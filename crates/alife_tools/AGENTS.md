@@ -1,3 +1,12 @@
 # alife_tools Instructions
 
-Follow root AGENTS.md. This crate is scaffold only. Do not implement runtime neural kernels unless a later spec explicitly asks.
+This crate controls developer tooling hooks, Graphify helpers, docs validation,
+and spec consistency checks.
+
+Rules:
+
+- Tooling must not become a runtime dependency for simulation crates.
+- Graphify is optional; cargo build/check/test must work without Graphify installed.
+- Prefer checks that catch architecture drift: Unity/HLSL, fixed 2048-only assumptions,
+  dense neural buffers, and hidden teacher injection.
+- Do not put game or neural runtime behavior in this crate.
