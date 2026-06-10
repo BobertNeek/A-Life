@@ -1,5 +1,10 @@
-//! alife_bevy_adapter scaffold. See ../../docs/master_spec.md.
+//! v0 scaffold: Bevy adapter boundary, not cognitive runtime logic.
 
-pub fn crate_name() -> &'static str {
-    "alife_bevy_adapter"
+use bevy::prelude::{App, Plugin};
+
+#[derive(Debug, Default)]
+pub struct AlifeBevyAdapterPlugin;
+
+impl Plugin for AlifeBevyAdapterPlugin {
+    fn build(&self, _app: &mut App) {}
 }

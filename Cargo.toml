@@ -1,3 +1,20 @@
 [workspace]
 members = ["crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_bevy_adapter", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools"]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/BobertNeek/A-Life"
+
+[workspace.dependencies]
+alife_core = { path = "crates/alife_core" }
+bevy = { version = "0.18.0", default-features = false }
+bitflags = "2.13.0"
+bytemuck = { version = "1.25.0", features = ["derive"] }
+pollster = "0.4.0"
+serde = { version = "1.0.228", features = ["derive"] }
+smallvec = "1.15.1"
+thiserror = "2.0.18"
+wgpu = "29.0.3"

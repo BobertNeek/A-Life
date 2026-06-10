@@ -8,4 +8,7 @@ Start with:
 - `docs/architecture_decisions.md`
 - `docs/codex_handoff_prompt.md`
 
+The current codebase is a scaffold: it defines crate boundaries, public contract
+types, and invariant tests. It does not implement neural runtime kernels.
+
 This repository should not use Unity, C#, or HLSL production shaders. `Standard2048` is only a reference brain class; the architecture is scalable.
