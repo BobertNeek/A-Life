@@ -10,4 +10,4 @@ Codex should update this file after each completed plan. Keep entries short but 
 | P03 | codex/P03-core-ids-math | complete | `b4bbaf4` | passed: fmt, check, test, core tests, boundary check, aggregate `scripts/check.sh`, clippy | P04 |
 | P04 | codex/P04-abi-validation-errors | complete | `504e9db` | passed: fmt, check, test, boundary check, aggregate `scripts/check.sh`, clippy | P05/P06/P07/P08/P09 |
 | P04.5 | codex/P04.5-performance-contract | complete | `60b3569` | passed: fmt, check, test, clippy, Git Bash `scripts/check.sh`, Git Bash `scripts/check_core_boundaries.sh` | P05/P06/P07/P08/P09 |
-| P08 | codex/P08-sensory-contexts | complete | pending local commit | passed: fmt, check, test, clippy, `cargo tree -p alife_core`, boundary grep, Git Bash `scripts/check_core_boundaries.sh`, Git Bash `scripts/check.sh` | P10/P14/P21/P22 |
+| P08 | codex/P08-sensory-contexts | complete | `004f467` | passed: fmt, check, test, clippy, `cargo tree -p alife_core`, boundary grep, Git Bash `scripts/check_core_boundaries.sh`, Git Bash `scripts/check.sh` | P10/P14/P21/P22 |
