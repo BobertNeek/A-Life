@@ -11,6 +11,7 @@ Codex must expand this as plans are implemented. Each row links a spec requireme
 | Schema and ABI changes are versioned | Public schema versioning | P02/P04/P11/P24/P30/P34 | `docs/architecture/schema_versioning.md` | future schema rejection/conversion tests | convention complete; executable readers pending |
 | Forbidden Unity/C#/HLSL artifacts stay absent | Architecture non-goals | P02 | repository file tree | `crates/alife_tools/tests/repo_invariants.rs` | complete for scaffold gate |
 | Dependency boundary checks are automated | CPU-GPU split / core purity | P02 | `scripts/check_core_boundaries.sh` | `scripts/check_core_boundaries.sh --self-test` | complete |
+| Engine-independent IDs, math primitives, units, and adapter boundary exist | Core IDs/math primitives/stable adapter boundary | P03 | `crates/alife_core/src/ids.rs`, `math.rs`, `units.rs`, `adapter.rs`; `docs/architecture/core_adapter_boundary.md` | `crates/alife_core/tests/id_math_units.rs` | complete |
 | Scalable brain classes, not fixed 2048 | Scalable brain classes | P05 | `crates/alife_core/src/brain_class.rs`, `crates/alife_core/src/lobe.rs` | brain class/lobe tests | scaffold present; P05 pending hardening |
 | Lobe layouts and routing masks are class-bucketed | Lobe layout generation / sparse routing | P05 | future routing/lobe modules | P05 tests | pending |
 | Genome controls development and weight split | Genome and developmental encoding | P06 | `crates/alife_core/src/genome.rs` and future weight split modules | P06 tests | pending |

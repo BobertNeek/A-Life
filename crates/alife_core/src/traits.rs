@@ -2,22 +2,27 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::OrganismId;
+use crate::{ExperienceSequenceId, OrganismId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SemanticPriorRequest {
     pub organism_id: OrganismId,
-    pub sequence_id: u64,
+    pub sequence_id: ExperienceSequenceId,
     pub private_to_organism: bool,
 }
 
 impl SemanticPriorRequest {
-    pub const fn new(organism_id: u64, sequence_id: u64) -> Self {
-        Self {
-            organism_id: OrganismId(organism_id),
+    pub fn new(
+        organism_id: OrganismId,
+        sequence_id: ExperienceSequenceId,
+    ) -> Result<Self, crate::ScaffoldContractError> {
+        organism_id.validate()?;
+        sequence_id.validate()?;
+        Ok(Self {
+            organism_id,
             sequence_id,
             private_to_organism: true,
-        }
+        })
     }
 }
 

@@ -1,9 +1,10 @@
 use alife_core::{
     ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, EndocrineProfile,
-    ExperiencePatchHeader, GenomeId, LineageExportManifest, LineageId, LobeKind, LobeLayout,
-    NeuralComputeBackend, SemanticPriorProvider, SemanticPriorRequest, TeacherPerceptionChannel,
-    WorldEntityId,
+    ExperiencePatchHeader, ExperienceSequenceId, GenomeId, LineageExportManifest, LineageId,
+    LobeKind, LobeLayout, NeuralComputeBackend, OrganismId, SemanticPriorProvider,
+    SemanticPriorRequest, TeacherPerceptionChannel, Tick, WorldEntityId,
 };
+use alife_core::{Confidence, DurationTicks};
 
 #[test]
 fn standard2048_is_one_scalable_reference_tier() {
@@ -53,19 +54,27 @@ fn genome_and_endocrine_profile_reference_brain_class_without_runtime_weights() 
 
 #[test]
 fn experience_patch_and_action_command_use_versioned_structured_contracts() {
-    let patch = ExperiencePatchHeader::new(11, 22, 33);
-    let action = ActionCommand::new(11, ActionKind::Interact, Some(WorldEntityId(44)), 0.75, 120);
+    let patch =
+        ExperiencePatchHeader::new(OrganismId(11), ExperienceSequenceId(22), Tick(33)).unwrap();
+    let action = ActionCommand::new(
+        OrganismId(11),
+        ActionKind::Interact,
+        Some(WorldEntityId(44)),
+        Confidence::new(0.75).unwrap(),
+        DurationTicks::new(120),
+    )
+    .unwrap();
 
     assert_eq!(patch.abi_version, ExperiencePatchHeader::ABI_VERSION);
     assert_eq!(patch.organism_id.0, 11);
     assert_eq!(action.abi_version, ActionCommand::ABI_VERSION);
     assert_eq!(action.target_entity, Some(WorldEntityId(44)));
-    assert!(action.confidence > 0.0);
+    assert!(action.confidence.raw() > 0.0);
 }
 
 #[test]
 fn semantic_prior_is_private_and_teacher_uses_perceptual_channels() {
-    let request = SemanticPriorRequest::new(11, 22);
+    let request = SemanticPriorRequest::new(OrganismId(11), ExperienceSequenceId(22)).unwrap();
     let channels = TeacherPerceptionChannel::ALL;
 
     assert!(request.private_to_organism);

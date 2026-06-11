@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::OrganismId;
+use crate::{ExperienceSequenceId, OrganismId, Tick};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExperiencePatchPhase {
@@ -15,21 +15,27 @@ pub enum ExperiencePatchPhase {
 pub struct ExperiencePatchHeader {
     pub abi_version: u16,
     pub organism_id: OrganismId,
-    pub sequence_id: u64,
-    pub world_tick: u64,
+    pub sequence_id: ExperienceSequenceId,
+    pub world_tick: Tick,
     pub phase: ExperiencePatchPhase,
 }
 
 impl ExperiencePatchHeader {
     pub const ABI_VERSION: u16 = 1;
 
-    pub const fn new(organism_id: u64, sequence_id: u64, world_tick: u64) -> Self {
-        Self {
+    pub fn new(
+        organism_id: OrganismId,
+        sequence_id: ExperienceSequenceId,
+        world_tick: Tick,
+    ) -> Result<Self, crate::ScaffoldContractError> {
+        organism_id.validate()?;
+        sequence_id.validate()?;
+        Ok(Self {
             abi_version: Self::ABI_VERSION,
-            organism_id: OrganismId(organism_id),
+            organism_id,
             sequence_id,
             world_tick,
             phase: ExperiencePatchPhase::Ingest,
-        }
+        })
     }
 }

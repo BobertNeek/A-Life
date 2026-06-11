@@ -14,4 +14,14 @@ pub enum ScaffoldContractError {
     LobeAlignment,
     #[error("requested brain tier has no canonical neuron count")]
     MissingCanonicalNeuronCount,
+    #[error("ID value zero is reserved as invalid")]
+    InvalidId,
+    #[error("float value must be finite")]
+    NonFiniteFloat,
+    #[error("scalar value is outside its allowed range")]
+    ScalarOutOfRange,
+    #[error("tick value moved backward")]
+    NonMonotonicTick,
+    #[error("axis-aligned bounds are invalid")]
+    InvalidBounds,
 }
