@@ -19,7 +19,9 @@ Codex must expand this as plans are implemented. Each row links a spec requireme
 | Genome controls development and weight split | Genome and developmental encoding | P06 | `crates/alife_core/src/genome.rs` and future weight split modules | P06 tests | pending |
 | Genetic weights are immutable under lifetime learning | Weight decomposition | P06/P16 | future weight split and sleep modules | P06/P16 tests | pending |
 | Drives and hormones are bounded and reject invalid values | Neurochemistry and drive system | P07 | `crates/alife_core/src/chemistry.rs` | P07 validation tests | pending |
-| Sensory/context ABI is versioned and engine-neutral | Sensory ABI / semantic context | P08 | `crates/alife_core/src/sensory_abi.rs` | P08 tests | pending |
+| Sensory/context ABI is versioned and engine-neutral | Sensory ABI / semantic context | P08 | `crates/alife_core/src/sensory_abi.rs` | `crates/alife_core/tests/sensory_abi_contexts.rs` | complete |
+| Context streams capture atmospheric, light, energy, vocal, social, and optional environment inputs | Sensory ABI / context streams | P08 | `crates/alife_core/src/sensory_abi.rs` | `crates/alife_core/tests/sensory_abi_contexts.rs` | complete |
+| Optional Gaussian and semantic references remain metadata, not renderer or SLM/runtime objects | Sensory ABI / semantic and Gaussian context boundary | P08 | `crates/alife_core/src/sensory_abi.rs` | `crates/alife_core/tests/sensory_abi_contexts.rs` | complete |
 | ExperiencePatch is three-phase | ExperiencePatch contract | P10 | `experience.rs` | `experience` tests | pending |
 | Runtime ExperiencePatch remains separate from packed logs | ExperiencePatch / packed logging split | P10/P11 | future runtime and packed log modules | P10/P11 tests | pending |
 | Memory recall returns expectancy, not replay | Memory contract | P12 | `memory.rs` | `memory` tests | pending |
