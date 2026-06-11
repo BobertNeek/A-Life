@@ -13,6 +13,7 @@ pub mod ids;
 pub mod lineage;
 pub mod lobe;
 pub mod math;
+pub mod routing;
 pub mod sensory_abi;
 pub mod traits;
 pub mod units;
@@ -22,7 +23,7 @@ pub mod version;
 pub use action::{ActionCommand, ActionKind};
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
-pub use brain_class::{BrainClassSpec, BrainScaleTier};
+pub use brain_class::{BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier};
 pub use chemistry::EndocrineProfile;
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
@@ -34,8 +35,14 @@ pub use ids::{
     OrganismId, WorldEntityId,
 };
 pub use lineage::LineageExportManifest;
-pub use lobe::{LobeKind, LobeLayout, LobeRegion};
+pub use lobe::{
+    ActivationPolicy, LobeEssentiality, LobeKind, LobeLayout, LobeRegion, LobeThrottlePriority,
+    PlasticityPolicy, UpdateCadence,
+};
 pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
+pub use routing::{
+    ActiveTilePolicy, BiologicalPriority, ProjectionType, RoutingMask, RoutingMatrix,
+};
 pub use sensory_abi::{SensoryAbiVersion, TeacherPerceptionChannel};
 pub use traits::{
     NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,

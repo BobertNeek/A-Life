@@ -14,6 +14,12 @@ pub enum ScaffoldContractError {
     LobeTotalMismatch,
     #[error("lobe starts and lengths must align to 16")]
     LobeAlignment,
+    #[error("lobe layout has a gap, overlap, or out-of-order enabled range")]
+    LobeRangeCoverage,
+    #[error("routing mask references a missing or disabled lobe")]
+    RoutingReferencesDisabledLobe,
+    #[error("routing mask duplicates an existing source-target projection")]
+    RoutingDuplicateMask,
     #[error("requested brain tier has no canonical neuron count")]
     MissingCanonicalNeuronCount,
     #[error("ID value zero is reserved as invalid")]

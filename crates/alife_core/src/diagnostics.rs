@@ -10,6 +10,9 @@ pub enum DiagnosticCode {
     BrainClassAlignment,
     LobeTotalMismatch,
     LobeAlignment,
+    LobeRangeCoverage,
+    RoutingReferencesDisabledLobe,
+    RoutingDuplicateMask,
     MissingCanonicalNeuronCount,
     InvalidId,
     NonFiniteFloat,
@@ -55,6 +58,15 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
                 Self::new(DiagnosticCode::LobeTotalMismatch)
             }
             ScaffoldContractError::LobeAlignment => Self::new(DiagnosticCode::LobeAlignment),
+            ScaffoldContractError::LobeRangeCoverage => {
+                Self::new(DiagnosticCode::LobeRangeCoverage)
+            }
+            ScaffoldContractError::RoutingReferencesDisabledLobe => {
+                Self::new(DiagnosticCode::RoutingReferencesDisabledLobe)
+            }
+            ScaffoldContractError::RoutingDuplicateMask => {
+                Self::new(DiagnosticCode::RoutingDuplicateMask)
+            }
             ScaffoldContractError::MissingCanonicalNeuronCount => {
                 Self::new(DiagnosticCode::MissingCanonicalNeuronCount)
             }
