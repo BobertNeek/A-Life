@@ -40,6 +40,12 @@ pub enum ScaffoldContractError {
     InvalidBounds,
     #[error("required phase data is missing")]
     MissingPhaseData,
+    #[error("experience phases were recorded out of causal order")]
+    UnorderedExperiencePhase,
+    #[error("experience phases reference different creatures")]
+    MismatchedCreatureId,
+    #[error("action decision is internally inconsistent")]
+    InvalidActionDecision,
     #[error("drive or hormone value is outside its allowed range")]
     OutOfRangeDriveHormone,
     #[error("incompatible {kind:?} version: expected {expected}, got {actual}")]

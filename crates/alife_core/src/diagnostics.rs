@@ -23,6 +23,9 @@ pub enum DiagnosticCode {
     NonMonotonicTick,
     InvalidBounds,
     MissingPhaseData,
+    UnorderedExperiencePhase,
+    MismatchedCreatureId,
+    InvalidActionDecision,
     OutOfRangeDriveHormone,
     IncompatibleAbi,
     PackedLogSchemaMismatch,
@@ -88,6 +91,15 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
             ScaffoldContractError::NonMonotonicTick => Self::new(DiagnosticCode::NonMonotonicTick),
             ScaffoldContractError::InvalidBounds => Self::new(DiagnosticCode::InvalidBounds),
             ScaffoldContractError::MissingPhaseData => Self::new(DiagnosticCode::MissingPhaseData),
+            ScaffoldContractError::UnorderedExperiencePhase => {
+                Self::new(DiagnosticCode::UnorderedExperiencePhase)
+            }
+            ScaffoldContractError::MismatchedCreatureId => {
+                Self::new(DiagnosticCode::MismatchedCreatureId)
+            }
+            ScaffoldContractError::InvalidActionDecision => {
+                Self::new(DiagnosticCode::InvalidActionDecision)
+            }
             ScaffoldContractError::OutOfRangeDriveHormone => {
                 Self::new(DiagnosticCode::OutOfRangeDriveHormone)
             }
