@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::SchemaKind;
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ScaffoldContractError {
     #[error("brain class must contain at least 512 neurons")]
@@ -24,4 +26,18 @@ pub enum ScaffoldContractError {
     NonMonotonicTick,
     #[error("axis-aligned bounds are invalid")]
     InvalidBounds,
+    #[error("required phase data is missing")]
+    MissingPhaseData,
+    #[error("drive or hormone value is outside its allowed range")]
+    OutOfRangeDriveHormone,
+    #[error("incompatible {kind:?} version: expected {expected}, got {actual}")]
+    IncompatibleAbi {
+        kind: SchemaKind,
+        expected: u16,
+        actual: u16,
+    },
+    #[error("packed log schema mismatch: expected {expected}, got {actual}")]
+    PackedLogSchemaMismatch { expected: u16, actual: u16 },
+    #[error("backend parity check failed")]
+    BackendParity,
 }

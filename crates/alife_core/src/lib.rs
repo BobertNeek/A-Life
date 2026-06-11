@@ -5,6 +5,7 @@ pub mod action_abi;
 pub mod adapter;
 pub mod brain_class;
 pub mod chemistry;
+pub mod diagnostics;
 pub mod error;
 pub mod experience;
 pub mod genome;
@@ -15,12 +16,15 @@ pub mod math;
 pub mod sensory_abi;
 pub mod traits;
 pub mod units;
+pub mod validation;
+pub mod version;
 
 pub use action::{ActionCommand, ActionKind};
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
 pub use brain_class::{BrainClassSpec, BrainScaleTier};
 pub use chemistry::EndocrineProfile;
+pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
 pub use experience::{ExperiencePatchHeader, ExperiencePatchPhase};
 pub use genome::BrainGenome;
@@ -39,4 +43,8 @@ pub use traits::{
 pub use units::{
     Confidence, DurationTicks, FixedPointScale, Intensity, NormalizedScalar, Seconds,
     SignedValence, Tick,
+};
+pub use validation::{ensure_current_version, Validate, Validated};
+pub use version::{
+    require_current_version, require_version, ContractVersion, SchemaKind, SchemaVersions,
 };

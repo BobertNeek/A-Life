@@ -2,11 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::SchemaVersions;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SensoryAbiVersion(pub u16);
 
 impl SensoryAbiVersion {
-    pub const CURRENT: Self = Self(1);
+    pub const CURRENT: Self = Self(SchemaVersions::CURRENT.sensory_abi.0);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

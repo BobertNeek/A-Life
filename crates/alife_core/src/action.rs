@@ -2,7 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{validate_optional_target, Confidence, DurationTicks, OrganismId, WorldEntityId};
+use crate::{
+    ensure_current_version, validate_optional_target, Confidence, DurationTicks, OrganismId,
+    SchemaKind, SchemaVersions, Validate, WorldEntityId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActionKind {
@@ -26,7 +29,7 @@ pub struct ActionCommand {
 }
 
 impl ActionCommand {
-    pub const ABI_VERSION: u16 = 1;
+    pub const ABI_VERSION: u16 = SchemaVersions::CURRENT.action_abi.0;
 
     pub fn new(
         organism_id: OrganismId,
@@ -46,5 +49,15 @@ impl ActionCommand {
             duration_ticks,
             drive_source_mask: 0,
         })
+    }
+}
+
+impl Validate for ActionCommand {
+    fn validate_contract(&self) -> Result<(), crate::ScaffoldContractError> {
+        ensure_current_version(SchemaKind::ActionAbi, self.abi_version)?;
+        self.organism_id.validate()?;
+        validate_optional_target(self.target_entity)?;
+        Confidence::new(self.confidence.raw())?;
+        Ok(())
     }
 }

@@ -2,7 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{ExperienceSequenceId, OrganismId, Tick};
+use crate::{
+    ensure_current_version, ExperienceSequenceId, OrganismId, SchemaKind, SchemaVersions, Tick,
+    Validate,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExperiencePatchPhase {
@@ -21,7 +24,7 @@ pub struct ExperiencePatchHeader {
 }
 
 impl ExperiencePatchHeader {
-    pub const ABI_VERSION: u16 = 1;
+    pub const ABI_VERSION: u16 = SchemaVersions::CURRENT.experience.0;
 
     pub fn new(
         organism_id: OrganismId,
@@ -37,5 +40,14 @@ impl ExperiencePatchHeader {
             world_tick,
             phase: ExperiencePatchPhase::Ingest,
         })
+    }
+}
+
+impl Validate for ExperiencePatchHeader {
+    fn validate_contract(&self) -> Result<(), crate::ScaffoldContractError> {
+        ensure_current_version(SchemaKind::Experience, self.abi_version)?;
+        self.organism_id.validate()?;
+        self.sequence_id.validate()?;
+        Ok(())
     }
 }

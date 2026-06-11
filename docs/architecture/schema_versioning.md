@@ -17,6 +17,8 @@ Versioned schemas include:
 
 ## Rules
 
+- Central versions live in `crates/alife_core/src/version.rs` through
+  `SchemaVersions::CURRENT`.
 - Use small integer `abi_version` or `schema_version` fields for serialized and packed structs.
 - Keep rich runtime cognition structs separate from packed logging/export structs.
 - Reject unknown future major versions unless an explicit migration exists.

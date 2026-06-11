@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{BrainClassId, GenomeId};
+use crate::{BrainClassId, GenomeId, SchemaVersions, Validate};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BrainGenome {
@@ -15,6 +15,8 @@ pub struct BrainGenome {
 }
 
 impl BrainGenome {
+    pub const SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.genome.0;
+
     pub fn scaffold(species_seed: u64, brain_class_id: BrainClassId) -> Self {
         let genetic_prior_seed = species_seed
             .wrapping_mul(0x9E37_79B9_7F4A_7C15)
@@ -28,5 +30,13 @@ impl BrainGenome {
             developmental_schedule_version: 1,
             mutable_lifetime_weights_allowed: true,
         }
+    }
+}
+
+impl Validate for BrainGenome {
+    fn validate_contract(&self) -> Result<(), crate::ScaffoldContractError> {
+        self.id.validate()?;
+        self.brain_class_id.validate()?;
+        Ok(())
     }
 }

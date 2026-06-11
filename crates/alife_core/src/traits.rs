@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{ExperienceSequenceId, OrganismId};
+use crate::{ExperienceSequenceId, OrganismId, Validate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SemanticPriorRequest {
@@ -23,6 +23,18 @@ impl SemanticPriorRequest {
             sequence_id,
             private_to_organism: true,
         })
+    }
+}
+
+impl Validate for SemanticPriorRequest {
+    fn validate_contract(&self) -> Result<(), crate::ScaffoldContractError> {
+        self.organism_id.validate()?;
+        self.sequence_id.validate()?;
+        if self.private_to_organism {
+            Ok(())
+        } else {
+            Err(crate::ScaffoldContractError::MissingPhaseData)
+        }
     }
 }
 
