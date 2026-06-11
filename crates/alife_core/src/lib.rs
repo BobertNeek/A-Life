@@ -59,7 +59,18 @@ pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f,
 pub use routing::{
     ActiveTilePolicy, BiologicalPriority, ProjectionType, RoutingMask, RoutingMatrix,
 };
-pub use sensory_abi::{SensoryAbiVersion, TeacherPerceptionChannel};
+pub use sensory_abi::{
+    AffordanceBits, ChannelBounds, ChannelExtensionPolicy, ChannelGroupKind, ChannelGroupSpec,
+    CompressedSemanticCode, ContextFeatureFlags, ContextStreams, EnvironmentStreamEntry,
+    GaussianContextRef, GaussianSalienceEntry, HeardToken, LanguageContextSnapshot,
+    SemanticContextRef, SemanticSalienceEntry, SensoryAbiDescriptor, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, SensorySnapshotFromAdapter, SensorySnapshotSource,
+    SocialAgentSnapshot, SocialContextSnapshot, SocialProximityEntry, TeacherPerceptionChannel,
+    VocalizedToken, MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS,
+    SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
+    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+};
 pub use traits::{
     NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,
 };
