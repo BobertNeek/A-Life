@@ -10,3 +10,4 @@ Codex should update this file after each completed plan. Keep entries short but 
 | P03 | codex/P03-core-ids-math | complete | `b4bbaf4` | passed: fmt, check, test, core tests, boundary check, aggregate `scripts/check.sh`, clippy | P04 |
 | P04 | codex/P04-abi-validation-errors | complete | `504e9db` | passed: fmt, check, test, boundary check, aggregate `scripts/check.sh`, clippy | P05/P06/P07/P08/P09 |
 | P04.5 | codex/P04.5-performance-contract | complete | `60b3569` | passed: fmt, check, test, clippy, Git Bash `scripts/check.sh`, Git Bash `scripts/check_core_boundaries.sh` | P05/P06/P07/P08/P09 |
+| P06 | codex/P06-genome-weight-split | complete | local commit; see receipt | passed: focused P06 tests, core tests, fmt, check, test, all-features check/test, clippy, cargo tree, grep boundary inspection, Git Bash `scripts/check_core_boundaries.sh`, Git Bash `scripts/check.sh`, Graphify update | P10/P14/P16/P33 |

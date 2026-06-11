@@ -27,7 +27,18 @@ pub use chemistry::EndocrineProfile;
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
 pub use experience::{ExperiencePatchHeader, ExperiencePatchPhase};
-pub use genome::BrainGenome;
+pub use genome::{
+    AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
+    DevelopmentState, DevelopmentalMilestone, DevelopmentalSchedule, DriveThresholdGene,
+    DriveThresholdKind, EffectiveWeightSample, EndocrineConstantGene, EndocrineConstantKind,
+    GenomeSeedSet, HOperational, HShadow, InheritancePolicy, LifetimeConsolidationDelta,
+    LobeAlphaOverride, LobeRatioOverride, LobeRatioPlan, LobeRatioRegistryRef, MacroConnectomeMask,
+    MotorAffordanceGene, MotorAffordanceKind, MutationRates, PlasticityMask,
+    ProjectionAlphaOverride, ProjectionKey, ProjectionPlasticityMask, SensorChannelGene,
+    SensorChannelKind, SensorLayoutGene, SparseDensityPrior, SynapseAddress, SynapseAlphaOverride,
+    TileAddress, TileAlphaOverride, WEffective, WGeneticFixed, WLifetimeConsolidated,
+    WeightLayerDescriptor, WeightLayerKind, WeightSplitContract, WeightStorageSemantics,
+};
 pub use ids::{
     validate_optional_target, ActionId, BrainClassId, ConceptCellId, CreatureId,
     ExperienceSequenceId, GaussianClusterId, GenomeId, LineageId, LobeIndex, MemoryId, NeuronIndex,
