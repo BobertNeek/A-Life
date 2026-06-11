@@ -1,0 +1,620 @@
+{
+  "pack_name": "A-Life Codex Completion Plan Pack",
+  "version": "1.0",
+  "created": "2026-06-10",
+  "assumptions": [
+    "Current repo is a scaffold, not a complete runtime.",
+    "Rust workspace crates likely include alife_core, alife_world, alife_gpu_backend, alife_bevy_adapter, alife_school, alife_semantic, and alife_tools.",
+    "Codex must re-audit actual repo in P00 before applying file paths blindly."
+  ],
+  "plans": [
+    {
+      "id": "P00",
+      "title": "Operating model, repo audit, and plan wiring",
+      "group": "Group 0 - Baseline serial",
+      "branch": "codex/P00-operating-model",
+      "dependencies": [],
+      "can_run_concurrently": false,
+      "next": [
+        "P01"
+      ],
+      "file": "plans/P00_operating_model_repo_audit_and_plan_wiring.md"
+    },
+    {
+      "id": "P01",
+      "title": "Scaffold cleanup, workspace hygiene, portable hooks, CI baseline",
+      "group": "Group 0 - Baseline serial",
+      "branch": "codex/P01-scaffold-cleanup",
+      "dependencies": [
+        "P00"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P02"
+      ],
+      "file": "plans/P01_scaffold_cleanup_workspace_hygiene_portable_hooks_ci_baseline.md"
+    },
+    {
+      "id": "P02",
+      "title": "Spec traceability matrix, decision/progress logs, invariant test harness",
+      "group": "Group 0 - Baseline serial",
+      "branch": "codex/P02-traceability-invariants",
+      "dependencies": [
+        "P01"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P03"
+      ],
+      "file": "plans/P02_spec_traceability_matrix_decision_progress_logs_invariant_test_harness.md"
+    },
+    {
+      "id": "P03",
+      "title": "Core IDs, math primitives, units, stable adapter boundary",
+      "group": "Group 0 - Baseline serial",
+      "branch": "codex/P03-core-ids-math",
+      "dependencies": [
+        "P02"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P04"
+      ],
+      "file": "plans/P03_core_ids_math_primitives_units_stable_adapter_boundary.md"
+    },
+    {
+      "id": "P04",
+      "title": "ABI versioning, validation framework, error model",
+      "group": "Group 0 - Baseline serial",
+      "branch": "codex/P04-abi-validation-errors",
+      "dependencies": [
+        "P03"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09"
+      ],
+      "file": "plans/P04_abi_versioning_validation_framework_error_model.md"
+    },
+    {
+      "id": "P05",
+      "title": "Brain classes, lobe layouts, routing masks, BrainClass registry",
+      "group": "Group 1 - Parallel core contracts",
+      "branch": "codex/P05-brain-lobes-routing",
+      "dependencies": [
+        "P04"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P10",
+        "P14"
+      ],
+      "file": "plans/P05_brain_classes_lobe_layouts_routing_masks_brainclass_registry.md"
+    },
+    {
+      "id": "P06",
+      "title": "Genome, development state, and weight split contracts",
+      "group": "Group 1 - Parallel core contracts",
+      "branch": "codex/P06-genome-weight-split",
+      "dependencies": [
+        "P04"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P10",
+        "P14",
+        "P16",
+        "P33"
+      ],
+      "file": "plans/P06_genome_development_state_and_weight_split_contracts.md"
+    },
+    {
+      "id": "P07",
+      "title": "Drives, hormones, endocrine chemistry, homeostatic bounds",
+      "group": "Group 1 - Parallel core contracts",
+      "branch": "codex/P07-drives-hormones",
+      "dependencies": [
+        "P04"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P10",
+        "P14",
+        "P15"
+      ],
+      "file": "plans/P07_drives_hormones_endocrine_chemistry_homeostatic_bounds.md"
+    },
+    {
+      "id": "P08",
+      "title": "Sensory ABI, context streams, semantic/Gaussian reference types",
+      "group": "Group 1 - Parallel core contracts",
+      "branch": "codex/P08-sensory-contexts",
+      "dependencies": [
+        "P04"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P10",
+        "P14",
+        "P21",
+        "P22"
+      ],
+      "file": "plans/P08_sensory_abi_context_streams_semantic_gaussian_reference_types.md"
+    },
+    {
+      "id": "P09",
+      "title": "Action contract, proposals, commands, arbitration trace",
+      "group": "Group 1 - Parallel core contracts",
+      "branch": "codex/P09-action-arbitration",
+      "dependencies": [
+        "P04"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P10",
+        "P15",
+        "P21",
+        "P23"
+      ],
+      "file": "plans/P09_action_contract_proposals_commands_arbitration_trace.md"
+    },
+    {
+      "id": "P10",
+      "title": "Three-phase ExperiencePatch runtime contract",
+      "group": "Group 1 - Core integration serial",
+      "branch": "codex/P10-experience-three-phase",
+      "dependencies": [
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P11",
+        "P12",
+        "P13",
+        "P15",
+        "P21",
+        "P23"
+      ],
+      "file": "plans/P10_three_phase_experiencepatch_runtime_contract.md"
+    },
+    {
+      "id": "P11",
+      "title": "Packed experience logging and side buffers",
+      "group": "Group 1 - Core logging serial",
+      "branch": "codex/P11-packed-logging",
+      "dependencies": [
+        "P10"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P12",
+        "P13",
+        "P30"
+      ],
+      "file": "plans/P11_packed_experience_logging_and_side_buffers.md"
+    },
+    {
+      "id": "P12",
+      "title": "MemoryExpectancy and episodic associative memory bank",
+      "group": "Group 1 - Parallel after P10/P11",
+      "branch": "codex/P12-memory-expectancy",
+      "dependencies": [
+        "P10"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P15",
+        "P16",
+        "P18"
+      ],
+      "file": "plans/P12_memoryexpectancy_and_episodic_associative_memory_bank.md"
+    },
+    {
+      "id": "P13",
+      "title": "Topological concept map, CognitiveEdges, CognitiveSimplex, UnresolvedGap",
+      "group": "Group 1 - Parallel after P10/P11",
+      "branch": "codex/P13-topological-map",
+      "dependencies": [
+        "P10"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P15",
+        "P16",
+        "P18",
+        "P23"
+      ],
+      "file": "plans/P13_topological_concept_map_cognitiveedges_cognitivesimplex_unresolvedgap.md"
+    },
+    {
+      "id": "P14",
+      "title": "Neural state, sparse projection schema, CPU math kernels",
+      "group": "Group 1 - Core neural substrate",
+      "branch": "codex/P14-neural-state-projection-schema",
+      "dependencies": [
+        "P05",
+        "P06",
+        "P07",
+        "P08"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P15",
+        "P24"
+      ],
+      "file": "plans/P14_neural_state_sparse_projection_schema_cpu_math_kernels.md"
+    },
+    {
+      "id": "P15",
+      "title": "CPU reference brain tick loop",
+      "group": "Group 1 - Core integration serial",
+      "branch": "codex/P15-cpu-reference-brain",
+      "dependencies": [
+        "P10",
+        "P12",
+        "P13",
+        "P14",
+        "P09",
+        "P07"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P16",
+        "P17",
+        "P21",
+        "P23",
+        "P24"
+      ],
+      "file": "plans/P15_cpu_reference_brain_tick_loop.md"
+    },
+    {
+      "id": "P16",
+      "title": "Sleep consolidation, H-trace drain, structural editing, lifetime traits",
+      "group": "Group 1 - Core serial",
+      "branch": "codex/P16-sleep-consolidation",
+      "dependencies": [
+        "P15",
+        "P06",
+        "P12",
+        "P13",
+        "P14"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P17",
+        "P18",
+        "P33",
+        "P28"
+      ],
+      "file": "plans/P16_sleep_consolidation_h_trace_drain_structural_editing_lifetime_traits.md"
+    },
+    {
+      "id": "P17",
+      "title": "Headless world and behavior harness",
+      "group": "Group 2 - Harness parallel",
+      "branch": "codex/P17-headless-world-harness",
+      "dependencies": [
+        "P15"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P18",
+        "P19",
+        "P20"
+      ],
+      "file": "plans/P17_headless_world_and_behavior_harness.md"
+    },
+    {
+      "id": "P18",
+      "title": "Scenario suite: food, pain, sleep, curiosity, word, social grounding",
+      "group": "Group 2 - Harness serial after P17",
+      "branch": "codex/P18-scenario-suite",
+      "dependencies": [
+        "P17",
+        "P12",
+        "P13",
+        "P16"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "file": "plans/P18_scenario_suite_food_pain_sleep_curiosity_word_social_grounding.md"
+    },
+    {
+      "id": "P19",
+      "title": "Golden traces, property/fuzz tests, determinism",
+      "group": "Group 2 - Validation serial after scenarios",
+      "branch": "codex/P19-golden-determinism",
+      "dependencies": [
+        "P18"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P20",
+        "P21",
+        "P24"
+      ],
+      "file": "plans/P19_golden_traces_property_fuzz_tests_determinism.md"
+    },
+    {
+      "id": "P20",
+      "title": "Benchmark harness and performance tiers",
+      "group": "Group 2 - Validation/performance",
+      "branch": "codex/P20-benchmark-tiers",
+      "dependencies": [
+        "P17",
+        "P18"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P21",
+        "P24",
+        "P29",
+        "P36"
+      ],
+      "file": "plans/P20_benchmark_harness_and_performance_tiers.md"
+    },
+    {
+      "id": "P21",
+      "title": "Bevy/Avian adapter and runtime integration",
+      "group": "Group 2 - Adapter parallel",
+      "branch": "codex/P21-bevy-avian-adapter",
+      "dependencies": [
+        "P10",
+        "P17"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P35"
+      ],
+      "file": "plans/P21_bevy_avian_adapter_and_runtime_integration.md"
+    },
+    {
+      "id": "P22",
+      "title": "Semantic/Gaussian adapter",
+      "group": "Group 2 - Adapter optional parallel",
+      "branch": "codex/P22-semantic-gaussian-adapter",
+      "dependencies": [
+        "P08",
+        "P10"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P35"
+      ],
+      "file": "plans/P22_semantic_gaussian_adapter.md"
+    },
+    {
+      "id": "P23",
+      "title": "School/Teacher curriculum and perception-only teaching",
+      "group": "Group 2 - School parallel",
+      "branch": "codex/P23-school-teacher",
+      "dependencies": [
+        "P09",
+        "P10",
+        "P12",
+        "P13"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P18",
+        "P35"
+      ],
+      "file": "plans/P23_school_teacher_curriculum_and_perception_only_teaching.md"
+    },
+    {
+      "id": "P24",
+      "title": "GPU buffer layout and WGSL/HLSL contract translation",
+      "group": "Group 3 - GPU serial",
+      "branch": "codex/P24-gpu-buffer-contracts",
+      "dependencies": [
+        "P14",
+        "P15"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P25"
+      ],
+      "file": "plans/P24_gpu_buffer_layout_and_wgsl_hlsl_contract_translation.md"
+    },
+    {
+      "id": "P25",
+      "title": "Static GPU forward passes and CPU parity",
+      "group": "Group 3 - GPU serial",
+      "branch": "codex/P25-gpu-static-forward-parity",
+      "dependencies": [
+        "P24"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P26"
+      ],
+      "file": "plans/P25_static_gpu_forward_passes_and_cpu_parity.md"
+    },
+    {
+      "id": "P26",
+      "title": "GPU plasticity pass, fixed-point/Oja, weight split",
+      "group": "Group 3 - GPU serial",
+      "branch": "codex/P26-gpu-plasticity-oja",
+      "dependencies": [
+        "P25"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P27"
+      ],
+      "file": "plans/P26_gpu_plasticity_pass_fixed_point_oja_weight_split.md"
+    },
+    {
+      "id": "P27",
+      "title": "Super-tile culling, expert routing, active masks",
+      "group": "Group 3 - GPU serial",
+      "branch": "codex/P27-gpu-supertile-routing",
+      "dependencies": [
+        "P26"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P28"
+      ],
+      "file": "plans/P27_super_tile_culling_expert_routing_active_masks.md"
+    },
+    {
+      "id": "P28",
+      "title": "Structural recompaction, autophagy, sleep GPU path",
+      "group": "Group 3 - GPU serial",
+      "branch": "codex/P28-gpu-recompaction-autophagy",
+      "dependencies": [
+        "P27",
+        "P16"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P29"
+      ],
+      "file": "plans/P28_structural_recompaction_autophagy_sleep_gpu_path.md"
+    },
+    {
+      "id": "P29",
+      "title": "No-readback runtime integration and GPU performance tiers",
+      "group": "Group 3 - GPU final integration",
+      "branch": "codex/P29-gpu-runtime-performance",
+      "dependencies": [
+        "P28",
+        "P20"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P34",
+        "P35",
+        "P36"
+      ],
+      "file": "plans/P29_no_readback_runtime_integration_and_gpu_performance_tiers.md"
+    },
+    {
+      "id": "P30",
+      "title": "Offline log tools, clustering, replay, visualization",
+      "group": "Group 4 - Tools parallel",
+      "branch": "codex/P30-offline-log-tools",
+      "dependencies": [
+        "P11"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P31",
+        "P32",
+        "P33",
+        "P34"
+      ],
+      "file": "plans/P30_offline_log_tools_clustering_replay_visualization.md"
+    },
+    {
+      "id": "P31",
+      "title": "ETF/Neural Collapse metrics and sensory prototype tooling",
+      "group": "Group 4 - Research optional parallel",
+      "branch": "codex/P31-etf-neural-collapse-metrics",
+      "dependencies": [
+        "P30",
+        "P08",
+        "P14"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P35",
+        "P36"
+      ],
+      "file": "plans/P31_etf_neural_collapse_metrics_and_sensory_prototype_tooling.md"
+    },
+    {
+      "id": "P32",
+      "title": "D2NWG/initial weight generator optional pipeline",
+      "group": "Group 4 - Research optional parallel",
+      "branch": "codex/P32-d2nwg-weight-generator",
+      "dependencies": [
+        "P30",
+        "P06",
+        "P14"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P33",
+        "P35"
+      ],
+      "file": "plans/P32_d2nwg_initial_weight_generator_optional_pipeline.md"
+    },
+    {
+      "id": "P33",
+      "title": "Evolution, breeding, mutation, genome lab",
+      "group": "Group 4 - Evolution tools",
+      "branch": "codex/P33-evolution-genome-lab",
+      "dependencies": [
+        "P06",
+        "P16",
+        "P30"
+      ],
+      "can_run_concurrently": true,
+      "next": [
+        "P34",
+        "P35"
+      ],
+      "file": "plans/P33_evolution_breeding_mutation_genome_lab.md"
+    },
+    {
+      "id": "P34",
+      "title": "Save/load, schema migration, configs, assets",
+      "group": "Group 5 - Product integration",
+      "branch": "codex/P34-save-load-config-assets",
+      "dependencies": [
+        "P29",
+        "P30",
+        "P33"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P35"
+      ],
+      "file": "plans/P34_save_load_schema_migration_configs_assets.md"
+    },
+    {
+      "id": "P35",
+      "title": "Full playground, examples, UX docs",
+      "group": "Group 5 - Product integration",
+      "branch": "codex/P35-playground-examples-docs",
+      "dependencies": [
+        "P21",
+        "P22",
+        "P23",
+        "P29",
+        "P34"
+      ],
+      "can_run_concurrently": false,
+      "next": [
+        "P36"
+      ],
+      "file": "plans/P35_full_playground_examples_ux_docs.md"
+    },
+    {
+      "id": "P36",
+      "title": "Production hardening, soak tests, release gate",
+      "group": "Group 5 - Release final",
+      "branch": "codex/P36-production-hardening",
+      "dependencies": [
+        "P35"
+      ],
+      "can_run_concurrently": false,
+      "next": [],
+      "file": "plans/P36_production_hardening_soak_tests_release_gate.md"
+    }
+  ]
+}
