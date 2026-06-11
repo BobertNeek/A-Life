@@ -39,7 +39,12 @@ pub use chemistry::{
 };
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
-pub use experience::{ExperiencePatchHeader, ExperiencePatchPhase};
+pub use experience::{
+    ConceptHint, DecisionSnapshot, ExperiencePatch, ExperiencePatchBuilder, ExperiencePatchHeader,
+    ExperiencePatchPhase, ExperiencePatchView, MemoryExpectancySnapshot, MemoryHint,
+    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
+    TeacherFeedbackObservation,
+};
 pub use genome::{
     AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
     DevelopmentState, DevelopmentalMilestone, DevelopmentalSchedule, DriveThresholdGene,

@@ -35,3 +35,7 @@ Decision: Graphify and DOX are developer/agent tooling, not runtime dependencies
 ## ADR-009: Engine-Neutral Sensory ABI and Optional Context Refs
 
 Decision: Core sensory snapshots use stable IDs, core math primitives, fixed v1 channel groups, context stream metadata, and optional semantic/Gaussian references. They do not embed Bevy entities, renderer objects, SLM runtime objects, teacher internals, or hidden action hooks.
+
+## ADR-010: Sealed Three-Phase ExperiencePatch
+
+Decision: Runtime `ExperiencePatch` records are rich Rust data assembled through pre-action, decision, and post-action phases, then sealed before learning, memory, topology, or logging consumers can inspect them. Packed logging remains a separate P11 contract.
