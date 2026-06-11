@@ -15,8 +15,11 @@ pub enum DiagnosticCode {
     RoutingDuplicateMask,
     MissingCanonicalNeuronCount,
     InvalidId,
+    UnknownBrainClass,
     NonFiniteFloat,
     ScalarOutOfRange,
+    DenseAlphaRequiresOptIn,
+    LamarckianInheritanceRequiresOptIn,
     NonMonotonicTick,
     InvalidBounds,
     MissingPhaseData,
@@ -71,8 +74,17 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
                 Self::new(DiagnosticCode::MissingCanonicalNeuronCount)
             }
             ScaffoldContractError::InvalidId => Self::new(DiagnosticCode::InvalidId),
+            ScaffoldContractError::UnknownBrainClass => {
+                Self::new(DiagnosticCode::UnknownBrainClass)
+            }
             ScaffoldContractError::NonFiniteFloat => Self::new(DiagnosticCode::NonFiniteFloat),
             ScaffoldContractError::ScalarOutOfRange => Self::new(DiagnosticCode::ScalarOutOfRange),
+            ScaffoldContractError::DenseAlphaRequiresOptIn => {
+                Self::new(DiagnosticCode::DenseAlphaRequiresOptIn)
+            }
+            ScaffoldContractError::LamarckianInheritanceRequiresOptIn => {
+                Self::new(DiagnosticCode::LamarckianInheritanceRequiresOptIn)
+            }
             ScaffoldContractError::NonMonotonicTick => Self::new(DiagnosticCode::NonMonotonicTick),
             ScaffoldContractError::InvalidBounds => Self::new(DiagnosticCode::InvalidBounds),
             ScaffoldContractError::MissingPhaseData => Self::new(DiagnosticCode::MissingPhaseData),

@@ -24,10 +24,16 @@ pub enum ScaffoldContractError {
     MissingCanonicalNeuronCount,
     #[error("ID value zero is reserved as invalid")]
     InvalidId,
+    #[error("brain class ID is not known to the current scaffold registry")]
+    UnknownBrainClass,
     #[error("float value must be finite")]
     NonFiniteFloat,
     #[error("scalar value is outside its allowed range")]
     ScalarOutOfRange,
+    #[error("dense alpha storage requires an explicit debug/reference opt-in")]
+    DenseAlphaRequiresOptIn,
+    #[error("lifetime weight inheritance requires explicit Lamarckian opt-in")]
+    LamarckianInheritanceRequiresOptIn,
     #[error("tick value moved backward")]
     NonMonotonicTick,
     #[error("axis-aligned bounds are invalid")]

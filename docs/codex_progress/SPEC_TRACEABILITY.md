@@ -17,8 +17,8 @@ Codex must expand this as plans are implemented. Each row links a spec requireme
 | Scalable brain classes, not fixed 2048 | Scalable brain classes | P05 | `crates/alife_core/src/brain_class.rs`, `crates/alife_core/src/lobe.rs` | `crates/alife_core/tests/brain_topology.rs` | complete |
 | Lobe layouts and routing masks are class-bucketed | Lobe layout generation / sparse routing | P05 | `crates/alife_core/src/lobe.rs`, `crates/alife_core/src/routing.rs` | `crates/alife_core/tests/brain_topology.rs` | complete |
 | Brain class compute budgets use P04.5 active synapse and tile ledger | Performance contract / sparse memory planning | P05 | `crates/alife_core/src/brain_class.rs` | `crates/alife_core/tests/brain_topology.rs` | complete |
-| Genome controls development and weight split | Genome and developmental encoding | P06 | `crates/alife_core/src/genome.rs` and future weight split modules | P06 tests | pending |
-| Genetic weights are immutable under lifetime learning | Weight decomposition | P06/P16 | future weight split and sleep modules | P06/P16 tests | pending |
+| Genome controls development and weight split | Genome and developmental encoding | P06 | `crates/alife_core/src/genome.rs` | `crates/alife_core/tests/genome_weight_split.rs` | complete |
+| Genetic weights are immutable under lifetime learning | Weight decomposition | P06/P16 | `crates/alife_core/src/genome.rs` (`WGeneticFixed`, `WeightSplitContract`) | `crates/alife_core/tests/genome_weight_split.rs` | complete for P06 contract; P16 runtime consolidation pending |
 | Drives and hormones are bounded and reject invalid values | Neurochemistry and drive system | P07 | `crates/alife_core/src/chemistry.rs` | P07 validation tests | pending |
 | Sensory/context ABI is versioned and engine-neutral | Sensory ABI / semantic context | P08 | `crates/alife_core/src/sensory_abi.rs` | P08 tests | pending |
 | ExperiencePatch is three-phase | ExperiencePatch contract | P10 | `experience.rs` | `experience` tests | pending |
