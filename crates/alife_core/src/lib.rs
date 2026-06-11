@@ -24,7 +24,12 @@ pub use action::{ActionCommand, ActionKind};
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
 pub use brain_class::{BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier};
-pub use chemistry::EndocrineProfile;
+pub use chemistry::{
+    ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta, EndocrineProfile,
+    EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand, HomeostaticDelta,
+    HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment, RecoveryTrigger,
+    DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
+};
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
 pub use experience::{ExperiencePatchHeader, ExperiencePatchPhase};
