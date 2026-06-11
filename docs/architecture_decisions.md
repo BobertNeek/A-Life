@@ -39,3 +39,7 @@ Decision: Core sensory snapshots use stable IDs, core math primitives, fixed v1 
 ## ADR-010: Sealed Three-Phase ExperiencePatch
 
 Decision: Runtime `ExperiencePatch` records are rich Rust data assembled through pre-action, decision, and post-action phases, then sealed before learning, memory, topology, or logging consumers can inspect them. Packed logging remains a separate P11 contract.
+
+## ADR-011: Fixed Packed Logs with Side Buffers
+
+Decision: Packed experience logs are versioned, fixed-size, intentionally lossy frames derived from sealed `ExperiencePatch` records, with variable-length payload summaries stored in deterministic side-buffer records. Packed logs are an export/replay boundary, not the canonical runtime cognition representation.

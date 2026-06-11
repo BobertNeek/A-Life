@@ -56,6 +56,10 @@ pub enum ScaffoldContractError {
     },
     #[error("packed log schema mismatch: expected {expected}, got {actual}")]
     PackedLogSchemaMismatch { expected: u16, actual: u16 },
+    #[error("packed log side buffer capacity exceeded")]
+    PackedLogSideBufferOverflow,
+    #[error("packed log frame capacity exceeded")]
+    PackedLogFrameCapacityExceeded,
     #[error("backend parity check failed")]
     BackendParity,
 }

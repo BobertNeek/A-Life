@@ -29,6 +29,8 @@ pub enum DiagnosticCode {
     OutOfRangeDriveHormone,
     IncompatibleAbi,
     PackedLogSchemaMismatch,
+    PackedLogSideBufferOverflow,
+    PackedLogFrameCapacityExceeded,
     BackendParity,
 }
 
@@ -119,6 +121,12 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
                 expected: Some(expected),
                 actual: Some(actual),
             },
+            ScaffoldContractError::PackedLogSideBufferOverflow => {
+                Self::new(DiagnosticCode::PackedLogSideBufferOverflow)
+            }
+            ScaffoldContractError::PackedLogFrameCapacityExceeded => {
+                Self::new(DiagnosticCode::PackedLogFrameCapacityExceeded)
+            }
             ScaffoldContractError::BackendParity => Self::new(DiagnosticCode::BackendParity),
         }
     }
