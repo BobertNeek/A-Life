@@ -6,6 +6,7 @@ use crate::ScaffoldContractError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SchemaKind {
+    Chemistry,
     SensoryAbi,
     ActionAbi,
     Experience,
@@ -31,6 +32,7 @@ impl ContractVersion {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SchemaVersions {
+    pub chemistry: ContractVersion,
     pub sensory_abi: ContractVersion,
     pub action_abi: ContractVersion,
     pub experience: ContractVersion,
@@ -44,6 +46,7 @@ pub struct SchemaVersions {
 
 impl SchemaVersions {
     pub const CURRENT: Self = Self {
+        chemistry: ContractVersion::V1,
         sensory_abi: ContractVersion::V1,
         action_abi: ContractVersion::V1,
         experience: ContractVersion::V1,
@@ -57,6 +60,7 @@ impl SchemaVersions {
 
     pub const fn current_for(kind: SchemaKind) -> ContractVersion {
         match kind {
+            SchemaKind::Chemistry => Self::CURRENT.chemistry,
             SchemaKind::SensoryAbi => Self::CURRENT.sensory_abi,
             SchemaKind::ActionAbi => Self::CURRENT.action_abi,
             SchemaKind::Experience => Self::CURRENT.experience,
