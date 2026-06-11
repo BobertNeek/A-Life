@@ -24,6 +24,7 @@ pub struct ContractVersion(pub u16);
 
 impl ContractVersion {
     pub const V1: Self = Self(1);
+    pub const V2: Self = Self(2);
 
     pub const fn raw(self) -> u16 {
         self.0
@@ -48,7 +49,7 @@ impl SchemaVersions {
     pub const CURRENT: Self = Self {
         chemistry: ContractVersion::V1,
         sensory_abi: ContractVersion::V1,
-        action_abi: ContractVersion::V1,
+        action_abi: ContractVersion::V2,
         experience: ContractVersion::V1,
         packed_log: ContractVersion::V1,
         genome: ContractVersion::V1,
