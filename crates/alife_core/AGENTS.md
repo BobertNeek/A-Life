@@ -1,8 +1,8 @@
 # alife_core Instructions
 
-This crate controls engine-agnostic cognitive contracts: IDs, brain classes,
-lobe layout, genome, chemistry, ExperiencePatch, ActionCommand, sensory/action
-ABIs, profiles, lineage, and backend traits.
+This crate controls engine-agnostic cognitive contracts: IDs, brain class
+registry, lobe layout, routing masks, genome, chemistry, ExperiencePatch,
+ActionCommand, sensory/action ABIs, profiles, lineage, and backend traits.
 
 Rules:
 
