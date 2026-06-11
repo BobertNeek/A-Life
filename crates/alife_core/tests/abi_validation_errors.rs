@@ -29,7 +29,7 @@ fn incompatible_abi_returns_typed_error_and_diagnostic() {
         error,
         ScaffoldContractError::IncompatibleAbi {
             kind: SchemaKind::ActionAbi,
-            expected: 1,
+            expected: 2,
             actual: 99,
         }
     );
@@ -38,7 +38,7 @@ fn incompatible_abi_returns_typed_error_and_diagnostic() {
     let diagnostic = ContractDiagnostic::from(&error);
     assert_eq!(diagnostic.code, DiagnosticCode::IncompatibleAbi);
     assert_eq!(diagnostic.schema, Some(SchemaKind::ActionAbi));
-    assert_eq!(diagnostic.expected, Some(1));
+    assert_eq!(diagnostic.expected, Some(2));
     assert_eq!(diagnostic.actual, Some(99));
 }
 
@@ -61,7 +61,7 @@ fn validated_wrapper_accepts_good_contracts_and_rejects_bad_versions() {
         bad.validate_contract(),
         Err(ScaffoldContractError::IncompatibleAbi {
             kind: SchemaKind::ActionAbi,
-            expected: 1,
+            expected: 2,
             actual: 999
         })
     ));
