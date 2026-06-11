@@ -1,8 +1,8 @@
 use alife_core::{
     ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, EndocrineProfile,
-    ExperiencePatchHeader, ExperienceSequenceId, GenomeId, LineageExportManifest, LineageId,
-    LobeKind, LobeLayout, NeuralComputeBackend, OrganismId, SemanticPriorProvider,
-    SemanticPriorRequest, TeacherPerceptionChannel, Tick, WorldEntityId,
+    EndocrineSnapshot, ExperiencePatchHeader, ExperienceSequenceId, GenomeId,
+    LineageExportManifest, LineageId, LobeKind, LobeLayout, NeuralComputeBackend, OrganismId,
+    SemanticPriorProvider, SemanticPriorRequest, TeacherPerceptionChannel, Tick, WorldEntityId,
 };
 use alife_core::{Confidence, DurationTicks};
 
@@ -49,7 +49,10 @@ fn genome_and_endocrine_profile_reference_brain_class_without_runtime_weights() 
     assert_eq!(genome.species_seed, 7);
     assert_eq!(genome.brain_class_id, class.id);
     assert!(genome.genetic_prior_seed != 0);
-    assert_eq!(endocrine.modulator_count(), 6);
+    assert_eq!(
+        endocrine.modulator_count(),
+        EndocrineSnapshot::CHANNEL_COUNT
+    );
 }
 
 #[test]

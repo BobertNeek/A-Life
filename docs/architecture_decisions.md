@@ -31,3 +31,7 @@ Decision: Formal spec uses “grounded developmental generalist agent research d
 ## ADR-008: Graphify and DOX
 
 Decision: Graphify and DOX are developer/agent tooling, not runtime dependencies. Graphify supplies queryable repo knowledge. DOX supplies AGENTS.md discipline.
+
+## ADR-009: Engine-Neutral Sensory ABI and Optional Context Refs
+
+Decision: Core sensory snapshots use stable IDs, core math primitives, fixed v1 channel groups, context stream metadata, and optional semantic/Gaussian references. They do not embed Bevy entities, renderer objects, SLM runtime objects, teacher internals, or hidden action hooks.

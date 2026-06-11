@@ -13,30 +13,71 @@ pub mod ids;
 pub mod lineage;
 pub mod lobe;
 pub mod math;
+pub mod routing;
 pub mod sensory_abi;
 pub mod traits;
 pub mod units;
 pub mod validation;
 pub mod version;
 
-pub use action::{ActionCommand, ActionKind};
+pub use action::{
+    cpu_reference_arbitrate, ActionArbitrationConfig, ActionArbitrationTrace,
+    ActionArbitrationTraceRef, ActionBiasSource, ActionCommand, ActionDecision,
+    ActionDecisionStatus, ActionFallbackReason, ActionInhibitionSample, ActionKind, ActionProposal,
+    ActionRegistryEntry, ActionScoreBias, ActionTarget, ActionWtaResult, InhibitionNeighborhood,
+    MotorPayloadKind, MotorPayloadRef, RankedActionProposal, SuppressedProposal, SuppressionReason,
+    TeacherLessonMetadata, TeacherLessonResponseChannel,
+};
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
-pub use brain_class::{BrainClassSpec, BrainScaleTier};
-pub use chemistry::EndocrineProfile;
+pub use brain_class::{BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier};
+pub use chemistry::{
+    ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta, EndocrineProfile,
+    EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand, HomeostaticDelta,
+    HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment, RecoveryTrigger,
+    DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
+};
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
 pub use experience::{ExperiencePatchHeader, ExperiencePatchPhase};
-pub use genome::BrainGenome;
+pub use genome::{
+    AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
+    DevelopmentState, DevelopmentalMilestone, DevelopmentalSchedule, DriveThresholdGene,
+    DriveThresholdKind, EffectiveWeightSample, EndocrineConstantGene, EndocrineConstantKind,
+    GenomeSeedSet, HOperational, HShadow, InheritancePolicy, LifetimeConsolidationDelta,
+    LobeAlphaOverride, LobeRatioOverride, LobeRatioPlan, LobeRatioRegistryRef, MacroConnectomeMask,
+    MotorAffordanceGene, MotorAffordanceKind, MutationRates, PlasticityMask,
+    ProjectionAlphaOverride, ProjectionKey, ProjectionPlasticityMask, SensorChannelGene,
+    SensorChannelKind, SensorLayoutGene, SparseDensityPrior, SynapseAddress, SynapseAlphaOverride,
+    TileAddress, TileAlphaOverride, WEffective, WGeneticFixed, WLifetimeConsolidated,
+    WeightLayerDescriptor, WeightLayerKind, WeightSplitContract, WeightStorageSemantics,
+};
 pub use ids::{
     validate_optional_target, ActionId, BrainClassId, ConceptCellId, CreatureId,
     ExperienceSequenceId, GaussianClusterId, GenomeId, LineageId, LobeIndex, MemoryId, NeuronIndex,
     OrganismId, WorldEntityId,
 };
 pub use lineage::LineageExportManifest;
-pub use lobe::{LobeKind, LobeLayout, LobeRegion};
+pub use lobe::{
+    ActivationPolicy, LobeEssentiality, LobeKind, LobeLayout, LobeRegion, LobeThrottlePriority,
+    PlasticityPolicy, UpdateCadence,
+};
 pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
-pub use sensory_abi::{SensoryAbiVersion, TeacherPerceptionChannel};
+pub use routing::{
+    ActiveTilePolicy, BiologicalPriority, ProjectionType, RoutingMask, RoutingMatrix,
+};
+pub use sensory_abi::{
+    AffordanceBits, ChannelBounds, ChannelExtensionPolicy, ChannelGroupKind, ChannelGroupSpec,
+    CompressedSemanticCode, ContextFeatureFlags, ContextStreams, EnvironmentStreamEntry,
+    GaussianContextRef, GaussianSalienceEntry, HeardToken, LanguageContextSnapshot,
+    SemanticContextRef, SemanticSalienceEntry, SensoryAbiDescriptor, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, SensorySnapshotFromAdapter, SensorySnapshotSource,
+    SocialAgentSnapshot, SocialContextSnapshot, SocialProximityEntry, TeacherPerceptionChannel,
+    VocalizedToken, MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS,
+    SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
+    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+};
 pub use traits::{
     NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,
 };
