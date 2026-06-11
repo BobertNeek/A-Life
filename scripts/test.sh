@@ -5,4 +5,4 @@ if ! command -v cargo >/dev/null 2>&1 && [ -n "${USERPROFILE:-}" ] && [ -x "${US
   export PATH="${USERPROFILE}/.cargo/bin:${PATH}"
 fi
 
-cargo test --workspace
+cargo test --workspace --all-targets

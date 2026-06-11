@@ -6,5 +6,5 @@ if ! command -v cargo >/dev/null 2>&1 && [ -n "${USERPROFILE:-}" ] && [ -x "${US
 fi
 
 cargo fmt --all -- --check
-cargo check --workspace
-cargo build --workspace
+cargo check --workspace --all-targets
+cargo build --workspace --all-targets
