@@ -19,7 +19,14 @@ pub mod units;
 pub mod validation;
 pub mod version;
 
-pub use action::{ActionCommand, ActionKind};
+pub use action::{
+    cpu_reference_arbitrate, ActionArbitrationConfig, ActionArbitrationTrace,
+    ActionArbitrationTraceRef, ActionBiasSource, ActionCommand, ActionDecision,
+    ActionDecisionStatus, ActionFallbackReason, ActionInhibitionSample, ActionKind, ActionProposal,
+    ActionRegistryEntry, ActionScoreBias, ActionTarget, ActionWtaResult, InhibitionNeighborhood,
+    MotorPayloadKind, MotorPayloadRef, RankedActionProposal, SuppressedProposal, SuppressionReason,
+    TeacherLessonMetadata, TeacherLessonResponseChannel,
+};
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
 pub use brain_class::{BrainClassSpec, BrainScaleTier};

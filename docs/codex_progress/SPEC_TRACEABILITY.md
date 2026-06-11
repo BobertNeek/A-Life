@@ -24,8 +24,8 @@ Codex must expand this as plans are implemented. Each row links a spec requireme
 | Runtime ExperiencePatch remains separate from packed logs | ExperiencePatch / packed logging split | P10/P11 | future runtime and packed log modules | P10/P11 tests | pending |
 | Memory recall returns expectancy, not replay | Memory contract | P12 | `memory.rs` | `memory` tests | pending |
 | Topological concept map tracks edges/simplexes/gaps | Topological cognitive map | P13 | future topology modules | P13 tests | pending |
-| Action output is structured | Runtime spec action arbitration | P09 | `action.rs` | `action` tests | pending |
-| Action arbitration records proposals and rejection trace | Action ABI and motor arbitration | P09 | future arbitration modules | P09 tests | pending |
+| Action output is structured | Runtime spec action arbitration | P09 | `crates/alife_core/src/action.rs` | `crates/alife_core/tests/action_arbitration.rs` | complete: ActionAbi v2 command preserves action ID/kind, optional entity/position target, intensity, duration, confidence, source mask, teacher metadata, motor payload ref, and arbitration trace ref |
+| Action arbitration records proposals and rejection trace | Action ABI and motor arbitration | P09 | `crates/alife_core/src/action.rs` | `crates/alife_core/tests/action_arbitration.rs` | complete: CPU reference WTA ranks proposals, records suppressed proposals/ties/thresholds, uses deterministic tie-breaking, and falls back when no eligible proposal passes |
 | CPU reference precedes GPU | Runtime implementation sequence | P15/P24-P29 | `brain_reference.rs`, GPU crate | parity tests | pending |
 | CPU sparse projection schema exists before GPU contracts | Sparse tensor storage / CPU reference | P14/P15 | future neural state modules | P14/P15 tests | pending |
 | Headless behavior harness gates world behavior | Testing strategy / world harness | P17-P20 | future harness crates/modules | scenario, golden trace, benchmark tests | pending |
