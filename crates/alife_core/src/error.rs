@@ -60,6 +60,12 @@ pub enum ScaffoldContractError {
     PackedLogSideBufferOverflow,
     #[error("packed log frame capacity exceeded")]
     PackedLogFrameCapacityExceeded,
+    #[error("topological map bounded storage capacity exceeded")]
+    TopologyCapacityExceeded,
+    #[error("sparse projection schema is invalid")]
+    InvalidSparseProjectionSchema,
+    #[error("sparse tile format is defined but not implemented in the CPU oracle")]
+    UnsupportedSparseTileFormat,
     #[error("backend parity check failed")]
     BackendParity,
 }

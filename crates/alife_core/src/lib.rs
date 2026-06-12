@@ -13,9 +13,12 @@ pub mod ids;
 pub mod lineage;
 pub mod lobe;
 pub mod math;
+pub mod memory;
+pub mod neural;
 pub mod packed_log;
 pub mod routing;
 pub mod sensory_abi;
+pub mod topology;
 pub mod traits;
 pub mod units;
 pub mod validation;
@@ -69,6 +72,20 @@ pub use lobe::{
     PlasticityPolicy, UpdateCadence,
 };
 pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
+pub use memory::{
+    MemoryBank, MemoryBankConfig, MemoryConsolidationBatch, MemoryConsolidator, MemoryExpectancy,
+    MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecord, MEMORY_BANK_MAX_CAPACITY,
+    MEMORY_FEATURE_VECTOR_MAX_LEN,
+};
+pub use neural::{
+    cpu_spmv_projection, finalize_cpu_activations, update_oja_shadow_traces, ActivationFunction,
+    CooEntry, CooTile, CpuNeuralState, DecodedSynapse, DenseTile, LobeActivationView, Microtile,
+    NeuralActivationConfig, NeuralDiagnostics, NeuralProjectionSchema, NeuralUpdateMetadata,
+    NeuralUpdateReport, NeuronRange, OjaUpdateConfig, PlasticityTraceBuffers, ProjectionRoutingRef,
+    ProjectionTile, SparseProjection, SparseTileCoord, SparseTilePayload, SparseTileType,
+    SupertileMask, SynapseWeightSplit, TileMetadata, MICROTILE_CELLS, MICROTILE_EDGE,
+    SUPERTILE_EDGE, SUPERTILE_MICROTILES,
+};
 pub use packed_log::{
     ExperiencePacker, InMemoryPackedExperienceLog, PackedExperienceFrame, PackedExperienceRecord,
     PackedExperienceSink, PackedExperienceSummary, PackedLogEntryRef, PackedSideBufferKind,
@@ -95,6 +112,12 @@ pub use sensory_abi::{
     SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
     SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+};
+pub use topology::{
+    ActionObservationFact, CognitiveEdge, CognitiveEdgeId, CognitiveSimplex, CognitiveSimplexId,
+    ConceptBindings, ConceptCell, ContradictionType, CuriosityBias, DriveBinding, DriveChannel,
+    EdgeRelationKind, EmotionValenceSummary, GapResolutionStatus, TopologicalMap,
+    TopologicalMapConfig, TopologyUpdate, UnresolvedGap, UnresolvedGapId,
 };
 pub use traits::{
     NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,
