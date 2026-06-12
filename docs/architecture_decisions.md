@@ -47,3 +47,7 @@ Decision: Packed experience logs are versioned, fixed-size, intentionally lossy 
 ## ADR-012: Memory Recall as Bounded Expectancy Bias
 
 Decision: Episodic associative memory stores sealed experience records in bounded deterministic banks and recalls `MemoryExpectancy` bias fields. Recall may bias valence, drive deltas, outcome summaries, affordances, danger/safety, social trust/fear, novelty, and curiosity, but it must not expose selected actions as replay commands.
+
+## ADR-013: Bounded CPU Topological Concept Map
+
+Decision: The P13 topological concept map is an engine-independent, bounded CPU-side ledger over sealed `ExperiencePatch` records. It creates `ConceptCell`, `CognitiveEdge`, `CognitiveSimplex`, and `UnresolvedGap` records plus curiosity bias metadata, but it does not use graph databases, GPU graph structures, renderer objects, engine entities, or direct public action-command output.

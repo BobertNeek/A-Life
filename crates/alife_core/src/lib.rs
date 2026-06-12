@@ -17,6 +17,7 @@ pub mod memory;
 pub mod packed_log;
 pub mod routing;
 pub mod sensory_abi;
+pub mod topology;
 pub mod traits;
 pub mod units;
 pub mod validation;
@@ -101,6 +102,12 @@ pub use sensory_abi::{
     SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
     SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+};
+pub use topology::{
+    ActionObservationFact, CognitiveEdge, CognitiveEdgeId, CognitiveSimplex, CognitiveSimplexId,
+    ConceptBindings, ConceptCell, ContradictionType, CuriosityBias, DriveBinding, DriveChannel,
+    EdgeRelationKind, EmotionValenceSummary, GapResolutionStatus, TopologicalMap,
+    TopologicalMapConfig, TopologyUpdate, UnresolvedGap, UnresolvedGapId,
 };
 pub use traits::{
     NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,

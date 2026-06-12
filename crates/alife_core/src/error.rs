@@ -60,6 +60,8 @@ pub enum ScaffoldContractError {
     PackedLogSideBufferOverflow,
     #[error("packed log frame capacity exceeded")]
     PackedLogFrameCapacityExceeded,
+    #[error("topological map bounded storage capacity exceeded")]
+    TopologyCapacityExceeded,
     #[error("backend parity check failed")]
     BackendParity,
 }
