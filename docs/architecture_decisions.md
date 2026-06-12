@@ -43,3 +43,7 @@ Decision: Runtime `ExperiencePatch` records are rich Rust data assembled through
 ## ADR-011: Fixed Packed Logs with Side Buffers
 
 Decision: Packed experience logs are versioned, fixed-size, intentionally lossy frames derived from sealed `ExperiencePatch` records, with variable-length payload summaries stored in deterministic side-buffer records. Packed logs are an export/replay boundary, not the canonical runtime cognition representation.
+
+## ADR-012: Bounded CPU Topological Concept Map
+
+Decision: The P13 topological concept map is an engine-independent, bounded CPU-side ledger over sealed `ExperiencePatch` records. It creates `ConceptCell`, `CognitiveEdge`, `CognitiveSimplex`, and `UnresolvedGap` records plus curiosity bias metadata, but it does not use graph databases, GPU graph structures, renderer objects, engine entities, or direct public action-command output.

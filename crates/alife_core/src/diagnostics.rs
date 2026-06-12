@@ -31,6 +31,7 @@ pub enum DiagnosticCode {
     PackedLogSchemaMismatch,
     PackedLogSideBufferOverflow,
     PackedLogFrameCapacityExceeded,
+    TopologyCapacityExceeded,
     BackendParity,
 }
 
@@ -126,6 +127,9 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
             }
             ScaffoldContractError::PackedLogFrameCapacityExceeded => {
                 Self::new(DiagnosticCode::PackedLogFrameCapacityExceeded)
+            }
+            ScaffoldContractError::TopologyCapacityExceeded => {
+                Self::new(DiagnosticCode::TopologyCapacityExceeded)
             }
             ScaffoldContractError::BackendParity => Self::new(DiagnosticCode::BackendParity),
         }
