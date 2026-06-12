@@ -13,6 +13,7 @@ pub mod ids;
 pub mod lineage;
 pub mod lobe;
 pub mod math;
+pub mod memory;
 pub mod packed_log;
 pub mod routing;
 pub mod sensory_abi;
@@ -69,6 +70,11 @@ pub use lobe::{
     PlasticityPolicy, UpdateCadence,
 };
 pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
+pub use memory::{
+    MemoryBank, MemoryBankConfig, MemoryConsolidationBatch, MemoryConsolidator, MemoryExpectancy,
+    MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecord, MEMORY_BANK_MAX_CAPACITY,
+    MEMORY_FEATURE_VECTOR_MAX_LEN,
+};
 pub use packed_log::{
     ExperiencePacker, InMemoryPackedExperienceLog, PackedExperienceFrame, PackedExperienceRecord,
     PackedExperienceSink, PackedExperienceSummary, PackedLogEntryRef, PackedSideBufferKind,

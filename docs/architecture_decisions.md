@@ -43,3 +43,7 @@ Decision: Runtime `ExperiencePatch` records are rich Rust data assembled through
 ## ADR-011: Fixed Packed Logs with Side Buffers
 
 Decision: Packed experience logs are versioned, fixed-size, intentionally lossy frames derived from sealed `ExperiencePatch` records, with variable-length payload summaries stored in deterministic side-buffer records. Packed logs are an export/replay boundary, not the canonical runtime cognition representation.
+
+## ADR-012: Memory Recall as Bounded Expectancy Bias
+
+Decision: Episodic associative memory stores sealed experience records in bounded deterministic banks and recalls `MemoryExpectancy` bias fields. Recall may bias valence, drive deltas, outcome summaries, affordances, danger/safety, social trust/fear, novelty, and curiosity, but it must not expose selected actions as replay commands.
