@@ -13,6 +13,7 @@ pub mod ids;
 pub mod lineage;
 pub mod lobe;
 pub mod math;
+pub mod neural;
 pub mod packed_log;
 pub mod routing;
 pub mod sensory_abi;
@@ -69,6 +70,15 @@ pub use lobe::{
     PlasticityPolicy, UpdateCadence,
 };
 pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
+pub use neural::{
+    cpu_spmv_projection, finalize_cpu_activations, update_oja_shadow_traces, ActivationFunction,
+    CooEntry, CooTile, CpuNeuralState, DecodedSynapse, DenseTile, LobeActivationView, Microtile,
+    NeuralActivationConfig, NeuralDiagnostics, NeuralProjectionSchema, NeuralUpdateMetadata,
+    NeuralUpdateReport, NeuronRange, OjaUpdateConfig, PlasticityTraceBuffers, ProjectionRoutingRef,
+    ProjectionTile, SparseProjection, SparseTileCoord, SparseTilePayload, SparseTileType,
+    SupertileMask, SynapseWeightSplit, TileMetadata, MICROTILE_CELLS, MICROTILE_EDGE,
+    SUPERTILE_EDGE, SUPERTILE_MICROTILES,
+};
 pub use packed_log::{
     ExperiencePacker, InMemoryPackedExperienceLog, PackedExperienceFrame, PackedExperienceRecord,
     PackedExperienceSink, PackedExperienceSummary, PackedLogEntryRef, PackedSideBufferKind,
