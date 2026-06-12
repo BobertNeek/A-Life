@@ -657,7 +657,6 @@ pub struct CuriosityBias {
     pub salience: NormalizedScalar,
     pub curiosity_voltage: NormalizedScalar,
     pub confidence: Confidence,
-    pub action_id_hint: Option<ActionId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -789,7 +788,6 @@ impl TopologicalMap {
                 salience: NormalizedScalar(gap.salience.raw().max(gap.curiosity_voltage.raw())),
                 curiosity_voltage: gap.curiosity_voltage,
                 confidence: gap.confidence,
-                action_id_hint: None,
             })
             .collect()
     }

@@ -503,10 +503,8 @@ fn topology_curiosity_api_does_not_produce_or_bypass_action_commands() {
     let biases = map.curiosity_biases();
     let bias = &biases[0];
     assert_eq!(bias.source_concepts, vec![ConceptCellId(1)]);
-    assert!(
-        bias.action_id_hint.is_none(),
-        "topology may bias salience, not issue actions"
-    );
+    assert!(bias.salience.raw() > 0.0);
+    assert!(bias.curiosity_voltage.raw() > 0.0);
 }
 
 #[test]
