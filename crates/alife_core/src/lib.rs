@@ -16,6 +16,7 @@ pub mod math;
 pub mod memory;
 pub mod neural;
 pub mod packed_log;
+pub mod reference_brain;
 pub mod routing;
 pub mod sensory_abi;
 pub mod topology;
@@ -97,6 +98,12 @@ pub use packed_log::{
     PACKED_FLAG_HAS_TARGET_POSITION, PACKED_FLAG_HAS_TEACHER_FEEDBACK,
     PACKED_FLAG_HAS_TEACHER_LESSON, PACKED_FLAG_SUCCESS, PACKED_HORMONE_SUMMARY_CHANNELS,
     PACKED_LOG_DEFAULT_SIDE_BUFFER_CAPACITY_RECORDS, PACKED_SIDE_BUFFER_GROUP_COUNT,
+};
+pub use reference_brain::{
+    BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,
+    CreatureBodyState, CreatureMind, ReferenceActionExecution, ReferenceActionExecutor,
+    ReferenceActionFailure, ReferenceOutcomeObservation, ReferenceOutcomeObserver,
+    ReferenceOutcomeRequest, ReferenceSensoryAdapter, ReferenceSensoryRequest,
 };
 pub use routing::{
     ActiveTilePolicy, BiologicalPriority, ProjectionType, RoutingMask, RoutingMatrix,
