@@ -32,6 +32,8 @@ pub enum DiagnosticCode {
     PackedLogSideBufferOverflow,
     PackedLogFrameCapacityExceeded,
     TopologyCapacityExceeded,
+    InvalidSparseProjectionSchema,
+    UnsupportedSparseTileFormat,
     BackendParity,
 }
 
@@ -130,6 +132,12 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
             }
             ScaffoldContractError::TopologyCapacityExceeded => {
                 Self::new(DiagnosticCode::TopologyCapacityExceeded)
+            }
+            ScaffoldContractError::InvalidSparseProjectionSchema => {
+                Self::new(DiagnosticCode::InvalidSparseProjectionSchema)
+            }
+            ScaffoldContractError::UnsupportedSparseTileFormat => {
+                Self::new(DiagnosticCode::UnsupportedSparseTileFormat)
             }
             ScaffoldContractError::BackendParity => Self::new(DiagnosticCode::BackendParity),
         }

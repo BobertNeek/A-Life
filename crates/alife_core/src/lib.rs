@@ -14,6 +14,7 @@ pub mod lineage;
 pub mod lobe;
 pub mod math;
 pub mod memory;
+pub mod neural;
 pub mod packed_log;
 pub mod routing;
 pub mod sensory_abi;
@@ -75,6 +76,15 @@ pub use memory::{
     MemoryBank, MemoryBankConfig, MemoryConsolidationBatch, MemoryConsolidator, MemoryExpectancy,
     MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecord, MEMORY_BANK_MAX_CAPACITY,
     MEMORY_FEATURE_VECTOR_MAX_LEN,
+};
+pub use neural::{
+    cpu_spmv_projection, finalize_cpu_activations, update_oja_shadow_traces, ActivationFunction,
+    CooEntry, CooTile, CpuNeuralState, DecodedSynapse, DenseTile, LobeActivationView, Microtile,
+    NeuralActivationConfig, NeuralDiagnostics, NeuralProjectionSchema, NeuralUpdateMetadata,
+    NeuralUpdateReport, NeuronRange, OjaUpdateConfig, PlasticityTraceBuffers, ProjectionRoutingRef,
+    ProjectionTile, SparseProjection, SparseTileCoord, SparseTilePayload, SparseTileType,
+    SupertileMask, SynapseWeightSplit, TileMetadata, MICROTILE_CELLS, MICROTILE_EDGE,
+    SUPERTILE_EDGE, SUPERTILE_MICROTILES,
 };
 pub use packed_log::{
     ExperiencePacker, InMemoryPackedExperienceLog, PackedExperienceFrame, PackedExperienceRecord,
