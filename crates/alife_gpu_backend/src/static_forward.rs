@@ -2,13 +2,15 @@
 //!
 //! This module implements only passes 0-2 for deterministic static forward
 //! projection diagnostics: accumulator clear, fixed-point SpMV, and activation
-//! clamp/finalize. It does not implement plasticity, supertile routing runtime,
-//! recompaction, or active-tick readback APIs.
+//! clamp/finalize. P27 supplies the shared supertile mask early-exit contract.
+//! This module does not implement plasticity, structural editing, or
+//! active-tick readback APIs.
 
 use std::sync::mpsc;
 
 use alife_core::{validate_finite, ScaffoldContractError};
 
+use crate::routing_masks::{p27_routing_counters, p27_tile_is_active, GpuRoutingCounters};
 use crate::{
     GpuBufferContractHeader, GpuFixedPointPolicy, GpuPackedSynapseIndexRecord,
     GpuSupertileMaskRecord, GpuTileMetadataRecord, GpuUploadBuffers,
@@ -179,7 +181,7 @@ impl GpuStaticForwardPlan {
             if !matches!(tile.tile_type, 1 | 2) {
                 return Err(ScaffoldContractError::UnsupportedSparseTileFormat);
             }
-            if !self.tile_is_active(*tile) {
+            if !p27_tile_is_active(*tile, &self.supertile_masks)? {
                 diagnostics.mask_skipped_tiles = diagnostics.mask_skipped_tiles.saturating_add(1);
                 continue;
             }
@@ -233,28 +235,13 @@ impl GpuStaticForwardPlan {
         Ok(finalized)
     }
 
-    fn tile_is_active(&self, tile: GpuTileMetadataRecord) -> bool {
-        if self.supertile_masks.is_empty() {
-            return true;
-        }
-        let supertile_row = tile.microtile_row / 8;
-        let supertile_col = tile.microtile_col / 8;
-        let local_row = tile.microtile_row % 8;
-        let local_col = tile.microtile_col % 8;
-        let local_bit = local_row * 8 + local_col;
-        self.supertile_masks.iter().any(|mask| {
-            if mask.projection_index != tile.projection_index
-                || mask.supertile_row != supertile_row
-                || mask.supertile_col != supertile_col
-            {
-                return false;
-            }
-            if local_bit < 32 {
-                (mask.active_microtile_mask_lo & (1_u32 << local_bit)) != 0
-            } else {
-                (mask.active_microtile_mask_hi & (1_u32 << (local_bit - 32))) != 0
-            }
-        })
+    pub fn routing_counters(&self) -> GpuRoutingCounters {
+        p27_routing_counters(
+            &self.tile_metadata,
+            &self.packed_indices,
+            &self.supertile_masks,
+            self.header.routing_descriptor_count,
+        )
     }
 
     fn params_bytes(&self) -> Vec<u8> {

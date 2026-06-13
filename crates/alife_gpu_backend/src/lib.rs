@@ -4,6 +4,7 @@ use alife_core::NeuralComputeBackend;
 
 pub mod buffers;
 pub mod plasticity;
+pub mod routing_masks;
 pub mod shader_contract;
 pub mod static_forward;
 
@@ -21,6 +22,12 @@ pub use plasticity::{
     run_plasticity_gpu_diagnostic, GpuOjaFixedPointConfig, GpuPlasticityDiagnostics,
     GpuPlasticityDispatch, GpuPlasticityPlan, GpuPlasticityResult, P26_PLASTICITY_DIAGNOSTIC_WORDS,
     P26_PLASTICITY_TOLERANCE_Q, P26_PLASTICITY_WORKGROUP_SIZE, P26_WGSL_PLASTICITY,
+};
+pub use routing_masks::{
+    p27_routing_counters, p27_tile_is_active, GpuActiveTileMaskConfig, GpuRoutingCounters,
+    GpuRoutingMaskPlan, GpuSupertileIndex, GpuSupertileMaskWords, P27_MICROTILE_EDGE,
+    P27_PLASTICITY_STORAGE_BINDINGS, P27_STATIC_FORWARD_STORAGE_BINDINGS, P27_SUPERTILE_EDGE,
+    P27_SUPERTILE_MASK_WORDS, P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
 pub use static_forward::{

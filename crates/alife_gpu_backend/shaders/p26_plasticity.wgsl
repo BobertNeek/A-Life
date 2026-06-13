@@ -14,7 +14,8 @@
 // - Each invocation owns exactly one packed synapse/weight slot and writes only
 //   h_shadow_write_q[weight_index]. Genetic, lifetime, and H_operational layers
 //   are not bound as writable buffers in this pass.
-// - P27 routing and P28 recompaction are intentionally unsupported here.
+// - P27 refines the existing supertile mask early-exit contract; later
+//   structural editing remains deferred.
 
 const WORKGROUP_SIZE: u32 = 64u;
 const Q16_DENOMINATOR: i32 = 65535;

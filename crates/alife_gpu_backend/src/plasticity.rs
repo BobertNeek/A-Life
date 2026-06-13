@@ -3,12 +3,14 @@
 //! This module implements pass 3 as a diagnostic/parity path only. It consumes
 //! finalized pass-2 activations plus the previous activation buffer and writes a
 //! new `H_shadow` trace buffer. Genetic, lifetime, and operational trace layers
-//! are carried for contract checks but are not writable by this pass.
+//! are carried for contract checks but are not writable by this pass. P27
+//! supplies the shared supertile mask early-exit contract.
 
 use std::sync::mpsc;
 
 use alife_core::{OjaUpdateConfig, ScaffoldContractError};
 
+use crate::routing_masks::p27_tile_is_active;
 use crate::{
     GpuBufferContractHeader, GpuFixedPointPolicy, GpuPackedSynapseIndexRecord,
     GpuSupertileMaskRecord, GpuTileMetadataRecord, GpuUploadBuffers,
@@ -229,7 +231,7 @@ impl GpuPlasticityPlan {
             if !matches!(tile.tile_type, 1 | 2) {
                 return Err(ScaffoldContractError::UnsupportedSparseTileFormat);
             }
-            if !self.tile_is_active(*tile) {
+            if !p27_tile_is_active(*tile, &self.supertile_masks)? {
                 diagnostics.mask_skipped_tiles = diagnostics.mask_skipped_tiles.saturating_add(1);
                 continue;
             }
@@ -303,30 +305,6 @@ impl GpuPlasticityPlan {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
         Ok(())
-    }
-
-    fn tile_is_active(&self, tile: GpuTileMetadataRecord) -> bool {
-        if self.supertile_masks.is_empty() {
-            return true;
-        }
-        let supertile_row = tile.microtile_row / 8;
-        let supertile_col = tile.microtile_col / 8;
-        let local_row = tile.microtile_row % 8;
-        let local_col = tile.microtile_col % 8;
-        let local_bit = local_row * 8 + local_col;
-        self.supertile_masks.iter().any(|mask| {
-            if mask.projection_index != tile.projection_index
-                || mask.supertile_row != supertile_row
-                || mask.supertile_col != supertile_col
-            {
-                return false;
-            }
-            if local_bit < 32 {
-                (mask.active_microtile_mask_lo & (1_u32 << local_bit)) != 0
-            } else {
-                (mask.active_microtile_mask_hi & (1_u32 << (local_bit - 32))) != 0
-            }
-        })
     }
 
     fn params_bytes(&self) -> Vec<u8> {
