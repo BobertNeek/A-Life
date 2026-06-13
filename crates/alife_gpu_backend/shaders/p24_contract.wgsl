@@ -1,7 +1,7 @@
 // P24 contract-only WGSL stub.
 //
-// This file documents shader-visible buffer expectations before P25/P26 add
-// actual compute entry points. It is intentionally not a runtime kernel.
+// This file documents shader-visible buffer expectations shared by P25/P26
+// compute entry points. It is intentionally not a runtime kernel.
 //
 // Binding contract:
 // - Tile metadata records are 32 bytes and page-relative.
@@ -30,8 +30,9 @@
 //   activation ping-pong buffer, and preserve diagnostic counters.
 //
 // pass 3 plasticity_update:
-//   Update H_operational/H_shadow contract buffers according to the CPU oracle
-//   semantics after parity tests exist. No implementation in P24.
+//   Update H_shadow according to the CPU oracle after pass-2 final activations
+//   are stable. Genetic fixed, lifetime consolidated, and H_operational layers
+//   are immutable in this pass. The executable diagnostic shader lives in P26.
 //
 // Later hooks:
 //   Super-tile culling refinement and sleep/offline structural recompaction

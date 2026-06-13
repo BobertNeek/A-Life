@@ -1,0 +1,129 @@
+{
+  "schema": "alife.p19.golden_trace.v1",
+  "schema_version": 1,
+  "tolerances": {
+    "milliscale_absolute": 0,
+    "stochastic_fields": [
+      "scenario.seed"
+    ]
+  },
+  "scenario": {
+    "key": "poison-pain-avoidance",
+    "label": "poison/pain avoidance",
+    "seed": 18002,
+    "experience_schema_version": 1,
+    "action_abi_version": 2,
+    "sensory_abi_version": 1,
+    "chemistry_schema_version": 1
+  },
+  "patches": [
+    {
+      "index": 0,
+      "phase_sequence": [
+        "PreActionSnapshot",
+        "DecisionSnapshot",
+        "PostActionOutcome",
+        "Sealed"
+      ],
+      "tick": 0,
+      "outcome_tick": 1,
+      "status": "Normal",
+      "failure": null,
+      "selected_action_id": 101,
+      "selected_action_kind": "Move",
+      "target_entity": 2,
+      "success": true,
+      "contact": "Collision",
+      "reward_milli": -710,
+      "pain_milli": 800,
+      "frustration_milli": 250,
+      "prediction_error_milli": 800,
+      "contradiction": true,
+      "memory_danger_milli": 0,
+      "memory_salience_milli": 13
+    },
+    {
+      "index": 1,
+      "phase_sequence": [
+        "PreActionSnapshot",
+        "DecisionSnapshot",
+        "PostActionOutcome",
+        "Sealed"
+      ],
+      "tick": 1,
+      "outcome_tick": 2,
+      "status": "Normal",
+      "failure": null,
+      "selected_action_id": 102,
+      "selected_action_kind": "Move",
+      "target_entity": 2,
+      "success": true,
+      "contact": "Moved",
+      "reward_milli": 0,
+      "pain_milli": 0,
+      "frustration_milli": 0,
+      "prediction_error_milli": 80,
+      "contradiction": false,
+      "memory_danger_milli": 800,
+      "memory_salience_milli": 500
+    }
+  ],
+  "state": {
+    "patch_count": 2,
+    "memory_record_count": 2,
+    "topology_concept_count": 3,
+    "topology_edge_count": 2,
+    "topology_simplex_count": 2,
+    "topology_gap_count": 1,
+    "curiosity_bias_count": 1,
+    "sleep_phase": "Awake",
+    "sleep_cycle_count": 0,
+    "pending_structural_edit_count": 0,
+    "final_drive_milli": [
+      270,
+      220,
+      460,
+      760,
+      156,
+      514,
+      610,
+      0,
+      102,
+      0,
+      0
+    ],
+    "final_hormone_milli": [
+      340,
+      300,
+      460,
+      500,
+      600,
+      500,
+      500,
+      500,
+      200,
+      0,
+      0
+    ]
+  },
+  "neural_ticks": [
+    {
+      "index": 0,
+      "active_tiles": 0,
+      "active_synapses": 0,
+      "mask_skipped_tiles": 0,
+      "range_rejections": 0
+    },
+    {
+      "index": 1,
+      "active_tiles": 0,
+      "active_synapses": 0,
+      "mask_skipped_tiles": 0,
+      "range_rejections": 0
+    }
+  ],
+  "world_signature": [
+    "1:Agent:agent:2.000:0.000:0.000:0.000:0.000:None:0.000:None:false:None",
+    "2:Hazard:poison:1.000:0.000:0.000:0.000:0.800:None:0.000:None:false:None"
+  ]
+}

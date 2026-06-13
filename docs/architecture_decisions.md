@@ -59,3 +59,7 @@ Decision: P16 sleep consolidation is a deterministic CPU sleep/offline phase tha
 ## ADR-015: GPU Upload Contracts Are Explicit Little-Endian Records
 
 Decision: P24 GPU upload buffers are explicit little-endian, page-relative records translated from the P14 CPU sparse projection schema. The GPU backend must not use raw host pointers, unsafe transmute packing, or shader-invented parallel layouts for tile metadata, masks, packed indices, weight layers, activation ping-pong, accumulators, diagnostics, routing descriptors, or action-summary staging.
+
+## ADR-016: Benchmark Tiers Are CPU-Smoke and GPU-Parity Gated
+
+Decision: P20 benchmark tiers use deterministic CPU-reference headless scenarios for CI smoke at populations 1 and 10, while populations 50, 100, 250, and 500 remain manual expected-slow CPU measurements until GPU parity/runtime plans provide acceleration. Benchmark reports are generated under `target/artifacts/` and are not committed as baseline data.

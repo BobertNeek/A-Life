@@ -1,27 +1,22 @@
 //! v0 scaffold: external in-world teacher contracts.
+//!
+//! The school crate may plan curriculum privately, but every creature-facing
+//! signal is represented as ordinary perceptual or social evidence.
 
-use alife_core::TeacherPerceptionChannel;
+pub mod curriculum;
+pub mod lesson_api;
+pub mod runner;
+pub mod teacher;
+pub mod verifier;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TeacherRole {
-    Tutor,
-    Examiner,
-    Critic,
-    CurriculumPlanner,
-    Verifier,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TeacherChannelContract {
-    pub channels: Vec<TeacherPerceptionChannel>,
-    pub hidden_vector_injection_allowed: bool,
-}
-
-impl TeacherChannelContract {
-    pub fn grounded_default() -> Self {
-        Self {
-            channels: TeacherPerceptionChannel::ALL.to_vec(),
-            hidden_vector_injection_allowed: false,
-        }
-    }
-}
+pub use curriculum::{Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation};
+pub use lesson_api::{LessonId, LessonResponse, LessonResponseKind};
+pub use runner::{HeadlessCurriculumRunner, LessonDispatch};
+pub use teacher::{
+    FeedbackPolarity, TeacherChannelContract, TeacherInputKind, TeacherPerceptualEvent,
+    TeacherRole, TEACHER_SCHOOL_SCHEMA_VERSION,
+};
+pub use verifier::{
+    LessonVerification, LessonVerifier, PatchLogLessonVerifier, SchoolEvidence, TopologySummary,
+    VerifierCheck,
+};

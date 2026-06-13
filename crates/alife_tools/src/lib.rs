@@ -1,5 +1,7 @@
 //! v0 scaffold: developer tooling contracts.
 
+pub mod benchmark;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolingManifest {
     pub graphify_required_for_cargo_build: bool,

@@ -8,6 +8,14 @@ The teacher LLM is not the creature's subconscious. The teacher is an external s
 
 The internal SLM is a private subconscious semantic prior. It receives compressed sensory summaries, drives, and limited ExperiencePatch summaries. It may bias attention, lexicon/concept activity, memory recall, and weak plasticity. It never issues direct actions.
 
+## P23 v0 School Contract
+
+The implemented v0 school contract is stricter than the older bootstrapping notes below. Teacher-facing code in `alife_school` exposes lesson roles, lesson IDs, prompts/cues, expected observations, verifier checks, feedback events, and lesson response channels. Creature-facing teacher inputs are only spoken tokens, gestures, object highlights, social feedback, visible reward, and visible punishment. Hidden vectors, direct motor selection, private reward injection, and weight edits are not represented in the v0 teacher event API.
+
+`LessonResponse` metadata may annotate an `ActionCommand` candidate through the existing teacher lesson metadata field, but it does not select the action. P09 arbitration still chooses between proposals by score, confidence, and traceable tie-breaking. P23 tests cover both a teacher-tagged candidate losing to a higher-scored ordinary candidate and a teacher-tagged candidate winning only when normal arbitration selects it.
+
+P23 verification consumes sealed `ExperiencePatch` logs plus bounded memory/topology summaries. Verifiers check perceptual evidence such as heard teacher tokens, visible reward/feedback outcomes, absence of hidden semantic/Gaussian vectors, and whether selected actions came from arbitration rather than a teacher bypass.
+
 ## Teacher Roles
 
 - Tutor.
