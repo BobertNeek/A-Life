@@ -9,3 +9,10 @@ repository.workspace = true
 alife_core.workspace = true
 pollster.workspace = true
 wgpu.workspace = true
+
+[features]
+default = []
+gpu-tests = []
+
+[dev-dependencies]
+naga = { version = "29.0.3", features = ["wgsl-in"] }
