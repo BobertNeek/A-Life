@@ -4,6 +4,7 @@ use alife_core::NeuralComputeBackend;
 
 pub mod buffers;
 pub mod shader_contract;
+pub mod static_forward;
 
 pub use buffers::{
     GpuAccumulatorLayout, GpuActionSummaryStagingRecord, GpuActivationPingPongViews,
@@ -16,6 +17,12 @@ pub use buffers::{
     GPU_TILE_METADATA_BYTES,
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
+pub use static_forward::{
+    finalize_static_forward_accumulators_for_diagnostics, run_static_forward_gpu_diagnostic,
+    GpuStaticForwardDiagnostics, GpuStaticForwardDispatch, GpuStaticForwardPlan,
+    GpuStaticForwardResult, P25_DIAGNOSTIC_COUNTER_WORDS, P25_STATIC_FORWARD_TOLERANCE_ABS,
+    P25_STATIC_FORWARD_WORKGROUP_SIZE, P25_WGSL_STATIC_FORWARD,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShaderSourceLanguage {
@@ -32,6 +39,11 @@ impl GpuBackendManifest {
     pub const SCAFFOLD: Self = Self {
         shader_language: ShaderSourceLanguage::Wgsl,
         runtime_neural_kernels_implemented: false,
+    };
+
+    pub const STATIC_FORWARD_PARITY: Self = Self {
+        shader_language: ShaderSourceLanguage::Wgsl,
+        runtime_neural_kernels_implemented: true,
     };
 }
 
