@@ -80,3 +80,20 @@ sleep/offline/export metadata rather than active gameplay readback.
 
 Dynamic shader-side allocation, GPU autophagy runtime passes, and no-readback
 performance tier integration remain separate follow-up work.
+
+## ADR-019: GPU Runtime Is Optional, Fallback-Capable, and No-Readback
+
+Decision: P29 makes GPU static, GPU plastic, and GPU full backends selectable
+runtime modes without replacing the CPU reference oracle. Unsupported hardware,
+disabled features, validation failure, or unavailable full-runtime support fall
+back to CPU with typed diagnostics.
+
+Active gameplay does not expose synchronous bulk neural, per-synapse, per-lobe,
+or weight readback. Diagnostics/export snapshots are frame, sleep, manual
+validation, or performance-report boundary scoped. Runtime throttling preserves
+sensory/motor and homeostatic priority while decimating non-essential cognitive
+lobes first when GPU neural timing exceeds budget.
+
+P29 performance reports must record unknown or missed targets honestly. P20 CPU
+smoke data may be copied into P29 reports as fallback context, but it is not a
+GPU performance claim.

@@ -125,3 +125,54 @@ The P28 WGSL file is a contract stub only. It does not implement dynamic GPU
 allocation or shader-side recompaction. Active gameplay APIs still cannot
 require per-synapse, weight, or bulk neural readback; P29 owns runtime
 performance-tier integration.
+
+## P29 optional GPU runtime and no-readback tiers
+
+P29 adds the runtime selection and performance-reporting shell around the
+diagnostic GPU lane. The CPU reference remains the default and the correctness
+oracle. GPU static, GPU plastic, and GPU full modes are selectable through
+configuration, but unsupported hardware, disabled features, validation failure,
+or unavailable full-runtime support fall back to CPU with a typed reason.
+
+Runtime boundary rules:
+
+- active gameplay may stage compact action summaries only.
+- active gameplay does not expose bulk neural, per-synapse, per-lobe, or weight
+  readback.
+- diagnostics/export readbacks are allowed only at frame, sleep, manual
+  validation, or performance-report boundaries.
+- P25/P26 ignored GPU parity tests and P27/P28 diagnostic counters are not
+  product active-gameplay readback APIs.
+
+The throttling policy protects sensory, metabolic, motor, and homeostatic lobes
+first. When GPU neural timing exceeds budget, non-essential association,
+lexicon, memory, and working-memory lobes decimate before sensory/motor cadence
+is reduced.
+
+Performance-report commands:
+
+```bash
+cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
+cargo run -p alife_tools --bin benchmark_tiers -- --all --gpu-runtime
+```
+
+The smoke command writes `target/artifacts/gpu_runtime_performance.md`. Unless
+`ALIFE_GPU_RUNTIME_AVAILABLE=1` and `ALIFE_GPU_RUNTIME_VALIDATED=1` are set, the
+report records CPU fallback data and leaves GPU neural timing and 60 FPS target
+status as unknown. This is intentional: the existing P25/P26 GPU paths are
+diagnostic parity paths, and local ignored tests do not prove product WebGPU
+portability.
+
+Relevant optional environment flags:
+
+- `ALIFE_GPU_RUNTIME_BACKEND=cpu|static|plastic|full`
+- `ALIFE_GPU_RUNTIME_FEATURE=1`
+- `ALIFE_GPU_RUNTIME_AVAILABLE=1`
+- `ALIFE_GPU_RUNTIME_VALIDATED=1`
+- `ALIFE_GPU_FULL_RUNTIME_AVAILABLE=1`
+
+Current storage-buffer assumptions remain inherited from P25/P26/P27: the
+static-forward diagnostic bind group uses at least nine storage buffers, and
+the plasticity diagnostic bind group uses at least ten storage buffers. Future
+runtime work may reduce or shard these assumptions, but must keep the
+no-active-readback rule.

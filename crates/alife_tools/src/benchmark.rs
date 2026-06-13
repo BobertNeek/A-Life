@@ -11,6 +11,10 @@ use std::{
 };
 
 use alife_core::{BrainClassSpec, BrainScaleTier, BrainTickStatus, LobeKind, Validate};
+use alife_gpu_backend::{
+    GpuRuntimeBackendStatus, GpuTierMeasurement, GpuTierPerformanceReport, GpuTierPopulation,
+    P29_RUNTIME_SCHEMA_VERSION,
+};
 use alife_world::{ScenarioFixture, ScenarioName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -361,6 +365,46 @@ impl BenchmarkHarness {
     }
 }
 
+pub struct GpuRuntimeBenchmarkBridge;
+
+impl GpuRuntimeBenchmarkBridge {
+    pub fn from_cpu_smoke(
+        cpu_report: &BenchmarkReport,
+        backend: GpuRuntimeBackendStatus,
+        notes: impl Into<String>,
+    ) -> Result<GpuTierPerformanceReport, alife_core::ScaffoldContractError> {
+        let notes = notes.into();
+        let mut report = GpuTierMeasurement::cpu_fallback_report(backend, notes.clone());
+        report.schema_version = P29_RUNTIME_SCHEMA_VERSION;
+        report.feature_flags.push("p20-smoke".to_string());
+
+        for run in &cpu_report.runs {
+            let Some(population) = tier_population(run.tier.population) else {
+                return Err(alife_core::ScaffoldContractError::ScalarOutOfRange);
+            };
+            if let Some(measurement) = report
+                .measurements
+                .iter_mut()
+                .find(|measurement| measurement.population == population)
+            {
+                measurement.tick_time_ms = Some(run.metrics.tick_time.as_secs_f32() * 1000.0);
+                measurement.patch_throughput_per_second =
+                    Some(run.metrics.patch_throughput_per_second as f32);
+                measurement.memory_topology_update_ms =
+                    Some(run.metrics.memory_topology_update_time.as_secs_f32() * 1000.0);
+                measurement.sleep_recompaction_ms =
+                    Some(run.metrics.sleep_consolidation_time.as_secs_f32() * 1000.0);
+                measurement.active_synapses = run.metrics.active_synapses;
+                measurement.active_tiles = run.metrics.active_tiles;
+                measurement.notes = format!("{notes}; P20 CPU smoke measurement copied");
+            }
+        }
+
+        report.validate()?;
+        Ok(report)
+    }
+}
+
 fn run_tier(
     tier: BenchmarkTier,
     brain_tier: BrainScaleTier,
@@ -446,4 +490,16 @@ fn sparse_population_total_bytes(tier: BrainScaleTier, population: u16) -> u64 {
         + 2 * 64
         + 2 * 256;
     shared_species_template + sparse_per_creature_live * u64::from(population)
+}
+
+fn tier_population(population: u16) -> Option<GpuTierPopulation> {
+    match population {
+        1 => Some(GpuTierPopulation::One),
+        10 => Some(GpuTierPopulation::Ten),
+        50 => Some(GpuTierPopulation::Fifty),
+        100 => Some(GpuTierPopulation::OneHundred),
+        250 => Some(GpuTierPopulation::TwoHundredFifty),
+        500 => Some(GpuTierPopulation::FiveHundred),
+        _ => None,
+    }
 }

@@ -1,9 +1,14 @@
 use std::time::Duration;
 
 use alife_core::{BrainScaleTier, LobeKind};
+use alife_gpu_backend::{
+    GpuPerformanceTargetStatus, GpuRuntimeBackendConfig, GpuRuntimeBackendKind,
+    GpuRuntimeFallbackReason, GpuTierPopulation,
+};
 use alife_tools::benchmark::{
     BenchmarkHarness, BenchmarkHarnessConfig, BenchmarkMetricKind, BenchmarkTier,
-    ComputeBudgetPolicy, ResidencyClass, TargetProfile, UpdateRatePolicy,
+    ComputeBudgetPolicy, GpuRuntimeBenchmarkBridge, ResidencyClass, TargetProfile,
+    UpdateRatePolicy,
 };
 
 #[test]
@@ -127,6 +132,62 @@ fn benchmark_report_generator_writes_markdown_under_target_artifacts() {
     assert!(markdown.contains("| 1 |"));
     assert!(markdown.contains("CPU reference smoke"));
     assert!(markdown.contains("Manual expected-slow tiers"));
+}
+
+#[test]
+fn gpu_runtime_bridge_reuses_p20_smoke_without_fabricating_gpu_results() {
+    let cpu_report = BenchmarkHarness::run(
+        BenchmarkHarnessConfig::smoke()
+            .with_tiers([BenchmarkTier::new(1), BenchmarkTier::new(10)])
+            .with_iteration_count(1),
+    )
+    .unwrap();
+    let backend = GpuRuntimeBackendConfig::request(GpuRuntimeBackendKind::GpuStatic)
+        .with_hardware_available(false)
+        .select_backend()
+        .unwrap();
+    let gpu_report = GpuRuntimeBenchmarkBridge::from_cpu_smoke(
+        &cpu_report,
+        backend,
+        "P29 CI smoke: no GPU hardware performance run",
+    )
+    .unwrap();
+
+    assert_eq!(
+        gpu_report.backend.selected,
+        GpuRuntimeBackendKind::CpuReference
+    );
+    assert_eq!(
+        gpu_report.backend.fallback_reason,
+        Some(GpuRuntimeFallbackReason::HardwareUnavailable)
+    );
+    assert!(gpu_report.feature_flags.contains(&"p20-smoke".to_string()));
+    assert_eq!(
+        gpu_report
+            .measurements
+            .iter()
+            .map(|measurement| measurement.population)
+            .collect::<Vec<_>>(),
+        [
+            GpuTierPopulation::One,
+            GpuTierPopulation::Ten,
+            GpuTierPopulation::Fifty,
+            GpuTierPopulation::OneHundred,
+            GpuTierPopulation::TwoHundredFifty,
+            GpuTierPopulation::FiveHundred,
+        ]
+    );
+    assert!(gpu_report.measurements[0].tick_time_ms.is_some());
+    assert!(gpu_report.measurements[1].tick_time_ms.is_some());
+    assert!(gpu_report.measurements[2].tick_time_ms.is_none());
+    assert!(gpu_report
+        .measurements
+        .iter()
+        .all(|measurement| measurement.gpu_neural_time_ms.is_none()));
+    assert!(gpu_report
+        .measurements
+        .iter()
+        .all(|measurement| measurement.target_60_fps == GpuPerformanceTargetStatus::Unknown));
 }
 
 #[test]

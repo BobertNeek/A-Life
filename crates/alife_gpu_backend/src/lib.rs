@@ -6,6 +6,7 @@ pub mod buffers;
 pub mod plasticity;
 pub mod recompaction;
 pub mod routing_masks;
+pub mod runtime;
 pub mod shader_contract;
 pub mod static_forward;
 
@@ -36,6 +37,14 @@ pub use routing_masks::{
     GpuRoutingMaskPlan, GpuSupertileIndex, GpuSupertileMaskWords, P27_MICROTILE_EDGE,
     P27_PLASTICITY_STORAGE_BINDINGS, P27_STATIC_FORWARD_STORAGE_BINDINGS, P27_SUPERTILE_EDGE,
     P27_SUPERTILE_MASK_WORDS, P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
+};
+pub use runtime::{
+    GpuPerformanceTargetStatus, GpuRuntimeBackendConfig, GpuRuntimeBackendKind,
+    GpuRuntimeBackendStatus, GpuRuntimeBoundary, GpuRuntimeCapabilityManifest,
+    GpuRuntimeDiagnosticExport, GpuRuntimeFallbackReason, GpuRuntimeReadbackGuard,
+    GpuRuntimeThrottleDecision, GpuRuntimeThrottlingPolicy, GpuRuntimeTimingBudget,
+    GpuRuntimeTimingSample, GpuThrottleLevel, GpuThrottleReason, GpuTierMeasurement,
+    GpuTierPerformanceReport, GpuTierPopulation, P29_RUNTIME_SCHEMA_VERSION,
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
 pub use static_forward::{
