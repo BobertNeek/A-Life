@@ -1,0 +1,231 @@
+{
+  "schema": "alife.p32.initial_weight_asset.v1",
+  "schema_version": 1,
+  "brain_class": "Nano512",
+  "brain_class_id": 1,
+  "neuron_count": 512,
+  "lobe_layout": {
+    "hash_algorithm": "fnv1a64",
+    "hash": "fnv1a64:240a44b58188d111",
+    "ranges": [
+      {
+        "lobe": "SensoryGrounding",
+        "start": 0,
+        "len": 64
+      },
+      {
+        "lobe": "MetabolicDrive",
+        "start": 64,
+        "len": 32
+      },
+      {
+        "lobe": "AuditorySpeech",
+        "start": 96,
+        "len": 32
+      },
+      {
+        "lobe": "GlyphVision",
+        "start": 128,
+        "len": 32
+      },
+      {
+        "lobe": "LexiconConcept",
+        "start": 160,
+        "len": 64
+      },
+      {
+        "lobe": "CoreAssociation",
+        "start": 224,
+        "len": 112
+      },
+      {
+        "lobe": "EpisodicMemory",
+        "start": 336,
+        "len": 64
+      },
+      {
+        "lobe": "WorkingMemory",
+        "start": 400,
+        "len": 32
+      },
+      {
+        "lobe": "MotorArbitration",
+        "start": 432,
+        "len": 64
+      },
+      {
+        "lobe": "HomeostaticRegulation",
+        "start": 496,
+        "len": 16
+      },
+      {
+        "lobe": "LanguageExpansion",
+        "start": 512,
+        "len": 0
+      },
+      {
+        "lobe": "MathQuantity",
+        "start": 512,
+        "len": 0
+      },
+      {
+        "lobe": "NarrativeHistory",
+        "start": 512,
+        "len": 0
+      },
+      {
+        "lobe": "SocialReasoning",
+        "start": 512,
+        "len": 0
+      },
+      {
+        "lobe": "SelfCriticUncertainty",
+        "start": 512,
+        "len": 0
+      },
+      {
+        "lobe": "PlanningDream",
+        "start": 512,
+        "len": 0
+      },
+      {
+        "lobe": "SpeechWritingMotor",
+        "start": 512,
+        "len": 0
+      }
+    ]
+  },
+  "w_genetic_fixed": {
+    "encoding": "sparse_coo_f32_genetic_fixed_only",
+    "entries": [
+      {
+        "projection_index": 0,
+        "source": 22,
+        "target": 227,
+        "genetic_fixed": 0.0123581765
+      },
+      {
+        "projection_index": 1,
+        "source": 71,
+        "target": 316,
+        "genetic_fixed": -0.021855088
+      },
+      {
+        "projection_index": 2,
+        "source": 124,
+        "target": 176,
+        "genetic_fixed": -0.14401594
+      },
+      {
+        "projection_index": 3,
+        "source": 130,
+        "target": 193,
+        "genetic_fixed": -0.17393622
+      },
+      {
+        "projection_index": 4,
+        "source": 222,
+        "target": 238,
+        "genetic_fixed": -0.12737806
+      },
+      {
+        "projection_index": 5,
+        "source": 302,
+        "target": 395,
+        "genetic_fixed": 0.16017139
+      },
+      {
+        "projection_index": 6,
+        "source": 295,
+        "target": 411,
+        "genetic_fixed": -0.1237221
+      },
+      {
+        "projection_index": 7,
+        "source": 267,
+        "target": 484,
+        "genetic_fixed": 0.09227001
+      }
+    ]
+  },
+  "alpha_mask": {
+    "storage_policy": "hierarchical_sparse_with_synapse_overrides",
+    "default_alpha": 0.25,
+    "tile_overrides": [],
+    "synapse_overrides": [
+      {
+        "source": 22,
+        "target": 227,
+        "alpha": 0.25
+      },
+      {
+        "source": 71,
+        "target": 316,
+        "alpha": 0.25
+      },
+      {
+        "source": 124,
+        "target": 176,
+        "alpha": 0.25
+      },
+      {
+        "source": 130,
+        "target": 193,
+        "alpha": 0.25
+      },
+      {
+        "source": 222,
+        "target": 238,
+        "alpha": 0.25
+      },
+      {
+        "source": 302,
+        "target": 395,
+        "alpha": 0.25
+      },
+      {
+        "source": 295,
+        "target": 411,
+        "alpha": 0.25
+      },
+      {
+        "source": 267,
+        "target": 484,
+        "alpha": 0.25
+      }
+    ]
+  },
+  "density": {
+    "active_synapses": 8,
+    "active_microtiles": 8,
+    "max_active_synapses": 8192,
+    "max_active_microtiles": 64,
+    "density_ratio": 0.0009765625,
+    "active_supertiles": 8
+  },
+  "split": {
+    "genetic_fixed_payload_present": true,
+    "lifetime_consolidated_payload_present": false,
+    "h_operational_payload_present": false,
+    "h_shadow_payload_present": false,
+    "generated_asset_is_birth_initialization_only": true
+  },
+  "provenance": {
+    "kind": "ProceduralFallback",
+    "template": "NeutralControl",
+    "generator_name": "alife_tools::p32_weights",
+    "generator_version": "0.1.0",
+    "seed": 32,
+    "external_hook": {
+      "hook_schema_version": 1,
+      "command_hint": "external D2NWG scripts may emit this JSON schema; no Rust runtime hook is required",
+      "expected_input_contract": "offline script reads brain class, lobe layout hash, template, and seed",
+      "expected_output_schema": "alife.p32.initial_weight_asset.v1",
+      "python_or_ml_required_by_rust_runtime": false
+    },
+    "notes": [
+      "deterministic procedural fallback, not a trained D2NWG model"
+    ]
+  },
+  "validation_digest": "fnv1a64:abb12c6cb241c41a"
+}
