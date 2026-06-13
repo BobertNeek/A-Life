@@ -69,3 +69,14 @@ Decision: P20 benchmark tiers use deterministic CPU-reference headless scenarios
 Decision: P27 GPU supertile routing uses backend-owned active masks derived from core lobe/routing metadata as behavior-preserving early-exit data. The masks may skip inactive 16x16 microtiles inside 8x8/128x128 supertiles, but masked and unmasked execution must agree when skipped source regions are inactive. P27 counters are diagnostics/export metadata only; active gameplay APIs still do not require synchronous neural readback.
 
 Dispatch-level scheduling and later structural GPU cleanup remain separate plans.
+
+## ADR-018: Structural Recompaction Is Sleep/Offline Double-Buffered
+
+Decision: P28 GPU structural recompaction compiles P16 sleep edit batches into
+validated scratch upload buffers and swaps them all-or-nothing only at safe
+sleep/offline boundaries. Active gameplay buffers are never mutated in place,
+`W_genetic_fixed` remains immutable by default, and recompaction diagnostics are
+sleep/offline/export metadata rather than active gameplay readback.
+
+Dynamic shader-side allocation, GPU autophagy runtime passes, and no-readback
+performance tier integration remain separate follow-up work.

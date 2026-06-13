@@ -247,7 +247,7 @@ fn no_readback_policy_allows_only_summary_and_diagnostic_staging() {
 }
 
 #[test]
-fn wgsl_contract_passes_keep_p27_and_p28_deferred() {
+fn wgsl_contract_passes_keep_sleep_recompaction_separate_from_active_order() {
     let passes = GpuShaderPass::contract_order();
     assert_eq!(passes.len(), 4);
     assert!(matches!(passes[0], GpuShaderPass::ClearAccumulators));
@@ -255,4 +255,5 @@ fn wgsl_contract_passes_keep_p27_and_p28_deferred() {
     assert!(matches!(passes[2], GpuShaderPass::ActivationFinalize));
     assert!(matches!(passes[3], GpuShaderPass::PlasticityUpdate));
     assert!(GpuShaderPass::culling_recompaction_hooks_are_deferred());
+    assert!(GpuShaderPass::sleep_recompaction_uses_offline_boundary());
 }

@@ -27,6 +27,10 @@ impl GpuShaderPass {
         true
     }
 
+    pub const fn sleep_recompaction_uses_offline_boundary() -> bool {
+        true
+    }
+
     pub const fn contract_summary(self) -> &'static str {
         match self {
             Self::ClearAccumulators => {
