@@ -7,3 +7,8 @@ repository.workspace = true
 
 [dependencies]
 alife_core.workspace = true
+
+[features]
+default = []
+gaussian-adapter = []
+fake-semantic-provider = ["gaussian-adapter"]

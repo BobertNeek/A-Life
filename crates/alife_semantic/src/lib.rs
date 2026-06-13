@@ -2,6 +2,15 @@
 
 use alife_core::SemanticPriorProvider;
 
+#[cfg(feature = "fake-semantic-provider")]
+mod fake;
+#[cfg(feature = "gaussian-adapter")]
+mod gaussian;
+#[cfg(feature = "gaussian-adapter")]
+mod providers;
+#[cfg(feature = "gaussian-adapter")]
+mod semantic;
+
 #[derive(Debug, Default)]
 pub struct NoopSemanticPriorProvider;
 
@@ -25,3 +34,21 @@ impl SemanticBoundaryManifest {
         can_rewrite_weights: false,
     };
 }
+
+#[cfg(feature = "gaussian-adapter")]
+pub use gaussian::{
+    build_gaussian_context, EgocentricBinGrid, EgocentricBinHasher, GaussianClusterObservation,
+    MAX_GAUSSIAN_CONTEXT_CLUSTERS,
+};
+
+#[cfg(feature = "gaussian-adapter")]
+pub use providers::{SemanticContextBundle, SemanticContextProvider, SemanticContextRequest};
+
+#[cfg(feature = "gaussian-adapter")]
+pub use semantic::{
+    build_semantic_context, SemanticCodeDescriptor, SemanticConceptBinding,
+    MAX_SEMANTIC_CODE_COUNT, MAX_SEMANTIC_CONTEXT_BINDINGS,
+};
+
+#[cfg(feature = "fake-semantic-provider")]
+pub use fake::FakeSemanticProvider;
