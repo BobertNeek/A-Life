@@ -29,6 +29,9 @@ jobs:
       - name: Test
         run: cargo test --workspace --all-targets
 
+      - name: Benchmark smoke
+        run: cargo test -p alife_tools --test benchmark_tiers benchmark_tiers_smoke_runs_tier_1_and_10_quickly
+
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
