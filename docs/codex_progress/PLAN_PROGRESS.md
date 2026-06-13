@@ -26,6 +26,7 @@ Codex should update this file after each completed plan. Keep entries short but 
 | P18 | codex/P18-scenario-suite | complete | local branch commit; see receipt | P18 validation command set recorded in completion receipt | P19/P20/P23 |
 | P19 | codex/P19-golden-determinism | complete | local branch commit; see receipt | passed: focused P19 golden/property tests, fmt, check, test, all-features check/test, clippy, Git Bash `scripts/check.sh`, Git Bash `scripts/check_core_boundaries.sh`, `cargo tree -p alife_core`, Graphify update | P20/P21/P24 |
 | P20 | codex/P20-benchmark-tiers | complete | local branch commit; see receipt | P20 validation command set recorded in completion receipt | P21/P24/P29/P36 |
+| P30 | codex/P30-offline-log-tools | complete | local branch commit; see receipt | required validation set from plan P30 recorded in completion receipt | P31/P32/P33/P34 |
 | P21 | codex/P21-bevy-avian-adapter | complete | local branch commit; see receipt | P21 validation command set recorded in completion receipt | P35 |
 | P22 | codex/P22-semantic-gaussian-adapter | complete | local commit; see receipt | passed: fmt check, check, test, clippy, `cargo tree -p alife_core`, `scripts/check.sh`, `scripts/check_core_boundaries.sh`, all-features check/test | P35 |
 | P24 | codex/P24-gpu-buffer-contracts | complete | local branch commit; see receipt | passed: focused P24 tests, fmt, check, test, clippy, Git Bash `scripts/check.sh`, Git Bash `scripts/check_core_boundaries.sh`, `cargo tree -p alife_core` | P25 |
