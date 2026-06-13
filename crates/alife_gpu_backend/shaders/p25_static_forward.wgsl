@@ -12,8 +12,9 @@
 // - Accumulators are signed i32 atomics in activation scale.
 // - Diagnostics are eight u32 atomics in the P24 counter order.
 // - Dense16x16 and COO tiles are already flattened into packed synapse records.
-// - Plasticity, row/column-run payload execution, P27 routing, and P28
-//   recompaction are intentionally unsupported here.
+// - Plasticity and row/column-run payload execution stay outside P25.
+// - P27 refines the existing supertile mask early-exit contract; later
+//   structural editing remains deferred.
 
 const WORKGROUP_SIZE: u32 = 64u;
 const DIAGNOSTIC_WORDS: u32 = 8u;

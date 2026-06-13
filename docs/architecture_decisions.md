@@ -63,3 +63,9 @@ Decision: P24 GPU upload buffers are explicit little-endian, page-relative recor
 ## ADR-016: Benchmark Tiers Are CPU-Smoke and GPU-Parity Gated
 
 Decision: P20 benchmark tiers use deterministic CPU-reference headless scenarios for CI smoke at populations 1 and 10, while populations 50, 100, 250, and 500 remain manual expected-slow CPU measurements until GPU parity/runtime plans provide acceleration. Benchmark reports are generated under `target/artifacts/` and are not committed as baseline data.
+
+## ADR-017: Super-Tile Culling Preserves CPU Oracle Behavior
+
+Decision: P27 GPU supertile routing uses backend-owned active masks derived from core lobe/routing metadata as behavior-preserving early-exit data. The masks may skip inactive 16x16 microtiles inside 8x8/128x128 supertiles, but masked and unmasked execution must agree when skipped source regions are inactive. P27 counters are diagnostics/export metadata only; active gameplay APIs still do not require synchronous neural readback.
+
+Dispatch-level scheduling and later structural GPU cleanup remain separate plans.

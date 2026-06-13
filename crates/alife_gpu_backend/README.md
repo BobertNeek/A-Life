@@ -73,3 +73,31 @@ cargo test -p alife_gpu_backend --features gpu-tests --test plasticity_oja_parit
 The current diagnostic bind group requires an adapter limit of at least ten
 storage buffers in the compute stage. Normal CI does not require this adapter
 path.
+
+## P27 supertile routing masks
+
+P27 adds the shared hierarchical active-mask contract used by the P25 static
+forward and P26 plasticity diagnostic paths:
+
+- microtiles remain 16x16 neurons.
+- each supertile covers 8x8 microtiles, a 128x128 macro region.
+- each supertile mask stores 64 microtile bits split into low/high 32-bit
+  words.
+- CPU-side routing descriptors are derived from `alife_core` lobe/routing
+  metadata and reject invalid lobe references.
+- active tile masks are deterministic and may be derived from lobe cadence,
+  sensory activity, biological tile budget, or static fixture masks.
+- P25/P26 CPU diagnostic plans use the shared P27 mask helper for early exit;
+  behavior must match unmasked execution whenever skipped regions have no
+  source contribution.
+- counters track skipped supertiles, skipped microtiles, active tiles, active
+  synapses, routing descriptors evaluated, and mask boundary failures.
+
+Dispatch-level culling is deliberately deferred. P27 establishes shader
+early-exit and host-side mask packing first; P29 owns runtime performance tiers.
+The P25 and P26 paths remain diagnostic parity paths. Passing local diagnostic
+or ignored GPU tests does not prove product WebGPU portability, especially
+because the current diagnostic bind groups use nine and ten storage-buffer
+bindings respectively. Active gameplay APIs still must not require synchronous
+neural readback; diagnostics and export staging remain the allowed readback
+surfaces.
