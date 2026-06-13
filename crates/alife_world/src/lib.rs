@@ -2,6 +2,10 @@
 
 use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
 
+pub mod headless;
+
+pub use headless::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionLegality {
     Legal,
