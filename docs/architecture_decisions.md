@@ -51,3 +51,7 @@ Decision: Episodic associative memory stores sealed experience records in bounde
 ## ADR-013: Bounded CPU Topological Concept Map
 
 Decision: The P13 topological concept map is an engine-independent, bounded CPU-side ledger over sealed `ExperiencePatch` records. It creates `ConceptCell`, `CognitiveEdge`, `CognitiveSimplex`, and `UnresolvedGap` records plus curiosity bias metadata, but it does not use graph databases, GPU graph structures, renderer objects, engine entities, action-ID hint outputs, or direct public action-command output.
+
+## ADR-014: Sleep Consolidation Preserves Genotype Boundaries
+
+Decision: P16 sleep consolidation is a deterministic CPU sleep/offline phase that may drain `H_shadow`, stage `H_operational` and lifetime-layer updates, compress bounded memory/topology summaries, and emit structural edit candidates. It must not silently mutate `W_genetic_fixed`, and structural edits remain staged for sleep/offline compilation rather than active tick matrix resizing.
