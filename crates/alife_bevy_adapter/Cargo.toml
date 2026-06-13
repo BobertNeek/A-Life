@@ -8,3 +8,8 @@ repository.workspace = true
 [dependencies]
 alife_core.workspace = true
 bevy.workspace = true
+avian3d = { version = "0.6.1", default-features = false, features = ["3d", "f32"], optional = true }
+
+[features]
+default = []
+avian3d = ["dep:avian3d"]
