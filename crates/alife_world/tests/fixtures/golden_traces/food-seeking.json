@@ -1,0 +1,97 @@
+{
+  "schema": "alife.p19.golden_trace.v1",
+  "schema_version": 1,
+  "tolerances": {
+    "milliscale_absolute": 0,
+    "stochastic_fields": [
+      "scenario.seed"
+    ]
+  },
+  "scenario": {
+    "key": "food-seeking",
+    "label": "food-seeking",
+    "seed": 18001,
+    "experience_schema_version": 1,
+    "action_abi_version": 2,
+    "sensory_abi_version": 1,
+    "chemistry_schema_version": 1
+  },
+  "patches": [
+    {
+      "index": 0,
+      "phase_sequence": [
+        "PreActionSnapshot",
+        "DecisionSnapshot",
+        "PostActionOutcome",
+        "Sealed"
+      ],
+      "tick": 0,
+      "outcome_tick": 1,
+      "status": "Normal",
+      "failure": null,
+      "selected_action_id": 210,
+      "selected_action_kind": "Interact",
+      "target_entity": 2,
+      "success": true,
+      "contact": "Consumed",
+      "reward_milli": 810,
+      "pain_milli": 0,
+      "frustration_milli": 0,
+      "prediction_error_milli": 50,
+      "contradiction": false,
+      "memory_danger_milli": 0,
+      "memory_salience_milli": 13
+    }
+  ],
+  "state": {
+    "patch_count": 1,
+    "memory_record_count": 1,
+    "topology_concept_count": 2,
+    "topology_edge_count": 1,
+    "topology_simplex_count": 1,
+    "topology_gap_count": 0,
+    "curiosity_bias_count": 0,
+    "sleep_phase": "Awake",
+    "sleep_cycle_count": 0,
+    "pending_structural_edit_count": 0,
+    "final_drive_milli": [
+      220,
+      210,
+      60,
+      0,
+      153,
+      452,
+      668,
+      0,
+      101,
+      0,
+      0
+    ],
+    "final_hormone_milli": [
+      200,
+      200,
+      650,
+      500,
+      650,
+      500,
+      500,
+      500,
+      210,
+      0,
+      0
+    ]
+  },
+  "neural_ticks": [
+    {
+      "index": 0,
+      "active_tiles": 0,
+      "active_synapses": 0,
+      "mask_skipped_tiles": 0,
+      "range_rejections": 0
+    }
+  ],
+  "world_signature": [
+    "1:Agent:agent:0.000:0.000:0.000:0.000:0.000:None:0.000:None:false:None",
+    "2:Food:berry:0.500:0.000:0.000:0.650:0.000:None:0.000:None:true:None"
+  ]
+}
