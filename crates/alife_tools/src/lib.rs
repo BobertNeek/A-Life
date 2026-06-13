@@ -1,6 +1,10 @@
 //! v0 scaffold: developer tooling contracts.
 
 pub mod benchmark;
+pub mod p30_bundle;
+pub mod p30_cluster;
+pub mod p30_markers;
+pub mod p30_summary;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolingManifest {

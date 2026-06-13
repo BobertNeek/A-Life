@@ -8,3 +8,6 @@ repository.workspace = true
 [dependencies]
 alife_core.workspace = true
 alife_world = { path = "../alife_world" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
