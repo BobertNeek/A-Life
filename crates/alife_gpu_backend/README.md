@@ -114,6 +114,8 @@ sleep/offline boundaries:
   mutating active buffers in place.
 - prunes only zero-effective, decayed trace slots under the v1 autophagy
   policy, preserving static forward outputs.
+- reports byproduct decay events and a bounded BrainATP recovery signal as
+  diagnostics for future sleep/autophagy tuning.
 - emits an old-to-new remap table, affected projection/tile refs, routing/mask
   preservation diagnostics, and autophagy markers.
 - stages a double-buffer replacement that can either be rejected while keeping

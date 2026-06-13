@@ -29,6 +29,8 @@ pub struct GpuAutophagyPolicy {
     pub prune_zero_effective_synapses: bool,
     pub prune_zero_h_shadow_only: bool,
     pub h_shadow_abs_prune_threshold_q: i16,
+    pub byproduct_decay_quorum: u32,
+    pub brain_atp_recovery_per_pruned_q16: u32,
 }
 
 impl GpuAutophagyPolicy {
@@ -39,12 +41,17 @@ impl GpuAutophagyPolicy {
             prune_zero_effective_synapses: true,
             prune_zero_h_shadow_only: true,
             h_shadow_abs_prune_threshold_q: 0,
+            byproduct_decay_quorum: 1,
+            brain_atp_recovery_per_pruned_q16: 256,
         }
     }
 
     pub fn validate(self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != GPU_RECOMPACTION_SCHEMA_VERSION || self.max_edit_candidates == 0 {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        if self.byproduct_decay_quorum == 0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         Ok(())
     }
@@ -93,6 +100,8 @@ pub struct GpuRecompactionDiagnostics {
     pub swap_validation_failures: u32,
     pub unsupported_edit_kinds: u32,
     pub routing_mask_coherence_failures: u32,
+    pub byproduct_decay_events: u32,
+    pub brain_atp_recovery_signal_q16: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -345,6 +354,12 @@ impl GpuRecompactionPlan {
 
         if diagnostics.pruned_entries > 0 {
             diagnostics.remapped_entries = diagnostics.preserved_entries;
+            if diagnostics.pruned_entries >= self.policy.byproduct_decay_quorum {
+                diagnostics.byproduct_decay_events = diagnostics.pruned_entries;
+                diagnostics.brain_atp_recovery_signal_q16 = diagnostics
+                    .pruned_entries
+                    .saturating_mul(self.policy.brain_atp_recovery_per_pruned_q16);
+            }
         }
 
         compacted.tile_metadata = tile_metadata;

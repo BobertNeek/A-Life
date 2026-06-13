@@ -207,6 +207,8 @@ fn pruning_autophagy_remaps_zero_effective_synapse_without_output_drift() {
     assert_eq!(output.diagnostics.pruned_entries, 1);
     assert_eq!(output.diagnostics.remapped_entries, 2);
     assert_eq!(output.diagnostics.preserved_entries, 2);
+    assert_eq!(output.diagnostics.byproduct_decay_events, 1);
+    assert_eq!(output.diagnostics.brain_atp_recovery_signal_q16, 256);
     assert_eq!(output.remap.old_to_new, vec![Some(0), None, Some(1)]);
     assert_eq!(output.compacted_upload.packed_indices.len(), 2);
     assert_eq!(output.autophagy_markers.len(), 1);
