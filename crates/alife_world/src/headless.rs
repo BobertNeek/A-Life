@@ -19,9 +19,10 @@ use alife_core::{
     ReferenceOutcomeRequest, ReferenceSensoryAdapter, ReferenceSensoryRequest,
     ScaffoldContractError, SensoryChannels, SensorySnapshot, SignedValence,
     SleepConsolidationReport, SleepTransition, SleepTrigger, SocialAgentSnapshot,
-    SocialProximityEntry, Tick, Validate, Vec3f, WorldEntityId, MAX_HEARD_TOKENS,
-    MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT,
-    SENSORY_TACTILE_CHANNEL_COUNT, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+    SocialProximityEntry, TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
+    MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
+    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
 const DEFAULT_ENTITY_ID_START: u64 = 1;
@@ -62,6 +63,8 @@ pub struct WorldObject {
     pub nutrition: f32,
     pub hazard_pain: f32,
     pub token_id: Option<u32>,
+    pub social_affinity: f32,
+    pub teacher_channel: Option<TeacherPerceptionChannel>,
     pub consumed: bool,
     pub carried_by: Option<OrganismId>,
 }
@@ -122,6 +125,7 @@ pub struct HeadlessTelemetry {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeadlessBrainTick {
     pub brain: BrainTickOutput,
+    pub action_result: Option<HeadlessActionResult>,
     pub sleep_transition: Option<SleepTransition>,
     pub sleep_report: Option<SleepConsolidationReport>,
 }
@@ -135,6 +139,8 @@ struct SpawnSpec<'a> {
     nutrition: f32,
     hazard_pain: f32,
     token_id: Option<u32>,
+    social_affinity: f32,
+    teacher_channel: Option<TeacherPerceptionChannel>,
 }
 
 #[derive(Debug, Clone)]
@@ -187,7 +193,7 @@ impl HeadlessWorld {
             .values()
             .map(|object| {
                 format!(
-                    "{}:{:?}:{}:{:.3}:{:.3}:{:.3}:{:.3}:{:.3}:{:?}:{}:{:?}",
+                    "{}:{:?}:{}:{:.3}:{:.3}:{:.3}:{:.3}:{:.3}:{:?}:{:.3}:{:?}:{}:{:?}",
                     object.id.raw(),
                     object.kind,
                     object.label,
@@ -197,6 +203,8 @@ impl HeadlessWorld {
                     object.nutrition,
                     object.hazard_pain,
                     object.token_id,
+                    object.social_affinity,
+                    object.teacher_channel,
                     object.consumed,
                     object.carried_by
                 )
@@ -211,7 +219,7 @@ impl HeadlessWorld {
     ) -> Result<HeadlessSensoryReport, ScaffoldContractError> {
         organism_id.validate()?;
         let agent = self.agent_for(organism_id)?;
-        let visible_entities = self.visible_entities_from(agent.position);
+        let visible_entities = self.visible_entities_from(agent);
         let contact_entities = visible_entities
             .iter()
             .filter(|visible| visible.distance <= CONTACT_RADIUS)
@@ -228,6 +236,7 @@ impl HeadlessWorld {
         let mut social_proximity = [None; MAX_SOCIAL_AGENTS];
         let mut heard_index = 0;
         let mut social_index = 0;
+        let mut teacher_channel_marker = None;
 
         for visible in &visible_entities {
             affordances |= visible.affordances;
@@ -283,8 +292,10 @@ impl HeadlessWorld {
                                 token_id,
                                 source_position: object.position,
                                 confidence: Confidence::new(salience.max(0.1))?,
-                                teacher_channel: None,
+                                teacher_channel: object.teacher_channel,
                             });
+                            teacher_channel_marker =
+                                teacher_channel_marker.or(object.teacher_channel);
                             heard_index += 1;
                         }
                     }
@@ -320,6 +331,7 @@ impl HeadlessWorld {
         core_snapshot.language_context = LanguageContextSnapshot {
             heard_tokens: vocal_tokens,
             word_confidence: Confidence::new(if heard_index > 0 { 0.8 } else { 0.0 })?,
+            teacher_channel_marker,
             ..LanguageContextSnapshot::default()
         };
         for (index, entry) in social_proximity.iter().flatten().enumerate() {
@@ -334,7 +346,7 @@ impl HeadlessWorld {
                 relative_position: subtract(object.position, agent.position),
                 gaze_direction: Vec3f::new(0.0, 1.0, 0.0),
                 orientation_forward: Vec3f::new(0.0, 1.0, 0.0),
-                affinity: SignedValence::new(0.0)?,
+                affinity: SignedValence::new(object.social_affinity)?,
                 proximity: entry.proximity,
             });
         }
@@ -379,6 +391,8 @@ impl HeadlessWorld {
             nutrition: spec.nutrition.clamp(0.0, 1.0),
             hazard_pain: spec.hazard_pain.clamp(0.0, 1.0),
             token_id: spec.token_id,
+            social_affinity: spec.social_affinity.clamp(-1.0, 1.0),
+            teacher_channel: spec.teacher_channel,
             consumed: false,
             carried_by: None,
         };
@@ -694,17 +708,17 @@ impl HeadlessWorld {
             .ok_or(ScaffoldContractError::InvalidId)
     }
 
-    fn visible_entities_from(&self, observer_position: Vec3f) -> Vec<VisibleWorldEntity> {
+    fn visible_entities_from(&self, observer: &WorldObject) -> Vec<VisibleWorldEntity> {
         let mut visible = self
             .objects
             .values()
-            .filter(|object| object.organism_id.is_none() && !object.consumed)
+            .filter(|object| object.id != observer.id && !object.consumed)
             .filter_map(|object| {
-                let distance = distance(observer_position, object.position);
+                let distance = distance(observer.position, object.position);
                 (distance <= DEFAULT_VISION_RADIUS).then_some(VisibleWorldEntity {
                     id: object.id,
                     kind: object.kind,
-                    relative_position: subtract(object.position, observer_position),
+                    relative_position: subtract(object.position, observer.position),
                     distance,
                     affordances: object.affordances(),
                 })
@@ -753,6 +767,29 @@ impl HeadlessScenarioBuilder {
             nutrition: 0.0,
             hazard_pain: 0.0,
             token_id: None,
+            social_affinity: 0.0,
+            teacher_channel: None,
+        });
+        self
+    }
+
+    pub fn social_agent(
+        mut self,
+        label: &str,
+        organism_id: OrganismId,
+        position: Vec3f,
+        affinity: f32,
+    ) -> Self {
+        self.insert(SpawnSpec {
+            label,
+            kind: WorldObjectKind::Agent,
+            organism_id: Some(organism_id),
+            position,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: None,
+            social_affinity: affinity.clamp(-1.0, 1.0),
+            teacher_channel: None,
         });
         self
     }
@@ -766,6 +803,8 @@ impl HeadlessScenarioBuilder {
             nutrition,
             hazard_pain: 0.0,
             token_id: None,
+            social_affinity: 0.0,
+            teacher_channel: None,
         });
         self
     }
@@ -779,6 +818,8 @@ impl HeadlessScenarioBuilder {
             nutrition: 0.0,
             hazard_pain: pain,
             token_id: None,
+            social_affinity: 0.0,
+            teacher_channel: None,
         });
         self
     }
@@ -792,6 +833,8 @@ impl HeadlessScenarioBuilder {
             nutrition: 0.0,
             hazard_pain: 0.0,
             token_id: None,
+            social_affinity: 0.0,
+            teacher_channel: None,
         });
         if let Some(id) = self.world.entity_id(label) {
             if let Some(object) = self.world.objects.get_mut(&id.raw()) {
@@ -810,6 +853,29 @@ impl HeadlessScenarioBuilder {
             nutrition: 0.0,
             hazard_pain: 0.0,
             token_id: Some(token_id),
+            social_affinity: 0.0,
+            teacher_channel: None,
+        });
+        self
+    }
+
+    pub fn teacher_token(
+        mut self,
+        label: &str,
+        position: Vec3f,
+        token_id: u32,
+        teacher_channel: TeacherPerceptionChannel,
+    ) -> Self {
+        self.insert(SpawnSpec {
+            label,
+            kind: WorldObjectKind::Token,
+            organism_id: None,
+            position,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: Some(token_id),
+            social_affinity: 0.0,
+            teacher_channel: Some(teacher_channel),
         });
         self
     }
@@ -824,6 +890,8 @@ impl HeadlessScenarioBuilder {
             nutrition,
             hazard_pain: 0.0,
             token_id: None,
+            social_affinity: 0.0,
+            teacher_channel: None,
         });
         self
     }
@@ -838,6 +906,8 @@ impl HeadlessScenarioBuilder {
             nutrition: 0.0,
             hazard_pain: pain,
             token_id: None,
+            social_affinity: 0.0,
+            teacher_channel: None,
         });
         self
     }
@@ -981,6 +1051,11 @@ impl HeadlessBrainHarness {
         if let Some(record) = &brain.packed_record {
             self.telemetry.packed_records.push(record.clone());
         }
+        let action_result = if brain.selected_action.is_some() {
+            self.world.borrow().last_action_result.clone()
+        } else {
+            None
+        };
         let sleep_transition = if matches!(
             brain.selected_action.map(|command| command.kind),
             Some(ActionKind::Rest)
@@ -997,6 +1072,7 @@ impl HeadlessBrainHarness {
         self.world.borrow_mut().advance_tick();
         HeadlessBrainTick {
             brain,
+            action_result,
             sleep_transition,
             sleep_report: None,
         }
