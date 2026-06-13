@@ -18,11 +18,24 @@ cargo run -p alife_tools --bin benchmark_tiers
 
 The report is written to `target/artifacts/benchmark_tiers.md`.
 
+P29 GPU runtime smoke report:
+
+```bash
+cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
+```
+
+This writes `target/artifacts/gpu_runtime_performance.md` next to the CPU smoke
+report. By default it records CPU fallback status and leaves GPU neural time and
+60 FPS target status as `unknown`; set `ALIFE_GPU_RUNTIME_AVAILABLE=1` and
+`ALIFE_GPU_RUNTIME_VALIDATED=1` only after running the supported GPU validation
+path on the local machine.
+
 Manual CPU-only upper tiers:
 
 ```bash
 cargo test -p alife_tools --test benchmark_tiers -- --ignored --nocapture
 cargo run -p alife_tools --bin benchmark_tiers -- --all
+cargo run -p alife_tools --bin benchmark_tiers -- --all --gpu-runtime
 ```
 
 The 50/100/250/500 CPU-only tiers are expected-slow manual measurements. They
@@ -90,4 +103,25 @@ Expected split:
 
 P20 deliberately does not optimize P15/P17/P25 internals and does not
 implement P29 runtime integration.
+
+## P29 GPU runtime bridge
+
+The P29 bridge keeps performance reporting honest:
+
+- CPU reference remains the default and the correctness oracle.
+- GPU static, GPU plastic, and GPU full modes are selectable, but unsupported
+  hardware, disabled features, validation failure, and unavailable full-runtime
+  support fall back to CPU with a typed reason.
+- Active gameplay APIs do not expose synchronous bulk neural, per-synapse,
+  per-lobe, or weight readback.
+- Diagnostics/export snapshots are allowed only after frame/sleep boundaries,
+  manual validation, or explicit performance-reporting runs.
+- The current P20 smoke measurements are copied into the P29 report only as CPU
+  fallback context. They are not GPU timing claims.
+- Full tier GPU performance remains manual until product runtime scheduling and
+  hardware validation are available.
+
+The report includes all required population tiers: 1, 10, 50, 100, 250, and
+500. If a tier was not measured, its timing remains `unknown` instead of being
+fabricated.
 

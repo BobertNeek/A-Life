@@ -7,6 +7,7 @@ repository.workspace = true
 
 [dependencies]
 alife_core.workspace = true
+alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_world = { path = "../alife_world" }
 serde.workspace = true
 serde_json.workspace = true
