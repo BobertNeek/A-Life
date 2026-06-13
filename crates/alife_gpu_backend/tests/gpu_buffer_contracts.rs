@@ -247,7 +247,7 @@ fn no_readback_policy_allows_only_summary_and_diagnostic_staging() {
 }
 
 #[test]
-fn wgsl_contract_passes_are_stubs_not_runtime_kernels() {
+fn wgsl_contract_passes_keep_p27_and_p28_deferred() {
     let passes = GpuShaderPass::contract_order();
     assert_eq!(passes.len(), 4);
     assert!(matches!(passes[0], GpuShaderPass::ClearAccumulators));

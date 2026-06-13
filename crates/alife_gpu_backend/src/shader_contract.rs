@@ -39,7 +39,7 @@ impl GpuShaderPass {
                 "pass 2 clamps fixed-point accumulators into activation ping-pong buffers and records overflow/range flags"
             }
             Self::PlasticityUpdate => {
-                "pass 3 updates H_operational/H_shadow contract buffers using CPU P14/P15 semantics; implementation deferred"
+                "pass 3 reads finalized pre/post activation buffers and writes H_shadow only; genetic, lifetime, and H_operational layers stay read-only"
             }
         }
     }
