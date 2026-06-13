@@ -7,3 +7,6 @@ repository.workspace = true
 
 [dependencies]
 alife_core.workspace = true
+
+[dev-dependencies]
+alife_world = { path = "../alife_world" }

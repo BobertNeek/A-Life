@@ -52,6 +52,7 @@ name = "alife_school"
 version = "0.1.0"
 dependencies = [
  "alife_core",
+ "alife_world",
 ]
 
 [[package]]
