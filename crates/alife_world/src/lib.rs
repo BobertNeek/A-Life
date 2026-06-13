@@ -3,8 +3,10 @@
 use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
 
 pub mod headless;
+pub mod scenario;
 
 pub use headless::*;
+pub use scenario::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionLegality {
