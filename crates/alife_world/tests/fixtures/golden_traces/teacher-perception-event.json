@@ -1,0 +1,97 @@
+{
+  "schema": "alife.p19.golden_trace.v1",
+  "schema_version": 1,
+  "tolerances": {
+    "milliscale_absolute": 0,
+    "stochastic_fields": [
+      "scenario.seed"
+    ]
+  },
+  "scenario": {
+    "key": "teacher-perception-event",
+    "label": "teacher perception event",
+    "seed": 18008,
+    "experience_schema_version": 1,
+    "action_abi_version": 2,
+    "sensory_abi_version": 1,
+    "chemistry_schema_version": 1
+  },
+  "patches": [
+    {
+      "index": 0,
+      "phase_sequence": [
+        "PreActionSnapshot",
+        "DecisionSnapshot",
+        "PostActionOutcome",
+        "Sealed"
+      ],
+      "tick": 0,
+      "outcome_tick": 1,
+      "status": "Normal",
+      "failure": null,
+      "selected_action_id": 4,
+      "selected_action_kind": "Inspect",
+      "target_entity": 2,
+      "success": true,
+      "contact": "Touch",
+      "reward_milli": 50,
+      "pain_milli": 0,
+      "frustration_milli": 0,
+      "prediction_error_milli": 100,
+      "contradiction": false,
+      "memory_danger_milli": 0,
+      "memory_salience_milli": 13
+    }
+  ],
+  "state": {
+    "patch_count": 1,
+    "memory_record_count": 1,
+    "topology_concept_count": 2,
+    "topology_edge_count": 1,
+    "topology_simplex_count": 1,
+    "topology_gap_count": 0,
+    "curiosity_bias_count": 0,
+    "sleep_phase": "Awake",
+    "sleep_cycle_count": 0,
+    "pending_structural_edit_count": 0,
+    "final_drive_milli": [
+      260,
+      210,
+      60,
+      0,
+      153,
+      592,
+      730,
+      0,
+      101,
+      0,
+      0
+    ],
+    "final_hormone_milli": [
+      200,
+      200,
+      500,
+      500,
+      600,
+      500,
+      500,
+      500,
+      210,
+      0,
+      0
+    ]
+  },
+  "neural_ticks": [
+    {
+      "index": 0,
+      "active_tiles": 0,
+      "active_synapses": 0,
+      "mask_skipped_tiles": 0,
+      "range_rejections": 0
+    }
+  ],
+  "world_signature": [
+    "1:Agent:agent:0.000:0.000:0.000:0.000:0.000:None:0.000:None:false:None",
+    "2:Token:teacher_word:0.700:0.000:0.000:0.000:0.000:Some(77):0.000:Some(Hearing):false:None"
+  ]
+}

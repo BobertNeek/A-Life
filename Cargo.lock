@@ -70,6 +70,8 @@ name = "alife_world"
 version = "0.1.0"
 dependencies = [
  "alife_core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
