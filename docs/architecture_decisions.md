@@ -55,3 +55,7 @@ Decision: The P13 topological concept map is an engine-independent, bounded CPU-
 ## ADR-014: Sleep Consolidation Preserves Genotype Boundaries
 
 Decision: P16 sleep consolidation is a deterministic CPU sleep/offline phase that may drain `H_shadow`, stage `H_operational` and lifetime-layer updates, compress bounded memory/topology summaries, and emit structural edit candidates. It must not silently mutate `W_genetic_fixed`, and structural edits remain staged for sleep/offline compilation rather than active tick matrix resizing.
+
+## ADR-015: GPU Upload Contracts Are Explicit Little-Endian Records
+
+Decision: P24 GPU upload buffers are explicit little-endian, page-relative records translated from the P14 CPU sparse projection schema. The GPU backend must not use raw host pointers, unsafe transmute packing, or shader-invented parallel layouts for tile metadata, masks, packed indices, weight layers, activation ping-pong, accumulators, diagnostics, routing descriptors, or action-summary staging.
