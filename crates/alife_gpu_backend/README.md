@@ -101,3 +101,27 @@ because the current diagnostic bind groups use nine and ten storage-buffer
 bindings respectively. Active gameplay APIs still must not require synchronous
 neural readback; diagnostics and export staging remain the allowed readback
 surfaces.
+
+## P28 sleep/offline recompaction
+
+P28 adds host-side structural recompaction and autophagy contracts for safe
+sleep/offline boundaries:
+
+- imports P16 `StructuralEditBatch` records into backend edit plans.
+- accepts prune, consolidate, and recompaction-hint candidates; strength,
+  weaken, and synaptogenesis edits remain explicitly unsupported/deferred.
+- rebuilds a scratch `GpuUploadBuffers` set deterministically instead of
+  mutating active buffers in place.
+- prunes only zero-effective, decayed trace slots under the v1 autophagy
+  policy, preserving static forward outputs.
+- reports byproduct decay events and a bounded BrainATP recovery signal as
+  diagnostics for future sleep/autophagy tuning.
+- emits an old-to-new remap table, affected projection/tile refs, routing/mask
+  preservation diagnostics, and autophagy markers.
+- stages a double-buffer replacement that can either be rejected while keeping
+  the old active upload or atomically swapped at a sleep/offline boundary.
+
+The P28 WGSL file is a contract stub only. It does not implement dynamic GPU
+allocation or shader-side recompaction. Active gameplay APIs still cannot
+require per-synapse, weight, or bulk neural readback; P29 owns runtime
+performance-tier integration.

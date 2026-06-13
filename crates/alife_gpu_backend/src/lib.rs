@@ -4,6 +4,7 @@ use alife_core::NeuralComputeBackend;
 
 pub mod buffers;
 pub mod plasticity;
+pub mod recompaction;
 pub mod routing_masks;
 pub mod shader_contract;
 pub mod static_forward;
@@ -22,6 +23,13 @@ pub use plasticity::{
     run_plasticity_gpu_diagnostic, GpuOjaFixedPointConfig, GpuPlasticityDiagnostics,
     GpuPlasticityDispatch, GpuPlasticityPlan, GpuPlasticityResult, P26_PLASTICITY_DIAGNOSTIC_WORDS,
     P26_PLASTICITY_TOLERANCE_Q, P26_PLASTICITY_WORKGROUP_SIZE, P26_WGSL_PLASTICITY,
+};
+pub use recompaction::{
+    GpuAffectedTileRef, GpuAutophagyMarker, GpuAutophagyMarkerKind, GpuAutophagyPolicy,
+    GpuBufferReplacement, GpuLogicalBufferRef, GpuRecompactionDiagnostics, GpuRecompactionOutput,
+    GpuRecompactionPlan, GpuRecompactionRemapTable, GpuRecompactionSwapState,
+    GpuRecompactionValidationStatus, GpuRoutingMaskPreservation, GpuStructuralEditPlanEntry,
+    GpuStructuralEditStatus, GPU_RECOMPACTION_SCHEMA_VERSION, P28_WGSL_RECOMPACTION_AUTOPHAGY,
 };
 pub use routing_masks::{
     p27_routing_counters, p27_tile_is_active, GpuActiveTileMaskConfig, GpuRoutingCounters,
