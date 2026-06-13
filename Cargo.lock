@@ -26,6 +26,7 @@ name = "alife_gpu_backend"
 version = "0.1.0"
 dependencies = [
  "alife_core",
+ "naga",
  "pollster",
  "wgpu",
 ]
