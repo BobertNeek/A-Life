@@ -64,6 +64,10 @@ dependencies = [
 [[package]]
 name = "alife_tools"
 version = "0.1.0"
+dependencies = [
+ "alife_core",
+ "alife_world",
+]
 
 [[package]]
 name = "alife_world"
