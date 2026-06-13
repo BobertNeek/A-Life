@@ -169,6 +169,11 @@ impl HeadlessWorld {
         self.tick
     }
 
+    pub fn advance_tick(&mut self) -> Tick {
+        self.tick = Tick::new(self.tick.raw().saturating_add(1));
+        self.tick
+    }
+
     pub fn entity_id(&self, label: &str) -> Option<WorldEntityId> {
         self.labels.get(label).copied()
     }
@@ -989,6 +994,7 @@ impl HeadlessBrainHarness {
         } else {
             None
         };
+        self.world.borrow_mut().advance_tick();
         HeadlessBrainTick {
             brain,
             sleep_transition,

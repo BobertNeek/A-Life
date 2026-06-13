@@ -129,6 +129,19 @@ fn seeded_random_builder_replays_same_world_state() {
 }
 
 #[test]
+fn headless_world_tick_progression_is_explicit_and_deterministic() {
+    let mut first = world_with_food_and_hazard();
+    let mut second = world_with_food_and_hazard();
+
+    assert_eq!(first.tick(), Tick::ZERO);
+    assert_eq!(first.advance_tick(), Tick::new(1));
+    assert_eq!(first.advance_tick(), Tick::new(2));
+    second.advance_tick();
+    second.advance_tick();
+    assert_eq!(first.tick(), second.tick());
+}
+
+#[test]
 fn action_execution_supports_move_inspect_eat_rest_and_idle() {
     let mut world = world_with_food_and_hazard();
     let berry = world.entity_id("berry").unwrap();
@@ -333,6 +346,7 @@ fn headless_harness_collects_sealed_patches_and_triggers_p16_sleep_on_rest() {
 
     assert_eq!(first.brain.status, BrainTickStatus::Normal);
     assert_eq!(harness.telemetry().sealed_patches.len(), 1);
+    assert_eq!(harness.world().tick(), Tick::new(1));
     assert_eq!(mind.sleep_state().phase, SleepPhase::ForcedRecoverySleep);
     assert!(first.sleep_transition.is_some());
 }
@@ -379,6 +393,8 @@ fn multi_tick_cpu_reference_brain_stepping_is_headless_and_deterministic() {
 
     assert_eq!(first.telemetry().sealed_patches.len(), 2);
     assert_eq!(second.telemetry().sealed_patches.len(), 2);
+    assert_eq!(first.world().tick(), Tick::new(2));
+    assert_eq!(second.world().tick(), Tick::new(2));
 }
 
 #[test]
