@@ -3,6 +3,7 @@
 use alife_core::NeuralComputeBackend;
 
 pub mod buffers;
+pub mod plasticity;
 pub mod shader_contract;
 pub mod static_forward;
 
@@ -15,6 +16,11 @@ pub use buffers::{
     GPU_DIAGNOSTIC_COUNTER_BYTES, GPU_HEADER_BYTES, GPU_PACKED_SYNAPSE_INDEX_BYTES,
     GPU_ROUTING_DESCRIPTOR_BYTES, GPU_SERIALIZATION_ENDIANNESS, GPU_SUPERTILE_MASK_BYTES,
     GPU_TILE_METADATA_BYTES,
+};
+pub use plasticity::{
+    run_plasticity_gpu_diagnostic, GpuOjaFixedPointConfig, GpuPlasticityDiagnostics,
+    GpuPlasticityDispatch, GpuPlasticityPlan, GpuPlasticityResult, P26_PLASTICITY_DIAGNOSTIC_WORDS,
+    P26_PLASTICITY_TOLERANCE_Q, P26_PLASTICITY_WORKGROUP_SIZE, P26_WGSL_PLASTICITY,
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
 pub use static_forward::{
