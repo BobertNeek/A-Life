@@ -27,7 +27,7 @@ if ! command -v cargo >/dev/null 2>&1; then
   exit 1
 fi
 
-tree_output="$(cargo tree -p alife_core)"
+tree_output="$(cargo tree -p alife_core --format "{lib}")"
 if printf '%s\n' "${tree_output}" | grep -Eiq "${forbidden_dep_regex}"; then
   echo "alife_core has a forbidden engine/runtime dependency:" >&2
   printf '%s\n' "${tree_output}" >&2
