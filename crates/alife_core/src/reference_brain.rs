@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::LifetimeTraitLedger;
 use crate::{
     cpu_reference_arbitrate, cpu_spmv_projection, finalize_cpu_activations,
     update_oja_shadow_traces, validate_finite_slice, ActionArbitrationConfig,
@@ -17,8 +18,10 @@ use crate::{
     MemoryQuery, NeuralActivationConfig, NeuralDiagnostics, NeuralProjectionSchema,
     NeuralUpdateReport, NormalizedScalar, OjaUpdateConfig, OrganismId, PackedExperienceRecord,
     PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PreActionSnapshot,
-    ScaffoldContractError, SensorySnapshot, SignedValence, Tick, TopologicalMap,
-    TopologicalMapConfig, TopologyUpdate, Validate, Vec3f, Velocity, WeightSplitContract,
+    ScaffoldContractError, SensorySnapshot, SignedValence, SleepConsolidationConfig,
+    SleepConsolidationReport, SleepConsolidator, SleepController, SleepPhase, SleepState,
+    SleepTransition, SleepTrigger, StructuralEditBatch, Tick, TopologicalMap, TopologicalMapConfig,
+    TopologyUpdate, Validate, Vec3f, Velocity, WeightSplitContract,
 };
 
 const DEFAULT_MEMORY_CAPACITY: usize = 64;
@@ -248,6 +251,20 @@ impl BrainTickOutput {
             diagnostics,
         }
     }
+
+    fn sleep_idle(diagnostics: BrainTickDiagnostics) -> Self {
+        Self {
+            status: BrainTickStatus::SafeIdle,
+            selected_action: None,
+            experience_patch: None,
+            packed_record: None,
+            memory_update: None,
+            topology_update: None,
+            endocrine_update: None,
+            neural_report: NeuralUpdateReport::default(),
+            diagnostics,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -402,6 +419,9 @@ pub struct CreatureMind {
     memory_bank: MemoryBank,
     topological_map: TopologicalMap,
     action_state: CreatureActionState,
+    sleep_controller: SleepController,
+    lifetime_traits: LifetimeTraitLedger,
+    pending_structural_edits: Vec<StructuralEditBatch>,
     tick: Tick,
     next_sequence_id: u64,
     deterministic_seed: u64,
@@ -451,6 +471,9 @@ impl CreatureMind {
             memory_bank: MemoryBank::new(memory_config)?,
             topological_map: TopologicalMap::new(TopologicalMapConfig::default())?,
             action_state: CreatureActionState::reference(),
+            sleep_controller: SleepController::new(SleepConsolidationConfig::reference())?,
+            lifetime_traits: LifetimeTraitLedger::new(64)?,
+            pending_structural_edits: Vec::new(),
             tick,
             next_sequence_id: 1,
             deterministic_seed,
@@ -484,8 +507,80 @@ impl CreatureMind {
         &self.topological_map
     }
 
+    pub const fn development_state(&self) -> &DevelopmentState {
+        &self.development_state
+    }
+
+    pub const fn sleep_state(&self) -> SleepState {
+        self.sleep_controller.state()
+    }
+
+    pub fn pending_structural_edits(&self) -> &[StructuralEditBatch] {
+        &self.pending_structural_edits
+    }
+
     pub const fn diagnostics(&self) -> BrainTickDiagnostics {
         self.diagnostics
+    }
+
+    pub fn force_sleep(
+        &mut self,
+        tick: Tick,
+        trigger: SleepTrigger,
+    ) -> Result<SleepTransition, ScaffoldContractError> {
+        self.sleep_controller.force_sleep(tick, trigger)
+    }
+
+    pub fn run_sleep_consolidation(
+        &mut self,
+        tick: Tick,
+    ) -> Result<SleepConsolidationReport, ScaffoldContractError> {
+        Tick::validate_monotonic(self.tick, tick)?;
+        self.sleep_controller.validate_contract()?;
+        self.neural_schema.validate()?;
+        self.memory_bank
+            .records_chronological()
+            .iter()
+            .try_for_each(|record| record.validate_contract())?;
+        self.topological_map.validate_contract()?;
+
+        let consolidator = SleepConsolidator::new(self.sleep_controller.config())?;
+        let neural = consolidator.consolidate_neural_schema(
+            &mut self.neural_schema,
+            &mut self.lifetime_traits,
+            tick,
+        )?;
+        self.neural_state.projections = self.neural_schema.projections.clone();
+        let memory = consolidator.compress_memory_bank(&mut self.memory_bank)?;
+        let topology = consolidator.consolidate_topology(&mut self.topological_map, 1)?;
+        let structural_edits = consolidator.generate_structural_edit_batch(
+            &self.neural_schema,
+            &self.topological_map,
+            tick,
+        )?;
+        self.pending_structural_edits.push(structural_edits.clone());
+        self.development_state.sleep_cycle_count =
+            self.development_state.sleep_cycle_count.saturating_add(1);
+        self.development_state.consolidation_cycle_count = self
+            .development_state
+            .consolidation_cycle_count
+            .saturating_add(1);
+        self.development_state.last_sleep_tick = Some(tick);
+        let report = SleepConsolidationReport {
+            schema_version: crate::SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+            tick,
+            sleep_phase: self.sleep_controller.state().phase,
+            traits: crate::TraitPromotionReport {
+                promoted_count: neural.promoted_trait_count,
+                ..crate::TraitPromotionReport::default()
+            },
+            neural,
+            memory,
+            topology,
+            structural_edits,
+        };
+        report.validate_contract()?;
+        Ok(report)
     }
 
     pub fn tick<S, A, O>(
@@ -521,6 +616,9 @@ impl CreatureMind {
         let mut diagnostics = BrainTickDiagnostics::default();
         fallible(&mut diagnostics, self.validate_ready(input.tick))?;
         fallible(&mut diagnostics, input.validate_contract(self.tick))?;
+        if self.sleep_controller.state().phase != SleepPhase::Awake {
+            return Ok(BrainTickOutput::sleep_idle(diagnostics));
+        }
 
         let mut next_neural_state = self.neural_state.clone();
         let mut next_neural_schema = self.neural_schema.clone();
@@ -754,6 +852,11 @@ impl CreatureMind {
         self.body.validate_contract()?;
         self.homeostasis.validate_contract()?;
         self.neural_schema.validate()?;
+        self.sleep_controller.validate_contract()?;
+        self.lifetime_traits.validate_contract()?;
+        for batch in &self.pending_structural_edits {
+            batch.validate_contract()?;
+        }
         self.topological_map.validate_contract()?;
         validate_finite_slice(&self.neural_state.activations)?;
         validate_finite_slice(&self.neural_state.previous_activations)?;

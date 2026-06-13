@@ -19,6 +19,7 @@ pub mod packed_log;
 pub mod reference_brain;
 pub mod routing;
 pub mod sensory_abi;
+pub mod sleep;
 pub mod topology;
 pub mod traits;
 pub mod units;
@@ -119,6 +120,14 @@ pub use sensory_abi::{
     SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
     SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+};
+pub use sleep::{
+    ConceptConsolidationReport, HTraceDrainReport, LifetimeTraitEvidence, LifetimeTraitLedger,
+    MemoryCompressionReport, SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator,
+    SleepController, SleepPhase, SleepState, SleepTransition, SleepTrigger, StableLifetimeTrait,
+    StableLifetimeTraitKind, StructuralEditApplicationStatus, StructuralEditBatch,
+    StructuralEditCandidate, StructuralEditKind, StructuralEditReason, TraitPromotionReport,
+    SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 pub use topology::{
     ActionObservationFact, CognitiveEdge, CognitiveEdgeId, CognitiveSimplex, CognitiveSimplexId,
