@@ -106,3 +106,27 @@ cargo run -p alife_tools --bin p31_offline -- write-lobe-asset \
   --prototypes target/artifacts/p31_etf_prototypes_v1.json \
   --out target/artifacts/p31_sensory_lobe_etf_v1.json
 ```
+
+## Evolution genome lab (`p33_genome_lab`)
+
+P33 ships deterministic offline evolution helpers in `alife_tools::p33_evolution`
+and a tiny smoke CLI. The lab mutates and crosses valid `BrainGenome` records,
+summarizes fitness from packed logs, and keeps optional generated weight assets
+as birth-only initializer references.
+
+```powershell
+cargo run -p alife_tools --bin p33_genome_lab -- smoke `
+  --seed 43981 `
+  --generations 1 `
+  --out target/artifacts/p33_generation_smoke.json
+```
+
+```bash
+cargo run -p alife_tools --bin p33_genome_lab -- smoke \
+  --seed 43981 \
+  --generations 1 \
+  --out target/artifacts/p33_generation_smoke.json
+```
+
+P33 does not import P32/D2NWG types. If generated weight assets are available,
+refer to them through `BirthWeightInitializerRef` with `birth_only: true`.
