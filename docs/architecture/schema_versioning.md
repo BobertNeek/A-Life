@@ -34,4 +34,6 @@ Versioned schemas include:
 
 ## Non-goals
 
-This convention does not implement migrations yet. It defines the rails P04, P11, P24, P30, and P34 must follow.
+This convention does not implement broad migrations yet. P34 adds executable
+save/config/asset schema rejection plus a documented migration hook that
+rejects until a future plan supplies a tested conversion path.

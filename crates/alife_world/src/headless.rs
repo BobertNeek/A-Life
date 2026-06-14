@@ -43,7 +43,9 @@ impl HeadlessActionIds {
     pub const GRAB: ActionId = ActionId(211);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum WorldObjectKind {
     Agent,
     Food,
@@ -154,6 +156,15 @@ pub struct HeadlessWorld {
     last_action_result: Option<HeadlessActionResult>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct HeadlessWorldPersistenceParts {
+    pub seed: u64,
+    pub tick: Tick,
+    pub next_entity_id: u64,
+    pub objects: Vec<WorldObject>,
+    pub last_touched_entities: Vec<WorldEntityId>,
+}
+
 impl HeadlessWorld {
     pub fn new(seed: u64) -> Self {
         Self {
@@ -210,6 +221,54 @@ impl HeadlessWorld {
                 )
             })
             .collect()
+    }
+
+    pub(crate) fn persistence_parts(&self) -> HeadlessWorldPersistenceParts {
+        HeadlessWorldPersistenceParts {
+            seed: self.seed,
+            tick: self.tick,
+            next_entity_id: self.next_entity_id,
+            objects: self.objects.values().cloned().collect(),
+            last_touched_entities: self.last_touched_entities.clone(),
+        }
+    }
+
+    pub(crate) fn from_persistence_parts(
+        parts: HeadlessWorldPersistenceParts,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut objects = BTreeMap::new();
+        let mut labels = BTreeMap::new();
+        let mut max_id = 0_u64;
+        for object in parts.objects {
+            validate_persisted_object(&object)?;
+            let raw_id = object.id.raw();
+            if objects.contains_key(&raw_id) || labels.contains_key(&object.label) {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+            max_id = max_id.max(raw_id);
+            labels.insert(object.label.clone(), object.id);
+            objects.insert(raw_id, object);
+        }
+        if parts.next_entity_id <= max_id
+            || (objects.is_empty() && parts.next_entity_id < DEFAULT_ENTITY_ID_START)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        for touched in &parts.last_touched_entities {
+            touched.validate()?;
+            if !objects.contains_key(&touched.raw()) {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        Ok(Self {
+            seed: parts.seed,
+            tick: parts.tick,
+            next_entity_id: parts.next_entity_id,
+            objects,
+            labels,
+            last_touched_entities: parts.last_touched_entities,
+            last_action_result: None,
+        })
     }
 
     pub fn sensory_report(
@@ -1200,6 +1259,35 @@ fn classify_action(command: &ActionCommand) -> HeadlessAction {
             }
         }
     }
+}
+
+fn validate_persisted_object(object: &WorldObject) -> Result<(), ScaffoldContractError> {
+    object.id.validate()?;
+    if object.label.is_empty() {
+        return Err(ScaffoldContractError::InvalidId);
+    }
+    if let Some(organism_id) = object.organism_id {
+        organism_id.validate()?;
+    }
+    if let Some(carried_by) = object.carried_by {
+        carried_by.validate()?;
+    }
+    object.position.validate()?;
+    if !object.radius.is_finite() || object.radius <= 0.0 {
+        return Err(ScaffoldContractError::ScalarOutOfRange);
+    }
+    for value in [object.nutrition, object.hazard_pain, object.social_affinity] {
+        if !value.is_finite() {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+    }
+    if !(0.0..=1.0).contains(&object.nutrition)
+        || !(0.0..=1.0).contains(&object.hazard_pain)
+        || !(-1.0..=1.0).contains(&object.social_affinity)
+    {
+        return Err(ScaffoldContractError::ScalarOutOfRange);
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]
