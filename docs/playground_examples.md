@@ -91,11 +91,13 @@ cargo run -p alife_tools --bin p35_playground -- gpu-fallback
 Manual hardware diagnostics can be run when GPU support is available:
 
 ```bash
-ALIFE_GPU_BACKEND=static cargo run -p alife_tools --bin benchmark_tiers -- --gpu-report
+ALIFE_GPU_RUNTIME_BACKEND=static ALIFE_GPU_RUNTIME_FEATURE=1 ALIFE_GPU_RUNTIME_AVAILABLE=1 ALIFE_GPU_RUNTIME_VALIDATED=1 cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
 ```
 
-Do not treat CPU fallback reports as GPU performance claims. P29 is the source
-for measured or unknown GPU performance status.
+If the hardware or validation flags are not set, the report may honestly record
+CPU fallback rather than GPU performance. Do not treat CPU fallback reports as
+GPU performance claims. P29 is the source for measured or unknown GPU
+performance status.
 
 ## Bevy/Avian Adapter Demo
 

@@ -84,6 +84,9 @@ fn playground_docs_manifest_references_existing_small_files_and_manual_optional_
     let root = workspace_root();
     let report =
         validate_playground_manifest(root.join("examples/p35/playground_manifest.json")).unwrap();
+    let docs = std::fs::read_to_string(root.join("docs/playground_examples.md")).unwrap();
+    let manifest =
+        std::fs::read_to_string(root.join("examples/p35/playground_manifest.json")).unwrap();
 
     assert!(report.checked_paths >= 4);
     assert!(report.manual_optional_commands >= 2);
@@ -92,4 +95,12 @@ fn playground_docs_manifest_references_existing_small_files_and_manual_optional_
         .documented_commands
         .iter()
         .any(|command| command.contains("p35_playground")));
+    assert!(!docs.contains("gpu-report"));
+    assert!(!manifest.contains("gpu-report"));
+    assert!(!docs.contains("ALIFE_GPU_BACKEND"));
+    assert!(!manifest.contains("ALIFE_GPU_BACKEND"));
+    assert!(docs.contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
+    assert!(manifest.contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
+    assert!(docs.contains("--gpu-runtime"));
+    assert!(manifest.contains("--gpu-runtime"));
 }

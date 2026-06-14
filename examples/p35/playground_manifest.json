@@ -61,7 +61,7 @@
     },
     {
       "name": "GPU hardware diagnostics",
-      "command": "ALIFE_GPU_BACKEND=static cargo run -p alife_tools --bin benchmark_tiers -- --gpu-report",
+      "command": "ALIFE_GPU_RUNTIME_BACKEND=static ALIFE_GPU_RUNTIME_FEATURE=1 ALIFE_GPU_RUNTIME_AVAILABLE=1 ALIFE_GPU_RUNTIME_VALIDATED=1 cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime",
       "manual": true,
       "optional_feature": "GPU hardware"
     }
