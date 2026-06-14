@@ -1,0 +1,69 @@
+{
+  "schema": "alife.p35.playground_manifest.v1",
+  "schema_version": 1,
+  "documentation_path": "docs/playground_examples.md",
+  "paths": [
+    {
+      "label": "P35 playground docs",
+      "relative_path": "docs/playground_examples.md",
+      "required": true
+    },
+    {
+      "label": "P34 tiny runtime config",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_config.json",
+      "required": true
+    },
+    {
+      "label": "P34 tiny save",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_save.json",
+      "required": true
+    },
+    {
+      "label": "P34 tiny asset manifest",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
+      "required": true
+    },
+    {
+      "label": "Bevy adapter smoke example",
+      "relative_path": "crates/alife_bevy_adapter/examples/minimal_adapter.rs",
+      "required": true
+    },
+    {
+      "label": "P35 playground CLI",
+      "relative_path": "crates/alife_tools/src/bin/p35_playground.rs",
+      "required": true
+    }
+  ],
+  "commands": [
+    {
+      "name": "Headless CPU playground smoke",
+      "command": "cargo run -p alife_tools --bin p35_playground -- run-headless crates/alife_world/tests/fixtures/p34",
+      "manual": false,
+      "optional_feature": null
+    },
+    {
+      "name": "Full headless example suite",
+      "command": "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json",
+      "manual": false,
+      "optional_feature": null
+    },
+    {
+      "name": "Semantic fake-provider demo",
+      "command": "cargo run -p alife_tools --features semantic-demo --bin p35_playground -- semantic-demo",
+      "manual": true,
+      "optional_feature": "semantic-demo"
+    },
+    {
+      "name": "Bevy adapter smoke example",
+      "command": "cargo run -p alife_bevy_adapter --example minimal_adapter",
+      "manual": true,
+      "optional_feature": "graphics environment"
+    },
+    {
+      "name": "GPU hardware diagnostics",
+      "command": "ALIFE_GPU_BACKEND=static cargo run -p alife_tools --bin benchmark_tiers -- --gpu-report",
+      "manual": true,
+      "optional_feature": "GPU hardware"
+    }
+  ]
+}

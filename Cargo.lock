@@ -68,6 +68,8 @@ version = "0.1.0"
 dependencies = [
  "alife_core",
  "alife_gpu_backend",
+ "alife_school",
+ "alife_semantic",
  "alife_world",
  "serde",
  "serde_json",
