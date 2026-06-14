@@ -291,6 +291,20 @@ fn asset_manifest_validates_required_optional_and_digest_mismatch() {
 }
 
 #[test]
+fn json_asset_digest_is_stable_across_line_endings() {
+    let root = temp_root("json_asset_digest_line_endings");
+    fs::create_dir_all(&root).unwrap();
+    let asset_path = root.join("asset.json");
+    fs::write(&asset_path, b"{\n  \"value\": 1\n}\n").unwrap();
+    let lf_digest = PortableAssetDigest::for_file(&asset_path).unwrap();
+
+    fs::write(&asset_path, b"{\r\n  \"value\": 1\r\n}\r\n").unwrap();
+    let crlf_digest = PortableAssetDigest::for_file(&asset_path).unwrap();
+
+    assert_eq!(lf_digest, crlf_digest);
+}
+
+#[test]
 fn learning_values_and_genetic_lifetime_boundaries_validate() {
     let world = fixture_world();
     let mut save = PortableSaveFile::from_headless_world(

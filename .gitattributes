@@ -3,3 +3,4 @@
 *.toml text eol=lf
 *.sh text eol=lf
 Makefile text eol=lf
+crates/alife_world/tests/fixtures/p34/**/*.json text eol=lf

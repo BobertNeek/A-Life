@@ -94,7 +94,12 @@ impl PortableAssetDigest {
     }
 
     pub fn for_file(path: &Path) -> Result<Self, PersistenceError> {
-        Ok(Self::for_bytes(&fs::read(path)?))
+        let bytes = fs::read(path)?;
+        if is_portable_text_asset(path) {
+            Ok(Self::for_bytes(&canonicalize_text_line_endings(&bytes)))
+        } else {
+            Ok(Self::for_bytes(&bytes))
+        }
     }
 
     pub fn validate_format(&self) -> Result<(), PersistenceError> {
@@ -113,6 +118,31 @@ impl PortableAssetDigest {
             })
         }
     }
+}
+
+fn is_portable_text_asset(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("json" | "toml" | "ron" | "txt" | "md")
+    )
+}
+
+fn canonicalize_text_line_endings(bytes: &[u8]) -> Vec<u8> {
+    let mut canonical = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'\r' && bytes.get(index + 1) == Some(&b'\n') {
+            canonical.push(b'\n');
+            index += 2;
+        } else {
+            canonical.push(bytes[index]);
+            index += 1;
+        }
+    }
+    canonical
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

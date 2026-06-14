@@ -51,7 +51,9 @@ unless a config explicitly names them as required.
 Asset manifests use schema `alife.p34.asset_manifest.v1`. Entries record asset
 ID, kind, relative path, digest, required/optional presence, schema version,
 size metadata when useful, and provenance. Required missing assets and digest
-mismatches reject. Optional missing assets are tolerated.
+mismatches reject. Optional missing assets are tolerated. Text asset digests
+canonicalize CRLF/LF differences so fixture validation is portable across Git
+checkouts; non-text assets keep raw byte digests.
 
 The tiny committed P34 fixtures are JSON references for tests. They are not
 large generated tensors, large logs, or binary runtime assets.
