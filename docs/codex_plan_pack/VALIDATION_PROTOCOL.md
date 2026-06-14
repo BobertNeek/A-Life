@@ -20,6 +20,29 @@ cargo check --workspace --all-features --all-targets
 cargo test --workspace --all-features --all-targets
 ```
 
+## Windows Git Bash validation
+
+On Windows, do not run plain `bash scripts/check.sh`; it may resolve to WSL.
+Use the PowerShell wrappers instead:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
+```
+
+Or call Git Bash explicitly:
+
+```powershell
+& 'C:\Program Files\Git\bin\bash.exe' scripts/check.sh
+& 'C:\Program Files\Git\bin\bash.exe' scripts/check_core_boundaries.sh
+& 'C:\Program Files\Git\bin\bash.exe' scripts/docs_check.sh
+```
+
+On non-Windows systems, existing `bash scripts/check.sh` usage remains
+acceptable. On Windows, the PowerShell wrappers are the preferred validation
+commands.
+
 ## Boundary checks
 
 At minimum, after any plan touching `alife_core`, inspect dependencies:

@@ -21,6 +21,10 @@ Non-negotiable rules:
 - Keep docs and local AGENTS.md files updated after meaningful changes.
 - Prefer Graphify queries for architecture questions when installed and a graph
   exists.
+- On Windows, never assume `bash` means Git Bash. Plain `bash` may invoke WSL
+  and fail if WSL virtualization is unavailable. Use `scripts/check.ps1`,
+  `scripts/check_core_boundaries.ps1`, and `scripts/docs_check.ps1`, or the
+  explicit Git Bash path.
 
 ## graphify
 

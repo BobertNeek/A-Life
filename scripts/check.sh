@@ -16,5 +16,5 @@ fi
 cargo fmt --all -- --check
 cargo check --workspace --all-targets
 cargo test --workspace --all-targets
-bash scripts/check_core_boundaries.sh
-bash scripts/docs_check.sh
+"${BASH}" scripts/check_core_boundaries.sh
+"${BASH}" scripts/docs_check.sh
