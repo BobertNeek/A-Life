@@ -122,3 +122,19 @@ as optional or manual paths where hardware or graphics support is required.
 `alife_core` remains engine-independent, GPU runtime keeps CPU fallback, and
 playground saves/configs consume P34 stable IDs and asset references instead of
 engine-local handles. P36 owns release hardening, packaging, and soak gates.
+
+## ADR-022: Release Gate Is Evidence-First And Manual Hardware Honest
+
+Decision: P36 treats production readiness as a checklist-backed release gate.
+Default validation, golden traces, scenarios, save/load, playground smoke,
+benchmark smoke, core boundaries, and fast headless soak must pass before a
+candidate can be called ready.
+
+Slow soak, upper population benchmark tiers, GPU hardware parity, GPU
+performance, and graphics smoke remain manual gates unless current hardware
+evidence is recorded. Unknown GPU performance or missed targets must be reported
+as unknown or missed, not inferred from CPU fallback data.
+
+Windows validation uses the PowerShell Git Bash wrappers to avoid accidental WSL
+invocation. The release gate does not create a P37 or new architecture lane;
+future work is tracked as backlog notes or issues.

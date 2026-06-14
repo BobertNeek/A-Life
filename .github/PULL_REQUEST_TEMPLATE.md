@@ -16,8 +16,8 @@
 - [ ] `cargo check --workspace --all-targets`
 - [ ] `cargo test --workspace --all-targets`
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`
-- [ ] `bash scripts/check_core_boundaries.sh` or documented local substitute
-- [ ] `bash scripts/docs_check.sh` or documented local substitute
+- [ ] Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1`; non-Windows/Git Bash: run `scripts/check_core_boundaries.sh`
+- [ ] Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1`; non-Windows/Git Bash: run `scripts/docs_check.sh`
 
 ## Invariants
 
