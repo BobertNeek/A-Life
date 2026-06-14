@@ -130,3 +130,33 @@ cargo run -p alife_tools --bin p33_genome_lab -- smoke \
 
 P33 does not import P32/D2NWG types. If generated weight assets are available,
 refer to them through `BirthWeightInitializerRef` with `birth_only: true`.
+
+## Persistence/config/asset validator (`p34_persistence`)
+
+P34 adds a tiny validator for portable save, runtime config, and asset manifest
+fixtures. It is a smoke tool for schema/digest checks, not runtime save/load UI.
+
+```powershell
+cargo run -p alife_tools --bin p34_persistence -- validate-fixtures `
+  crates\alife_world\tests\fixtures\p34
+```
+
+```bash
+cargo run -p alife_tools --bin p34_persistence -- validate-fixtures \
+  crates/alife_world/tests/fixtures/p34
+```
+
+Individual validation commands are also available:
+
+```bash
+cargo run -p alife_tools --bin p34_persistence -- validate-save \
+  crates/alife_world/tests/fixtures/p34/tiny_save.json \
+  crates/alife_world/tests/fixtures/p34
+
+cargo run -p alife_tools --bin p34_persistence -- validate-config \
+  crates/alife_world/tests/fixtures/p34/tiny_config.json
+
+cargo run -p alife_tools --bin p34_persistence -- validate-manifest \
+  crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json \
+  crates/alife_world/tests/fixtures/p34
+```

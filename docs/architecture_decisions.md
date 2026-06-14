@@ -97,3 +97,18 @@ lobes first when GPU neural timing exceeds budget.
 P29 performance reports must record unknown or missed targets honestly. P20 CPU
 smoke data may be copied into P29 reports as fallback context, but it is not a
 GPU performance claim.
+
+## ADR-020: Portable Saves Use Stable IDs and Asset References
+
+Decision: P34 save files, runtime configs, and asset manifests are explicitly
+versioned JSON contracts. Portable saves store stable IDs and summaries plus
+asset references/digests for generated weights, ETF prototypes, scenarios, and
+world fixtures. They reject incompatible schemas unless a tested migration
+exists.
+
+Engine-local IDs such as Bevy `Entity`, Avian handles, wgpu handles, renderer
+handles, and OS/window handles are not serialized directly. Bulk generated
+tensors and large logs stay outside the main save file behind manifest entries.
+
+Generated weight assets remain birth/initialization inputs. Lifetime learning,
+H-traces, and consolidated habits remain separate from `W_genetic_fixed`.
