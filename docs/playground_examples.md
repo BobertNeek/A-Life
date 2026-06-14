@@ -144,8 +144,10 @@ handles.
 - Schema mismatch: P34 rejects incompatible saves/configs/manifests explicitly.
 - Nondeterminism: compare P18/P19 scenario seeds and golden trace summaries.
 - Bad generated assets: validate manifests and digests before startup.
-- Dependency leak: run `scripts/check_core_boundaries.sh` and
-  `cargo tree -p alife_core`.
+- Dependency leak on Windows: run
+  `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1`
+  and `cargo tree -p alife_core`. On non-Windows systems, run the same boundary
+  shell script through the platform shell.
 
 ## P36 Handoff
 
