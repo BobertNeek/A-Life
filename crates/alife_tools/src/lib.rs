@@ -6,6 +6,7 @@ pub mod p30_cluster;
 pub mod p30_markers;
 pub mod p30_summary;
 pub mod p31_offline_tools;
+pub mod p32_weights;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolingManifest {
