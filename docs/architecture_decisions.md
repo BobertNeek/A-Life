@@ -112,3 +112,13 @@ tensors and large logs stay outside the main save file behind manifest entries.
 
 Generated weight assets remain birth/initialization inputs. Lifetime learning,
 H-traces, and consolidated habits remain separate from `W_genetic_fixed`.
+
+## ADR-021: Playground Examples Are Headless-First and Optional-Feature Gated
+
+Decision: P35 exposes the integrated playground through a headless CPU smoke
+path by default, with Bevy/Avian, semantic provider, school, and GPU demos kept
+as optional or manual paths where hardware or graphics support is required.
+
+`alife_core` remains engine-independent, GPU runtime keeps CPU fallback, and
+playground saves/configs consume P34 stable IDs and asset references instead of
+engine-local handles. P36 owns release hardening, packaging, and soak gates.

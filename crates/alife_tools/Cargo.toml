@@ -8,7 +8,13 @@ repository.workspace = true
 [dependencies]
 alife_core.workspace = true
 alife_gpu_backend = { path = "../alife_gpu_backend" }
+alife_school = { path = "../alife_school" }
+alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider"], optional = true }
 alife_world = { path = "../alife_world" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[features]
+default = []
+semantic-demo = ["dep:alife_semantic"]
