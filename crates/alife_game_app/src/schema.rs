@@ -46,3 +46,7 @@ pub const G18_POPULATION_PERFORMANCE_SCHEMA: &str = "alife.g18.population_perfor
 pub const G18_POPULATION_PERFORMANCE_SCHEMA_VERSION: u16 = 1;
 pub const G18_MAX_TARGET_TIERS: usize = 6;
 pub const G18_TARGET_FRAME_MS: f32 = 16.667;
+pub const G19_LONG_RUN_BALANCE_SCHEMA: &str = "alife.g19.long_run_balance.v1";
+pub const G19_LONG_RUN_BALANCE_SCHEMA_VERSION: u16 = 1;
+pub const G19_FAST_BALANCE_CYCLES: u32 = 3;
+pub const G19_EXTENDED_BALANCE_CYCLES: u32 = 16;
