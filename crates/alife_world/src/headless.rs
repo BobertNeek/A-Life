@@ -25,6 +25,12 @@ use alife_core::{
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
+use crate::ecology::{
+    deterministic_zone_position, EcologyConfig, EcologyMetrics, EcologySensorySummary,
+    EcologyState, EcologyStepReport, EcologyZoneId, ResourceLifecycle, ResourceSpawnPolicy,
+    TerrainZone, TerrainZoneKind,
+};
+
 const DEFAULT_ENTITY_ID_START: u64 = 1;
 const DEFAULT_VISION_RADIUS: f32 = 8.0;
 const DEFAULT_HEARING_RADIUS: f32 = 6.0;
@@ -108,6 +114,7 @@ pub struct HeadlessSensoryReport {
     pub visible_entities: Vec<VisibleWorldEntity>,
     pub contact_entities: Vec<WorldEntityId>,
     pub touched_entities: Vec<WorldEntityId>,
+    pub ecology: EcologySensorySummary,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -154,6 +161,7 @@ pub struct HeadlessWorld {
     labels: BTreeMap<String, WorldEntityId>,
     last_touched_entities: Vec<WorldEntityId>,
     last_action_result: Option<HeadlessActionResult>,
+    ecology: EcologyState,
 }
 
 #[derive(Debug, Clone)]
@@ -163,6 +171,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub next_entity_id: u64,
     pub objects: Vec<WorldObject>,
     pub last_touched_entities: Vec<WorldEntityId>,
+    pub ecology: EcologyState,
 }
 
 impl HeadlessWorld {
@@ -175,6 +184,7 @@ impl HeadlessWorld {
             labels: BTreeMap::new(),
             last_touched_entities: Vec::new(),
             last_action_result: None,
+            ecology: EcologyState::default(),
         }
     }
 
@@ -188,7 +198,79 @@ impl HeadlessWorld {
 
     pub fn advance_tick(&mut self) -> Tick {
         self.tick = Tick::new(self.tick.raw().saturating_add(1));
+        let _ = self.advance_ecology();
         self.tick
+    }
+
+    pub fn advance_ecology(&mut self) -> EcologyStepReport {
+        self.advance_ecology_at_current_tick()
+    }
+
+    pub fn ecology(&self) -> &EcologyState {
+        &self.ecology
+    }
+
+    pub fn ecology_metrics(&self) -> EcologyMetrics {
+        self.ecology.metrics()
+    }
+
+    pub fn configure_ecology(
+        &mut self,
+        ecology: EcologyState,
+    ) -> Result<(), ScaffoldContractError> {
+        ecology.validate()?;
+        for resource in &ecology.resources {
+            let Some(object) = self.objects.get(&resource.object_id.raw()) else {
+                return Err(ScaffoldContractError::InvalidId);
+            };
+            if object.kind != WorldObjectKind::Food {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        self.ecology = ecology;
+        self.rebuild_ecology_metrics();
+        Ok(())
+    }
+
+    pub fn add_terrain_zone(&mut self, zone: TerrainZone) -> Result<(), ScaffoldContractError> {
+        self.ecology.add_zone(zone)?;
+        self.rebuild_ecology_metrics();
+        Ok(())
+    }
+
+    pub fn track_resource_lifecycle(
+        &mut self,
+        object_id: WorldEntityId,
+        home_zone: EcologyZoneId,
+        regrow_after_ticks: u32,
+        decay_after_ticks: u32,
+    ) -> Result<(), ScaffoldContractError> {
+        let Some(object) = self.objects.get(&object_id.raw()) else {
+            return Err(ScaffoldContractError::InvalidId);
+        };
+        if object.kind != WorldObjectKind::Food || self.ecology.zone(home_zone).is_none() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        self.ecology.add_resource(ResourceLifecycle {
+            object_id,
+            home_zone,
+            base_nutrition: object.nutrition,
+            regrow_after_ticks,
+            decay_after_ticks,
+            consumed_at_tick: object.consumed.then_some(self.tick),
+            last_regrown_tick: None,
+            low_salience_marker: object.consumed,
+        })?;
+        self.rebuild_ecology_metrics();
+        Ok(())
+    }
+
+    pub fn add_resource_spawn_policy(
+        &mut self,
+        policy: ResourceSpawnPolicy,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ecology.add_spawn_policy(policy)?;
+        Ok(())
     }
 
     pub fn entity_id(&self, label: &str) -> Option<WorldEntityId> {
@@ -230,6 +312,7 @@ impl HeadlessWorld {
             next_entity_id: self.next_entity_id,
             objects: self.objects.values().cloned().collect(),
             last_touched_entities: self.last_touched_entities.clone(),
+            ecology: self.ecology.clone(),
         }
     }
 
@@ -254,6 +337,15 @@ impl HeadlessWorld {
         {
             return Err(ScaffoldContractError::InvalidId);
         }
+        parts.ecology.validate()?;
+        for resource in &parts.ecology.resources {
+            let Some(object) = objects.get(&resource.object_id.raw()) else {
+                return Err(ScaffoldContractError::InvalidId);
+            };
+            if object.kind != WorldObjectKind::Food {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
         for touched in &parts.last_touched_entities {
             touched.validate()?;
             if !objects.contains_key(&touched.raw()) {
@@ -268,6 +360,7 @@ impl HeadlessWorld {
             labels,
             last_touched_entities: parts.last_touched_entities,
             last_action_result: None,
+            ecology: parts.ecology,
         })
     }
 
@@ -380,7 +473,7 @@ impl HeadlessWorld {
         let context_streams = ContextStreams {
             vocal_tokens,
             social_proximity,
-            ambient_light: NormalizedScalar::new(0.8)?,
+            ambient_light: NormalizedScalar::new(self.ambient_light_for_tick())?,
             ..ContextStreams::default()
         };
         context_streams.validate_contract()?;
@@ -411,11 +504,19 @@ impl HeadlessWorld {
         }
         core_snapshot.validate_contract()?;
 
+        let ecology = self.ecology.sensory_summary(
+            agent.position,
+            tick,
+            self.active_food_count(),
+            self.active_hazard_count(),
+        );
+        ecology.validate()?;
         Ok(HeadlessSensoryReport {
             core_snapshot,
             visible_entities,
             contact_entities,
             touched_entities: self.last_touched_entities.clone(),
+            ecology,
         })
     }
 
@@ -580,6 +681,8 @@ impl HeadlessWorld {
         }
         let nutrition = object.nutrition;
         object.consumed = true;
+        self.ecology.record_consumed(target, self.tick);
+        self.rebuild_ecology_metrics();
         self.finish_action(
             command,
             true,
@@ -661,11 +764,21 @@ impl HeadlessWorld {
             agent.position = destination;
         }
         let displacement = subtract(destination, start);
+        let zone_hazard = self
+            .ecology
+            .zone_at(destination)
+            .map_or(0.0, |zone| zone.hazard_pressure);
         let (profile, contact, target) = if let Some((hazard_id, pain)) = hazard {
             (
                 OutcomeProfile::hazard(pain),
                 PhysicalContactKind::Collision,
                 Some(hazard_id),
+            )
+        } else if zone_hazard > 0.0 {
+            (
+                OutcomeProfile::hazard(zone_hazard),
+                PhysicalContactKind::Moved,
+                command.target_entity,
             )
         } else {
             (
@@ -798,6 +911,178 @@ impl HeadlessWorld {
                 .blocks_position(position)
                 .then_some(WorldEntityId(*id))
         })
+    }
+
+    fn advance_ecology_at_current_tick(&mut self) -> EcologyStepReport {
+        let mut report = EcologyStepReport {
+            tick: self.tick,
+            ..EcologyStepReport::default()
+        };
+        if self.ecology.zones.is_empty() && self.ecology.resources.is_empty() {
+            self.rebuild_ecology_metrics();
+            report.metrics = self.ecology.metrics();
+            return report;
+        }
+
+        let resource_ids = self
+            .ecology
+            .resources
+            .iter()
+            .map(|resource| resource.object_id)
+            .collect::<Vec<_>>();
+        for object_id in resource_ids {
+            let Some(object) = self.objects.get_mut(&object_id.raw()) else {
+                report.cap_rejections = report.cap_rejections.saturating_add(1);
+                continue;
+            };
+            let Some(resource) = self.ecology.resource_by_object_mut(object_id) else {
+                continue;
+            };
+            if object.consumed {
+                if let Some(consumed_at) = resource.consumed_at_tick {
+                    let elapsed = self.tick.raw().saturating_sub(consumed_at.raw());
+                    if elapsed >= resource.regrow_after_ticks as u64 {
+                        object.consumed = false;
+                        object.nutrition = resource.base_nutrition.clamp(0.0, 1.0);
+                        resource.last_regrown_tick = Some(self.tick);
+                        resource.consumed_at_tick = None;
+                        resource.low_salience_marker = false;
+                        report.regrown_entities.push(object_id);
+                        self.ecology.metrics.resources_regrown =
+                            self.ecology.metrics.resources_regrown.saturating_add(1);
+                    }
+                }
+            } else if let Some(regrown_at) = resource.last_regrown_tick {
+                let elapsed = self.tick.raw().saturating_sub(regrown_at.raw());
+                if elapsed >= resource.decay_after_ticks as u64 {
+                    resource.low_salience_marker = true;
+                    report.cleanup_marked_entities.push(object_id);
+                    self.ecology.metrics.cleanup_marked =
+                        self.ecology.metrics.cleanup_marked.saturating_add(1);
+                }
+            }
+        }
+
+        self.spawn_ecology_resources(&mut report);
+        self.rebuild_ecology_metrics();
+        report.metrics = self.ecology.metrics();
+        report
+    }
+
+    fn spawn_ecology_resources(&mut self, report: &mut EcologyStepReport) {
+        let mut spawned_this_tick = 0_usize;
+        let policies = self.ecology.spawn_policies.clone();
+        for (policy_index, mut policy) in policies.into_iter().enumerate() {
+            if spawned_this_tick >= self.ecology.config.max_spawn_per_tick {
+                break;
+            }
+            if self.tick.raw() < policy.next_spawn_tick.raw() {
+                continue;
+            }
+            let active_for_prefix = self
+                .objects
+                .values()
+                .filter(|object| {
+                    object.kind == WorldObjectKind::Food
+                        && !object.consumed
+                        && object.label.starts_with(&policy.label_prefix)
+                })
+                .count();
+            if active_for_prefix >= policy.max_active
+                || self.objects.len() >= self.ecology.config.max_world_objects
+                || self.ecology.resources.len() >= self.ecology.config.max_resource_records
+            {
+                report.cap_rejections = report.cap_rejections.saturating_add(1);
+                self.ecology.metrics.cap_rejections =
+                    self.ecology.metrics.cap_rejections.saturating_add(1);
+                continue;
+            }
+            let Some(zone) = self.ecology.zone(policy.zone_id).cloned() else {
+                report.cap_rejections = report.cap_rejections.saturating_add(1);
+                continue;
+            };
+            let label = format!("{}-{}", policy.label_prefix, policy.spawned_count);
+            let position = deterministic_zone_position(&zone, policy.spawned_count);
+            let Ok(id) = self.insert_object(SpawnSpec {
+                label: &label,
+                kind: WorldObjectKind::Food,
+                organism_id: None,
+                position,
+                nutrition: policy.nutrition,
+                hazard_pain: 0.0,
+                token_id: None,
+                social_affinity: 0.0,
+                teacher_channel: None,
+            }) else {
+                report.cap_rejections = report.cap_rejections.saturating_add(1);
+                continue;
+            };
+            let lifecycle = ResourceLifecycle {
+                object_id: id,
+                home_zone: policy.zone_id,
+                base_nutrition: policy.nutrition.clamp(0.0, 1.0),
+                regrow_after_ticks: policy.interval_ticks.max(1),
+                decay_after_ticks: policy.interval_ticks.saturating_mul(3).max(1),
+                consumed_at_tick: None,
+                last_regrown_tick: Some(self.tick),
+                low_salience_marker: false,
+            };
+            if self.ecology.add_resource(lifecycle).is_err() {
+                if let Some(removed) = self.objects.remove(&id.raw()) {
+                    self.labels.remove(&removed.label);
+                }
+                report.cap_rejections = report.cap_rejections.saturating_add(1);
+                continue;
+            }
+            policy.spawned_count = policy.spawned_count.saturating_add(1);
+            policy.next_spawn_tick =
+                Tick::new(self.tick.raw().saturating_add(policy.interval_ticks as u64));
+            if let Some(slot) = self.ecology.spawn_policies.get_mut(policy_index) {
+                *slot = policy;
+            }
+            report.spawned_labels.push(label);
+            spawned_this_tick += 1;
+            self.ecology.metrics.resources_spawned =
+                self.ecology.metrics.resources_spawned.saturating_add(1);
+        }
+    }
+
+    fn active_food_count(&self) -> usize {
+        self.objects
+            .values()
+            .filter(|object| object.kind == WorldObjectKind::Food && !object.consumed)
+            .count()
+    }
+
+    fn active_hazard_count(&self) -> usize {
+        self.objects
+            .values()
+            .filter(|object| object.kind == WorldObjectKind::Hazard && !object.consumed)
+            .count()
+    }
+
+    fn rebuild_ecology_metrics(&mut self) {
+        let object_kinds = self
+            .objects
+            .values()
+            .filter(|object| matches!(object.kind, WorldObjectKind::Food | WorldObjectKind::Hazard))
+            .map(|object| {
+                (
+                    object.id.raw(),
+                    (object.kind == WorldObjectKind::Food, object.consumed),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        self.ecology.rebuild_metrics(&object_kinds);
+    }
+
+    fn ambient_light_for_tick(&self) -> f32 {
+        let phase = crate::ecology::cycle_phase(self.tick, self.ecology.config.cycle_length_ticks);
+        if phase < 0.5 {
+            0.85
+        } else {
+            0.35
+        }
     }
 }
 
@@ -936,6 +1221,105 @@ impl HeadlessScenarioBuilder {
             social_affinity: 0.0,
             teacher_channel: Some(teacher_channel),
         });
+        self
+    }
+
+    pub fn ecology_config(mut self, config: EcologyConfig) -> Self {
+        if self.error.is_some() {
+            return self;
+        }
+        match self.world.ecology.clone().with_config(config) {
+            Ok(ecology) => {
+                if let Err(error) = self.world.configure_ecology(ecology) {
+                    self.error = Some(error);
+                }
+            }
+            Err(error) => self.error = Some(error),
+        }
+        self
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn terrain_zone(
+        mut self,
+        id: u32,
+        label: &str,
+        kind: TerrainZoneKind,
+        center: Vec3f,
+        radius: f32,
+        resource_bias: f32,
+        hazard_pressure: f32,
+    ) -> Self {
+        if self.error.is_some() {
+            return self;
+        }
+        match TerrainZone::new(
+            EcologyZoneId(id),
+            label,
+            kind,
+            center,
+            radius,
+            resource_bias,
+            hazard_pressure,
+        ) {
+            Ok(zone) => {
+                if let Err(error) = self.world.add_terrain_zone(zone) {
+                    self.error = Some(error);
+                }
+            }
+            Err(error) => self.error = Some(error),
+        }
+        self
+    }
+
+    pub fn track_resource(
+        mut self,
+        label: &str,
+        zone_id: u32,
+        regrow_after_ticks: u32,
+        decay_after_ticks: u32,
+    ) -> Self {
+        if self.error.is_some() {
+            return self;
+        }
+        let Some(object_id) = self.world.entity_id(label) else {
+            self.error = Some(ScaffoldContractError::InvalidId);
+            return self;
+        };
+        if let Err(error) = self.world.track_resource_lifecycle(
+            object_id,
+            EcologyZoneId(zone_id),
+            regrow_after_ticks,
+            decay_after_ticks,
+        ) {
+            self.error = Some(error);
+        }
+        self
+    }
+
+    pub fn resource_spawn_policy(
+        mut self,
+        label_prefix: &str,
+        zone_id: u32,
+        interval_ticks: u32,
+        max_active: usize,
+        nutrition: f32,
+    ) -> Self {
+        if self.error.is_some() {
+            return self;
+        }
+        let policy = ResourceSpawnPolicy {
+            label_prefix: label_prefix.to_string(),
+            zone_id: EcologyZoneId(zone_id),
+            interval_ticks,
+            max_active,
+            nutrition,
+            next_spawn_tick: self.world.tick(),
+            spawned_count: 0,
+        };
+        if let Err(error) = self.world.add_resource_spawn_policy(policy) {
+            self.error = Some(error);
+        }
         self
     }
 

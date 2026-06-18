@@ -17,7 +17,10 @@ use alife_core::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind};
+use crate::{
+    ecology::EcologyState,
+    headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
+};
 
 pub const P34_SAVE_FILE_SCHEMA: &str = "alife.p34.save_file.v1";
 pub const P34_SAVE_FILE_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.save.0;
@@ -592,6 +595,8 @@ pub struct WorldSaveState {
     pub next_entity_id: u64,
     pub objects: Vec<WorldObjectSaveState>,
     pub last_touched_entities: Vec<WorldEntityId>,
+    #[serde(default)]
+    pub ecology: EcologyState,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -849,6 +854,7 @@ impl WorldSaveState {
                 .map(WorldObjectSaveState::from)
                 .collect(),
             last_touched_entities: parts.last_touched_entities,
+            ecology: parts.ecology,
         }
     }
 
@@ -878,6 +884,12 @@ impl WorldSaveState {
                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
             }
         }
+        self.ecology.validate()?;
+        for resource in &self.ecology.resources {
+            if !ids.contains(&resource.object_id.raw()) {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
         Ok(())
     }
 
@@ -894,6 +906,7 @@ impl WorldSaveState {
                 .map(WorldObject::from)
                 .collect(),
             last_touched_entities: self.last_touched_entities.clone(),
+            ecology: self.ecology.clone(),
         };
         Ok(HeadlessWorld::from_persistence_parts(parts)?)
     }

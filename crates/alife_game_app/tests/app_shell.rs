@@ -6,9 +6,9 @@ use alife_game_app::{
     compare_visible_world_to_headless, load_visible_world_from_p34_save,
     run_creature_inspector_smoke, run_creature_visual_smoke, run_headless_app_shell_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig,
-    CameraNavigationState, CreatureAnimationState, CreatureExpressionState, InspectorControlPanel,
-    LiveBrainLoop, LiveBrainTickControl, PlayableSurvivalEventKind,
+    run_world_ecology_loop_smoke, select_visible_world_entity, validate_app_shell_config,
+    AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
+    InspectorControlPanel, LiveBrainLoop, LiveBrainTickControl, PlayableSurvivalEventKind,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -371,6 +371,39 @@ fn rest_loop_enters_visible_sleep_state_after_sealed_patch() {
         summary.final_visual.expression,
         CreatureExpressionState::Tired
     );
+}
+
+#[test]
+fn world_ecology_loop_tracks_regrowth_spawn_pressure_and_logs() {
+    let summary = run_world_ecology_loop_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G07_WORLD_ECOLOGY_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G07_WORLD_ECOLOGY_SCHEMA_VERSION
+    );
+    assert_eq!(summary.seed, 7070);
+    assert_eq!(summary.tick_summaries.len(), 4);
+    assert_eq!(summary.sealed_patch_count, 4);
+    assert_eq!(summary.packed_record_count, 4);
+    assert!(summary.metrics.resources_regrown >= 1);
+    assert!(summary.metrics.resources_spawned >= 1);
+    assert!(summary.metrics.active_resources >= 1);
+    assert!(summary.hazard_pain > 0.0);
+    assert_eq!(summary.sensory_zone_label.as_deref(), Some("ash-field"));
+    assert!(summary
+        .ecology_indicators
+        .iter()
+        .any(|indicator| indicator.label == "meadow"));
+    assert!(summary
+        .ecology_indicators
+        .iter()
+        .any(|indicator| indicator.label == "ash-field"));
+    assert!(summary
+        .world_signature
+        .iter()
+        .any(|line| line.contains("seed-berry")));
+    summary.validate().unwrap();
 }
 
 #[cfg(feature = "bevy-app")]
