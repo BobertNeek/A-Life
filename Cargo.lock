@@ -42,6 +42,7 @@ name = "alife_game_app"
 version = "0.1.0"
 dependencies = [
  "alife_bevy_adapter",
+ "alife_core",
  "alife_world",
  "bevy",
  "thiserror 2.0.18",
