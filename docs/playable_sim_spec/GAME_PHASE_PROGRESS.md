@@ -25,5 +25,6 @@
 | G18 | codex/G18-population-performance | complete | branch commit | full default, wrapper, core boundary, population-performance smoke, tier 1/10 CI evidence, manual upper-tier commands, LOD cadence protection, and all-features validation passed | R18 |
 | R18 | codex/R18-population-performance-review | complete | branch commit | population/performance review complete; verdict PASS; G18 tier/LOD policy, CPU fallback, no-readback status, and manual GPU limitations reviewed | G19 |
 | G19 | codex/G19-long-run-balance | complete | branch commit | full default, wrapper, core boundary, longrun-balance smoke, deterministic replay, ignored extended balance command, bounded population/resource metrics, and all-features validation passed | G20 |
+| G20 | codex/G20-onboarding-help | complete | branch commit | full default, wrapper, core boundary, onboarding-help smoke, tutorial script validation, docs path/command checks, and all-features validation passed | G21 |
 | R23 | codex/R23-feature-complete-rc-review | pending | not started | review gate required after G23 before G24 | G24 |
 | R24 | codex/R24-final-playable-sim-review | pending | not started | final playable-sim roadmap lock review after G24 | None |
