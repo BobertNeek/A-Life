@@ -69,6 +69,9 @@ pub use ecology_loop::*;
 mod feedback_polish;
 pub use feedback_polish::*;
 
+mod population_performance;
+pub use population_performance::*;
+
 mod population_social;
 pub use population_social::*;
 
