@@ -4,16 +4,17 @@ use alife_core::{
 };
 use alife_game_app::{
     compare_visible_world_to_headless, load_visible_world_from_p34_save,
-    run_creature_inspector_smoke, run_creature_visual_smoke, run_gpu_product_hardening_smoke,
-    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
-    run_live_brain_loop_smoke, run_playable_survival_loop_smoke, run_population_social_loop_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
-    AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind,
-    SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
+    run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
+    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
+    run_population_social_loop_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, InspectorControlPanel, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationSocialEventKind, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
+    WorldEditorMode, WorldEditorSession,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -966,6 +967,106 @@ fn world_editor_resume_uses_sealed_patch_without_direct_cognition_mutation() {
     assert_eq!(summary.cognition_direct_mutation_count, 0);
     assert!(summary.edit_log.iter().any(|entry| entry == "place"));
     assert!(summary.edit_log.iter().any(|entry| entry == "remove"));
+}
+
+#[test]
+fn cognition_debug_timeline_uses_sealed_patches_only_and_is_read_only() {
+    let panel = run_cognition_debug_timeline_smoke().unwrap();
+
+    assert_eq!(panel.schema, alife_game_app::G14_COGNITION_DEBUG_SCHEMA);
+    assert_eq!(
+        panel.schema_version,
+        alife_game_app::G14_COGNITION_DEBUG_SCHEMA_VERSION
+    );
+    assert!(panel.read_only);
+    assert!(!panel.mutation_controls_enabled);
+    assert!(!panel.timeline_entries.is_empty());
+    assert!(panel.timeline_entries.len() <= alife_game_app::G14_MAX_TIMELINE_ENTRIES);
+    assert!(panel
+        .timeline_entries
+        .iter()
+        .all(|entry| entry.sealed_patch_only && entry.packed_log_available));
+    assert!(panel
+        .timeline_entries
+        .iter()
+        .all(|entry| entry.summary_line.contains("sealed_patch=true")));
+    assert!(panel
+        .panel_notes
+        .iter()
+        .any(|note| note.contains("sealed ExperiencePatch")));
+    panel.validate().unwrap();
+}
+
+#[test]
+fn cognition_debug_keeps_memory_topology_gpu_and_exports_boundary_safe() {
+    let panel = run_cognition_debug_timeline_smoke().unwrap();
+
+    assert!(panel.bias_summary.action_replay_blocked);
+    assert!(panel.bias_summary.topology_action_bypass_blocked);
+    assert!(panel
+        .bias_summary
+        .memory_expectancy_line
+        .contains("bias_only"));
+    assert!(panel
+        .bias_summary
+        .memory_expectancy_line
+        .contains("no_action_replay"));
+    assert!(panel
+        .bias_summary
+        .topology_gap_line
+        .contains("cannot_emit_action"));
+    assert!(!panel
+        .bias_summary
+        .memory_expectancy_line
+        .contains("ActionCommand"));
+    assert!(!panel
+        .bias_summary
+        .topology_gap_line
+        .contains("ActionCommand"));
+
+    assert!(panel.no_active_neural_readback);
+    assert!(panel.gpu_summary.no_active_gameplay_readback);
+    assert_eq!(
+        panel.gpu_summary.telemetry_boundary,
+        "frame-boundary-diagnostic-export"
+    );
+    assert!(!panel.gpu_summary.measured_gpu_performance);
+    assert!(panel.gpu_summary.report_notes.contains("CPU fallback"));
+
+    assert!(panel.packed_log_export.offline_only);
+    assert!(!panel.packed_log_export.mutates_runtime_state);
+    assert!(panel
+        .packed_log_export
+        .export_command
+        .contains("p30_offline"));
+}
+
+#[test]
+fn cognition_debug_reports_arbitration_and_sleep_without_runtime_control() {
+    let panel = run_cognition_debug_timeline_smoke().unwrap();
+
+    assert!(!panel.proposal_lines.is_empty());
+    assert!(panel.proposal_lines.len() <= alife_game_app::G14_MAX_PROPOSAL_LINES);
+    assert_eq!(
+        panel
+            .proposal_lines
+            .iter()
+            .filter(|line| line.selected_by_arbitration)
+            .count(),
+        1
+    );
+    assert!(panel.proposal_lines.iter().all(|line| line
+        .bias_only_sources
+        .iter()
+        .any(|source| source.contains("action_arbitration"))));
+
+    assert!(panel.sleep_summary.rest_event_seen);
+    assert!(panel.sleep_summary.consolidation_visible);
+    assert!(!panel.sleep_summary.structural_edits_active_tick_applied);
+    assert!(panel
+        .sleep_summary
+        .summary_line
+        .contains("structural_edit_active_tick_applied=false"));
 }
 
 #[cfg(feature = "bevy-app")]

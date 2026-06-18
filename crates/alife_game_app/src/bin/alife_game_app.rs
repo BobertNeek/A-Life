@@ -1,12 +1,13 @@
 use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
-    load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_playable_survival_loop_smoke, run_population_social_loop_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_shell_config, AppShellLaunchConfig,
+    load_visible_world_from_p34_save, run_cognition_debug_timeline_smoke,
+    run_creature_inspector_smoke, run_creature_visual_smoke, run_gpu_product_hardening_smoke,
+    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
+    run_population_social_loop_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_shell_config,
+    AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -146,7 +147,14 @@ fn run() -> Result<String, String> {
             let summary = run_world_editor_smoke().map_err(|err| err.to_string())?;
             Ok(format_world_editor_summary("G13 world editor", &summary))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke".to_string()),
+        [command] if command == "cognition-debug-smoke" => {
+            let panel = run_cognition_debug_timeline_smoke().map_err(|err| err.to_string())?;
+            Ok(format_cognition_debug_summary(
+                "G14 cognition debug",
+                &panel,
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke".to_string()),
     }
 }
 
@@ -459,6 +467,32 @@ fn format_world_editor_summary(
         summary.simulation_resumed,
         summary.resumed_patch_sealed,
         summary.signature_line()
+    )
+}
+
+fn format_cognition_debug_summary(
+    prefix: &str,
+    panel: &alife_game_app::CognitionDebugTimelinePanel,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} organism={} read_only={} timeline={} proposals={} sealed_only={} memory='{}' topology='{}' sleep='{}' gpu_boundary={} no_readback={} export='{}' signature={}",
+        panel.schema,
+        panel.schema_version,
+        panel.organism_id.raw(),
+        panel.read_only,
+        panel.timeline_entries.len(),
+        panel.proposal_lines.len(),
+        panel
+            .timeline_entries
+            .iter()
+            .all(|entry| entry.sealed_patch_only),
+        panel.bias_summary.memory_expectancy_line,
+        panel.bias_summary.topology_gap_line,
+        panel.sleep_summary.summary_line,
+        panel.gpu_summary.telemetry_boundary,
+        panel.no_active_neural_readback,
+        panel.packed_log_export.export_command,
+        panel.signature_line()
     )
 }
 

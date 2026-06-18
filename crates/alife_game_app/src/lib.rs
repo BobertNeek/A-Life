@@ -84,6 +84,9 @@ pub use gpu_product_telemetry::*;
 mod world_editor;
 pub use world_editor::*;
 
+mod cognition_debug_timeline;
+pub use cognition_debug_timeline::*;
+
 #[cfg(feature = "bevy-app")]
 pub mod bevy_shell;
 
