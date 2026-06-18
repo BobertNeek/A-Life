@@ -1,8 +1,9 @@
 use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
-    load_visible_world_from_p34_save, run_headless_app_shell_smoke, validate_app_shell_config,
-    AppShellLaunchConfig,
+    load_visible_world_from_p34_save, run_headless_app_shell_smoke,
+    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -54,7 +55,37 @@ fn run() -> Result<String, String> {
         [command, fixture_root] if command == "visible-world-smoke" => {
             run_visible_world_smoke(fixture_root)
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root>".to_string()),
+        [command, fixture_root] if command == "live-brain-tick-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary = run_live_brain_loop_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format_live_tick_summary("G03 live brain tick", &summary))
+        }
+        [command, fixture_root] if command == "live-brain-paused-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let (mind_tick, world_tick, produced) =
+                run_live_brain_loop_paused_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format!(
+                "G03 live brain paused mind_tick={} world_tick={} produced={}",
+                mind_tick.raw(),
+                world_tick.raw(),
+                produced
+            ))
+        }
+        [command, fixture_root, ticks] if command == "live-brain-fixed-smoke" => {
+            let ticks = ticks
+                .parse::<u32>()
+                .map_err(|_| "ticks must be an unsigned integer".to_string())?;
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summaries =
+                run_live_brain_loop_fixed_smoke(&launch, ticks).map_err(|err| err.to_string())?;
+            Ok(format!(
+                "G03 live brain fixed ticks={} sealed={} last_status={:?}",
+                summaries.len(),
+                summaries.last().map_or(0, |summary| summary.sealed_patch_count),
+                summaries.last().map(|summary| summary.status)
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks>".to_string()),
     }
 }
 
@@ -70,6 +101,31 @@ fn format_summary(prefix: &str, summary: &alife_game_app::AppStartupSummary) -> 
         summary.state_labels().join(">"),
         summary.bevy_feature_compiled,
         summary.graphics_required_for_default_path
+    )
+}
+
+fn format_live_tick_summary(
+    prefix: &str,
+    summary: &alife_game_app::LiveBrainTickSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} organism={} tick={}->{} world_tick={}->{} status={:?} action={:?}:{:?} target={:?} sealed={} success={:?} contact={:?} patches={} packed_logs={}",
+        summary.schema,
+        summary.schema_version,
+        summary.organism_id.raw(),
+        summary.tick_before.raw(),
+        summary.tick_after.raw(),
+        summary.world_tick_before.raw(),
+        summary.world_tick_after.raw(),
+        summary.status,
+        summary.selected_action_kind,
+        summary.selected_action_id.map(|id| id.raw()),
+        summary.target_entity.map(|id| id.raw()),
+        summary.patch_sealed,
+        summary.patch_success,
+        summary.physical_contact,
+        summary.sealed_patch_count,
+        summary.packed_record_count
     )
 }
 

@@ -34,4 +34,22 @@ cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- visible-
 
 The visible-world smoke constructs deterministic placeholder entities from the
 P34 portable save and binds Bevy entities to stable IDs through the adapter-local
-map. It still does not run the G03 live brain/game tick bridge.
+map.
+
+G03 live brain tick bridge, no graphics required:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- live-brain-tick-smoke crates/alife_world/tests/fixtures/p34
+```
+
+G03 pause and fixed-step scheduler smokes:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- live-brain-paused-smoke crates/alife_world/tests/fixtures/p34
+cargo run -p alife_game_app --bin alife_game_app -- live-brain-fixed-smoke crates/alife_world/tests/fixtures/p34 2
+```
+
+The G03 bridge runs the existing P15/P17 CPU reference path from gathered
+sensory through action arbitration, action execution, outcome measurement,
+sealed `ExperiencePatch`, and packed-log telemetry. It does not add G04
+rendering polish or G06 gameplay tuning.
