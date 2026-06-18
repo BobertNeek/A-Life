@@ -64,3 +64,17 @@ The G04 visual state is a one-way presentation snapshot derived from P34
 visible objects, the G03 live tick summary, bounded drive/hormone values, and
 sleep phase. It maps the creature into placeholder animation, expression,
 intent color, and bounded cue bars without changing cognition or gameplay.
+
+G05 creature selection and inspector smoke, no graphics required:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- creature-inspector-smoke crates/alife_world/tests/fixtures/p34
+```
+
+The G05 inspector uses stable `WorldEntityId`/`OrganismId` values for model data
+and remains read-only. Feature-gated Bevy helpers may keep a local Bevy entity
+mapping for picking, but that local engine ID is not written into saves or core
+contracts. The inspector reports camera focus/follow state, bounded drives and
+hormones, current action, last sealed patch summary, memory/topology update
+counts, and optional backend/provider troubleshooting messages. It does not
+implement G06 survival-loop tuning or any cognition editing.
