@@ -4,15 +4,15 @@ use alife_core::{
 };
 use alife_game_app::{
     compare_visible_world_to_headless, load_visible_world_from_p34_save,
-    run_creature_inspector_smoke, run_creature_visual_smoke, run_headless_app_shell_smoke,
-    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_playable_survival_loop_smoke, run_population_social_loop_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, InspectorControlPanel, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationSocialEventKind, SchoolModeSaveState,
+    run_creature_inspector_smoke, run_creature_visual_smoke, run_gpu_product_hardening_smoke,
+    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
+    run_live_brain_loop_smoke, run_playable_survival_loop_smoke, run_population_social_loop_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig,
+    CameraNavigationState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, PlayableSurvivalEventKind,
+    PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind, SchoolModeSaveState,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -750,6 +750,66 @@ fn semantic_provider_config_rejects_unknown_schema_and_kind() {
 
     assert!(summary.unknown_schema_rejected);
     assert!(summary.unknown_provider_kind_rejected);
+}
+
+#[test]
+fn gpu_product_smoke_defaults_to_cpu_fallback_without_requiring_gpu() {
+    let summary = run_gpu_product_hardening_smoke().unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::G12_GPU_PRODUCT_TELEMETRY_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G12_GPU_PRODUCT_TELEMETRY_SCHEMA_VERSION
+    );
+    assert!(summary.cpu_fallback_default);
+    assert_eq!(summary.telemetry_overlay.selected_backend, "CpuReference");
+    assert!(summary.telemetry_overlay.cpu_oracle_authoritative);
+    assert!(!summary.telemetry_overlay.measured_gpu_performance);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn gpu_product_smoke_invalid_gpu_config_falls_back_and_reports_reason() {
+    let summary = run_gpu_product_hardening_smoke().unwrap();
+
+    assert!(summary.invalid_gpu_config_falls_back);
+    assert_eq!(summary.telemetry_overlay.requested_backend, "GpuStatic");
+    assert!(summary.telemetry_overlay.fallback_reason.is_some());
+    assert!(summary
+        .telemetry_overlay
+        .report_notes
+        .contains("CPU fallback"));
+}
+
+#[test]
+fn gpu_product_smoke_blocks_active_readback_and_allows_boundary_export() {
+    let summary = run_gpu_product_hardening_smoke().unwrap();
+
+    assert!(summary.active_readback_blocked);
+    assert!(summary.diagnostic_export_boundary_allowed);
+    assert!(summary.telemetry_overlay.no_active_gameplay_readback);
+    assert_eq!(
+        summary.telemetry_overlay.telemetry_boundary,
+        "frame-boundary-diagnostic-export"
+    );
+}
+
+#[test]
+fn gpu_product_smoke_report_is_honest_and_manual_command_is_current() {
+    let summary = run_gpu_product_hardening_smoke().unwrap();
+
+    assert!(summary
+        .report_markdown_preview
+        .contains("CPU fallback is not GPU performance"));
+    assert_eq!(summary.performance_claim_status, "unknown-unless-measured");
+    assert!(summary
+        .manual_hardware_command
+        .contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
+    assert!(summary.manual_hardware_command.contains("--gpu-runtime"));
+    assert!(!summary.manual_hardware_command.contains("--gpu-report"));
 }
 
 #[cfg(feature = "bevy-app")]

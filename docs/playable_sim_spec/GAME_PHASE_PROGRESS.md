@@ -14,3 +14,4 @@
 | G09 | codex/G09-life-cycle-lineage | complete | branch commit | full default, wrapper, core boundary, lifecycle-lineage smoke, birth/death/lineage save tests, and all-features validation passed | G10 |
 | G10 | codex/G10-school-playable-mode | complete | branch commit | full default, wrapper, core boundary, school-mode smoke, teacher perception/no-bypass tests, school save round-trip, and all-features validation passed | G11 |
 | G11 | codex/G11-semantic-slm-provider | complete | branch commit | full default, wrapper, core boundary, semantic-provider smoke, disabled/fake provider boundary tests, and all-features validation passed | G12 |
+| G12 | codex/G12-gpu-product-hardening | complete | branch commit | full default, wrapper, core boundary, gpu-product smoke, CPU fallback/no-readback tests, manual hardware docs, and all-features validation passed | G13 |
