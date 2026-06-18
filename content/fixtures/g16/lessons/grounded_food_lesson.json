@@ -1,0 +1,29 @@
+{
+  "schema": "alife.g16.lesson_pack.v1",
+  "schema_version": 1,
+  "lesson_pack_id": "g16-grounded-food",
+  "steps": [
+    {
+      "lesson_id": 1,
+      "kind": "name_object",
+      "channel": "Hearing",
+      "token_id": 77,
+      "target_world_entity_id": 2,
+      "expected_observation": "teacher says berry while berry is visible",
+      "perception_only": true,
+      "direct_motor_bypass": false,
+      "hidden_vector_injection": false
+    },
+    {
+      "lesson_id": 2,
+      "kind": "highlight_object",
+      "channel": "Vision",
+      "token_id": null,
+      "target_world_entity_id": 2,
+      "expected_observation": "teacher highlights berry without issuing action",
+      "perception_only": true,
+      "direct_motor_bypass": false,
+      "hidden_vector_injection": false
+    }
+  ]
+}

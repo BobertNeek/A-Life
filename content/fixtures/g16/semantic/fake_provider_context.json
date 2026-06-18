@@ -1,0 +1,8 @@
+{
+  "schema": "alife.g16.fake_semantic_context.v1",
+  "schema_version": 1,
+  "context_id": "g16-fake-semantic-context",
+  "optional": true,
+  "descriptor_i8_32": [4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "note": "Optional fake semantic context for authoring validation only; it cannot issue actions or mutate weights."
+}
