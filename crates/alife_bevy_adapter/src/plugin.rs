@@ -118,7 +118,6 @@ pub fn gather_sensory_system(
     let observed = observed_query
         .iter()
         .filter_map(|(entity, transform, body, tags, emitter)| {
-            let world_id = world_id_for_entity(entity, body, &mut map)?;
             let mut affordances = tags.map_or(AffordanceBits::NONE, |tags| tags.bits);
             if body.is_some() {
                 affordances |= AffordanceBits::SOCIAL_AGENT;
@@ -128,6 +127,7 @@ pub fn gather_sensory_system(
             {
                 return None;
             }
+            let world_id = world_id_for_entity(entity, body, &mut map)?;
 
             let mut observed =
                 ObservedBevyEntity::new(entity, world_id, transform.translation, affordances);
@@ -186,13 +186,16 @@ pub fn execute_action_system(
     let targets = {
         let mut targets = Vec::new();
         for (entity, transform, tags, body) in &set.p0() {
-            let Some(world_id) = world_id_for_entity(entity, body, &mut map) else {
-                continue;
-            };
             let mut affordances = tags.map_or(AffordanceBits::NONE, |tags| tags.bits);
             if body.is_some() {
                 affordances |= AffordanceBits::SOCIAL_AGENT;
             }
+            if affordances == AffordanceBits::NONE {
+                continue;
+            }
+            let Some(world_id) = world_id_for_entity(entity, body, &mut map) else {
+                continue;
+            };
             targets.push(TargetAdapterState::new(
                 entity,
                 world_id,
