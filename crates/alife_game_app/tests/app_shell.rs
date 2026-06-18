@@ -1,9 +1,15 @@
+use alife_core::{
+    ActionKind, ActionProposal, ActionTarget, BrainTickInput, BrainTickStatus, Confidence,
+    CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, WorldEntityId,
+};
 use alife_game_app::{
     compare_visible_world_to_headless, load_visible_world_from_p34_save,
-    run_headless_app_shell_smoke, validate_app_shell_config, AppShellLaunchConfig,
+    run_headless_app_shell_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    validate_app_shell_config, AppShellLaunchConfig, LiveBrainLoop, LiveBrainTickControl,
 };
-use alife_world::persistence::BackendSelection;
+use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
+use alife_world::{HeadlessActionIds, HeadlessBrainHarness};
 use std::path::PathBuf;
 
 fn p34_fixture_root() -> PathBuf {
@@ -42,6 +48,133 @@ fn visible_world_signature_matches_restored_headless_fixture_objects() {
     assert_eq!(presentation.stable_ids()[1].raw(), 2);
 }
 
+#[test]
+fn live_brain_tick_smoke_seals_patch_and_updates_runtime_state() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_live_brain_loop_smoke(&launch).unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G03_LIVE_BRAIN_LOOP_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION
+    );
+    assert_eq!(summary.organism_id, OrganismId(1));
+    assert_eq!(summary.status, BrainTickStatus::Normal);
+    assert_eq!(summary.selected_action_kind, Some(ActionKind::Interact));
+    assert_eq!(summary.selected_action_id, Some(HeadlessActionIds::EAT));
+    assert_eq!(summary.target_entity, Some(WorldEntityId(2)));
+    assert!(summary.patch_sealed);
+    assert_eq!(summary.patch_success, Some(true));
+    assert_eq!(summary.sealed_patch_count, 1);
+    assert_eq!(summary.packed_record_count, 1);
+    assert_eq!(summary.memory_updates, 1);
+    assert_eq!(summary.topology_updates, 1);
+    assert_eq!(summary.tick_after.raw(), summary.tick_before.raw() + 1);
+    assert_eq!(
+        summary.world_tick_after.raw(),
+        summary.world_tick_before.raw() + 1
+    );
+    assert_eq!(
+        summary.causal_stages,
+        vec![
+            alife_game_app::LiveBrainCausalStage::GatherSensory,
+            alife_game_app::LiveBrainCausalStage::CpuBrainTick,
+            alife_game_app::LiveBrainCausalStage::ExecuteAction,
+            alife_game_app::LiveBrainCausalStage::MeasureOutcome,
+            alife_game_app::LiveBrainCausalStage::SealPatch,
+            alife_game_app::LiveBrainCausalStage::UpdateLogs,
+        ]
+    );
+}
+
+#[test]
+fn app_bridge_and_manual_headless_tick_produce_compatible_patch_summary() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let mut bridge = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let proposals = bridge.current_context_proposals().unwrap();
+    let bridge_summary = bridge.tick_with_proposals(proposals.clone());
+
+    let save = PortableSaveFile::from_json_file(&launch.save_path).unwrap();
+    let creature = save.creatures.first().unwrap();
+    let mut mind = CreatureMind::scaffold(
+        creature.organism_id,
+        creature.brain_class,
+        save.deterministic_seed,
+        creature.mind.tick,
+    )
+    .unwrap();
+    *mind.homeostasis_mut() = creature.mind.homeostasis;
+    let mut harness = HeadlessBrainHarness::new(save.restore_headless_world().unwrap());
+    let manual = harness.tick_mind(
+        &mut mind,
+        BrainTickInput::new(creature.mind.tick, proposals)
+            .with_pack_experience(true)
+            .with_action_duration(DurationTicks::new(1)),
+    );
+
+    let manual_patch = manual.brain.experience_patch.as_ref().unwrap();
+    assert_eq!(bridge_summary.status, manual.brain.status);
+    assert_eq!(
+        bridge_summary.selected_action_kind,
+        Some(manual_patch.decision().selected_action.kind)
+    );
+    assert_eq!(
+        bridge_summary.selected_action_id,
+        Some(manual_patch.decision().selected_action.action_id)
+    );
+    assert_eq!(
+        bridge_summary.patch_success,
+        Some(manual_patch.outcome().success)
+    );
+    assert_eq!(
+        bridge_summary.physical_contact,
+        Some(manual_patch.outcome().physical.contact)
+    );
+}
+
+#[test]
+fn invalid_live_action_is_recoverable_and_still_seals_failure_patch() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let mut bridge = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let invalid = ActionProposal::new(
+        HeadlessActionIds::EAT,
+        ActionKind::Interact,
+        0.99,
+        Confidence::new(0.99).unwrap(),
+        None,
+        0b11,
+        ActionTarget::new(Some(WorldEntityId(99_999)), None),
+        NormalizedScalar::new(0.9).unwrap(),
+    )
+    .unwrap();
+    let summary = bridge.tick_with_proposals(vec![invalid]);
+
+    assert_eq!(summary.status, BrainTickStatus::RecoverableActionFailure);
+    assert!(summary.patch_sealed);
+    assert_eq!(summary.patch_success, Some(false));
+    assert!(summary.action_failure.is_some());
+    assert_eq!(summary.sealed_patch_count, 1);
+    assert_eq!(summary.memory_updates, 1);
+    assert_eq!(summary.topology_updates, 1);
+}
+
+#[test]
+fn pause_and_step_modes_do_not_advance_hidden_state_unexpectedly() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let (mind_tick, world_tick, produced) = run_live_brain_loop_paused_smoke(&launch).unwrap();
+    assert_eq!(mind_tick, Tick::new(3));
+    assert_eq!(world_tick, Tick::new(2));
+    assert_eq!(produced, 0);
+
+    let mut bridge = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let paused = bridge.update(LiveBrainTickControl::paused()).unwrap();
+    assert!(paused.is_empty());
+    assert_eq!(bridge.mind().current_tick(), Tick::new(3));
+    let stepped = bridge.update(LiveBrainTickControl::step_once()).unwrap();
+    assert_eq!(stepped.len(), 1);
+    assert_eq!(bridge.mind().current_tick(), Tick::new(4));
+}
+
 #[cfg(feature = "bevy-app")]
 #[test]
 fn bevy_feature_can_construct_shell_without_visible_world_content() {
@@ -74,4 +207,29 @@ fn bevy_feature_spawns_visible_world_with_adapter_local_stable_mapping() {
     for object in visible {
         assert!(map.bevy_entity(object.stable_id).is_some());
     }
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_live_brain_bridge_records_last_tick_summary() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let (mut app, visible, live) =
+        alife_game_app::bevy_shell::build_live_brain_world_app_shell(&launch)
+            .expect("G03 live bridge should run on the P34 fixture");
+    assert_eq!(visible.object_count, 2);
+    assert!(live.patch_sealed);
+    assert_eq!(live.selected_action_kind, Some(ActionKind::Interact));
+    let target = live
+        .target_entity
+        .expect("P34 fixture live tick should select the visible food target");
+    assert!(app
+        .world()
+        .resource::<alife_bevy_adapter::BevyEntityMap>()
+        .bevy_entity(target)
+        .is_some());
+    app.update();
+    let resource = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::LiveBrainLoopResource>();
+    assert_eq!(resource.last_summary.sealed_patch_count, 1);
 }
