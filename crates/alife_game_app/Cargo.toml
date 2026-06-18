@@ -1,0 +1,16 @@
+[package]
+name = "alife_game_app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+alife_bevy_adapter = { path = "../alife_bevy_adapter", optional = true }
+alife_world = { path = "../alife_world" }
+bevy = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[features]
+default = []
+bevy-app = ["dep:alife_bevy_adapter", "dep:bevy"]
