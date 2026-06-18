@@ -29,3 +29,7 @@ pub const G12_GPU_PRODUCT_TELEMETRY_SCHEMA_VERSION: u16 = 1;
 pub const G13_WORLD_EDITOR_SCHEMA: &str = "alife.g13.world_editor.v1";
 pub const G13_WORLD_EDITOR_SCHEMA_VERSION: u16 = 1;
 pub const G13_EDITOR_MAX_OBJECTS: usize = 16;
+pub const G14_COGNITION_DEBUG_SCHEMA: &str = "alife.g14.cognition_debug_timeline.v1";
+pub const G14_COGNITION_DEBUG_SCHEMA_VERSION: u16 = 1;
+pub const G14_MAX_TIMELINE_ENTRIES: usize = 16;
+pub const G14_MAX_PROPOSAL_LINES: usize = 8;

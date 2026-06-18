@@ -18,6 +18,7 @@
 | G13 | codex/G13-world-editing-tools | complete | branch commit | full default, wrapper, core boundary, world-editor smoke, stable-ID save/load round-trip, invalid edit/cap tests, and all-features validation passed | R13 |
 | R13 | codex/R13-retrospective-product-boundary-review | complete | branch commit | retrospective review complete; verdict FIX_REQUIRED; G01-G13 boundaries passed, but `alife_game_app/src/lib.rs` requires behavior-preserving module split before G14 | R13 remediation |
 | R13 remediation | codex/R13-module-split-remediation | complete | branch commit | behavior-preserving `alife_game_app` module split completed; public exports, CLI smoke commands, feature gates, and `alife_core` boundary preserved | G14 |
+| G14 | codex/G14-cognition-visualization | complete | branch commit | full default, wrapper, core boundary, cognition-debug smoke, sealed-patch timeline/read-only/bias-only/no-readback tests, and all-features validation passed | G15 |
 | R18 | codex/R18-population-performance-review | pending | not started | review gate required after G18 before G19 | G19 |
 | R23 | codex/R23-feature-complete-rc-review | pending | not started | review gate required after G23 before G24 | G24 |
 | R24 | codex/R24-final-playable-sim-review | pending | not started | final playable-sim roadmap lock review after G24 | None |
