@@ -8,18 +8,19 @@ use alife_game_app::{
     run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_feedback_polish_smoke, run_gpu_product_hardening_smoke, run_headless_app_shell_smoke,
     run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
-    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, RenderDetailLevel, SaveSlotDescriptor,
-    SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
-    WorldEditorMode, WorldEditorSession,
+    run_longrun_balance_smoke, run_longrun_balance_with_config, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
+    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
+    AppShellLaunchConfig, AutosavePolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
+    CreatureAnimationState, CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind,
+    FeedbackAssetManifest, FeedbackEventKind, InspectorControlPanel, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PlayableSurvivalEventKind,
+    PopulationLiveLoop, PopulationLoopConfig, PopulationPerformancePolicy,
+    PopulationSocialEventKind, RenderDetailLevel, SaveSlotDescriptor, SaveSlotKind,
+    SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -684,6 +685,63 @@ fn population_lod_projection_preserves_behavior_signature() {
     assert_eq!(projection.render_detail, RenderDetailLevel::Full);
     assert!(projection.nonessential_cognition_decimated);
     assert!(projection.feedback_vfx_enabled);
+}
+
+#[test]
+fn longrun_balance_smoke_reports_plausible_bounded_metrics() {
+    let summary = run_longrun_balance_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G19_LONG_RUN_BALANCE_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G19_LONG_RUN_BALANCE_SCHEMA_VERSION
+    );
+    assert_eq!(
+        summary.config.cycles,
+        alife_game_app::G19_FAST_BALANCE_CYCLES
+    );
+    assert!(summary.metrics.survival_score > 0.0);
+    assert!(summary.metrics.energy_stability > 0.0);
+    assert_eq!(summary.metrics.food_success_rate, 1.0);
+    assert!(summary.metrics.hazard_avoidance_score < 1.0);
+    assert!(summary.metrics.sleep_cycle_count >= 1);
+    assert!(summary.metrics.reproduction_births >= 1);
+    assert!(summary.metrics.social_diversity_score > 0.0);
+    assert!(summary.metrics.no_unsealed_learning);
+    assert!(summary.metrics.invalid_id_rejected);
+    assert!(summary.metrics.finite_values);
+    assert!(summary.metrics.population_bounds_enforced);
+    assert!(summary.metrics.resource_bounds_enforced);
+    assert!(summary
+        .report_markdown
+        .contains("Known degenerate behaviors"));
+    assert!(summary.manual_extended_command.contains("--ignored"));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn longrun_balance_is_reproducible_by_seed_and_config() {
+    let first = run_longrun_balance_smoke().unwrap();
+    let second = run_longrun_balance_smoke().unwrap();
+
+    assert_eq!(first.signature_line(), second.signature_line());
+    assert_eq!(first.report_markdown, second.report_markdown);
+}
+
+#[test]
+#[ignore = "manual extended G19 balance run: cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture"]
+fn g19_manual_extended_balance_run() {
+    let summary = run_longrun_balance_with_config(LongRunBalanceConfig::extended_manual()).unwrap();
+
+    assert_eq!(
+        summary.config.cycles,
+        alife_game_app::G19_EXTENDED_BALANCE_CYCLES
+    );
+    assert!(summary.metrics.no_unsealed_learning);
+    assert!(summary.metrics.population_bounds_enforced);
+    assert!(summary.metrics.resource_bounds_enforced);
+    summary.validate().unwrap();
+    eprintln!("{}", summary.report_markdown);
 }
 
 #[test]
