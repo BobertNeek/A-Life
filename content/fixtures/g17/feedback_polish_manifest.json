@@ -1,0 +1,102 @@
+{
+  "schema": "alife.g17.feedback_asset_manifest.v1",
+  "schema_version": 1,
+  "entries": [
+    {
+      "asset_id": "g17-audio-food-chime",
+      "kind": "AudioCue",
+      "relative_path": "content/fixtures/g17/assets/food_chime.txt",
+      "optional": false,
+      "procedural_fallback": false,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-audio-deny-tick",
+      "kind": "AudioCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-audio-hazard-pulse",
+      "kind": "AudioCue",
+      "relative_path": "content/fixtures/g17/assets/missing_optional_hazard_pulse.txt",
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-audio-sleep-soft",
+      "kind": "AudioCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-audio-teacher-cue",
+      "kind": "AudioCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-audio-save-chime",
+      "kind": "AudioCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-vfx-food-spark",
+      "kind": "VfxCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-vfx-hazard-flash",
+      "kind": "VfxCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-vfx-sleep-bloom",
+      "kind": "VfxCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-vfx-selection-ring",
+      "kind": "VfxCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-animation-soft-pop",
+      "kind": "AnimationCurve",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "g17-notification-default",
+      "kind": "NotificationStyle",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    }
+  ]
+}
