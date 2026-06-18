@@ -113,3 +113,17 @@ The G11 smoke keeps the default semantic provider disabled and nonfatal, then
 uses a deterministic fake/local table provider to display bounded semantic and
 Gaussian context lines. The provider manifest is private-prior metadata only:
 it cannot issue actions, mutate weights, or become a required runtime model.
+
+G12 GPU product telemetry smoke, no GPU hardware required:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- gpu-product-smoke
+```
+
+The default command reports CPU fallback, no-readback guardrails, and the manual
+hardware report command. With the optional `gpu-runtime` feature, it bridges to
+the P29 GPU runtime contracts without making GPU hardware required:
+
+```powershell
+cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-product-smoke
+```

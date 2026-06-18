@@ -2,10 +2,11 @@ use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
     load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_population_social_loop_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, validate_app_shell_config, AppShellLaunchConfig,
+    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    run_playable_survival_loop_smoke, run_population_social_loop_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, validate_app_shell_config,
+    AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -137,7 +138,11 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke".to_string()),
+        [command] if command == "gpu-product-smoke" => {
+            let summary = run_gpu_product_hardening_smoke().map_err(|err| err.to_string())?;
+            Ok(format_gpu_product_summary("G12 GPU product", &summary))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke".to_string()),
     }
 }
 
@@ -400,6 +405,28 @@ fn format_semantic_provider_summary(
         summary.weight_rewrite_blocked,
         summary.provider_absence_nonfatal,
         summary.provider_failure_nonfatal,
+        summary.signature_line()
+    )
+}
+
+fn format_gpu_product_summary(
+    prefix: &str,
+    summary: &alife_game_app::GpuProductHardeningSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} requested={} selected={} fallback={:?} feature_compiled={} no_readback={} measured_gpu={} cpu_fallback_default={} invalid_gpu_fallback={} manual_command='{}' performance_status={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.telemetry_overlay.requested_backend,
+        summary.telemetry_overlay.selected_backend,
+        summary.telemetry_overlay.fallback_reason,
+        summary.telemetry_overlay.gpu_runtime_feature_compiled,
+        summary.telemetry_overlay.no_active_gameplay_readback,
+        summary.telemetry_overlay.measured_gpu_performance,
+        summary.cpu_fallback_default,
+        summary.invalid_gpu_config_falls_back,
+        summary.manual_hardware_command,
+        summary.performance_claim_status,
         summary.signature_line()
     )
 }
