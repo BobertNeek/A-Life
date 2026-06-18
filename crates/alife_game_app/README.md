@@ -77,4 +77,17 @@ mapping for picking, but that local engine ID is not written into saves or core
 contracts. The inspector reports camera focus/follow state, bounded drives and
 hormones, current action, last sealed patch summary, memory/topology update
 counts, and optional backend/provider troubleshooting messages. It does not
-implement G06 survival-loop tuning or any cognition editing.
+implement any cognition editing.
+
+G06 playable survival-loop smoke, no graphics required:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- playable-survival-loop-smoke
+```
+
+The G06 smoke runs a deterministic one-creature loop with visible food, a
+hazard, an obstacle, and a rest/sleep cue. Scripted fixture proposals still pass
+through structured action arbitration and the P15/P17 CPU reference path, then
+produce sealed patches, packed logs, memory/topology updates, bounded
+drive/hormone changes, and an app-level event feed. It is a first playable
+survival loop, not G07 ecology or balance tuning.
