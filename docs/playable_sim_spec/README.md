@@ -24,6 +24,18 @@ The manifest includes explicit review plans so Goal Mode cannot run past product
 
 Do not add active R11/R12 gates because G12 and G13 are already merged. R13 is the corrective review gate for that history.
 
+## Roadmap lock docs
+
+G24 records the feature-complete roadmap lock in:
+
+- `FINAL_PLAYABLE_SIM_STATUS_REPORT.md`
+- `POST_RELEASE_BACKLOG.md`
+- `RELEASE_TAG_PROPOSAL.md`
+
+These files are status/backlog/proposal documents only. They do not create G25,
+P37, a release tag, or another implementation phase. R24 is the final review
+gate and has no next implementation plan by default.
+
 ## Why this pack exists
 
 The current project is validated as backend/headless/tooling/persistence/developer playground. The missing layer is the player-facing graphical sim game: Bevy app, visible world, creature inspection, live brain loop, ecology, lifecycle, school UX, semantic provider UX, save/load UX, performance hardening, and playtest/release-candidate discipline.
