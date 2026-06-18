@@ -78,6 +78,9 @@ pub use longrun_balance::*;
 mod onboarding_help;
 pub use onboarding_help::*;
 
+mod packaging_platform;
+pub use packaging_platform::*;
+
 mod population_social;
 pub use population_social::*;
 

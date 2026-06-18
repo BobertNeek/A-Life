@@ -5,10 +5,11 @@ use alife_game_app::{
     run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
     run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_onboarding_help_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke, run_save_load_ux_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, validate_app_shell_config, AppShellLaunchConfig,
+    run_longrun_balance_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -188,7 +189,14 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke".to_string()),
+        [command] if command == "platform-package-smoke" => {
+            let summary = run_platform_package_smoke().map_err(|err| err.to_string())?;
+            Ok(format_platform_package_summary(
+                "G21 platform package",
+                &summary,
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke".to_string()),
     }
 }
 
@@ -635,6 +643,26 @@ fn format_onboarding_help_summary(
         summary.tutorial_step_count,
         summary.optional_systems_remain_optional,
         summary.windows_wrappers_documented,
+        summary.signature_line()
+    )
+}
+
+fn format_platform_package_summary(
+    prefix: &str,
+    summary: &alife_game_app::PlatformPackageSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} output={} commands={} assets={} required={} optional={} artifacts_tracked={} wrappers={} release_attempted={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.output_directory,
+        summary.commands.len(),
+        summary.asset_bundle_entries,
+        summary.required_asset_entries,
+        summary.optional_asset_entries,
+        summary.generated_artifacts_tracked,
+        summary.windows_wrappers_used,
+        summary.release_publishing_attempted,
         summary.signature_line()
     )
 }

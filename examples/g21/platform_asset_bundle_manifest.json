@@ -1,0 +1,50 @@
+{
+  "schema": "alife.g21.asset_bundle.v1",
+  "schema_version": 1,
+  "bundle_id": "g21-local-playable-smoke",
+  "output_directory": "target/artifacts/g21_local_package",
+  "entries": [
+    {
+      "asset_id": "p34-tiny-config",
+      "kind": "runtime-config",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_config.json",
+      "required": true,
+      "max_size_bytes": 8192
+    },
+    {
+      "asset_id": "p34-tiny-save",
+      "kind": "portable-save",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_save.json",
+      "required": true,
+      "max_size_bytes": 16384
+    },
+    {
+      "asset_id": "p34-tiny-assets",
+      "kind": "asset-manifest",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
+      "required": true,
+      "max_size_bytes": 8192
+    },
+    {
+      "asset_id": "p35-playground-manifest",
+      "kind": "playground-manifest",
+      "relative_path": "examples/p35/playground_manifest.json",
+      "required": true,
+      "max_size_bytes": 8192
+    },
+    {
+      "asset_id": "g20-tutorial-script",
+      "kind": "tutorial-script",
+      "relative_path": "examples/g20/tutorial_food_hazard_sleep_inspection.json",
+      "required": true,
+      "max_size_bytes": 8192
+    },
+    {
+      "asset_id": "g17-feedback-polish-manifest",
+      "kind": "feedback-manifest",
+      "relative_path": "content/fixtures/g17/feedback_polish_manifest.json",
+      "required": true,
+      "max_size_bytes": 8192
+    }
+  ]
+}
