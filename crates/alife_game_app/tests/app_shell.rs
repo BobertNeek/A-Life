@@ -3,9 +3,10 @@ use alife_core::{
     CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, WorldEntityId,
 };
 use alife_game_app::{
-    compare_visible_world_to_headless, load_visible_world_from_p34_save,
+    compare_visible_world_to_headless, load_visible_world_from_p34_save, run_creature_visual_smoke,
     run_headless_app_shell_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    validate_app_shell_config, AppShellLaunchConfig, LiveBrainLoop, LiveBrainTickControl,
+    validate_app_shell_config, AppShellLaunchConfig, CreatureAnimationState,
+    CreatureExpressionState, LiveBrainLoop, LiveBrainTickControl,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -175,6 +176,32 @@ fn pause_and_step_modes_do_not_advance_hidden_state_unexpectedly() {
     assert_eq!(bridge.mind().current_tick(), Tick::new(4));
 }
 
+#[test]
+fn creature_visual_smoke_maps_live_state_without_mutating_cognition() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let visual = run_creature_visual_smoke(&launch).unwrap();
+
+    assert_eq!(visual.schema, alife_game_app::G04_CREATURE_VISUAL_SCHEMA);
+    assert_eq!(
+        visual.schema_version,
+        alife_game_app::G04_CREATURE_VISUAL_SCHEMA_VERSION
+    );
+    assert_eq!(visual.organism_id, OrganismId(1));
+    assert_eq!(visual.stable_id, WorldEntityId(1));
+    assert_eq!(visual.selected_action_kind, Some(ActionKind::Interact));
+    assert_eq!(visual.target_entity, Some(WorldEntityId(2)));
+    assert_eq!(visual.animation, CreatureAnimationState::Interacting);
+    assert!(matches!(
+        visual.expression,
+        CreatureExpressionState::Neutral
+            | CreatureExpressionState::Hungry
+            | CreatureExpressionState::Energized
+    ));
+    assert!(visual.cues.hunger.value <= 1.0);
+    assert!(visual.cues.energy.value <= 1.0);
+    assert!(visual.signature_line().contains("Interact"));
+}
+
 #[cfg(feature = "bevy-app")]
 #[test]
 fn bevy_feature_can_construct_shell_without_visible_world_content() {
@@ -232,4 +259,35 @@ fn bevy_feature_live_brain_bridge_records_last_tick_summary() {
         .world()
         .resource::<alife_game_app::bevy_shell::LiveBrainLoopResource>();
     assert_eq!(resource.last_summary.sealed_patch_count, 1);
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_creature_visual_state_attaches_to_visible_creature() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let (mut app, visible, visual) =
+        alife_game_app::bevy_shell::build_creature_visual_world_app_shell(&launch)
+            .expect("G04 creature visual shell should run on the P34 fixture");
+    assert_eq!(visible.object_count, 2);
+    assert_eq!(visual.animation, CreatureAnimationState::Interacting);
+    app.update();
+
+    let resource = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::CreatureVisualStateResource>();
+    assert_eq!(resource.snapshot.stable_id, WorldEntityId(1));
+
+    let entity = app
+        .world()
+        .resource::<alife_bevy_adapter::BevyEntityMap>()
+        .bevy_entity(WorldEntityId(1))
+        .expect("visible creature should be mapped by stable ID");
+    let state = app
+        .world()
+        .entity(entity)
+        .get::<alife_game_app::bevy_shell::VisibleCreatureState>()
+        .expect("G04 visual state component should be attached to the creature");
+    assert_eq!(state.animation, visual.animation);
+    assert_eq!(state.expression, visual.expression);
+    assert!(state.debug_summary.contains("organism=1"));
 }
