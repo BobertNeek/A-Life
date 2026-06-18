@@ -38,6 +38,7 @@ const CONTACT_RADIUS: f32 = 0.75;
 const EAT_RADIUS: f32 = 1.25;
 const MOVE_STEP: f32 = 1.0;
 const MAX_VISIBLE_ENTITIES: usize = 16;
+const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeadlessActionIds;
@@ -302,6 +303,13 @@ impl HeadlessWorld {
                     object.carried_by
                 )
             })
+            .collect()
+    }
+
+    pub fn organism_entity_ids(&self) -> Vec<(OrganismId, WorldEntityId)> {
+        self.objects
+            .values()
+            .filter_map(|object| object.organism_id.map(|organism| (organism, object.id)))
             .collect()
     }
 
@@ -619,15 +627,46 @@ impl HeadlessWorld {
                     vec![target],
                 )
             }
-            HeadlessAction::Vocalize => self.finish_action(
-                *command,
-                true,
-                None,
-                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.02)?,
-                OutcomeProfile::vocalize(),
-                Vec::new(),
-            ),
+            HeadlessAction::Vocalize => {
+                let token = self.emit_vocalization_token(command.organism_id)?;
+                self.finish_action(
+                    *command,
+                    true,
+                    None,
+                    physical(PhysicalContactKind::None, Some(token), Vec3f::ZERO, 0.02)?,
+                    OutcomeProfile::vocalize(),
+                    vec![token],
+                )
+            }
         }
+    }
+
+    fn emit_vocalization_token(
+        &mut self,
+        organism_id: OrganismId,
+    ) -> Result<WorldEntityId, ScaffoldContractError> {
+        let position = self.agent_for(organism_id)?.position;
+        let label = format!("voice-token-{}", organism_id.raw());
+        let token_id = VOCAL_TOKEN_ID_BASE.saturating_add((organism_id.raw() % 10_000) as u32);
+        if let Some(existing) = self.labels.get(&label).copied() {
+            if let Some(object) = self.objects.get_mut(&existing.raw()) {
+                object.position = position;
+                object.token_id = Some(token_id);
+                object.consumed = false;
+            }
+            return Ok(existing);
+        }
+        self.insert_object(SpawnSpec {
+            label: &label,
+            kind: WorldObjectKind::Token,
+            organism_id: None,
+            position,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: Some(token_id),
+            social_affinity: 0.0,
+            teacher_channel: None,
+        })
     }
 
     fn execute_eat(
@@ -768,6 +807,12 @@ impl HeadlessWorld {
             .ecology
             .zone_at(destination)
             .map_or(0.0, |zone| zone.hazard_pressure);
+        let agent_contact = touched.iter().find_map(|id| {
+            self.objects
+                .get(&id.raw())
+                .filter(|object| object.kind == WorldObjectKind::Agent)
+                .map(|object| (*id, object.social_affinity))
+        });
         let (profile, contact, target) = if let Some((hazard_id, pain)) = hazard {
             (
                 OutcomeProfile::hazard(pain),
@@ -777,6 +822,26 @@ impl HeadlessWorld {
         } else if zone_hazard > 0.0 {
             (
                 OutcomeProfile::hazard(zone_hazard),
+                PhysicalContactKind::Moved,
+                command.target_entity,
+            )
+        } else if matches!(intent, MoveIntent::Absolute) {
+            if let Some((agent_id, affinity)) = agent_contact {
+                (
+                    OutcomeProfile::social_contact(affinity),
+                    PhysicalContactKind::Collision,
+                    Some(agent_id),
+                )
+            } else {
+                (
+                    OutcomeProfile::movement(),
+                    PhysicalContactKind::Moved,
+                    command.target_entity,
+                )
+            }
+        } else if let Some((_agent_id, _affinity)) = agent_contact {
+            (
+                OutcomeProfile::movement(),
                 PhysicalContactKind::Moved,
                 command.target_entity,
             )
@@ -1418,6 +1483,16 @@ impl HeadlessWorldCommand {
         )
     }
 
+    pub fn vocalize(organism_id: OrganismId) -> Result<ActionCommand, ScaffoldContractError> {
+        Self::structured(
+            organism_id,
+            ActionKind::Vocalize.canonical_id(),
+            ActionKind::Vocalize,
+            None,
+            None,
+        )
+    }
+
     pub fn idle(organism_id: OrganismId) -> Result<ActionCommand, ScaffoldContractError> {
         Self::structured(
             organism_id,
@@ -1895,6 +1970,52 @@ impl OutcomeProfile {
             0.1,
             false,
         )
+    }
+
+    fn social_contact(affinity: f32) -> Self {
+        let affinity = affinity.clamp(-1.0, 1.0);
+        if affinity >= 0.0 {
+            Self::new(
+                DriveDelta {
+                    loneliness: -0.08 * affinity,
+                    brain_atp: -0.02,
+                    ..DriveDelta::zero()
+                },
+                EndocrineDelta {
+                    oxytocin: 0.08 * affinity,
+                    serotonin: 0.03 * affinity,
+                    ..EndocrineDelta::zero()
+                },
+                0.08 * affinity,
+                0.02,
+                0.0,
+                -0.02,
+                0.15,
+                false,
+            )
+        } else {
+            let fear = affinity.abs();
+            Self::new(
+                DriveDelta {
+                    fear: 0.18 * fear,
+                    pain: 0.02 * fear,
+                    brain_atp: -0.04,
+                    ..DriveDelta::zero()
+                },
+                EndocrineDelta {
+                    adrenaline: 0.12 * fear,
+                    cortisol: 0.10 * fear,
+                    oxytocin: -0.04 * fear,
+                    ..EndocrineDelta::zero()
+                },
+                -0.12 * fear,
+                0.20 * fear,
+                0.02 * fear,
+                -0.04,
+                0.35,
+                true,
+            )
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
