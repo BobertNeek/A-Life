@@ -6,12 +6,13 @@ use alife_game_app::{
     compare_visible_world_to_headless, load_visible_world_from_p34_save,
     run_creature_inspector_smoke, run_creature_visual_smoke, run_headless_app_shell_smoke,
     run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_playable_survival_loop_smoke, run_population_social_loop_smoke,
+    run_playable_survival_loop_smoke, run_population_social_loop_smoke, run_school_mode_smoke,
     run_world_ecology_loop_smoke, select_visible_world_entity, validate_app_shell_config,
     AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
     CreatureLifeStage, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
     LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl,
     PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind,
+    SchoolModeSaveState,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -614,6 +615,80 @@ fn lifecycle_lineage_reproduction_cap_is_enforced() {
         .events
         .iter()
         .any(|event| event.kind == LifecycleEventKind::ReproductionBlocked));
+}
+
+#[test]
+fn school_mode_dispatches_teacher_cue_as_sensory_event() {
+    let summary = run_school_mode_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G10_SCHOOL_MODE_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G10_SCHOOL_MODE_SCHEMA_VERSION
+    );
+    assert!(summary.sensory_heard_tokens.contains(&77));
+    assert!(summary
+        .sensory_teacher_channels
+        .contains(&alife_core::TeacherPerceptionChannel::Hearing));
+    assert!(summary.cues.iter().any(|cue| cue.token_id == Some(77)
+        && cue.channel == alife_core::TeacherPerceptionChannel::Hearing
+        && cue.perception_only
+        && !cue.direct_motor_bypass));
+    assert!(summary
+        .world_signature
+        .iter()
+        .any(|line| line.contains("teacher-word-food")));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn school_mode_teacher_metadata_does_not_bypass_arbitration() {
+    let summary = run_school_mode_smoke().unwrap();
+
+    assert!(summary.teacher_metadata_bypass_blocked);
+    assert_eq!(summary.teacher_selected_action_id, None);
+    assert!(summary
+        .cues
+        .iter()
+        .all(|cue| cue.perception_only && !cue.direct_motor_bypass));
+}
+
+#[test]
+fn school_mode_verifier_uses_sealed_patches_and_progresses_lesson() {
+    let summary = run_school_mode_smoke().unwrap();
+
+    assert!(summary.verifier_panel.passed);
+    assert_eq!(summary.verifier_panel.sealed_patch_count, 1);
+    assert_eq!(summary.lesson_panel.completed_steps, 1);
+    assert_eq!(summary.lesson_panel.total_steps, 1);
+    assert!(summary
+        .verifier_panel
+        .observed_checks
+        .iter()
+        .any(|check| check.contains("HeardToken")));
+    assert!(summary.verifier_panel.failed_checks.is_empty());
+}
+
+#[test]
+fn school_mode_save_state_roundtrips_without_teacher_private_state() {
+    let summary = run_school_mode_smoke().unwrap();
+    let save = SchoolModeSaveState::from_summary(&summary).unwrap();
+    let json = save.to_json_string_pretty().unwrap();
+    let loaded = SchoolModeSaveState::from_json_str(&json).unwrap();
+
+    assert_eq!(save.signature_line(), loaded.signature_line());
+    assert!(loaded.p34_school.enabled);
+    assert_eq!(
+        loaded.p34_school.active_curriculum_id.as_deref(),
+        Some("g10-grounded-object-food")
+    );
+    assert!(!loaded.p34_school.teacher_private_state_saved);
+    assert_eq!(
+        loaded.teacher_avatar_stable_id,
+        summary.teacher_avatar_stable_id
+    );
+    assert!(!loaded.cue_entity_ids.is_empty());
+    loaded.validate().unwrap();
 }
 
 #[cfg(feature = "bevy-app")]

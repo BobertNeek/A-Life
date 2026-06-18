@@ -8,6 +8,7 @@ repository.workspace = true
 [dependencies]
 alife_core = { path = "../alife_core" }
 alife_bevy_adapter = { path = "../alife_bevy_adapter", optional = true }
+alife_school = { path = "../alife_school" }
 alife_world = { path = "../alife_world" }
 bevy = { workspace = true, optional = true }
 serde.workspace = true

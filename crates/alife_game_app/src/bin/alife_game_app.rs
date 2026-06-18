@@ -4,8 +4,8 @@ use alife_game_app::{
     load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_population_social_loop_smoke, run_world_ecology_loop_smoke, validate_app_shell_config,
-    AppShellLaunchConfig,
+    run_population_social_loop_smoke, run_school_mode_smoke, run_world_ecology_loop_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -126,7 +126,11 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke".to_string()),
+        [command] if command == "school-mode-smoke" => {
+            let summary = run_school_mode_smoke().map_err(|err| err.to_string())?;
+            Ok(format_school_mode_summary("G10 school mode", &summary))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke".to_string()),
     }
 }
 
@@ -327,6 +331,44 @@ fn format_lifecycle_lineage_summary(
             .map(alife_game_app::LifecycleEventRecord::signature_line)
             .collect::<Vec<_>>()
             .join("|"),
+        summary.save_roundtrip_signature,
+        summary.signature_line()
+    )
+}
+
+fn format_school_mode_summary(prefix: &str, summary: &alife_game_app::SchoolModeSummary) -> String {
+    format!(
+        "{prefix} schema={} version={} seed={} curriculum={} lesson={} completed={}/{} cues={} verifier_passed={} sealed_patches={} bypass_blocked={} teacher_avatar={} learner={} sensory_tokens={} channels={} save_roundtrip={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.seed,
+        summary.lesson_panel.curriculum_id,
+        summary.lesson_panel.active_lesson_id.raw(),
+        summary.lesson_panel.completed_steps,
+        summary.lesson_panel.total_steps,
+        summary
+            .cues
+            .iter()
+            .map(alife_game_app::SchoolCuePresentation::signature_line)
+            .collect::<Vec<_>>()
+            .join("|"),
+        summary.verifier_panel.passed,
+        summary.verifier_panel.sealed_patch_count,
+        summary.teacher_metadata_bypass_blocked,
+        summary.teacher_avatar_stable_id.raw(),
+        summary.learner_stable_id.raw(),
+        summary
+            .sensory_heard_tokens
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join("+"),
+        summary
+            .sensory_teacher_channels
+            .iter()
+            .map(|channel| format!("{channel:?}"))
+            .collect::<Vec<_>>()
+            .join("+"),
         summary.save_roundtrip_signature,
         summary.signature_line()
     )

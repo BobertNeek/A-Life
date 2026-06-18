@@ -91,3 +91,14 @@ through structured action arbitration and the P15/P17 CPU reference path, then
 produce sealed patches, packed logs, memory/topology updates, bounded
 drive/hormone changes, and an app-level event feed. It is a first playable
 survival loop, not G07 ecology or balance tuning.
+
+G10 playable school/teacher smoke, no graphics required:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- school-mode-smoke
+```
+
+The G10 smoke builds a teacher avatar, ordinary world cue token, highlighted
+object, lesson panel, verifier panel, and P34-compatible school save summary.
+Teacher cues enter through sensory perception only; low-scoring
+teacher-tagged action metadata cannot win arbitration by metadata alone.
