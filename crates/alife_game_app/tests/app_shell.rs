@@ -11,19 +11,20 @@ use alife_game_app::{
     run_longrun_balance_smoke, run_longrun_balance_with_config, run_onboarding_help_smoke,
     run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
-    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
-    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
-    ProductQaStatus, RenderDetailLevel, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
-    SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
-    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
+    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
+    AppShellLaunchConfig, AutosavePolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
+    CreatureAnimationState, CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind,
+    FeedbackAssetManifest, FeedbackEventKind, InspectorControlPanel, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
+    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, SaveSlotDescriptor,
+    SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
+    WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -953,6 +954,91 @@ fn product_qa_docs_record_exact_manual_commands_and_no_hidden_blockers() {
     assert!(docs.contains("cargo test -p alife_world --test headless_soak"));
     assert!(known.contains("None known after the G22 QA smoke"));
     assert!(known.contains("CPU fallback is not a GPU performance claim"));
+}
+
+#[test]
+fn release_candidate_smoke_aggregates_playable_candidate_gates() {
+    let summary = run_release_candidate_smoke().unwrap();
+    let areas = summary
+        .gates
+        .iter()
+        .map(|gate| gate.area)
+        .collect::<std::collections::BTreeSet<_>>();
+
+    assert_eq!(summary.schema, alife_game_app::G23_RELEASE_CANDIDATE_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G23_RELEASE_CANDIDATE_SCHEMA_VERSION
+    );
+    assert_eq!(summary.candidate_id, "playable-sim-rc1");
+    assert_eq!(summary.playable_supported_path, "headless-cpu-playground");
+    assert_eq!(summary.release_blocker_count, 0);
+    assert_eq!(summary.product_qa_release_blockers, 0);
+    assert!(summary.known_limitation_count >= 1);
+    assert!(summary.p36_gates_preserved);
+    assert!(summary.no_p37_created);
+    assert!(summary.no_generated_artifacts_tracked);
+    assert!(!summary.release_tag_created);
+    assert_eq!(
+        summary.gpu_performance_status,
+        "manual-unknown-unless-measured"
+    );
+    assert_eq!(summary.graphics_status, "manual-not-measured");
+    assert!(summary.tag_proposal.contains("git tag -a playable-sim-rc1"));
+
+    for area in [
+        ReleaseCandidateArea::FullValidation,
+        ReleaseCandidateArea::HeadlessPlayground,
+        ReleaseCandidateArea::SaveLoad,
+        ReleaseCandidateArea::Soak,
+        ReleaseCandidateArea::Balance,
+        ReleaseCandidateArea::ProductQa,
+        ReleaseCandidateArea::Packaging,
+        ReleaseCandidateArea::GpuManual,
+        ReleaseCandidateArea::GraphicsManual,
+        ReleaseCandidateArea::Docs,
+    ] {
+        assert!(areas.contains(&area), "missing G23 area {}", area.label());
+    }
+    assert!(summary
+        .gates
+        .iter()
+        .any(|gate| gate.area == ReleaseCandidateArea::GpuManual
+            && gate.status == ReleaseCandidateGateStatus::Manual
+            && gate.command.contains("--gpu-runtime")));
+    assert!(summary
+        .gates
+        .iter()
+        .any(|gate| gate.area == ReleaseCandidateArea::GraphicsManual
+            && gate.status == ReleaseCandidateGateStatus::Manual));
+    assert!(summary.gates.iter().all(|gate| !gate.release_blocker
+        && !gate.command.contains("gpu-report")
+        && !gate.command.contains("ALIFE_GPU_BACKEND")
+        && !gate.command.contains("bash scripts/check.sh")));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn release_candidate_report_records_exact_commands_and_no_overclaims() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let report = std::fs::read_to_string(root.join("docs/release_candidate.md")).unwrap();
+
+    for required in [
+        "cargo run -p alife_game_app --bin alife_game_app -- release-candidate-smoke",
+        "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json",
+        "cargo run -p alife_game_app --bin alife_game_app -- save-load-ux-smoke crates/alife_world/tests/fixtures/p34",
+        "cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants",
+        "cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke",
+        "ALIFE_GPU_RUNTIME_BACKEND=static",
+        "--gpu-runtime",
+        "No release tag was created",
+        "CPU fallback is not GPU performance",
+    ] {
+        assert!(report.contains(required), "missing report text: {required}");
+    }
+    assert!(!report.contains("gpu-report"));
+    assert!(!report.contains("ALIFE_GPU_BACKEND"));
+    assert!(!report.contains("bash scripts/check.sh"));
 }
 
 #[test]

@@ -63,3 +63,6 @@ pub const G21_MAX_BUNDLE_ENTRIES: usize = 16;
 pub const G22_PRODUCT_QA_SCHEMA: &str = "alife.g22.product_qa_hardening.v1";
 pub const G22_PRODUCT_QA_SCHEMA_VERSION: u16 = 1;
 pub const G22_MAX_QA_FINDINGS: usize = 32;
+pub const G23_RELEASE_CANDIDATE_SCHEMA: &str = "alife.g23.playable_release_candidate.v1";
+pub const G23_RELEASE_CANDIDATE_SCHEMA_VERSION: u16 = 1;
+pub const G23_MAX_RELEASE_CANDIDATE_GATES: usize = 32;
