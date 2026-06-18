@@ -15,3 +15,4 @@
 | G10 | codex/G10-school-playable-mode | complete | branch commit | full default, wrapper, core boundary, school-mode smoke, teacher perception/no-bypass tests, school save round-trip, and all-features validation passed | G11 |
 | G11 | codex/G11-semantic-slm-provider | complete | branch commit | full default, wrapper, core boundary, semantic-provider smoke, disabled/fake provider boundary tests, and all-features validation passed | G12 |
 | G12 | codex/G12-gpu-product-hardening | complete | branch commit | full default, wrapper, core boundary, gpu-product smoke, CPU fallback/no-readback tests, manual hardware docs, and all-features validation passed | G13 |
+| G13 | codex/G13-world-editing-tools | complete | branch commit | full default, wrapper, core boundary, world-editor smoke, stable-ID save/load round-trip, invalid edit/cap tests, and all-features validation passed | G14 |

@@ -5,8 +5,8 @@ use alife_game_app::{
     run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
     run_playable_survival_loop_smoke, run_population_social_loop_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, validate_app_shell_config,
-    AppShellLaunchConfig,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -142,7 +142,11 @@ fn run() -> Result<String, String> {
             let summary = run_gpu_product_hardening_smoke().map_err(|err| err.to_string())?;
             Ok(format_gpu_product_summary("G12 GPU product", &summary))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke".to_string()),
+        [command] if command == "world-editor-smoke" => {
+            let summary = run_world_editor_smoke().map_err(|err| err.to_string())?;
+            Ok(format_world_editor_summary("G13 world editor", &summary))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke".to_string()),
     }
 }
 
@@ -427,6 +431,33 @@ fn format_gpu_product_summary(
         summary.invalid_gpu_config_falls_back,
         summary.manual_hardware_command,
         summary.performance_claim_status,
+        summary.signature_line()
+    )
+}
+
+fn format_world_editor_summary(
+    prefix: &str,
+    summary: &alife_game_app::WorldEditorSmokeSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} seed={} mode={} placed={} removed={} moved={} resource_rates={} invalid_rejected={} stable_ids={} resumed={} sealed={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.seed,
+        summary.mode_after_edits.label(),
+        summary.placed_count,
+        summary.removed_count,
+        summary.moved_count,
+        summary.resource_rate_changes,
+        summary.invalid_edit_rejected,
+        summary
+            .stable_ids
+            .iter()
+            .map(|id| id.raw().to_string())
+            .collect::<Vec<_>>()
+            .join("+"),
+        summary.simulation_resumed,
+        summary.resumed_patch_sealed,
         summary.signature_line()
     )
 }

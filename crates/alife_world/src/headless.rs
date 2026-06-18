@@ -153,6 +153,18 @@ struct SpawnSpec<'a> {
     teacher_channel: Option<TeacherPerceptionChannel>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldEditorSpawnSpec {
+    pub label: String,
+    pub kind: WorldObjectKind,
+    pub organism_id: Option<OrganismId>,
+    pub position: Vec3f,
+    pub nutrition: f32,
+    pub hazard_pain: f32,
+    pub radius: f32,
+    pub token_id: Option<u32>,
+}
+
 #[derive(Debug, Clone)]
 pub struct HeadlessWorld {
     seed: u64,
@@ -282,6 +294,10 @@ impl HeadlessWorld {
         self.objects.get(&id.raw())
     }
 
+    pub fn object_count(&self) -> usize {
+        self.objects.len()
+    }
+
     pub fn stable_signature(&self) -> Vec<String> {
         self.objects
             .values()
@@ -358,6 +374,86 @@ impl HeadlessWorld {
             self.last_action_result = None;
         }
         Ok(object)
+    }
+
+    pub fn editor_spawn_object(
+        &mut self,
+        spec: WorldEditorSpawnSpec,
+    ) -> Result<WorldEntityId, ScaffoldContractError> {
+        if matches!(spec.kind, WorldObjectKind::Agent) && spec.organism_id.is_none() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if !matches!(spec.kind, WorldObjectKind::Agent) && spec.organism_id.is_some() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if matches!(spec.kind, WorldObjectKind::Token) && spec.token_id.is_none() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if !spec.radius.is_finite() || spec.radius <= 0.0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let id = self.insert_object(SpawnSpec {
+            label: &spec.label,
+            kind: spec.kind,
+            organism_id: spec.organism_id,
+            position: spec.position,
+            nutrition: spec.nutrition,
+            hazard_pain: spec.hazard_pain,
+            token_id: spec.token_id,
+            social_affinity: 0.0,
+            teacher_channel: None,
+        })?;
+        if let Some(object) = self.objects.get_mut(&id.raw()) {
+            object.radius = spec.radius.max(0.1);
+        }
+        self.rebuild_ecology_metrics();
+        Ok(id)
+    }
+
+    pub fn editor_remove_object(
+        &mut self,
+        id: WorldEntityId,
+    ) -> Result<WorldObject, ScaffoldContractError> {
+        id.validate()?;
+        if self
+            .ecology
+            .resources
+            .iter()
+            .any(|resource| resource.object_id == id)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let object = self
+            .objects
+            .remove(&id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        self.labels.remove(&object.label);
+        self.last_touched_entities.retain(|touched| *touched != id);
+        if self
+            .last_action_result
+            .as_ref()
+            .is_some_and(|result| result.touched_entities.contains(&id))
+        {
+            self.last_action_result = None;
+        }
+        self.rebuild_ecology_metrics();
+        Ok(object)
+    }
+
+    pub fn editor_move_object(
+        &mut self,
+        id: WorldEntityId,
+        position: Vec3f,
+    ) -> Result<(), ScaffoldContractError> {
+        id.validate()?;
+        position.validate()?;
+        let object = self
+            .objects
+            .get_mut(&id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        object.position = position;
+        self.rebuild_ecology_metrics();
+        Ok(())
     }
 
     pub(crate) fn persistence_parts(&self) -> HeadlessWorldPersistenceParts {
