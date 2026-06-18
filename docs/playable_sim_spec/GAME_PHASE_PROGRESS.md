@@ -31,4 +31,4 @@
 | G23 | codex/G23-playable-release-candidate | complete | branch commit | full default, wrapper, core boundary, release-candidate smoke, P35 playground run-all, save-load UX, fast soak, longrun balance, manual GPU/graphics gates documented, and all-features validation passed | R23 |
 | R23 | codex/R23-feature-complete-rc-review | complete | branch commit | feature-complete release-candidate review complete; verdict PASS; G24 may proceed only after explicit user authorization | G24 |
 | G24 | codex/G24-feature-complete-roadmap-lock | complete | branch commit | final status report, feature classification, backlog/issues notes, tag proposal docs, no G25/P37 continuation audit, full validation, and focused smoke evidence passed | R24 |
-| R24 | codex/R24-final-playable-sim-review | pending | not started | final playable-sim roadmap lock review after G24 | None |
+| R24 | codex/R24-final-playable-sim-review | complete | branch commit | final playable-sim roadmap lock review complete; verdict PASS; roadmap locked, no G25/P37 continuation, future work remains backlog/issues only | None |
