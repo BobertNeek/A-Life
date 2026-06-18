@@ -4,18 +4,20 @@ use alife_core::{
 };
 use alife_game_app::{
     compare_visible_world_to_headless, g17_feedback_manifest_path, g17_workspace_root,
-    load_visible_world_from_p34_save, run_cognition_debug_timeline_smoke,
-    run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
-    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
+    load_visible_world_from_p34_save, project_lod_without_behavior_change,
+    run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
+    run_feedback_polish_smoke, run_gpu_product_hardening_smoke, run_headless_app_shell_smoke,
+    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
     run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
     run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
     select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
-    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, PlayableSurvivalEventKind,
-    PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind, SaveSlotDescriptor,
+    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, RenderDetailLevel, SaveSlotDescriptor,
     SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
     WorldEditorMode, WorldEditorSession,
 };
@@ -588,6 +590,100 @@ fn population_cap_and_schedule_validation_are_strict_and_deterministic() {
     let summary_a = run_a.run_rounds(rounds, seed).unwrap();
     let summary_b = run_b.run_rounds(rounds, seed).unwrap();
     assert_eq!(summary_a.signature_line(), summary_b.signature_line());
+}
+
+#[test]
+fn population_performance_lod_smoke_documents_honest_tiers_and_gpu_status() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_population_performance_lod_smoke(&launch).unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::G18_POPULATION_PERFORMANCE_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G18_POPULATION_PERFORMANCE_SCHEMA_VERSION
+    );
+    assert_eq!(summary.population_creatures, 2);
+    assert_eq!(summary.policy.minimum_playable_population, 10);
+    assert_eq!(
+        summary
+            .policy
+            .tier_targets
+            .iter()
+            .map(|target| target.population)
+            .collect::<Vec<_>>(),
+        vec![1, 10, 50, 100, 250, 500]
+    );
+    assert!(summary.tier_1_10_ci_smoke_documented);
+    assert!(summary.manual_upper_tiers_documented);
+    assert!(!summary.gpu_performance_measured);
+    assert!(summary
+        .performance_report_markdown
+        .contains("GPU performance remains unknown"));
+    assert!(summary
+        .policy
+        .gpu_runtime_manual_command
+        .contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
+    assert!(summary
+        .policy
+        .gpu_runtime_manual_command
+        .contains("--gpu-runtime"));
+    assert!(!summary
+        .policy
+        .gpu_runtime_manual_command
+        .contains("--gpu-report"));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn population_performance_throttling_protects_sensory_motor_homeostasis() {
+    let policy = PopulationPerformancePolicy::v1_defaults().unwrap();
+
+    assert_eq!(
+        policy.rate_hz(LodResidency::Hot, CadenceTarget::SensoryMotor),
+        60.0
+    );
+    assert!(
+        policy.rate_hz(LodResidency::Hot, CadenceTarget::ActionArbitration)
+            >= policy.rate_hz(LodResidency::Hot, CadenceTarget::NonessentialCognition)
+    );
+    assert!(
+        policy.rate_hz(LodResidency::Warm, CadenceTarget::SensoryMotor)
+            >= policy.rate_hz(LodResidency::Warm, CadenceTarget::NonessentialCognition)
+    );
+
+    let under_budget = policy.throttling_decision(8.0, None).unwrap();
+    assert_eq!(under_budget.throttle_level, 0);
+    assert_eq!(under_budget.nonessential_decimation_factor, 1);
+
+    let over_budget = policy
+        .throttling_decision(alife_game_app::G18_TARGET_FRAME_MS * 1.2, None)
+        .unwrap();
+    assert_eq!(over_budget.throttle_level, 2);
+    assert_eq!(over_budget.nonessential_decimation_factor, 4);
+    assert!(over_budget.sensory_motor_protected);
+    assert!(over_budget.homeostasis_protected);
+    assert!(over_budget.action_arbitration_protected);
+}
+
+#[test]
+fn population_lod_projection_preserves_behavior_signature() {
+    let population = run_population_social_loop_smoke().unwrap();
+    let policy = PopulationPerformancePolicy::v1_defaults().unwrap();
+    let decision = policy
+        .throttling_decision(alife_game_app::G18_TARGET_FRAME_MS * 1.2, None)
+        .unwrap();
+    let projection = project_lod_without_behavior_change(&population, &policy, &decision).unwrap();
+
+    assert_eq!(
+        projection.behavior_signature_before,
+        projection.behavior_signature_after
+    );
+    assert_eq!(projection.render_detail, RenderDetailLevel::Full);
+    assert!(projection.nonessential_cognition_decimated);
+    assert!(projection.feedback_vfx_enabled);
 }
 
 #[test]

@@ -42,3 +42,7 @@ pub const G17_FEEDBACK_ASSET_MANIFEST_SCHEMA: &str = "alife.g17.feedback_asset_m
 pub const G17_FEEDBACK_ASSET_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const G17_MAX_FEEDBACK_EVENTS: usize = 16;
 pub const G17_MAX_POLISH_ASSET_BYTES: u64 = 8 * 1024;
+pub const G18_POPULATION_PERFORMANCE_SCHEMA: &str = "alife.g18.population_performance.v1";
+pub const G18_POPULATION_PERFORMANCE_SCHEMA_VERSION: u16 = 1;
+pub const G18_MAX_TARGET_TIERS: usize = 6;
+pub const G18_TARGET_FRAME_MS: f32 = 16.667;

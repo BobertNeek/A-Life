@@ -5,9 +5,10 @@ use alife_game_app::{
     run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
     run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_playable_survival_loop_smoke, run_population_social_loop_smoke, run_save_load_ux_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, validate_app_shell_config, AppShellLaunchConfig,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -164,7 +165,16 @@ fn run() -> Result<String, String> {
             let summary = run_feedback_polish_smoke(&launch).map_err(|err| err.to_string())?;
             Ok(format_feedback_polish_summary("G17 feedback polish", &summary))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root>".to_string()),
+        [command, fixture_root] if command == "population-performance-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary =
+                run_population_performance_lod_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format_population_performance_summary(
+                "G18 population performance",
+                &summary,
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root>".to_string()),
     }
 }
 
@@ -549,6 +559,28 @@ fn format_feedback_polish_summary(
         summary.optional_asset_fallbacks,
         summary.non_authoritative,
         summary.event_labels().join(">"),
+        summary.signature_line()
+    )
+}
+
+fn format_population_performance_summary(
+    prefix: &str,
+    summary: &alife_game_app::PopulationPerformanceOverlaySummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} creatures={} steps={} sealed={} backend={} throttle={} decimation={} lod={} golden_preserved={} tier_smoke={} manual_upper={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.population_creatures,
+        summary.scheduler_steps,
+        summary.sealed_patch_count,
+        summary.gpu_selected_backend,
+        summary.throttle_decision.throttle_level,
+        summary.throttle_decision.nonessential_decimation_factor,
+        summary.lod_projection.render_detail.label(),
+        summary.golden_behavior_preserved,
+        summary.tier_1_10_ci_smoke_documented,
+        summary.manual_upper_tiers_documented,
         summary.signature_line()
     )
 }
