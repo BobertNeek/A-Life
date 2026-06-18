@@ -1,9 +1,10 @@
 use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
-    load_visible_world_from_p34_save, run_creature_visual_smoke, run_headless_app_shell_smoke,
-    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    validate_app_shell_config, AppShellLaunchConfig,
+    load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
+    run_headless_app_shell_smoke, run_live_brain_loop_fixed_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, validate_app_shell_config,
+    AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -90,7 +91,13 @@ fn run() -> Result<String, String> {
             let visual = run_creature_visual_smoke(&launch).map_err(|err| err.to_string())?;
             Ok(format_creature_visual_summary("G04 creature visual", &visual))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root>".to_string()),
+        [command, fixture_root] if command == "creature-inspector-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let inspector =
+                run_creature_inspector_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format_creature_inspector_summary("G05 creature inspector", &inspector))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root>".to_string()),
     }
 }
 
@@ -171,6 +178,26 @@ fn format_creature_visual_summary(
         visual.cues.energy.value,
         visual.cues.sleep_pressure.value,
         visual.signature_line()
+    )
+}
+
+fn format_creature_inspector_summary(
+    prefix: &str,
+    inspector: &alife_game_app::CreatureInspectorSnapshot,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} selected={} label={} camera_follow={:?} read_only={} action='{}' patch='{}' memory_topology='{}' messages={} signature={}",
+        inspector.schema,
+        inspector.schema_version,
+        inspector.selection.stable_id.raw(),
+        inspector.selection.label,
+        inspector.camera.follow_target.map(|id| id.raw()),
+        inspector.read_only,
+        inspector.action_summary,
+        inspector.patch_summary,
+        inspector.memory_topology_summary,
+        inspector.troubleshooting_messages.join("|"),
+        inspector.signature_line()
     )
 }
 

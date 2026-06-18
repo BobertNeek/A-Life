@@ -3,10 +3,11 @@ use alife_core::{
     CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, WorldEntityId,
 };
 use alife_game_app::{
-    compare_visible_world_to_headless, load_visible_world_from_p34_save, run_creature_visual_smoke,
-    run_headless_app_shell_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    validate_app_shell_config, AppShellLaunchConfig, CreatureAnimationState,
-    CreatureExpressionState, LiveBrainLoop, LiveBrainTickControl,
+    compare_visible_world_to_headless, load_visible_world_from_p34_save,
+    run_creature_inspector_smoke, run_creature_visual_smoke, run_headless_app_shell_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState,
+    CreatureExpressionState, InspectorControlPanel, LiveBrainLoop, LiveBrainTickControl,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -202,6 +203,75 @@ fn creature_visual_smoke_maps_live_state_without_mutating_cognition() {
     assert!(visual.signature_line().contains("Interact"));
 }
 
+#[test]
+fn inspector_smoke_selects_creature_and_reports_read_only_runtime_state() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let inspector = run_creature_inspector_smoke(&launch).unwrap();
+
+    assert_eq!(
+        inspector.schema,
+        alife_game_app::G05_CAMERA_INSPECTOR_SCHEMA
+    );
+    assert_eq!(
+        inspector.schema_version,
+        alife_game_app::G05_CAMERA_INSPECTOR_SCHEMA_VERSION
+    );
+    assert!(inspector.read_only);
+    assert_eq!(inspector.selection.stable_id, WorldEntityId(1));
+    assert_eq!(inspector.selection.organism_id, Some(OrganismId(1)));
+    assert_eq!(inspector.camera.follow_target, Some(WorldEntityId(1)));
+    assert!(inspector.action_summary.contains("Interact"));
+    assert!(inspector.patch_summary.contains("sealed=true"));
+    assert!(inspector
+        .memory_topology_summary
+        .contains("topology_updates=1"));
+    assert!(inspector
+        .fallback_summary
+        .contains("GPU/semantic providers optional"));
+}
+
+#[test]
+fn selection_and_camera_controls_are_stable_id_based_and_deterministic() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let presentation = load_visible_world_from_p34_save(&launch).unwrap();
+    let selection = select_visible_world_entity(&presentation, WorldEntityId(1)).unwrap();
+    let camera = CameraNavigationState::top_down_default()
+        .focus_on(selection.position)
+        .unwrap()
+        .with_follow_target(selection.stable_id)
+        .unwrap()
+        .zoom_by(0.5)
+        .unwrap()
+        .orbit_by(90.0)
+        .unwrap();
+
+    assert_eq!(selection.kind, WorldObjectKind::Agent);
+    assert_eq!(camera.follow_target, Some(selection.stable_id));
+    assert_eq!(camera.zoom, 1.5);
+    assert_eq!(camera.yaw_degrees, 90.0);
+    assert!(camera.signature_line().contains("90.00"));
+}
+
+#[test]
+fn inspector_pause_step_controls_preserve_existing_deterministic_scheduler() {
+    assert_eq!(
+        InspectorControlPanel::paused().to_live_control().unwrap(),
+        LiveBrainTickControl::paused()
+    );
+    assert_eq!(
+        InspectorControlPanel::step_once()
+            .to_live_control()
+            .unwrap(),
+        LiveBrainTickControl::step_once()
+    );
+    assert_eq!(
+        InspectorControlPanel::run_fixed(2, 100)
+            .to_live_control()
+            .unwrap(),
+        LiveBrainTickControl::run_fixed(2)
+    );
+}
+
 #[cfg(feature = "bevy-app")]
 #[test]
 fn bevy_feature_can_construct_shell_without_visible_world_content() {
@@ -290,4 +360,42 @@ fn bevy_feature_creature_visual_state_attaches_to_visible_creature() {
     assert_eq!(state.animation, visual.animation);
     assert_eq!(state.expression, visual.expression);
     assert!(state.debug_summary.contains("organism=1"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_creature_inspector_keeps_local_entity_mapping_out_of_model() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let (mut app, visible, inspector) =
+        alife_game_app::bevy_shell::build_creature_inspector_world_app_shell(&launch)
+            .expect("G05 inspector shell should run on the P34 fixture");
+    assert_eq!(visible.object_count, 2);
+    assert!(inspector.read_only);
+    app.update();
+
+    let selection = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::SelectionResource>();
+    assert_eq!(selection.stable_id, WorldEntityId(1));
+    let local = selection
+        .local_entity
+        .expect("selected stable ID should map to a local Bevy entity");
+    let selected_component = app
+        .world()
+        .entity(local)
+        .get::<alife_game_app::bevy_shell::SelectedVisibleEntity>()
+        .expect("selected visible entity component should be local only");
+    assert_eq!(selected_component.selection.stable_id, WorldEntityId(1));
+
+    let inspector_resource = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::CreatureInspectorResource>();
+    assert_eq!(
+        inspector_resource.snapshot.selection.stable_id,
+        WorldEntityId(1)
+    );
+    assert!(inspector_resource
+        .snapshot
+        .action_summary
+        .contains("Interact"));
 }
