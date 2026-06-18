@@ -1,0 +1,6 @@
+# Playable Sim Game Phase Progress
+
+| Plan | Branch | Status | Commit/PR | Validation | Next |
+|---|---|---:|---|---|---|
+| G00 | codex/G00-product-audit | complete | branch commit | passed default, wrapper, and all-features validation | G01 |
+| G01 | codex/G01-game-app-shell | not started | | | G02 |

@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A-Life Spec System Stack Chart</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17211d;
+      --muted: #5c6a63;
+      --line: #d8ded8;
+      --paper: #f7f7f2;
+      --panel: #ffffff;
+      --green: #236b4a;
+      --amber: #9a6200;
+      --blue: #255f8a;
+      --red: #9b3430;
+      --shade: #edf2ec;
+      --shadow: 0 18px 44px rgba(23, 33, 29, 0.10);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    main {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 36px clamp(18px, 4vw, 56px) 56px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+      gap: 32px;
+      align-items: end;
+      min-height: 220px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 820px;
+      font-size: clamp(2.35rem, 5vw, 5.6rem);
+      line-height: 0.94;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      margin: 18px 0 0;
+      max-width: 740px;
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+
+    .summary {
+      display: grid;
+      gap: 14px;
+      padding: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .summary strong {
+      display: block;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .summary span {
+      font-size: 1.02rem;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 28px 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 6px 11px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .ready .dot { background: var(--green); }
+    .partial .dot { background: var(--amber); }
+    .future .dot { background: var(--blue); }
+    .risk .dot { background: var(--red); }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .layer-label {
+      position: sticky;
+      top: 14px;
+      align-self: start;
+      padding: 18px 16px;
+      background: var(--ink);
+      color: #fff;
+      min-height: 120px;
+    }
+
+    .layer-label h2 {
+      margin: 0;
+      font-size: 1.15rem;
+      letter-spacing: 0;
+    }
+
+    .layer-label p {
+      margin: 12px 0 0;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 0.88rem;
+    }
+
+    .systems {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    article {
+      position: relative;
+      min-height: 210px;
+      padding: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      overflow: hidden;
+    }
+
+    article::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      background: var(--muted);
+    }
+
+    article.ready::before { background: var(--green); }
+    article.partial::before { background: var(--amber); }
+    article.future::before { background: var(--blue); }
+    article.risk::before { background: var(--red); }
+
+    article h3 {
+      margin: 0;
+      font-size: 1.06rem;
+      letter-spacing: 0;
+    }
+
+    .meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    dl {
+      margin: 16px 0 0;
+      display: grid;
+      gap: 10px;
+    }
+
+    dt {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    dd {
+      margin: 3px 0 0;
+      color: #27322d;
+      font-size: 0.93rem;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 14px;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .status::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .ready .status { color: var(--green); }
+    .partial .status { color: var(--amber); }
+    .future .status { color: var(--blue); }
+    .risk .status { color: var(--red); }
+
+    .takeaway {
+      margin-top: 34px;
+      padding: 24px;
+      background: var(--shade);
+      border: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .takeaway h2 {
+      margin: 0 0 10px;
+      font-size: 1.25rem;
+    }
+
+    .takeaway ul {
+      margin: 0;
+      padding-left: 1.1rem;
+      color: var(--muted);
+    }
+
+    .takeaway li + li {
+      margin-top: 8px;
+    }
+
+    @media (max-width: 1060px) {
+      header,
+      .layer,
+      .takeaway {
+        grid-template-columns: 1fr;
+      }
+
+      .layer-label {
+        position: static;
+        min-height: auto;
+      }
+
+      .systems {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 680px) {
+      main {
+        padding-inline: 14px;
+      }
+
+      .systems {
+        grid-template-columns: 1fr;
+      }
+
+      article {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>A-Life System Stack</h1>
+        <p class="lede">A map of the systems described by the spec, where they sit in the stack, and what still needs work before the implementation feels like the full game described by the architecture.</p>
+      </div>
+      <section class="summary" aria-label="Current state summary">
+        <div><strong>Current state</strong><span>Validated backend, headless world, tooling, persistence, and developer playground.</span></div>
+        <div><strong>Main gap</strong><span>Player-facing graphical game loop and product polish are not finished.</span></div>
+        <div><strong>Release evidence</strong><span>P36 gates pass; GPU and graphics-heavy paths remain optional/manual.</span></div>
+      </section>
+    </header>
+
+    <nav class="legend" aria-label="Status legend">
+      <span class="pill ready"><span class="dot"></span>Validated baseline</span>
+      <span class="pill partial"><span class="dot"></span>Partial or manual</span>
+      <span class="pill future"><span class="dot"></span>Spec/future depth</span>
+      <span class="pill risk"><span class="dot"></span>Product gap</span>
+    </nav>
+
+    <section class="stack" aria-label="System stack chart">
+      <section class="layer">
+        <div class="layer-label">
+          <h2>Player & Product Surface</h2>
+          <p>What a player or designer would touch: play, observe, debug, teach, save, and configure.</p>
+        </div>
+        <div class="systems">
+          <article class="risk">
+            <h3>Playable Game UI</h3>
+            <p class="meta">Spec: Bevy game, player interaction, debug inspectors</p>
+            <dl>
+              <div><dt>Now</dt><dd>No polished graphical playable game loop. The default runnable path is command-line/headless.</dd></div>
+              <div><dt>Needs work</dt><dd>Real UI, camera, controls, creature inspection, world feedback, menus, and player-facing onboarding.</dd></div>
+            </dl>
+            <div class="status">Product gap</div>
+          </article>
+          <article class="partial">
+            <h3>P35 Playground Examples</h3>
+            <p class="meta">Crate: alife_tools, examples/p35</p>
+            <dl>
+              <div><dt>Now</dt><dd>Headless CPU demo, save/load demo, school demo, semantic fake-provider demo, GPU fallback demo.</dd></div>
+              <div><dt>Needs work</dt><dd>Turn demos into a cohesive interactive app instead of developer smoke commands.</dd></div>
+            </dl>
+            <div class="status">Partial/manual</div>
+          </article>
+          <article class="partial">
+            <h3>Bevy/Avian Adapter</h3>
+            <p class="meta">Crate: alife_bevy_adapter</p>
+            <dl>
+              <div><dt>Now</dt><dd>Adapter contracts and smoke coverage exist with optional graphics/physics features.</dd></div>
+              <div><dt>Needs work</dt><dd>Full scene runtime, visual debugging, physics-rich creatures, resource spawning, and user controls.</dd></div>
+            </dl>
+            <div class="status">Partial/manual</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="layer">
+        <div class="layer-label">
+          <h2>Host World & Ecology</h2>
+          <p>Game truth: entities, positions, resources, hazards, action legality, scenarios, and persistence.</p>
+        </div>
+        <div class="systems">
+          <article class="ready">
+            <h3>Headless World Harness</h3>
+            <p class="meta">P17, crate: alife_world</p>
+            <dl>
+              <div><dt>Now</dt><dd>Deterministic entities, stable IDs, sensory gathering, action execution, outcomes, patch collection.</dd></div>
+              <div><dt>Needs work</dt><dd>More world richness: terrain, ecology, reproduction pressure, animation-facing state, and long-form play.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="ready">
+            <h3>Scenario Suite & Golden Traces</h3>
+            <p class="meta">P18-P20</p>
+            <dl>
+              <div><dt>Now</dt><dd>Food, pain, sleep, curiosity, word, social, determinism, and benchmark smoke coverage.</dd></div>
+              <div><dt>Needs work</dt><dd>Expanded scenario content and upper population performance evidence on target hardware.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="ready">
+            <h3>Save/Load, Configs, Assets</h3>
+            <p class="meta">P34, crate: alife_world/tools</p>
+            <dl>
+              <div><dt>Now</dt><dd>Versioned JSON saves/configs/manifests, stable IDs, explicit rejection, tiny fixtures.</dd></div>
+              <div><dt>Needs work</dt><dd>Broader game saves, migration paths, packaged asset discovery, and real player save UX.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="layer">
+        <div class="layer-label">
+          <h2>Core Cognition</h2>
+          <p>Engine-independent organism contracts and CPU oracle behavior.</p>
+        </div>
+        <div class="systems">
+          <article class="ready">
+            <h3>IDs, ABI, Brain Classes</h3>
+            <p class="meta">P03-P05, crate: alife_core</p>
+            <dl>
+              <div><dt>Now</dt><dd>Stable IDs, math units, validation errors, scalable brain classes, lobes, routing masks.</dd></div>
+              <div><dt>Needs work</dt><dd>More production brain profiles and tuning after real gameplay data exists.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="ready">
+            <h3>Genome, Drives, Sensory, Actions</h3>
+            <p class="meta">P06-P09</p>
+            <dl>
+              <div><dt>Now</dt><dd>Genome/weight split, bounded chemistry, sensory contexts, structured commands, arbitration.</dd></div>
+              <div><dt>Needs work</dt><dd>Richer morphology, sensors, motor affordances, and biological tuning from gameplay loops.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="ready">
+            <h3>Experience, Memory, Topology</h3>
+            <p class="meta">P10-P13</p>
+            <dl>
+              <div><dt>Now</dt><dd>Sealed three-phase experience, packed logs, expectancy-only memory, concept graph and gaps.</dd></div>
+              <div><dt>Needs work</dt><dd>Behavioral depth from larger worlds, richer sensory history, and longer-running creatures.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="ready">
+            <h3>CPU Brain Tick & Sleep</h3>
+            <p class="meta">P14-P16</p>
+            <dl>
+              <div><dt>Now</dt><dd>CPU sparse neural oracle, deterministic single-creature tick, sleep consolidation, H-trace handling.</dd></div>
+              <div><dt>Needs work</dt><dd>High-scale runtime orchestration and product behavior balancing.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="future">
+            <h3>Internal SLM Prior</h3>
+            <p class="meta">Spec layer D</p>
+            <dl>
+              <div><dt>Now</dt><dd>Boundary is specified: private semantic prior may bias context but cannot act.</dd></div>
+              <div><dt>Needs work</dt><dd>Actual local semantic prior model/provider, training/evaluation, and safe modulation evidence.</dd></div>
+            </dl>
+            <div class="status">Spec/future depth</div>
+          </article>
+          <article class="future">
+            <h3>Large-Scale Organism Life</h3>
+            <p class="meta">Spec: ecology, reproduction, exceptional lineages</p>
+            <dl>
+              <div><dt>Now</dt><dd>Genome lab and headless loops exist, but not a living ecosystem game.</dd></div>
+              <div><dt>Needs work</dt><dd>Population lifecycle, reproduction, death, resource pressure, and visible ecological feedback.</dd></div>
+            </dl>
+            <div class="status">Spec/future depth</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="layer">
+        <div class="layer-label">
+          <h2>GPU Neural Runtime</h2>
+          <p>Acceleration path for sparse neural math. CPU remains the correctness oracle.</p>
+        </div>
+        <div class="systems">
+          <article class="ready">
+            <h3>GPU Buffer Contracts</h3>
+            <p class="meta">P24</p>
+            <dl>
+              <div><dt>Now</dt><dd>Explicit upload records, fixed-point policy, shader contracts, no-readback rules.</dd></div>
+              <div><dt>Needs work</dt><dd>Hardware portability evidence across real target GPUs.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="partial">
+            <h3>Static Forward & Plasticity</h3>
+            <p class="meta">P25-P26</p>
+            <dl>
+              <div><dt>Now</dt><dd>Parity and diagnostic paths exist; manual ignored GPU adapter tests are documented.</dd></div>
+              <div><dt>Needs work</dt><dd>Product-grade dispatch, full hardware validation, and sustained runtime measurements.</dd></div>
+            </dl>
+            <div class="status">Partial/manual</div>
+          </article>
+          <article class="partial">
+            <h3>Routing, Recompaction, Runtime</h3>
+            <p class="meta">P27-P29</p>
+            <dl>
+              <div><dt>Now</dt><dd>Supertile masks, sleep/offline recompaction, backend selection, CPU fallback, throttling policy.</dd></div>
+              <div><dt>Needs work</dt><dd>Measured GPU performance, product runtime integration, graphics loop coupling, and manual hardware gates.</dd></div>
+            </dl>
+            <div class="status">Partial/manual</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="layer">
+        <div class="layer-label">
+          <h2>Semantic & School Layers</h2>
+          <p>Optional context, teacher interaction, curriculum, and perception-only instruction.</p>
+        </div>
+        <div class="systems">
+          <article class="partial">
+            <h3>Semantic/Gaussian Adapter</h3>
+            <p class="meta">P22, crate: alife_semantic</p>
+            <dl>
+              <div><dt>Now</dt><dd>Optional fake provider and bounded context conversion; missing provider is nonfatal.</dd></div>
+              <div><dt>Needs work</dt><dd>Real provider integration, renderer/3DGS pipeline, richer semantics, and product UX.</dd></div>
+            </dl>
+            <div class="status">Partial/manual</div>
+          </article>
+          <article class="ready">
+            <h3>School/Teacher Contracts</h3>
+            <p class="meta">P23, crate: alife_school</p>
+            <dl>
+              <div><dt>Now</dt><dd>Teacher perception events, curriculum runner, verifier, no direct motor bypass.</dd></div>
+              <div><dt>Needs work</dt><dd>Interactive lessons, teacher avatars, speech/gesture objects, and content authoring.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="future">
+            <h3>External Teacher LLM</h3>
+            <p class="meta">Spec layer E</p>
+            <dl>
+              <div><dt>Now</dt><dd>Boundary is enforced: teaching must enter through perception.</dd></div>
+              <div><dt>Needs work</dt><dd>Actual LLM-backed curriculum planning, grading, lesson dialogue, and safety controls.</dd></div>
+            </dl>
+            <div class="status">Spec/future depth</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="layer">
+        <div class="layer-label">
+          <h2>Tools, Research & Release</h2>
+          <p>Offline analysis, generated assets, genome lab, benchmarks, docs, validation.</p>
+        </div>
+        <div class="systems">
+          <article class="ready">
+            <h3>Offline Logs & Benchmarks</h3>
+            <p class="meta">P20, P30</p>
+            <dl>
+              <div><dt>Now</dt><dd>Benchmark smoke tiers, packed log readers, summaries, clustering/replay tooling.</dd></div>
+              <div><dt>Needs work</dt><dd>Long-run artifacts, richer visualization, and product dashboard integration.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+          <article class="partial">
+            <h3>ETF, D2NWG, Evolution Lab</h3>
+            <p class="meta">P31-P33</p>
+            <dl>
+              <div><dt>Now</dt><dd>Offline metrics, generated weight asset contract, deterministic genome lab smoke.</dd></div>
+              <div><dt>Needs work</dt><dd>Real ML pipeline, large asset handling, selection UI, and long-horizon experiments.</dd></div>
+            </dl>
+            <div class="status">Partial/manual</div>
+          </article>
+          <article class="ready">
+            <h3>Release Gate & Validation</h3>
+            <p class="meta">P36</p>
+            <dl>
+              <div><dt>Now</dt><dd>Checklist, fast soak, release docs, Windows Git Bash wrappers, final status report.</dd></div>
+              <div><dt>Needs work</dt><dd>Release tagging/package automation only after explicit product release request.</dd></div>
+            </dl>
+            <div class="status">Validated baseline</div>
+          </article>
+        </div>
+      </section>
+    </section>
+
+    <section class="takeaway" aria-label="What this means">
+      <div>
+        <h2>Answer to “backend only?”</h2>
+        <ul>
+          <li>The spec describes a full game stack: player surface, Bevy world, cognitive core, GPU backend, semantic/school systems, tools, persistence, and release gates.</li>
+          <li>The strongest implemented path today is backend/headless/dev-tooling, not a finished player-facing game.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Highest-leverage gaps</h2>
+        <ul>
+          <li>Build the graphical Bevy game loop and UX around the validated headless contracts.</li>
+          <li>Collect real GPU/graphics hardware evidence instead of relying on CPU fallback.</li>
+          <li>Expand world/ecology content so creatures have a real playable environment.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
