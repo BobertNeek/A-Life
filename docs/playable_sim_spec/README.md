@@ -11,6 +11,18 @@ This is **not P37**. P01-P36 remain the completed scaffold/release-gate phase. T
 3. Start with `plans/G00_currentstate-product-audit-and-playablesim-freeze.md`.
 4. Do not implement `G01` until the G00 backend confidence audit is complete.
 5. Use `prompts/GOAL_MODE_DRIVER_PROMPT.md` only if you want Codex to work plan-by-plan with strict gates.
+6. Use `prompts/GOAL_MODE_DRIVER_PROMPT_REVIEW_GATED.md` for automated Goal Mode after G13. Review gates with `Rxx` IDs are manifest-visible executable hard stops, not internal notes.
+
+## Review gates
+
+The manifest includes explicit review plans so Goal Mode cannot run past product checkpoints without producing a review receipt and stopping:
+
+- `R13` after G13 and before G14. This retrospectively audits G01-G13, including the missed G03/G06/G12 checkpoints.
+- `R18` after G18 and before G19.
+- `R23` after G23 and before G24.
+- `R24` after G24 as the final playable-sim roadmap lock review.
+
+Do not add active R11/R12 gates because G12 and G13 are already merged. R13 is the corrective review gate for that history.
 
 ## Why this pack exists
 

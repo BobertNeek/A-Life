@@ -204,15 +204,31 @@
       "can_run_concurrently": true,
       "recommended_model": "GPT-5.5 High",
       "next": [
-        "G14"
+        "R13"
       ],
       "file": "plans/G13_player-world-editing-and-scenario-sandbox-tools.md"
+    },
+    {
+      "id": "R13",
+      "title": "Retrospective product boundary review after G13 before G14",
+      "branch": "codex/R13-retrospective-product-boundary-review",
+      "dependencies": [
+        "G13",
+        "G01-G13 complete on main"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G14"
+      ],
+      "file": "review_gates/R13_retrospective_product_boundary_review.md"
     },
     {
       "id": "G14",
       "title": "Cognition visualization and debug timeline",
       "branch": "codex/G14-cognition-visualization",
       "dependencies": [
+        "R13",
         "G05",
         "G03"
       ],
@@ -283,15 +299,30 @@
       "can_run_concurrently": false,
       "recommended_model": "GPT-5.5 High or Pro High",
       "next": [
-        "G19"
+        "R18"
       ],
       "file": "plans/G18_population-performance-lod-and-scalability-pass.md"
+    },
+    {
+      "id": "R18",
+      "title": "Population/performance/scalability review before G19",
+      "branch": "codex/R18-population-performance-review",
+      "dependencies": [
+        "G18"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G19"
+      ],
+      "file": "review_gates/R18_population_performance_review.md"
     },
     {
       "id": "G19",
       "title": "Long-run balance, behavior tuning, and ecosystem stability",
       "branch": "codex/G19-long-run-balance",
       "dependencies": [
+        "R18",
         "G18",
         "G09",
         "G07"
@@ -358,21 +389,50 @@
       "can_run_concurrently": false,
       "recommended_model": "GPT-5.5 High or Pro High",
       "next": [
-        "G24"
+        "R23"
       ],
       "file": "plans/G23_playable-featurecomplete-release-candidate.md"
+    },
+    {
+      "id": "R23",
+      "title": "Feature-complete release-candidate review before G24",
+      "branch": "codex/R23-feature-complete-rc-review",
+      "dependencies": [
+        "G23"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G24"
+      ],
+      "file": "review_gates/R23_feature_complete_rc_review.md"
     },
     {
       "id": "G24",
       "title": "Feature-complete roadmap lock and post-release backlog",
       "branch": "codex/G24-feature-complete-roadmap-lock",
       "dependencies": [
+        "R23",
         "G23"
       ],
       "can_run_concurrently": false,
       "recommended_model": "GPT-5.5 High or Pro High",
-      "next": [],
+      "next": [
+        "R24"
+      ],
       "file": "plans/G24_featurecomplete-roadmap-lock-and-postrelease-backlog.md"
+    },
+    {
+      "id": "R24",
+      "title": "Final playable-sim roadmap lock review",
+      "branch": "codex/R24-final-playable-sim-review",
+      "dependencies": [
+        "G24"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [],
+      "file": "review_gates/R24_final_playable_sim_review.md"
     }
   ]
 }
