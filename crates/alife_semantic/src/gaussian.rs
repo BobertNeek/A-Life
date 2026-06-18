@@ -97,6 +97,12 @@ impl EgocentricBinHasher {
     }
 }
 
+impl Default for EgocentricBinHasher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Convert adapter-side Gaussian observations into optional core Gaussian context.
 pub fn build_gaussian_context(
     observations: &[GaussianClusterObservation],

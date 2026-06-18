@@ -7,12 +7,12 @@ use alife_game_app::{
     run_creature_inspector_smoke, run_creature_visual_smoke, run_headless_app_shell_smoke,
     run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
     run_playable_survival_loop_smoke, run_population_social_loop_smoke, run_school_mode_smoke,
-    run_world_ecology_loop_smoke, select_visible_world_entity, validate_app_shell_config,
-    AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind,
-    SchoolModeSaveState,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, InspectorControlPanel, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationSocialEventKind, SchoolModeSaveState,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -233,6 +233,9 @@ fn inspector_smoke_selects_creature_and_reports_read_only_runtime_state() {
     assert!(inspector
         .fallback_summary
         .contains("GPU/semantic providers optional"));
+    assert!(inspector
+        .semantic_context_summary
+        .contains("semantic_provider=disabled"));
 }
 
 #[test]
@@ -689,6 +692,64 @@ fn school_mode_save_state_roundtrips_without_teacher_private_state() {
     );
     assert!(!loaded.cue_entity_ids.is_empty());
     loaded.validate().unwrap();
+}
+
+#[test]
+fn semantic_provider_disabled_path_is_safe_and_nonfatal() {
+    let summary = run_semantic_provider_smoke().unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::G11_SEMANTIC_PROVIDER_DISPLAY_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G11_SEMANTIC_PROVIDER_DISPLAY_SCHEMA_VERSION
+    );
+    assert_eq!(summary.disabled_panel.config.provider_id, "disabled");
+    assert!(!summary.disabled_panel.context_visible);
+    assert!(summary.provider_absence_nonfatal);
+    assert!(summary.disabled_panel.display_lines.is_empty());
+    summary.validate().unwrap();
+}
+
+#[test]
+fn semantic_provider_fake_context_is_visible_bounded_and_optional() {
+    let summary = run_semantic_provider_smoke().unwrap();
+    let fake = &summary.fake_panel;
+
+    assert_eq!(fake.config.provider_id, "fake-local-table");
+    assert!(fake.manifest.available);
+    assert!(fake.context_visible);
+    assert!(fake.display_lines.len() <= fake.config.max_display_entries);
+    assert!(fake.semantic_code_count > 0);
+    assert!(fake.concept_binding_count > 0);
+    assert!(fake.gaussian_cluster_count > 0);
+    assert!(fake
+        .display_lines
+        .iter()
+        .any(|line| line.source == "semantic-concept"));
+    assert!(fake.extension_note.contains("extension point"));
+}
+
+#[test]
+fn semantic_provider_cannot_issue_actions_or_mutate_weights() {
+    let summary = run_semantic_provider_smoke().unwrap();
+
+    assert!(summary.semantic_action_bypass_blocked);
+    assert!(summary.weight_rewrite_blocked);
+    assert!(!summary.fake_panel.manifest.can_issue_actions);
+    assert!(!summary.fake_panel.manifest.can_rewrite_weights);
+    assert!(!summary.disabled_panel.manifest.can_issue_actions);
+    assert!(!summary.disabled_panel.manifest.can_rewrite_weights);
+}
+
+#[test]
+fn semantic_provider_config_rejects_unknown_schema_and_kind() {
+    let summary = run_semantic_provider_smoke().unwrap();
+
+    assert!(summary.unknown_schema_rejected);
+    assert!(summary.unknown_provider_kind_rejected);
 }
 
 #[cfg(feature = "bevy-app")]

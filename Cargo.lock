@@ -44,6 +44,7 @@ dependencies = [
  "alife_bevy_adapter",
  "alife_core",
  "alife_school",
+ "alife_semantic",
  "alife_world",
  "bevy",
  "serde",
@@ -74,6 +75,8 @@ name = "alife_semantic"
 version = "0.1.0"
 dependencies = [
  "alife_core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

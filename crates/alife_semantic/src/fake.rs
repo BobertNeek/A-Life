@@ -5,6 +5,7 @@ use alife_core::ScaffoldContractError;
 use crate::providers::{
     synthesize_context_bundle, SemanticContextProvider, SemanticContextRequest,
 };
+use crate::SemanticProviderCapabilityManifest;
 
 /// Fake provider that returns deterministic semantic/Gaussian contexts for
 /// tests and headless scenarios.
@@ -12,6 +13,10 @@ use crate::providers::{
 pub struct FakeSemanticProvider;
 
 impl SemanticContextProvider for FakeSemanticProvider {
+    fn capability_manifest(&self) -> SemanticProviderCapabilityManifest {
+        SemanticProviderCapabilityManifest::fake_local_table()
+    }
+
     fn build_context_bundle(
         &self,
         request: &SemanticContextRequest,
@@ -23,5 +28,11 @@ impl SemanticContextProvider for FakeSemanticProvider {
 impl FakeSemanticProvider {
     pub fn new() -> Self {
         Self
+    }
+}
+
+impl Default for FakeSemanticProvider {
+    fn default() -> Self {
+        Self::new()
     }
 }
