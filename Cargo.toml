@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_bevy_adapter", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools"]
+members = ["crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_bevy_adapter", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools", "crates/alife_game_app"]
 resolver = "2"
 
 [workspace.package]

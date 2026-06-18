@@ -38,6 +38,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "alife_game_app"
+version = "0.1.0"
+dependencies = [
+ "alife_bevy_adapter",
+ "alife_world",
+ "bevy",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "alife_gpu_backend"
 version = "0.1.0"
 dependencies = [
