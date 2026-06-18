@@ -5,6 +5,7 @@ use alife_core::{GaussianContextRef, ScaffoldContractError, SemanticContextRef, 
 use crate::{
     build_gaussian_context, build_semantic_context, EgocentricBinGrid, EgocentricBinHasher,
     GaussianClusterObservation, SemanticCodeDescriptor, SemanticConceptBinding,
+    SemanticProviderCapabilityManifest,
 };
 
 use crate::{
@@ -80,6 +81,8 @@ pub struct SemanticContextBundle {
 
 /// Optional adapter contracts are explicit; missing sources must never fail.
 pub trait SemanticContextProvider {
+    fn capability_manifest(&self) -> SemanticProviderCapabilityManifest;
+
     fn build_context_bundle(
         &self,
         request: &SemanticContextRequest,

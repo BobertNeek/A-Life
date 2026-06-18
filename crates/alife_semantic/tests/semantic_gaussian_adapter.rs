@@ -3,6 +3,10 @@ use alife_core::ScaffoldContractError;
 #[cfg(feature = "gaussian-adapter")]
 use alife_core::{ConceptCellId, GaussianClusterId};
 use alife_semantic::SemanticBoundaryManifest;
+use alife_semantic::{
+    SemanticProviderCapabilityManifest, SemanticProviderConfig, SemanticProviderKind,
+    G11_SEMANTIC_PROVIDER_SCHEMA, G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
+};
 
 #[cfg(feature = "gaussian-adapter")]
 use alife_semantic::{
@@ -22,6 +26,67 @@ fn missing_semantic_provider_stays_nonfatal() {
     assert!(manifest.private_prior);
     assert!(!manifest.can_issue_actions);
     assert!(!manifest.can_rewrite_weights);
+}
+
+#[test]
+fn g11_disabled_provider_config_is_default_and_nonfatal() {
+    let config = SemanticProviderConfig::default();
+    config.validate().unwrap();
+    assert_eq!(config.schema, G11_SEMANTIC_PROVIDER_SCHEMA);
+    assert_eq!(config.schema_version, G11_SEMANTIC_PROVIDER_SCHEMA_VERSION);
+    assert_eq!(config.provider_kind, SemanticProviderKind::Disabled);
+    assert!(!config.required);
+
+    let manifest = SemanticProviderCapabilityManifest::disabled();
+    manifest.validate().unwrap();
+    assert!(manifest.private_prior);
+    assert!(!manifest.available);
+    assert!(manifest.failure_is_nonfatal);
+    assert!(!manifest.can_issue_actions);
+    assert!(!manifest.can_rewrite_weights);
+}
+
+#[test]
+fn g11_provider_config_rejects_unknown_schema_and_provider_kind() {
+    let mut config = SemanticProviderConfig::fake_local_table();
+    config.schema_version = G11_SEMANTIC_PROVIDER_SCHEMA_VERSION + 1;
+    assert!(config.validate().is_err());
+
+    let unknown_kind = format!(
+        r#"{{
+            "schema":"{}",
+            "schema_version":{},
+            "provider_id":"mystery",
+            "provider_kind":"mystery_provider",
+            "required":false,
+            "max_display_entries":4
+        }}"#,
+        G11_SEMANTIC_PROVIDER_SCHEMA, G11_SEMANTIC_PROVIDER_SCHEMA_VERSION
+    );
+    assert!(SemanticProviderConfig::from_json_str(&unknown_kind).is_err());
+}
+
+#[test]
+fn g11_fake_and_external_manifests_preserve_action_weight_boundary() {
+    let fake = SemanticProviderCapabilityManifest::fake_local_table();
+    fake.validate().unwrap();
+    assert!(fake.available);
+    assert_eq!(fake.provider_kind, SemanticProviderKind::FakeLocalTable);
+    assert!(!fake.requires_external_model);
+    assert!(!fake.can_issue_actions);
+    assert!(!fake.can_rewrite_weights);
+
+    let external = SemanticProviderCapabilityManifest::external_extension("local-slm", false);
+    external.validate().unwrap();
+    assert_eq!(
+        external.provider_kind,
+        SemanticProviderKind::ExternalExtension
+    );
+    assert!(external.optional_runtime_dependency);
+    assert!(external.requires_external_model);
+    assert!(external.failure_is_nonfatal);
+    assert!(!external.can_issue_actions);
+    assert!(!external.can_rewrite_weights);
 }
 
 #[cfg(feature = "gaussian-adapter")]
@@ -170,6 +235,10 @@ fn fake_provider_generates_bundle_without_renderer() -> Result<(), ScaffoldContr
         });
 
     let provider = FakeSemanticProvider::new();
+    let manifest = provider.capability_manifest();
+    manifest.validate()?;
+    assert!(!manifest.can_issue_actions);
+    assert!(!manifest.can_rewrite_weights);
     let bundle = provider.build_context_bundle(&request)?;
 
     assert!(bundle.gaussian_context.is_some());

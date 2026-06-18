@@ -4,8 +4,8 @@ use alife_game_app::{
     load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_population_social_loop_smoke, run_school_mode_smoke, run_world_ecology_loop_smoke,
-    validate_app_shell_config, AppShellLaunchConfig,
+    run_population_social_loop_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -130,7 +130,14 @@ fn run() -> Result<String, String> {
             let summary = run_school_mode_smoke().map_err(|err| err.to_string())?;
             Ok(format_school_mode_summary("G10 school mode", &summary))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke".to_string()),
+        [command] if command == "semantic-provider-smoke" => {
+            let summary = run_semantic_provider_smoke().map_err(|err| err.to_string())?;
+            Ok(format_semantic_provider_summary(
+                "G11 semantic provider",
+                &summary,
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke".to_string()),
     }
 }
 
@@ -219,7 +226,7 @@ fn format_creature_inspector_summary(
     inspector: &alife_game_app::CreatureInspectorSnapshot,
 ) -> String {
     format!(
-        "{prefix} schema={} version={} selected={} label={} camera_follow={:?} read_only={} action='{}' patch='{}' memory_topology='{}' messages={} signature={}",
+        "{prefix} schema={} version={} selected={} label={} camera_follow={:?} read_only={} action='{}' patch='{}' semantic='{}' memory_topology='{}' messages={} signature={}",
         inspector.schema,
         inspector.schema_version,
         inspector.selection.stable_id.raw(),
@@ -228,6 +235,7 @@ fn format_creature_inspector_summary(
         inspector.read_only,
         inspector.action_summary,
         inspector.patch_summary,
+        inspector.semantic_context_summary,
         inspector.memory_topology_summary,
         inspector.troubleshooting_messages.join("|"),
         inspector.signature_line()
@@ -370,6 +378,28 @@ fn format_school_mode_summary(prefix: &str, summary: &alife_game_app::SchoolMode
             .collect::<Vec<_>>()
             .join("+"),
         summary.save_roundtrip_signature,
+        summary.signature_line()
+    )
+}
+
+fn format_semantic_provider_summary(
+    prefix: &str,
+    summary: &alife_game_app::SemanticProviderSmokeSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} provider_schema={} provider_version={} disabled={} fake={} schema_rejected={} kind_rejected={} action_blocked={} weight_blocked={} absence_nonfatal={} failure_nonfatal={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.provider_schema,
+        summary.provider_schema_version,
+        summary.disabled_panel.signature_line(),
+        summary.fake_panel.signature_line(),
+        summary.unknown_schema_rejected,
+        summary.unknown_provider_kind_rejected,
+        summary.semantic_action_bypass_blocked,
+        summary.weight_rewrite_blocked,
+        summary.provider_absence_nonfatal,
+        summary.provider_failure_nonfatal,
         summary.signature_line()
     )
 }

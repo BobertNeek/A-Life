@@ -102,3 +102,14 @@ The G10 smoke builds a teacher avatar, ordinary world cue token, highlighted
 object, lesson panel, verifier panel, and P34-compatible school save summary.
 Teacher cues enter through sensory perception only; low-scoring
 teacher-tagged action metadata cannot win arbitration by metadata alone.
+
+G11 semantic provider boundary smoke, no graphics or model required:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- semantic-provider-smoke
+```
+
+The G11 smoke keeps the default semantic provider disabled and nonfatal, then
+uses a deterministic fake/local table provider to display bounded semantic and
+Gaussian context lines. The provider manifest is private-prior metadata only:
+it cannot issue actions, mutate weights, or become a required runtime model.
