@@ -8,15 +8,19 @@ use alife_game_app::{
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
     run_live_brain_loop_smoke, run_playable_survival_loop_smoke, run_population_social_loop_smoke,
     run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig,
-    CameraNavigationState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
-    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
-    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, PlayableSurvivalEventKind,
-    PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind, SchoolModeSaveState,
+    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
+    AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind,
+    SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
-use alife_world::{HeadlessActionIds, HeadlessBrainHarness};
+use alife_world::{
+    EcologyZoneId, HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, TerrainZone,
+    TerrainZoneKind,
+};
 use std::path::PathBuf;
 
 fn p34_fixture_root() -> PathBuf {
@@ -810,6 +814,158 @@ fn gpu_product_smoke_report_is_honest_and_manual_command_is_current() {
         .contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
     assert!(summary.manual_hardware_command.contains("--gpu-runtime"));
     assert!(!summary.manual_hardware_command.contains("--gpu-report"));
+}
+
+#[test]
+fn world_editor_smoke_places_removes_moves_and_saves_stable_ids() {
+    let summary = run_world_editor_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G13_WORLD_EDITOR_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G13_WORLD_EDITOR_SCHEMA_VERSION
+    );
+    assert_eq!(summary.mode_after_edits, WorldEditorMode::EditingPaused);
+    assert_eq!(summary.placed_count, 4);
+    assert_eq!(summary.removed_count, 1);
+    assert_eq!(summary.moved_count, 1);
+    assert_eq!(summary.resource_rate_changes, 1);
+    assert!(summary.invalid_edit_rejected);
+    assert!(summary.undo_available);
+    assert_eq!(summary.stable_ids.len(), 3);
+    assert!(summary
+        .saved_roundtrip_signature
+        .iter()
+        .any(|line| line.contains("editor-food")));
+    assert!(summary
+        .saved_roundtrip_signature
+        .iter()
+        .any(|line| line.contains("editor-hazard")));
+    assert!(summary
+        .saved_roundtrip_signature
+        .iter()
+        .any(|line| line.contains("editor-creature")));
+    assert!(!summary
+        .saved_roundtrip_signature
+        .iter()
+        .any(|line| line.contains("editor-wall")));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn world_editor_rejects_invalid_edits_and_enforces_caps() {
+    let world = HeadlessScenarioBuilder::new(13_113)
+        .agent("editor-agent", OrganismId(13_101), alife_core::Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let mut session = WorldEditorSession::new(
+        world,
+        WorldEditorConfig {
+            max_objects: 2,
+            world_bound: 4.0,
+        },
+    )
+    .unwrap();
+
+    assert!(session
+        .apply_edit(WorldEditCommand::place_food(
+            "not-paused",
+            alife_core::Vec3f::new(0.2, 0.0, 0.0),
+            0.5,
+        ))
+        .is_err());
+    session.enter_editor();
+    assert!(session
+        .apply_edit(WorldEditCommand::place_food(
+            "editor-food",
+            alife_core::Vec3f::new(0.2, 0.0, 0.0),
+            0.5,
+        ))
+        .unwrap()
+        .is_some());
+    assert!(session
+        .apply_edit(WorldEditCommand::place_hazard(
+            "over-cap-hazard",
+            alife_core::Vec3f::new(0.4, 0.0, 0.0),
+            0.2,
+        ))
+        .is_err());
+    assert!(session
+        .apply_edit(WorldEditCommand::place_food(
+            "out-of-bounds",
+            alife_core::Vec3f::new(8.0, 0.0, 0.0),
+            0.5,
+        ))
+        .is_err());
+    assert_eq!(session.world().object_count(), 2);
+}
+
+#[test]
+fn world_editor_roundtrip_resource_rates_and_undo_are_stable() {
+    let mut world = HeadlessScenarioBuilder::new(13_213)
+        .agent("editor-agent", OrganismId(13_201), alife_core::Vec3f::ZERO)
+        .build()
+        .unwrap();
+    world
+        .add_terrain_zone(
+            TerrainZone::new(
+                EcologyZoneId(13),
+                "editor-meadow",
+                TerrainZoneKind::Meadow,
+                alife_core::Vec3f::ZERO,
+                8.0,
+                0.8,
+                0.1,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let before = world.stable_signature();
+    let mut session = WorldEditorSession::new(world, WorldEditorConfig::default()).unwrap();
+    session.enter_editor();
+    let food = session
+        .apply_edit(WorldEditCommand::place_food(
+            "editor-food",
+            alife_core::Vec3f::new(0.5, 0.0, 0.0),
+            0.65,
+        ))
+        .unwrap()
+        .unwrap();
+    session
+        .apply_edit(WorldEditCommand::SetFoodResourceRate {
+            food_id: food,
+            home_zone: EcologyZoneId(13),
+            regrow_after_ticks: 2,
+            decay_after_ticks: 4,
+        })
+        .unwrap();
+    let save = session.save_portable("g13-test-save").unwrap();
+    let json = save.to_json_string_pretty().unwrap();
+    let loaded = PortableSaveFile::from_json_str(&json).unwrap();
+    assert_eq!(
+        loaded
+            .restore_headless_world()
+            .unwrap()
+            .ecology()
+            .resources
+            .len(),
+        1
+    );
+
+    session.undo_last().unwrap();
+    session.undo_last().unwrap();
+    assert_eq!(session.world().stable_signature(), before);
+}
+
+#[test]
+fn world_editor_resume_uses_sealed_patch_without_direct_cognition_mutation() {
+    let summary = run_world_editor_smoke().unwrap();
+
+    assert!(summary.simulation_resumed);
+    assert!(summary.resumed_patch_sealed);
+    assert_eq!(summary.cognition_direct_mutation_count, 0);
+    assert!(summary.edit_log.iter().any(|entry| entry == "place"));
+    assert!(summary.edit_log.iter().any(|entry| entry == "remove"));
 }
 
 #[cfg(feature = "bevy-app")]

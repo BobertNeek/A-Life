@@ -127,3 +127,14 @@ the P29 GPU runtime contracts without making GPU hardware required:
 ```powershell
 cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-product-smoke
 ```
+
+G13 world editor/sandbox smoke, no graphics required:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- world-editor-smoke
+```
+
+The G13 smoke pauses simulation, applies bounded stable-ID world edits, saves
+and reloads through the P34 portable save contract, then resumes the normal
+CPU reference brain path and verifies that a sealed patch is produced. It is a
+small sandbox/editing proof path, not the G16 content-authoring pipeline.
