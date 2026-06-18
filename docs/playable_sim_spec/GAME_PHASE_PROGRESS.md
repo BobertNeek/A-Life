@@ -16,7 +16,7 @@
 | G11 | codex/G11-semantic-slm-provider | complete | branch commit | full default, wrapper, core boundary, semantic-provider smoke, disabled/fake provider boundary tests, and all-features validation passed | G12 |
 | G12 | codex/G12-gpu-product-hardening | complete | branch commit | full default, wrapper, core boundary, gpu-product smoke, CPU fallback/no-readback tests, manual hardware docs, and all-features validation passed | G13 |
 | G13 | codex/G13-world-editing-tools | complete | branch commit | full default, wrapper, core boundary, world-editor smoke, stable-ID save/load round-trip, invalid edit/cap tests, and all-features validation passed | R13 |
-| R13 | codex/R13-retrospective-product-boundary-review | pending | not started | retrospective review gate required before G14; audits G01-G13 and missed G03/G06/G12 checkpoints | G14 |
+| R13 | codex/R13-retrospective-product-boundary-review | complete | branch commit | retrospective review complete; verdict FIX_REQUIRED; G01-G13 boundaries passed, but `alife_game_app/src/lib.rs` requires behavior-preserving module split before G14 | R13 remediation prompt in `review_gates/R13_REVIEW_REPORT.md` |
 | R18 | codex/R18-population-performance-review | pending | not started | review gate required after G18 before G19 | G19 |
 | R23 | codex/R23-feature-complete-rc-review | pending | not started | review gate required after G23 before G24 | G24 |
 | R24 | codex/R24-final-playable-sim-review | pending | not started | final playable-sim roadmap lock review after G24 | None |
