@@ -5,9 +5,10 @@ use alife_core::{
 use alife_game_app::{
     compare_visible_world_to_headless, load_visible_world_from_p34_save,
     run_creature_inspector_smoke, run_creature_visual_smoke, run_headless_app_shell_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState,
-    CreatureExpressionState, InspectorControlPanel, LiveBrainLoop, LiveBrainTickControl,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig,
+    CameraNavigationState, CreatureAnimationState, CreatureExpressionState, InspectorControlPanel,
+    LiveBrainLoop, LiveBrainTickControl, PlayableSurvivalEventKind,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -269,6 +270,106 @@ fn inspector_pause_step_controls_preserve_existing_deterministic_scheduler() {
             .to_live_control()
             .unwrap(),
         LiveBrainTickControl::run_fixed(2)
+    );
+}
+
+#[test]
+fn playable_survival_loop_exercises_food_hazard_sleep_and_logs() {
+    let summary = run_playable_survival_loop_smoke().unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::G06_PLAYABLE_SURVIVAL_LOOP_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G06_PLAYABLE_SURVIVAL_LOOP_SCHEMA_VERSION
+    );
+    assert_eq!(
+        summary.event_labels(),
+        vec![
+            "food-consumed",
+            "missing-affordance",
+            "hazard-pain",
+            "rest-sleep"
+        ]
+    );
+    assert_eq!(summary.object_count, 5);
+    assert_eq!(summary.events.len(), 4);
+    assert_eq!(summary.tick_summaries.len(), 4);
+    assert_eq!(summary.sealed_patch_count, 4);
+    assert_eq!(summary.packed_record_count, 4);
+    assert!(summary.memory_record_count >= 4);
+    assert!(summary.topology_concept_count >= 1);
+    assert!(summary
+        .world_signature
+        .iter()
+        .any(|line| line.contains("Food")));
+    assert!(summary
+        .world_signature
+        .iter()
+        .any(|line| line.contains("Hazard")));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn food_loop_reduces_hunger_and_failure_does_not_retry_infinitely() {
+    let summary = run_playable_survival_loop_smoke().unwrap();
+    let food = &summary.events[0];
+    assert_eq!(food.kind, PlayableSurvivalEventKind::FoodConsumed);
+    assert!(food.success);
+    assert_eq!(food.action_kind, Some(ActionKind::Interact));
+    assert!(food.hunger_after < food.hunger_before);
+
+    let missing = &summary.events[1];
+    assert_eq!(missing.kind, PlayableSurvivalEventKind::MissingAffordance);
+    assert!(!missing.success);
+    assert_eq!(
+        summary.tick_summaries[1].status,
+        BrainTickStatus::RecoverableActionFailure
+    );
+    assert!(summary.tick_summaries[1].action_failure.is_some());
+    assert_eq!(summary.tick_summaries[1].sealed_patch_count, 2);
+}
+
+#[test]
+fn hazard_loop_records_bias_only_memory_topology_evidence() {
+    let summary = run_playable_survival_loop_smoke().unwrap();
+    let hazard = &summary.events[2];
+    assert_eq!(hazard.kind, PlayableSurvivalEventKind::HazardPain);
+    assert!(hazard.success);
+    assert_eq!(hazard.action_kind, Some(ActionKind::Move));
+    assert!(hazard.pain_after > summary.events[1].pain_after);
+    assert!(hazard.fear_after > summary.events[1].fear_after);
+    assert!(summary.tick_summaries[2].memory_updates > 0);
+    assert!(summary.tick_summaries[2].topology_updates > 0);
+    assert!(summary.unresolved_gap_count >= 1);
+    assert!(summary.events[2]
+        .message
+        .contains("topology gap remains bias-only"));
+}
+
+#[test]
+fn rest_loop_enters_visible_sleep_state_after_sealed_patch() {
+    let summary = run_playable_survival_loop_smoke().unwrap();
+    let rest = &summary.events[3];
+    assert_eq!(rest.kind, PlayableSurvivalEventKind::RestSleep);
+    assert!(rest.success);
+    assert_eq!(rest.action_kind, Some(ActionKind::Rest));
+    assert!(matches!(
+        rest.sleep_phase_after,
+        alife_core::SleepPhase::EnteringSleep
+            | alife_core::SleepPhase::Consolidating
+            | alife_core::SleepPhase::ForcedRecoverySleep
+    ));
+    assert_eq!(summary.tick_summaries[3].sealed_patch_count, 4);
+    assert_eq!(
+        summary.final_visual.animation,
+        CreatureAnimationState::Sleeping
+    );
+    assert_eq!(
+        summary.final_visual.expression,
+        CreatureExpressionState::Tired
     );
 }
 

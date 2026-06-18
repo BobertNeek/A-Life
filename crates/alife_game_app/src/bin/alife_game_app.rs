@@ -3,8 +3,8 @@ use std::{env, path::PathBuf, process::ExitCode};
 use alife_game_app::{
     load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_headless_app_shell_smoke, run_live_brain_loop_fixed_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, validate_app_shell_config,
-    AppShellLaunchConfig,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -97,7 +97,14 @@ fn run() -> Result<String, String> {
                 run_creature_inspector_smoke(&launch).map_err(|err| err.to_string())?;
             Ok(format_creature_inspector_summary("G05 creature inspector", &inspector))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root>".to_string()),
+        [command] if command == "playable-survival-loop-smoke" => {
+            let summary = run_playable_survival_loop_smoke().map_err(|err| err.to_string())?;
+            Ok(format_playable_survival_loop_summary(
+                "G06 playable survival loop",
+                &summary,
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke".to_string()),
     }
 }
 
@@ -198,6 +205,28 @@ fn format_creature_inspector_summary(
         inspector.memory_topology_summary,
         inspector.troubleshooting_messages.join("|"),
         inspector.signature_line()
+    )
+}
+
+fn format_playable_survival_loop_summary(
+    prefix: &str,
+    summary: &alife_game_app::PlayableSurvivalLoopSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} seed={} organism={} events={} sealed_patches={} packed_logs={} memory_records={} topology_concepts={} gaps={} final_animation={} final_expression={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.seed,
+        summary.organism_id.raw(),
+        summary.event_labels().join(">"),
+        summary.sealed_patch_count,
+        summary.packed_record_count,
+        summary.memory_record_count,
+        summary.topology_concept_count,
+        summary.unresolved_gap_count,
+        summary.final_visual.animation.label(),
+        summary.final_visual.expression.label(),
+        summary.signature_line()
     )
 }
 
