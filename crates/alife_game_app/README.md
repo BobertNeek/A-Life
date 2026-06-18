@@ -53,3 +53,14 @@ The G03 bridge runs the existing P15/P17 CPU reference path from gathered
 sensory through action arbitration, action execution, outcome measurement,
 sealed `ExperiencePatch`, and packed-log telemetry. It does not add G04
 rendering polish or G06 gameplay tuning.
+
+G04 creature visual state smoke, no graphics required:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- creature-visual-smoke crates/alife_world/tests/fixtures/p34
+```
+
+The G04 visual state is a one-way presentation snapshot derived from P34
+visible objects, the G03 live tick summary, bounded drive/hormone values, and
+sleep phase. It maps the creature into placeholder animation, expression,
+intent color, and bounded cue bars without changing cognition or gameplay.

@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
-    load_visible_world_from_p34_save, run_headless_app_shell_smoke,
+    load_visible_world_from_p34_save, run_creature_visual_smoke, run_headless_app_shell_smoke,
     run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
     validate_app_shell_config, AppShellLaunchConfig,
 };
@@ -85,7 +85,12 @@ fn run() -> Result<String, String> {
                 summaries.last().map(|summary| summary.status)
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks>".to_string()),
+        [command, fixture_root] if command == "creature-visual-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let visual = run_creature_visual_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format_creature_visual_summary("G04 creature visual", &visual))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root>".to_string()),
     }
 }
 
@@ -141,6 +146,31 @@ fn format_visible_summary(
         presentation.save_id,
         presentation.object_count,
         presentation.visible_signature.join("|")
+    )
+}
+
+fn format_creature_visual_summary(
+    prefix: &str,
+    visual: &alife_game_app::CreatureVisualSnapshot,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} organism={} stable={} animation={} expression={} action={:?} target={:?} cues=hunger:{:.2},fatigue:{:.2},fear:{:.2},pain:{:.2},curiosity:{:.2},energy:{:.2},sleep:{:.2} signature={}",
+        visual.schema,
+        visual.schema_version,
+        visual.organism_id.raw(),
+        visual.stable_id.raw(),
+        visual.animation.label(),
+        visual.expression.label(),
+        visual.selected_action_kind,
+        visual.target_entity.map(|id| id.raw()),
+        visual.cues.hunger.value,
+        visual.cues.fatigue.value,
+        visual.cues.fear.value,
+        visual.cues.pain.value,
+        visual.cues.curiosity.value,
+        visual.cues.energy.value,
+        visual.cues.sleep_pressure.value,
+        visual.signature_line()
     )
 }
 
