@@ -10,3 +10,4 @@
 | G05 | codex/G05-camera-selection-inspector | complete | branch commit | full default, wrapper, core boundary, creature-inspector smoke, Bevy inspector resource smoke, and all-features validation passed | G06 |
 | G06 | codex/G06-food-hazard-sleep-loop | complete | branch commit | full default, wrapper, core boundary, playable survival-loop smoke, and all-features validation passed | G07 |
 | G07 | codex/G07-world-ecology | complete | branch commit | full default, wrapper, core boundary, world-ecology loop smoke, save/load ecology round-trip, and all-features validation passed | G08 |
+| G08 | codex/G08-population-social-loop | complete | branch commit | full default, wrapper, core boundary, population-social loop smoke, deterministic schedule/cap tests, and all-features validation passed | G09 |

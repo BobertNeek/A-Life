@@ -6,9 +6,10 @@ use alife_game_app::{
     compare_visible_world_to_headless, load_visible_world_from_p34_save,
     run_creature_inspector_smoke, run_creature_visual_smoke, run_headless_app_shell_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_world_ecology_loop_smoke, select_visible_world_entity, validate_app_shell_config,
-    AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
-    InspectorControlPanel, LiveBrainLoop, LiveBrainTickControl, PlayableSurvivalEventKind,
+    run_population_social_loop_smoke, run_world_ecology_loop_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState,
+    CreatureExpressionState, InspectorControlPanel, LiveBrainLoop, LiveBrainTickControl,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
 use alife_world::WorldObjectKind;
@@ -404,6 +405,106 @@ fn world_ecology_loop_tracks_regrowth_spawn_pressure_and_logs() {
         .iter()
         .any(|line| line.contains("seed-berry")));
     summary.validate().unwrap();
+}
+
+#[test]
+fn population_social_loop_runs_two_creatures_in_stable_order() {
+    let summary = run_population_social_loop_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G08_POPULATION_SOCIAL_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G08_POPULATION_SOCIAL_SCHEMA_VERSION
+    );
+    assert_eq!(summary.seed, 8080);
+    assert_eq!(summary.creature_count, 2);
+    assert_eq!(summary.population_cap, 4);
+    assert_eq!(
+        summary.schedule_order,
+        vec![OrganismId(801), OrganismId(802)]
+    );
+    assert_eq!(summary.tick_records.len(), 4);
+    assert_eq!(summary.metrics.scheduler_steps, 4);
+    assert_eq!(summary.metrics.sealed_patch_count, 4);
+    assert_eq!(summary.metrics.packed_record_count, 4);
+    assert!(summary.metrics.world_object_count >= summary.creature_count);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn population_social_loop_exposes_vocal_tokens_and_social_context_as_perception_only() {
+    let summary = run_population_social_loop_smoke().unwrap();
+
+    assert!(summary.tick_records.iter().any(|record| record.event_kind
+        == PopulationSocialEventKind::Vocalize
+        && record.tick_summary.selected_action_kind == Some(ActionKind::Vocalize)));
+    assert!(summary
+        .tick_records
+        .iter()
+        .any(|record| record.heard_tokens > 0));
+    assert!(summary
+        .tick_records
+        .iter()
+        .any(|record| record.social_agents_seen > 0));
+    assert!(summary
+        .tick_records
+        .iter()
+        .any(|record| record.trust_cues_seen > 0));
+    assert!(summary
+        .tick_records
+        .iter()
+        .any(|record| record.fear_cues_seen > 0));
+    assert_eq!(
+        summary
+            .tick_records
+            .iter()
+            .map(|record| record.social_direct_action_count)
+            .sum::<usize>(),
+        0
+    );
+    assert!(summary
+        .world_signature
+        .iter()
+        .any(|line| line.contains("voice-token-801")));
+}
+
+#[test]
+fn population_social_loop_records_bounded_collision_feedback_and_group_status() {
+    let summary = run_population_social_loop_smoke().unwrap();
+
+    assert!(summary.metrics.collision_feedback_count >= 1);
+    assert!(summary
+        .tick_records
+        .iter()
+        .any(|record| record.contacted_agents > 0
+            && record.tick_summary.physical_contact
+                == Some(alife_core::PhysicalContactKind::Collision)));
+    assert_eq!(summary.creature_status.len(), 2);
+    assert!(summary
+        .creature_status
+        .iter()
+        .all(|status| status.visual.schema == alife_game_app::G04_CREATURE_VISUAL_SCHEMA));
+    assert!(summary
+        .creature_status
+        .iter()
+        .all(|status| status.last_action_kind.is_some()));
+}
+
+#[test]
+fn population_cap_and_schedule_validation_are_strict_and_deterministic() {
+    let mut config = PopulationLoopConfig::two_creature_smoke().unwrap();
+    config.population_cap = 1;
+    assert!(config.validate().is_err());
+
+    let config_a = PopulationLoopConfig::two_creature_smoke().unwrap();
+    let config_b = PopulationLoopConfig::two_creature_smoke().unwrap();
+    let seed = config_a.seed;
+    let rounds = config_a.rounds;
+    let mut run_a = PopulationLiveLoop::from_config(config_a).unwrap();
+    let mut run_b = PopulationLiveLoop::from_config(config_b).unwrap();
+    let summary_a = run_a.run_rounds(rounds, seed).unwrap();
+    let summary_b = run_b.run_rounds(rounds, seed).unwrap();
+    assert_eq!(summary_a.signature_line(), summary_b.signature_line());
 }
 
 #[cfg(feature = "bevy-app")]

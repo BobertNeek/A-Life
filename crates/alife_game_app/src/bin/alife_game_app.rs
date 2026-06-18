@@ -4,7 +4,8 @@ use alife_game_app::{
     load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_headless_app_shell_smoke, run_live_brain_loop_fixed_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_world_ecology_loop_smoke, validate_app_shell_config, AppShellLaunchConfig,
+    run_population_social_loop_smoke, run_world_ecology_loop_smoke, validate_app_shell_config,
+    AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -111,7 +112,14 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke".to_string()),
+        [command] if command == "population-social-loop-smoke" => {
+            let summary = run_population_social_loop_smoke().map_err(|err| err.to_string())?;
+            Ok(format_population_social_loop_summary(
+                "G08 population social loop",
+                &summary,
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke".to_string()),
     }
 }
 
@@ -255,6 +263,33 @@ fn format_world_ecology_loop_summary(
         summary.sensory_zone_label,
         summary.sealed_patch_count,
         summary.packed_record_count,
+        summary.signature_line()
+    )
+}
+
+fn format_population_social_loop_summary(
+    prefix: &str,
+    summary: &alife_game_app::PopulationSocialLoopSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} seed={} creatures={} cap={} order={} steps={} social_samples={} heard_tokens={} collisions={} sealed_patches={} packed_logs={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.seed,
+        summary.creature_count,
+        summary.population_cap,
+        summary
+            .schedule_order
+            .iter()
+            .map(|id| id.raw().to_string())
+            .collect::<Vec<_>>()
+            .join(">"),
+        summary.metrics.scheduler_steps,
+        summary.metrics.social_context_samples,
+        summary.metrics.vocal_tokens_heard,
+        summary.metrics.collision_feedback_count,
+        summary.metrics.sealed_patch_count,
+        summary.metrics.packed_record_count,
         summary.signature_line()
     )
 }
