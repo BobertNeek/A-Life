@@ -1,14 +1,16 @@
 use alife_core::{
     ActionKind, ActionProposal, ActionTarget, BrainTickInput, BrainTickStatus, Confidence,
-    CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, WorldEntityId,
+    CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, Validate, WorldEntityId,
 };
 use alife_game_app::{
     compare_visible_world_to_headless, load_visible_world_from_p34_save,
     run_creature_inspector_smoke, run_creature_visual_smoke, run_headless_app_shell_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_population_social_loop_smoke, run_world_ecology_loop_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState,
-    CreatureExpressionState, InspectorControlPanel, LiveBrainLoop, LiveBrainTickControl,
+    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    run_playable_survival_loop_smoke, run_population_social_loop_smoke,
+    run_world_ecology_loop_smoke, select_visible_world_entity, validate_app_shell_config,
+    AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl,
     PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile};
@@ -505,6 +507,113 @@ fn population_cap_and_schedule_validation_are_strict_and_deterministic() {
     let summary_a = run_a.run_rounds(rounds, seed).unwrap();
     let summary_b = run_b.run_rounds(rounds, seed).unwrap();
     assert_eq!(summary_a.signature_line(), summary_b.signature_line());
+}
+
+#[test]
+fn lifecycle_lineage_birth_creates_valid_offspring_genome() {
+    let summary = run_lifecycle_lineage_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G09_LIFECYCLE_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G09_LIFECYCLE_SCHEMA_VERSION
+    );
+    assert_eq!(summary.metrics.births, 1);
+    assert_eq!(summary.lineage_records.len(), 1);
+    let birth = &summary.lineage_records[0];
+    assert_eq!(birth.parent_genome_ids.len(), 2);
+    assert!(summary.creatures.iter().any(|creature| creature.genome_id
+        == birth.offspring_genome_id
+        && creature.parent_genome_ids == birth.parent_genome_ids
+        && creature.life_stage == CreatureLifeStage::Hatchling
+        && creature.alive));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn lifecycle_lineage_keeps_genetic_baseline_immutable_by_default() {
+    let summary = run_lifecycle_lineage_smoke().unwrap();
+    let offspring = summary
+        .creatures
+        .iter()
+        .find(|creature| !creature.parent_genome_ids.is_empty())
+        .expect("G09 smoke should create one offspring");
+
+    assert_eq!(
+        offspring.birth_weight_asset_id.as_deref(),
+        Some("g09-tiny-birth-weight-asset")
+    );
+    assert!(!offspring.lamarckian_enabled);
+    assert!(!offspring.inherited_lifetime_state);
+    assert!(summary
+        .lineage_records
+        .iter()
+        .all(|record| !record.lamarckian_enabled && !record.inherited_lifetime_state));
+}
+
+#[test]
+fn lifecycle_lineage_death_cleanup_preserves_stable_selection() {
+    let summary = run_lifecycle_lineage_smoke().unwrap();
+
+    assert_eq!(summary.metrics.deaths, 1);
+    assert!(summary
+        .events
+        .iter()
+        .any(|event| event.kind == LifecycleEventKind::Death
+            && event.message.contains("energy-failure")));
+    let dead = summary
+        .creatures
+        .iter()
+        .find(|creature| !creature.alive)
+        .expect("G09 smoke should remove the low-energy elder");
+    assert_eq!(dead.life_stage, CreatureLifeStage::Dead);
+    assert_ne!(summary.selected_stable_id, Some(dead.stable_id));
+    assert!(summary.selected_stable_id.is_some_and(|selected| summary
+        .creatures
+        .iter()
+        .any(|creature| { creature.alive && creature.stable_id == selected })));
+    assert!(!summary
+        .world_signature
+        .iter()
+        .any(|line| line.contains("lineage-elder")));
+}
+
+#[test]
+fn lifecycle_lineage_save_state_roundtrips_with_lineage_records() {
+    let summary = run_lifecycle_lineage_smoke().unwrap();
+    let save = LifecycleSaveState::from_summary(&summary).unwrap();
+    let json = save.to_json_string_pretty().unwrap();
+    let loaded = LifecycleSaveState::from_json_str(&json).unwrap();
+
+    assert_eq!(save.signature_line(), loaded.signature_line());
+    assert_eq!(loaded.lineages.len(), 1);
+    assert_eq!(loaded.records.len(), summary.creatures.len());
+    assert_eq!(loaded.selected_stable_id, summary.selected_stable_id);
+    loaded.validate().unwrap();
+}
+
+#[test]
+fn lifecycle_lineage_reproduction_cap_is_enforced() {
+    let mut config = LifecycleLoopConfig::lineage_smoke().unwrap();
+    config.population_cap = config.creatures.len() - 1;
+    assert!(config.validate().is_err());
+
+    let mut blocked = LifecycleLoopConfig::lineage_smoke().unwrap();
+    blocked.population_cap = blocked.creatures.len();
+    for creature in &mut blocked.creatures {
+        creature.homeostasis.drives.brain_atp = 0.72;
+        creature.homeostasis.drives.reproductive_drive = 0.76;
+        creature.homeostasis.validate_contract().unwrap();
+        creature.initial_age_ticks = Tick::new(5);
+    }
+    let mut live = LifecycleLiveLoop::from_config(blocked).unwrap();
+    let summary = live.run_lifecycle_once().unwrap();
+    assert_eq!(summary.metrics.births, 0);
+    assert_eq!(summary.metrics.reproduction_blocked_count, 1);
+    assert!(summary
+        .events
+        .iter()
+        .any(|event| event.kind == LifecycleEventKind::ReproductionBlocked));
 }
 
 #[cfg(feature = "bevy-app")]
