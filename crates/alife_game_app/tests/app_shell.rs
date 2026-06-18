@@ -8,19 +8,19 @@ use alife_game_app::{
     run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_feedback_polish_smoke, run_gpu_product_hardening_smoke, run_headless_app_shell_smoke,
     run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_longrun_balance_with_config, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke, run_save_load_ux_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
-    AppShellLaunchConfig, AutosavePolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
-    CreatureAnimationState, CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, InspectorControlPanel, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PlayableSurvivalEventKind,
-    PopulationLiveLoop, PopulationLoopConfig, PopulationPerformancePolicy,
-    PopulationSocialEventKind, RenderDetailLevel, SaveSlotDescriptor, SaveSlotKind,
-    SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
-    WorldEditorSession,
+    run_longrun_balance_smoke, run_longrun_balance_with_config, run_onboarding_help_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, RenderDetailLevel, SaveSlotDescriptor,
+    SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
+    WorldEditorMode, WorldEditorSession,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -726,6 +726,69 @@ fn longrun_balance_is_reproducible_by_seed_and_config() {
 
     assert_eq!(first.signature_line(), second.signature_line());
     assert_eq!(first.report_markdown, second.report_markdown);
+}
+
+#[test]
+fn onboarding_help_smoke_references_existing_controls_and_safe_commands() {
+    let summary = run_onboarding_help_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G20_ONBOARDING_HELP_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G20_ONBOARDING_HELP_SCHEMA_VERSION
+    );
+    assert!(summary
+        .controls
+        .iter()
+        .any(|control| control.label == "Pause"));
+    assert!(summary
+        .controls
+        .iter()
+        .any(|control| control.label == "Step"));
+    assert!(summary
+        .controls
+        .iter()
+        .any(|control| control.label == "Inspect"));
+    assert!(summary
+        .troubleshooting
+        .iter()
+        .any(|entry| entry.command.contains("scripts/check.ps1")));
+    assert!(summary
+        .troubleshooting
+        .iter()
+        .all(|entry| !entry.command.contains("bash scripts/check.sh")));
+    assert!(summary.optional_systems_remain_optional);
+    assert!(summary.windows_wrappers_documented);
+    assert!(summary.tutorial_script_path.is_file());
+    assert!(summary.docs_path.is_file());
+    summary.validate().unwrap();
+}
+
+#[test]
+fn tutorial_script_loads_food_hazard_sleep_inspection_flow() {
+    let script = alife_game_app::load_g20_tutorial_script().unwrap();
+    let step_ids = script
+        .steps
+        .iter()
+        .map(|step| step.id.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(script.schema, alife_game_app::G20_TUTORIAL_SCRIPT_SCHEMA);
+    assert_eq!(
+        script.schema_version,
+        alife_game_app::G20_TUTORIAL_SCRIPT_SCHEMA_VERSION
+    );
+    assert!(step_ids.contains(&"run-headless"));
+    assert!(step_ids.contains(&"food-hazard-sleep"));
+    assert!(step_ids.contains(&"inspect-readonly"));
+    assert!(step_ids.contains(&"balance-report"));
+    assert!(script
+        .steps
+        .iter()
+        .all(|step| !step.command.contains("gpu-report")
+            && !step.command.contains("ALIFE_GPU_BACKEND")
+            && !step.command.contains("bash scripts/check.sh")));
+    script.validate().unwrap();
 }
 
 #[test]

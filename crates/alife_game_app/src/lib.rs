@@ -75,6 +75,9 @@ pub use population_performance::*;
 mod longrun_balance;
 pub use longrun_balance::*;
 
+mod onboarding_help;
+pub use onboarding_help::*;
+
 mod population_social;
 pub use population_social::*;
 
