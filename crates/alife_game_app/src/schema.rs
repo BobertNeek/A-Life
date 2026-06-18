@@ -1,0 +1,31 @@
+//! Versioned playable-sim schema constants split during R13 remediation.
+
+pub const G01_APP_SHELL_SCHEMA: &str = "alife.g01.app_shell.v1";
+pub const G01_APP_SHELL_SCHEMA_VERSION: u16 = 1;
+pub const G02_VISIBLE_WORLD_SCHEMA: &str = "alife.g02.visible_world.v1";
+pub const G02_VISIBLE_WORLD_SCHEMA_VERSION: u16 = 1;
+pub const G03_LIVE_BRAIN_LOOP_SCHEMA: &str = "alife.g03.live_brain_loop.v1";
+pub const G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION: u16 = 1;
+pub const G04_CREATURE_VISUAL_SCHEMA: &str = "alife.g04.creature_visual_state.v1";
+pub const G04_CREATURE_VISUAL_SCHEMA_VERSION: u16 = 1;
+pub const G05_CAMERA_INSPECTOR_SCHEMA: &str = "alife.g05.camera_selection_inspector.v1";
+pub const G05_CAMERA_INSPECTOR_SCHEMA_VERSION: u16 = 1;
+pub const G06_PLAYABLE_SURVIVAL_LOOP_SCHEMA: &str = "alife.g06.playable_survival_loop.v1";
+pub const G06_PLAYABLE_SURVIVAL_LOOP_SCHEMA_VERSION: u16 = 1;
+pub const G07_WORLD_ECOLOGY_SCHEMA: &str = "alife.g07.world_ecology_loop.v1";
+pub const G07_WORLD_ECOLOGY_SCHEMA_VERSION: u16 = 1;
+pub const G08_POPULATION_SOCIAL_SCHEMA: &str = "alife.g08.population_social_loop.v1";
+pub const G08_POPULATION_SOCIAL_SCHEMA_VERSION: u16 = 1;
+pub const G08_MAX_POPULATION_CAP: usize = 8;
+pub const G09_LIFECYCLE_SCHEMA: &str = "alife.g09.lifecycle_lineage.v1";
+pub const G09_LIFECYCLE_SCHEMA_VERSION: u16 = 1;
+pub const G09_MAX_LIFECYCLE_POPULATION_CAP: usize = 8;
+pub const G10_SCHOOL_MODE_SCHEMA: &str = "alife.g10.school_mode.v1";
+pub const G10_SCHOOL_MODE_SCHEMA_VERSION: u16 = 1;
+pub const G11_SEMANTIC_PROVIDER_DISPLAY_SCHEMA: &str = "alife.g11.semantic_provider_display.v1";
+pub const G11_SEMANTIC_PROVIDER_DISPLAY_SCHEMA_VERSION: u16 = 1;
+pub const G12_GPU_PRODUCT_TELEMETRY_SCHEMA: &str = "alife.g12.gpu_product_telemetry.v1";
+pub const G12_GPU_PRODUCT_TELEMETRY_SCHEMA_VERSION: u16 = 1;
+pub const G13_WORLD_EDITOR_SCHEMA: &str = "alife.g13.world_editor.v1";
+pub const G13_WORLD_EDITOR_SCHEMA_VERSION: u16 = 1;
+pub const G13_EDITOR_MAX_OBJECTS: usize = 16;

@@ -1,0 +1,337 @@
+use crate::prelude::*;
+
+use super::*;
+
+fn p34_fixture_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/alife_world/tests/fixtures/p34")
+}
+
+#[test]
+fn headless_app_shell_loads_p34_config_and_manifest() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_headless_app_shell_smoke(&launch).unwrap();
+    assert_eq!(summary.schema, G01_APP_SHELL_SCHEMA);
+    assert_eq!(summary.schema_version, G01_APP_SHELL_SCHEMA_VERSION);
+    assert_eq!(summary.seed, 4242);
+    assert_eq!(summary.brain_class, "Nano512");
+    assert_eq!(summary.requested_backend, BackendSelection::CpuReference);
+    assert_eq!(summary.asset_count, 2);
+    assert!(!summary.graphics_required_for_default_path);
+    assert_eq!(
+        summary.state_labels(),
+        vec!["Boot", "LoadConfig", "DevMenu", "Running", "Shutdown"]
+    );
+}
+
+#[test]
+fn paused_state_path_is_explicit_and_deterministic() {
+    let mut launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    launch.start_paused = true;
+    let summary = run_headless_app_shell_smoke(&launch).unwrap();
+    assert_eq!(
+        summary.state_labels(),
+        vec![
+            "Boot",
+            "LoadConfig",
+            "DevMenu",
+            "Running",
+            "Paused",
+            "Running",
+            "Shutdown"
+        ]
+    );
+}
+
+#[test]
+fn invalid_config_rejects_with_p34_diagnostics() {
+    let mut launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    launch.config_path = launch.fixture_root.join("missing_config.json");
+    let err = validate_app_shell_config(&launch).unwrap_err().to_string();
+    assert!(err.contains("persistence/config error") || err.contains("io error"));
+}
+
+#[test]
+fn invalid_state_transition_is_rejected() {
+    let mut trace = AppShellStateTrace::default();
+    let err = trace.transition(GameAppState::Running).unwrap_err();
+    assert!(matches!(
+        err,
+        GameAppShellError::InvalidTransition {
+            from: GameAppState::Boot,
+            to: GameAppState::Running
+        }
+    ));
+}
+
+#[test]
+fn visible_world_signature_loads_from_p34_save_without_bevy() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let presentation = load_visible_world_from_p34_save(&launch).unwrap();
+    compare_visible_world_to_headless(&presentation).unwrap();
+    assert_eq!(presentation.schema, G02_VISIBLE_WORLD_SCHEMA);
+    assert_eq!(
+        presentation.schema_version,
+        G02_VISIBLE_WORLD_SCHEMA_VERSION
+    );
+    assert_eq!(presentation.seed, 4242);
+    assert_eq!(presentation.object_count, 2);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Agent), 1);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Food), 1);
+    assert!(presentation
+        .visible_signature
+        .iter()
+        .any(|line| line.contains("Food:berry")));
+}
+
+#[test]
+fn placeholder_mapping_covers_g02_required_visual_kinds() {
+    assert_eq!(
+        placeholder_for_kind(WorldObjectKind::Agent),
+        (
+            VisiblePlaceholderShape::CreatureCapsule,
+            VisibleMaterialKind::Creature
+        )
+    );
+    assert_eq!(
+        placeholder_for_kind(WorldObjectKind::Food),
+        (
+            VisiblePlaceholderShape::FoodSphere,
+            VisibleMaterialKind::Food
+        )
+    );
+    assert_eq!(
+        placeholder_for_kind(WorldObjectKind::Hazard),
+        (
+            VisiblePlaceholderShape::HazardCone,
+            VisibleMaterialKind::Hazard
+        )
+    );
+    assert_eq!(
+        placeholder_for_kind(WorldObjectKind::Obstacle),
+        (
+            VisiblePlaceholderShape::ObstacleCube,
+            VisibleMaterialKind::Obstacle
+        )
+    );
+    assert_eq!(
+        placeholder_for_kind(WorldObjectKind::Token),
+        (
+            VisiblePlaceholderShape::TokenBillboard,
+            VisibleMaterialKind::Token
+        )
+    );
+}
+
+#[test]
+fn creature_visual_mapping_is_bounded_and_readable() {
+    let mut homeostasis = HomeostaticSnapshot::baseline(Tick::new(9));
+    homeostasis.drives.hunger = 0.82;
+    homeostasis.drives.fear = 0.20;
+    homeostasis.drives.pain = 0.10;
+    homeostasis.drives.curiosity = 0.55;
+    homeostasis.drives.brain_atp = 0.72;
+    homeostasis.hormones.sleep_pressure = 0.25;
+    let visual = creature_visual_snapshot_from_parts(
+        OrganismId(1),
+        WorldEntityId(1),
+        Vec3f::new(0.0, 0.0, 0.0),
+        Some(WorldEntityId(2)),
+        Some(Vec3f::new(2.0, 0.0, 0.0)),
+        &homeostasis,
+        SleepPhase::Awake,
+        Some(ActionKind::Interact),
+    )
+    .unwrap();
+
+    assert_eq!(visual.schema, G04_CREATURE_VISUAL_SCHEMA);
+    assert_eq!(visual.schema_version, G04_CREATURE_VISUAL_SCHEMA_VERSION);
+    assert_eq!(visual.animation, CreatureAnimationState::Interacting);
+    assert_eq!(visual.expression, CreatureExpressionState::Hungry);
+    assert_eq!(visual.facing, Vec3f::new(1.0, 0.0, 0.0));
+    assert_eq!(visual.cues.hunger.value, 0.82);
+    assert!(visual
+        .base_rgba
+        .iter()
+        .chain(visual.accent_rgba.iter())
+        .chain(visual.intent_rgba.iter())
+        .all(|channel| (0.0..=1.0).contains(channel)));
+    visual.validate().unwrap();
+}
+
+#[test]
+fn sleep_and_pain_override_action_visual_states_without_cognitive_mutation() {
+    let mut homeostasis = HomeostaticSnapshot::baseline(Tick::new(11));
+    homeostasis.drives.pain = 0.80;
+    let pain_visual = creature_visual_snapshot_from_parts(
+        OrganismId(1),
+        WorldEntityId(1),
+        Vec3f::ZERO,
+        None,
+        None,
+        &homeostasis,
+        SleepPhase::Awake,
+        Some(ActionKind::Move),
+    )
+    .unwrap();
+    assert_eq!(pain_visual.animation, CreatureAnimationState::Hurt);
+    assert_eq!(pain_visual.expression, CreatureExpressionState::Pained);
+
+    let sleep_visual = creature_visual_snapshot_from_parts(
+        OrganismId(1),
+        WorldEntityId(1),
+        Vec3f::ZERO,
+        None,
+        None,
+        &homeostasis,
+        SleepPhase::Consolidating,
+        Some(ActionKind::Move),
+    )
+    .unwrap();
+    assert_eq!(sleep_visual.animation, CreatureAnimationState::Sleeping);
+    assert_eq!(sleep_visual.expression, CreatureExpressionState::Tired);
+}
+
+#[test]
+fn g04_creature_visual_smoke_derives_from_g03_tick_summary() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let visual = run_creature_visual_smoke(&launch).unwrap();
+    assert_eq!(visual.organism_id, OrganismId(1));
+    assert_eq!(visual.stable_id, WorldEntityId(1));
+    assert_eq!(visual.selected_action_kind, Some(ActionKind::Interact));
+    assert_eq!(visual.target_entity, Some(WorldEntityId(2)));
+    assert_eq!(visual.animation, CreatureAnimationState::Interacting);
+    assert!(visual.debug_summary.contains("organism=1"));
+    visual.validate().unwrap();
+}
+
+#[test]
+fn g05_camera_controls_are_bounded_and_deterministic() {
+    let camera = CameraNavigationState::top_down_default()
+        .pan_by(2.0, -3.5)
+        .unwrap()
+        .zoom_by(20.0)
+        .unwrap()
+        .orbit_by(-45.0)
+        .unwrap()
+        .with_follow_target(WorldEntityId(1))
+        .unwrap();
+
+    assert_eq!(camera.zoom, 8.0);
+    assert_eq!(camera.yaw_degrees, 315.0);
+    assert_eq!(camera.follow_target, Some(WorldEntityId(1)));
+    assert!(camera.signature_line().contains("315.00"));
+    camera.validate().unwrap();
+}
+
+#[test]
+fn g05_selection_uses_stable_ids_from_visible_world() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let presentation = load_visible_world_from_p34_save(&launch).unwrap();
+    let selection = select_visible_world_entity(&presentation, WorldEntityId(1)).unwrap();
+    assert_eq!(selection.schema, G05_CAMERA_INSPECTOR_SCHEMA);
+    assert_eq!(
+        selection.schema_version,
+        G05_CAMERA_INSPECTOR_SCHEMA_VERSION
+    );
+    assert_eq!(selection.stable_id, WorldEntityId(1));
+    assert_eq!(selection.organism_id, Some(OrganismId(1)));
+    assert_eq!(selection.kind, WorldObjectKind::Agent);
+    assert!(selection.debug_label.contains("Agent"));
+    selection.validate().unwrap();
+
+    assert!(select_visible_world_entity(&presentation, WorldEntityId(99_999)).is_err());
+}
+
+#[test]
+fn g05_inspector_snapshot_is_read_only_and_covers_expected_fields() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let inspector = run_creature_inspector_smoke(&launch).unwrap();
+    assert_eq!(inspector.schema, G05_CAMERA_INSPECTOR_SCHEMA);
+    assert_eq!(
+        inspector.schema_version,
+        G05_CAMERA_INSPECTOR_SCHEMA_VERSION
+    );
+    assert!(inspector.read_only);
+    assert_eq!(inspector.selection.stable_id, WorldEntityId(1));
+    assert_eq!(inspector.camera.follow_target, Some(WorldEntityId(1)));
+    assert_eq!(
+        inspector.visual.selected_action_kind,
+        Some(ActionKind::Interact)
+    );
+    assert!(inspector.action_summary.contains("Interact"));
+    assert!(inspector.patch_summary.contains("sealed=true"));
+    assert!(inspector
+        .memory_topology_summary
+        .contains("memory_updates=1"));
+    assert!(inspector
+        .drive_lines
+        .iter()
+        .any(|line| line.starts_with("hunger=")));
+    assert!(inspector
+        .hormone_lines
+        .iter()
+        .any(|line| line.starts_with("sleep_pressure=")));
+    assert!(inspector
+        .troubleshooting_messages
+        .iter()
+        .any(|line| line.contains("gpu_runtime=optional")));
+    inspector.validate().unwrap();
+}
+
+#[test]
+fn g05_pause_step_run_controls_map_to_live_tick_controls() {
+    let paused = InspectorControlPanel::paused();
+    assert_eq!(
+        paused.to_live_control().unwrap(),
+        LiveBrainTickControl::paused()
+    );
+    let step = InspectorControlPanel::step_once();
+    assert_eq!(
+        step.to_live_control().unwrap(),
+        LiveBrainTickControl::step_once()
+    );
+    let run = InspectorControlPanel::run_fixed(3, 150);
+    assert_eq!(
+        run.to_live_control().unwrap(),
+        LiveBrainTickControl::run_fixed(3)
+    );
+    assert!(InspectorControlPanel::run_fixed(32, 100)
+        .validate()
+        .is_err());
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn feature_gated_bevy_shell_builds_with_adapter_plugin() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_headless_app_shell_smoke(&launch).unwrap();
+    let mut app = crate::bevy_shell::build_minimal_bevy_app_shell(summary);
+    app.update();
+    assert!(app
+        .world()
+        .get_resource::<alife_bevy_adapter::AdapterScheduleTrace>()
+        .is_some());
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn feature_gated_visible_world_spawns_stable_mapped_entities() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let (mut app, summary) = crate::bevy_shell::build_visible_world_app_shell(&launch).unwrap();
+    assert!(summary.ground_spawned);
+    assert_eq!(summary.object_count, 2);
+    assert_eq!(summary.stable_map_count, 2);
+    let mut visible_query = app
+        .world_mut()
+        .query::<&crate::bevy_shell::VisibleWorldObject>();
+    let visible = visible_query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(visible.len(), 2);
+    let map = app.world().resource::<alife_bevy_adapter::BevyEntityMap>();
+    for object in visible {
+        assert!(map.bevy_entity(object.stable_id).is_some());
+    }
+    let mut ground_query = app
+        .world_mut()
+        .query::<&crate::bevy_shell::VisibleGroundPlane>();
+    assert_eq!(ground_query.iter(app.world()).count(), 1);
+}
