@@ -1,12 +1,13 @@
 # A-Life Playable Sim Final Status Report
 
-Status: G24 feature-complete roadmap lock.
+Status: G24 feature-complete roadmap lock and R24 final review complete.
 
-This report locks the G00-G24 playable-sim product phase. It does not create a
-new implementation plan, G25, P37, release tag, or product claim beyond the
-validation evidence recorded here. Future work is tracked as backlog/issues
-notes in `docs/playable_sim_spec/POST_RELEASE_BACKLOG.md` and requires a new
-explicit user instruction before implementation.
+This report locks the G00-G24 playable-sim product phase after the R24 final
+review. It does not create a new implementation plan, G25, P37, release tag, or
+product claim beyond the validation evidence recorded here. Future work is
+tracked as backlog/issues notes in
+`docs/playable_sim_spec/POST_RELEASE_BACKLOG.md` and requires a new explicit
+user instruction before implementation. The next plan is None.
 
 ## Supported Playable Scope
 
@@ -56,8 +57,8 @@ local hardware. CPU fallback output is not GPU performance evidence.
 | G22 product QA hardening | Complete | product-qa smoke and known issues docs | No blockers; limitations remain explicit. |
 | G23 playable release candidate | Complete | release-candidate smoke and R23 review | Feature-complete candidate for supported headless CPU path. |
 | R23 feature-complete review | Complete | R23 report | PASS; G24 authorized by user. |
-| G24 roadmap lock/backlog | Complete after this branch validates | this report, backlog, and tag proposal | Locks current phase and prevents automatic continuation. |
-| R24 final review | Pending until executed after G24 | R24 review gate | Final hard stop; no next implementation plan by default. |
+| G24 roadmap lock/backlog | Complete | this report, backlog, and tag proposal | Locks current phase and prevents automatic continuation. |
+| R24 final review | Complete | `docs/playable_sim_spec/review_gates/R24_REVIEW_REPORT.md` and progress row | Final hard stop passed; roadmap locked and next plan is None. |
 
 ## Known Limitations
 
@@ -70,7 +71,7 @@ local hardware. CPU fallback output is not GPU performance evidence.
 - Extended balance, extended soak, upper CPU benchmark tiers, and GPU parity
   hardware checks remain ignored/manual where runtime cost or hardware
   availability is unsuitable for normal CI.
-- No release tag was created by G24.
+- No release tag was created by G24 or R24.
 
 ## Final Validation Set
 
