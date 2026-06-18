@@ -43,6 +43,7 @@ version = "0.1.0"
 dependencies = [
  "alife_bevy_adapter",
  "alife_core",
+ "alife_school",
  "alife_world",
  "bevy",
  "serde",

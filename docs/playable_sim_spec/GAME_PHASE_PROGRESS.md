@@ -12,3 +12,4 @@
 | G07 | codex/G07-world-ecology | complete | branch commit | full default, wrapper, core boundary, world-ecology loop smoke, save/load ecology round-trip, and all-features validation passed | G08 |
 | G08 | codex/G08-population-social-loop | complete | branch commit | full default, wrapper, core boundary, population-social loop smoke, deterministic schedule/cap tests, and all-features validation passed | G09 |
 | G09 | codex/G09-life-cycle-lineage | complete | branch commit | full default, wrapper, core boundary, lifecycle-lineage smoke, birth/death/lineage save tests, and all-features validation passed | G10 |
+| G10 | codex/G10-school-playable-mode | complete | branch commit | full default, wrapper, core boundary, school-mode smoke, teacher perception/no-bypass tests, school save round-trip, and all-features validation passed | G11 |
