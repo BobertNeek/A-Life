@@ -27,5 +27,6 @@
 | G19 | codex/G19-long-run-balance | complete | branch commit | full default, wrapper, core boundary, longrun-balance smoke, deterministic replay, ignored extended balance command, bounded population/resource metrics, and all-features validation passed | G20 |
 | G20 | codex/G20-onboarding-help | complete | branch commit | full default, wrapper, core boundary, onboarding-help smoke, tutorial script validation, docs path/command checks, and all-features validation passed | G21 |
 | G21 | codex/G21-packaging-platform-smoke | complete | branch commit | full default, wrapper, core boundary, platform-package smoke, dry-run run scripts, asset bundle validation, generated artifact tracking check, and all-features validation passed | G22 |
+| G22 | codex/G22-product-qa-hardening | complete | branch commit | full default, wrapper, core boundary, product-qa smoke, invalid input rejection, UI transition smoke, optional feature smoke, known-issues docs, and all-features validation passed | G23 |
 | R23 | codex/R23-feature-complete-rc-review | pending | not started | review gate required after G23 before G24 | G24 |
 | R24 | codex/R24-final-playable-sim-review | pending | not started | final playable-sim roadmap lock review after G24 | None |
