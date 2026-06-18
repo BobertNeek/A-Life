@@ -1,0 +1,378 @@
+{
+  "pack_name": "A-Life Playable Sim Game Completion Plan Pack",
+  "version": "2.0-expanded",
+  "created": "2026-06-18",
+  "baseline": {
+    "completed_phase": "P01-P36 scaffold/release gate",
+    "current_head": "7b973d0 or later",
+    "do_not_create": "P37"
+  },
+  "plans": [
+    {
+      "id": "G00",
+      "title": "Current-state product audit and playable-sim freeze",
+      "branch": "codex/G00-product-audit",
+      "dependencies": [
+        "P36 complete on main"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G01"
+      ],
+      "file": "plans/G00_currentstate-product-audit-and-playablesim-freeze.md"
+    },
+    {
+      "id": "G01",
+      "title": "Graphical game app shell and feature-gated launcher",
+      "branch": "codex/G01-game-app-shell",
+      "dependencies": [
+        "G00"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G02"
+      ],
+      "file": "plans/G01_graphical-game-app-shell-and-featuregated-launcher.md"
+    },
+    {
+      "id": "G02",
+      "title": "Visible world binding and stable entity presentation",
+      "branch": "codex/G02-visible-world-binding",
+      "dependencies": [
+        "G01"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G03"
+      ],
+      "file": "plans/G02_visible-world-binding-and-stable-entity-presentation.md"
+    },
+    {
+      "id": "G03",
+      "title": "Live brain loop bridge and game tick scheduler",
+      "branch": "codex/G03-live-brain-loop-bridge",
+      "dependencies": [
+        "G02"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G04"
+      ],
+      "file": "plans/G03_live-brain-loop-bridge-and-game-tick-scheduler.md"
+    },
+    {
+      "id": "G04",
+      "title": "Creature rendering, expression, and state visualization",
+      "branch": "codex/G04-creature-render-expression",
+      "dependencies": [
+        "G03"
+      ],
+      "can_run_concurrently": true,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "G05"
+      ],
+      "file": "plans/G04_creature-rendering-expression-and-state-visualization.md"
+    },
+    {
+      "id": "G05",
+      "title": "Camera, selection, and creature inspector",
+      "branch": "codex/G05-camera-selection-inspector",
+      "dependencies": [
+        "G04"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "G06"
+      ],
+      "file": "plans/G05_camera-selection-and-creature-inspector.md"
+    },
+    {
+      "id": "G06",
+      "title": "Food, hazard, sleep, and playable survival loop",
+      "branch": "codex/G06-food-hazard-sleep-loop",
+      "dependencies": [
+        "G05"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G07"
+      ],
+      "file": "plans/G06_food-hazard-sleep-and-playable-survival-loop.md"
+    },
+    {
+      "id": "G07",
+      "title": "World ecology, resource cycles, terrain zones, and hazard pressure",
+      "branch": "codex/G07-world-ecology",
+      "dependencies": [
+        "G06"
+      ],
+      "can_run_concurrently": true,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "G08"
+      ],
+      "file": "plans/G07_world-ecology-resource-cycles-terrain-zones-and-hazard-pressure.md"
+    },
+    {
+      "id": "G08",
+      "title": "Multi-creature population and social interaction loop",
+      "branch": "codex/G08-population-social-loop",
+      "dependencies": [
+        "G07"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G09"
+      ],
+      "file": "plans/G08_multicreature-population-and-social-interaction-loop.md"
+    },
+    {
+      "id": "G09",
+      "title": "Lifecycle, reproduction, death, and lineage gameplay",
+      "branch": "codex/G09-life-cycle-lineage",
+      "dependencies": [
+        "G08"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G10"
+      ],
+      "file": "plans/G09_lifecycle-reproduction-death-and-lineage-gameplay.md"
+    },
+    {
+      "id": "G10",
+      "title": "Playable school/teacher mode and lesson UX",
+      "branch": "codex/G10-school-playable-mode",
+      "dependencies": [
+        "G06",
+        "G08"
+      ],
+      "can_run_concurrently": true,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "G11"
+      ],
+      "file": "plans/G10_playable-school-teacher-mode-and-lesson-ux.md"
+    },
+    {
+      "id": "G11",
+      "title": "Semantic/SLM provider boundary and optional meaning layer",
+      "branch": "codex/G11-semantic-slm-provider",
+      "dependencies": [
+        "G10",
+        "G02"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G12"
+      ],
+      "file": "plans/G11_semantic-slm-provider-boundary-and-optional-meaning-layer.md"
+    },
+    {
+      "id": "G12",
+      "title": "GPU product hardening and runtime telemetry",
+      "branch": "codex/G12-gpu-product-hardening",
+      "dependencies": [
+        "G03",
+        "P29 complete"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G13"
+      ],
+      "file": "plans/G12_gpu-product-hardening-and-runtime-telemetry.md"
+    },
+    {
+      "id": "G13",
+      "title": "Player world editing and scenario sandbox tools",
+      "branch": "codex/G13-world-editing-tools",
+      "dependencies": [
+        "G07",
+        "P34 complete"
+      ],
+      "can_run_concurrently": true,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "G14"
+      ],
+      "file": "plans/G13_player-world-editing-and-scenario-sandbox-tools.md"
+    },
+    {
+      "id": "G14",
+      "title": "Cognition visualization and debug timeline",
+      "branch": "codex/G14-cognition-visualization",
+      "dependencies": [
+        "G05",
+        "G03"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "G15"
+      ],
+      "file": "plans/G14_cognition-visualization-and-debug-timeline.md"
+    },
+    {
+      "id": "G15",
+      "title": "Save/load UX, slots, autosave, and config menus",
+      "branch": "codex/G15-save-load-ux",
+      "dependencies": [
+        "G13",
+        "G05",
+        "P34 complete"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G16"
+      ],
+      "file": "plans/G15_save-load-ux-slots-autosave-and-config-menus.md"
+    },
+    {
+      "id": "G16",
+      "title": "Content authoring pipeline for worlds, lessons, creatures, and assets",
+      "branch": "codex/G16-content-authoring",
+      "dependencies": [
+        "G15",
+        "G10",
+        "G13"
+      ],
+      "can_run_concurrently": true,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "G17"
+      ],
+      "file": "plans/G16_content-authoring-pipeline-for-worlds-lessons-creatures-and-assets.md"
+    },
+    {
+      "id": "G17",
+      "title": "Audio, VFX, animation polish, and feedback readability",
+      "branch": "codex/G17-audio-vfx-polish",
+      "dependencies": [
+        "G06",
+        "G04",
+        "G16"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 Medium or High",
+      "next": [
+        "G18"
+      ],
+      "file": "plans/G17_audio-vfx-animation-polish-and-feedback-readability.md"
+    },
+    {
+      "id": "G18",
+      "title": "Population performance, LOD, and scalability pass",
+      "branch": "codex/G18-population-performance",
+      "dependencies": [
+        "G08",
+        "G12",
+        "G17"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G19"
+      ],
+      "file": "plans/G18_population-performance-lod-and-scalability-pass.md"
+    },
+    {
+      "id": "G19",
+      "title": "Long-run balance, behavior tuning, and ecosystem stability",
+      "branch": "codex/G19-long-run-balance",
+      "dependencies": [
+        "G18",
+        "G09",
+        "G07"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G20"
+      ],
+      "file": "plans/G19_longrun-balance-behavior-tuning-and-ecosystem-stability.md"
+    },
+    {
+      "id": "G20",
+      "title": "Onboarding, help, tutorials, and player documentation",
+      "branch": "codex/G20-onboarding-help",
+      "dependencies": [
+        "G15",
+        "G19"
+      ],
+      "can_run_concurrently": true,
+      "recommended_model": "Codex Spark or GPT-5.5 Medium acceptable; High for UI integration changes.",
+      "next": [
+        "G21"
+      ],
+      "file": "plans/G20_onboarding-help-tutorials-and-player-documentation.md"
+    },
+    {
+      "id": "G21",
+      "title": "Packaging, platform smoke, and asset bundle discipline",
+      "branch": "codex/G21-packaging-platform-smoke",
+      "dependencies": [
+        "G20",
+        "G15"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "G22"
+      ],
+      "file": "plans/G21_packaging-platform-smoke-and-asset-bundle-discipline.md"
+    },
+    {
+      "id": "G22",
+      "title": "Product QA hardening and bug-bash gate",
+      "branch": "codex/G22-product-qa-hardening",
+      "dependencies": [
+        "G21",
+        "G19"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G23"
+      ],
+      "file": "plans/G22_product-qa-hardening-and-bugbash-gate.md"
+    },
+    {
+      "id": "G23",
+      "title": "Playable feature-complete release candidate",
+      "branch": "codex/G23-playable-release-candidate",
+      "dependencies": [
+        "G22"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [
+        "G24"
+      ],
+      "file": "plans/G23_playable-featurecomplete-release-candidate.md"
+    },
+    {
+      "id": "G24",
+      "title": "Feature-complete roadmap lock and post-release backlog",
+      "branch": "codex/G24-feature-complete-roadmap-lock",
+      "dependencies": [
+        "G23"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Pro High",
+      "next": [],
+      "file": "plans/G24_featurecomplete-roadmap-lock-and-postrelease-backlog.md"
+    }
+  ]
+}
