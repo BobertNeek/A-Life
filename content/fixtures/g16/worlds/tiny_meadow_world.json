@@ -1,0 +1,47 @@
+{
+  "schema": "alife.g16.world_preset.v1",
+  "schema_version": 1,
+  "world_id": "tiny-meadow",
+  "stable_seed": 16016,
+  "objects": [
+    {
+      "stable_id": 1,
+      "label": "nano-forager-body",
+      "kind": "Agent",
+      "organism_id": 1601,
+      "position": [0.0, 0.0, 0.0],
+      "radius": 0.75,
+      "nutrition": 0.0,
+      "hazard_pain": 0.0
+    },
+    {
+      "stable_id": 2,
+      "label": "blue-berry",
+      "kind": "Food",
+      "organism_id": null,
+      "position": [1.0, 0.0, 0.0],
+      "radius": 0.5,
+      "nutrition": 0.8,
+      "hazard_pain": 0.0
+    },
+    {
+      "stable_id": 3,
+      "label": "warm-stone",
+      "kind": "Obstacle",
+      "organism_id": null,
+      "position": [-1.0, 0.0, 0.0],
+      "radius": 0.5,
+      "nutrition": 0.0,
+      "hazard_pain": 0.0
+    }
+  ],
+  "terrain_zones": [
+    {
+      "zone_id": 1,
+      "label": "safe-meadow",
+      "kind": "meadow",
+      "center": [0.0, 0.0, 0.0],
+      "radius": 4.0
+    }
+  ]
+}
