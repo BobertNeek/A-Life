@@ -5,9 +5,9 @@ use alife_game_app::{
     run_creature_inspector_smoke, run_creature_visual_smoke, run_gpu_product_hardening_smoke,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_population_social_loop_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_shell_config,
-    AppShellLaunchConfig,
+    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -154,7 +154,12 @@ fn run() -> Result<String, String> {
                 &panel,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke".to_string()),
+        [command, fixture_root] if command == "save-load-ux-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary = run_save_load_ux_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format_save_load_ux_summary("G15 save/load UX", &summary))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root>".to_string()),
     }
 }
 
@@ -493,6 +498,35 @@ fn format_cognition_debug_summary(
         panel.no_active_neural_readback,
         panel.packed_log_export.export_command,
         panel.signature_line()
+    )
+}
+
+fn format_save_load_ux_summary(
+    prefix: &str,
+    summary: &alife_game_app::SaveLoadUxSmokeSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} manual_slot={} autosave_slot={} loaded={} restored_objects={} stable_ids={} overwrite_confirm={} invalid_schema={} missing_asset={} digest_error={} invalid_config={} no_partial_load={} engine_tokens_absent={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.manual_save_slot,
+        summary.autosave_slot,
+        summary.loaded_save_id,
+        summary.restored_object_count,
+        summary
+            .stable_world_ids
+            .iter()
+            .map(|id| id.raw().to_string())
+            .collect::<Vec<_>>()
+            .join("+"),
+        summary.overwrite_confirmation_visible,
+        summary.invalid_schema_error.code,
+        summary.missing_asset_error.code,
+        summary.digest_error.code,
+        summary.invalid_config_error.code,
+        summary.no_partial_load_after_error,
+        summary.engine_local_token_absent,
+        summary.signature_line()
     )
 }
 

@@ -33,3 +33,6 @@ pub const G14_COGNITION_DEBUG_SCHEMA: &str = "alife.g14.cognition_debug_timeline
 pub const G14_COGNITION_DEBUG_SCHEMA_VERSION: u16 = 1;
 pub const G14_MAX_TIMELINE_ENTRIES: usize = 16;
 pub const G14_MAX_PROPOSAL_LINES: usize = 8;
+pub const G15_SAVE_LOAD_UX_SCHEMA: &str = "alife.g15.save_load_ux.v1";
+pub const G15_SAVE_LOAD_UX_SCHEMA_VERSION: u16 = 1;
+pub const G15_MAX_SAVE_SLOTS: usize = 4;

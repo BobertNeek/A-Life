@@ -7,16 +7,17 @@ use alife_game_app::{
     run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_population_social_loop_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, CameraNavigationState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, InspectorControlPanel, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationSocialEventKind, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
-    WorldEditorMode, WorldEditorSession,
+    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind,
+    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand,
+    WorldEditorConfig, WorldEditorMode, WorldEditorSession,
 };
-use alife_world::persistence::{BackendSelection, PortableSaveFile};
+use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
 use alife_world::{
     EcologyZoneId, HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, TerrainZone,
@@ -1067,6 +1068,105 @@ fn cognition_debug_reports_arbitration_and_sleep_without_runtime_control() {
         .sleep_summary
         .summary_line
         .contains("structural_edit_active_tick_applied=false"));
+}
+
+#[test]
+fn save_load_ux_smoke_roundtrips_visible_world_with_stable_ids() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_save_load_ux_smoke(&launch).unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G15_SAVE_LOAD_UX_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G15_SAVE_LOAD_UX_SCHEMA_VERSION
+    );
+    assert_eq!(summary.loaded_save_id, "g15-manual-slot");
+    assert_eq!(summary.restored_object_count, 2);
+    assert_eq!(
+        summary.stable_world_ids,
+        vec![WorldEntityId(1), WorldEntityId(2)]
+    );
+    assert!(summary.stable_id_remap_preserved);
+    assert!(summary.engine_local_token_absent);
+    assert!(summary
+        .menu
+        .stable_id_remap_summary
+        .contains("stable_world_ids=2"));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn save_load_ux_requires_overwrite_confirmation_and_autosave_is_deterministic() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let source_save = PortableSaveFile::from_json_file(&launch.save_path).unwrap();
+    let mut manager = SaveSlotManager::new(alife_game_app::G15_MAX_SAVE_SLOTS).unwrap();
+    let descriptor =
+        SaveSlotDescriptor::new("slot-0", "Manual Save", SaveSlotKind::Manual).unwrap();
+
+    let first = manager.save_slot(descriptor.clone(), &source_save, &launch.asset_root, false);
+    assert!(first.success);
+    let blocked = manager.save_slot(descriptor.clone(), &source_save, &launch.asset_root, false);
+    assert!(!blocked.success);
+    assert!(blocked.overwrite_confirmation_required);
+    assert_eq!(
+        blocked.error.as_ref().map(|error| error.code.as_str()),
+        Some("overwrite-confirmation-required")
+    );
+    let confirmed = manager.save_slot(descriptor, &source_save, &launch.asset_root, true);
+    assert!(confirmed.success);
+
+    let autosave = AutosavePolicy::deterministic_default();
+    assert!(autosave.should_autosave(None, source_save.world.tick));
+    assert!(!autosave.should_autosave(
+        Some(Tick::new(source_save.world.tick.raw().saturating_sub(1))),
+        source_save.world.tick
+    ));
+}
+
+#[test]
+fn save_load_ux_displays_invalid_save_config_asset_errors_without_partial_load() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_save_load_ux_smoke(&launch).unwrap();
+
+    assert_eq!(summary.invalid_schema_error.code, "schema-version");
+    assert!(summary
+        .invalid_schema_error
+        .message
+        .contains("schema version mismatch"));
+    assert_eq!(summary.missing_asset_error.code, "missing-required-asset");
+    assert!(summary.missing_asset_error.message.contains("missing"));
+    assert_eq!(summary.digest_error.code, "digest-mismatch");
+    assert!(summary.digest_error.message.contains("digest mismatch"));
+    assert_eq!(summary.invalid_config_error.code, "invalid-config");
+    assert!(summary
+        .invalid_config_error
+        .message
+        .contains("deterministic_seed"));
+    assert!(summary.no_partial_load_after_error);
+    assert!(!summary.invalid_schema_error.partial_load_applied);
+}
+
+#[test]
+fn config_menu_defaults_are_deterministic_and_keep_optional_features_safe() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let config = RuntimeConfig::from_json_file(&launch.config_path).unwrap();
+    let menu = ConfigMenuState::validate_config(&config).unwrap();
+
+    assert_eq!(menu.schema_version, 1);
+    assert_eq!(menu.requested_backend, BackendSelection::CpuReference);
+    assert_eq!(menu.deterministic_seed, 4242);
+    assert!(!menu.school_enabled);
+    assert!(!menu.semantic_enabled);
+    assert!(!menu.gpu_enabled);
+    assert!(menu.cpu_fallback_required);
+    assert!(menu.no_active_readback);
+
+    let mut invalid = config;
+    invalid.backend.requested = BackendSelection::GpuStatic;
+    invalid.backend.gpu_feature_enabled = false;
+    let error = ConfigMenuState::validate_config(&invalid).unwrap_err();
+    assert_eq!(error.code, "invalid-config");
+    assert!(error.message.contains("GPU backend selection"));
 }
 
 #[cfg(feature = "bevy-app")]

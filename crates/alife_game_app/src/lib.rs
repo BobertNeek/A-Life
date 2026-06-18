@@ -87,6 +87,9 @@ pub use world_editor::*;
 mod cognition_debug_timeline;
 pub use cognition_debug_timeline::*;
 
+mod save_load_ux;
+pub use save_load_ux::*;
+
 #[cfg(feature = "bevy-app")]
 pub mod bevy_shell;
 
