@@ -3,19 +3,21 @@ use alife_core::{
     CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, Validate, WorldEntityId,
 };
 use alife_game_app::{
-    compare_visible_world_to_headless, load_visible_world_from_p34_save,
-    run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
+    compare_visible_world_to_headless, g17_feedback_manifest_path, g17_workspace_root,
+    load_visible_world_from_p34_save, run_cognition_debug_timeline_smoke,
+    run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
     run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
     run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
     run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
     select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
     CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind,
-    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand,
-    WorldEditorConfig, WorldEditorMode, WorldEditorSession,
+    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, PlayableSurvivalEventKind,
+    PopulationLiveLoop, PopulationLoopConfig, PopulationSocialEventKind, SaveSlotDescriptor,
+    SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
+    WorldEditorMode, WorldEditorSession,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -27,6 +29,75 @@ use std::path::PathBuf;
 
 fn p34_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/alife_world/tests/fixtures/p34")
+}
+
+#[test]
+fn feedback_polish_maps_existing_outcomes_into_non_authoritative_cues() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_feedback_polish_smoke(&launch).unwrap();
+    let labels = summary.event_labels();
+
+    assert_eq!(summary.schema, alife_game_app::G17_FEEDBACK_POLISH_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G17_FEEDBACK_POLISH_SCHEMA_VERSION
+    );
+    assert_eq!(summary.sealed_outcome_event_count, 4);
+    assert!(summary.non_authoritative);
+    assert!(summary
+        .events
+        .iter()
+        .all(|event| event.non_authoritative && !event.channels.is_empty()));
+    assert!(labels.contains(&FeedbackEventKind::FoodReward.label()));
+    assert!(labels.contains(&FeedbackEventKind::MissingAffordance.label()));
+    assert!(labels.contains(&FeedbackEventKind::HazardPain.label()));
+    assert!(labels.contains(&FeedbackEventKind::SleepTransition.label()));
+    assert!(labels.contains(&FeedbackEventKind::TeacherCue.label()));
+    assert!(labels.contains(&FeedbackEventKind::SaveCompleted.label()));
+    assert!(labels.contains(&FeedbackEventKind::LoadCompleted.label()));
+    assert!(labels.contains(&FeedbackEventKind::SelectionChanged.label()));
+}
+
+#[test]
+fn feedback_polish_asset_manifest_validates_optional_fallbacks() {
+    let manifest = FeedbackAssetManifest::from_json_file(g17_feedback_manifest_path()).unwrap();
+    let validation = manifest.validate_with_root(g17_workspace_root()).unwrap();
+
+    assert!(validation.entry_count >= 4);
+    assert!(validation.optional_fallback_count > 0);
+    assert!(manifest
+        .entries
+        .iter()
+        .any(|entry| entry.kind == FeedbackAssetKind::AudioCue));
+    assert!(manifest
+        .entries
+        .iter()
+        .any(|entry| entry.kind == FeedbackAssetKind::VfxCue));
+    assert!(manifest
+        .entries
+        .iter()
+        .any(|entry| entry.kind == FeedbackAssetKind::AnimationCurve));
+    assert!(manifest
+        .entries
+        .iter()
+        .any(|entry| entry.kind == FeedbackAssetKind::NotificationStyle));
+}
+
+#[test]
+fn feedback_polish_rejects_missing_required_asset() {
+    let mut manifest = FeedbackAssetManifest::from_json_file(g17_feedback_manifest_path()).unwrap();
+    let missing = manifest
+        .entries
+        .iter_mut()
+        .find(|entry| entry.asset_id == "g17-audio-hazard-pulse")
+        .expect("fixture should include a missing optional hazard pulse");
+    missing.optional = false;
+    missing.procedural_fallback = false;
+
+    let err = manifest
+        .validate_with_root(g17_workspace_root())
+        .unwrap_err();
+    assert!(err.to_string().contains("required feedback asset"));
 }
 
 #[test]

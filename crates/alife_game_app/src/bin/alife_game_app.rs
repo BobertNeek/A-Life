@@ -2,12 +2,12 @@ use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
     load_visible_world_from_p34_save, run_cognition_debug_timeline_smoke,
-    run_creature_inspector_smoke, run_creature_visual_smoke, run_gpu_product_hardening_smoke,
-    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_shell_config, AppShellLaunchConfig,
+    run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
+    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    run_playable_survival_loop_smoke, run_population_social_loop_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
+    run_world_editor_smoke, validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -159,7 +159,12 @@ fn run() -> Result<String, String> {
             let summary = run_save_load_ux_smoke(&launch).map_err(|err| err.to_string())?;
             Ok(format_save_load_ux_summary("G15 save/load UX", &summary))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root>".to_string()),
+        [command, fixture_root] if command == "feedback-polish-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary = run_feedback_polish_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format_feedback_polish_summary("G17 feedback polish", &summary))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root>".to_string()),
     }
 }
 
@@ -526,6 +531,24 @@ fn format_save_load_ux_summary(
         summary.invalid_config_error.code,
         summary.no_partial_load_after_error,
         summary.engine_local_token_absent,
+        summary.signature_line()
+    )
+}
+
+fn format_feedback_polish_summary(
+    prefix: &str,
+    summary: &alife_game_app::FeedbackPolishSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} events={} sealed_sources={} manifest_entries={} optional_fallbacks={} non_authoritative={} labels={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.events.len(),
+        summary.sealed_outcome_event_count,
+        summary.asset_manifest_entries,
+        summary.optional_asset_fallbacks,
+        summary.non_authoritative,
+        summary.event_labels().join(">"),
         summary.signature_line()
     )
 }

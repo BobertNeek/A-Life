@@ -21,6 +21,7 @@
 | G14 | codex/G14-cognition-visualization | complete | branch commit | full default, wrapper, core boundary, cognition-debug smoke, sealed-patch timeline/read-only/bias-only/no-readback tests, and all-features validation passed | G15 |
 | G15 | codex/G15-save-load-ux | complete | branch commit | full default, wrapper, core boundary, save-load UX smoke, slot overwrite/error-display/config-menu tests, and all-features validation passed | G16 |
 | G16 | codex/G16-content-authoring | complete | branch commit | full default, wrapper, core boundary, content-authoring validator, tiny content pack, missing asset, perception-only lesson, creature preset, and all-features validation passed | G17 |
+| G17 | codex/G17-audio-vfx-polish | complete | branch commit | full default, wrapper, core boundary, feedback-polish smoke, sealed outcome cue mapping, optional asset fallback, and all-features validation passed | G18 |
 | R18 | codex/R18-population-performance-review | pending | not started | review gate required after G18 before G19 | G19 |
 | R23 | codex/R23-feature-complete-rc-review | pending | not started | review gate required after G23 before G24 | G24 |
 | R24 | codex/R24-final-playable-sim-review | pending | not started | final playable-sim roadmap lock review after G24 | None |

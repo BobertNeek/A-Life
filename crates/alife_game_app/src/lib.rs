@@ -66,6 +66,9 @@ pub use survival_loop::*;
 mod ecology_loop;
 pub use ecology_loop::*;
 
+mod feedback_polish;
+pub use feedback_polish::*;
+
 mod population_social;
 pub use population_social::*;
 
