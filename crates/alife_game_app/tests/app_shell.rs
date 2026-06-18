@@ -9,18 +9,20 @@ use alife_game_app::{
     run_feedback_polish_smoke, run_gpu_product_hardening_smoke, run_headless_app_shell_smoke,
     run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
     run_longrun_balance_smoke, run_longrun_balance_with_config, run_onboarding_help_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
-    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
+    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
+    AppShellLaunchConfig, AutosavePolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
+    CreatureAnimationState, CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind,
+    FeedbackAssetManifest, FeedbackEventKind, InspectorControlPanel, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, RenderDetailLevel, SaveSlotDescriptor,
     SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
-    WorldEditorMode, WorldEditorSession,
+    WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -789,6 +791,56 @@ fn tutorial_script_loads_food_hazard_sleep_inspection_flow() {
             && !step.command.contains("ALIFE_GPU_BACKEND")
             && !step.command.contains("bash scripts/check.sh")));
     script.validate().unwrap();
+}
+
+#[test]
+fn platform_package_smoke_validates_scripts_manifest_and_artifact_policy() {
+    let summary = run_platform_package_smoke().unwrap();
+
+    assert_eq!(summary.schema, G21_PLATFORM_PACKAGE_SCHEMA);
+    assert_eq!(summary.schema_version, G21_PLATFORM_PACKAGE_SCHEMA_VERSION);
+    assert_eq!(
+        summary.output_directory,
+        "target/artifacts/g21_local_package"
+    );
+    assert!(!summary.generated_artifacts_tracked);
+    assert!(summary.windows_wrappers_used);
+    assert!(!summary.release_publishing_attempted);
+    assert!(summary.commands.iter().any(|command| {
+        command.kind == PackageSmokeKind::Headless && !command.manual && !command.requires_graphics
+    }));
+    assert!(summary.commands.iter().any(|command| {
+        command.kind == PackageSmokeKind::GraphicalManual
+            && command.manual
+            && command.requires_graphics
+    }));
+    assert!(summary.commands.iter().all(|command| {
+        !command.windows_command.contains("bash scripts/check.sh")
+            && !command
+                .non_windows_command
+                .contains("bash scripts/check.sh")
+            && !command.windows_command.contains("gpu-report")
+            && !command.windows_command.contains("ALIFE_GPU_BACKEND")
+    }));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn platform_asset_bundle_manifest_references_only_small_committed_fixtures() {
+    let manifest = alife_game_app::load_g21_asset_bundle_manifest().unwrap();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let validation = manifest.validate_with_root(&root).unwrap();
+
+    assert_eq!(manifest.schema, G21_ASSET_BUNDLE_SCHEMA);
+    assert_eq!(manifest.schema_version, G21_ASSET_BUNDLE_SCHEMA_VERSION);
+    assert!(manifest.output_directory.starts_with("target/artifacts/"));
+    assert_eq!(validation.entry_count, 6);
+    assert_eq!(validation.required_count, 6);
+    assert_eq!(validation.optional_count, 0);
+    assert!(manifest
+        .entries
+        .iter()
+        .all(|entry| entry.max_size_bytes <= 16_384));
 }
 
 #[test]
