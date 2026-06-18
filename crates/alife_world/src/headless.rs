@@ -313,6 +313,53 @@ impl HeadlessWorld {
             .collect()
     }
 
+    pub fn spawn_social_agent(
+        &mut self,
+        label: &str,
+        organism_id: OrganismId,
+        position: Vec3f,
+        affinity: f32,
+    ) -> Result<WorldEntityId, ScaffoldContractError> {
+        organism_id.validate()?;
+        self.insert_object(SpawnSpec {
+            label,
+            kind: WorldObjectKind::Agent,
+            organism_id: Some(organism_id),
+            position,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: None,
+            social_affinity: affinity.clamp(-1.0, 1.0),
+            teacher_channel: None,
+        })
+    }
+
+    pub fn remove_agent_entity(
+        &mut self,
+        id: WorldEntityId,
+    ) -> Result<WorldObject, ScaffoldContractError> {
+        id.validate()?;
+        let object = self
+            .objects
+            .get(&id.raw())
+            .cloned()
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.kind != WorldObjectKind::Agent {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        self.objects.remove(&id.raw());
+        self.labels.remove(&object.label);
+        self.last_touched_entities.retain(|touched| *touched != id);
+        if self
+            .last_action_result
+            .as_ref()
+            .is_some_and(|result| result.touched_entities.contains(&id))
+        {
+            self.last_action_result = None;
+        }
+        Ok(object)
+    }
+
     pub(crate) fn persistence_parts(&self) -> HeadlessWorldPersistenceParts {
         HeadlessWorldPersistenceParts {
             seed: self.seed,
@@ -1546,6 +1593,25 @@ impl HeadlessBrainHarness {
 
     pub const fn telemetry(&self) -> &HeadlessTelemetry {
         &self.telemetry
+    }
+
+    pub fn spawn_social_agent(
+        &mut self,
+        label: &str,
+        organism_id: OrganismId,
+        position: Vec3f,
+        affinity: f32,
+    ) -> Result<WorldEntityId, ScaffoldContractError> {
+        self.world
+            .borrow_mut()
+            .spawn_social_agent(label, organism_id, position, affinity)
+    }
+
+    pub fn remove_agent_entity(
+        &mut self,
+        id: WorldEntityId,
+    ) -> Result<WorldObject, ScaffoldContractError> {
+        self.world.borrow_mut().remove_agent_entity(id)
     }
 
     pub fn tick_mind(

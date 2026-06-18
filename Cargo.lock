@@ -45,6 +45,8 @@ dependencies = [
  "alife_core",
  "alife_world",
  "bevy",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 

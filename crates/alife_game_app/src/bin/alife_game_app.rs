@@ -2,7 +2,7 @@ use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
     load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_headless_app_shell_smoke, run_live_brain_loop_fixed_smoke,
+    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
     run_population_social_loop_smoke, run_world_ecology_loop_smoke, validate_app_shell_config,
     AppShellLaunchConfig,
@@ -119,7 +119,14 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke".to_string()),
+        [command] if command == "lifecycle-lineage-smoke" => {
+            let summary = run_lifecycle_lineage_smoke().map_err(|err| err.to_string())?;
+            Ok(format_lifecycle_lineage_summary(
+                "G09 lifecycle lineage",
+                &summary,
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke".to_string()),
     }
 }
 
@@ -290,6 +297,37 @@ fn format_population_social_loop_summary(
         summary.metrics.collision_feedback_count,
         summary.metrics.sealed_patch_count,
         summary.metrics.packed_record_count,
+        summary.signature_line()
+    )
+}
+
+fn format_lifecycle_lineage_summary(
+    prefix: &str,
+    summary: &alife_game_app::LifecycleLineageSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} seed={} living={} births={} deaths={} cap={} selected={:?} lineage={} events={} save_roundtrip={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.seed,
+        summary.metrics.living_population,
+        summary.metrics.births,
+        summary.metrics.deaths,
+        summary.population_cap,
+        summary.selected_stable_id.map(|id| id.raw()),
+        summary
+            .lineage_records
+            .iter()
+            .map(alife_game_app::LifecycleLineageRecord::signature_line)
+            .collect::<Vec<_>>()
+            .join("|"),
+        summary
+            .events
+            .iter()
+            .map(alife_game_app::LifecycleEventRecord::signature_line)
+            .collect::<Vec<_>>()
+            .join("|"),
+        summary.save_roundtrip_signature,
         summary.signature_line()
     )
 }
