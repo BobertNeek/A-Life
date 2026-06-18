@@ -60,3 +60,6 @@ pub const G21_PLATFORM_PACKAGE_SCHEMA_VERSION: u16 = 1;
 pub const G21_ASSET_BUNDLE_SCHEMA: &str = "alife.g21.asset_bundle.v1";
 pub const G21_ASSET_BUNDLE_SCHEMA_VERSION: u16 = 1;
 pub const G21_MAX_BUNDLE_ENTRIES: usize = 16;
+pub const G22_PRODUCT_QA_SCHEMA: &str = "alife.g22.product_qa_hardening.v1";
+pub const G22_PRODUCT_QA_SCHEMA_VERSION: u16 = 1;
+pub const G22_MAX_QA_FINDINGS: usize = 32;

@@ -81,6 +81,9 @@ pub use onboarding_help::*;
 mod packaging_platform;
 pub use packaging_platform::*;
 
+mod product_qa;
+pub use product_qa::*;
+
 mod population_social;
 pub use population_social::*;
 

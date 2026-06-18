@@ -7,9 +7,9 @@ use alife_game_app::{
     run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
     run_longrun_balance_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
     run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_shell_config, AppShellLaunchConfig,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
+    run_world_editor_smoke, validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -196,7 +196,11 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke".to_string()),
+        [command] if command == "product-qa-smoke" => {
+            let summary = run_product_qa_hardening_smoke().map_err(|err| err.to_string())?;
+            Ok(format_product_qa_summary("G22 product QA", &summary))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke".to_string()),
     }
 }
 
@@ -663,6 +667,22 @@ fn format_platform_package_summary(
         summary.generated_artifacts_tracked,
         summary.windows_wrappers_used,
         summary.release_publishing_attempted,
+        summary.signature_line()
+    )
+}
+
+fn format_product_qa_summary(prefix: &str, summary: &alife_game_app::ProductQaSummary) -> String {
+    format!(
+        "{prefix} schema={} version={} checklist={} findings={} blockers={} limitations={} p36={} no_p37={} artifacts_clean={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.checklist.len(),
+        summary.findings.len(),
+        summary.release_blocker_count,
+        summary.known_limitation_count,
+        summary.p36_gates_preserved,
+        summary.no_p37_created,
+        summary.no_generated_artifacts_tracked,
         summary.signature_line()
     )
 }

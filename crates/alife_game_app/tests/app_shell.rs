@@ -10,19 +10,20 @@ use alife_game_app::{
     run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
     run_longrun_balance_smoke, run_longrun_balance_with_config, run_onboarding_help_smoke,
     run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke, run_save_load_ux_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
-    AppShellLaunchConfig, AutosavePolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
-    CreatureAnimationState, CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, InspectorControlPanel, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, RenderDetailLevel, SaveSlotDescriptor,
-    SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
-    WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, RenderDetailLevel, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
+    SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
+    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -841,6 +842,117 @@ fn platform_asset_bundle_manifest_references_only_small_committed_fixtures() {
         .entries
         .iter()
         .all(|entry| entry.max_size_bytes <= 16_384));
+}
+
+#[test]
+fn product_qa_smoke_aggregates_invalid_inputs_optional_gates_and_known_issues() {
+    let summary = run_product_qa_hardening_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::G22_PRODUCT_QA_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::G22_PRODUCT_QA_SCHEMA_VERSION
+    );
+    assert_eq!(summary.release_blocker_count, 0);
+    assert!(summary.known_limitation_count >= 3);
+    assert!(summary.p36_gates_preserved);
+    assert!(summary.no_p37_created);
+    assert!(summary.no_generated_artifacts_tracked);
+    assert!(summary.invalid_input.invalid_config_rejected);
+    assert!(summary.invalid_input.invalid_save_schema_rejected);
+    assert!(summary.invalid_input.missing_required_asset_rejected);
+    assert!(summary.invalid_input.digest_mismatch_rejected);
+    assert!(summary.invalid_input.invalid_app_state_transition_rejected);
+    assert!(summary.invalid_input.stale_gpu_command_rejected);
+    assert!(summary.invalid_input.no_partial_load_after_error);
+    assert!(
+        summary
+            .optional_features
+            .headless_default_has_no_graphics_requirement
+    );
+    assert!(summary.optional_features.semantic_absence_nonfatal);
+    assert!(
+        summary
+            .optional_features
+            .semantic_fake_provider_non_authoritative
+    );
+    assert!(
+        summary
+            .optional_features
+            .school_verifier_uses_sealed_patches
+    );
+    assert!(summary.optional_features.gpu_default_falls_back_to_cpu);
+    assert!(summary.optional_features.gpu_no_active_readback);
+    assert!(summary.optional_features.graphical_smoke_manual);
+    assert!(summary.ui_transitions.pause_resume_seen);
+    assert!(summary.ui_transitions.save_load_menu_seen);
+    assert!(summary.ui_transitions.cognition_debug_read_only);
+    assert!(summary.ui_transitions.world_editor_resume_seen);
+    assert!(summary.manual_gpu_command.contains("--gpu-runtime"));
+    assert!(summary
+        .extended_balance_command
+        .contains("g19_manual_extended_balance_run"));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn product_qa_checklist_covers_all_required_areas_without_stale_commands() {
+    let summary = run_product_qa_hardening_smoke().unwrap();
+    let areas = summary
+        .checklist
+        .iter()
+        .map(|item| item.area)
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for area in [
+        ProductQaArea::AppLaunch,
+        ProductQaArea::GameplayLoop,
+        ProductQaArea::UiState,
+        ProductQaArea::SaveLoad,
+        ProductQaArea::School,
+        ProductQaArea::Semantic,
+        ProductQaArea::GpuFallback,
+        ProductQaArea::Performance,
+        ProductQaArea::Packaging,
+        ProductQaArea::Docs,
+    ] {
+        assert!(areas.contains(&area), "missing QA area {}", area.label());
+    }
+    assert!(summary
+        .checklist
+        .iter()
+        .all(|item| !item.command.contains("gpu-report")
+            && !item.command.contains("ALIFE_GPU_BACKEND")
+            && !item.command.contains("bash scripts/check.sh")));
+    assert!(summary
+        .checklist
+        .iter()
+        .any(|item| item.status == ProductQaStatus::Manual && item.manual));
+    assert!(summary
+        .findings
+        .iter()
+        .all(|finding| !finding.release_blocker));
+}
+
+#[test]
+fn product_qa_docs_record_exact_manual_commands_and_no_hidden_blockers() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let docs = std::fs::read_to_string(root.join("docs/playable_sim_spec/product_qa_hardening.md"))
+        .unwrap();
+    let known =
+        std::fs::read_to_string(root.join("docs/playable_sim_spec/known_issues.md")).unwrap();
+
+    for text in [&docs, &known] {
+        assert!(!text.contains("bash scripts/check.sh"));
+        assert!(!text.contains("gpu-report"));
+        assert!(!text.contains("ALIFE_GPU_BACKEND"));
+        assert!(text.contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
+        assert!(text.contains("--gpu-runtime"));
+    }
+    assert!(docs.contains("cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke"));
+    assert!(docs.contains("cargo test -p alife_world --test headless_soak"));
+    assert!(known.contains("None known after the G22 QA smoke"));
+    assert!(known.contains("CPU fallback is not a GPU performance claim"));
 }
 
 #[test]
