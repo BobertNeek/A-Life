@@ -4,7 +4,7 @@ use alife_game_app::{
     load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_headless_app_shell_smoke, run_live_brain_loop_fixed_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_playable_survival_loop_smoke,
-    validate_app_shell_config, AppShellLaunchConfig,
+    run_world_ecology_loop_smoke, validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -104,7 +104,14 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke".to_string()),
+        [command] if command == "world-ecology-loop-smoke" => {
+            let summary = run_world_ecology_loop_smoke().map_err(|err| err.to_string())?;
+            Ok(format_world_ecology_loop_summary(
+                "G07 world ecology loop",
+                &summary,
+            ))
+        }
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke".to_string()),
     }
 }
 
@@ -226,6 +233,28 @@ fn format_playable_survival_loop_summary(
         summary.unresolved_gap_count,
         summary.final_visual.animation.label(),
         summary.final_visual.expression.label(),
+        summary.signature_line()
+    )
+}
+
+fn format_world_ecology_loop_summary(
+    prefix: &str,
+    summary: &alife_game_app::PlayableEcologyLoopSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} seed={} organism={} ticks={} active_resources={} regrown={} spawned={} hazard_pain={:.2} sensory_zone={:?} sealed_patches={} packed_logs={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.seed,
+        summary.organism_id.raw(),
+        summary.tick_summaries.len(),
+        summary.metrics.active_resources,
+        summary.metrics.resources_regrown,
+        summary.metrics.resources_spawned,
+        summary.hazard_pain,
+        summary.sensory_zone_label,
+        summary.sealed_patch_count,
+        summary.packed_record_count,
         summary.signature_line()
     )
 }
