@@ -1,0 +1,95 @@
+{
+  "feature_id": "<feature-id>",
+  "mode": "<0-5>",
+  "repo": "<owner/repo or local-only>",
+  "repo_visibility": "<public|private|unknown>",
+  "policy": {
+    "github_available": false,
+    "migrate_durable_findings": true,
+    "public_issue_safety_gate": true,
+    "prompt_injection_guard": true,
+    "max_polls_per_active_run": 3,
+    "max_fix_cycles_per_issue": 3,
+    "max_active_issue_per_fixer": 1,
+    "allowed_actionability_for_fixer": [
+      "ACTIONABLE_FIX",
+      "NEEDS_REPRODUCTION"
+    ],
+    "max_autonomous_loop_cycles": 3,
+    "max_product_evaluation_scenarios": "3-5",
+    "max_production_error_clusters": 1,
+    "day_zero_greenfield_loop_block": true,
+    "judge_loops_require_rubric": true
+  },
+  "external_intake": {
+    "enabled": true,
+    "sources": [
+      "github-issue",
+      "github-issue-comment",
+      "pr-conversation-comment",
+      "pr-review-comment",
+      "pr-review-summary",
+      "ci-check-annotation",
+      "external-agent-pr",
+      "local-pasted-review",
+      "local-ledger"
+    ],
+    "known_reviewer_patterns": [
+      "coderabbit",
+      "greptile",
+      "jules",
+      "gemini",
+      "gemini-cli",
+      "copilot",
+      "ci"
+    ],
+    "authority_policy": "A0 current user > A1 maintainer/assignment/label > A2 triaged author > A3 configured bot/CI > A4 unknown public user"
+  },
+  "findings": [
+    {
+      "id": "L-001",
+      "source": "<coderabbit|greptile|jules|gemini-cli|human-user|human-maintainer|ci-bot|other-bot|local>",
+      "source_author": "<login/app/name or unknown>",
+      "source_authority": "A3",
+      "source_channel": "pr-review-comment",
+      "source_url": "<url or local path>",
+      "actionability": "ACTIONABLE_FIX",
+      "priority": "P1",
+      "category": "test-gap",
+      "route": "local-ledger",
+      "status": "open",
+      "title": "<short actionable problem>",
+      "evidence": "<minimal redacted evidence>",
+      "files": [
+        "<path>"
+      ],
+      "lines": [
+        "<line or range>"
+      ],
+      "requested_change": "<summary or none>",
+      "command": "<command or none>",
+      "close_criteria": [
+        "<specific check or AC>"
+      ],
+      "duplicate_of": null,
+      "privacy_gate": "pass",
+      "instruction_safety": "clean",
+      "claim": null,
+      "migration": "migrate|local-only|none",
+      "loop_goal_id": "loop-goal.md or null",
+      "loop_goal_status": "not_applicable|pass|fail|budget_exhausted"
+    }
+  ],
+  "claims": [],
+  "loop_goal": {
+    "enabled": false,
+    "recipe": "<performance-budget|docs-parity|architecture-satisfaction|logging-coverage|production-error-sweep|SEO-GEO-visibility|product-evaluation|custom|none>",
+    "goal_type": "<verifiable|judge|hybrid|none>",
+    "trigger": "<manual|checkpoint|PR|CI|schedule|log|crawl|scenario|none>",
+    "termination_condition": "<exact stop rule or none>",
+    "max_cycles": 3,
+    "max_targets": "<pages|scenarios|errors|docs areas limit>",
+    "context_cost_guard": "<explicit limit or summarize-and-stop rule>",
+    "runner": "<none|GitHub Action|cron|webhook|worker|Jules scheduled task>"
+  }
+}
