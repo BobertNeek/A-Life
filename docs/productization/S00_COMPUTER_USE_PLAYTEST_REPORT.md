@@ -22,8 +22,10 @@ Evidence collected in `target/playtest_evidence/S00/` shows:
   CLI passed through `g16_content_authoring validate-pack`.
 - The graphical launcher command passed, but it ran `visible-world-smoke`,
   printed a CLI summary, and exited. It did not leave a persistent game window.
-- Computer Use was unavailable due a local plugin/runtime export error. Windows
-  screenshot fallback was used for evidence images.
+- Computer Use was re-run after the local runtime repair. App/window
+  enumeration, accessibility inspection, keyboard input, and Alt+PrintScreen
+  active-window screenshot fallback worked. The graphical A-Life smoke still
+  left no persistent product window to inspect.
 - GPU runtime diagnostics selected CPU fallback with `HardwareUnavailable`;
   no GPU hardware performance was measured.
 
@@ -39,7 +41,9 @@ Key local environment:
 - GPU/display: NVIDIA GeForce RTX 3050, driver 32.0.15.8180.
 - Screens: 1536x864 primary plus 1280x720 and 1344x840 secondary displays.
 - GUI session: available.
-- Computer Use: unavailable; setup failed before automation.
+- Computer Use: available after local runtime repair. Native WGC screenshot
+  remains machine-limited, so active-window evidence uses the Alt+PrintScreen
+  clipboard fallback.
 
 ## Validation Summary
 
@@ -86,11 +90,27 @@ Notable CLI evidence:
 
 ## Graphical And Computer-Use Findings
 
-Computer Use could not be used for UI automation. Setup failed with:
+Computer Use was re-run after the local runtime repair and was functional for
+the parts needed in this pass:
 
-```text
-Package subpath './dist/project/cua/sky_js/src/targets/windows/internal/computer_use_client_base.js' is not defined by "exports" in @oai/sky package.json
-```
+- `sky.list_apps()` and `sky.list_windows()` returned targetable windows.
+- Accessibility inspection succeeded on a safe File Explorer probe window.
+- Keyboard input through Computer Use succeeded with `Alt+PrintScreen`.
+- The Alt+PrintScreen clipboard fallback saved a bounded active-window PNG:
+  `target/playtest_evidence/S00/screenshots/013_computer_use_alt_printscreen_active_window.png`.
+- After the graphical launcher completed, Computer Use found zero targetable
+  A-Life/Bevy/playground windows.
+
+Evidence:
+
+- `target/playtest_evidence/S00/raw_command_output/computer_use_after_repair_window_enumeration.log`
+- `target/playtest_evidence/S00/raw_command_output/computer_use_after_repair_accessibility.log`
+- `target/playtest_evidence/S00/raw_command_output/computer_use_after_repair_post_graphical_windows.log`
+- `target/playtest_evidence/S00/raw_command_output/graphical_real_launch_after_computer_use_repair.log`
+
+Native Computer Use screenshot capture was not relied on because this Windows 10
+machine still reports a WGC interface limitation. The reliable local path is
+Computer Use keyboard input plus Alt+PrintScreen clipboard capture.
 
 Graphical command tested:
 
@@ -140,6 +160,7 @@ Full index: `docs/productization/S00_SCREENSHOT_INDEX.md`.
 | `target/playtest_evidence/S00/screenshots/010_school_semantic_or_optional_demo_surface.png` | unavailable | No school/semantic UI surface. |
 | `target/playtest_evidence/S00/screenshots/011_gpu_fallback_or_status_surface.png` | unavailable | No GPU/status UI surface. |
 | `target/playtest_evidence/S00/screenshots/012_exit_or_shutdown_state.png` | pass/manual | Launcher exited cleanly; no window to close. |
+| `target/playtest_evidence/S00/screenshots/013_computer_use_alt_printscreen_active_window.png` | pass/manual | Repaired Computer Use active-window screenshot fallback captured File Explorer, not A-Life product UI. |
 
 ## Product Playability Answers
 
@@ -180,10 +201,11 @@ product smoke.
    - Evidence: `target/playtest_evidence/S00/reports/graphical_interactions.md`.
    - Impact: core game UX remains CLI/dev-tooling only.
 
-3. Computer Use automation is unavailable in this run.
-   - Evidence: `target/playtest_evidence/S00/raw_command_output/computer_use_probe.log`.
-   - Impact: automated Windows UI interaction and window screenshots could not
-     verify GUI behavior.
+3. Repaired Computer Use found no targetable A-Life product window after the
+   graphical smoke.
+   - Evidence: `target/playtest_evidence/S00/raw_command_output/computer_use_after_repair_post_graphical_windows.log`.
+   - Impact: the previous Computer Use setup failure is no longer the blocker;
+     the product still does not expose an interactive graphical window.
 
 ### MEDIUM
 
@@ -195,7 +217,8 @@ product smoke.
    - Evidence: `target/artifacts/gpu_runtime_performance.md` reports
      `Backend selected: CpuReference` and `Fallback reason: HardwareUnavailable`.
 
-3. Screenshot evidence includes placeholders for unavailable UI surfaces.
+3. Screenshot evidence includes placeholders for unavailable A-Life UI
+   surfaces.
    - Impact: useful for documentation, but not a substitute for real GUI
      screenshots.
 
@@ -211,7 +234,8 @@ product smoke.
 - Real graphical app window.
 - Real camera/selection/inspector/menu interaction screenshots.
 - Real GPU hardware performance measurements.
-- Automated Computer Use interaction evidence after plugin/runtime repair.
+- Real A-Life product-window screenshots through Computer Use. Computer Use now
+  works, but there was no A-Life window to capture.
 
 ## Current Playable Status
 

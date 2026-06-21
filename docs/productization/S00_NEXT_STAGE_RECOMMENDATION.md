@@ -17,7 +17,11 @@ The current graphical path is not yet a normal playable game:
 - `scripts/run_graphical_playground.ps1` ran successfully, but it executed `visible-world-smoke` and exited.
 - No persistent game window remained for Computer Use or manual interaction.
 - Camera movement, creature selection, inspector overlay, pause/step/run, save/load UI, school/semantic panels, and GPU/status UI could not be tested through a graphical app surface.
-- Computer Use itself was unavailable in this run due a plugin/runtime export error, but the shell and screenshot evidence still show that the current graphical launcher is a smoke command rather than an interactive game window.
+- Computer Use itself is now functional after the local runtime repair:
+  app/window enumeration, accessibility inspection, keyboard input, and
+  Alt+PrintScreen active-window screenshot fallback worked. It found no
+  targetable A-Life product window after the graphical smoke, so the blocker is
+  the product surface, not the automation tool.
 
 ## Why Not Release/Tag Now
 
@@ -35,7 +39,8 @@ Run a focused graphical stabilization phase with these goals:
 
 ## Secondary Follow-Ups
 
-- Fix or update the Computer Use plugin/runtime integration if future automated UI playtests should depend on it.
+- Continue using Computer Use with the Alt+PrintScreen fallback for Windows
+  screenshot evidence until native WGC screenshots work on this machine.
 - Keep GPU performance in manual/unknown status until measured with hardware flags and an explicit report.
 - Keep headless CPU validation as the correctness oracle while graphical stabilization proceeds.
 
