@@ -87,6 +87,9 @@ pub use product_qa::*;
 mod release_candidate;
 pub use release_candidate::*;
 
+mod graphical_playground;
+pub use graphical_playground::*;
+
 mod population_social;
 pub use population_social::*;
 

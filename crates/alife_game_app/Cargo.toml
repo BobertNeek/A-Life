@@ -19,5 +19,17 @@ thiserror.workspace = true
 
 [features]
 default = []
-bevy-app = ["dep:alife_bevy_adapter", "dep:bevy"]
+bevy-app = [
+    "dep:alife_bevy_adapter",
+    "dep:bevy",
+    "bevy/default_app",
+    "bevy/default_platform",
+    "bevy/bevy_core_pipeline",
+    "bevy/bevy_render",
+    "bevy/bevy_sprite",
+    "bevy/bevy_sprite_render",
+    "bevy/bevy_text",
+    "bevy/bevy_ui",
+    "bevy/bevy_ui_render",
+]
 gpu-runtime = ["dep:alife_gpu_backend"]
