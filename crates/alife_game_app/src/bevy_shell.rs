@@ -6,14 +6,25 @@ use alife_bevy_adapter::{
 };
 use alife_core::{AffordanceBits, WorldEntityId};
 use alife_world::WorldObjectKind;
-use bevy::prelude::{App, Component, Entity, MinimalPlugins, Resource, Transform};
+use bevy::{
+    app::AppExit,
+    prelude::{
+        default, App, BackgroundColor, Camera2d, ClearColor, Color, Component, DefaultPlugins,
+        Entity, MessageWriter, MinimalPlugins, Name, Node, PluginGroup, PositionType, Res, ResMut,
+        Resource, Sprite, Text, Text2d, TextColor, TextFont, Time, Timer, TimerMode, Transform,
+        Update, Val, Vec2, Vec3,
+    },
+    window::{ExitCondition, PresentMode, Window, WindowPlugin, WindowTheme},
+};
 
 use crate::{
     load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_live_brain_loop_smoke, AppShellLaunchConfig, AppStartupSummary, CameraNavigationState,
     CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
     CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
-    LiveBrainTickSummary, VisibleMaterialKind, VisiblePlaceholderShape, VisibleWorldPresentation,
+    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
+    LiveBrainTickSummary, VisibleMaterialKind, VisiblePlaceholderShape,
+    VisibleWorldObjectPresentation, VisibleWorldPresentation,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -100,6 +111,20 @@ pub struct VisibleCreatureState {
     pub intent_rgba: [f32; 4],
     pub debug_summary: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalPlaygroundSceneResource {
+    pub summary: GraphicalPlaygroundLaunchSummary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalPlaygroundMarker {
+    pub stable_id: WorldEntityId,
+    pub kind: WorldObjectKind,
+}
+
+#[derive(Debug, Resource)]
+struct GraphicalPlaygroundSmokeTimer(Timer);
 
 pub fn build_minimal_bevy_app_shell(summary: AppStartupSummary) -> App {
     let mut app = App::new();
@@ -190,6 +215,52 @@ pub fn build_creature_inspector_world_app_shell(
     Ok((app, summary, inspector))
 }
 
+pub fn build_graphical_playground_app_shell(
+    launch: &GraphicalPlaygroundLaunchConfig,
+) -> Result<(App, GraphicalPlaygroundLaunchSummary), GameAppShellError> {
+    let summary = crate::validate_graphical_playground_launch(launch)?;
+    let presentation = load_visible_world_from_p34_save(&launch.app_launch)?;
+    crate::compare_visible_world_to_headless(&presentation)?;
+
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: launch.window_title.clone(),
+            name: Some("alife.graphical_playground".to_string()),
+            resolution: (1120, 700).into(),
+            present_mode: PresentMode::AutoVsync,
+            window_theme: Some(WindowTheme::Dark),
+            ..default()
+        }),
+        exit_condition: ExitCondition::OnPrimaryClosed,
+        ..default()
+    }))
+    .add_plugins(AlifeBevyAdapterPlugin)
+    .insert_resource(ClearColor(Color::srgb(0.045, 0.065, 0.055)))
+    .insert_resource(GraphicalPlaygroundSceneResource {
+        summary: summary.clone(),
+    });
+
+    if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
+        app.insert_resource(GraphicalPlaygroundSmokeTimer(Timer::from_seconds(
+            seconds as f32,
+            TimerMode::Once,
+        )))
+        .add_systems(Update, close_after_graphical_smoke_timeout);
+    }
+
+    spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
+    Ok((app, summary))
+}
+
+pub fn run_graphical_playground_window(
+    launch: &GraphicalPlaygroundLaunchConfig,
+) -> Result<GraphicalPlaygroundLaunchSummary, GameAppShellError> {
+    let (mut app, summary) = build_graphical_playground_app_shell(launch)?;
+    app.run();
+    Ok(summary)
+}
+
 pub fn spawn_visible_world(
     app: &mut App,
     presentation: &VisibleWorldPresentation,
@@ -274,4 +345,179 @@ pub fn spawn_visible_world(
         stable_map_count: map_len,
         visible_signature: presentation.visible_signature.clone(),
     })
+}
+
+fn spawn_graphical_playground_scene(
+    app: &mut App,
+    presentation: &VisibleWorldPresentation,
+    summary: &GraphicalPlaygroundLaunchSummary,
+) -> Result<(), GameAppShellError> {
+    app.world_mut().spawn((Camera2d,));
+    app.world_mut().spawn((
+        Name::new("A-Life S01 ground plane"),
+        Sprite {
+            color: rgba_to_color(presentation.ground_material.rgba()),
+            custom_size: Some(Vec2::new(860.0, 460.0)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 0.0, -10.0),
+        VisibleGroundPlane {
+            shape: presentation.ground_shape,
+            material: presentation.ground_material,
+            rgba: presentation.ground_material.rgba(),
+        },
+        VisibleWorldDebugLabel("ground:p34-fixture".to_string()),
+    ));
+
+    for object in &presentation.objects {
+        spawn_graphical_object(app, object)?;
+    }
+
+    app.insert_resource(VisibleWorldSceneResource {
+        schema: presentation.schema,
+        schema_version: presentation.schema_version,
+        seed: presentation.seed,
+        save_id: presentation.save_id.clone(),
+        visible_signature: presentation.visible_signature.clone(),
+        headless_signature: presentation.headless_signature.clone(),
+    });
+
+    app.world_mut().spawn((
+        Name::new("A-Life S01 diagnostic overlay"),
+        Text::new(format!(
+            "A-Life Graphical Playground\nFixture: P34 tiny world  seed={}\nBackend: CPU Reference fallback\nStable IDs visible: agent=1 food=2\nMode: {}  timeout={:?}\nClose the window to exit.",
+            summary.seed, summary.mode_label, summary.smoke_seconds
+        )),
+        TextFont {
+            font_size: 16.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.88, 0.95, 0.88)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(12.0),
+            left: Val::Px(12.0),
+            max_width: Val::Px(520.0),
+            padding: bevy::ui::UiRect::all(Val::Px(10.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.02, 0.03, 0.025, 0.82)),
+    ));
+
+    Ok(())
+}
+
+fn spawn_graphical_object(
+    app: &mut App,
+    object: &VisibleWorldObjectPresentation,
+) -> Result<(), GameAppShellError> {
+    let material = object.material;
+    let marker_position = graphical_position(object);
+    let entity = app
+        .world_mut()
+        .spawn((
+            Name::new(format!(
+                "A-Life {:?} stable:{} {}",
+                object.kind,
+                object.stable_id.raw(),
+                object.label
+            )),
+            Sprite {
+                color: rgba_to_color(material.rgba()),
+                custom_size: Some(graphical_size(object)),
+                ..default()
+            },
+            Transform::from_translation(marker_position),
+            VisibleWorldObject {
+                stable_id: object.stable_id,
+                kind: object.kind,
+                shape: object.shape,
+                material,
+                rgba: material.rgba(),
+            },
+            VisibleWorldDebugLabel(object.debug_label.clone()),
+            GraphicalPlaygroundMarker {
+                stable_id: object.stable_id,
+                kind: object.kind,
+            },
+        ))
+        .id();
+    {
+        let mut entity_mut = app.world_mut().entity_mut(entity);
+        match object.kind {
+            WorldObjectKind::Agent => {
+                if let Some(organism_id) = object.organism_id {
+                    entity_mut.insert(CreatureBody::new(organism_id, object.stable_id)?);
+                }
+            }
+            WorldObjectKind::Food => {
+                entity_mut.insert(AffordanceTags::food(object.nutrition));
+            }
+            WorldObjectKind::Hazard => {
+                entity_mut.insert(AffordanceTags::hazard(object.hazard_pain));
+            }
+            WorldObjectKind::Obstacle => {
+                entity_mut.insert(AffordanceTags {
+                    bits: AffordanceBits::RESOURCE,
+                    nutrition: 0.0,
+                    hazard_pain: 0.0,
+                    blocks_movement: true,
+                });
+            }
+            WorldObjectKind::Token => {
+                entity_mut.insert(SensoryEmitter {
+                    audible_token: object.token_id,
+                    ..SensoryEmitter::default()
+                });
+            }
+        }
+    }
+    app.world_mut()
+        .resource_mut::<BevyEntityMap>()
+        .bind(entity, object.stable_id)?;
+
+    app.world_mut().spawn((
+        Name::new(format!("A-Life label stable:{}", object.stable_id.raw())),
+        Text2d::new(format!(
+            "stable:{} {}",
+            object.stable_id.raw(),
+            object.label
+        )),
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.92, 0.94, 0.86)),
+        Transform::from_translation(marker_position + Vec3::new(0.0, 48.0, 1.0)),
+    ));
+    Ok(())
+}
+
+fn graphical_position(object: &VisibleWorldObjectPresentation) -> Vec3 {
+    Vec3::new(object.position.x * 160.0, object.position.z * 160.0, 0.0)
+}
+
+fn graphical_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
+    match object.kind {
+        WorldObjectKind::Agent => Vec2::new(78.0, 46.0),
+        WorldObjectKind::Food => Vec2::splat(42.0),
+        WorldObjectKind::Hazard => Vec2::new(52.0, 52.0),
+        WorldObjectKind::Obstacle => Vec2::new(64.0, 64.0),
+        WorldObjectKind::Token => Vec2::new(72.0, 36.0),
+    }
+}
+
+fn rgba_to_color(rgba: [f32; 4]) -> Color {
+    Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3])
+}
+
+fn close_after_graphical_smoke_timeout(
+    time: Res<Time>,
+    mut timer: ResMut<GraphicalPlaygroundSmokeTimer>,
+    mut exits: MessageWriter<AppExit>,
+) {
+    timer.0.tick(time.delta());
+    if timer.0.just_finished() {
+        exits.write(AppExit::Success);
+    }
 }

@@ -66,3 +66,6 @@ pub const G22_MAX_QA_FINDINGS: usize = 32;
 pub const G23_RELEASE_CANDIDATE_SCHEMA: &str = "alife.g23.playable_release_candidate.v1";
 pub const G23_RELEASE_CANDIDATE_SCHEMA_VERSION: u16 = 1;
 pub const G23_MAX_RELEASE_CANDIDATE_GATES: usize = 32;
+pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA: &str = "alife.s01.graphical_playground_shell.v1";
+pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION: u16 = 1;
+pub const S01_MAX_GRAPHICAL_SMOKE_SECONDS: u32 = 120;

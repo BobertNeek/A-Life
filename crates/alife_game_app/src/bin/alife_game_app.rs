@@ -53,6 +53,17 @@ fn run() -> Result<String, String> {
             Ok(format_summary("G01 validated app config", &summary))
         }
         [command, fixture_root] if command == "bevy-smoke" => run_bevy_smoke(fixture_root),
+        [command, fixture_root] if command == "graphical-playground" => {
+            run_graphical_playground_interactive(fixture_root)
+        }
+        [command, flag, seconds, fixture_root]
+            if command == "graphical-playground-smoke" && flag == "--seconds" =>
+        {
+            let seconds = seconds
+                .parse::<u32>()
+                .map_err(|_| "graphical smoke seconds must be an unsigned integer".to_string())?;
+            run_graphical_playground_smoke(fixture_root, seconds)
+        }
         [command, fixture_root] if command == "visible-signature" => {
             let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
             let presentation =
@@ -208,7 +219,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -264,6 +275,30 @@ fn format_visible_summary(
         presentation.save_id,
         presentation.object_count,
         presentation.visible_signature.join("|")
+    )
+}
+
+#[cfg(feature = "bevy-app")]
+fn format_graphical_playground_summary(
+    prefix: &str,
+    summary: &alife_game_app::GraphicalPlaygroundLaunchSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} title='{}' mode={} timeout={:?} seed={} backend={:?} objects={} creatures={} food={} cpu_fallback={} stable_ids={} persistent={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.window_title,
+        summary.mode_label,
+        summary.smoke_seconds,
+        summary.seed,
+        summary.selected_backend,
+        summary.object_count,
+        summary.creature_marker_count,
+        summary.food_marker_count,
+        summary.cpu_fallback_visible,
+        summary.stable_id_overlay_visible,
+        summary.persistent_window,
+        summary.signature_line()
     )
 }
 
@@ -728,6 +763,38 @@ fn run_bevy_smoke(fixture_root: &str) -> Result<String, String> {
 #[cfg(not(feature = "bevy-app"))]
 fn run_bevy_smoke(_fixture_root: &str) -> Result<String, String> {
     Err("bevy-smoke requires feature `bevy-app`; run `cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- bevy-smoke crates/alife_world/tests/fixtures/p34`".to_string())
+}
+
+#[cfg(feature = "bevy-app")]
+fn run_graphical_playground_interactive(fixture_root: &str) -> Result<String, String> {
+    let launch = alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(fixture_root);
+    let summary = alife_game_app::bevy_shell::run_graphical_playground_window(&launch)
+        .map_err(|err| err.to_string())?;
+    Ok(format_graphical_playground_summary(
+        "S01 graphical playground closed",
+        &summary,
+    ))
+}
+
+#[cfg(not(feature = "bevy-app"))]
+fn run_graphical_playground_interactive(_fixture_root: &str) -> Result<String, String> {
+    Err("graphical-playground requires feature `bevy-app`; run `cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/p34`".to_string())
+}
+
+#[cfg(feature = "bevy-app")]
+fn run_graphical_playground_smoke(fixture_root: &str, seconds: u32) -> Result<String, String> {
+    let launch = alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(fixture_root, seconds);
+    let summary = alife_game_app::bevy_shell::run_graphical_playground_window(&launch)
+        .map_err(|err| err.to_string())?;
+    Ok(format_graphical_playground_summary(
+        "S01 graphical playground smoke",
+        &summary,
+    ))
+}
+
+#[cfg(not(feature = "bevy-app"))]
+fn run_graphical_playground_smoke(_fixture_root: &str, _seconds: u32) -> Result<String, String> {
+    Err("graphical-playground-smoke requires feature `bevy-app`; run `cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- graphical-playground-smoke --seconds 5 crates/alife_world/tests/fixtures/p34`".to_string())
 }
 
 #[cfg(feature = "bevy-app")]

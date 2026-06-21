@@ -84,6 +84,60 @@ fn visible_world_signature_loads_from_p34_save_without_bevy() {
 }
 
 #[test]
+fn s01_graphical_playground_launch_plan_validates_without_graphics() {
+    let launch = GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
+    let summary = validate_graphical_playground_launch(&launch).unwrap();
+
+    assert_eq!(summary.schema, S01_GRAPHICAL_PLAYGROUND_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION
+    );
+    assert_eq!(summary.window_title, S01_GRAPHICAL_WINDOW_TITLE);
+    assert_eq!(summary.mode_label, "interactive");
+    assert!(summary.persistent_window);
+    assert_eq!(summary.seed, 4242);
+    assert_eq!(summary.selected_backend, BackendSelection::CpuReference);
+    assert!(summary.cpu_fallback_visible);
+    assert!(summary.stable_id_overlay_visible);
+    assert_eq!(summary.object_count, 2);
+    assert_eq!(summary.creature_marker_count, 1);
+    assert_eq!(summary.food_marker_count, 1);
+    assert!(summary.signature_line().contains("persistent=true"));
+}
+
+#[test]
+fn s01_graphical_smoke_seconds_are_bounded() {
+    let ok = GraphicalPlaygroundLaunchConfig::smoke(p34_fixture_root(), 5);
+    let summary = validate_graphical_playground_launch(&ok).unwrap();
+    assert_eq!(summary.mode_label, "smoke-timeout");
+    assert_eq!(summary.smoke_seconds, Some(5));
+    assert!(!summary.persistent_window);
+
+    let zero = GraphicalPlaygroundLaunchConfig::smoke(p34_fixture_root(), 0);
+    assert!(zero.validate().is_err());
+    let too_long = GraphicalPlaygroundLaunchConfig::smoke(
+        p34_fixture_root(),
+        S01_MAX_GRAPHICAL_SMOKE_SECONDS + 1,
+    );
+    assert!(too_long.validate().is_err());
+}
+
+#[test]
+fn s01_graphical_launcher_script_uses_persistent_window_commands() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let script =
+        std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
+
+    assert!(script.contains("[switch]$DryRun"));
+    assert!(script.contains("[int]$SmokeSeconds"));
+    assert!(script.contains("graphical-playground"));
+    assert!(script.contains("graphical-playground-smoke"));
+    assert!(script.contains("--seconds"));
+    assert!(!script.contains("\"visible-world-smoke\""));
+}
+
+#[test]
 fn placeholder_mapping_covers_g02_required_visual_kinds() {
     assert_eq!(
         placeholder_for_kind(WorldObjectKind::Agent),

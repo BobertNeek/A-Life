@@ -20,6 +20,8 @@ pub enum GameAppShellError {
     },
     #[error("visible world mismatch: {message}")]
     VisibleWorldMismatch { message: &'static str },
+    #[error("invalid graphical playground launch: {message}")]
+    InvalidGraphicalLaunch { message: &'static str },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

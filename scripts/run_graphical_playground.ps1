@@ -1,9 +1,20 @@
 param(
-    [switch]$DryRun
+    [switch]$DryRun,
+    [ValidateRange(0, 120)]
+    [int]$SmokeSeconds = 0
 )
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+
+if ($SmokeSeconds -gt 0) {
+    $ModeArgs = @("graphical-playground-smoke", "--seconds", "$SmokeSeconds")
+    $ModeLabel = "bounded graphical playground smoke"
+} else {
+    $ModeArgs = @("graphical-playground")
+    $ModeLabel = "persistent graphical playground"
+}
+
 $Command = @(
     "cargo",
     "run",
@@ -13,14 +24,14 @@ $Command = @(
     "bevy-app",
     "--bin",
     "alife_game_app",
-    "--",
-    "visible-world-smoke",
-    "crates/alife_world/tests/fixtures/p34"
+    "--"
 )
+$Command += $ModeArgs
+$Command += "crates/alife_world/tests/fixtures/p34"
 
-Write-Host "A-Life graphical playground smoke command:"
+Write-Host "A-Life $ModeLabel command:"
 Write-Host ($Command -join " ")
-Write-Host "Manual graphics smoke only: requires local graphics support."
+Write-Host "Manual graphics path: requires local windowing/graphics support. CPU fallback is used for cognition/backend status."
 
 if ($DryRun) {
     exit 0
