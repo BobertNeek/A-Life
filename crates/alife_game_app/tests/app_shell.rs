@@ -1921,3 +1921,55 @@ fn bevy_feature_s03_inspector_overlay_is_read_only_and_stable_id_based() {
     assert!(overlay.contains("read_only=true"));
     assert!(!overlay.contains("Entity("));
 }
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_s04_readability_feedback_is_display_only() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let (app, visible, _inspector) =
+        alife_game_app::bevy_shell::build_creature_inspector_world_app_shell(&launch)
+            .expect("S04 readability helpers should use the existing headless-safe Bevy shell");
+    assert_eq!(visible.object_count, 2);
+
+    let feedback = run_feedback_polish_smoke(&launch).unwrap();
+    assert!(feedback.non_authoritative);
+    assert_eq!(feedback.sealed_outcome_event_count, 4);
+    assert!(feedback
+        .event_labels()
+        .contains(&FeedbackEventKind::FoodReward.label()));
+    assert!(feedback
+        .event_labels()
+        .contains(&FeedbackEventKind::HazardPain.label()));
+    assert!(feedback
+        .event_labels()
+        .contains(&FeedbackEventKind::SleepTransition.label()));
+
+    let inspector = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::CreatureInspectorResource>();
+    let feedback_text = alife_game_app::bevy_shell::feedback_cue_overlay_text(&feedback, inspector);
+    assert!(feedback_text.contains("Display Feedback (non-authoritative)"));
+    assert!(feedback_text.contains("Success=true"));
+    assert!(feedback_text.contains("pain=true"));
+    assert!(feedback_text.contains("sleep=true"));
+    assert!(feedback_text.contains("failure=true"));
+    assert!(feedback_text.contains("cannot act or mutate weights"));
+    assert!(!feedback_text.contains("Entity("));
+
+    let legend = alife_game_app::bevy_shell::readability_legend_overlay_text();
+    assert!(legend.contains("[@] creature"));
+    assert!(legend.contains("[+] food"));
+    assert!(legend.contains("[!] hazard"));
+    assert!(legend.contains("[#] obstacle"));
+    assert!(legend.contains("presentation only"));
+
+    let presentation = load_visible_world_from_p34_save(&launch).unwrap();
+    let badges = presentation
+        .objects
+        .iter()
+        .map(alife_game_app::bevy_shell::graphical_object_badge_text)
+        .collect::<Vec<_>>();
+    assert!(badges.iter().any(|badge| badge.contains("[@] creature")));
+    assert!(badges.iter().any(|badge| badge.contains("[+] food")));
+    assert!(badges.iter().all(|badge| badge.contains("stable:")));
+}
