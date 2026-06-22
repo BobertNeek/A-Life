@@ -24,7 +24,8 @@ cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/test
 ```
 
 Graphical and GPU hardware paths remain optional/manual unless measured on
-local hardware. CPU fallback output is not GPU performance evidence.
+local hardware. GPU adapter/device availability may be recorded separately from
+GPU neural timing. CPU fallback output is not GPU performance evidence.
 
 ## Feature Classification
 
@@ -42,7 +43,7 @@ local hardware. CPU fallback output is not GPU performance evidence.
 | G09 lifecycle/reproduction/death/lineage | Complete | lifecycle-lineage smoke and tests | Genetic/lifetime separation remains explicit. |
 | G10 school/teacher mode | Complete | school-mode smoke and verifier tests | Perception-only; no arbitration bypass. |
 | G11 semantic/SLM provider boundary | Complete | semantic-provider smoke and boundary tests | Optional, bounded, non-authoritative, cannot act or mutate weights. |
-| G12 GPU product hardening | Partial/manual | gpu-product smoke and runtime tests | CPU fallback and no-readback guardrails pass; hardware performance remains manual/unknown. |
+| G12 GPU product hardening | Partial/manual | gpu-product smoke and runtime tests | CPU fallback and no-readback guardrails pass; adapter/device bring-up may be local evidence, while hardware performance remains manual/unknown. |
 | G13 world editor/scenario sandbox | Complete | world-editor smoke and save/load tests | Bounded stable-ID edits, no cognition mutation. |
 | R13 retrospective review and remediation | Complete | R13 report and module split remediation | G01-G13 boundary review passed after module split. |
 | G14 cognition visualization/debug timeline | Complete | cognition-debug tests | Read-only sealed-patch timeline; no runtime control or active readback. |
@@ -62,8 +63,9 @@ local hardware. CPU fallback output is not GPU performance evidence.
 
 ## Known Limitations
 
-- GPU hardware performance is unknown unless the documented GPU command records
-  hardware-validated measurements. CPU fallback is not GPU performance.
+- GPU adapter/device availability is distinct from GPU neural performance. GPU
+  hardware performance is unknown unless a documented GPU command records
+  measured GPU timing. CPU fallback is not GPU performance.
 - Graphical playground smoke is manual unless local graphics support is
   available. The dry-run command verifies command wiring only.
 - The fast balance smoke intentionally scripts hazard contact to keep pain and

@@ -18,13 +18,17 @@ requires a new explicit user instruction before implementation.
      visual verification is requested.
 
 2. Record GPU hardware runtime/performance evidence.
-   - Current status: manual/unknown unless hardware and validation flags are set.
+   - Current status: adapter/device bring-up may be recorded locally by
+     `benchmark_tiers --gpu-runtime`; GPU neural timing and product performance
+     remain manual/unknown until a timing path records measured GPU results.
    - Command:
      ```powershell
-     ALIFE_GPU_RUNTIME_BACKEND=static ALIFE_GPU_RUNTIME_FEATURE=1 ALIFE_GPU_RUNTIME_AVAILABLE=1 ALIFE_GPU_RUNTIME_VALIDATED=1 cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
+     cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
      ```
    - Evidence required: hardware identifier, backend status, fallback status,
-     timing report, bottlenecks, and explicit 60 FPS target status.
+     timing report, bottlenecks, and explicit 60 FPS target status. Environment
+     flags can control fallback behavior but are not hardware proof by
+     themselves.
 
 3. Run extended headless soak and extended balance on release-candidate hardware.
    - Current status: ignored/manual to keep CI bounded.

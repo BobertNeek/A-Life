@@ -39,12 +39,13 @@ pub use routing_masks::{
     P27_SUPERTILE_MASK_WORDS, P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
 };
 pub use runtime::{
-    GpuPerformanceTargetStatus, GpuRuntimeBackendConfig, GpuRuntimeBackendKind,
-    GpuRuntimeBackendStatus, GpuRuntimeBoundary, GpuRuntimeCapabilityManifest,
-    GpuRuntimeDiagnosticExport, GpuRuntimeFallbackReason, GpuRuntimeReadbackGuard,
-    GpuRuntimeThrottleDecision, GpuRuntimeThrottlingPolicy, GpuRuntimeTimingBudget,
-    GpuRuntimeTimingSample, GpuThrottleLevel, GpuThrottleReason, GpuTierMeasurement,
-    GpuTierPerformanceReport, GpuTierPopulation, P29_RUNTIME_SCHEMA_VERSION,
+    probe_local_wgpu_runtime, required_storage_buffers, GpuPerformanceTargetStatus,
+    GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuRuntimeBackendStatus, GpuRuntimeBoundary,
+    GpuRuntimeCapabilityManifest, GpuRuntimeDiagnosticExport, GpuRuntimeFallbackReason,
+    GpuRuntimeHardwareProbe, GpuRuntimeReadbackGuard, GpuRuntimeThrottleDecision,
+    GpuRuntimeThrottlingPolicy, GpuRuntimeTimingBudget, GpuRuntimeTimingSample, GpuThrottleLevel,
+    GpuThrottleReason, GpuTierMeasurement, GpuTierPerformanceReport, GpuTierPopulation,
+    P29_RUNTIME_SCHEMA_VERSION,
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
 pub use static_forward::{
