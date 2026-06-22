@@ -193,6 +193,15 @@ pub struct GraphicalPlaygroundMarker {
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct RuntimeStatusOverlay;
 
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalMainCamera;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalSelectionRing;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct InspectorStatusOverlay;
+
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer(Timer);
 
@@ -313,9 +322,23 @@ pub fn build_graphical_playground_app_shell(
     .insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     });
+    spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
+    let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
+    let local_entity =
+        inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
     let (controls, live_loop) = graphical_runtime_resources(launch)?;
     app.insert_resource(controls)
         .insert_non_send_resource(live_loop)
+        .insert_resource(CameraNavigationResource {
+            state: inspector.camera,
+        })
+        .insert_resource(SelectionResource {
+            stable_id: inspector.selection.stable_id,
+            local_entity,
+        })
+        .insert_resource(CreatureInspectorResource {
+            snapshot: inspector,
+        })
         .insert_resource(GraphicalRuntimeTickTimer(Timer::from_seconds(
             0.35,
             TimerMode::Repeating,
@@ -324,8 +347,12 @@ pub fn build_graphical_playground_app_shell(
             Update,
             (
                 handle_graphical_runtime_input,
+                handle_graphical_camera_selection_input,
                 advance_graphical_runtime_loop,
+                update_graphical_camera_transform,
+                update_graphical_selection_ring,
                 update_graphical_runtime_overlay,
+                update_graphical_inspector_overlay,
             ),
         );
 
@@ -337,7 +364,6 @@ pub fn build_graphical_playground_app_shell(
         .add_systems(Update, close_after_graphical_smoke_timeout);
     }
 
-    spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
     Ok((app, summary))
 }
 
@@ -454,7 +480,7 @@ fn spawn_graphical_playground_scene(
     presentation: &VisibleWorldPresentation,
     summary: &GraphicalPlaygroundLaunchSummary,
 ) -> Result<(), GameAppShellError> {
-    app.world_mut().spawn((Camera2d,));
+    app.world_mut().spawn((Camera2d, GraphicalMainCamera));
     app.world_mut().spawn((
         Name::new("A-Life S01 ground plane"),
         Sprite {
@@ -505,6 +531,26 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.02, 0.03, 0.025, 0.82)),
         RuntimeStatusOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life S03 read-only creature inspector overlay"),
+        Text::new("Inspector loading..."),
+        TextFont {
+            font_size: 15.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.92, 0.96, 1.0)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(12.0),
+            right: Val::Px(12.0),
+            max_width: Val::Px(420.0),
+            padding: bevy::ui::UiRect::all(Val::Px(10.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.02, 0.025, 0.035, 0.86)),
+        InspectorStatusOverlay,
     ));
 
     Ok(())
@@ -594,6 +640,34 @@ fn spawn_graphical_object(
         Transform::from_translation(marker_position + Vec3::new(0.0, 48.0, 1.0)),
     ));
     Ok(())
+}
+
+fn inspector_local_entity(
+    app: &mut App,
+    presentation: &VisibleWorldPresentation,
+    stable_id: WorldEntityId,
+) -> Result<Option<Entity>, GameAppShellError> {
+    let local_entity = app
+        .world()
+        .resource::<BevyEntityMap>()
+        .bevy_entity(stable_id);
+    if let Some(entity) = local_entity {
+        let selection = crate::select_visible_world_entity(presentation, stable_id)?;
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(SelectedVisibleEntity { selection });
+        app.world_mut().spawn((
+            Name::new("A-Life S03 stable-ID selection ring"),
+            Sprite {
+                color: Color::srgba(1.0, 0.86, 0.25, 0.42),
+                custom_size: Some(Vec2::new(104.0, 66.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, 0.5),
+            GraphicalSelectionRing,
+        ));
+    }
+    Ok(local_entity)
 }
 
 fn graphical_position(object: &VisibleWorldObjectPresentation) -> Vec3 {
@@ -689,6 +763,44 @@ fn handle_graphical_runtime_input(
     }
 }
 
+fn handle_graphical_camera_selection_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut camera: ResMut<CameraNavigationResource>,
+    selection: Res<SelectionResource>,
+) {
+    let mut next = camera.state;
+
+    if keyboard.any_just_pressed([KeyCode::ArrowLeft, KeyCode::KeyA]) {
+        next = next.pan_by(-0.2, 0.0).unwrap_or(next);
+    }
+    if keyboard.any_just_pressed([KeyCode::ArrowRight, KeyCode::KeyD]) {
+        next = next.pan_by(0.2, 0.0).unwrap_or(next);
+    }
+    if keyboard.any_just_pressed([KeyCode::ArrowUp, KeyCode::KeyW]) {
+        next = next.pan_by(0.0, 0.2).unwrap_or(next);
+    }
+    if keyboard.any_just_pressed([KeyCode::ArrowDown, KeyCode::KeyS]) {
+        next = next.pan_by(0.0, -0.2).unwrap_or(next);
+    }
+    if keyboard.just_pressed(KeyCode::KeyQ) {
+        next = next.orbit_by(-15.0).unwrap_or(next);
+    }
+    if keyboard.just_pressed(KeyCode::KeyE) {
+        next = next.orbit_by(15.0).unwrap_or(next);
+    }
+    if keyboard.just_pressed(KeyCode::Equal) {
+        next = next.zoom_by(0.25).unwrap_or(next);
+    }
+    if keyboard.just_pressed(KeyCode::Minus) {
+        next = next.zoom_by(-0.25).unwrap_or(next);
+    }
+    if keyboard.just_pressed(KeyCode::KeyF) {
+        next = next.with_follow_target(selection.stable_id).unwrap_or(next);
+    }
+
+    camera.state = next;
+}
+
 fn advance_graphical_runtime_loop(
     time: Res<Time>,
     mut timer: ResMut<GraphicalRuntimeTickTimer>,
@@ -717,6 +829,35 @@ fn advance_graphical_runtime_loop(
     let _ = runtime.panel.advance_if_running(&mut live_loop.live);
 }
 
+fn update_graphical_camera_transform(
+    camera: Res<CameraNavigationResource>,
+    mut cameras: bevy::prelude::Query<&mut Transform, With<GraphicalMainCamera>>,
+) {
+    for mut transform in &mut cameras {
+        transform.translation.x = camera.state.focus.x * 160.0;
+        transform.translation.y = camera.state.focus.z * 160.0;
+        transform.rotation =
+            bevy::prelude::Quat::from_rotation_z(camera.state.yaw_degrees.to_radians());
+        let zoom_scale = (1.0 / camera.state.zoom).clamp(0.125, 4.0);
+        transform.scale = Vec3::splat(zoom_scale);
+    }
+}
+
+fn update_graphical_selection_ring(
+    inspector: Res<CreatureInspectorResource>,
+    mut ring_query: bevy::prelude::Query<&mut Transform, With<GraphicalSelectionRing>>,
+) {
+    let selected_position = inspector.snapshot.selection.position;
+    let ring_position = Vec3::new(
+        selected_position.x * 160.0,
+        selected_position.z * 160.0,
+        0.2,
+    );
+    for mut ring in &mut ring_query {
+        ring.translation = ring_position;
+    }
+}
+
 fn update_graphical_runtime_overlay(
     runtime: Res<GraphicalRuntimeControlsResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<RuntimeStatusOverlay>>,
@@ -724,4 +865,59 @@ fn update_graphical_runtime_overlay(
     for mut text in &mut overlays {
         text.0 = runtime.panel.status_overlay_text();
     }
+}
+
+fn update_graphical_inspector_overlay(
+    camera: Res<CameraNavigationResource>,
+    selection: Res<SelectionResource>,
+    inspector: Res<CreatureInspectorResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<InspectorStatusOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = graphical_inspector_overlay_text(&camera, &selection, &inspector);
+    }
+}
+
+pub fn graphical_inspector_overlay_text(
+    camera: &CameraNavigationResource,
+    selection: &SelectionResource,
+    inspector: &CreatureInspectorResource,
+) -> String {
+    let snapshot = &inspector.snapshot;
+    format!(
+        concat!(
+            "Read-only Inspector\n",
+            "Selected stable:{} local_entity={}\n",
+            "Organism: {:?} kind={:?}\n",
+            "Action: {}\n",
+            "Patch: {}\n",
+            "Drives: {}\n",
+            "Hormones: {}\n",
+            "Sleep/visual: animation={} expression={}\n",
+            "Memory/topology: {}\n",
+            "Camera: focus=({:.2},{:.2}) zoom={:.2} yaw={:.1} follow={:?}\n",
+            "Selection controls: arrows/WASD pan | +/- zoom | Q/E orbit | F follow\n",
+            "Boundary: stable IDs only; no Bevy entity in portable model; read_only={}"
+        ),
+        selection.stable_id.raw(),
+        selection
+            .local_entity
+            .map(|_| "adapter-local")
+            .unwrap_or("none"),
+        snapshot.selection.organism_id.map(|id| id.raw()),
+        snapshot.selection.kind,
+        snapshot.action_summary,
+        snapshot.patch_summary,
+        snapshot.drive_lines.join(", "),
+        snapshot.hormone_lines.join(", "),
+        snapshot.visual.animation.label(),
+        snapshot.visual.expression.label(),
+        snapshot.memory_topology_summary,
+        camera.state.focus.x,
+        camera.state.focus.z,
+        camera.state.zoom,
+        camera.state.yaw_degrees,
+        camera.state.follow_target.map(|id| id.raw()),
+        snapshot.read_only
+    )
 }

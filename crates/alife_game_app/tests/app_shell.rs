@@ -1882,3 +1882,42 @@ fn bevy_feature_graphical_playground_carries_s02_runtime_controls() {
         alife_game_app::S02_RUNTIME_CONTROLS_SCHEMA
     );
 }
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_s03_inspector_overlay_is_read_only_and_stable_id_based() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let (app, visible, inspector) =
+        alife_game_app::bevy_shell::build_creature_inspector_world_app_shell(&launch)
+            .expect("S03 inspector shell should load from the P34 fixture");
+
+    assert_eq!(visible.object_count, 2);
+    assert!(inspector.read_only);
+
+    let camera = *app
+        .world()
+        .resource::<alife_game_app::bevy_shell::CameraNavigationResource>();
+    let selection = *app
+        .world()
+        .resource::<alife_game_app::bevy_shell::SelectionResource>();
+    let inspector_resource = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::CreatureInspectorResource>()
+        .clone();
+
+    let overlay = alife_game_app::bevy_shell::graphical_inspector_overlay_text(
+        &camera,
+        &selection,
+        &inspector_resource,
+    );
+
+    assert_eq!(selection.stable_id, WorldEntityId(1));
+    assert_eq!(camera.state.follow_target, Some(WorldEntityId(1)));
+    assert!(overlay.contains("Read-only Inspector"));
+    assert!(overlay.contains("Selected stable:1"));
+    assert!(overlay.contains("Action: action=Some(Interact)"));
+    assert!(overlay.contains("Patch: sealed=true"));
+    assert!(overlay.contains("stable IDs only"));
+    assert!(overlay.contains("read_only=true"));
+    assert!(!overlay.contains("Entity("));
+}

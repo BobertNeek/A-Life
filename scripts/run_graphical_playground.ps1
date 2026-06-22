@@ -33,6 +33,7 @@ Write-Host "A-Life $ModeLabel command:"
 Write-Host ($Command -join " ")
 Write-Host "Manual graphics path: requires local windowing/graphics support. CPU fallback is used for cognition/backend status."
 Write-Host "Controls: Space pause/run, N step once, 1/2/3 speed, Esc quit."
+Write-Host "Camera/inspector: arrows/WASD pan, +/- zoom, Q/E orbit, F follow selected stable ID. Inspector is read-only."
 
 if ($DryRun) {
     exit 0
