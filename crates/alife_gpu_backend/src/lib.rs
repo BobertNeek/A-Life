@@ -9,6 +9,7 @@ pub mod routing_masks;
 pub mod runtime;
 pub mod shader_contract;
 pub mod static_forward;
+pub mod timing;
 
 pub use buffers::{
     GpuAccumulatorLayout, GpuActionSummaryStagingRecord, GpuActivationPingPongViews,
@@ -21,8 +22,9 @@ pub use buffers::{
     GPU_TILE_METADATA_BYTES,
 };
 pub use plasticity::{
-    run_plasticity_gpu_diagnostic, GpuOjaFixedPointConfig, GpuPlasticityDiagnostics,
-    GpuPlasticityDispatch, GpuPlasticityPlan, GpuPlasticityResult, P26_PLASTICITY_DIAGNOSTIC_WORDS,
+    run_plasticity_gpu_diagnostic, run_plasticity_gpu_diagnostic_timed, GpuOjaFixedPointConfig,
+    GpuPlasticityDiagnostics, GpuPlasticityDispatch, GpuPlasticityPlan, GpuPlasticityResult,
+    GpuPlasticityTimedResult, GpuPlasticityTiming, P26_PLASTICITY_DIAGNOSTIC_WORDS,
     P26_PLASTICITY_TOLERANCE_Q, P26_PLASTICITY_WORKGROUP_SIZE, P26_WGSL_PLASTICITY,
 };
 pub use recompaction::{
@@ -50,9 +52,15 @@ pub use runtime::{
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
 pub use static_forward::{
     finalize_static_forward_accumulators_for_diagnostics, run_static_forward_gpu_diagnostic,
-    GpuStaticForwardDiagnostics, GpuStaticForwardDispatch, GpuStaticForwardPlan,
-    GpuStaticForwardResult, P25_DIAGNOSTIC_COUNTER_WORDS, P25_STATIC_FORWARD_TOLERANCE_ABS,
+    run_static_forward_gpu_diagnostic_timed, GpuStaticForwardDiagnostics, GpuStaticForwardDispatch,
+    GpuStaticForwardPlan, GpuStaticForwardResult, GpuStaticForwardTimedResult,
+    GpuStaticForwardTiming, P25_DIAGNOSTIC_COUNTER_WORDS, P25_STATIC_FORWARD_TOLERANCE_ABS,
     P25_STATIC_FORWARD_WORKGROUP_SIZE, P25_WGSL_STATIC_FORWARD,
+};
+pub use timing::{
+    run_local_gpu_diagnostic_timing, GpuDiagnosticProductRuntimeClaim, GpuDiagnosticTimingKind,
+    GpuDiagnosticTimingReport, GpuDiagnosticWorkloadTiming, GpuTimingTargetStatus,
+    GPU_DIAGNOSTIC_TIMING_SCHEMA_VERSION,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

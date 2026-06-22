@@ -6,7 +6,7 @@
 //! This module does not implement plasticity, structural editing, or
 //! active-tick readback APIs.
 
-use std::sync::mpsc;
+use std::{sync::mpsc, time::Instant};
 
 use alife_core::{validate_finite, ScaffoldContractError};
 
@@ -64,6 +64,18 @@ pub struct GpuStaticForwardResult {
     pub activations_q: Vec<i32>,
     pub accumulators_q: Vec<i32>,
     pub diagnostics: GpuStaticForwardDiagnostics,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GpuStaticForwardTiming {
+    pub submit_poll_wall_ms: f32,
+    pub readback_wall_ms: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuStaticForwardTimedResult {
+    pub result: GpuStaticForwardResult,
+    pub timing: GpuStaticForwardTiming,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -289,6 +301,19 @@ pub async fn run_static_forward_gpu_diagnostic(
     plan: &GpuStaticForwardPlan,
     activation_read_q: &[i32],
 ) -> Result<GpuStaticForwardResult, ScaffoldContractError> {
+    Ok(
+        run_static_forward_gpu_diagnostic_timed(device, queue, plan, activation_read_q)
+            .await?
+            .result,
+    )
+}
+
+pub async fn run_static_forward_gpu_diagnostic_timed(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    plan: &GpuStaticForwardPlan,
+    activation_read_q: &[i32],
+) -> Result<GpuStaticForwardTimedResult, ScaffoldContractError> {
     if activation_read_q.len() != plan.header.neuron_count as usize {
         return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
     }
@@ -343,15 +368,28 @@ pub async fn run_static_forward_gpu_diagnostic(
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(plan.dispatch.pass2_workgroups, 1, 1);
     }
+    let submit_poll_start = Instant::now();
     queue.submit(Some(encoder.finish()));
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .map_err(|_| ScaffoldContractError::BackendParity)?;
+    let submit_poll_wall_ms = elapsed_ms(submit_poll_start);
 
+    let readback_start = Instant::now();
     let activations_q = read_i32_buffer(device, queue, &buffers.activation_write_buffer)?;
     let accumulators_q = read_i32_buffer(device, queue, &buffers.accumulator_buffer)?;
     let diagnostics_words = read_u32_buffer(device, queue, &buffers.diagnostics_buffer)?;
-    Ok(GpuStaticForwardResult {
-        activations_q,
-        accumulators_q,
-        diagnostics: GpuStaticForwardDiagnostics::from_words(&diagnostics_words)?,
+    let readback_wall_ms = elapsed_ms(readback_start);
+    Ok(GpuStaticForwardTimedResult {
+        result: GpuStaticForwardResult {
+            activations_q,
+            accumulators_q,
+            diagnostics: GpuStaticForwardDiagnostics::from_words(&diagnostics_words)?,
+        },
+        timing: GpuStaticForwardTiming {
+            submit_poll_wall_ms,
+            readback_wall_ms,
+        },
     })
 }
 
@@ -623,6 +661,10 @@ fn read_buffer_bytes(
     drop(mapped);
     readback.unmap();
     Ok(bytes)
+}
+
+fn elapsed_ms(start: Instant) -> f32 {
+    start.elapsed().as_secs_f64().mul_add(1000.0, 0.0) as f32
 }
 
 fn quantize_activation(
