@@ -94,6 +94,46 @@ fn s09_tutorial_commands_are_current_and_school_cues_remain_perception_only() {
 }
 
 #[test]
+fn s10_external_playtest_candidate_docs_are_current_and_artifact_safe() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let report = std::fs::read_to_string(
+        root.join("docs/productization/S10_EXTERNAL_PLAYTEST_CANDIDATE_REPORT.md"),
+    )
+    .unwrap();
+    let checklist =
+        std::fs::read_to_string(root.join("docs/productization/S10_EXTERNAL_TESTER_CHECKLIST.md"))
+            .unwrap();
+
+    for text in [&report, &checklist] {
+        assert!(text.contains(
+            "cargo run -p alife_game_app --bin alife_game_app -- platform-package-smoke"
+        ));
+        assert!(
+            text.contains("cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke")
+        );
+        assert!(text.contains(
+            "cargo run -p alife_game_app --bin alife_game_app -- release-candidate-smoke"
+        ));
+        assert!(text.contains(
+            "cargo run -p alife_game_app --bin alife_game_app -- content-authoring-smoke"
+        ));
+        assert!(text.contains("cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json"));
+        assert!(text.contains("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1"));
+        assert!(text.contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
+        assert!(text.contains("--gpu-runtime"));
+        assert!(text.contains("git ls-files target dist target/artifacts graphify-out"));
+        assert!(text.contains("not commit") || text.contains("not be committed"));
+        assert!(!text.contains("gpu-report"));
+        assert!(!text.contains("ALIFE_GPU_BACKEND"));
+        assert!(!text.contains("bash scripts/check.sh"));
+    }
+
+    assert!(report.contains("No release blockers are known"));
+    assert!(report.contains("No S12, G25, or P37 was created"));
+    assert!(checklist.contains("S10 does not create a release tag"));
+}
+
+#[test]
 fn feedback_polish_maps_existing_outcomes_into_non_authoritative_cues() {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     let summary = run_feedback_polish_smoke(&launch).unwrap();
