@@ -134,6 +134,47 @@ fn s10_external_playtest_candidate_docs_are_current_and_artifact_safe() {
 }
 
 #[test]
+fn s11_release_decision_docs_are_honest_and_stop_the_chain() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let report = std::fs::read_to_string(
+        root.join("docs/productization/S11_FINAL_PRODUCTIZATION_REPORT.md"),
+    )
+    .unwrap();
+    let decision =
+        std::fs::read_to_string(root.join("docs/productization/S11_RELEASE_DECISION_PACKET.md"))
+            .unwrap();
+    let roadmap =
+        std::fs::read_to_string(root.join("docs/productization/S11_NEXT_STAGE_ROADMAP.md"))
+            .unwrap();
+
+    for text in [&report, &decision, &roadmap] {
+        assert!(!text.contains("gpu-report"));
+        assert!(!text.contains("ALIFE_GPU_BACKEND"));
+        assert!(!text.contains("bash scripts/check.sh"));
+        assert!(text.contains("explicit") || text.contains("Do not"));
+    }
+
+    for required in [
+        "cargo run -p alife_game_app --bin alife_game_app -- release-candidate-smoke",
+        "cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke",
+        "cargo run -p alife_game_app --bin alife_game_app -- platform-package-smoke",
+        "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json",
+        "cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime",
+        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun",
+    ] {
+        assert!(report.contains(required));
+    }
+
+    assert!(report.contains("alpha / external playtest candidate"));
+    assert!(report.contains("No release tag was created"));
+    assert!(report.contains("No S12, G25, P37"));
+    assert!(decision.contains("defer release tag"));
+    assert!(decision.contains("Do not run this without explicit user approval"));
+    assert!(roadmap.contains("not an implementation plan"));
+    assert!(roadmap.contains("Do not create S12 automatically"));
+}
+
+#[test]
 fn feedback_polish_maps_existing_outcomes_into_non_authoritative_cues() {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     let summary = run_feedback_polish_smoke(&launch).unwrap();
