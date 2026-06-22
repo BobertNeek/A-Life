@@ -202,6 +202,25 @@ pub struct GraphicalSelectionRing;
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct InspectorStatusOverlay;
 
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct ReadabilityLegendOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct FeedbackCueOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalObjectBadge {
+    pub stable_id: WorldEntityId,
+    pub kind: WorldObjectKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalFeedbackCueResource {
+    pub summary: crate::FeedbackPolishSummary,
+}
+
+const GRAPHICAL_WORLD_SCALE: f32 = 125.0;
+
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer(Timer);
 
@@ -324,6 +343,7 @@ pub fn build_graphical_playground_app_shell(
     });
     spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
     let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
+    let feedback = crate::run_feedback_polish_smoke(&launch.app_launch)?;
     let local_entity =
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
     let (controls, live_loop) = graphical_runtime_resources(launch)?;
@@ -339,6 +359,7 @@ pub fn build_graphical_playground_app_shell(
         .insert_resource(CreatureInspectorResource {
             snapshot: inspector,
         })
+        .insert_resource(GraphicalFeedbackCueResource { summary: feedback })
         .insert_resource(GraphicalRuntimeTickTimer(Timer::from_seconds(
             0.35,
             TimerMode::Repeating,
@@ -353,6 +374,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_selection_ring,
                 update_graphical_runtime_overlay,
                 update_graphical_inspector_overlay,
+                update_graphical_feedback_overlay,
             ),
         );
 
@@ -513,7 +535,7 @@ fn spawn_graphical_playground_scene(
     app.world_mut().spawn((
         Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "A-Life Graphical Playground\nFixture: P34 tiny world  seed={}\nBackend: CPU Reference fallback\nStable IDs visible: agent=1 food=2\nMode: {}  timeout={:?}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit",
+            "A-Life Graphical Playground\nFixture: P34 tiny world  seed={}\nBackend: CPU Reference fallback\nStable IDs visible: agent=1 food=2\nMode: {}  timeout={:?}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit\nReadability: color+shape markers, badges, display-only feedback",
             summary.seed, summary.mode_label, summary.smoke_seconds
         )),
         TextFont {
@@ -531,6 +553,46 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.02, 0.03, 0.025, 0.82)),
         RuntimeStatusOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life S04 readability legend overlay"),
+        Text::new(readability_legend_overlay_text()),
+        TextFont {
+            font_size: 15.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.95, 0.94, 0.86)),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(14.0),
+            left: Val::Px(12.0),
+            max_width: Val::Px(620.0),
+            padding: bevy::ui::UiRect::all(Val::Px(10.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.025, 0.025, 0.02, 0.84)),
+        ReadabilityLegendOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life S04 feedback cue overlay"),
+        Text::new("Feedback cues loading..."),
+        TextFont {
+            font_size: 15.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.94, 0.98, 0.94)),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(14.0),
+            right: Val::Px(12.0),
+            max_width: Val::Px(470.0),
+            padding: bevy::ui::UiRect::all(Val::Px(10.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.018, 0.03, 0.024, 0.86)),
+        FeedbackCueOverlay,
     ));
 
     app.world_mut().spawn((
@@ -627,17 +689,17 @@ fn spawn_graphical_object(
 
     app.world_mut().spawn((
         Name::new(format!("A-Life label stable:{}", object.stable_id.raw())),
-        Text2d::new(format!(
-            "stable:{} {}",
-            object.stable_id.raw(),
-            object.label
-        )),
+        Text2d::new(graphical_object_badge_text(object)),
         TextFont {
             font_size: 14.0,
             ..default()
         },
-        TextColor(Color::srgb(0.92, 0.94, 0.86)),
-        Transform::from_translation(marker_position + Vec3::new(0.0, 48.0, 1.0)),
+        TextColor(readability_label_color(object.kind)),
+        Transform::from_translation(marker_position + graphical_badge_offset(object.kind)),
+        GraphicalObjectBadge {
+            stable_id: object.stable_id,
+            kind: object.kind,
+        },
     ));
     Ok(())
 }
@@ -671,7 +733,11 @@ fn inspector_local_entity(
 }
 
 fn graphical_position(object: &VisibleWorldObjectPresentation) -> Vec3 {
-    Vec3::new(object.position.x * 160.0, object.position.z * 160.0, 0.0)
+    Vec3::new(
+        object.position.x * GRAPHICAL_WORLD_SCALE,
+        object.position.z * GRAPHICAL_WORLD_SCALE,
+        0.0,
+    )
 }
 
 fn graphical_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
@@ -834,8 +900,8 @@ fn update_graphical_camera_transform(
     mut cameras: bevy::prelude::Query<&mut Transform, With<GraphicalMainCamera>>,
 ) {
     for mut transform in &mut cameras {
-        transform.translation.x = camera.state.focus.x * 160.0;
-        transform.translation.y = camera.state.focus.z * 160.0;
+        transform.translation.x = camera.state.focus.x * GRAPHICAL_WORLD_SCALE;
+        transform.translation.y = camera.state.focus.z * GRAPHICAL_WORLD_SCALE;
         transform.rotation =
             bevy::prelude::Quat::from_rotation_z(camera.state.yaw_degrees.to_radians());
         let zoom_scale = (1.0 / camera.state.zoom).clamp(0.125, 4.0);
@@ -849,8 +915,8 @@ fn update_graphical_selection_ring(
 ) {
     let selected_position = inspector.snapshot.selection.position;
     let ring_position = Vec3::new(
-        selected_position.x * 160.0,
-        selected_position.z * 160.0,
+        selected_position.x * GRAPHICAL_WORLD_SCALE,
+        selected_position.z * GRAPHICAL_WORLD_SCALE,
         0.2,
     );
     for mut ring in &mut ring_query {
@@ -875,6 +941,16 @@ fn update_graphical_inspector_overlay(
 ) {
     for mut text in &mut overlays {
         text.0 = graphical_inspector_overlay_text(&camera, &selection, &inspector);
+    }
+}
+
+fn update_graphical_feedback_overlay(
+    feedback: Res<GraphicalFeedbackCueResource>,
+    inspector: Res<CreatureInspectorResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<FeedbackCueOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = feedback_cue_overlay_text(&feedback.summary, &inspector);
     }
 }
 
@@ -920,4 +996,101 @@ pub fn graphical_inspector_overlay_text(
         camera.state.follow_target.map(|id| id.raw()),
         snapshot.read_only
     )
+}
+
+pub fn readability_legend_overlay_text() -> String {
+    [
+        "Readability Legend: [@] creature | [+] food | [!] hazard | [#] obstacle | [T] token",
+        "States: SUCCESS green | PAIN red | SLEEP blue | CURIOSITY amber | FAILURE red",
+        "Terrain/resource zone: dark green. All markers are presentation only; stable IDs stay portable.",
+    ]
+    .join("\n")
+}
+
+pub fn feedback_cue_overlay_text(
+    feedback: &crate::FeedbackPolishSummary,
+    inspector: &CreatureInspectorResource,
+) -> String {
+    let snapshot = &inspector.snapshot;
+    format!(
+        concat!(
+            "Display Feedback (non-authoritative)\n",
+            "Sealed cues: {}\n",
+            "Success={} pain={} sleep={} failure={}\n",
+            "Creature: {}/{} curiosity={:.2} sleep={:?}\n",
+            "Assets: entries={} optional={} required={}\n",
+            "Boundary: cues cannot act or mutate weights"
+        ),
+        feedback.event_labels().join(">"),
+        feedback
+            .event_labels()
+            .iter()
+            .any(|label| *label == crate::FeedbackEventKind::FoodReward.label()),
+        feedback
+            .event_labels()
+            .iter()
+            .any(|label| *label == crate::FeedbackEventKind::HazardPain.label()),
+        feedback
+            .event_labels()
+            .iter()
+            .any(|label| *label == crate::FeedbackEventKind::SleepTransition.label()),
+        feedback
+            .event_labels()
+            .iter()
+            .any(|label| *label == crate::FeedbackEventKind::MissingAffordance.label()),
+        snapshot.visual.animation.label(),
+        snapshot.visual.expression.label(),
+        snapshot.visual.cues.curiosity.value,
+        snapshot.visual.sleep_phase,
+        feedback.asset_manifest_entries,
+        feedback.optional_asset_fallbacks,
+        feedback.required_assets_available
+    )
+}
+
+pub fn graphical_object_badge_text(object: &VisibleWorldObjectPresentation) -> String {
+    let marker = match object.kind {
+        WorldObjectKind::Agent => "[@] creature",
+        WorldObjectKind::Food => "[+] food",
+        WorldObjectKind::Hazard => "[!] hazard",
+        WorldObjectKind::Obstacle => "[#] obstacle",
+        WorldObjectKind::Token => "[T] token",
+    };
+    let detail = match object.kind {
+        WorldObjectKind::Agent => object
+            .organism_id
+            .map(|id| format!("organism={}", id.raw()))
+            .unwrap_or_else(|| "organism=unknown".to_string()),
+        WorldObjectKind::Food => format!("nutrition={:.2}", object.nutrition),
+        WorldObjectKind::Hazard => format!("pain={:.2}", object.hazard_pain),
+        WorldObjectKind::Obstacle => format!("radius={:.2}", object.radius),
+        WorldObjectKind::Token => format!("token={:?}", object.token_id),
+    };
+    format!(
+        "{} stable:{} {}\n{}",
+        marker,
+        object.stable_id.raw(),
+        object.label,
+        detail
+    )
+}
+
+fn graphical_badge_offset(kind: WorldObjectKind) -> Vec3 {
+    match kind {
+        WorldObjectKind::Agent => Vec3::new(-118.0, 72.0, 1.0),
+        WorldObjectKind::Food => Vec3::new(-70.0, 84.0, 1.0),
+        WorldObjectKind::Hazard => Vec3::new(92.0, -70.0, 1.0),
+        WorldObjectKind::Obstacle => Vec3::new(96.0, 36.0, 1.0),
+        WorldObjectKind::Token => Vec3::new(92.0, 42.0, 1.0),
+    }
+}
+
+fn readability_label_color(kind: WorldObjectKind) -> Color {
+    match kind {
+        WorldObjectKind::Agent => Color::srgb(1.0, 0.88, 0.35),
+        WorldObjectKind::Food => Color::srgb(0.34, 1.0, 0.46),
+        WorldObjectKind::Hazard => Color::srgb(1.0, 0.28, 0.22),
+        WorldObjectKind::Obstacle => Color::srgb(0.78, 0.76, 0.70),
+        WorldObjectKind::Token => Color::srgb(0.82, 0.68, 1.0),
+    }
 }
