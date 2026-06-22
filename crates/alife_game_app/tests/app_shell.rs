@@ -750,9 +750,48 @@ fn longrun_balance_smoke_reports_plausible_bounded_metrics() {
     assert!(summary.metrics.finite_values);
     assert!(summary.metrics.population_bounds_enforced);
     assert!(summary.metrics.resource_bounds_enforced);
+    assert_eq!(summary.behavior_criteria.len(), 6);
+    let criterion_ids = summary
+        .behavior_criteria
+        .iter()
+        .map(|criterion| criterion.id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        criterion_ids,
+        vec![
+            "food-seeking",
+            "hazard-avoidance",
+            "sleep-rest",
+            "population-bounds",
+            "resource-stability",
+            "social-diversity"
+        ]
+    );
+    assert!(summary
+        .behavior_criteria
+        .iter()
+        .any(|criterion| criterion.status == "autonomous-ecology-signal"));
+    assert!(summary
+        .behavior_criteria
+        .iter()
+        .any(|criterion| criterion.status == "not-yet-emergent"));
+    let resource = summary
+        .behavior_criteria
+        .iter()
+        .find(|criterion| criterion.id == "resource-stability")
+        .unwrap();
+    assert!(resource.evidence.contains("resources_regrown="));
+    assert!(resource.evidence.contains("resources_spawned="));
     assert!(summary
         .report_markdown
         .contains("Known degenerate behaviors"));
+    assert!(summary
+        .report_markdown
+        .contains("S06 non-scripted criteria"));
+    assert!(summary.report_markdown.contains("S06 assessment"));
+    assert!(summary
+        .s06_improvement_note
+        .contains("autonomous resource regrowth"));
     assert!(summary.manual_extended_command.contains("--ignored"));
     summary.validate().unwrap();
 }
