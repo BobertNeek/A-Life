@@ -134,6 +134,8 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     assert!(script.contains("graphical-playground"));
     assert!(script.contains("graphical-playground-smoke"));
     assert!(script.contains("--seconds"));
+    assert!(script.contains("arrows/WASD pan"));
+    assert!(script.contains("Inspector is read-only"));
     assert!(!script.contains("\"visible-world-smoke\""));
 }
 
