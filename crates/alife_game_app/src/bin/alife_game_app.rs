@@ -812,6 +812,13 @@ fn run_visible_world_smoke(fixture_root: &str) -> Result<String, String> {
 }
 
 #[cfg(not(feature = "bevy-app"))]
-fn run_visible_world_smoke(_fixture_root: &str) -> Result<String, String> {
-    Err("visible-world-smoke requires feature `bevy-app`; run `cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- visible-world-smoke crates/alife_world/tests/fixtures/p34`".to_string())
+fn run_visible_world_smoke(fixture_root: &str) -> Result<String, String> {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+    let presentation = load_visible_world_from_p34_save(&launch).map_err(|err| err.to_string())?;
+    alife_game_app::compare_visible_world_to_headless(&presentation)
+        .map_err(|err| err.to_string())?;
+    Ok(format_visible_summary(
+        "G02 visible world headless smoke",
+        &presentation,
+    ))
 }
