@@ -19,11 +19,13 @@ requires a new explicit user instruction before implementation.
 
 2. Record GPU hardware runtime/performance evidence.
    - Current status: adapter/device bring-up may be recorded locally by
-     `benchmark_tiers --gpu-runtime`; GPU neural timing and product performance
-     remain manual/unknown until a timing path records measured GPU results.
+     `benchmark_tiers --gpu-runtime`; bounded P25/P26 diagnostic timing may be
+     recorded with `--measure-gpu`; product gameplay GPU timing remains
+     manual/unknown until a product-runtime timing path records measured GPU
+     results.
    - Command:
      ```powershell
-     cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
+     cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime --measure-gpu
      ```
    - Evidence required: hardware identifier, backend status, fallback status,
      timing report, bottlenecks, and explicit 60 FPS target status. Environment

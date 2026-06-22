@@ -1,6 +1,6 @@
 # Local GPU Bring-up Report
 
-Status: local GPU adapter/device probe working; GPU neural timing still unknown.
+Status: local GPU adapter/device probe working; diagnostic GPU timing is recorded separately in `docs/productization/LOCAL_GPU_TIMING_EVIDENCE_REPORT.md`.
 
 Branch: `codex/local-gpu-bringup`
 
@@ -125,8 +125,10 @@ Those timings are not GPU neural performance measurements.
 
 Yes for adapter/device bring-up and ignored diagnostic parity tests.
 
-No for product GPU performance timing. The current performance report path
-does not measure GPU neural time, so the 60 FPS target remains `Unknown`.
+Yes for bounded diagnostic GPU timing in the post-bring-up timing report.
+
+No for product gameplay GPU performance timing. The P25/P26 timing report uses
+manual diagnostic fixtures, so the 60 FPS gameplay target remains unclaimed.
 
 ## CPU Fallback Status
 
@@ -147,7 +149,9 @@ CPU fallback remains available:
 
 ## Remaining Limitations
 
-- GPU neural runtime timing is still unknown.
+- Product gameplay GPU neural runtime timing is still unknown.
+- Local P25/P26 diagnostic GPU timing is now recorded separately in
+  `docs/productization/LOCAL_GPU_TIMING_EVIDENCE_REPORT.md`.
 - P25/P26 ignored GPU parity tests are diagnostic/manual evidence and do not
   prove product WebGPU portability.
 - The benchmark report still reuses CPU smoke metrics for tier rows.

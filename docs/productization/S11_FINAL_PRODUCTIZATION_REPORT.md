@@ -16,9 +16,9 @@ smoke commands, a persistent graphical shell path, product QA smoke coverage,
 packaging smoke coverage, and an external tester checklist. It is not being
 tagged automatically because release tagging requires explicit user approval,
 manual graphics evidence should be reviewed on the target playtest machine, and
-GPU hardware performance remains manual unless measured on local hardware. A
-post-S11 local bring-up report may record adapter/device availability separately
-from GPU neural timing.
+GPU hardware performance remains manual unless measured on local hardware.
+Post-S11 local reports record adapter/device availability and bounded P25/P26
+diagnostic GPU timing separately from product gameplay GPU timing.
 
 No release tag was created during S11.
 
@@ -79,9 +79,10 @@ High issues:
 
 Medium issues:
 
-- GPU adapter/device availability may be recorded by the GPU runtime command on
-  supported local hardware, but GPU neural performance remains manual or
-  unknown unless a timing path records measured GPU results.
+- GPU adapter/device availability and bounded P25/P26 diagnostic timing may be
+  recorded on supported local hardware, but product gameplay GPU neural
+  performance remains manual or unknown unless a product-runtime timing path
+  records measured GPU results.
 - Extended balance, soak, and large-population evidence remain manual rather
   than normal CI gates.
 - The graphical shell is suitable for alpha playtest evidence, but broader UX

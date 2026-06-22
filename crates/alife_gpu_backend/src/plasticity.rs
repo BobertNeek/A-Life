@@ -6,7 +6,7 @@
 //! are carried for contract checks but are not writable by this pass. P27
 //! supplies the shared supertile mask early-exit contract.
 
-use std::sync::mpsc;
+use std::{sync::mpsc, time::Instant};
 
 use alife_core::{OjaUpdateConfig, ScaffoldContractError};
 
@@ -141,6 +141,18 @@ pub struct GpuPlasticityResult {
     pub lifetime_consolidated_q: Vec<i16>,
     pub h_operational_q: Vec<i16>,
     pub diagnostics: GpuPlasticityDiagnostics,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GpuPlasticityTiming {
+    pub submit_poll_wall_ms: f32,
+    pub readback_wall_ms: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuPlasticityTimedResult {
+    pub result: GpuPlasticityResult,
+    pub timing: GpuPlasticityTiming,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -332,6 +344,24 @@ pub async fn run_plasticity_gpu_diagnostic(
     previous_activation_q: &[i32],
     finalized_activation_q: &[i32],
 ) -> Result<GpuPlasticityResult, ScaffoldContractError> {
+    Ok(run_plasticity_gpu_diagnostic_timed(
+        device,
+        queue,
+        plan,
+        previous_activation_q,
+        finalized_activation_q,
+    )
+    .await?
+    .result)
+}
+
+pub async fn run_plasticity_gpu_diagnostic_timed(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    plan: &GpuPlasticityPlan,
+    previous_activation_q: &[i32],
+    finalized_activation_q: &[i32],
+) -> Result<GpuPlasticityTimedResult, ScaffoldContractError> {
     plan.validate_activation_shapes(previous_activation_q, finalized_activation_q)?;
 
     let buffers = GpuPlasticityDeviceBuffers::new(
@@ -369,19 +399,32 @@ pub async fn run_plasticity_gpu_diagnostic(
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(plan.dispatch.pass3_workgroups, 1, 1);
     }
+    let submit_poll_start = Instant::now();
     queue.submit(Some(encoder.finish()));
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .map_err(|_| ScaffoldContractError::BackendParity)?;
+    let submit_poll_wall_ms = elapsed_ms(submit_poll_start);
 
+    let readback_start = Instant::now();
     let h_shadow_q = read_i32_buffer(device, queue, &buffers.h_shadow_write_buffer)?
         .into_iter()
         .map(|value| i16::try_from(value).map_err(|_| ScaffoldContractError::BackendParity))
         .collect::<Result<Vec<_>, _>>()?;
     let diagnostics_words = read_u32_buffer(device, queue, &buffers.diagnostics_buffer)?;
-    Ok(GpuPlasticityResult {
-        h_shadow_q,
-        genetic_fixed_q: plan.genetic_fixed_q.clone(),
-        lifetime_consolidated_q: plan.lifetime_consolidated_q.clone(),
-        h_operational_q: plan.h_operational_q.clone(),
-        diagnostics: GpuPlasticityDiagnostics::from_words(&diagnostics_words)?,
+    let readback_wall_ms = elapsed_ms(readback_start);
+    Ok(GpuPlasticityTimedResult {
+        result: GpuPlasticityResult {
+            h_shadow_q,
+            genetic_fixed_q: plan.genetic_fixed_q.clone(),
+            lifetime_consolidated_q: plan.lifetime_consolidated_q.clone(),
+            h_operational_q: plan.h_operational_q.clone(),
+            diagnostics: GpuPlasticityDiagnostics::from_words(&diagnostics_words)?,
+        },
+        timing: GpuPlasticityTiming {
+            submit_poll_wall_ms,
+            readback_wall_ms,
+        },
     })
 }
 
@@ -780,6 +823,10 @@ fn read_buffer_bytes(
     drop(mapped);
     readback.unmap();
     Ok(bytes)
+}
+
+fn elapsed_ms(start: Instant) -> f32 {
+    start.elapsed().as_secs_f64().mul_add(1000.0, 0.0) as f32
 }
 
 fn div_ceil_u32(value: u32, divisor: u32) -> u32 {

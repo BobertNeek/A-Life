@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use alife_gpu_backend::{
-    probe_local_wgpu_runtime, GpuRuntimeBackendConfig, GpuRuntimeBackendKind,
-    GpuRuntimeFallbackReason, GpuRuntimeHardwareProbe,
+    probe_local_wgpu_runtime, run_local_gpu_diagnostic_timing, GpuRuntimeBackendConfig,
+    GpuRuntimeBackendKind, GpuRuntimeFallbackReason, GpuRuntimeHardwareProbe,
 };
 use alife_tools::benchmark::{BenchmarkHarness, BenchmarkHarnessConfig, GpuRuntimeBenchmarkBridge};
 
@@ -10,6 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     let full = args.iter().any(|arg| arg == "--all");
     let gpu_runtime_report = args.iter().any(|arg| arg == "--gpu-runtime");
+    let measure_gpu = args.iter().any(|arg| arg == "--measure-gpu");
     let output_dir = args
         .windows(2)
         .find(|window| window[0] == "--out")
@@ -104,6 +105,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let gpu_path = output_dir.join("gpu_runtime_performance.md");
         std::fs::write(&gpu_path, gpu_report.to_markdown())?;
         println!("{}", gpu_path.display());
+
+        if measure_gpu {
+            let timing_report = run_local_gpu_diagnostic_timing(3, 10)?;
+            let timing_path = output_dir.join("local_gpu_timing_evidence.md");
+            std::fs::write(&timing_path, timing_report.to_markdown())?;
+            println!("{}", timing_path.display());
+        }
+    } else if measure_gpu {
+        return Err("--measure-gpu requires --gpu-runtime".into());
     }
     Ok(())
 }
