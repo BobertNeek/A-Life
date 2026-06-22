@@ -209,6 +209,9 @@ pub struct ReadabilityLegendOverlay;
 pub struct FeedbackCueOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct SaveLoadMenuOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalObjectBadge {
     pub stable_id: WorldEntityId,
     pub kind: WorldObjectKind,
@@ -217,6 +220,11 @@ pub struct GraphicalObjectBadge {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalFeedbackCueResource {
     pub summary: crate::FeedbackPolishSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalSaveLoadMenuResource {
+    pub summary: crate::SaveLoadUxSmokeSummary,
 }
 
 const GRAPHICAL_WORLD_SCALE: f32 = 125.0;
@@ -344,6 +352,7 @@ pub fn build_graphical_playground_app_shell(
     spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
     let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
     let feedback = crate::run_feedback_polish_smoke(&launch.app_launch)?;
+    let save_load = crate::run_save_load_ux_smoke(&launch.app_launch)?;
     let local_entity =
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
     let (controls, live_loop) = graphical_runtime_resources(launch)?;
@@ -360,6 +369,9 @@ pub fn build_graphical_playground_app_shell(
             snapshot: inspector,
         })
         .insert_resource(GraphicalFeedbackCueResource { summary: feedback })
+        .insert_resource(GraphicalSaveLoadMenuResource {
+            summary: save_load.clone(),
+        })
         .insert_resource(GraphicalRuntimeTickTimer(Timer::from_seconds(
             0.35,
             TimerMode::Repeating,
@@ -375,8 +387,10 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_runtime_overlay,
                 update_graphical_inspector_overlay,
                 update_graphical_feedback_overlay,
+                update_graphical_save_load_menu_overlay,
             ),
         );
+    spawn_save_load_menu_overlay(&mut app, &save_load);
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
         app.insert_resource(GraphicalPlaygroundSmokeTimer(Timer::from_seconds(
@@ -616,6 +630,28 @@ fn spawn_graphical_playground_scene(
     ));
 
     Ok(())
+}
+
+fn spawn_save_load_menu_overlay(app: &mut App, summary: &crate::SaveLoadUxSmokeSummary) {
+    app.world_mut().spawn((
+        Name::new("A-Life S05 save load menu overlay"),
+        Text::new(save_load_menu_overlay_text(summary)),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.91, 0.96, 1.0)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(236.0),
+            left: Val::Px(12.0),
+            max_width: Val::Px(820.0),
+            padding: bevy::ui::UiRect::all(Val::Px(10.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.018, 0.024, 0.035, 0.87)),
+        SaveLoadMenuOverlay,
+    ));
 }
 
 fn spawn_graphical_object(
@@ -952,6 +988,19 @@ fn update_graphical_feedback_overlay(
     for mut text in &mut overlays {
         text.0 = feedback_cue_overlay_text(&feedback.summary, &inspector);
     }
+}
+
+fn update_graphical_save_load_menu_overlay(
+    menu: Res<GraphicalSaveLoadMenuResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<SaveLoadMenuOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = save_load_menu_overlay_text(&menu.summary);
+    }
+}
+
+pub fn save_load_menu_overlay_text(summary: &crate::SaveLoadUxSmokeSummary) -> String {
+    crate::player_save_load_menu_text(summary)
 }
 
 pub fn graphical_inspector_overlay_text(

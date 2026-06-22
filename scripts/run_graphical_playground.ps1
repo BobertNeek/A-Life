@@ -35,6 +35,7 @@ Write-Host "Manual graphics path: requires local windowing/graphics support. CPU
 Write-Host "Controls: Space pause/run, N step once, 1/2/3 speed, Esc quit."
 Write-Host "Camera/inspector: arrows/WASD pan, +/- zoom, Q/E orbit, F follow selected stable ID. Inspector is read-only."
 Write-Host "Readability: color+shape markers, stable-ID badges, display-only feedback legend, CPU fallback status."
+Write-Host "Save/load menu: visible S05 overlay with New/Save/Load/Settings tabs, slots, overwrite guard, error banner, and stable-ID policy."
 
 if ($DryRun) {
     exit 0

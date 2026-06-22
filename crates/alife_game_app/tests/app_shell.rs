@@ -1741,6 +1741,33 @@ fn config_menu_defaults_are_deterministic_and_keep_optional_features_safe() {
     assert!(error.message.contains("GPU backend selection"));
 }
 
+#[test]
+fn save_load_menu_text_exposes_player_flows_and_readable_errors() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_save_load_ux_smoke(&launch).unwrap();
+    let text = alife_game_app::player_save_load_menu_text(&summary);
+
+    assert!(text.contains("Save / Load Menu"));
+    assert!(text.contains("Tabs: New | Save | Load | Settings"));
+    assert!(text.contains("Manual Save 1"));
+    assert!(text.contains("Autosave"));
+    assert!(text.contains("Save: manual slot=slot-0"));
+    assert!(text.contains("Load: slot-0 -> save=g15-manual-slot"));
+    assert!(text.contains("Overwrite: confirm required=true"));
+    assert!(text.contains("Cancel: keeps current slot"));
+    assert!(text.contains("Errors: schema=schema-version"));
+    assert!(text.contains("missing_asset=missing-required-asset"));
+    assert!(text.contains("digest=digest-mismatch"));
+    assert!(text.contains("config=invalid-config"));
+    assert!(text.contains("partial_load_after_error=false"));
+    assert!(text.contains("Settings: backend=CpuReference"));
+    assert!(text.contains("cpu_fallback=true"));
+    assert!(text.contains("no_active_readback=true"));
+    assert!(text.contains("Stable IDs: [1, 2]"));
+    assert!(text.contains("engine-local tokens=false"));
+    assert!(!text.contains("Entity("));
+}
+
 #[cfg(feature = "bevy-app")]
 #[test]
 fn bevy_feature_can_construct_shell_without_visible_world_content() {
@@ -1972,4 +1999,22 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
     assert!(badges.iter().any(|badge| badge.contains("[@] creature")));
     assert!(badges.iter().any(|badge| badge.contains("[+] food")));
     assert!(badges.iter().all(|badge| badge.contains("stable:")));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_s05_save_load_menu_overlay_is_player_facing_and_stable_id_safe() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_save_load_ux_smoke(&launch).unwrap();
+    let overlay = alife_game_app::bevy_shell::save_load_menu_overlay_text(&summary);
+
+    assert!(overlay.contains("Save / Load Menu"));
+    assert!(overlay.contains("Tabs: New | Save | Load | Settings"));
+    assert!(overlay.contains("Stable IDs: [1, 2]"));
+    assert!(overlay.contains("Overwrite: confirm required=true"));
+    assert!(overlay.contains("Cancel: keeps current slot"));
+    assert!(overlay.contains("schema=schema-version"));
+    assert!(overlay.contains("cpu_fallback=true"));
+    assert!(overlay.contains("Boundary: stable IDs only"));
+    assert!(!overlay.contains("Entity("));
 }

@@ -594,6 +594,93 @@ impl SaveLoadUxSmokeSummary {
     }
 }
 
+pub fn player_save_load_menu_text(summary: &SaveLoadUxSmokeSummary) -> String {
+    let slot_lines = summary
+        .menu
+        .slots
+        .iter()
+        .map(save_slot_menu_line)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let stable_ids = summary
+        .stable_world_ids
+        .iter()
+        .map(|id| id.raw().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!(
+        concat!(
+            "Save / Load Menu\n",
+            "Tabs: New | Save | Load | Settings\n",
+            "New: P34 tiny world seed={} scenario={}\n",
+            "Stable IDs: [{}]\n",
+            "Save: manual slot={} | autosave slot={} due={}\n",
+            "Load: {} -> save={} objects={} stable_id_remap={}\n",
+            "Overwrite: confirm required={}\n",
+            "Cancel: keeps current slot\n",
+            "Slots:\n{}\n",
+            "Errors: schema={} missing_asset={}\n",
+            "        digest={} config={} partial_load_after_error={}\n",
+            "Settings: backend={:?} brain={:?}\n",
+            "          school={} semantic={} gpu={}\n",
+            "          cpu_fallback={} no_active_readback={}\n",
+            "Boundary: stable IDs only; engine-local tokens={}"
+        ),
+        summary.config_menu.deterministic_seed,
+        summary.config_menu.scenario_id,
+        stable_ids,
+        summary.manual_save_slot,
+        summary.autosave_slot,
+        summary.deterministic_autosave_due,
+        summary.manual_save_slot,
+        summary.loaded_save_id,
+        summary.restored_object_count,
+        summary.stable_id_remap_preserved,
+        summary.overwrite_confirmation_visible,
+        slot_lines,
+        summary.invalid_schema_error.code,
+        summary.missing_asset_error.code,
+        summary.digest_error.code,
+        summary.invalid_config_error.code,
+        !summary.no_partial_load_after_error,
+        summary.config_menu.requested_backend,
+        summary.config_menu.brain_class,
+        summary.config_menu.school_enabled,
+        summary.config_menu.semantic_enabled,
+        summary.config_menu.gpu_enabled,
+        summary.config_menu.cpu_fallback_required,
+        summary.config_menu.no_active_readback,
+        !summary.engine_local_token_absent
+    )
+}
+
+fn save_slot_menu_line(slot: &SaveSlotMetadata) -> String {
+    let stable_ids = slot
+        .stable_world_ids
+        .iter()
+        .map(|id| id.raw().to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "- {} ({}) occupied={} save={}\n  tick={} objects={} stable_ids=[{}] schema={} v{} bytes={}",
+        slot.display_name,
+        slot.kind.label(),
+        slot.occupied,
+        slot.save_id.as_deref().unwrap_or("empty"),
+        slot.world_tick
+            .map(|tick| tick.raw().to_string())
+            .unwrap_or_else(|| "n/a".to_string()),
+        slot.object_count,
+        stable_ids,
+        slot.schema.as_deref().unwrap_or("none"),
+        slot.schema_version
+            .map(|version| version.to_string())
+            .unwrap_or_else(|| "n/a".to_string()),
+        slot.json_bytes
+    )
+}
+
 pub fn run_save_load_ux_smoke(
     launch: &AppShellLaunchConfig,
 ) -> Result<SaveLoadUxSmokeSummary, GameAppShellError> {
