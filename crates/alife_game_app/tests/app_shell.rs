@@ -5,27 +5,27 @@ use alife_core::{
 use alife_game_app::{
     compare_visible_world_to_headless, g17_feedback_manifest_path, g17_workspace_root,
     load_visible_world_from_p34_save, project_lod_without_behavior_change,
-    run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_feedback_polish_smoke, run_gpu_product_hardening_smoke, run_headless_app_shell_smoke,
-    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_longrun_balance_with_config, run_onboarding_help_smoke,
-    run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
-    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
-    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
-    RuntimeControlPanel, RuntimePlaybackState, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
-    SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
-    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    run_advanced_gameplay_ux_smoke, run_cognition_debug_timeline_smoke,
+    run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
+    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
+    run_longrun_balance_with_config, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, SaveSlotDescriptor,
+    SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
+    WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -1367,6 +1367,62 @@ fn semantic_provider_config_rejects_unknown_schema_and_kind() {
 
     assert!(summary.unknown_schema_rejected);
     assert!(summary.unknown_provider_kind_rejected);
+}
+
+#[test]
+fn s07_advanced_gameplay_ux_aggregates_optional_social_lifecycle_school_semantic_state() {
+    let summary = run_advanced_gameplay_ux_smoke().unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::S07_ADVANCED_GAMEPLAY_UX_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::S07_ADVANCED_GAMEPLAY_UX_SCHEMA_VERSION
+    );
+    assert_eq!(summary.social.creature_count, 2);
+    assert_eq!(summary.lifecycle.births, 1);
+    assert_eq!(summary.lifecycle.deaths, 1);
+    assert!(summary.school.verifier_passed);
+    assert!(summary.semantic.disabled_provider_nonfatal);
+    assert!(summary.semantic.context_visible);
+    assert!(summary.display_only);
+    assert!(summary.optional_modes);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn s07_advanced_gameplay_ux_keeps_authority_boundaries_blocked() {
+    let summary = run_advanced_gameplay_ux_smoke().unwrap();
+
+    assert!(summary.social.perception_only);
+    assert_eq!(summary.social.direct_action_bypass_count, 0);
+    assert!(summary.lifecycle.genetic_lifetime_separated);
+    assert!(summary.lifecycle.birth_weight_assets_are_initializers);
+    assert!(summary.school.perception_only);
+    assert!(summary.school.direct_motor_bypass_blocked);
+    assert!(summary.semantic.semantic_action_bypass_blocked);
+    assert!(summary.semantic.weight_rewrite_blocked);
+    assert!(summary.no_action_or_weight_bypass);
+    assert!(!alife_game_app::advanced_gameplay_overlay_text(&summary).contains("Entity("));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_s07_advanced_gameplay_overlay_is_display_only() {
+    let summary = run_advanced_gameplay_ux_smoke().unwrap();
+    let overlay = alife_game_app::advanced_gameplay_overlay_text(&summary);
+
+    assert!(overlay.contains("Advanced Systems (S07)"));
+    assert!(overlay.contains("Social:"));
+    assert!(overlay.contains("Lifecycle:"));
+    assert!(overlay.contains("School:"));
+    assert!(overlay.contains("Semantic:"));
+    assert!(overlay.contains("display_only=true"));
+    assert!(overlay.contains("no_action_or_weight_bypass=true"));
+    assert!(overlay.contains("cannot act or rewrite weights"));
+    assert!(!overlay.contains("Entity("));
 }
 
 #[test]

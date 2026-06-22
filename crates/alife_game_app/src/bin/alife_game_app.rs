@@ -1,16 +1,17 @@
 use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
-    load_visible_world_from_p34_save, run_cognition_debug_timeline_smoke,
-    run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
-    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_shell_config, AppShellLaunchConfig,
+    load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke,
+    run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
+    run_feedback_polish_smoke, run_gpu_product_hardening_smoke, run_headless_app_shell_smoke,
+    run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke,
+    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_onboarding_help_smoke,
+    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_shell_config,
+    AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -164,6 +165,13 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
+        [command] if command == "advanced-gameplay-ux-smoke" => {
+            let summary = run_advanced_gameplay_ux_smoke().map_err(|err| err.to_string())?;
+            Ok(format_advanced_gameplay_summary(
+                "S07 advanced gameplay UX",
+                &summary,
+            ))
+        }
         [command] if command == "gpu-product-smoke" => {
             let summary = run_gpu_product_hardening_smoke().map_err(|err| err.to_string())?;
             Ok(format_gpu_product_summary("G12 GPU product", &summary))
@@ -230,7 +238,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -548,6 +556,26 @@ fn format_semantic_provider_summary(
         summary.weight_rewrite_blocked,
         summary.provider_absence_nonfatal,
         summary.provider_failure_nonfatal,
+        summary.signature_line()
+    )
+}
+
+fn format_advanced_gameplay_summary(
+    prefix: &str,
+    summary: &alife_game_app::AdvancedGameplayUxSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} social='{}' lifecycle='{}' school='{}' semantic='{}' display_only={} optional={} bypass_blocked={} screenshot_status={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.social.signature_line(),
+        summary.lifecycle.signature_line(),
+        summary.school.signature_line(),
+        summary.semantic.signature_line(),
+        summary.display_only,
+        summary.optional_modes,
+        summary.no_action_or_weight_bypass,
+        summary.manual_screenshot_status,
         summary.signature_line()
     )
 }

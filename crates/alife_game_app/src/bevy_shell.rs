@@ -18,14 +18,15 @@ use bevy::{
 };
 
 use crate::{
-    load_visible_world_from_p34_save, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_live_brain_loop_smoke, AppShellLaunchConfig, AppStartupSummary, CameraNavigationState,
-    CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
-    CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
-    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
-    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
-    VisibleMaterialKind, VisiblePlaceholderShape, VisibleWorldObjectPresentation,
-    VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
+    advanced_gameplay_overlay_text, load_visible_world_from_p34_save,
+    run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
+    run_live_brain_loop_smoke, AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
+    CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
+    CreatureInspectorSnapshot, CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError,
+    GameAppState, GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary,
+    GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand,
+    RuntimeControlPanel, VisibleMaterialKind, VisiblePlaceholderShape,
+    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -212,6 +213,9 @@ pub struct FeedbackCueOverlay;
 pub struct SaveLoadMenuOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct AdvancedGameplayOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalObjectBadge {
     pub stable_id: WorldEntityId,
     pub kind: WorldObjectKind,
@@ -225,6 +229,11 @@ pub struct GraphicalFeedbackCueResource {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalSaveLoadMenuResource {
     pub summary: crate::SaveLoadUxSmokeSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalAdvancedGameplayResource {
+    pub summary: AdvancedGameplayUxSummary,
 }
 
 const GRAPHICAL_WORLD_SCALE: f32 = 125.0;
@@ -353,6 +362,7 @@ pub fn build_graphical_playground_app_shell(
     let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
     let feedback = crate::run_feedback_polish_smoke(&launch.app_launch)?;
     let save_load = crate::run_save_load_ux_smoke(&launch.app_launch)?;
+    let advanced = run_advanced_gameplay_ux_smoke()?;
     let local_entity =
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
     let (controls, live_loop) = graphical_runtime_resources(launch)?;
@@ -372,6 +382,9 @@ pub fn build_graphical_playground_app_shell(
         .insert_resource(GraphicalSaveLoadMenuResource {
             summary: save_load.clone(),
         })
+        .insert_resource(GraphicalAdvancedGameplayResource {
+            summary: advanced.clone(),
+        })
         .insert_resource(GraphicalRuntimeTickTimer(Timer::from_seconds(
             0.35,
             TimerMode::Repeating,
@@ -388,9 +401,11 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_inspector_overlay,
                 update_graphical_feedback_overlay,
                 update_graphical_save_load_menu_overlay,
+                update_graphical_advanced_gameplay_overlay,
             ),
         );
     spawn_save_load_menu_overlay(&mut app, &save_load);
+    spawn_advanced_gameplay_overlay(&mut app, &advanced);
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
         app.insert_resource(GraphicalPlaygroundSmokeTimer(Timer::from_seconds(
@@ -645,12 +660,34 @@ fn spawn_save_load_menu_overlay(app: &mut App, summary: &crate::SaveLoadUxSmokeS
             position_type: PositionType::Absolute,
             top: Val::Px(236.0),
             left: Val::Px(12.0),
-            max_width: Val::Px(820.0),
+            max_width: Val::Px(560.0),
             padding: bevy::ui::UiRect::all(Val::Px(10.0)),
             ..default()
         },
         BackgroundColor(Color::srgba(0.018, 0.024, 0.035, 0.87)),
         SaveLoadMenuOverlay,
+    ));
+}
+
+fn spawn_advanced_gameplay_overlay(app: &mut App, summary: &AdvancedGameplayUxSummary) {
+    app.world_mut().spawn((
+        Name::new("A-Life S07 advanced gameplay overlay"),
+        Text::new(advanced_gameplay_overlay_text(summary)),
+        TextFont {
+            font_size: 10.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.93, 0.98, 0.92)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(210.0),
+            left: Val::Px(16.0),
+            max_width: Val::Px(650.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.018, 0.031, 0.026, 0.88)),
+        AdvancedGameplayOverlay,
     ));
 }
 
@@ -996,6 +1033,15 @@ fn update_graphical_save_load_menu_overlay(
 ) {
     for mut text in &mut overlays {
         text.0 = save_load_menu_overlay_text(&menu.summary);
+    }
+}
+
+fn update_graphical_advanced_gameplay_overlay(
+    advanced: Res<GraphicalAdvancedGameplayResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<AdvancedGameplayOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = advanced_gameplay_overlay_text(&advanced.summary);
     }
 }
 
