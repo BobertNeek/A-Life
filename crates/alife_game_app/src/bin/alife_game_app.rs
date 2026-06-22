@@ -8,9 +8,9 @@ use alife_game_app::{
     run_longrun_balance_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
     run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
     run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_shell_config,
-    AppShellLaunchConfig,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -101,6 +101,17 @@ fn run() -> Result<String, String> {
                 summaries.len(),
                 summaries.last().map_or(0, |summary| summary.sealed_patch_count),
                 summaries.last().map(|summary| summary.status)
+            ))
+        }
+        [command, fixture_root, ticks] if command == "runtime-controls-smoke" => {
+            let ticks = ticks
+                .parse::<u32>()
+                .map_err(|_| "runtime control smoke ticks must be an unsigned integer".to_string())?;
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary = run_runtime_controls_smoke(&launch, ticks).map_err(|err| err.to_string())?;
+            Ok(format_runtime_controls_summary(
+                "S02 runtime controls",
+                &summary,
             ))
         }
         [command, fixture_root] if command == "creature-visual-smoke" => {
@@ -219,7 +230,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -263,6 +274,30 @@ fn format_live_tick_summary(
     )
 }
 
+fn format_runtime_controls_summary(
+    prefix: &str,
+    summary: &alife_game_app::RuntimeControlSmokeSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} playback={} paused={} step={} run={} mind_tick={} world_tick={:?} action={:?}:{:?} target={:?} sealed={} sealed_patches={} packed_logs={} signature={}",
+        summary.panel.schema,
+        summary.panel.schema_version,
+        summary.panel.playback.label(),
+        summary.paused_produced,
+        summary.step_produced,
+        summary.run_produced,
+        summary.panel.mind_tick,
+        summary.panel.world_tick,
+        summary.panel.selected_action_kind,
+        summary.panel.selected_action_id,
+        summary.panel.target_entity,
+        summary.all_patches_sealed,
+        summary.panel.sealed_patch_count,
+        summary.panel.packed_record_count,
+        summary.panel.signature_line()
+    )
+}
+
 fn format_visible_summary(
     prefix: &str,
     presentation: &alife_game_app::VisibleWorldPresentation,
@@ -281,23 +316,30 @@ fn format_visible_summary(
 #[cfg(feature = "bevy-app")]
 fn format_graphical_playground_summary(
     prefix: &str,
-    summary: &alife_game_app::GraphicalPlaygroundLaunchSummary,
+    summary: &alife_game_app::bevy_shell::GraphicalPlaygroundRunSummary,
 ) -> String {
     format!(
-        "{prefix} schema={} version={} title='{}' mode={} timeout={:?} seed={} backend={:?} objects={} creatures={} food={} cpu_fallback={} stable_ids={} persistent={} signature={}",
-        summary.schema,
-        summary.schema_version,
-        summary.window_title,
-        summary.mode_label,
-        summary.smoke_seconds,
-        summary.seed,
-        summary.selected_backend,
-        summary.object_count,
-        summary.creature_marker_count,
-        summary.food_marker_count,
-        summary.cpu_fallback_visible,
-        summary.stable_id_overlay_visible,
-        summary.persistent_window,
+        "{prefix} schema={} version={} title='{}' mode={} timeout={:?} seed={} backend={:?} objects={} creatures={} food={} cpu_fallback={} stable_ids={} persistent={} playback={} mind_tick={} world_tick={:?} action={:?}:{:?} sealed_patches={} packed_logs={} signature={}",
+        summary.launch.schema,
+        summary.launch.schema_version,
+        summary.launch.window_title,
+        summary.launch.mode_label,
+        summary.launch.smoke_seconds,
+        summary.launch.seed,
+        summary.launch.selected_backend,
+        summary.launch.object_count,
+        summary.launch.creature_marker_count,
+        summary.launch.food_marker_count,
+        summary.launch.cpu_fallback_visible,
+        summary.launch.stable_id_overlay_visible,
+        summary.launch.persistent_window,
+        summary.runtime.playback.label(),
+        summary.runtime.mind_tick,
+        summary.runtime.world_tick,
+        summary.runtime.selected_action_kind,
+        summary.runtime.selected_action_id,
+        summary.runtime.sealed_patch_count,
+        summary.runtime.packed_record_count,
         summary.signature_line()
     )
 }
@@ -768,10 +810,11 @@ fn run_bevy_smoke(_fixture_root: &str) -> Result<String, String> {
 #[cfg(feature = "bevy-app")]
 fn run_graphical_playground_interactive(fixture_root: &str) -> Result<String, String> {
     let launch = alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(fixture_root);
-    let summary = alife_game_app::bevy_shell::run_graphical_playground_window(&launch)
-        .map_err(|err| err.to_string())?;
+    let summary =
+        alife_game_app::bevy_shell::run_graphical_playground_window_with_controls(&launch)
+            .map_err(|err| err.to_string())?;
     Ok(format_graphical_playground_summary(
-        "S01 graphical playground closed",
+        "S02 graphical playground closed",
         &summary,
     ))
 }
@@ -784,10 +827,11 @@ fn run_graphical_playground_interactive(_fixture_root: &str) -> Result<String, S
 #[cfg(feature = "bevy-app")]
 fn run_graphical_playground_smoke(fixture_root: &str, seconds: u32) -> Result<String, String> {
     let launch = alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(fixture_root, seconds);
-    let summary = alife_game_app::bevy_shell::run_graphical_playground_window(&launch)
-        .map_err(|err| err.to_string())?;
+    let summary =
+        alife_game_app::bevy_shell::run_graphical_playground_window_with_controls(&launch)
+            .map_err(|err| err.to_string())?;
     Ok(format_graphical_playground_summary(
-        "S01 graphical playground smoke",
+        "S02 graphical playground smoke",
         &summary,
     ))
 }

@@ -11,20 +11,21 @@ use alife_game_app::{
     run_longrun_balance_smoke, run_longrun_balance_with_config, run_onboarding_help_smoke,
     run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_save_load_ux_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
-    AppShellLaunchConfig, AutosavePolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
-    CreatureAnimationState, CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, InspectorControlPanel, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
+    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, SaveSlotDescriptor,
-    SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
-    WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
+    RuntimeControlPanel, RuntimePlaybackState, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
+    SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
+    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -264,6 +265,39 @@ fn pause_and_step_modes_do_not_advance_hidden_state_unexpectedly() {
     let stepped = bridge.update(LiveBrainTickControl::step_once()).unwrap();
     assert_eq!(stepped.len(), 1);
     assert_eq!(bridge.mind().current_tick(), Tick::new(4));
+}
+
+#[test]
+fn s02_runtime_controls_pause_step_and_run_through_sealed_live_loop() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_runtime_controls_smoke(&launch, 5).unwrap();
+
+    assert_eq!(summary.paused_produced, 0);
+    assert_eq!(summary.step_produced, 1);
+    assert_eq!(summary.run_produced, 5);
+    assert!(summary.all_patches_sealed);
+    assert_eq!(summary.panel.playback, RuntimePlaybackState::Running);
+    assert_eq!(summary.panel.run_speed_ticks, 2);
+    assert!(summary.panel.selected_action_kind.is_some());
+    assert!(summary.panel.sealed_patch_count >= 6);
+    assert!(summary.panel.packed_record_count >= 6);
+    assert!(summary.panel.status_overlay_text().contains("Controls:"));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn s02_runtime_controls_cannot_mutate_cognition_directly() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+
+    let stepped = panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    assert_eq!(stepped.len(), 1);
+    assert!(stepped[0].patch_sealed);
+    panel.direct_cognition_mutation_allowed = true;
+    assert!(panel.validate().is_err());
 }
 
 #[test]
@@ -1833,4 +1867,18 @@ fn bevy_feature_creature_inspector_keeps_local_entity_mapping_out_of_model() {
         .snapshot
         .action_summary
         .contains("Interact"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_graphical_playground_carries_s02_runtime_controls() {
+    let launch = alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(p34_fixture_root(), 5);
+    let runtime = alife_game_app::bevy_shell::GraphicalRuntimeControlsResource::new(&launch)
+        .expect("S02 runtime controls should initialize from the P34 fixture");
+    assert_eq!(runtime.smoke_target_ticks, Some(5));
+    assert_eq!(runtime.panel.playback, RuntimePlaybackState::Paused);
+    assert_eq!(
+        runtime.panel.schema,
+        alife_game_app::S02_RUNTIME_CONTROLS_SCHEMA
+    );
 }

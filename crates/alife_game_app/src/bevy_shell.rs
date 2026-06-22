@@ -9,10 +9,10 @@ use alife_world::WorldObjectKind;
 use bevy::{
     app::AppExit,
     prelude::{
-        default, App, BackgroundColor, Camera2d, ClearColor, Color, Component, DefaultPlugins,
-        Entity, MessageWriter, MinimalPlugins, Name, Node, PluginGroup, PositionType, Res, ResMut,
-        Resource, Sprite, Text, Text2d, TextColor, TextFont, Time, Timer, TimerMode, Transform,
-        Update, Val, Vec2, Vec3,
+        default, App, BackgroundColor, ButtonInput, Camera2d, ClearColor, Color, Component,
+        DefaultPlugins, Entity, KeyCode, MessageWriter, MinimalPlugins, Name, Node, NonSendMut,
+        PluginGroup, PositionType, Res, ResMut, Resource, Sprite, Text, Text2d, TextColor,
+        TextFont, Time, Timer, TimerMode, Transform, Update, Val, Vec2, Vec3, With,
     },
     window::{ExitCondition, PresentMode, Window, WindowPlugin, WindowTheme},
 };
@@ -23,8 +23,9 @@ use crate::{
     CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
     CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
     GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
-    LiveBrainTickSummary, VisibleMaterialKind, VisiblePlaceholderShape,
-    VisibleWorldObjectPresentation, VisibleWorldPresentation,
+    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    VisibleMaterialKind, VisiblePlaceholderShape, VisibleWorldObjectPresentation,
+    VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -117,14 +118,86 @@ pub struct GraphicalPlaygroundSceneResource {
     pub summary: GraphicalPlaygroundLaunchSummary,
 }
 
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalPlaygroundRunSummary {
+    pub launch: GraphicalPlaygroundLaunchSummary,
+    pub runtime: RuntimeControlPanel,
+}
+
+impl GraphicalPlaygroundRunSummary {
+    pub fn signature_line(&self) -> String {
+        format!(
+            "{}|{}",
+            self.launch.signature_line(),
+            self.runtime.signature_line()
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalRuntimeControlsResource {
+    pub panel: RuntimeControlPanel,
+    pub smoke_target_ticks: Option<u32>,
+    pub smoke_ticks_done: u32,
+}
+
+struct GraphicalRuntimeLoopResource {
+    live: LiveBrainLoop,
+}
+
+impl GraphicalRuntimeControlsResource {
+    pub fn new(launch: &GraphicalPlaygroundLaunchConfig) -> Result<Self, GameAppShellError> {
+        let live = LiveBrainLoop::from_p34_launch(&launch.app_launch)?;
+        let panel = RuntimeControlPanel::from_live_loop(&live);
+        panel.validate()?;
+        Ok(Self {
+            panel,
+            smoke_target_ticks: launch
+                .mode
+                .smoke_seconds()
+                .map(|seconds| seconds.min(S02_MAX_SMOKE_TICKS).max(1)),
+            smoke_ticks_done: 0,
+        })
+    }
+}
+
+fn graphical_runtime_resources(
+    launch: &GraphicalPlaygroundLaunchConfig,
+) -> Result<
+    (
+        GraphicalRuntimeControlsResource,
+        GraphicalRuntimeLoopResource,
+    ),
+    GameAppShellError,
+> {
+    let live = LiveBrainLoop::from_p34_launch(&launch.app_launch)?;
+    let panel = RuntimeControlPanel::from_live_loop(&live);
+    panel.validate()?;
+    let controls = GraphicalRuntimeControlsResource {
+        panel,
+        smoke_target_ticks: launch
+            .mode
+            .smoke_seconds()
+            .map(|seconds| seconds.min(S02_MAX_SMOKE_TICKS).max(1)),
+        smoke_ticks_done: 0,
+    };
+    Ok((controls, GraphicalRuntimeLoopResource { live }))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalPlaygroundMarker {
     pub stable_id: WorldEntityId,
     pub kind: WorldObjectKind,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct RuntimeStatusOverlay;
+
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer(Timer);
+
+#[derive(Debug, Resource)]
+struct GraphicalRuntimeTickTimer(Timer);
 
 pub fn build_minimal_bevy_app_shell(summary: AppStartupSummary) -> App {
     let mut app = App::new();
@@ -240,6 +313,21 @@ pub fn build_graphical_playground_app_shell(
     .insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     });
+    let (controls, live_loop) = graphical_runtime_resources(launch)?;
+    app.insert_resource(controls)
+        .insert_non_send_resource(live_loop)
+        .insert_resource(GraphicalRuntimeTickTimer(Timer::from_seconds(
+            0.35,
+            TimerMode::Repeating,
+        )))
+        .add_systems(
+            Update,
+            (
+                handle_graphical_runtime_input,
+                advance_graphical_runtime_loop,
+                update_graphical_runtime_overlay,
+            ),
+        );
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
         app.insert_resource(GraphicalPlaygroundSmokeTimer(Timer::from_seconds(
@@ -256,9 +344,23 @@ pub fn build_graphical_playground_app_shell(
 pub fn run_graphical_playground_window(
     launch: &GraphicalPlaygroundLaunchConfig,
 ) -> Result<GraphicalPlaygroundLaunchSummary, GameAppShellError> {
+    Ok(run_graphical_playground_window_with_controls(launch)?.launch)
+}
+
+pub fn run_graphical_playground_window_with_controls(
+    launch: &GraphicalPlaygroundLaunchConfig,
+) -> Result<GraphicalPlaygroundRunSummary, GameAppShellError> {
     let (mut app, summary) = build_graphical_playground_app_shell(launch)?;
     app.run();
-    Ok(summary)
+    let runtime = crate::run_runtime_controls_smoke(
+        &launch.app_launch,
+        launch.mode.smoke_seconds().unwrap_or(1),
+    )?
+    .panel;
+    Ok(GraphicalPlaygroundRunSummary {
+        launch: summary,
+        runtime,
+    })
 }
 
 pub fn spawn_visible_world(
@@ -383,9 +485,9 @@ fn spawn_graphical_playground_scene(
     });
 
     app.world_mut().spawn((
-        Name::new("A-Life S01 diagnostic overlay"),
+        Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "A-Life Graphical Playground\nFixture: P34 tiny world  seed={}\nBackend: CPU Reference fallback\nStable IDs visible: agent=1 food=2\nMode: {}  timeout={:?}\nClose the window to exit.",
+            "A-Life Graphical Playground\nFixture: P34 tiny world  seed={}\nBackend: CPU Reference fallback\nStable IDs visible: agent=1 food=2\nMode: {}  timeout={:?}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit",
             summary.seed, summary.mode_label, summary.smoke_seconds
         )),
         TextFont {
@@ -402,6 +504,7 @@ fn spawn_graphical_playground_scene(
             ..default()
         },
         BackgroundColor(Color::srgba(0.02, 0.03, 0.025, 0.82)),
+        RuntimeStatusOverlay,
     ));
 
     Ok(())
@@ -519,5 +622,106 @@ fn close_after_graphical_smoke_timeout(
     timer.0.tick(time.delta());
     if timer.0.just_finished() {
         exits.write(AppExit::Success);
+    }
+}
+
+fn handle_graphical_runtime_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut runtime: ResMut<GraphicalRuntimeControlsResource>,
+    mut live_loop: NonSendMut<GraphicalRuntimeLoopResource>,
+    mut exits: MessageWriter<AppExit>,
+) {
+    let apply = |runtime: &mut GraphicalRuntimeControlsResource,
+                 live_loop: &mut GraphicalRuntimeLoopResource,
+                 command| {
+        if runtime
+            .panel
+            .apply_command(&mut live_loop.live, command)
+            .is_err()
+        {
+            runtime.panel.playback = crate::RuntimePlaybackState::Paused;
+            runtime.panel.last_patch_sealed = false;
+        }
+    };
+
+    if keyboard.just_pressed(KeyCode::Escape) {
+        apply(
+            &mut *runtime,
+            &mut *live_loop,
+            RuntimeControlCommand::RequestExit,
+        );
+        exits.write(AppExit::Success);
+    }
+    if keyboard.just_pressed(KeyCode::Space) {
+        apply(
+            &mut *runtime,
+            &mut *live_loop,
+            RuntimeControlCommand::TogglePause,
+        );
+    }
+    if keyboard.just_pressed(KeyCode::KeyN) {
+        apply(
+            &mut *runtime,
+            &mut *live_loop,
+            RuntimeControlCommand::StepOnce,
+        );
+    }
+    if keyboard.just_pressed(KeyCode::Digit1) {
+        apply(
+            &mut *runtime,
+            &mut *live_loop,
+            RuntimeControlCommand::SetRunSpeed(1),
+        );
+    }
+    if keyboard.just_pressed(KeyCode::Digit2) {
+        apply(
+            &mut *runtime,
+            &mut *live_loop,
+            RuntimeControlCommand::SetRunSpeed(2),
+        );
+    }
+    if keyboard.just_pressed(KeyCode::Digit3) {
+        apply(
+            &mut *runtime,
+            &mut *live_loop,
+            RuntimeControlCommand::SetRunSpeed(3),
+        );
+    }
+}
+
+fn advance_graphical_runtime_loop(
+    time: Res<Time>,
+    mut timer: ResMut<GraphicalRuntimeTickTimer>,
+    mut runtime: ResMut<GraphicalRuntimeControlsResource>,
+    mut live_loop: NonSendMut<GraphicalRuntimeLoopResource>,
+) {
+    timer.0.tick(time.delta());
+    if !timer.0.just_finished() {
+        return;
+    }
+
+    if let Some(target) = runtime.smoke_target_ticks {
+        if runtime.smoke_ticks_done < target {
+            if let Ok(summaries) = runtime
+                .panel
+                .apply_command(&mut live_loop.live, RuntimeControlCommand::StepOnce)
+            {
+                runtime.smoke_ticks_done = runtime
+                    .smoke_ticks_done
+                    .saturating_add(summaries.len() as u32);
+            }
+        }
+        return;
+    }
+
+    let _ = runtime.panel.advance_if_running(&mut live_loop.live);
+}
+
+fn update_graphical_runtime_overlay(
+    runtime: Res<GraphicalRuntimeControlsResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<RuntimeStatusOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = runtime.panel.status_overlay_text();
     }
 }

@@ -90,6 +90,9 @@ pub use release_candidate::*;
 mod graphical_playground;
 pub use graphical_playground::*;
 
+mod interactive_runtime;
+pub use interactive_runtime::*;
+
 mod population_social;
 pub use population_social::*;
 

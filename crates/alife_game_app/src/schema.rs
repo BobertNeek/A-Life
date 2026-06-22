@@ -69,3 +69,7 @@ pub const G23_MAX_RELEASE_CANDIDATE_GATES: usize = 32;
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA: &str = "alife.s01.graphical_playground_shell.v1";
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION: u16 = 1;
 pub const S01_MAX_GRAPHICAL_SMOKE_SECONDS: u32 = 120;
+pub const S02_RUNTIME_CONTROLS_SCHEMA: &str = "alife.s02.runtime_controls.v1";
+pub const S02_RUNTIME_CONTROLS_SCHEMA_VERSION: u16 = 1;
+pub const S02_MAX_RUN_TICKS_PER_UPDATE: u32 = 4;
+pub const S02_MAX_SMOKE_TICKS: u32 = 16;
