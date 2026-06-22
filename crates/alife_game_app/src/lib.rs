@@ -108,6 +108,9 @@ pub use semantic_provider_display::*;
 mod advanced_gameplay_ux;
 pub use advanced_gameplay_ux::*;
 
+mod gpu_graphics_performance;
+pub use gpu_graphics_performance::*;
+
 mod gpu_product_telemetry;
 pub use gpu_product_telemetry::*;
 

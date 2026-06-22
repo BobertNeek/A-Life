@@ -564,8 +564,11 @@ fn spawn_graphical_playground_scene(
     app.world_mut().spawn((
         Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "A-Life Graphical Playground\nFixture: P34 tiny world  seed={}\nBackend: CPU Reference fallback\nStable IDs visible: agent=1 food=2\nMode: {}  timeout={:?}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit\nReadability: color+shape markers, badges, display-only feedback",
-            summary.seed, summary.mode_label, summary.smoke_seconds
+            "A-Life Graphical Playground\nFixture: P34 tiny world  seed={}\nBackend: CPU Reference fallback\n{}\nStable IDs visible: agent=1 food=2\nMode: {}  timeout={:?}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit\nReadability: color+shape markers, badges, display-only feedback",
+            summary.seed,
+            crate::s08_runtime_overlay_status_line(),
+            summary.mode_label,
+            summary.smoke_seconds
         )),
         TextFont {
             font_size: 16.0,

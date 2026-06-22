@@ -3,15 +3,15 @@ use std::{env, path::PathBuf, process::ExitCode};
 use alife_game_app::{
     load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke,
     run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_feedback_polish_smoke, run_gpu_product_hardening_smoke, run_headless_app_shell_smoke,
-    run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke,
-    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_onboarding_help_smoke,
-    run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_shell_config,
-    AppShellLaunchConfig,
+    run_feedback_polish_smoke, run_gpu_graphics_performance_evidence_smoke,
+    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    run_longrun_balance_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_shell_config, AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -176,6 +176,15 @@ fn run() -> Result<String, String> {
             let summary = run_gpu_product_hardening_smoke().map_err(|err| err.to_string())?;
             Ok(format_gpu_product_summary("G12 GPU product", &summary))
         }
+        [command, fixture_root] if command == "gpu-graphics-performance-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary = run_gpu_graphics_performance_evidence_smoke(&launch)
+                .map_err(|err| err.to_string())?;
+            Ok(format_gpu_graphics_performance_summary(
+                "S08 GPU graphics performance",
+                &summary,
+            ))
+        }
         [command] if command == "world-editor-smoke" => {
             let summary = run_world_editor_smoke().map_err(|err| err.to_string())?;
             Ok(format_world_editor_summary("G13 world editor", &summary))
@@ -238,7 +247,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -598,6 +607,26 @@ fn format_gpu_product_summary(
         summary.invalid_gpu_config_falls_back,
         summary.manual_hardware_command,
         summary.performance_claim_status,
+        summary.signature_line()
+    )
+}
+
+fn format_gpu_graphics_performance_summary(
+    prefix: &str,
+    summary: &alife_game_app::GpuGraphicsPerformanceEvidenceSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} selected={} gpu_evidence={} graphics_evidence={} fps_target={} fallback={:?} cpu_fallback={} no_readback={} launch_smoke='{}' signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.settings_panel.selected_backend,
+        summary.settings_panel.gpu_evidence_status.label(),
+        summary.settings_panel.graphics_evidence_status.label(),
+        summary.settings_panel.fps_target_status.label(),
+        summary.settings_panel.fallback_reason,
+        summary.cpu_fallback_works,
+        summary.no_active_readback,
+        summary.launch_window_smoke_status,
         summary.signature_line()
     )
 }
