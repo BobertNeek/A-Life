@@ -75,3 +75,6 @@ pub const S02_MAX_RUN_TICKS_PER_UPDATE: u32 = 4;
 pub const S02_MAX_SMOKE_TICKS: u32 = 16;
 pub const S07_ADVANCED_GAMEPLAY_UX_SCHEMA: &str = "alife.s07.advanced_gameplay_ux.v1";
 pub const S07_ADVANCED_GAMEPLAY_UX_SCHEMA_VERSION: u16 = 1;
+pub const S08_GPU_GRAPHICS_PERFORMANCE_SCHEMA: &str = "alife.s08.gpu_graphics_performance.v1";
+pub const S08_GPU_GRAPHICS_PERFORMANCE_SCHEMA_VERSION: u16 = 1;
+pub const S08_TARGET_FPS: u16 = 60;

@@ -7,24 +7,25 @@ use alife_game_app::{
     load_visible_world_from_p34_save, project_lod_without_behavior_change,
     run_advanced_gameplay_ux_smoke, run_cognition_debug_timeline_smoke,
     run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
-    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
-    run_longrun_balance_with_config, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
-    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
-    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
-    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, SaveSlotDescriptor,
-    SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig,
-    WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    run_gpu_graphics_performance_evidence_smoke, run_gpu_product_hardening_smoke,
+    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
+    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
+    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
+    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
+    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
+    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
+    SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
     G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
@@ -1483,6 +1484,98 @@ fn gpu_product_smoke_report_is_honest_and_manual_command_is_current() {
         .contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
     assert!(summary.manual_hardware_command.contains("--gpu-runtime"));
     assert!(!summary.manual_hardware_command.contains("--gpu-report"));
+}
+
+#[test]
+fn s08_gpu_graphics_performance_evidence_keeps_gpu_claims_manual_or_measured() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_gpu_graphics_performance_evidence_smoke(&launch).unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::S08_GPU_GRAPHICS_PERFORMANCE_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::S08_GPU_GRAPHICS_PERFORMANCE_SCHEMA_VERSION
+    );
+    assert_eq!(
+        summary.settings_panel.target_fps,
+        alife_game_app::S08_TARGET_FPS
+    );
+    assert!(summary.cpu_fallback_works);
+    assert!(summary.no_active_readback);
+    assert!(summary.no_false_gpu_claims);
+    assert_eq!(summary.settings_panel.selected_backend, "CpuReference");
+    assert!(!summary.settings_panel.measured_gpu_performance);
+    assert_ne!(
+        summary.settings_panel.gpu_evidence_status,
+        S08EvidenceStatus::Measured
+    );
+    assert_ne!(
+        summary.settings_panel.fps_target_status,
+        S08EvidenceStatus::Measured
+    );
+    summary.validate().unwrap();
+}
+
+#[test]
+fn s08_status_surface_documents_fallback_fps_and_no_readback_boundaries() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_gpu_graphics_performance_evidence_smoke(&launch).unwrap();
+    let status = &summary.settings_panel.status_line;
+
+    assert!(status.contains("backend=CpuReference"));
+    assert!(status.contains("CPU fallback is not GPU performance"));
+    assert!(status.contains("60 FPS target=manual-unknown"));
+    assert!(status.contains("no active neural readback"));
+    assert!(summary.report_markdown.contains("manual/unknown"));
+    assert!(summary
+        .report_markdown
+        .contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
+    assert!(summary.report_markdown.contains("--gpu-runtime"));
+    assert!(!summary.report_markdown.contains("--gpu-report"));
+    assert!(!summary.report_markdown.contains("ALIFE_GPU_BACKEND"));
+}
+
+#[test]
+fn s08_graphical_and_benchmark_commands_are_ci_safe_or_explicitly_manual() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_gpu_graphics_performance_evidence_smoke(&launch).unwrap();
+
+    assert_eq!(
+        summary.benchmark_smoke_command,
+        "cargo run -p alife_tools --bin benchmark_tiers"
+    );
+    assert_eq!(
+        summary.benchmark_gpu_runtime_command,
+        "cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime"
+    );
+    assert!(summary.graphical_dry_run_command.contains("-DryRun"));
+    assert!(summary.graphical_smoke_command.contains("-SmokeSeconds 5"));
+    assert!(summary
+        .graphics_smoke_evidence
+        .contains("dry-run is not graphical proof"));
+    assert!(summary
+        .launch_window_smoke_status
+        .contains("real window timing remains manual"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_s08_runtime_overlay_reports_honest_gpu_status() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    let overlay = panel.status_overlay_text();
+
+    assert!(overlay.contains("S08 GPU/Graphics"));
+    assert!(overlay.contains("CPU fallback is not GPU performance"));
+    assert!(overlay.contains("60 FPS target=manual-unknown"));
+    assert!(overlay.contains("no active neural readback"));
 }
 
 #[test]

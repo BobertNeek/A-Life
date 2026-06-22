@@ -153,7 +153,7 @@ impl RuntimeControlPanel {
 
     pub fn status_overlay_text(&self) -> String {
         format!(
-            "A-Life Graphical Playground\nStatus: {}  speed={} tick/update\nMind tick: {}  World tick: {}\nLast action: {}  target={}\nLast status: {}  sealed_patch={} sealed_patches={} packed_logs={}\nBackend: CPU Reference fallback\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit",
+            "A-Life Graphical Playground\nStatus: {}  speed={} tick/update\nMind tick: {}  World tick: {}\nLast action: {}  target={}\nLast status: {}  sealed_patch={} sealed_patches={} packed_logs={}\nBackend: CPU Reference fallback\n{}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
@@ -168,6 +168,7 @@ impl RuntimeControlPanel {
             self.last_patch_sealed,
             self.sealed_patch_count,
             self.packed_record_count,
+            crate::s08_runtime_overlay_status_line(),
         )
     }
 
