@@ -2,16 +2,17 @@ use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_game_app::{
     load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke,
-    run_cognition_debug_timeline_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_feedback_polish_smoke, run_gpu_graphics_performance_evidence_smoke,
-    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_shell_config, AppShellLaunchConfig,
+    run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
+    run_creature_visual_smoke, run_feedback_polish_smoke,
+    run_gpu_graphics_performance_evidence_smoke, run_gpu_product_hardening_smoke,
+    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
+    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_shell_config,
+    AppShellLaunchConfig,
 };
 
 fn main() -> ExitCode {
@@ -229,6 +230,13 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
+        [command] if command == "content-authoring-smoke" => {
+            let summary = run_content_authoring_smoke().map_err(|err| err.to_string())?;
+            Ok(format_content_tutorial_authoring_summary(
+                "S09 content tutorial authoring",
+                &summary,
+            ))
+        }
         [command] if command == "platform-package-smoke" => {
             let summary = run_platform_package_smoke().map_err(|err| err.to_string())?;
             Ok(format_platform_package_summary(
@@ -247,7 +255,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -789,6 +797,35 @@ fn format_onboarding_help_summary(
         summary.tutorial_step_count,
         summary.optional_systems_remain_optional,
         summary.windows_wrappers_documented,
+        summary.signature_line()
+    )
+}
+
+fn format_content_tutorial_authoring_summary(
+    prefix: &str,
+    summary: &alife_game_app::ContentTutorialAuthoringSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} pack={} worlds={} lessons={} creatures={} scenarios={} checked_files={} largest_bytes={} tutorial_steps={} perception_steps={} food={} hazard={} social={} school_token={} resource_zone={} missing_rejected={} headless_ready={} graphics={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.content.pack_id,
+        summary.content.world_presets,
+        summary.content.lesson_packs,
+        summary.content.creature_presets,
+        summary.content.scenario_packs,
+        summary.content.checked_files,
+        summary.content.largest_file_bytes,
+        summary.onboarding_tutorial_steps,
+        summary.content.perception_only_lesson_steps,
+        summary.content.has_food,
+        summary.content.has_hazard,
+        summary.content.has_social_peer,
+        summary.content.has_school_token,
+        summary.content.has_resource_zone,
+        summary.content.missing_required_rejected,
+        summary.new_tester_headless_ready,
+        summary.tutorial.graphical_manual_status,
         summary.signature_line()
     )
 }

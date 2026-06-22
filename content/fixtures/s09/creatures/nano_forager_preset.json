@@ -1,0 +1,12 @@
+{
+  "schema": "alife.g16.creature_preset.v1",
+  "schema_version": 1,
+  "preset_id": "s09-nano-forager",
+  "organism_id": 1901,
+  "genome_id": 1901,
+  "brain_class": "Nano512",
+  "generated_weight_asset_id": "tiny-generated-weights",
+  "inherited_weight_only": true,
+  "lifetime_state_included": false,
+  "role_tags": ["forager", "tutorial", "school-visible"]
+}

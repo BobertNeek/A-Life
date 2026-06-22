@@ -1,0 +1,52 @@
+{
+  "schema": "alife.g16.content_pack.v1",
+  "schema_version": 1,
+  "pack_id": "s09-first-run-tutorial-pack",
+  "display_name": "S09 First-Run Tutorial Pack",
+  "p34_runtime_config": "crates/alife_world/tests/fixtures/p34/tiny_config.json",
+  "p34_asset_manifest": "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
+  "p34_asset_root": "crates/alife_world/tests/fixtures/p34",
+  "p34_save": "crates/alife_world/tests/fixtures/p34/tiny_save.json",
+  "worlds": [
+    {
+      "id": "s09-first-run-meadow",
+      "relative_path": "content/fixtures/s09/worlds/first_run_meadow_world.json",
+      "required": true
+    }
+  ],
+  "lessons": [
+    {
+      "id": "s09-food-hazard-school-lesson",
+      "relative_path": "content/fixtures/s09/lessons/food_hazard_school_lesson.json",
+      "required": true
+    }
+  ],
+  "creatures": [
+    {
+      "id": "s09-nano-forager",
+      "relative_path": "content/fixtures/s09/creatures/nano_forager_preset.json",
+      "required": true
+    }
+  ],
+  "generated_weight_refs": [
+    {
+      "asset_id": "tiny-generated-weights",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/assets/tiny_generated_weights_ref.json",
+      "required": true
+    }
+  ],
+  "semantic_assets": [
+    {
+      "asset_id": "g16-fake-semantic-context",
+      "relative_path": "content/fixtures/g16/semantic/fake_provider_context.json",
+      "required": false
+    }
+  ],
+  "scenario_packs": [
+    {
+      "id": "s09-first-run-tutorial-scenario",
+      "relative_path": "content/fixtures/s09/scenarios/first_run_tutorial_scenario.json",
+      "required": true
+    }
+  ]
+}

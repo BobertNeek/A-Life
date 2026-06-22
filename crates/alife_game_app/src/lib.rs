@@ -111,6 +111,9 @@ pub use advanced_gameplay_ux::*;
 mod gpu_graphics_performance;
 pub use gpu_graphics_performance::*;
 
+mod content_tutorial_authoring;
+pub use content_tutorial_authoring::*;
+
 mod gpu_product_telemetry;
 pub use gpu_product_telemetry::*;
 
