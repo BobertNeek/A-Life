@@ -112,6 +112,43 @@ impl LongRunBalanceMetrics {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct BalanceBehaviorCriterion {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub status: &'static str,
+    pub metric_value: f32,
+    pub evidence: String,
+    pub limitation: String,
+}
+
+impl BalanceBehaviorCriterion {
+    pub fn validate(&self) -> Result<(), ScaffoldContractError> {
+        if self.id.is_empty()
+            || self.label.is_empty()
+            || self.evidence.is_empty()
+            || self.limitation.is_empty()
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if !matches!(
+            self.status,
+            "autonomous-ecology-signal"
+                | "bounded-smoke"
+                | "bounded-lifecycle"
+                | "not-yet-emergent"
+        ) {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        NormalizedScalar::new(self.metric_value)?;
+        Ok(())
+    }
+
+    pub fn signature_line(&self) -> String {
+        format!("{}:{}:{:.3}", self.id, self.status, self.metric_value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct LongRunBalanceSummary {
     pub schema: &'static str,
     pub schema_version: u16,
@@ -122,6 +159,8 @@ pub struct LongRunBalanceSummary {
     pub lifecycle_signature: String,
     pub performance_signature: String,
     pub metrics: LongRunBalanceMetrics,
+    pub behavior_criteria: Vec<BalanceBehaviorCriterion>,
+    pub s06_improvement_note: String,
     pub degenerate_behaviors: Vec<String>,
     pub constraints: Vec<String>,
     pub manual_extended_command: String,
@@ -137,16 +176,34 @@ impl LongRunBalanceSummary {
             || self.population_signature.is_empty()
             || self.lifecycle_signature.is_empty()
             || self.performance_signature.is_empty()
+            || self.behavior_criteria.len() < 5
+            || self.s06_improvement_note.is_empty()
             || self.degenerate_behaviors.is_empty()
             || self.constraints.is_empty()
             || !self.manual_extended_command.contains("--ignored")
             || !self
                 .manual_extended_command
                 .contains("g19_manual_extended_balance_run")
+            || !self.report_markdown.contains("S06 non-scripted criteria")
+            || !self.report_markdown.contains(&self.s06_improvement_note)
             || !self.report_markdown.contains("Known degenerate behaviors")
             || !self.report_markdown.contains("manual extended")
         {
             return Err(ScaffoldContractError::MissingPhaseData);
+        }
+        if !self
+            .behavior_criteria
+            .iter()
+            .any(|criterion| criterion.status == "autonomous-ecology-signal")
+            || !self
+                .behavior_criteria
+                .iter()
+                .any(|criterion| criterion.status == "not-yet-emergent")
+        {
+            return Err(ScaffoldContractError::MissingPhaseData);
+        }
+        for criterion in &self.behavior_criteria {
+            criterion.validate()?;
         }
         if self
             .degenerate_behaviors
@@ -209,10 +266,15 @@ pub fn run_longrun_balance_with_config(
         &lifecycle,
         &performance,
     )?;
+    let behavior_criteria = balance_behavior_criteria(&metrics, &ecology, &population, &lifecycle)?;
+    let s06_improvement_note =
+        "S06 records autonomous resource regrowth/spawn as the current non-scripted ecology signal; creature-level free foraging and hazard avoidance remain bounded smoke or not yet emergent."
+            .to_string();
     let degenerate_behaviors = vec![
-        "hazard contact is still scripted in the smoke loop; G19 keeps it visible instead of hiding the pain metric".to_string(),
+        "hazard contact is still scripted in the smoke loop; S06/G19 keeps it visible instead of hiding the pain metric".to_string(),
         "manual upper population tiers remain expected-slow and are not normal CI gates".to_string(),
         "current fast balance smoke proves bounded deterministic loops, not full player fun across every ecology".to_string(),
+        "creature-level free foraging is not yet emergent; food success currently proves the validated visible-food path".to_string(),
     ];
     let constraints = vec![
         "CPU/headless path remains the correctness oracle".to_string(),
@@ -232,6 +294,8 @@ pub fn run_longrun_balance_with_config(
         lifecycle_signature: lifecycle.signature_line(),
         performance_signature: performance.signature_line(),
         metrics,
+        behavior_criteria,
+        s06_improvement_note,
         degenerate_behaviors,
         constraints,
         manual_extended_command,
@@ -240,6 +304,109 @@ pub fn run_longrun_balance_with_config(
     summary.report_markdown = balance_report_markdown(&summary);
     summary.validate()?;
     Ok(summary)
+}
+
+fn balance_behavior_criteria(
+    metrics: &LongRunBalanceMetrics,
+    ecology: &PlayableEcologyLoopSummary,
+    population: &PopulationSocialLoopSummary,
+    lifecycle: &LifecycleLineageSummary,
+) -> Result<Vec<BalanceBehaviorCriterion>, ScaffoldContractError> {
+    let resource_signal =
+        usize::from(ecology.metrics.resources_regrown > 0 || ecology.metrics.resources_spawned > 0)
+            as f32;
+    let criteria = vec![
+        BalanceBehaviorCriterion {
+            id: "food-seeking",
+            label: "Food seeking",
+            status: "bounded-smoke",
+            metric_value: metrics.food_success_rate,
+            evidence: format!(
+                "food_success_rate={:.3}; visible food action succeeds and lowers hunger",
+                metrics.food_success_rate
+            ),
+            limitation:
+                "food is still reached through the bounded smoke loop, not open-ended foraging"
+                    .to_string(),
+        },
+        BalanceBehaviorCriterion {
+            id: "hazard-avoidance",
+            label: "Hazard avoidance",
+            status: "not-yet-emergent",
+            metric_value: metrics.hazard_avoidance_score,
+            evidence: format!(
+                "hazard_avoidance_score={:.3}; pain remains visible instead of hidden",
+                metrics.hazard_avoidance_score
+            ),
+            limitation:
+                "hazard contact is still scripted, so this is not proof of emergent avoidance"
+                    .to_string(),
+        },
+        BalanceBehaviorCriterion {
+            id: "sleep-rest",
+            label: "Sleep and rest",
+            status: "bounded-smoke",
+            metric_value: (metrics.sleep_cycle_count as f32).min(1.0),
+            evidence: format!(
+                "sleep_cycle_count={}; P16 sleep hook is exercised through sealed patches",
+                metrics.sleep_cycle_count
+            ),
+            limitation: "rest is still a bounded smoke-path event".to_string(),
+        },
+        BalanceBehaviorCriterion {
+            id: "population-bounds",
+            label: "Reproduction and death bounds",
+            status: "bounded-lifecycle",
+            metric_value: if metrics.population_bounds_enforced {
+                1.0
+            } else {
+                0.0
+            },
+            evidence: format!(
+                "births={} blocked={} living={} cap={}",
+                metrics.reproduction_births,
+                metrics.reproduction_blocked,
+                lifecycle.metrics.living_population,
+                lifecycle.population_cap
+            ),
+            limitation:
+                "population pressure is capped and deterministic, not yet tuned for broad fun"
+                    .to_string(),
+        },
+        BalanceBehaviorCriterion {
+            id: "resource-stability",
+            label: "Resource stability",
+            status: "autonomous-ecology-signal",
+            metric_value: resource_signal,
+            evidence: format!(
+                "resources_regrown={} resources_spawned={} active_resources={}",
+                ecology.metrics.resources_regrown,
+                ecology.metrics.resources_spawned,
+                ecology.metrics.active_resources
+            ),
+            limitation:
+                "resource cycling is deterministic fixture ecology, not a full open ecosystem"
+                    .to_string(),
+        },
+        BalanceBehaviorCriterion {
+            id: "social-diversity",
+            label: "Social diversity",
+            status: "bounded-smoke",
+            metric_value: metrics.social_diversity_score,
+            evidence: format!(
+                "social_diversity_score={:.3}; samples={} collisions={} tokens={}",
+                metrics.social_diversity_score,
+                population.metrics.social_context_samples,
+                population.metrics.collision_feedback_count,
+                population.metrics.vocal_tokens_heard
+            ),
+            limitation: "social variety is bounded and perception/modulatory only".to_string(),
+        },
+    ];
+    for criterion in &criteria {
+        criterion.validate()?;
+    }
+    Ok(criteria)
 }
 
 fn compute_balance_metrics(
@@ -384,7 +551,7 @@ fn social_diversity(population: &PopulationSocialLoopSummary) -> f32 {
 
 pub fn balance_report_markdown(summary: &LongRunBalanceSummary) -> String {
     let mut report = String::new();
-    report.push_str("# G19 Long-run Balance Report\n\n");
+    report.push_str("# S06/G19 Long-run Balance Report\n\n");
     report.push_str("| Metric | Value |\n|---|---:|\n");
     report.push_str(&format!(
         "| Survival score | {:.3} |\n| Energy stability | {:.3} |\n| Food success rate | {:.3} |\n| Hazard avoidance score | {:.3} |\n| Sleep cycles | {} |\n| Reproduction births | {} |\n| Reproduction blocked | {} |\n| Social diversity | {:.3} |\n| Sealed patches | {} |\n| Max population observed | {} |\n| Max resources observed | {} |\n",
@@ -400,6 +567,22 @@ pub fn balance_report_markdown(summary: &LongRunBalanceSummary) -> String {
         summary.metrics.max_population_observed,
         summary.metrics.max_resources_observed
     ));
+    report.push_str("\n## S06 non-scripted criteria\n\n");
+    report.push_str("| Criterion | Status | Metric | Evidence | Limitation |\n");
+    report.push_str("|---|---|---:|---|---|\n");
+    for criterion in &summary.behavior_criteria {
+        report.push_str(&format!(
+            "| {} | {} | {:.3} | {} | {} |\n",
+            criterion.label,
+            criterion.status,
+            criterion.metric_value,
+            criterion.evidence,
+            criterion.limitation
+        ));
+    }
+    report.push_str("\n## S06 assessment\n\n");
+    report.push_str(&summary.s06_improvement_note);
+    report.push('\n');
     report.push_str("\n## Known degenerate behaviors\n\n");
     for behavior in &summary.degenerate_behaviors {
         report.push_str(&format!("- {behavior}\n"));
