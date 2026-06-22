@@ -30,6 +30,90 @@ pub enum GpuRuntimeFallbackReason {
     UnsupportedBackend,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuRuntimeHardwareProbe {
+    pub schema_version: u16,
+    pub requested_backend: GpuRuntimeBackendKind,
+    pub adapter_available: bool,
+    pub device_request_succeeded: bool,
+    pub adapter_name: Option<String>,
+    pub backend_api: Option<String>,
+    pub adapter_type: Option<String>,
+    pub vendor_id: Option<u32>,
+    pub device_id: Option<u32>,
+    pub driver: Option<String>,
+    pub driver_info: Option<String>,
+    pub required_storage_buffers_per_shader_stage: u32,
+    pub adapter_storage_buffers_per_shader_stage: Option<u32>,
+    pub error: Option<String>,
+}
+
+impl GpuRuntimeHardwareProbe {
+    pub fn unavailable(requested_backend: GpuRuntimeBackendKind, error: impl Into<String>) -> Self {
+        Self {
+            schema_version: P29_RUNTIME_SCHEMA_VERSION,
+            requested_backend,
+            adapter_available: false,
+            device_request_succeeded: false,
+            adapter_name: None,
+            backend_api: None,
+            adapter_type: None,
+            vendor_id: None,
+            device_id: None,
+            driver: None,
+            driver_info: None,
+            required_storage_buffers_per_shader_stage: required_storage_buffers(requested_backend),
+            adapter_storage_buffers_per_shader_stage: None,
+            error: Some(error.into()),
+        }
+    }
+
+    pub const fn hardware_available(&self) -> bool {
+        self.adapter_available && self.device_request_succeeded
+    }
+
+    pub fn hardware_identifier(&self) -> Option<String> {
+        self.adapter_name.as_ref().map(|name| {
+            let backend = self.backend_api.as_deref().unwrap_or("unknown-backend");
+            let adapter_type = self.adapter_type.as_deref().unwrap_or("unknown-type");
+            let driver = self.driver_info.as_deref().or(self.driver.as_deref());
+            match driver {
+                Some(driver) if !driver.is_empty() => {
+                    format!("{name} ({backend}, {adapter_type}, {driver})")
+                }
+                _ => format!("{name} ({backend}, {adapter_type})"),
+            }
+        })
+    }
+
+    fn from_adapter(
+        requested_backend: GpuRuntimeBackendKind,
+        info: wgpu::AdapterInfo,
+        limits: wgpu::Limits,
+        device_request_succeeded: bool,
+        error: Option<String>,
+    ) -> Self {
+        Self {
+            schema_version: P29_RUNTIME_SCHEMA_VERSION,
+            requested_backend,
+            adapter_available: true,
+            device_request_succeeded,
+            adapter_name: Some(info.name),
+            backend_api: Some(format!("{:?}", info.backend)),
+            adapter_type: Some(format!("{:?}", info.device_type)),
+            vendor_id: Some(info.vendor),
+            device_id: Some(info.device),
+            driver: Some(info.driver),
+            driver_info: Some(info.driver_info),
+            required_storage_buffers_per_shader_stage: required_storage_buffers(requested_backend),
+            adapter_storage_buffers_per_shader_stage: Some(
+                limits.max_storage_buffers_per_shader_stage,
+            ),
+            error,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuRuntimeBackendStatus {
     pub schema_version: u16,
@@ -184,6 +268,112 @@ impl GpuRuntimeBackendConfig {
             ),
             no_active_gameplay_readback: true,
         })
+    }
+}
+
+pub fn probe_local_wgpu_runtime(
+    requested_backend: GpuRuntimeBackendKind,
+) -> GpuRuntimeHardwareProbe {
+    pollster::block_on(probe_local_wgpu_runtime_async(requested_backend))
+}
+
+async fn probe_local_wgpu_runtime_async(
+    requested_backend: GpuRuntimeBackendKind,
+) -> GpuRuntimeHardwareProbe {
+    if requested_backend == GpuRuntimeBackendKind::CpuReference {
+        return GpuRuntimeHardwareProbe {
+            schema_version: P29_RUNTIME_SCHEMA_VERSION,
+            requested_backend,
+            adapter_available: false,
+            device_request_succeeded: false,
+            adapter_name: None,
+            backend_api: None,
+            adapter_type: None,
+            vendor_id: None,
+            device_id: None,
+            driver: None,
+            driver_info: None,
+            required_storage_buffers_per_shader_stage: 0,
+            adapter_storage_buffers_per_shader_stage: None,
+            error: None,
+        };
+    }
+
+    let instance = wgpu::Instance::default();
+    let adapter = match instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })
+        .await
+    {
+        Ok(adapter) => adapter,
+        Err(error) => {
+            return GpuRuntimeHardwareProbe::unavailable(
+                requested_backend,
+                format!("wgpu adapter request failed: {error}"),
+            );
+        }
+    };
+
+    let info = adapter.get_info();
+    let limits = adapter.limits();
+    let required_storage_buffers = required_storage_buffers(requested_backend);
+    if limits.max_storage_buffers_per_shader_stage < required_storage_buffers {
+        let exposed_storage_buffers = limits.max_storage_buffers_per_shader_stage;
+        return GpuRuntimeHardwareProbe::from_adapter(
+            requested_backend,
+            info,
+            limits,
+            false,
+            Some(format!(
+                "adapter exposes {} storage buffers per shader stage, but {:?} requires {}",
+                exposed_storage_buffers, requested_backend, required_storage_buffers
+            )),
+        );
+    }
+
+    let mut required_limits = wgpu::Limits::downlevel_defaults();
+    required_limits.max_storage_buffers_per_shader_stage = required_limits
+        .max_storage_buffers_per_shader_stage
+        .max(required_storage_buffers);
+
+    match adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("alife-local-gpu-runtime-probe-device"),
+            required_features: wgpu::Features::empty(),
+            required_limits,
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::MemoryUsage,
+            trace: wgpu::Trace::Off,
+        })
+        .await
+    {
+        Ok((_device, _queue)) => {
+            GpuRuntimeHardwareProbe::from_adapter(requested_backend, info, limits, true, None)
+        }
+        Err(error) => GpuRuntimeHardwareProbe::from_adapter(
+            requested_backend,
+            info,
+            limits,
+            false,
+            Some(format!("wgpu device request failed: {error}")),
+        ),
+    }
+}
+
+pub const fn required_storage_buffers(backend: GpuRuntimeBackendKind) -> u32 {
+    match backend {
+        GpuRuntimeBackendKind::CpuReference => 0,
+        GpuRuntimeBackendKind::GpuStatic => P27_STATIC_FORWARD_STORAGE_BINDINGS,
+        GpuRuntimeBackendKind::GpuPlastic | GpuRuntimeBackendKind::GpuFull => {
+            if P27_STATIC_FORWARD_STORAGE_BINDINGS > P27_PLASTICITY_STORAGE_BINDINGS {
+                P27_STATIC_FORWARD_STORAGE_BINDINGS
+            } else {
+                P27_PLASTICITY_STORAGE_BINDINGS
+            }
+        }
     }
 }
 
@@ -611,11 +801,16 @@ impl GpuTierPerformanceReport {
         let mut out = String::new();
         out.push_str("# P29 GPU runtime performance report\n\n");
         out.push_str(&format!(
-            "- Backend requested: {:?}\n- Backend selected: {:?}\n- Fallback reason: {:?}\n- Hardware: {}\n- No active gameplay neural readback: {}\n\n",
+            "- Backend requested: {:?}\n- Backend selected: {:?}\n- Fallback reason: {:?}\n- Hardware: {}\n- Feature flags/evidence: {}\n- No active gameplay neural readback: {}\n\n",
             self.backend.requested,
             self.backend.selected,
             self.backend.fallback_reason,
             self.hardware_identifier.as_deref().unwrap_or("unknown"),
+            if self.feature_flags.is_empty() {
+                "none".to_string()
+            } else {
+                self.feature_flags.join(", ")
+            },
             self.backend.no_active_gameplay_readback,
         ));
         out.push_str(

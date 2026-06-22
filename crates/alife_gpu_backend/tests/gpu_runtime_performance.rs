@@ -1,10 +1,12 @@
 use alife_core::LobeKind;
 use alife_gpu_backend::{
-    GpuPerformanceTargetStatus, GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuRuntimeBoundary,
-    GpuRuntimeCapabilityManifest, GpuRuntimeDiagnosticExport, GpuRuntimeFallbackReason,
+    required_storage_buffers, GpuPerformanceTargetStatus, GpuRuntimeBackendConfig,
+    GpuRuntimeBackendKind, GpuRuntimeBoundary, GpuRuntimeCapabilityManifest,
+    GpuRuntimeDiagnosticExport, GpuRuntimeFallbackReason, GpuRuntimeHardwareProbe,
     GpuRuntimeReadbackGuard, GpuRuntimeThrottlingPolicy, GpuRuntimeTimingBudget,
     GpuRuntimeTimingSample, GpuThrottleLevel, GpuThrottleReason, GpuTierMeasurement,
-    GpuTierPopulation, P29_RUNTIME_SCHEMA_VERSION,
+    GpuTierPopulation, P27_PLASTICITY_STORAGE_BINDINGS, P27_STATIC_FORWARD_STORAGE_BINDINGS,
+    P29_RUNTIME_SCHEMA_VERSION,
 };
 
 #[test]
@@ -48,6 +50,36 @@ fn backend_selection_defaults_to_cpu_and_falls_back_cleanly() {
         .unwrap();
     assert_eq!(plastic.selected, GpuRuntimeBackendKind::GpuPlastic);
     assert_eq!(plastic.fallback_reason, None);
+}
+
+#[test]
+fn local_gpu_probe_contract_records_requirements_without_claiming_hardware_in_ci() {
+    assert_eq!(
+        required_storage_buffers(GpuRuntimeBackendKind::GpuStatic),
+        P27_STATIC_FORWARD_STORAGE_BINDINGS
+    );
+    assert_eq!(
+        required_storage_buffers(GpuRuntimeBackendKind::GpuPlastic),
+        P27_PLASTICITY_STORAGE_BINDINGS
+    );
+    assert_eq!(
+        required_storage_buffers(GpuRuntimeBackendKind::GpuFull),
+        P27_PLASTICITY_STORAGE_BINDINGS
+    );
+
+    let unavailable =
+        GpuRuntimeHardwareProbe::unavailable(GpuRuntimeBackendKind::GpuStatic, "adapter missing");
+    assert!(!unavailable.hardware_available());
+    assert_eq!(
+        unavailable.required_storage_buffers_per_shader_stage,
+        P27_STATIC_FORWARD_STORAGE_BINDINGS
+    );
+    assert_eq!(unavailable.hardware_identifier(), None);
+    assert!(unavailable
+        .error
+        .as_deref()
+        .unwrap()
+        .contains("adapter missing"));
 }
 
 #[test]

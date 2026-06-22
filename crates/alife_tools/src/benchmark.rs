@@ -376,6 +376,10 @@ impl GpuRuntimeBenchmarkBridge {
         let notes = notes.into();
         let mut report = GpuTierMeasurement::cpu_fallback_report(backend, notes.clone());
         report.schema_version = P29_RUNTIME_SCHEMA_VERSION;
+        if backend.selected != alife_gpu_backend::GpuRuntimeBackendKind::CpuReference {
+            report.feature_flags.retain(|flag| flag != "cpu-fallback");
+            report.feature_flags.push("cpu-smoke-metrics".to_string());
+        }
         report.feature_flags.push("p20-smoke".to_string());
 
         for run in &cpu_report.runs {

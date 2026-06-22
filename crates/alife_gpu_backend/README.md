@@ -157,19 +157,26 @@ cargo run -p alife_tools --bin benchmark_tiers -- --all --gpu-runtime
 ```
 
 The smoke command writes `target/artifacts/gpu_runtime_performance.md`. Unless
-`ALIFE_GPU_RUNTIME_AVAILABLE=1` and `ALIFE_GPU_RUNTIME_VALIDATED=1` are set, the
-report records CPU fallback data and leaves GPU neural timing and 60 FPS target
-status as unknown. This is intentional: the existing P25/P26 GPU paths are
-diagnostic parity paths, and local ignored tests do not prove product WebGPU
-portability.
+the local wgpu adapter/device probe succeeds, the report records CPU fallback
+data and leaves GPU neural timing and 60 FPS target status as unknown. When the
+probe succeeds, the report records adapter/backend identity and may select a GPU
+backend, but the copied tier timings are still P20 CPU smoke metrics unless a
+future command records explicit GPU neural timing. This is intentional: the
+existing P25/P26 GPU paths are diagnostic parity paths, and local ignored tests
+do not prove product WebGPU portability.
 
 Relevant optional environment flags:
 
 - `ALIFE_GPU_RUNTIME_BACKEND=cpu|static|plastic|full`
 - `ALIFE_GPU_RUNTIME_FEATURE=1`
-- `ALIFE_GPU_RUNTIME_AVAILABLE=1`
-- `ALIFE_GPU_RUNTIME_VALIDATED=1`
+- `ALIFE_GPU_RUNTIME_AVAILABLE=0|1` to explicitly force unavailable or require
+  the real probe to be available
+- `ALIFE_GPU_RUNTIME_VALIDATED=0|1` to explicitly force validation fallback or
+  allow selection after the real probe succeeds
 - `ALIFE_GPU_FULL_RUNTIME_AVAILABLE=1`
+
+Environment flags are controls, not hardware proof. `ALIFE_GPU_RUNTIME_AVAILABLE=1`
+cannot make the report select GPU if the local wgpu adapter/device probe fails.
 
 Current storage-buffer assumptions remain inherited from P25/P26/P27: the
 static-forward diagnostic bind group uses at least nine storage buffers, and
