@@ -1,0 +1,169 @@
+{
+  "pack_name": "A-Life Productization Plan Pack",
+  "version": "1.0-productization",
+  "created": "2026-06-21",
+  "baseline": {
+    "completed_phase": "P01-P36 and G00-G24/R24 locked",
+    "supported_scope": "headless CPU playable path and deterministic product smoke suite",
+    "known_graphical_gap": "no persistent interactive game window from S00 evidence",
+    "do_not_create": [
+      "P37",
+      "G25"
+    ]
+  },
+  "plans": [
+    {
+      "id": "S01",
+      "title": "Persistent graphical app window and launch stabilization",
+      "branch": "codex/S01-graphical-window-stabilization",
+      "dependencies": [
+        "R24 complete",
+        "S00 evidence available"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "S02"
+      ],
+      "file": "plans/S01_persistent-graphical-app-window-and-launch-stabilization.md"
+    },
+    {
+      "id": "S02",
+      "title": "Minimal interactive player loop and runtime controls",
+      "branch": "codex/S02-interactive-player-loop",
+      "dependencies": [
+        "S01"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "S03"
+      ],
+      "file": "plans/S02_minimal-interactive-player-loop-and-runtime-controls.md"
+    },
+    {
+      "id": "S03",
+      "title": "Camera, selection, creature inspector, and screenshot evidence",
+      "branch": "codex/S03-camera-inspector-screenshots",
+      "dependencies": [
+        "S02"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "S04"
+      ],
+      "file": "plans/S03_camera-selection-creature-inspector-and-screenshot-evidence.md"
+    },
+    {
+      "id": "S04",
+      "title": "Visual world readability and feedback polish",
+      "branch": "codex/S04-world-readability-feedback",
+      "dependencies": [
+        "S03"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "S05"
+      ],
+      "file": "plans/S04_visual-world-readability-and-feedback-polish.md"
+    },
+    {
+      "id": "S05",
+      "title": "Player-facing save/load/menu UX",
+      "branch": "codex/S05-save-load-menu-ux",
+      "dependencies": [
+        "S04"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Extra High",
+      "next": [
+        "S06"
+      ],
+      "file": "plans/S05_player-facing-save-load-menu-ux.md"
+    },
+    {
+      "id": "S06",
+      "title": "Non-scripted survival, ecology, and behavior balance",
+      "branch": "codex/S06-nonscripted-ecology-balance",
+      "dependencies": [
+        "S05"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Extra High",
+      "next": [
+        "S07"
+      ],
+      "file": "plans/S06_non-scripted-survival-ecology-and-behavior-balance.md"
+    },
+    {
+      "id": "S07",
+      "title": "Social, lifecycle, school, and semantic gameplay UX",
+      "branch": "codex/S07-social-school-semantic-ux",
+      "dependencies": [
+        "S06"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "S08"
+      ],
+      "file": "plans/S07_social-lifecycle-school-and-semantic-gameplay-ux.md"
+    },
+    {
+      "id": "S08",
+      "title": "GPU, graphics, and performance evidence pass",
+      "branch": "codex/S08-gpu-graphics-performance-evidence",
+      "dependencies": [
+        "S07"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Extra High",
+      "next": [
+        "S09"
+      ],
+      "file": "plans/S08_gpu-graphics-and-performance-evidence-pass.md"
+    },
+    {
+      "id": "S09",
+      "title": "Content, tutorial, scenario, and world authoring pass",
+      "branch": "codex/S09-content-tutorial-world-authoring",
+      "dependencies": [
+        "S08"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High",
+      "next": [
+        "S10"
+      ],
+      "file": "plans/S09_content-tutorial-scenario-and-world-authoring-pass.md"
+    },
+    {
+      "id": "S10",
+      "title": "Packaging, QA, external playtest candidate",
+      "branch": "codex/S10-packaging-qa-external-playtest",
+      "dependencies": [
+        "S09"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 High or Extra High",
+      "next": [
+        "S11"
+      ],
+      "file": "plans/S10_packaging-qa-external-playtest-candidate.md"
+    },
+    {
+      "id": "S11",
+      "title": "Final playtest, release/tag decision, and next-stage handoff",
+      "branch": "codex/S11-final-playtest-release-decision",
+      "dependencies": [
+        "S10"
+      ],
+      "can_run_concurrently": false,
+      "recommended_model": "GPT-5.5 Extra High preferred; High acceptable",
+      "next": [],
+      "file": "plans/S11_final-playtest-release-tag-decision-and-next-stage-handoff.md"
+    }
+  ]
+}

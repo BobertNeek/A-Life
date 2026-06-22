@@ -25,6 +25,8 @@ Non-negotiable rules:
   and fail if WSL virtualization is unavailable. Use `scripts/check.ps1`,
   `scripts/check_core_boundaries.ps1`, and `scripts/docs_check.ps1`, or the
   explicit Git Bash path.
+- Future post-R24 productization work should use `docs/productization_s_plans/`
+  and must not create P37/G25/S12 automatically.
 
 ## graphify
 
