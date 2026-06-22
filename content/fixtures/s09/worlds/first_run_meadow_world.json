@@ -1,0 +1,91 @@
+{
+  "schema": "alife.g16.world_preset.v1",
+  "schema_version": 1,
+  "world_id": "s09-first-run-meadow",
+  "stable_seed": 19009,
+  "objects": [
+    {
+      "stable_id": 1,
+      "label": "player-forager-body",
+      "kind": "Agent",
+      "organism_id": 1901,
+      "position": [0.0, 0.0, 0.0],
+      "radius": 0.75,
+      "nutrition": 0.0,
+      "hazard_pain": 0.0
+    },
+    {
+      "stable_id": 2,
+      "label": "safe-berry-food",
+      "kind": "Food",
+      "organism_id": null,
+      "position": [1.2, 0.0, 0.0],
+      "radius": 0.5,
+      "nutrition": 0.8,
+      "hazard_pain": 0.0
+    },
+    {
+      "stable_id": 3,
+      "label": "red-thorn-hazard",
+      "kind": "Hazard",
+      "organism_id": null,
+      "position": [-1.4, 0.0, 0.0],
+      "radius": 0.6,
+      "nutrition": 0.0,
+      "hazard_pain": 0.7
+    },
+    {
+      "stable_id": 4,
+      "label": "rest-stone-obstacle",
+      "kind": "Obstacle",
+      "organism_id": null,
+      "position": [0.0, 0.0, 1.6],
+      "radius": 0.6,
+      "nutrition": 0.0,
+      "hazard_pain": 0.0
+    },
+    {
+      "stable_id": 5,
+      "label": "teacher-word-berry",
+      "kind": "Token",
+      "organism_id": null,
+      "position": [0.7, 0.0, 0.7],
+      "radius": 0.25,
+      "nutrition": 0.0,
+      "hazard_pain": 0.0
+    },
+    {
+      "stable_id": 6,
+      "label": "peer-forager-body",
+      "kind": "Agent",
+      "organism_id": 1902,
+      "position": [2.0, 0.0, 0.5],
+      "radius": 0.7,
+      "nutrition": 0.0,
+      "hazard_pain": 0.0
+    }
+  ],
+  "terrain_zones": [
+    {
+      "zone_id": 1,
+      "label": "resource-meadow",
+      "kind": "meadow-resource-cycle",
+      "center": [0.0, 0.0, 0.0],
+      "radius": 5.0
+    },
+    {
+      "zone_id": 2,
+      "label": "hazard-edge",
+      "kind": "hazard-pressure",
+      "center": [-1.4, 0.0, 0.0],
+      "radius": 1.2
+    },
+    {
+      "zone_id": 3,
+      "label": "school-circle",
+      "kind": "teacher-perception-zone",
+      "center": [0.7, 0.0, 0.7],
+      "radius": 1.5
+    }
+  ]
+}

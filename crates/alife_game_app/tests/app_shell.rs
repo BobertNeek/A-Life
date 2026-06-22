@@ -6,27 +6,28 @@ use alife_game_app::{
     compare_visible_world_to_headless, g17_feedback_manifest_path, g17_workspace_root,
     load_visible_world_from_p34_save, project_lod_without_behavior_change,
     run_advanced_gameplay_ux_smoke, run_cognition_debug_timeline_smoke,
-    run_creature_inspector_smoke, run_creature_visual_smoke, run_feedback_polish_smoke,
-    run_gpu_graphics_performance_evidence_smoke, run_gpu_product_hardening_smoke,
-    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
-    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
-    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
-    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
-    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
-    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
-    SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
-    WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
+    run_feedback_polish_smoke, run_gpu_graphics_performance_evidence_smoke,
+    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
+    run_longrun_balance_with_config, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
+    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand,
+    WorldEditorConfig, WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA,
+    G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -38,6 +39,58 @@ use std::path::PathBuf;
 
 fn p34_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/alife_world/tests/fixtures/p34")
+}
+
+#[test]
+fn s09_content_tutorial_authoring_pack_is_coherent_and_tiny() {
+    let summary = run_content_authoring_smoke().unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::S09_CONTENT_TUTORIAL_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::S09_CONTENT_TUTORIAL_SCHEMA_VERSION
+    );
+    assert_eq!(summary.content.pack_id, "s09-first-run-tutorial-pack");
+    assert_eq!(summary.content.world_presets, 1);
+    assert_eq!(summary.content.lesson_packs, 1);
+    assert_eq!(summary.content.creature_presets, 1);
+    assert_eq!(summary.content.scenario_packs, 1);
+    assert!(summary.content.largest_file_bytes < alife_game_app::S09_MAX_CONTENT_FILE_BYTES);
+    assert!(summary.content.tiny_files_under_limit);
+    assert!(summary.content.has_food);
+    assert!(summary.content.has_hazard);
+    assert!(summary.content.has_social_peer);
+    assert!(summary.content.has_school_token);
+    assert!(summary.content.has_resource_zone);
+    assert!(summary.content.missing_required_rejected);
+    assert!(summary.new_tester_headless_ready);
+    assert!(!summary.hidden_provider_required);
+    assert!(!summary.huge_assets_committed);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn s09_tutorial_commands_are_current_and_school_cues_remain_perception_only() {
+    let summary = run_content_authoring_smoke().unwrap();
+
+    assert_eq!(summary.content.perception_only_lesson_steps, 3);
+    assert!(summary.school_cues_perception_only);
+    assert_eq!(summary.tutorial.graphical_manual_status, "manual-optional");
+    assert!(summary
+        .tutorial
+        .recommended_commands
+        .iter()
+        .any(|command| command.contains("content-authoring-smoke")));
+    assert!(summary
+        .tutorial
+        .recommended_commands
+        .iter()
+        .any(|command| command.contains("onboarding-help-smoke")));
+    assert!(summary.tutorial.recommended_commands.iter().all(|command| {
+        !command.contains("gpu-report")
+            && !command.contains("ALIFE_GPU_BACKEND")
+            && !command.contains("bash scripts/check.sh")
+    }));
 }
 
 #[test]

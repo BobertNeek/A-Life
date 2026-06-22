@@ -78,3 +78,6 @@ pub const S07_ADVANCED_GAMEPLAY_UX_SCHEMA_VERSION: u16 = 1;
 pub const S08_GPU_GRAPHICS_PERFORMANCE_SCHEMA: &str = "alife.s08.gpu_graphics_performance.v1";
 pub const S08_GPU_GRAPHICS_PERFORMANCE_SCHEMA_VERSION: u16 = 1;
 pub const S08_TARGET_FPS: u16 = 60;
+pub const S09_CONTENT_TUTORIAL_SCHEMA: &str = "alife.s09.content_tutorial_authoring.v1";
+pub const S09_CONTENT_TUTORIAL_SCHEMA_VERSION: u16 = 1;
+pub const S09_MAX_CONTENT_FILE_BYTES: u64 = 64 * 1024;

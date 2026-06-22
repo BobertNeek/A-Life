@@ -1,0 +1,40 @@
+{
+  "schema": "alife.g16.lesson_pack.v1",
+  "schema_version": 1,
+  "lesson_pack_id": "s09-food-hazard-school",
+  "steps": [
+    {
+      "lesson_id": 1,
+      "kind": "name_food",
+      "channel": "Hearing",
+      "token_id": 77,
+      "target_world_entity_id": 2,
+      "expected_observation": "teacher says berry while the safe food marker is visible",
+      "perception_only": true,
+      "direct_motor_bypass": false,
+      "hidden_vector_injection": false
+    },
+    {
+      "lesson_id": 2,
+      "kind": "warn_hazard",
+      "channel": "Vision",
+      "token_id": 88,
+      "target_world_entity_id": 3,
+      "expected_observation": "teacher highlights thorn hazard without issuing movement",
+      "perception_only": true,
+      "direct_motor_bypass": false,
+      "hidden_vector_injection": false
+    },
+    {
+      "lesson_id": 3,
+      "kind": "peer_context",
+      "channel": "Touch",
+      "token_id": null,
+      "target_world_entity_id": 6,
+      "expected_observation": "peer body is present as bounded social context only",
+      "perception_only": true,
+      "direct_motor_bypass": false,
+      "hidden_vector_injection": false
+    }
+  ]
+}
