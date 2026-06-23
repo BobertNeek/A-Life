@@ -28,7 +28,8 @@ No release tag was created during S11.
 ## What Remains Manual
 
 - Persistent graphical shell evaluation on the target playtest machine.
-- GPU runtime measurement with supported local hardware.
+- GPU runtime measurement with supported local hardware beyond the bounded
+  static CPU-shadow-guarded live-tick smoke path.
 - Extended balance, soak, and large-population runs.
 - External tester feedback collection and triage.
 

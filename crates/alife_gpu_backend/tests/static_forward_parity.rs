@@ -4,12 +4,16 @@ use alife_core::{
     NeuralDiagnostics, NeuralProjectionSchema, ProjectionTile, SparseTileCoord, SynapseWeightSplit,
     MICROTILE_CELLS, MICROTILE_EDGE,
 };
-#[cfg(feature = "gpu-tests")]
-use alife_gpu_backend::run_static_forward_gpu_diagnostic;
 use alife_gpu_backend::{
-    finalize_static_forward_accumulators_for_diagnostics, GpuFixedPointPolicy,
-    GpuStaticForwardPlan, GpuUploadBuffers, P25_DIAGNOSTIC_COUNTER_WORDS,
-    P25_STATIC_FORWARD_TOLERANCE_ABS, P25_STATIC_FORWARD_WORKGROUP_SIZE, P25_WGSL_STATIC_FORWARD,
+    finalize_static_forward_accumulators_for_diagnostics, GpuActionSummaryStagingRecord,
+    GpuFixedPointPolicy, GpuStaticActionSummaryConfig, GpuStaticForwardPlan, GpuUploadBuffers,
+    GPU_ACTION_SUMMARY_RECORD_BYTES, P25_DIAGNOSTIC_COUNTER_WORDS,
+    P25_STATIC_FORWARD_TOLERANCE_ABS, P25_STATIC_FORWARD_WORKGROUP_SIZE, P25_WGSL_ACTION_SUMMARY,
+    P25_WGSL_STATIC_FORWARD,
+};
+#[cfg(feature = "gpu-tests")]
+use alife_gpu_backend::{
+    run_static_forward_gpu_action_summary_timed, run_static_forward_gpu_diagnostic,
 };
 
 fn weights(genetic: f32, lifetime: f32, alpha: f32, h: f32) -> SynapseWeightSplit {
@@ -186,6 +190,71 @@ fn p25_wgsl_static_forward_passes_parse_and_expose_expected_entries() {
     assert!(!P25_WGSL_STATIC_FORWARD.contains("oja"));
 }
 
+#[test]
+fn action_summary_record_roundtrips_and_cpu_summary_is_compact() {
+    let (plan, state, _schema) = fixture_plan();
+    let activation_q = plan.quantize_activations(&state.activations).unwrap();
+    let cpu = plan.execute_cpu_diagnostic(&activation_q).unwrap();
+    let config = GpuStaticActionSummaryConfig {
+        brain_slot: 7,
+        action_count: 4,
+        action_ids: [11, 12, 13, 14],
+        score_indices: [0, 1, 16, 17],
+        confidence_q16: u32::from(u16::MAX),
+        drive_source_mask: 0b11,
+        motor_payload_ref: 0,
+        flags: 0,
+    };
+    let summary = config.cpu_action_summary(&cpu.activations_q).unwrap();
+    let bytes = summary.to_le_bytes();
+    assert_eq!(bytes.len(), GPU_ACTION_SUMMARY_RECORD_BYTES);
+    let roundtrip = GpuActionSummaryStagingRecord::from_le_bytes(&bytes).unwrap();
+
+    assert_eq!(roundtrip, summary);
+    assert_eq!(summary.brain_slot, 7);
+    assert_eq!(summary.winning_action_id, 13);
+    assert_eq!(summary.reserved[1], 2);
+    assert_eq!(
+        GpuActionSummaryStagingRecord::from_le_bytes(&bytes[..8]),
+        Err(alife_core::ScaffoldContractError::InvalidSparseProjectionSchema)
+    );
+}
+
+#[test]
+fn action_summary_validation_covers_all_shader_read_score_slots() {
+    let (plan, _state, _schema) = fixture_plan();
+    let config = GpuStaticActionSummaryConfig {
+        brain_slot: 0,
+        action_count: 1,
+        action_ids: [11, 12, 13, 14],
+        score_indices: [0, plan.header.neuron_count + 1, 2, 3],
+        confidence_q16: u32::from(u16::MAX),
+        drive_source_mask: 0,
+        motor_payload_ref: 0,
+        flags: 0,
+    };
+
+    assert_eq!(
+        config.validate(plan.header.neuron_count),
+        Err(alife_core::ScaffoldContractError::InvalidSparseProjectionSchema)
+    );
+}
+
+#[test]
+fn p25_action_summary_wgsl_parses_and_exposes_compact_entry_only() {
+    let module = naga::front::wgsl::parse_str(P25_WGSL_ACTION_SUMMARY).unwrap();
+    let mut validator = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    );
+    validator.validate(&module).unwrap();
+
+    assert!(P25_WGSL_ACTION_SUMMARY.contains("fn build_action_summary"));
+    assert!(P25_WGSL_ACTION_SUMMARY.contains("action_summary"));
+    assert!(!P25_WGSL_ACTION_SUMMARY.contains("h_shadow"));
+    assert!(!P25_WGSL_ACTION_SUMMARY.contains("activation_read_q"));
+}
+
 #[cfg(feature = "gpu-tests")]
 #[test]
 #[ignore = "requires a local wgpu adapter; run with `cargo test -p alife_gpu_backend --features gpu-tests --test static_forward_parity -- --ignored`"]
@@ -219,5 +288,58 @@ fn gpu_static_forward_passes_match_cpu_diagnostic_fixture() {
             .unwrap();
         assert_eq!(gpu.activations_q, cpu.activations_q);
         assert_eq!(gpu.diagnostics, cpu.diagnostics);
+    });
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+#[ignore = "requires a local wgpu adapter; run with `cargo test -p alife_gpu_backend --features gpu-tests --test static_forward_parity -- --ignored`"]
+fn gpu_static_forward_action_summary_matches_cpu_compact_shadow() {
+    pollster::block_on(async {
+        let (plan, state, _schema) = fixture_plan();
+        let activation_q = plan.quantize_activations(&state.activations).unwrap();
+        let cpu = plan.execute_cpu_diagnostic(&activation_q).unwrap();
+        let config = GpuStaticActionSummaryConfig {
+            brain_slot: 1,
+            action_count: 4,
+            action_ids: [11, 12, 13, 14],
+            score_indices: [0, 1, 16, 17],
+            confidence_q16: u32::from(u16::MAX),
+            drive_source_mask: 0b11,
+            motor_payload_ref: 0,
+            flags: 0,
+        };
+        let cpu_summary = config.cpu_action_summary(&cpu.activations_q).unwrap();
+        let instance = wgpu::Instance::default();
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .await
+            .expect("manual GPU compact summary test requires an adapter");
+        let mut required_limits = wgpu::Limits::downlevel_defaults();
+        required_limits.max_storage_buffers_per_shader_stage =
+            required_limits.max_storage_buffers_per_shader_stage.max(9);
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("p25-action-summary-parity-device"),
+                required_features: wgpu::Features::empty(),
+                required_limits,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                trace: wgpu::Trace::Off,
+            })
+            .await
+            .expect("manual GPU compact summary test requires a device");
+
+        let gpu = run_static_forward_gpu_action_summary_timed(
+            &device,
+            &queue,
+            &plan,
+            &activation_q,
+            config,
+        )
+        .await
+        .unwrap();
+        assert_eq!(gpu.action_summary, cpu_summary);
+        assert_eq!(gpu.compact_readback_bytes, GPU_ACTION_SUMMARY_RECORD_BYTES);
     });
 }

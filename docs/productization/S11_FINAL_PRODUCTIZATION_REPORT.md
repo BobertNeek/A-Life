@@ -17,8 +17,9 @@ packaging smoke coverage, and an external tester checklist. It is not being
 tagged automatically because release tagging requires explicit user approval,
 manual graphics evidence should be reviewed on the target playtest machine, and
 GPU hardware performance remains manual unless measured on local hardware.
-Post-S11 local reports record adapter/device availability and bounded P25/P26
-diagnostic GPU timing separately from product gameplay GPU timing.
+Post-S11 local reports record adapter/device availability, bounded P25/P26
+diagnostic GPU timing, and a separate CPU-shadow-guarded static live-tick GPU
+smoke path. Full plastic live gameplay GPU timing remains unclaimed.
 
 No release tag was created during S11.
 
@@ -79,10 +80,10 @@ High issues:
 
 Medium issues:
 
-- GPU adapter/device availability and bounded P25/P26 diagnostic timing may be
-  recorded on supported local hardware, but product gameplay GPU neural
-  performance remains manual or unknown unless a product-runtime timing path
-  records measured GPU results.
+- GPU adapter/device availability, bounded P25/P26 diagnostic timing, and
+  static CPU-shadow-guarded live-tick timing may be recorded on supported local
+  hardware. Full plastic live gameplay GPU neural performance remains manual or
+  unknown until a safe post-seal lifetime-state update hook exists.
 - Extended balance, soak, and large-population evidence remain manual rather
   than normal CI gates.
 - The graphical shell is suitable for alpha playtest evidence, but broader UX

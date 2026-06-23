@@ -7,27 +7,28 @@ use alife_game_app::{
     load_visible_world_from_p34_save, project_lod_without_behavior_change,
     run_advanced_gameplay_ux_smoke, run_cognition_debug_timeline_smoke,
     run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_feedback_polish_smoke, run_gpu_graphics_performance_evidence_smoke,
-    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
-    run_longrun_balance_with_config, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
-    FeedbackEventKind, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
-    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
-    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
-    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand,
-    WorldEditorConfig, WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA,
-    G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
+    run_gpu_graphics_performance_evidence_smoke, run_gpu_product_hardening_smoke,
+    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
+    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
+    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, InspectorControlPanel, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
+    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
+    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
+    SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -312,6 +313,113 @@ fn live_brain_tick_smoke_seals_patch_and_updates_runtime_state() {
             alife_game_app::LiveBrainCausalStage::UpdateLogs,
         ]
     );
+}
+
+#[test]
+fn full_gpu_runtime_smoke_preserves_cpu_fallback_and_no_bulk_readback() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let default_summary =
+        run_full_gpu_runtime_smoke(&launch, FullGpuRuntimeSmokeOptions::default()).unwrap();
+    assert_eq!(default_summary.requested_mode, "cpu-reference");
+    assert_eq!(default_summary.selected_backend, "CpuReference");
+    assert!(!default_summary.gpu_static_dispatched);
+    assert!(!default_summary.gpu_output_used_for_proposals);
+    assert_eq!(default_summary.product_runtime_claim, "None");
+    default_summary.validate().unwrap();
+
+    let summary = run_full_gpu_runtime_smoke(
+        &launch,
+        FullGpuRuntimeSmokeOptions {
+            mode: FullGpuRuntimeSmokeMode::StaticActionAuthoritative,
+            ticks: 1,
+            json_path: None,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::FULL_GPU_NEURAL_RUNTIME_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::FULL_GPU_NEURAL_RUNTIME_SCHEMA_VERSION
+    );
+    assert_eq!(summary.ticks_run, 1);
+    assert_eq!(summary.sealed_patches, 1);
+    assert_eq!(summary.packed_logs, 1);
+    assert!(summary.bulk_readback_forbidden);
+    assert!(summary.per_synapse_readback_forbidden);
+    assert!(summary.per_lobe_readback_forbidden);
+    assert!(summary.weight_readback_forbidden);
+    if summary.gpu_static_dispatched {
+        assert_eq!(summary.compact_readback_bytes, 64);
+        if summary.cpu_shadow_parity {
+            assert!(summary.gpu_output_used_for_proposals);
+            assert_eq!(summary.product_runtime_claim, "CpuShadowGuarded");
+        } else {
+            assert_eq!(summary.selected_backend, "CpuReference");
+            assert!(summary.fallback_reason.is_some());
+            assert!(!summary.gpu_output_used_for_proposals);
+            assert_eq!(summary.product_runtime_claim, "None");
+        }
+    } else {
+        assert_eq!(summary.selected_backend, "CpuReference");
+        assert!(summary.fallback_reason.is_some());
+        assert!(!summary.gpu_output_used_for_proposals);
+    }
+    summary.validate().unwrap();
+}
+
+#[test]
+fn full_gpu_runtime_plasticity_report_is_post_seal_shadow_only_when_available() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_full_gpu_runtime_smoke(
+        &launch,
+        FullGpuRuntimeSmokeOptions {
+            mode: FullGpuRuntimeSmokeMode::StaticPlasticShadow,
+            ticks: 1,
+            json_path: None,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(summary.sealed_patches, 1);
+    assert!(summary.w_genetic_fixed_unchanged);
+    assert!(summary.plasticity_diagnostic_only);
+    assert!(summary.plasticity_post_seal_only);
+    if summary.plasticity_dispatched {
+        assert!(summary.experience_patch_sealed_before_plasticity);
+        assert!(summary.h_shadow_updated_values > 0);
+        assert!(summary
+            .plasticity_live_gap
+            .contains("post-seal lifetime-state hook"));
+    } else {
+        assert!(summary.plasticity_live_gap.contains("CPU reference"));
+    }
+    summary.validate().unwrap();
+}
+
+#[test]
+fn full_gpu_runtime_unsupported_full_mode_falls_back_without_claiming_gpu_work() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_full_gpu_runtime_smoke(
+        &launch,
+        FullGpuRuntimeSmokeOptions {
+            mode: FullGpuRuntimeSmokeMode::FullActionAuthoritative,
+            ticks: 1,
+            json_path: None,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(summary.selected_backend, "CpuReference");
+    assert!(summary.fallback_reason.is_some());
+    assert!(!summary.gpu_static_dispatched);
+    assert!(!summary.gpu_output_used_for_proposals);
+    assert!(!summary.plasticity_dispatched);
+    assert_eq!(summary.product_runtime_claim, "None");
+    summary.validate().unwrap();
 }
 
 #[test]
