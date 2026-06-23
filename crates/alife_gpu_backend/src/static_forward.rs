@@ -12,14 +12,69 @@ use alife_core::{validate_finite, ScaffoldContractError};
 
 use crate::routing_masks::{p27_routing_counters, p27_tile_is_active, GpuRoutingCounters};
 use crate::{
-    GpuBufferContractHeader, GpuFixedPointPolicy, GpuPackedSynapseIndexRecord,
-    GpuSupertileMaskRecord, GpuTileMetadataRecord, GpuUploadBuffers,
+    GpuActionSummaryStagingRecord, GpuBufferContractHeader, GpuFixedPointPolicy,
+    GpuPackedSynapseIndexRecord, GpuSupertileMaskRecord, GpuTileMetadataRecord, GpuUploadBuffers,
+    GPU_ACTION_SUMMARY_RECORD_BYTES,
 };
 
 pub const P25_STATIC_FORWARD_WORKGROUP_SIZE: u32 = 64;
 pub const P25_DIAGNOSTIC_COUNTER_WORDS: u32 = 8;
 pub const P25_STATIC_FORWARD_TOLERANCE_ABS: f32 = 1.0 / 4096.0;
 pub const P25_WGSL_STATIC_FORWARD: &str = include_str!("../shaders/p25_static_forward.wgsl");
+pub const P25_WGSL_ACTION_SUMMARY: &str = r#"
+const ACTION_SUMMARY_WORDS: u32 = 16u;
+
+@group(0) @binding(0)
+var<storage, read> activation_write_q: array<i32>;
+@group(0) @binding(1)
+var<storage, read> summary_params: array<u32>;
+@group(0) @binding(2)
+var<storage, read_write> action_summary: array<u32>;
+
+fn score_at(slot: u32) -> i32 {
+    let index = summary_params[8u + slot];
+    return activation_write_q[index];
+}
+
+@compute @workgroup_size(1)
+fn build_action_summary(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    if (global_id.x > 0u) {
+        return;
+    }
+    let action_count = min(summary_params[1], 4u);
+    var winning_slot = 0u;
+    var winning_score = score_at(0u);
+    var slot = 1u;
+    loop {
+        if (slot >= action_count) {
+            break;
+        }
+        let score = score_at(slot);
+        if (score > winning_score) {
+            winning_score = score;
+            winning_slot = slot;
+        }
+        slot = slot + 1u;
+    }
+
+    action_summary[0] = summary_params[0];
+    action_summary[1] = summary_params[4u + winning_slot];
+    action_summary[2] = summary_params[2];
+    action_summary[3] = summary_params[3];
+    action_summary[4] = summary_params[12];
+    action_summary[5] = summary_params[13] | 1u;
+    action_summary[6] = bitcast<u32>(winning_score);
+    action_summary[7] = winning_slot;
+    action_summary[8] = bitcast<u32>(score_at(0u));
+    action_summary[9] = bitcast<u32>(score_at(1u));
+    action_summary[10] = bitcast<u32>(score_at(2u));
+    action_summary[11] = bitcast<u32>(score_at(3u));
+    action_summary[12] = action_count;
+    action_summary[13] = 64u;
+    action_summary[14] = 0u;
+    action_summary[15] = 0u;
+}
+"#;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuStaticForwardDispatch {
@@ -76,6 +131,98 @@ pub struct GpuStaticForwardTiming {
 pub struct GpuStaticForwardTimedResult {
     pub result: GpuStaticForwardResult,
     pub timing: GpuStaticForwardTiming,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuStaticActionSummaryConfig {
+    pub brain_slot: u32,
+    pub action_count: u32,
+    pub action_ids: [u32; 4],
+    pub score_indices: [u32; 4],
+    pub confidence_q16: u32,
+    pub drive_source_mask: u32,
+    pub motor_payload_ref: u32,
+    pub flags: u32,
+}
+
+impl GpuStaticActionSummaryConfig {
+    pub fn validate(self, neuron_count: u32) -> Result<(), ScaffoldContractError> {
+        if self.action_count == 0
+            || self.action_count > 4
+            || self.confidence_q16 > u32::from(u16::MAX)
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        for index in self.score_indices.iter().copied() {
+            if index >= neuron_count {
+                return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn cpu_action_summary(
+        self,
+        activations_q: &[i32],
+    ) -> Result<GpuActionSummaryStagingRecord, ScaffoldContractError> {
+        self.validate(checked_u32(activations_q.len())?)?;
+        let mut winning_slot = 0_usize;
+        let mut winning_score = score_at(activations_q, self.score_indices[0])?;
+        for slot in 1..self.action_count as usize {
+            let score = score_at(activations_q, self.score_indices[slot])?;
+            if score > winning_score {
+                winning_score = score;
+                winning_slot = slot;
+            }
+        }
+        let mut reserved = [0_u32; 10];
+        reserved[0] = winning_score as u32;
+        reserved[1] = winning_slot as u32;
+        for slot in 0..4 {
+            reserved[slot + 2] = score_at(activations_q, self.score_indices[slot])? as u32;
+        }
+        reserved[6] = self.action_count;
+        reserved[7] = GPU_ACTION_SUMMARY_RECORD_BYTES as u32;
+        Ok(GpuActionSummaryStagingRecord {
+            brain_slot: self.brain_slot,
+            winning_action_id: self.action_ids[winning_slot],
+            confidence_q16: self.confidence_q16,
+            drive_source_mask: self.drive_source_mask,
+            motor_payload_ref: self.motor_payload_ref,
+            flags: self.flags | 1,
+            reserved,
+        })
+    }
+
+    fn params_bytes(self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(14 * 4);
+        push_u32(&mut bytes, self.brain_slot);
+        push_u32(&mut bytes, self.action_count);
+        push_u32(&mut bytes, self.confidence_q16);
+        push_u32(&mut bytes, self.drive_source_mask);
+        for action_id in self.action_ids {
+            push_u32(&mut bytes, action_id);
+        }
+        for score_index in self.score_indices {
+            push_u32(&mut bytes, score_index);
+        }
+        push_u32(&mut bytes, self.motor_payload_ref);
+        push_u32(&mut bytes, self.flags);
+        bytes
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GpuStaticActionSummaryTiming {
+    pub submit_poll_wall_ms: f32,
+    pub compact_readback_wall_ms: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuStaticActionSummaryTimedResult {
+    pub action_summary: GpuActionSummaryStagingRecord,
+    pub timing: GpuStaticActionSummaryTiming,
+    pub compact_readback_bytes: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -393,6 +540,145 @@ pub async fn run_static_forward_gpu_diagnostic_timed(
     })
 }
 
+pub async fn run_static_forward_gpu_action_summary_timed(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    plan: &GpuStaticForwardPlan,
+    activation_read_q: &[i32],
+    summary_config: GpuStaticActionSummaryConfig,
+) -> Result<GpuStaticActionSummaryTimedResult, ScaffoldContractError> {
+    if activation_read_q.len() != plan.header.neuron_count as usize {
+        return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+    }
+    summary_config.validate(plan.header.neuron_count)?;
+
+    let buffers = GpuStaticForwardDeviceBuffers::new(device, plan, activation_read_q)?;
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("p25-static-forward-action-summary-static"),
+        source: wgpu::ShaderSource::Wgsl(P25_WGSL_STATIC_FORWARD.into()),
+    });
+    let bind_group_layout = create_bind_group_layout(device);
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("p25-static-forward-action-summary-layout"),
+        bind_group_layouts: &[Some(&bind_group_layout)],
+        immediate_size: 0,
+    });
+    let pass0 = create_pipeline(device, &pipeline_layout, &shader, "clear_accumulators");
+    let pass1 = create_pipeline(device, &pipeline_layout, &shader, "sparse_projection_spmv");
+    let pass2 = create_pipeline(device, &pipeline_layout, &shader, "activation_finalize");
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("p25-static-forward-action-summary-bind-group"),
+        layout: &bind_group_layout,
+        entries: &buffers.bind_group_entries(),
+    });
+
+    let action_summary_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("p25-action-summary-output"),
+        size: GPU_ACTION_SUMMARY_RECORD_BYTES as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let action_params_buffer = create_init_buffer(
+        device,
+        "p25-action-summary-params",
+        &summary_config.params_bytes(),
+        wgpu::BufferUsages::STORAGE,
+    );
+    let action_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("p25-action-summary"),
+        source: wgpu::ShaderSource::Wgsl(P25_WGSL_ACTION_SUMMARY.into()),
+    });
+    let action_layout = create_action_summary_bind_group_layout(device);
+    let action_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("p25-action-summary-layout"),
+        bind_group_layouts: &[Some(&action_layout)],
+        immediate_size: 0,
+    });
+    let action_pipeline = create_pipeline(
+        device,
+        &action_pipeline_layout,
+        &action_shader,
+        "build_action_summary",
+    );
+    let action_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("p25-action-summary-bind-group"),
+        layout: &action_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffers.activation_write_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: action_params_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: action_summary_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("p25-static-forward-action-summary-encoder"),
+    });
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("p25-action-summary-clear"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&pass0);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(plan.dispatch.pass0_workgroups, 1, 1);
+    }
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("p25-action-summary-spmv"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&pass1);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(plan.dispatch.pass1_workgroups, 1, 1);
+    }
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("p25-action-summary-finalize"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&pass2);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(plan.dispatch.pass2_workgroups, 1, 1);
+    }
+    {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("p25-action-summary-build"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&action_pipeline);
+        pass.set_bind_group(0, &action_bind_group, &[]);
+        pass.dispatch_workgroups(1, 1, 1);
+    }
+
+    let submit_poll_start = Instant::now();
+    queue.submit(Some(encoder.finish()));
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .map_err(|_| ScaffoldContractError::BackendParity)?;
+    let submit_poll_wall_ms = elapsed_ms(submit_poll_start);
+
+    let readback_start = Instant::now();
+    let bytes = read_buffer_bytes(device, queue, &action_summary_buffer)?;
+    let compact_readback_wall_ms = elapsed_ms(readback_start);
+    Ok(GpuStaticActionSummaryTimedResult {
+        action_summary: GpuActionSummaryStagingRecord::from_le_bytes(&bytes)?,
+        timing: GpuStaticActionSummaryTiming {
+            submit_poll_wall_ms,
+            compact_readback_wall_ms,
+        },
+        compact_readback_bytes: bytes.len(),
+    })
+}
+
 struct GpuStaticForwardDeviceBuffers {
     params_buffer: wgpu::Buffer,
     tile_metadata_buffer: wgpu::Buffer,
@@ -552,6 +838,33 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             read_write(7),
             read_write(8),
         ],
+    })
+}
+
+fn create_action_summary_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    let read_only = |binding| wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: true },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    };
+    let read_write = |binding| wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    };
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("p25-action-summary-bind-group-layout"),
+        entries: &[read_only(0), read_only(1), read_write(2)],
     })
 }
 
@@ -739,4 +1052,11 @@ fn push_u32(bytes: &mut Vec<u8>, value: u32) {
 
 fn push_i32(bytes: &mut Vec<u8>, value: i32) {
     bytes.extend_from_slice(&value.to_le_bytes());
+}
+
+fn score_at(activations_q: &[i32], index: u32) -> Result<i32, ScaffoldContractError> {
+    activations_q
+        .get(index as usize)
+        .copied()
+        .ok_or(ScaffoldContractError::InvalidSparseProjectionSchema)
 }

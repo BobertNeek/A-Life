@@ -289,6 +289,29 @@ impl GpuActionSummaryStagingRecord {
         debug_assert_eq!(bytes.len(), GPU_ACTION_SUMMARY_RECORD_BYTES);
         bytes
     }
+
+    pub fn from_le_bytes(bytes: &[u8]) -> Result<Self, ScaffoldContractError> {
+        if bytes.len() != GPU_ACTION_SUMMARY_RECORD_BYTES {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        let read = |index: usize| -> u32 {
+            let start = index * 4;
+            u32::from_le_bytes(bytes[start..start + 4].try_into().unwrap())
+        };
+        let mut reserved = [0_u32; 10];
+        for (index, value) in reserved.iter_mut().enumerate() {
+            *value = read(index + 6);
+        }
+        Ok(Self {
+            brain_slot: read(0),
+            winning_action_id: read(1),
+            confidence_q16: read(2),
+            drive_source_mask: read(3),
+            motor_payload_ref: read(4),
+            flags: read(5),
+            reserved,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

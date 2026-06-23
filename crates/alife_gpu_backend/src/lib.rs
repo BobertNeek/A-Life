@@ -3,6 +3,7 @@
 use alife_core::NeuralComputeBackend;
 
 pub mod buffers;
+pub mod full_runtime;
 pub mod plasticity;
 pub mod recompaction;
 pub mod routing_masks;
@@ -20,6 +21,13 @@ pub use buffers::{
     GPU_DIAGNOSTIC_COUNTER_BYTES, GPU_HEADER_BYTES, GPU_PACKED_SYNAPSE_INDEX_BYTES,
     GPU_ROUTING_DESCRIPTOR_BYTES, GPU_SERIALIZATION_ENDIANNESS, GPU_SUPERTILE_MASK_BYTES,
     GPU_TILE_METADATA_BYTES,
+};
+pub use full_runtime::{
+    run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
+    FullGpuRuntimeBackendReport, FullGpuRuntimeMode, FullGpuRuntimePlasticityReport,
+    FullGpuRuntimeProductClaim, FullGpuRuntimeReadbackReport, FullGpuRuntimeRoutingReport,
+    FullGpuRuntimeStaticTickInput, FullGpuRuntimeStaticTickReport, FullGpuRuntimeTimingReport,
+    FULL_GPU_RUNTIME_SCHEMA_VERSION,
 };
 pub use plasticity::{
     run_plasticity_gpu_diagnostic, run_plasticity_gpu_diagnostic_timed, GpuOjaFixedPointConfig,
@@ -51,11 +59,14 @@ pub use runtime::{
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
 pub use static_forward::{
-    finalize_static_forward_accumulators_for_diagnostics, run_static_forward_gpu_diagnostic,
-    run_static_forward_gpu_diagnostic_timed, GpuStaticForwardDiagnostics, GpuStaticForwardDispatch,
-    GpuStaticForwardPlan, GpuStaticForwardResult, GpuStaticForwardTimedResult,
-    GpuStaticForwardTiming, P25_DIAGNOSTIC_COUNTER_WORDS, P25_STATIC_FORWARD_TOLERANCE_ABS,
-    P25_STATIC_FORWARD_WORKGROUP_SIZE, P25_WGSL_STATIC_FORWARD,
+    finalize_static_forward_accumulators_for_diagnostics,
+    run_static_forward_gpu_action_summary_timed, run_static_forward_gpu_diagnostic,
+    run_static_forward_gpu_diagnostic_timed, GpuStaticActionSummaryConfig,
+    GpuStaticActionSummaryTimedResult, GpuStaticActionSummaryTiming, GpuStaticForwardDiagnostics,
+    GpuStaticForwardDispatch, GpuStaticForwardPlan, GpuStaticForwardResult,
+    GpuStaticForwardTimedResult, GpuStaticForwardTiming, P25_DIAGNOSTIC_COUNTER_WORDS,
+    P25_STATIC_FORWARD_TOLERANCE_ABS, P25_STATIC_FORWARD_WORKGROUP_SIZE, P25_WGSL_ACTION_SUMMARY,
+    P25_WGSL_STATIC_FORWARD,
 };
 pub use timing::{
     run_local_gpu_diagnostic_timing, GpuDiagnosticProductRuntimeClaim, GpuDiagnosticTimingKind,

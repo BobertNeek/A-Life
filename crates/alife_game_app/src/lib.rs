@@ -34,8 +34,8 @@ mod prelude {
     };
     pub(crate) use alife_world::{
         EcologyMetrics, EcologyZoneId, HeadlessActionIds, HeadlessBrainHarness,
-        HeadlessScenarioBuilder, HeadlessWorld, TerrainZone, TerrainZoneKind, WorldEditorSpawnSpec,
-        WorldObjectKind,
+        HeadlessScenarioBuilder, HeadlessSensoryReport, HeadlessWorld, TerrainZone,
+        TerrainZoneKind, WorldEditorSpawnSpec, WorldObjectKind,
     };
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use thiserror::Error;
@@ -116,6 +116,9 @@ pub use content_tutorial_authoring::*;
 
 mod gpu_product_telemetry;
 pub use gpu_product_telemetry::*;
+
+mod gpu_live_runtime;
+pub use gpu_live_runtime::*;
 
 mod world_editor;
 pub use world_editor::*;

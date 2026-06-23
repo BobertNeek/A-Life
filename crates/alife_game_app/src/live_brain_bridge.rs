@@ -75,6 +75,15 @@ pub struct LiveBrainTickSummary {
     pub causal_stages: Vec<LiveBrainCausalStage>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LiveBrainProposalScores {
+    pub food_score: f32,
+    pub hazard_score: f32,
+    pub inspect_score: f32,
+    pub idle_score: f32,
+    pub confidence: f32,
+}
+
 #[derive(Debug)]
 pub struct LiveBrainLoop {
     organism_id: OrganismId,
@@ -222,6 +231,21 @@ impl LiveBrainLoop {
         self.proposals_from_current_sensory()
     }
 
+    pub fn current_sensory_report(&self) -> Result<HeadlessSensoryReport, GameAppShellError> {
+        self.harness
+            .world()
+            .sensory_report(self.organism_id, self.mind.current_tick())
+            .map_err(GameAppShellError::from)
+    }
+
+    pub fn current_context_proposals_with_scores(
+        &self,
+        scores: LiveBrainProposalScores,
+    ) -> Result<Vec<ActionProposal>, GameAppShellError> {
+        let report = self.current_sensory_report()?;
+        self.proposals_from_sensory_report(report, Some(scores))
+    }
+
     pub fn tick_with_proposals(&mut self, proposals: Vec<ActionProposal>) -> LiveBrainTickSummary {
         let tick_before = self.mind.current_tick();
         let world_tick_before = self.harness.world().tick();
@@ -248,10 +272,15 @@ impl LiveBrainLoop {
     }
 
     fn proposals_from_current_sensory(&self) -> Result<Vec<ActionProposal>, GameAppShellError> {
-        let report = self
-            .harness
-            .world()
-            .sensory_report(self.organism_id, self.mind.current_tick())?;
+        let report = self.current_sensory_report()?;
+        self.proposals_from_sensory_report(report, None)
+    }
+
+    fn proposals_from_sensory_report(
+        &self,
+        report: HeadlessSensoryReport,
+        scores: Option<LiveBrainProposalScores>,
+    ) -> Result<Vec<ActionProposal>, GameAppShellError> {
         let mut proposals = Vec::new();
         for visible in report.visible_entities {
             match visible.kind {
@@ -260,8 +289,8 @@ impl LiveBrainLoop {
                     ActionKind::Interact,
                     Some(visible.id),
                     None,
-                    0.72,
-                    0.95,
+                    scores.map_or(0.72, |scores| scores.food_score),
+                    scores.map_or(0.95, |scores| scores.confidence),
                     visible.distance,
                 )?),
                 WorldObjectKind::Hazard => proposals.push(proposal(
@@ -269,8 +298,8 @@ impl LiveBrainLoop {
                     ActionKind::Move,
                     Some(visible.id),
                     None,
-                    0.66,
-                    0.9,
+                    scores.map_or(0.66, |scores| scores.hazard_score),
+                    scores.map_or(0.9, |scores| scores.confidence),
                     visible.distance,
                 )?),
                 WorldObjectKind::Obstacle => proposals.push(proposal(
@@ -278,7 +307,7 @@ impl LiveBrainLoop {
                     ActionKind::Inspect,
                     Some(visible.id),
                     None,
-                    0.38,
+                    scores.map_or(0.38, |scores| scores.inspect_score),
                     0.7,
                     visible.distance,
                 )?),
@@ -287,7 +316,7 @@ impl LiveBrainLoop {
                     ActionKind::Inspect,
                     Some(visible.id),
                     None,
-                    0.42,
+                    scores.map_or(0.42, |scores| scores.inspect_score),
                     0.75,
                     visible.distance,
                 )?),
@@ -298,7 +327,7 @@ impl LiveBrainLoop {
             ActionKind::Idle,
             None,
             None,
-            0.28,
+            scores.map_or(0.28, |scores| scores.idle_score),
             0.55,
             0.0,
         )?);

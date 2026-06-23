@@ -20,12 +20,14 @@ requires a new explicit user instruction before implementation.
 2. Record GPU hardware runtime/performance evidence.
    - Current status: adapter/device bring-up may be recorded locally by
      `benchmark_tiers --gpu-runtime`; bounded P25/P26 diagnostic timing may be
-     recorded with `--measure-gpu`; product gameplay GPU timing remains
-     manual/unknown until a product-runtime timing path records measured GPU
-     results.
+     recorded with `--measure-gpu`; a static CPU-shadow-guarded live-tick GPU
+     smoke path may record product-smoke timing with compact readback. Full
+     plastic live gameplay GPU timing remains manual/unknown until a safe
+     post-seal lifetime-state update hook exists.
    - Command:
      ```powershell
      cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime --measure-gpu
+     cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- full-gpu-runtime-smoke crates/alife_world/tests/fixtures/p34 --mode static-action-authoritative --ticks 3
      ```
    - Evidence required: hardware identifier, backend status, fallback status,
      timing report, bottlenecks, and explicit 60 FPS target status. Environment

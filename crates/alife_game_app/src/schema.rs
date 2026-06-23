@@ -81,3 +81,6 @@ pub const S08_TARGET_FPS: u16 = 60;
 pub const S09_CONTENT_TUTORIAL_SCHEMA: &str = "alife.s09.content_tutorial_authoring.v1";
 pub const S09_CONTENT_TUTORIAL_SCHEMA_VERSION: u16 = 1;
 pub const S09_MAX_CONTENT_FILE_BYTES: u64 = 64 * 1024;
+pub const FULL_GPU_NEURAL_RUNTIME_SCHEMA: &str = "alife.product.full_gpu_neural_runtime.v1";
+pub const FULL_GPU_NEURAL_RUNTIME_SCHEMA_VERSION: u16 = 1;
+pub const FULL_GPU_NEURAL_RUNTIME_MAX_TICKS: u32 = 16;

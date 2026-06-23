@@ -1,6 +1,6 @@
 # Local GPU Timing Evidence Report
 
-Status: local diagnostic GPU timing recorded for P25/P26 parity workloads; product gameplay GPU timing remains unclaimed.
+Status: local diagnostic GPU timing recorded for P25/P26 parity workloads; a separate full GPU runtime smoke now records CPU-shadow-guarded static product timing, while full plastic gameplay GPU timing remains unclaimed.
 
 Branch: `codex/local-gpu-timing-evidence`
 
@@ -63,9 +63,11 @@ P26 plasticity diagnostic workloads on real hardware and match their CPU
 diagnostic references. This improves local GPU evidence from adapter/device
 bring-up to measured diagnostic workload timing.
 
-This does not prove product gameplay GPU performance, full WebGPU portability,
-or a 60 FPS gameplay target. Product gameplay GPU timing still needs a runtime
-workload measurement that does not rely on active neural readback.
+This does not prove full plastic gameplay GPU performance, full WebGPU
+portability, or a 60 FPS gameplay target. `FULL_GPU_NEURAL_RUNTIME_REPORT.md`
+adds live-tick static action-score timing with compact readback; live H_shadow
+application remains a gap until a future core-owned post-seal lifetime-state
+hook exists.
 
 ## Next Recommendation
 
@@ -76,5 +78,5 @@ cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime --measure-gpu
 ```
 
 for local diagnostic GPU timing evidence. Treat the generated timing report as
-manual diagnostic evidence until a future user-approved phase defines product
-runtime GPU timing criteria.
+manual diagnostic evidence; use `FULL_GPU_NEURAL_RUNTIME_REPORT.md` for the
+separate static product-smoke timing evidence.
