@@ -386,14 +386,24 @@ fn full_gpu_runtime_plasticity_report_is_post_seal_shadow_only_when_available() 
 
     assert_eq!(summary.sealed_patches, 1);
     assert!(summary.w_genetic_fixed_unchanged);
-    assert!(summary.plasticity_diagnostic_only);
+    assert!(summary.lifetime_consolidated_unchanged);
+    assert!(summary.h_operational_unchanged);
     assert!(summary.plasticity_post_seal_only);
     if summary.plasticity_dispatched {
         assert!(summary.experience_patch_sealed_before_plasticity);
         assert!(summary.h_shadow_updated_values > 0);
-        assert!(summary
-            .plasticity_live_gap
-            .contains("post-seal lifetime-state hook"));
+        assert!(summary.plasticity_live_core_update_applied);
+        assert!(summary.post_seal_delta_applied_records > 0);
+        assert_eq!(summary.post_seal_delta_sequence_id, Some(1));
+        if summary.gpu_output_used_for_proposals {
+            assert_eq!(
+                summary.product_runtime_claim,
+                "CpuShadowGuardedStaticPlusLiveHShadow"
+            );
+        } else {
+            assert_eq!(summary.product_runtime_claim, "ShadowOnly");
+        }
+        assert!(summary.plasticity_live_gap.contains("alife_core contract"));
     } else {
         assert!(summary.plasticity_live_gap.contains("CPU reference"));
     }

@@ -138,3 +138,17 @@ as unknown or missed, not inferred from CPU fallback data.
 Windows validation uses the PowerShell Git Bash wrappers to avoid accidental WSL
 invocation. The release gate does not create a P37 or new architecture lane;
 future work is tracked as backlog notes or issues.
+
+## ADR-023: Post-Seal Lifetime Deltas Are Core-Owned And Patch-Gated
+
+Decision: live lifetime/H_shadow application is allowed only through
+`alife_core` owned, versioned, validated delta batches derived from sealed
+`ExperiencePatch` evidence. External GPU code may convert validated plasticity
+results into the core batch format, but it may not expose raw GPU buffers,
+wgpu resources, engine IDs, Bevy types, or renderer handles to `alife_core`.
+
+`CreatureMind` applies these batches only after patch sealing and rejects wrong
+organism/tick/sequence, replay, NaN/Inf, out-of-range values, duplicate targets,
+failed CPU shadow parity, non-H_shadow layers, and any claimed mutation of
+`W_genetic_fixed`, lifetime-consolidated weights, or H_operational. CPU fallback
+and CPU shadow parity remain authoritative.

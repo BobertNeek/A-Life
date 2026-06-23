@@ -1,15 +1,19 @@
 //! Optional product-facing GPU neural runtime bridge.
 //!
 //! The current live path supports CPU-shadow-guarded static GPU action scoring
-//! with compact active-tick readback. Plasticity remains post-seal
-//! diagnostic/shadow evidence until `alife_core` owns a safe lifetime-state
-//! mutation hook.
+//! with compact active-tick readback. Static-plastic shadow mode can apply
+//! validated post-seal H_shadow deltas through the core-owned lifetime contract,
+//! while full action-authoritative static+routing+plastic runtime remains
+//! unsupported.
 
 use std::time::Instant;
 
 use alife_core::{
-    validate_finite, BrainClassSpec, BrainScaleTier, CooEntry, CooTile, NeuralProjectionSchema,
-    OjaUpdateConfig, ProjectionTile, ScaffoldContractError, SparseTileCoord, SynapseWeightSplit,
+    validate_finite, BrainClassSpec, BrainScaleTier, CooEntry, CooTile, ExperiencePatch,
+    NeuralProjectionSchema, OjaUpdateConfig, PostSealHShadowDeltaTarget,
+    PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaRecord, PostSealLifetimeDeltaSourceKind,
+    ProjectionTile, ScaffoldContractError, SparseTileCoord, SparseTilePayload, SynapseWeightSplit,
+    Validate,
 };
 
 use crate::{
@@ -59,6 +63,7 @@ pub enum FullGpuRuntimeProductClaim {
     None,
     ShadowOnly,
     CpuShadowGuarded,
+    CpuShadowGuardedStaticPlusLiveHShadow,
     ActionAuthoritative,
 }
 
@@ -165,6 +170,7 @@ pub struct FullGpuRuntimePlasticityReport {
     pub cpu_shadow_parity_passed: bool,
     pub submit_poll_ms: f32,
     pub diagnostic_readback_ms: f32,
+    pub h_shadow_delta_records: Vec<PostSealLifetimeDeltaRecord>,
     pub live_core_update_applied: bool,
 }
 
@@ -187,6 +193,40 @@ pub fn run_full_gpu_runtime_post_seal_plasticity_diagnostic(
     pollster::block_on(run_full_gpu_runtime_post_seal_plasticity_diagnostic_async(
         input,
     ))
+}
+
+pub fn full_gpu_runtime_live_plasticity_schema(
+) -> Result<NeuralProjectionSchema, ScaffoldContractError> {
+    live_static_schema(0.1)
+}
+
+pub fn post_seal_delta_batch_from_plasticity_report(
+    patch: &ExperiencePatch,
+    report: &FullGpuRuntimePlasticityReport,
+) -> Result<PostSealLifetimeDeltaBatch, ScaffoldContractError> {
+    patch.validate_contract()?;
+    if !report.cpu_shadow_parity_passed
+        || !report.genetic_fixed_unchanged
+        || !report.lifetime_consolidated_unchanged
+        || !report.h_operational_unchanged
+        || report.h_shadow_delta_records.is_empty()
+    {
+        return Err(ScaffoldContractError::BackendParity);
+    }
+    PostSealLifetimeDeltaBatch::new(
+        patch.header().organism_id,
+        patch.pre_action().brain_class_id,
+        patch.pre_action().brain_neuron_count,
+        patch.pre_action().max_active_synapses,
+        patch.header().world_tick,
+        patch.header().sequence_id,
+        PostSealLifetimeDeltaSourceKind::GpuCpuShadowGuarded,
+        report.cpu_shadow_parity_passed,
+        report.genetic_fixed_unchanged,
+        report.lifetime_consolidated_unchanged,
+        report.h_operational_unchanged,
+        report.h_shadow_delta_records.clone(),
+    )
 }
 
 async fn run_full_gpu_runtime_static_tick_async(
@@ -382,6 +422,7 @@ async fn run_full_gpu_runtime_post_seal_plasticity_diagnostic_async(
             cpu_shadow_parity_passed: false,
             submit_poll_ms: 0.0,
             diagnostic_readback_ms: 0.0,
+            h_shadow_delta_records: Vec::new(),
             live_core_update_applied: false,
         });
     }
@@ -413,7 +454,8 @@ async fn run_full_gpu_runtime_post_seal_plasticity_diagnostic_async(
     let static_plan = live_static_plan()?;
     let activation_q = live_activation_q(&static_plan, input)?;
     let cpu_static = static_plan.execute_cpu_diagnostic(&activation_q)?;
-    let plasticity_plan = live_plasticity_plan()?;
+    let schema = live_static_schema(0.1)?;
+    let plasticity_plan = live_plasticity_plan_from_schema(&schema)?;
     let cpu = plasticity_plan.execute_cpu_diagnostic(&activation_q, &cpu_static.activations_q)?;
     let gpu = run_plasticity_gpu_diagnostic_timed(
         &device,
@@ -436,9 +478,16 @@ async fn run_full_gpu_runtime_post_seal_plasticity_diagnostic_async(
         }
         max_delta_q = max_delta_q.max((i32::from(after) - i32::from(before)).abs());
     }
+    let h_shadow_delta_records = h_shadow_delta_records_from_schema(
+        &schema,
+        &plasticity_plan.h_shadow_initial_q,
+        &gpu.result.h_shadow_q,
+        plasticity_plan.policy,
+        plasticity_plan.oja.to_oja_config(plasticity_plan.policy),
+    )?;
     Ok(FullGpuRuntimePlasticityReport {
         schema_version: FULL_GPU_RUNTIME_SCHEMA_VERSION,
-        diagnostic_only: true,
+        diagnostic_only: false,
         post_seal_only: true,
         h_shadow_changed: gpu.result.h_shadow_q != plasticity_plan.h_shadow_initial_q,
         updated_values_count,
@@ -456,6 +505,7 @@ async fn run_full_gpu_runtime_post_seal_plasticity_diagnostic_async(
             && gpu.result.diagnostics == cpu.diagnostics,
         submit_poll_ms: gpu.timing.submit_poll_wall_ms,
         diagnostic_readback_ms: gpu.timing.readback_wall_ms,
+        h_shadow_delta_records,
         live_core_update_applied: false,
     })
 }
@@ -527,9 +577,11 @@ fn live_static_plan() -> Result<GpuStaticForwardPlan, ScaffoldContractError> {
     GpuStaticForwardPlan::from_upload(&upload, policy)
 }
 
-fn live_plasticity_plan() -> Result<GpuPlasticityPlan, ScaffoldContractError> {
+fn live_plasticity_plan_from_schema(
+    schema: &NeuralProjectionSchema,
+) -> Result<GpuPlasticityPlan, ScaffoldContractError> {
     let policy = GpuFixedPointPolicy::reference();
-    let upload = GpuUploadBuffers::from_cpu_schema(&live_static_schema(0.1)?, policy)?;
+    let upload = GpuUploadBuffers::from_cpu_schema(schema, policy)?;
     GpuPlasticityPlan::from_upload(
         &upload,
         policy,
@@ -617,6 +669,100 @@ fn weights(
         h_operational,
         h_shadow,
     )
+}
+
+fn h_shadow_delta_records_from_schema(
+    schema: &NeuralProjectionSchema,
+    before_q: &[i16],
+    after_q: &[i16],
+    policy: GpuFixedPointPolicy,
+    config: OjaUpdateConfig,
+) -> Result<Vec<PostSealLifetimeDeltaRecord>, ScaffoldContractError> {
+    if before_q.len() != after_q.len() {
+        return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+    }
+    let mut weight_index = 0_usize;
+    let mut records = Vec::new();
+    for projection in &schema.projections {
+        for (tile_index, tile) in projection.tiles.iter().enumerate() {
+            match &tile.payload {
+                SparseTilePayload::Dense(dense) => {
+                    for synapse_index in 0..dense.weights.len() {
+                        push_delta_record(
+                            &mut records,
+                            projection.projection_index,
+                            tile_index,
+                            synapse_index,
+                            weight_index,
+                            before_q,
+                            after_q,
+                            policy,
+                            config,
+                        )?;
+                        weight_index = weight_index.saturating_add(1);
+                    }
+                }
+                SparseTilePayload::Coo(coo) => {
+                    for synapse_index in 0..coo.entries.len() {
+                        push_delta_record(
+                            &mut records,
+                            projection.projection_index,
+                            tile_index,
+                            synapse_index,
+                            weight_index,
+                            before_q,
+                            after_q,
+                            policy,
+                            config,
+                        )?;
+                        weight_index = weight_index.saturating_add(1);
+                    }
+                }
+                SparseTilePayload::RowRunUnsupported | SparseTilePayload::ColumnRunUnsupported => {
+                    return Err(ScaffoldContractError::UnsupportedSparseTileFormat);
+                }
+            }
+        }
+    }
+    if weight_index != before_q.len() {
+        return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+    }
+    Ok(records)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_delta_record(
+    records: &mut Vec<PostSealLifetimeDeltaRecord>,
+    projection_index: u32,
+    tile_index: usize,
+    synapse_index: usize,
+    weight_index: usize,
+    before_q: &[i16],
+    after_q: &[i16],
+    policy: GpuFixedPointPolicy,
+    config: OjaUpdateConfig,
+) -> Result<(), ScaffoldContractError> {
+    let before = *before_q
+        .get(weight_index)
+        .ok_or(ScaffoldContractError::InvalidSparseProjectionSchema)?;
+    let after = *after_q
+        .get(weight_index)
+        .ok_or(ScaffoldContractError::InvalidSparseProjectionSchema)?;
+    if before == after {
+        return Ok(());
+    }
+    records.push(PostSealLifetimeDeltaRecord::h_shadow(
+        PostSealHShadowDeltaTarget::new(projection_index, tile_index as u32, synapse_index as u16),
+        dequantize_weight(before, policy),
+        dequantize_weight(after, policy),
+        config.shadow_min,
+        config.shadow_max,
+    )?);
+    Ok(())
+}
+
+fn dequantize_weight(value: i16, policy: GpuFixedPointPolicy) -> f32 {
+    f32::from(value) / policy.weight_scale as f32
 }
 
 fn env_flag_optional(name: &str) -> Option<bool> {

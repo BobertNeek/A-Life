@@ -19,7 +19,9 @@ manual graphics evidence should be reviewed on the target playtest machine, and
 GPU hardware performance remains manual unless measured on local hardware.
 Post-S11 local reports record adapter/device availability, bounded P25/P26
 diagnostic GPU timing, and a separate CPU-shadow-guarded static live-tick GPU
-smoke path. Full plastic live gameplay GPU timing remains unclaimed.
+smoke path. A post-S11 contract pass also records post-seal H_shadow
+application in static-plastic shadow mode. Full action-authoritative
+static+routing+plastic gameplay GPU timing remains unclaimed.
 
 No release tag was created during S11.
 
@@ -80,10 +82,11 @@ High issues:
 
 Medium issues:
 
-- GPU adapter/device availability, bounded P25/P26 diagnostic timing, and
-  static CPU-shadow-guarded live-tick timing may be recorded on supported local
-  hardware. Full plastic live gameplay GPU neural performance remains manual or
-  unknown until a safe post-seal lifetime-state update hook exists.
+- GPU adapter/device availability, bounded P25/P26 diagnostic timing, static
+  CPU-shadow-guarded live-tick timing, and static-plastic shadow H_shadow
+  application may be recorded on supported local hardware. Full
+  action-authoritative static+routing+plastic gameplay GPU neural performance
+  remains manual or unknown.
 - Extended balance, soak, and large-population evidence remain manual rather
   than normal CI gates.
 - The graphical shell is suitable for alpha playtest evidence, but broader UX

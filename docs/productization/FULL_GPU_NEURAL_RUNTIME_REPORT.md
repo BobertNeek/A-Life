@@ -1,6 +1,8 @@
 # Full GPU neural runtime report
 
-Status: optional product smoke path implemented for CPU-shadow-guarded static GPU action scoring.
+Status: optional product smoke path implemented for CPU-shadow-guarded static
+GPU action scoring, plus live post-seal H_shadow application in
+static-plastic shadow mode.
 
 ## Scope
 
@@ -30,9 +32,11 @@ Product runtime claim: `CpuShadowGuarded` for the static action scorer when the
 real GPU path is selected and parity passes.
 
 This is not a claim that the complete plastic recurrent brain is GPU
-action-authoritative. H_shadow plasticity remains diagnostic/shadow evidence
-because live application requires a future core-owned post-seal lifetime-state
-hook.
+action-authoritative. The `static-plastic-shadow` mode now converts validated
+GPU plasticity output into a core-owned post-seal H_shadow delta batch and
+applies that batch to the live `CreatureMind` only after a sealed
+`ExperiencePatch`. Because that mode does not use GPU output for action
+proposals, its product runtime claim remains `ShadowOnly`.
 
 Requests for the `full-shadow` or `full-action-authoritative` modes fall back
 with an unsupported-backend status instead of pretending the full
@@ -50,8 +54,8 @@ The smoke output reports:
 - CPU shadow parity
 - routing active/skipped tile counters
 - compact readback byte count
-- H_shadow diagnostic summary
-- `W_genetic_fixed` unchanged status
+- H_shadow application summary
+- `W_genetic_fixed`, lifetime-consolidated, and H_operational unchanged status
 - upload, submit/poll, compact readback, CPU shadow, and total GPU runtime wall timings
 
 ## Forced fallback
@@ -81,10 +85,17 @@ On this Windows machine, the feature-enabled command selected:
 - CPU shadow parity: `true`
 - Routing counters: `1 active tile / 1 total tile`, `0 skipped`, `4 active synapses`
 - Compact active readback: `64` bytes
-- Timing: upload `0.2032 ms`, submit/poll `1.2318 ms`, compact readback `0.9273 ms`, CPU shadow `0.0262 ms`, total GPU runtime `2.3623 ms`
+- Timing: upload `0.1942 ms`, submit/poll `1.2196 ms`, compact readback `0.8307 ms`, CPU shadow `0.0242 ms`, total GPU runtime `2.2445 ms`
 
 The static-plastic-shadow command selected `GpuPlastic` on the same adapter,
-dispatched the post-seal plasticity diagnostic, changed H_shadow shadow values,
-reported `W_genetic_fixed` unchanged, and recorded total GPU runtime wall timing
-of `3.7268 ms`. That plasticity result is not applied back into the live
-`CreatureMind`.
+dispatched post-seal plasticity, converted the result into a core-owned delta
+batch, and applied `2` H_shadow records to the live `CreatureMind` after sealed
+patch sequence `1`. It reported `W_genetic_fixed`,
+lifetime-consolidated weights, and H_operational unchanged. The measured
+command output recorded upload `0.2092 ms`, submit/poll `1.1921 ms`, compact
+readback `0.7289 ms`, CPU shadow `0.0237 ms`, and total GPU runtime wall timing
+of `2.1302 ms`.
+
+Forced fallback with `ALIFE_GPU_RUNTIME_AVAILABLE=0` reported `CpuReference`,
+fallback `HardwareUnavailable`, no GPU plasticity dispatch, and still sealed
+three patches.

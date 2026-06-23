@@ -81,11 +81,18 @@ pub struct FullGpuRuntimeSmokeSummary {
     pub weight_readback_forbidden: bool,
     pub plasticity_dispatched: bool,
     pub plasticity_diagnostic_only: bool,
+    pub plasticity_live_core_update_applied: bool,
     pub plasticity_post_seal_only: bool,
     pub h_shadow_changed: bool,
     pub h_shadow_updated_values: u32,
     pub h_shadow_max_delta_q: i32,
+    pub post_seal_delta_applied_records: u32,
+    pub post_seal_delta_changed_records: u32,
+    pub post_seal_delta_max_abs_delta: f32,
+    pub post_seal_delta_sequence_id: Option<u64>,
     pub w_genetic_fixed_unchanged: bool,
+    pub lifetime_consolidated_unchanged: bool,
+    pub h_operational_unchanged: bool,
     pub experience_patch_sealed_before_plasticity: bool,
     pub upload_ms: f32,
     pub gpu_submit_poll_ms: f32,
@@ -116,14 +123,25 @@ impl FullGpuRuntimeSmokeSummary {
                 message: "GPU proposal scoring requires CPU shadow parity",
             });
         }
+        alife_core::validate_finite(self.post_seal_delta_max_abs_delta)?;
         if self.plasticity_dispatched
-            && (!self.plasticity_diagnostic_only
-                || !self.plasticity_post_seal_only
+            && (!self.plasticity_post_seal_only
                 || !self.experience_patch_sealed_before_plasticity
-                || !self.w_genetic_fixed_unchanged)
+                || !self.w_genetic_fixed_unchanged
+                || !self.lifetime_consolidated_unchanged
+                || !self.h_operational_unchanged)
         {
             return Err(GameAppShellError::VisibleWorldMismatch {
-                message: "GPU plasticity must remain post-seal H_shadow-only diagnostic evidence",
+                message: "GPU plasticity must remain post-seal H_shadow-only evidence",
+            });
+        }
+        if self.plasticity_live_core_update_applied
+            && (self.post_seal_delta_applied_records == 0
+                || self.post_seal_delta_sequence_id.is_none()
+                || self.plasticity_diagnostic_only)
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "live H_shadow application requires a post-seal delta receipt",
             });
         }
         Ok(())
@@ -171,6 +189,7 @@ fn run_full_gpu_runtime_smoke_inner(
     ticks: u32,
 ) -> Result<FullGpuRuntimeSmokeSummary, GameAppShellError> {
     use alife_gpu_backend::{
+        full_gpu_runtime_live_plasticity_schema, post_seal_delta_batch_from_plasticity_report,
         run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
         FullGpuRuntimeProductClaim,
     };
@@ -180,12 +199,17 @@ fn run_full_gpu_runtime_smoke_inner(
     let mut tick_summaries = Vec::with_capacity(ticks as usize);
     let mut last_static = None;
     let mut plasticity = None;
+    let mut post_seal_receipt = None;
     let mut gpu_output_used = false;
 
     for tick_index in 0..ticks {
         let report = live.current_sensory_report()?;
         let input = runtime_input_from_sensory(&report)?;
         let static_report = run_full_gpu_runtime_static_tick(input, backend_mode)?;
+        let gpu_static_available = static_report.backend.fallback_reason.is_none();
+        if tick_index == 0 && mode.requests_plasticity() && gpu_static_available {
+            live.initialize_neural_projection_schema(full_gpu_runtime_live_plasticity_schema()?)?;
+        }
         let proposals = if static_report.action_summary.is_some()
             && static_report.cpu_shadow_parity_passed
             && matches!(
@@ -194,22 +218,35 @@ fn run_full_gpu_runtime_smoke_inner(
                     | FullGpuRuntimeProductClaim::ActionAuthoritative
             ) {
             gpu_output_used = true;
-            live.current_context_proposals_with_scores(scores_from_action_summary(
-                static_report.action_summary.expect("checked above"),
-            )?)?
+            let action_summary =
+                static_report
+                    .action_summary
+                    .ok_or(GameAppShellError::VisibleWorldMismatch {
+                        message: "GPU static scoring reported parity without an action summary",
+                    })?;
+            live.current_context_proposals_with_scores(scores_from_action_summary(action_summary)?)?
         } else {
             live.current_context_proposals()?
         };
-        let tick = live.tick_with_proposals(proposals);
-        if tick.patch_sealed
+        let tick = live.tick_with_proposals_detailed(
+            proposals,
+            !(mode.requests_plasticity() && gpu_static_available),
+        );
+        if tick.summary.patch_sealed
             && tick_index == 0
             && mode.requests_plasticity()
-            && static_report.backend.fallback_reason.is_none()
+            && gpu_static_available
         {
-            plasticity = Some(run_full_gpu_runtime_post_seal_plasticity_diagnostic(input)?);
+            let plasticity_report = run_full_gpu_runtime_post_seal_plasticity_diagnostic(input)?;
+            if let Some(patch) = tick.sealed_patch.as_ref() {
+                let batch =
+                    post_seal_delta_batch_from_plasticity_report(patch, &plasticity_report)?;
+                post_seal_receipt = Some(live.apply_post_seal_lifetime_deltas(patch, batch)?);
+            }
+            plasticity = Some(plasticity_report);
         }
         last_static = Some(static_report);
-        tick_summaries.push(tick);
+        tick_summaries.push(tick.summary);
     }
 
     let Some(static_report) = last_static else {
@@ -225,6 +262,13 @@ fn run_full_gpu_runtime_smoke_inner(
         .last()
         .map_or(0, |summary| summary.packed_record_count);
     let plasticity_report = plasticity.as_ref();
+    let receipt = post_seal_receipt.as_ref();
+    let product_runtime_claim =
+        if receipt.is_some() && gpu_output_used && static_report.cpu_shadow_parity_passed {
+            "CpuShadowGuardedStaticPlusLiveHShadow".to_string()
+        } else {
+            format!("{:?}", static_report.product_runtime_claim)
+        };
     let summary = FullGpuRuntimeSmokeSummary {
         schema: FULL_GPU_NEURAL_RUNTIME_SCHEMA,
         schema_version: FULL_GPU_NEURAL_RUNTIME_SCHEMA_VERSION,
@@ -253,12 +297,21 @@ fn run_full_gpu_runtime_smoke_inner(
         weight_readback_forbidden: static_report.readback.weight_readback_forbidden,
         plasticity_dispatched: plasticity_report.is_some(),
         plasticity_diagnostic_only: plasticity_report.is_none_or(|report| report.diagnostic_only),
+        plasticity_live_core_update_applied: receipt.is_some(),
         plasticity_post_seal_only: plasticity_report.is_none_or(|report| report.post_seal_only),
         h_shadow_changed: plasticity_report.is_some_and(|report| report.h_shadow_changed),
         h_shadow_updated_values: plasticity_report.map_or(0, |report| report.updated_values_count),
         h_shadow_max_delta_q: plasticity_report.map_or(0, |report| report.max_delta_q),
+        post_seal_delta_applied_records: receipt.map_or(0, |receipt| receipt.applied_records),
+        post_seal_delta_changed_records: receipt.map_or(0, |receipt| receipt.changed_records),
+        post_seal_delta_max_abs_delta: receipt.map_or(0.0, |receipt| receipt.max_abs_delta),
+        post_seal_delta_sequence_id: receipt.map(|receipt| receipt.sealed_sequence_id.raw()),
         w_genetic_fixed_unchanged: plasticity_report
             .is_none_or(|report| report.genetic_fixed_unchanged),
+        lifetime_consolidated_unchanged: plasticity_report
+            .is_none_or(|report| report.lifetime_consolidated_unchanged),
+        h_operational_unchanged: plasticity_report
+            .is_none_or(|report| report.h_operational_unchanged),
         experience_patch_sealed_before_plasticity: plasticity_report
             .is_none_or(|_| sealed_patches > 0),
         upload_ms: static_report.timing.upload_ms,
@@ -266,11 +319,16 @@ fn run_full_gpu_runtime_smoke_inner(
         compact_readback_ms: static_report.timing.compact_readback_ms,
         cpu_shadow_ms: static_report.timing.cpu_shadow_ms,
         total_gpu_runtime_ms: static_report.timing.total_gpu_runtime_ms,
-        product_runtime_claim: format!("{:?}", static_report.product_runtime_claim),
-        plasticity_live_gap: static_report.fallback_note.clone().unwrap_or_else(|| {
-            "live H_shadow application remains diagnostic/shadow-only until alife_core owns a safe post-seal lifetime-state hook"
+        product_runtime_claim,
+        plasticity_live_gap: if receipt.is_some() {
+            "post-seal H_shadow delta batch applied through alife_core contract; full action-authoritative static+routing+plastic runtime remains unsupported"
                 .to_string()
-        }),
+        } else {
+            static_report.fallback_note.clone().unwrap_or_else(|| {
+                "live H_shadow application did not run; CPU fallback or unsupported mode kept plasticity shadow-only"
+                    .to_string()
+            })
+        },
     };
     summary.validate()?;
     Ok(summary)
@@ -312,11 +370,18 @@ fn cpu_fallback_summary(
         weight_readback_forbidden: true,
         plasticity_dispatched: false,
         plasticity_diagnostic_only: true,
+        plasticity_live_core_update_applied: false,
         plasticity_post_seal_only: true,
         h_shadow_changed: false,
         h_shadow_updated_values: 0,
         h_shadow_max_delta_q: 0,
+        post_seal_delta_applied_records: 0,
+        post_seal_delta_changed_records: 0,
+        post_seal_delta_max_abs_delta: 0.0,
+        post_seal_delta_sequence_id: None,
         w_genetic_fixed_unchanged: true,
+        lifetime_consolidated_unchanged: true,
+        h_operational_unchanged: true,
         experience_patch_sealed_before_plasticity: false,
         upload_ms: 0.0,
         gpu_submit_poll_ms: 0.0,

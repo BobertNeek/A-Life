@@ -75,6 +75,12 @@ pub struct LiveBrainTickSummary {
     pub causal_stages: Vec<LiveBrainCausalStage>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveBrainTickDetailed {
+    pub summary: LiveBrainTickSummary,
+    pub sealed_patch: Option<ExperiencePatch>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LiveBrainProposalScores {
     pub food_score: f32,
@@ -148,6 +154,24 @@ impl LiveBrainLoop {
 
     pub const fn mind(&self) -> &CreatureMind {
         &self.mind
+    }
+
+    pub fn initialize_neural_projection_schema(
+        &mut self,
+        schema: NeuralProjectionSchema,
+    ) -> Result<(), GameAppShellError> {
+        self.mind.initialize_neural_projection_schema(schema)?;
+        Ok(())
+    }
+
+    pub fn apply_post_seal_lifetime_deltas(
+        &mut self,
+        sealed_patch: &ExperiencePatch,
+        deltas: PostSealLifetimeDeltaBatch,
+    ) -> Result<PostSealLifetimeDeltaReceipt, GameAppShellError> {
+        Ok(self
+            .mind
+            .apply_post_seal_lifetime_deltas(sealed_patch, deltas)?)
     }
 
     pub fn creature_visual_snapshot(
@@ -247,18 +271,27 @@ impl LiveBrainLoop {
     }
 
     pub fn tick_with_proposals(&mut self, proposals: Vec<ActionProposal>) -> LiveBrainTickSummary {
+        self.tick_with_proposals_detailed(proposals, true).summary
+    }
+
+    pub fn tick_with_proposals_detailed(
+        &mut self,
+        proposals: Vec<ActionProposal>,
+        enable_learning_trace_update: bool,
+    ) -> LiveBrainTickDetailed {
         let tick_before = self.mind.current_tick();
         let world_tick_before = self.harness.world().tick();
-        let input = BrainTickInput::new(tick_before, proposals)
+        let mut input = BrainTickInput::new(tick_before, proposals)
             .with_pack_experience(self.logging_enabled)
             .with_action_duration(DurationTicks::new(1));
+        input.enable_learning_trace_update = enable_learning_trace_update;
         let tick = self.harness.tick_mind(&mut self.mind, input);
         let world_tick_after = self.harness.world().tick();
         let action_failure = tick
             .action_result
             .as_ref()
             .and_then(|result| result.execution.failure);
-        Self::summarize_tick(
+        let summary = Self::summarize_tick(
             self.organism_id,
             tick_before,
             self.mind.current_tick(),
@@ -268,7 +301,11 @@ impl LiveBrainLoop {
             action_failure,
             self.harness.telemetry().sealed_patches.len(),
             self.harness.telemetry().packed_records.len(),
-        )
+        );
+        LiveBrainTickDetailed {
+            summary,
+            sealed_patch: tick.brain.experience_patch,
+        }
     }
 
     fn proposals_from_current_sensory(&self) -> Result<Vec<ActionProposal>, GameAppShellError> {

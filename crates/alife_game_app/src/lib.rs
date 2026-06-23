@@ -10,8 +10,9 @@ mod prelude {
     pub(crate) use alife_core::{
         cpu_reference_arbitrate, ActionArbitrationConfig, ActionId, ActionKind, ActionProposal,
         ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput, BrainTickStatus, ConceptCellId,
-        Confidence, CreatureMind, DurationTicks, GaussianClusterId, GenomeId, HomeostaticSnapshot,
-        Intensity, LineageId, NormalizedScalar, OrganismId, PhysicalContactKind,
+        Confidence, CreatureMind, DurationTicks, ExperiencePatch, GaussianClusterId, GenomeId,
+        HomeostaticSnapshot, Intensity, LineageId, NeuralProjectionSchema, NormalizedScalar,
+        OrganismId, PhysicalContactKind, PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt,
         ReferenceActionFailure, ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel,
         TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
     };
