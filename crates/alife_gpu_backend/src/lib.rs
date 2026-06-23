@@ -23,6 +23,7 @@ pub use buffers::{
     GPU_TILE_METADATA_BYTES,
 };
 pub use full_runtime::{
+    full_gpu_runtime_live_plasticity_schema, post_seal_delta_batch_from_plasticity_report,
     run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
     FullGpuRuntimeBackendReport, FullGpuRuntimeMode, FullGpuRuntimePlasticityReport,
     FullGpuRuntimeProductClaim, FullGpuRuntimeReadbackReport, FullGpuRuntimeRoutingReport,

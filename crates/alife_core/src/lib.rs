@@ -16,6 +16,7 @@ pub mod math;
 pub mod memory;
 pub mod neural;
 pub mod packed_log;
+pub mod post_seal_lifetime;
 pub mod reference_brain;
 pub mod routing;
 pub mod sensory_abi;
@@ -99,6 +100,14 @@ pub use packed_log::{
     PACKED_FLAG_HAS_TARGET_POSITION, PACKED_FLAG_HAS_TEACHER_FEEDBACK,
     PACKED_FLAG_HAS_TEACHER_LESSON, PACKED_FLAG_SUCCESS, PACKED_HORMONE_SUMMARY_CHANNELS,
     PACKED_LOG_DEFAULT_SIDE_BUFFER_CAPACITY_RECORDS, PACKED_SIDE_BUFFER_GROUP_COUNT,
+};
+pub use post_seal_lifetime::{
+    PostSealHShadowDeltaTarget, PostSealLearningToken, PostSealLifetimeDeltaApplication,
+    PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, PostSealLifetimeDeltaRecord,
+    PostSealLifetimeDeltaRejectionReason, PostSealLifetimeDeltaSchemaVersion,
+    PostSealLifetimeDeltaSourceKind, PostSealLifetimeLayer, POST_SEAL_HSHADOW_ABS_LIMIT,
+    POST_SEAL_HSHADOW_VALUE_EPSILON, POST_SEAL_LIFETIME_DELTA_MAX_RECORDS,
+    POST_SEAL_LIFETIME_DELTA_SCHEMA_VERSION,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,

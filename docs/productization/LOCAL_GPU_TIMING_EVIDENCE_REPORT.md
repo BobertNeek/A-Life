@@ -1,6 +1,10 @@
 # Local GPU Timing Evidence Report
 
-Status: local diagnostic GPU timing recorded for P25/P26 parity workloads; a separate full GPU runtime smoke now records CPU-shadow-guarded static product timing, while full plastic gameplay GPU timing remains unclaimed.
+Status: local diagnostic GPU timing recorded for P25/P26 parity workloads; a
+separate full GPU runtime smoke now records CPU-shadow-guarded static product
+timing and post-seal H_shadow application timing in static-plastic shadow mode,
+while full action-authoritative static+routing+plastic gameplay timing remains
+unclaimed.
 
 Branch: `codex/local-gpu-timing-evidence`
 
@@ -63,11 +67,12 @@ P26 plasticity diagnostic workloads on real hardware and match their CPU
 diagnostic references. This improves local GPU evidence from adapter/device
 bring-up to measured diagnostic workload timing.
 
-This does not prove full plastic gameplay GPU performance, full WebGPU
-portability, or a 60 FPS gameplay target. `FULL_GPU_NEURAL_RUNTIME_REPORT.md`
-adds live-tick static action-score timing with compact readback; live H_shadow
-application remains a gap until a future core-owned post-seal lifetime-state
-hook exists.
+This does not prove full action-authoritative plastic gameplay GPU
+performance, full WebGPU portability, or a 60 FPS gameplay target.
+`FULL_GPU_NEURAL_RUNTIME_REPORT.md` adds live-tick static action-score timing
+with compact readback and records static-plastic shadow timing where GPU
+plasticity output is applied through the post-seal H_shadow contract after a
+sealed patch.
 
 ## Next Recommendation
 

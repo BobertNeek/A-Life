@@ -17,7 +17,8 @@ use crate::{
     LobeKind, MemoryBank, MemoryBankConfig, MemoryExpectancy, MemoryExpectancySnapshot, MemoryId,
     MemoryQuery, NeuralActivationConfig, NeuralDiagnostics, NeuralProjectionSchema,
     NeuralUpdateReport, NormalizedScalar, OjaUpdateConfig, OrganismId, PackedExperienceRecord,
-    PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PreActionSnapshot,
+    PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PostSealLearningToken,
+    PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, PreActionSnapshot,
     ScaffoldContractError, SensorySnapshot, SignedValence, SleepConsolidationConfig,
     SleepConsolidationReport, SleepConsolidator, SleepController, SleepPhase, SleepState,
     SleepTransition, SleepTrigger, StructuralEditBatch, Tick, TopologicalMap, TopologicalMapConfig,
@@ -424,6 +425,8 @@ pub struct CreatureMind {
     pending_structural_edits: Vec<StructuralEditBatch>,
     tick: Tick,
     next_sequence_id: u64,
+    #[serde(default)]
+    last_post_seal_lifetime_delta_sequence: Option<ExperienceSequenceId>,
     deterministic_seed: u64,
     diagnostics: BrainTickDiagnostics,
 }
@@ -476,6 +479,7 @@ impl CreatureMind {
             pending_structural_edits: Vec::new(),
             tick,
             next_sequence_id: 1,
+            last_post_seal_lifetime_delta_sequence: None,
             deterministic_seed,
             diagnostics: BrainTickDiagnostics::default(),
         };
@@ -521,6 +525,87 @@ impl CreatureMind {
 
     pub const fn diagnostics(&self) -> BrainTickDiagnostics {
         self.diagnostics
+    }
+
+    pub const fn neural_projection_schema(&self) -> &NeuralProjectionSchema {
+        &self.neural_schema
+    }
+
+    pub fn initialize_neural_projection_schema(
+        &mut self,
+        schema: NeuralProjectionSchema,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.next_sequence_id != 1 || self.last_post_seal_lifetime_delta_sequence.is_some() {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        schema.validate()?;
+        if schema.brain_class_id != self.brain_class.id
+            || schema.neuron_count != self.brain_class.neuron_count
+        {
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+        }
+        self.neural_schema = schema;
+        self.neural_state.projections = self.neural_schema.projections.clone();
+        self.validate_ready(self.tick)
+    }
+
+    pub fn apply_post_seal_lifetime_deltas(
+        &mut self,
+        sealed_patch: &ExperiencePatch,
+        deltas: PostSealLifetimeDeltaBatch,
+    ) -> Result<PostSealLifetimeDeltaReceipt, ScaffoldContractError> {
+        let token = PostSealLearningToken::from_sealed_patch(sealed_patch)?;
+        self.apply_validated_post_seal_hshadow_deltas(token, deltas)
+    }
+
+    pub fn apply_validated_post_seal_hshadow_deltas(
+        &mut self,
+        token: PostSealLearningToken,
+        deltas: PostSealLifetimeDeltaBatch,
+    ) -> Result<PostSealLifetimeDeltaReceipt, ScaffoldContractError> {
+        deltas.validate_against_token(&token)?;
+        if token.organism_id() != self.organism_id
+            || token.brain_class_id() != self.brain_class.id
+            || token.outcome_tick() != self.tick
+            || deltas.neuron_count != self.brain_class.neuron_count
+            || deltas.max_active_synapses != self.brain_class.max_active_synapses
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if let Some(last_sequence) = self.last_post_seal_lifetime_delta_sequence {
+            if token.sealed_sequence_id().raw() <= last_sequence.raw() {
+                return Err(ScaffoldContractError::NonMonotonicTick);
+            }
+        }
+        let mut next_schema = self.neural_schema.clone();
+        let stats = crate::post_seal_lifetime::apply_hshadow_delta_records_to_schema(
+            &mut next_schema,
+            &deltas.records,
+        )?;
+        self.neural_schema = next_schema;
+        self.neural_state.projections = self.neural_schema.projections.clone();
+        self.last_post_seal_lifetime_delta_sequence = Some(token.sealed_sequence_id());
+        self.validate_ready(self.tick)?;
+        let receipt = PostSealLifetimeDeltaReceipt {
+            schema_version: crate::POST_SEAL_LIFETIME_DELTA_SCHEMA_VERSION,
+            organism_id: self.organism_id,
+            brain_class_id: self.brain_class.id,
+            originating_tick: token.originating_tick(),
+            outcome_tick: token.outcome_tick(),
+            sealed_sequence_id: token.sealed_sequence_id(),
+            source_kind: deltas.source_kind,
+            applied_records: stats.applied_records,
+            changed_records: stats.changed_records,
+            max_abs_delta: stats.max_abs_delta,
+            h_shadow_changed: stats.changed_records > 0,
+            genetic_fixed_unchanged: true,
+            lifetime_consolidated_unchanged: true,
+            h_operational_unchanged: true,
+            post_seal_only: true,
+            replay_protected: true,
+        };
+        receipt.validate_contract()?;
+        Ok(receipt)
     }
 
     pub fn force_sleep(
