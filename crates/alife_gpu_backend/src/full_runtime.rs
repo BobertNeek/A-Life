@@ -2,8 +2,9 @@
 //!
 //! The current live path supports CPU-shadow-guarded static GPU action scoring
 //! with compact active-tick readback. Static-plastic shadow mode can apply
-//! validated post-seal H_shadow deltas through the core-owned lifetime contract,
-//! while full action-authoritative static+routing+plastic runtime remains
+//! validated post-seal H_shadow deltas through the core-owned lifetime contract.
+//! The combined static/plastic mode runs both in one CPU-shadow-guarded live
+//! path; full action-authoritative static+routing+plastic runtime remains
 //! unsupported.
 
 use std::time::Instant;
@@ -21,7 +22,7 @@ use crate::{
     GpuActionSummaryStagingRecord, GpuFixedPointPolicy, GpuOjaFixedPointConfig, GpuPlasticityPlan,
     GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuRuntimeBackendStatus,
     GpuRuntimeFallbackReason, GpuStaticActionSummaryConfig, GpuStaticForwardPlan, GpuUploadBuffers,
-    GPU_ACTION_SUMMARY_RECORD_BYTES,
+    GPU_ACTION_SUMMARY_RECORD_BYTES, P26_PLASTICITY_DIAGNOSTIC_WORDS,
 };
 
 pub const FULL_GPU_RUNTIME_SCHEMA_VERSION: u16 = 1;
@@ -32,6 +33,7 @@ pub enum FullGpuRuntimeMode {
     GpuStaticShadow,
     GpuStaticActionAuthoritative,
     GpuStaticPlasticShadow,
+    GpuStaticPlasticCpuShadowGuarded,
     GpuFullShadow,
     GpuFullActionAuthoritative,
 }
@@ -43,7 +45,9 @@ impl FullGpuRuntimeMode {
             Self::GpuStaticShadow | Self::GpuStaticActionAuthoritative => {
                 GpuRuntimeBackendKind::GpuStatic
             }
-            Self::GpuStaticPlasticShadow => GpuRuntimeBackendKind::GpuPlastic,
+            Self::GpuStaticPlasticShadow | Self::GpuStaticPlasticCpuShadowGuarded => {
+                GpuRuntimeBackendKind::GpuPlastic
+            }
             Self::GpuFullShadow | Self::GpuFullActionAuthoritative => {
                 GpuRuntimeBackendKind::GpuFull
             }
@@ -53,7 +57,10 @@ impl FullGpuRuntimeMode {
     pub const fn requests_plasticity(self) -> bool {
         matches!(
             self,
-            Self::GpuStaticPlasticShadow | Self::GpuFullShadow | Self::GpuFullActionAuthoritative
+            Self::GpuStaticPlasticShadow
+                | Self::GpuStaticPlasticCpuShadowGuarded
+                | Self::GpuFullShadow
+                | Self::GpuFullActionAuthoritative
         )
     }
 }
@@ -170,6 +177,7 @@ pub struct FullGpuRuntimePlasticityReport {
     pub cpu_shadow_parity_passed: bool,
     pub submit_poll_ms: f32,
     pub diagnostic_readback_ms: f32,
+    pub diagnostic_readback_bytes: usize,
     pub h_shadow_delta_records: Vec<PostSealLifetimeDeltaRecord>,
     pub live_core_update_applied: bool,
 }
@@ -364,6 +372,7 @@ async fn run_full_gpu_runtime_static_tick_async(
     let claim = if parity {
         match mode {
             FullGpuRuntimeMode::GpuStaticActionAuthoritative
+            | FullGpuRuntimeMode::GpuStaticPlasticCpuShadowGuarded
             | FullGpuRuntimeMode::GpuFullActionAuthoritative => {
                 FullGpuRuntimeProductClaim::CpuShadowGuarded
             }
@@ -422,6 +431,7 @@ async fn run_full_gpu_runtime_post_seal_plasticity_diagnostic_async(
             cpu_shadow_parity_passed: false,
             submit_poll_ms: 0.0,
             diagnostic_readback_ms: 0.0,
+            diagnostic_readback_bytes: 0,
             h_shadow_delta_records: Vec::new(),
             live_core_update_applied: false,
         });
@@ -505,6 +515,7 @@ async fn run_full_gpu_runtime_post_seal_plasticity_diagnostic_async(
             && gpu.result.diagnostics == cpu.diagnostics,
         submit_poll_ms: gpu.timing.submit_poll_wall_ms,
         diagnostic_readback_ms: gpu.timing.readback_wall_ms,
+        diagnostic_readback_bytes: plasticity_diagnostic_readback_bytes(&plasticity_plan),
         h_shadow_delta_records,
         live_core_update_applied: false,
     })
@@ -597,6 +608,15 @@ fn live_plasticity_plan_from_schema(
             0xF00D,
         )?,
     )
+}
+
+fn plasticity_diagnostic_readback_bytes(plan: &GpuPlasticityPlan) -> usize {
+    plan.h_shadow_initial_q
+        .len()
+        .saturating_mul(std::mem::size_of::<i32>())
+        .saturating_add(
+            (P26_PLASTICITY_DIAGNOSTIC_WORDS as usize).saturating_mul(std::mem::size_of::<u32>()),
+        )
 }
 
 fn live_static_schema(h_shadow: f32) -> Result<NeuralProjectionSchema, ScaffoldContractError> {

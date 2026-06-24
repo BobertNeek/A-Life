@@ -37,9 +37,15 @@ use alife_world::{
     TerrainZoneKind,
 };
 use std::path::PathBuf;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 fn p34_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/alife_world/tests/fixtures/p34")
+}
+
+fn gpu_plasticity_env_lock() -> MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
 }
 
 #[test]
@@ -321,6 +327,7 @@ fn full_gpu_runtime_smoke_preserves_cpu_fallback_and_no_bulk_readback() {
     let default_summary =
         run_full_gpu_runtime_smoke(&launch, FullGpuRuntimeSmokeOptions::default()).unwrap();
     assert_eq!(default_summary.requested_mode, "cpu-reference");
+    assert!(!default_summary.combined_mode);
     assert_eq!(default_summary.selected_backend, "CpuReference");
     assert!(!default_summary.gpu_static_dispatched);
     assert!(!default_summary.gpu_output_used_for_proposals);
@@ -373,6 +380,8 @@ fn full_gpu_runtime_smoke_preserves_cpu_fallback_and_no_bulk_readback() {
 
 #[test]
 fn full_gpu_runtime_plasticity_report_is_post_seal_shadow_only_when_available() {
+    let _guard = gpu_plasticity_env_lock();
+    std::env::remove_var("ALIFE_GPU_PLASTICITY_DIAGNOSTIC_AVAILABLE");
     let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     let summary = run_full_gpu_runtime_smoke(
         &launch,
@@ -385,29 +394,137 @@ fn full_gpu_runtime_plasticity_report_is_post_seal_shadow_only_when_available() 
     .unwrap();
 
     assert_eq!(summary.sealed_patches, 1);
+    assert!(!summary.combined_mode);
     assert!(summary.w_genetic_fixed_unchanged);
     assert!(summary.lifetime_consolidated_unchanged);
     assert!(summary.h_operational_unchanged);
     assert!(summary.plasticity_post_seal_only);
     if summary.plasticity_dispatched {
         assert!(summary.experience_patch_sealed_before_plasticity);
+        assert!(summary.post_seal_diagnostic_readback_bytes > 0);
+        assert!(summary.post_seal_diagnostic_readback_boundary_scoped);
         assert!(summary.h_shadow_updated_values > 0);
         assert!(summary.plasticity_live_core_update_applied);
+        assert!(summary.post_seal_hshadow_applied);
+        assert!(summary.post_seal_replay_protected);
         assert!(summary.post_seal_delta_applied_records > 0);
         assert_eq!(summary.post_seal_delta_sequence_id, Some(1));
-        if summary.gpu_output_used_for_proposals {
-            assert_eq!(
-                summary.product_runtime_claim,
-                "CpuShadowGuardedStaticPlusLiveHShadow"
-            );
-        } else {
-            assert_eq!(summary.product_runtime_claim, "ShadowOnly");
-        }
+        assert!(!summary.gpu_output_used_for_proposals);
+        assert_eq!(summary.product_runtime_claim, "ShadowOnly");
         assert!(summary.plasticity_live_gap.contains("alife_core contract"));
     } else {
         assert!(summary.plasticity_live_gap.contains("CPU reference"));
     }
     summary.validate().unwrap();
+}
+
+#[test]
+fn full_gpu_runtime_combined_static_plastic_mode_is_cpu_shadow_guarded() {
+    let _guard = gpu_plasticity_env_lock();
+    std::env::remove_var("ALIFE_GPU_PLASTICITY_DIAGNOSTIC_AVAILABLE");
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_full_gpu_runtime_smoke(
+        &launch,
+        FullGpuRuntimeSmokeOptions {
+            mode: FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded,
+            ticks: 3,
+            json_path: None,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(summary.requested_mode, "static-plastic-cpu-shadow-guarded");
+    assert!(summary.combined_mode);
+    assert_eq!(summary.ticks_run, 3);
+    assert_eq!(summary.sealed_patches, 3);
+    assert!(summary.bulk_readback_forbidden);
+    assert!(summary.per_synapse_readback_forbidden);
+    assert!(summary.per_lobe_readback_forbidden);
+    assert!(summary.weight_readback_forbidden);
+    assert!(summary.w_genetic_fixed_unchanged);
+    assert!(summary.lifetime_consolidated_unchanged);
+    assert!(summary.h_operational_unchanged);
+    assert!(summary.unsupported_full_runtime_gap_remaining);
+
+    if summary.gpu_static_dispatched {
+        assert_eq!(summary.compact_readback_bytes, 64);
+        assert!(summary.cpu_shadow_parity);
+        assert!(summary.gpu_output_used_for_proposals);
+        assert!(summary.plasticity_dispatched);
+        assert!(summary.plasticity_post_seal_only);
+        assert!(summary.post_seal_diagnostic_readback_bytes > 0);
+        assert!(summary.post_seal_diagnostic_readback_ms >= 0.0);
+        assert!(summary.post_seal_diagnostic_readback_boundary_scoped);
+        assert!(summary.experience_patch_sealed_before_plasticity);
+        assert!(summary.plasticity_live_core_update_applied);
+        assert!(summary.post_seal_hshadow_applied);
+        assert!(summary.post_seal_replay_protected);
+        assert!(summary.post_seal_delta_applied_records > 0);
+        assert_eq!(summary.post_seal_delta_sequence_id, Some(1));
+        assert_eq!(
+            summary.product_runtime_claim,
+            "CpuShadowGuardedStaticPlusLiveHShadow"
+        );
+        assert!(summary.plasticity_live_gap.contains("unsupported"));
+    } else {
+        assert_eq!(summary.selected_backend, "CpuReference");
+        assert!(summary.fallback_reason.is_some());
+        assert!(!summary.gpu_output_used_for_proposals);
+        assert!(!summary.plasticity_live_core_update_applied);
+        assert_eq!(summary.product_runtime_claim, "None");
+    }
+    summary.validate().unwrap();
+}
+
+#[test]
+fn full_gpu_runtime_combined_mode_degrades_when_post_seal_plasticity_unavailable() {
+    let _guard = gpu_plasticity_env_lock();
+    std::env::set_var("ALIFE_GPU_PLASTICITY_DIAGNOSTIC_AVAILABLE", "0");
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_full_gpu_runtime_smoke(
+        &launch,
+        FullGpuRuntimeSmokeOptions {
+            mode: FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded,
+            ticks: 3,
+            json_path: None,
+        },
+    )
+    .unwrap();
+    std::env::remove_var("ALIFE_GPU_PLASTICITY_DIAGNOSTIC_AVAILABLE");
+
+    assert!(summary.combined_mode);
+    assert_eq!(summary.sealed_patches, 3);
+    if summary.gpu_static_dispatched {
+        assert!(summary.gpu_output_used_for_proposals);
+        assert_eq!(summary.product_runtime_claim, "CpuShadowGuarded");
+        assert!(!summary.plasticity_dispatched);
+        assert!(!summary.plasticity_live_core_update_applied);
+        assert!(!summary.post_seal_hshadow_applied);
+        assert_eq!(summary.post_seal_diagnostic_readback_bytes, 0);
+        assert!(summary.post_seal_diagnostic_readback_boundary_scoped);
+        assert!(summary
+            .plasticity_live_gap
+            .contains("post-seal GPU plasticity unavailable"));
+    }
+    summary.validate().unwrap();
+}
+
+#[test]
+fn full_gpu_runtime_combined_summary_validation_rejects_overclaimed_hshadow() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let mut summary =
+        run_full_gpu_runtime_smoke(&launch, FullGpuRuntimeSmokeOptions::default()).unwrap();
+    summary.combined_mode = true;
+    summary.gpu_static_dispatched = true;
+    summary.fallback_reason = None;
+    summary.gpu_output_used_for_proposals = true;
+    summary.cpu_shadow_parity = true;
+    summary.product_runtime_claim = "CpuShadowGuardedStaticPlusLiveHShadow".to_string();
+    summary.post_seal_hshadow_applied = false;
+    summary.plasticity_live_core_update_applied = false;
+    summary.post_seal_delta_applied_records = 0;
+
+    assert!(summary.validate().is_err());
 }
 
 #[test]

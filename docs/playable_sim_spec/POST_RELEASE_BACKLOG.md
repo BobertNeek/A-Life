@@ -21,8 +21,12 @@ requires a new explicit user instruction before implementation.
    - Current status: adapter/device bring-up may be recorded locally by
      `benchmark_tiers --gpu-runtime`; bounded P25/P26 diagnostic timing may be
      recorded with `--measure-gpu`; a static CPU-shadow-guarded live-tick GPU
-     smoke path may record product-smoke timing with compact readback; and a
-     static-plastic shadow smoke may apply validated post-seal H_shadow deltas.
+     smoke path may record product-smoke timing with compact readback; a
+     static-plastic shadow smoke may apply validated post-seal H_shadow deltas;
+     and `static-plastic-cpu-shadow-guarded` may combine GPU proposal scoring
+     with post-seal H_shadow application in one CPU-shadow-guarded live path
+     while reporting active compact proposal readback separately from
+     boundary-scoped post-seal H_shadow diagnostic readback.
      Full action-authoritative static+routing+plastic gameplay GPU timing
      remains manual/unknown.
    - Command:
@@ -30,6 +34,7 @@ requires a new explicit user instruction before implementation.
      cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime --measure-gpu
      cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- full-gpu-runtime-smoke crates/alife_world/tests/fixtures/p34 --mode static-action-authoritative --ticks 3
      cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- full-gpu-runtime-smoke crates/alife_world/tests/fixtures/p34 --mode static-plastic-shadow --ticks 3
+     cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- full-gpu-runtime-smoke crates/alife_world/tests/fixtures/p34 --mode static-plastic-cpu-shadow-guarded --ticks 3
      ```
    - Evidence required: hardware identifier, backend status, fallback status,
      timing report, bottlenecks, and explicit 60 FPS target status. Environment
