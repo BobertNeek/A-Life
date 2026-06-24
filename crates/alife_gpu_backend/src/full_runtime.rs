@@ -188,6 +188,385 @@ pub struct FullGpuRuntimeBackendReport {
     pub plasticity: Option<FullGpuRuntimePlasticityReport>,
 }
 
+pub struct FullGpuRuntimeSession {
+    mode: FullGpuRuntimeMode,
+    execution: FullGpuRuntimeSessionExecution,
+}
+
+enum FullGpuRuntimeSessionExecution {
+    Cpu {
+        backend: GpuRuntimeBackendStatus,
+        hardware_identifier: Option<String>,
+        fallback_note: Option<String>,
+    },
+    Gpu {
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        plan: GpuStaticForwardPlan,
+        backend: GpuRuntimeBackendStatus,
+        hardware_identifier: String,
+    },
+}
+
+impl FullGpuRuntimeSession {
+    pub fn new(mode: FullGpuRuntimeMode) -> Result<Self, ScaffoldContractError> {
+        pollster::block_on(Self::new_async(mode))
+    }
+
+    pub fn run_static_tick(
+        &self,
+        input: FullGpuRuntimeStaticTickInput,
+    ) -> Result<FullGpuRuntimeStaticTickReport, ScaffoldContractError> {
+        pollster::block_on(self.run_static_tick_async(input))
+    }
+
+    pub fn run_post_seal_plasticity_diagnostic(
+        &self,
+        input: FullGpuRuntimeStaticTickInput,
+    ) -> Result<FullGpuRuntimePlasticityReport, ScaffoldContractError> {
+        pollster::block_on(self.run_post_seal_plasticity_diagnostic_async(input))
+    }
+
+    async fn new_async(mode: FullGpuRuntimeMode) -> Result<Self, ScaffoldContractError> {
+        if mode == FullGpuRuntimeMode::CpuReference {
+            return Ok(Self {
+                mode,
+                execution: FullGpuRuntimeSessionExecution::Cpu {
+                    backend: GpuRuntimeBackendConfig::request(mode.requested_backend())
+                        .with_gpu_feature_enabled(false)
+                        .with_hardware_available(false)
+                        .with_validation_passed(true)
+                        .select_backend()?,
+                    hardware_identifier: None,
+                    fallback_note: Some("CPU reference mode requested".to_string()),
+                },
+            });
+        }
+        if env_flag_optional("ALIFE_GPU_RUNTIME_AVAILABLE") == Some(false) {
+            return Ok(Self {
+                mode,
+                execution: FullGpuRuntimeSessionExecution::Cpu {
+                    backend: GpuRuntimeBackendConfig::request(mode.requested_backend())
+                        .with_gpu_feature_enabled(true)
+                        .with_hardware_available(false)
+                        .with_validation_passed(true)
+                        .select_backend()?,
+                    hardware_identifier: None,
+                    fallback_note: Some(
+                        "ALIFE_GPU_RUNTIME_AVAILABLE=0 forced CPU fallback".to_string(),
+                    ),
+                },
+            });
+        }
+        if env_flag_optional("ALIFE_GPU_RUNTIME_VALIDATED") == Some(false) {
+            return Ok(Self {
+                mode,
+                execution: FullGpuRuntimeSessionExecution::Cpu {
+                    backend: GpuRuntimeBackendConfig::request(mode.requested_backend())
+                        .with_gpu_feature_enabled(true)
+                        .with_hardware_available(true)
+                        .with_validation_passed(false)
+                        .select_backend()?,
+                    hardware_identifier: None,
+                    fallback_note: Some(
+                        "ALIFE_GPU_RUNTIME_VALIDATED=0 forced CPU fallback".to_string(),
+                    ),
+                },
+            });
+        }
+
+        let instance = wgpu::Instance::default();
+        let adapter = match instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await
+        {
+            Ok(adapter) => adapter,
+            Err(error) => {
+                return Ok(Self {
+                    mode,
+                    execution: FullGpuRuntimeSessionExecution::Cpu {
+                        backend: GpuRuntimeBackendConfig::request(mode.requested_backend())
+                            .with_gpu_feature_enabled(true)
+                            .with_hardware_available(false)
+                            .with_validation_passed(true)
+                            .select_backend()?,
+                        hardware_identifier: None,
+                        fallback_note: Some(format!("wgpu adapter request failed: {error}")),
+                    },
+                });
+            }
+        };
+        let info = adapter.get_info();
+        let hardware_identifier = format!(
+            "{} ({:?}, {:?}, {})",
+            info.name, info.backend, info.device_type, info.driver_info
+        );
+        let mut required_limits = wgpu::Limits::downlevel_defaults();
+        required_limits.max_storage_buffers_per_shader_stage =
+            required_limits.max_storage_buffers_per_shader_stage.max(10);
+        let (device, queue) = match adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("alife-full-gpu-runtime-session-device"),
+                required_features: wgpu::Features::empty(),
+                required_limits,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                trace: wgpu::Trace::Off,
+            })
+            .await
+        {
+            Ok(device) => device,
+            Err(error) => {
+                return Ok(Self {
+                    mode,
+                    execution: FullGpuRuntimeSessionExecution::Cpu {
+                        backend: GpuRuntimeBackendConfig::request(mode.requested_backend())
+                            .with_gpu_feature_enabled(true)
+                            .with_hardware_available(false)
+                            .with_validation_passed(true)
+                            .select_backend()?,
+                        hardware_identifier: Some(hardware_identifier),
+                        fallback_note: Some(format!("wgpu device request failed: {error}")),
+                    },
+                });
+            }
+        };
+
+        let backend = GpuRuntimeBackendConfig::request(mode.requested_backend())
+            .with_gpu_feature_enabled(true)
+            .with_hardware_available(true)
+            .with_validation_passed(true)
+            .select_backend()?;
+        if backend.selected == GpuRuntimeBackendKind::CpuReference {
+            return Ok(Self {
+                mode,
+                execution: FullGpuRuntimeSessionExecution::Cpu {
+                    backend,
+                    hardware_identifier: Some(hardware_identifier),
+                    fallback_note: Some(
+                        "requested full static+routing+plasticity runtime is not currently supported; bounded static/plastic shadow evidence is available separately"
+                            .to_string(),
+                    ),
+                },
+            });
+        }
+
+        Ok(Self {
+            mode,
+            execution: FullGpuRuntimeSessionExecution::Gpu {
+                device,
+                queue,
+                plan: live_static_plan()?,
+                backend,
+                hardware_identifier,
+            },
+        })
+    }
+
+    async fn run_static_tick_async(
+        &self,
+        input: FullGpuRuntimeStaticTickInput,
+    ) -> Result<FullGpuRuntimeStaticTickReport, ScaffoldContractError> {
+        input.validate()?;
+        match &self.execution {
+            FullGpuRuntimeSessionExecution::Cpu {
+                backend,
+                hardware_identifier,
+                fallback_note,
+            } => cpu_status_report(
+                input,
+                self.mode,
+                *backend,
+                hardware_identifier.clone(),
+                fallback_note.clone(),
+            ),
+            FullGpuRuntimeSessionExecution::Gpu {
+                device,
+                queue,
+                plan,
+                backend,
+                hardware_identifier,
+            } => {
+                let upload_start = Instant::now();
+                let activation_q = live_activation_q(plan, input)?;
+                let action_summary_config = action_summary_config(input)?;
+                let upload_ms = elapsed_ms(upload_start);
+
+                let cpu_shadow_start = Instant::now();
+                let cpu = plan.execute_cpu_diagnostic(&activation_q)?;
+                let cpu_summary = action_summary_config.cpu_action_summary(&cpu.activations_q)?;
+                let cpu_shadow_ms = elapsed_ms(cpu_shadow_start);
+
+                let gpu = run_static_forward_gpu_action_summary_timed(
+                    device,
+                    queue,
+                    plan,
+                    &activation_q,
+                    action_summary_config,
+                )
+                .await?;
+                let parity = gpu.action_summary == cpu_summary;
+                let (backend, parity_fallback_note) = if parity {
+                    (*backend, None)
+                } else {
+                    (
+                        GpuRuntimeBackendConfig::request(self.mode.requested_backend())
+                            .with_gpu_feature_enabled(true)
+                            .with_hardware_available(true)
+                            .with_validation_passed(false)
+                            .select_backend()?,
+                        Some(
+                            "GPU compact action summary failed CPU shadow parity; active tick used CPU proposals"
+                                .to_string(),
+                        ),
+                    )
+                };
+                let routing = routing_report(plan);
+                let readback = FullGpuRuntimeReadbackReport {
+                    compact_readback_bytes: gpu.compact_readback_bytes,
+                    action_summary_allowed: gpu.compact_readback_bytes
+                        == GPU_ACTION_SUMMARY_RECORD_BYTES,
+                    bulk_neural_readback_forbidden: true,
+                    per_synapse_readback_forbidden: true,
+                    per_lobe_readback_forbidden: true,
+                    weight_readback_forbidden: true,
+                };
+                let claim = if parity {
+                    match self.mode {
+                        FullGpuRuntimeMode::GpuStaticActionAuthoritative
+                        | FullGpuRuntimeMode::GpuStaticPlasticCpuShadowGuarded
+                        | FullGpuRuntimeMode::GpuFullActionAuthoritative => {
+                            FullGpuRuntimeProductClaim::CpuShadowGuarded
+                        }
+                        FullGpuRuntimeMode::GpuStaticShadow
+                        | FullGpuRuntimeMode::GpuStaticPlasticShadow
+                        | FullGpuRuntimeMode::GpuFullShadow => {
+                            FullGpuRuntimeProductClaim::ShadowOnly
+                        }
+                        FullGpuRuntimeMode::CpuReference => FullGpuRuntimeProductClaim::None,
+                    }
+                } else {
+                    FullGpuRuntimeProductClaim::None
+                };
+                Ok(FullGpuRuntimeStaticTickReport {
+                    schema_version: FULL_GPU_RUNTIME_SCHEMA_VERSION,
+                    mode: self.mode,
+                    backend,
+                    hardware_identifier: Some(hardware_identifier.clone()),
+                    action_summary: Some(gpu.action_summary),
+                    cpu_shadow_action_summary: Some(cpu_summary),
+                    cpu_shadow_parity_passed: parity,
+                    routing,
+                    readback,
+                    timing: FullGpuRuntimeTimingReport {
+                        upload_ms,
+                        gpu_submit_poll_ms: gpu.timing.submit_poll_wall_ms,
+                        compact_readback_ms: gpu.timing.compact_readback_wall_ms,
+                        cpu_shadow_ms,
+                        total_gpu_runtime_ms: upload_ms
+                            + gpu.timing.submit_poll_wall_ms
+                            + gpu.timing.compact_readback_wall_ms,
+                    },
+                    product_runtime_claim: claim,
+                    fallback_note: parity_fallback_note,
+                })
+            }
+        }
+    }
+
+    async fn run_post_seal_plasticity_diagnostic_async(
+        &self,
+        input: FullGpuRuntimeStaticTickInput,
+    ) -> Result<FullGpuRuntimePlasticityReport, ScaffoldContractError> {
+        input.validate()?;
+        let FullGpuRuntimeSessionExecution::Gpu { device, queue, .. } = &self.execution else {
+            return Ok(FullGpuRuntimePlasticityReport {
+                schema_version: FULL_GPU_RUNTIME_SCHEMA_VERSION,
+                diagnostic_only: true,
+                post_seal_only: true,
+                h_shadow_changed: false,
+                updated_values_count: 0,
+                max_delta_q: 0,
+                saturation_count: 0,
+                nan_or_inf_rejected: true,
+                genetic_fixed_unchanged: true,
+                lifetime_consolidated_unchanged: true,
+                h_operational_unchanged: true,
+                cpu_shadow_parity_passed: false,
+                submit_poll_ms: 0.0,
+                diagnostic_readback_ms: 0.0,
+                diagnostic_readback_bytes: 0,
+                h_shadow_delta_records: Vec::new(),
+                live_core_update_applied: false,
+            });
+        };
+
+        let static_plan = live_static_plan()?;
+        let activation_q = live_activation_q(&static_plan, input)?;
+        let cpu_static = static_plan.execute_cpu_diagnostic(&activation_q)?;
+        let schema = live_static_schema(0.1)?;
+        let plasticity_plan = live_plasticity_plan_from_schema(&schema)?;
+        let cpu =
+            plasticity_plan.execute_cpu_diagnostic(&activation_q, &cpu_static.activations_q)?;
+        let gpu = run_plasticity_gpu_diagnostic_timed(
+            device,
+            queue,
+            &plasticity_plan,
+            &activation_q,
+            &cpu_static.activations_q,
+        )
+        .await?;
+        let mut updated_values_count = 0_u32;
+        let mut max_delta_q = 0_i32;
+        for (before, after) in plasticity_plan
+            .h_shadow_initial_q
+            .iter()
+            .copied()
+            .zip(gpu.result.h_shadow_q.iter().copied())
+        {
+            if before != after {
+                updated_values_count = updated_values_count.saturating_add(1);
+            }
+            max_delta_q = max_delta_q.max((i32::from(after) - i32::from(before)).abs());
+        }
+        let h_shadow_delta_records = h_shadow_delta_records_from_schema(
+            &schema,
+            &plasticity_plan.h_shadow_initial_q,
+            &gpu.result.h_shadow_q,
+            plasticity_plan.policy,
+            plasticity_plan.oja.to_oja_config(plasticity_plan.policy),
+        )?;
+        Ok(FullGpuRuntimePlasticityReport {
+            schema_version: FULL_GPU_RUNTIME_SCHEMA_VERSION,
+            diagnostic_only: false,
+            post_seal_only: true,
+            h_shadow_changed: gpu.result.h_shadow_q != plasticity_plan.h_shadow_initial_q,
+            updated_values_count,
+            max_delta_q,
+            saturation_count: gpu.result.diagnostics.saturation_count,
+            nan_or_inf_rejected: true,
+            genetic_fixed_unchanged: gpu.result.genetic_fixed_q == plasticity_plan.genetic_fixed_q,
+            lifetime_consolidated_unchanged: gpu.result.lifetime_consolidated_q
+                == plasticity_plan.lifetime_consolidated_q,
+            h_operational_unchanged: gpu.result.h_operational_q == plasticity_plan.h_operational_q,
+            cpu_shadow_parity_passed: gpu.result.h_shadow_q == cpu.h_shadow_q
+                && gpu.result.genetic_fixed_q == cpu.genetic_fixed_q
+                && gpu.result.lifetime_consolidated_q == cpu.lifetime_consolidated_q
+                && gpu.result.h_operational_q == cpu.h_operational_q
+                && gpu.result.diagnostics == cpu.diagnostics,
+            submit_poll_ms: gpu.timing.submit_poll_wall_ms,
+            diagnostic_readback_ms: gpu.timing.readback_wall_ms,
+            diagnostic_readback_bytes: plasticity_diagnostic_readback_bytes(&plasticity_plan),
+            h_shadow_delta_records,
+            live_core_update_applied: false,
+        })
+    }
+}
+
 pub fn run_full_gpu_runtime_static_tick(
     input: FullGpuRuntimeStaticTickInput,
     mode: FullGpuRuntimeMode,

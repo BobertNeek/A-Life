@@ -23,6 +23,10 @@ bounded gap.
 - `static-plastic-cpu-shadow-guarded` combines GPU static proposal scoring,
   normal arbitration, patch sealing, post-seal GPU plasticity, and live
   H_shadow application in one CPU-shadow-guarded smoke run.
+- `gpu-longrun-soak` manually validates the same combined mode for longer runs;
+  the local RTX 3050/Vulkan 5000-tick soak completed with 5000 CPU shadow
+  parity checks, zero parity failures, one post-seal H_shadow application, and
+  no full action-authoritative claim.
 
 ## Gap
 
@@ -37,6 +41,8 @@ proposals and gates them with CPU shadow parity, but it does not dispatch live
 plasticity. The static-plastic shadow smoke dispatches GPU plasticity and
 applies H_shadow deltas after sealing, but it does not use GPU output for
 action proposals. The combined smoke does both, but remains CPU-shadow guarded.
+The long-run soak increases stability evidence for this combined mode, but it
+does not change the remaining gap: CPU shadow parity is still a runtime gate.
 
 ## Current safe behavior
 

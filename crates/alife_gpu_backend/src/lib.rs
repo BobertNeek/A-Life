@@ -27,8 +27,8 @@ pub use full_runtime::{
     run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
     FullGpuRuntimeBackendReport, FullGpuRuntimeMode, FullGpuRuntimePlasticityReport,
     FullGpuRuntimeProductClaim, FullGpuRuntimeReadbackReport, FullGpuRuntimeRoutingReport,
-    FullGpuRuntimeStaticTickInput, FullGpuRuntimeStaticTickReport, FullGpuRuntimeTimingReport,
-    FULL_GPU_RUNTIME_SCHEMA_VERSION,
+    FullGpuRuntimeSession, FullGpuRuntimeStaticTickInput, FullGpuRuntimeStaticTickReport,
+    FullGpuRuntimeTimingReport, FULL_GPU_RUNTIME_SCHEMA_VERSION,
 };
 pub use plasticity::{
     run_plasticity_gpu_diagnostic, run_plasticity_gpu_diagnostic_timed, GpuOjaFixedPointConfig,
