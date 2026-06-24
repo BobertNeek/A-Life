@@ -27,6 +27,10 @@ bounded gap.
   the local RTX 3050/Vulkan 5000-tick soak completed with 5000 CPU shadow
   parity checks, zero parity failures, one post-seal H_shadow application, and
   no full action-authoritative claim.
+- `gpu-sustained-learning-soak` adds a manual episode-rotated evidence path for
+  repeated valid post-seal H_shadow applications. The local RTX 3050/Vulkan
+  5000-tick run completed 5000 sealed patches, 5000 CPU shadow parity checks,
+  zero parity failures, and 157 successful H_shadow applications.
 
 ## Gap
 
@@ -41,8 +45,9 @@ proposals and gates them with CPU shadow parity, but it does not dispatch live
 plasticity. The static-plastic shadow smoke dispatches GPU plasticity and
 applies H_shadow deltas after sealing, but it does not use GPU output for
 action proposals. The combined smoke does both, but remains CPU-shadow guarded.
-The long-run soak increases stability evidence for this combined mode, but it
-does not change the remaining gap: CPU shadow parity is still a runtime gate.
+The long-run and sustained-learning soaks increase stability and repeated
+post-seal H_shadow evidence for this combined mode, but they do not change the
+remaining gap: CPU shadow parity is still a runtime gate.
 
 ## Current safe behavior
 

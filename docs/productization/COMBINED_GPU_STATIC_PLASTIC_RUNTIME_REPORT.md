@@ -86,6 +86,36 @@ Local 5000-tick soak result:
 See `docs/productization/GPU_LONGRUN_SOAK_REPORT.md` for the full manual
 1000/5000 tick evidence and forced CPU fallback result.
 
+## Manual Sustained-Learning Soak Evidence
+
+Manual sustained-learning command:
+
+```powershell
+cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-sustained-learning-soak crates/alife_world/tests/fixtures/p34 --ticks 1000 --report-every 100
+```
+
+Local 5000-tick sustained-learning result:
+
+- Selected backend: `GpuPlastic`
+- Adapter: NVIDIA GeForce RTX 3050
+- Backend/API: Vulkan
+- Completed ticks: `5000`
+- Episodes: `157`
+- Sealed patches total: `5000`
+- Packed logs total: `5000`
+- GPU static dispatch ticks: `5000`
+- GPU proposal ticks: `5000`
+- CPU shadow parity checks: `5000`
+- Parity failures: `0`
+- H_shadow application attempts/succeeded/rejected: `157/157/0`
+- H_shadow records applied: `314`
+- Product runtime claim: `CpuShadowGuardedStaticPlusLiveHShadow`
+- Full action-authoritative claim: `false`
+
+This sustained-learning command uses deterministic episode rotation to collect
+repeated valid post-seal H_shadow applications without replaying stale deltas.
+See `docs/productization/GPU_SUSTAINED_LEARNING_SOAK_REPORT.md`.
+
 ## Fallback Behavior
 
 When GPU runtime availability is forced off with
