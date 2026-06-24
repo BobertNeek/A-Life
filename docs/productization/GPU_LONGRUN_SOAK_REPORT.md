@@ -111,6 +111,9 @@ parity remains a runtime gate before GPU proposal scores are used.
 - H_shadow application is intentionally attempted once for this fixture because
   the diagnostic plasticity records include before-values and the core contract
   correctly rejects replaying the same deltas after live H_shadow state changes.
+- Sustained repeated H_shadow applications are now covered separately by
+  `docs/productization/GPU_SUSTAINED_LEARNING_SOAK_REPORT.md`, which uses
+  deterministic episode rotation to avoid stale-delta replay.
 - Timing is local hardware evidence only and is not a release-wide performance
   claim.
 - No release tag was created.

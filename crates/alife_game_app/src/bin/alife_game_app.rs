@@ -5,15 +5,16 @@ use alife_game_app::{
     run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
     run_creature_visual_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
-    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_shell_config, AppShellLaunchConfig, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_headless_app_shell_smoke,
+    run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke,
+    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_onboarding_help_smoke,
+    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_shell_config,
+    AppShellLaunchConfig, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
 };
 
 fn main() -> ExitCode {
@@ -182,6 +183,9 @@ fn run() -> Result<String, String> {
             run_full_gpu_runtime_cli(rest)
         }
         [command, rest @ ..] if command == "gpu-longrun-soak" => run_gpu_longrun_soak_cli(rest),
+        [command, rest @ ..] if command == "gpu-sustained-learning-soak" => {
+            run_gpu_sustained_learning_soak_cli(rest)
+        }
         [command, fixture_root] if command == "gpu-graphics-performance-smoke" => {
             let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
             let summary = run_gpu_graphics_performance_evidence_smoke(&launch)
@@ -260,7 +264,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -346,6 +350,64 @@ fn run_gpu_longrun_soak_cli(args: &[String]) -> Result<String, String> {
     let summary = run_gpu_longrun_soak(&launch, options).map_err(|err| err.to_string())?;
     Ok(format_gpu_longrun_soak_summary(
         "GPU long-run soak",
+        &summary,
+    ))
+}
+
+fn run_gpu_sustained_learning_soak_cli(args: &[String]) -> Result<String, String> {
+    let Some(fixture_root) = args.first() else {
+        return Err("gpu-sustained-learning-soak requires <p34-fixture-root>".to_string());
+    };
+    let mut options = GpuSustainedLearningSoakOptions::default();
+    let mut index = 1_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--ticks" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--ticks requires a value".to_string())?;
+                options.ticks = value
+                    .parse::<u32>()
+                    .map_err(|_| "--ticks must be an unsigned integer".to_string())?;
+                index += 2;
+            }
+            "--report-every" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--report-every requires a value".to_string())?;
+                options.report_every = value
+                    .parse::<u32>()
+                    .map_err(|_| "--report-every must be an unsigned integer".to_string())?;
+                index += 2;
+            }
+            "--episode-ticks" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--episode-ticks requires a value".to_string())?;
+                options.episode_ticks = value
+                    .parse::<u32>()
+                    .map_err(|_| "--episode-ticks must be an unsigned integer".to_string())?;
+                index += 2;
+            }
+            "--json" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--json requires a path".to_string())?;
+                options.json_path = Some(PathBuf::from(value));
+                index += 2;
+            }
+            unknown => {
+                return Err(format!(
+                    "unknown gpu-sustained-learning-soak option: {unknown}"
+                ));
+            }
+        }
+    }
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+    let summary =
+        run_gpu_sustained_learning_soak(&launch, options).map_err(|err| err.to_string())?;
+    Ok(format_gpu_sustained_learning_soak_summary(
+        "GPU sustained-learning soak",
         &summary,
     ))
 }
@@ -804,6 +866,56 @@ fn format_gpu_longrun_soak_summary(
         summary.first_h_shadow_rejection_tick,
         summary.total_h_shadow_records_applied,
         summary.max_h_shadow_abs_delta,
+        summary.w_genetic_fixed_unchanged,
+        summary.lifetime_consolidated_unchanged,
+        summary.h_operational_unchanged,
+        summary.compact_active_readback_bytes,
+        summary.post_seal_readback_bytes,
+        summary.no_active_bulk_readback,
+        summary.total_upload_ms,
+        summary.total_submit_poll_ms,
+        summary.total_compact_readback_ms,
+        summary.total_post_seal_readback_ms,
+        summary.total_cpu_shadow_ms,
+        summary.total_wall_ms,
+        summary.average_ms_per_tick,
+        summary.ticks_per_second,
+        summary.product_runtime_claim,
+        summary.full_action_authoritative_claim,
+    )
+}
+
+fn format_gpu_sustained_learning_soak_summary(
+    prefix: &str,
+    summary: &alife_game_app::GpuSustainedLearningSoakSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} requested={} completed={} episodes={} episode_ticks={} report_every={} selected={} fallback={:?} hardware={} sealed_patches_total={} packed_logs_total={} gpu_static_ticks={} gpu_proposal_ticks={} parity_checks={} parity_failures={} first_parity_failure={:?} h_attempts={} h_success={} h_rejections={} first_h_rejection={:?} h_records={} h_delta_max={:.6} replay_protection={} episode_rotation={} w_genetic_fixed_unchanged={} lifetime_unchanged={} h_operational_unchanged={} compact_readback_bytes={} post_seal_readback_bytes={} no_active_bulk_readback={} timing=upload:{:.4},gpu:{:.4},compact_readback:{:.4},post_seal_readback:{:.4},cpu_shadow:{:.4},wall:{:.4},avg_ms_tick:{:.4},ticks_sec:{:.2} claim={} full_action_authoritative_claim={}",
+        summary.schema,
+        summary.schema_version,
+        summary.requested_ticks,
+        summary.ticks_completed,
+        summary.episodes,
+        summary.episode_ticks,
+        summary.report_every,
+        summary.selected_backend,
+        summary.fallback_reason,
+        summary.hardware_identifier.as_deref().unwrap_or("none"),
+        summary.sealed_patches_total,
+        summary.packed_logs_total,
+        summary.gpu_static_dispatched_ticks,
+        summary.gpu_proposal_ticks,
+        summary.cpu_shadow_parity_checks,
+        summary.parity_failures,
+        summary.first_parity_failure_tick,
+        summary.h_shadow_application_attempts,
+        summary.h_shadow_applications_succeeded,
+        summary.h_shadow_applications_rejected,
+        summary.first_h_shadow_rejection_tick,
+        summary.total_h_shadow_records_applied,
+        summary.max_h_shadow_abs_delta,
+        summary.replay_protection_active,
+        summary.repeated_learning_uses_episode_rotation,
         summary.w_genetic_fixed_unchanged,
         summary.lifetime_consolidated_unchanged,
         summary.h_operational_unchanged,
