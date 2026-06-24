@@ -49,12 +49,14 @@ $Command += $ModeArgs
 Write-Host "A-Life $ModeLabel command:"
 $DisplayCommand = ($Command | ForEach-Object { Format-CommandArgument $_ }) -join " "
 Write-Host $DisplayCommand
+Write-Host "Alpha tester command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 30 -GpuMode static-plastic-cpu-shadow-guarded"
 Write-Host "Manual graphics path: requires local windowing/graphics support. Requested GPU mode: $GpuMode."
 Write-Host "GPU mode remains optional; CPU fallback is visible when hardware, feature, or validation gates are unavailable."
-Write-Host "Controls: Space pause/run, N step once, 1/2/3 speed, Esc quit."
+Write-Host "Title: A-Life Alpha Playground."
+Write-Host "Controls: Space pause/run, N step once, 1/2/3 speed, F follow, Esc quit."
 Write-Host "Camera/inspector: arrows/WASD pan, +/- zoom, Q/E orbit, F follow selected stable ID. Inspector is read-only."
-Write-Host "Readability: color+shape markers, stable-ID badges, display-only feedback legend, CPU fallback status."
-Write-Host "Save/load menu: visible S05 overlay with New/Save/Load/Settings tabs, slots, overwrite guard, error banner, and stable-ID policy."
+Write-Host "Readability: color+shape markers, stable-ID badges, concise GPU/fallback status, read-only inspector."
+Write-Host "Reset/restart: close and relaunch the P34 fixture if the current alpha run becomes confusing."
 
 if ($DryRun) {
     exit 0

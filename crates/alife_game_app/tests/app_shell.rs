@@ -184,6 +184,35 @@ fn s11_release_decision_docs_are_honest_and_stop_the_chain() {
 }
 
 #[test]
+fn first_graphical_alpha_playtest_docs_and_launcher_are_current() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let checklist = std::fs::read_to_string(
+        root.join("docs/productization/FIRST_GRAPHICAL_ALPHA_PLAYTEST_CHECKLIST.md"),
+    )
+    .unwrap();
+    let report = std::fs::read_to_string(
+        root.join("docs/productization/FIRST_GRAPHICAL_ALPHA_PLAYTEST_REPORT.md"),
+    )
+    .unwrap();
+    let launcher =
+        std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
+
+    for text in [&checklist, &report, &launcher] {
+        assert!(text.contains("A-Life Alpha Playground"));
+        assert!(text.contains("-GpuMode static-plastic-cpu-shadow-guarded"));
+        assert!(text.contains("CPU fallback") || text.contains("fallback"));
+        assert!(!text.contains("gpu-report"));
+        assert!(!text.contains("ALIFE_GPU_BACKEND"));
+        assert!(!text.contains("bash scripts/check.sh"));
+    }
+
+    assert!(checklist.contains("No Bevy Entity IDs"));
+    assert!(report.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
+    assert!(report.contains("not full action-authoritative"));
+    assert!(launcher.contains("Reset/restart"));
+}
+
+#[test]
 fn feedback_polish_maps_existing_outcomes_into_non_authoritative_cues() {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     let summary = run_feedback_polish_smoke(&launch).unwrap();
@@ -912,6 +941,10 @@ fn s02_runtime_controls_pause_step_and_run_through_sealed_live_loop() {
     assert!(summary.panel.sealed_patch_count >= 6);
     assert!(summary.panel.packed_record_count >= 6);
     assert!(summary.panel.status_overlay_text().contains("Controls:"));
+    assert!(summary
+        .panel
+        .status_overlay_text()
+        .contains("A-Life Alpha Playground"));
     summary.validate().unwrap();
 }
 
@@ -978,10 +1011,19 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
     telemetry.validate().unwrap();
     let overlay = telemetry.overlay_lines();
     let inspector = telemetry.inspector_lines();
-    assert!(overlay.contains("gpu_scores=true"));
+    assert!(overlay.contains("Scores=true"));
+    assert!(overlay.contains("no active bulk readback=true"));
+    assert!(inspector.contains("Claim: CpuShadowGuardedStaticPlusLiveHShadow"));
     assert!(inspector.contains("CPU shadow remains the gate"));
     assert!(inspector.contains("not full action-authoritative"));
     assert!(!inspector.contains("Entity("));
+
+    let pending = GraphicalGpuRuntimeTelemetry::pending(
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+    );
+    assert_eq!(pending.selected_backend, "PendingFirstTick");
+    assert_eq!(pending.product_runtime_claim, "PendingTick");
+    assert!(pending.fallback_reason.is_none());
 }
 
 #[test]
@@ -2255,10 +2297,10 @@ fn bevy_feature_s08_runtime_overlay_reports_honest_gpu_status() {
         .unwrap();
     let overlay = panel.status_overlay_text();
 
-    assert!(overlay.contains("S08 GPU/Graphics"));
+    assert!(overlay.contains("A-Life Alpha Playground"));
     assert!(overlay.contains("CPU fallback is not GPU performance"));
-    assert!(overlay.contains("60 FPS target=manual-unknown"));
     assert!(overlay.contains("no active neural readback"));
+    assert!(overlay.contains("Controls: Space pause/run"));
 }
 
 #[test]
@@ -2819,11 +2861,12 @@ fn bevy_feature_s03_inspector_overlay_is_read_only_and_stable_id_based() {
     assert_eq!(selection.stable_id, WorldEntityId(1));
     assert_eq!(camera.state.follow_target, Some(WorldEntityId(1)));
     assert!(overlay.contains("Read-only Inspector"));
-    assert!(overlay.contains("Selected stable:1"));
+    assert!(overlay.contains("Stable ID: 1"));
     assert!(overlay.contains("Action: action=Some(Interact)"));
     assert!(overlay.contains("Patch: sealed=true"));
     assert!(overlay.contains("stable IDs only"));
     assert!(overlay.contains("GPU Runtime"));
+    assert!(overlay.contains("Mode: cpu-reference"));
     assert!(overlay.contains("read_only=true"));
     assert!(!overlay.contains("Entity("));
 }
@@ -2854,9 +2897,9 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
         .world()
         .resource::<alife_game_app::bevy_shell::CreatureInspectorResource>();
     let feedback_text = alife_game_app::bevy_shell::feedback_cue_overlay_text(&feedback, inspector);
-    assert!(feedback_text.contains("Display Feedback (non-authoritative)"));
-    assert!(feedback_text.contains("Success=true"));
-    assert!(feedback_text.contains("pain=true"));
+    assert!(feedback_text.contains("Play Feedback (display-only)"));
+    assert!(feedback_text.contains("Food=true"));
+    assert!(feedback_text.contains("hazard=true"));
     assert!(feedback_text.contains("sleep=true"));
     assert!(feedback_text.contains("failure=true"));
     assert!(feedback_text.contains("cannot act or mutate weights"));
@@ -2878,6 +2921,30 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
     assert!(badges.iter().any(|badge| badge.contains("[@] creature")));
     assert!(badges.iter().any(|badge| badge.contains("[+] food")));
     assert!(badges.iter().all(|badge| badge.contains("stable:")));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_alpha_overlay_text_is_first_tester_readable() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let save_load = run_save_load_ux_smoke(&launch).unwrap();
+    let advanced = run_advanced_gameplay_ux_smoke().unwrap();
+
+    let save_note = alife_game_app::bevy_shell::alpha_save_load_note_text(&save_load);
+    assert!(save_note.contains("Save/Load Alpha Note"));
+    assert!(save_note.contains("Reset/restart"));
+    assert!(save_note.contains("Stable IDs: [1, 2]"));
+    assert!(!save_note.contains("Entity("));
+
+    let playtest_note = alife_game_app::bevy_shell::alpha_playtest_status_note_text(&advanced);
+    assert!(playtest_note.contains("Alpha Playtest Focus"));
+    assert!(playtest_note.contains("GPU optional"));
+    assert!(playtest_note.contains("Record: window"));
+    assert!(!playtest_note.contains("full action-authoritative"));
+
+    let controls = alife_game_app::bevy_shell::alpha_controls_help_text();
+    assert!(controls.contains("Space run/pause"));
+    assert!(controls.contains("Esc quit"));
 }
 
 #[cfg(feature = "bevy-app")]

@@ -20,16 +20,16 @@ use bevy::{
 };
 
 use crate::{
-    advanced_gameplay_overlay_text, load_visible_world_from_p34_save,
-    run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_live_brain_loop_smoke, AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
-    CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
-    CreatureInspectorSnapshot, CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError,
-    GameAppState, GraphicalGpuRuntimeController, GraphicalGpuRuntimeTelemetry,
-    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
-    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
-    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
-    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
+    load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke,
+    run_creature_visual_smoke, run_live_brain_loop_smoke, AdvancedGameplayUxSummary,
+    AppShellLaunchConfig, AppStartupSummary, CameraNavigationState, CreatureAnimationState,
+    CreatureExpressionState, CreatureInspectorSnapshot, CreatureVisualSnapshot,
+    EntitySelectionSnapshot, GameAppShellError, GameAppState, GraphicalGpuRuntimeController,
+    GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
+    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
+    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
+    S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -432,8 +432,6 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_advanced_gameplay_overlay,
             ),
         );
-    spawn_save_load_menu_overlay(&mut app, &save_load);
-    spawn_advanced_gameplay_overlay(&mut app, &advanced);
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
         app.insert_resource(GraphicalPlaygroundSmokeTimer(Timer::from_seconds(
@@ -600,11 +598,11 @@ fn spawn_graphical_playground_scene(
     app.world_mut().spawn((
         Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "A-Life Graphical Playground\nFixture: P34 tiny world  seed={}\nBackend: CPU Reference fallback\n{}\nStable IDs visible: agent=1 food=2\nMode: {}  timeout={:?}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit\nReadability: color+shape markers, badges, display-only feedback",
+            "A-Life Alpha Playground\nFixture: P34 tiny world  seed={}\nMode: {}  timeout={:?}\n{}\nStable IDs: creature=1 food=2\nControls: Space pause/run | N step | 1/2/3 speed | F follow | Esc quit\nMarkers: cyan/green creature, bright food, red hazard symbol in guide",
             summary.seed,
-            crate::s08_runtime_overlay_status_line(),
             summary.mode_label,
-            summary.smoke_seconds
+            summary.smoke_seconds,
+            crate::s08_runtime_overlay_status_line(),
         )),
         TextFont {
             font_size: 16.0,
@@ -627,7 +625,7 @@ fn spawn_graphical_playground_scene(
         Name::new("A-Life S04 readability legend overlay"),
         Text::new(readability_legend_overlay_text()),
         TextFont {
-            font_size: 15.0,
+            font_size: 14.0,
             ..default()
         },
         TextColor(Color::srgb(0.95, 0.94, 0.86)),
@@ -647,7 +645,7 @@ fn spawn_graphical_playground_scene(
         Name::new("A-Life S04 feedback cue overlay"),
         Text::new("Feedback cues loading..."),
         TextFont {
-            font_size: 15.0,
+            font_size: 13.0,
             ..default()
         },
         TextColor(Color::srgb(0.94, 0.98, 0.94)),
@@ -667,7 +665,7 @@ fn spawn_graphical_playground_scene(
         Name::new("A-Life S03 read-only creature inspector overlay"),
         Text::new("Inspector loading..."),
         TextFont {
-            font_size: 15.0,
+            font_size: 14.0,
             ..default()
         },
         TextColor(Color::srgb(0.92, 0.96, 1.0)),
@@ -684,50 +682,6 @@ fn spawn_graphical_playground_scene(
     ));
 
     Ok(())
-}
-
-fn spawn_save_load_menu_overlay(app: &mut App, summary: &crate::SaveLoadUxSmokeSummary) {
-    app.world_mut().spawn((
-        Name::new("A-Life S05 save load menu overlay"),
-        Text::new(save_load_menu_overlay_text(summary)),
-        TextFont {
-            font_size: 12.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.91, 0.96, 1.0)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(236.0),
-            left: Val::Px(12.0),
-            max_width: Val::Px(560.0),
-            padding: bevy::ui::UiRect::all(Val::Px(10.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.018, 0.024, 0.035, 0.87)),
-        SaveLoadMenuOverlay,
-    ));
-}
-
-fn spawn_advanced_gameplay_overlay(app: &mut App, summary: &AdvancedGameplayUxSummary) {
-    app.world_mut().spawn((
-        Name::new("A-Life S07 advanced gameplay overlay"),
-        Text::new(advanced_gameplay_overlay_text(summary)),
-        TextFont {
-            font_size: 10.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.93, 0.98, 0.92)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(210.0),
-            left: Val::Px(16.0),
-            max_width: Val::Px(650.0),
-            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.018, 0.031, 0.026, 0.88)),
-        AdvancedGameplayOverlay,
-    ));
 }
 
 fn spawn_graphical_object(
@@ -1178,7 +1132,7 @@ fn update_graphical_save_load_menu_overlay(
     mut overlays: bevy::prelude::Query<&mut Text, With<SaveLoadMenuOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = save_load_menu_overlay_text(&menu.summary);
+        text.0 = alpha_save_load_note_text(&menu.summary);
     }
 }
 
@@ -1187,7 +1141,7 @@ fn update_graphical_advanced_gameplay_overlay(
     mut overlays: bevy::prelude::Query<&mut Text, With<AdvancedGameplayOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = advanced_gameplay_overlay_text(&advanced.summary);
+        text.0 = alpha_playtest_status_note_text(&advanced.summary);
     }
 }
 
@@ -1205,36 +1159,27 @@ pub fn graphical_inspector_overlay_text(
     format!(
         concat!(
             "Read-only Inspector\n",
-            "Selected stable:{} local_entity={}\n",
+            "Stable ID: {}  adapter={}\n",
             "Organism: {:?} kind={:?}\n",
             "Action: {}\n",
             "Patch: {}\n",
             "Drives: {}\n",
-            "Hormones: {}\n",
-            "Sleep/visual: animation={} expression={}\n",
-            "Memory/topology: {}\n",
-            "Camera: focus=({:.2},{:.2}) zoom={:.2} yaw={:.1} follow={:?}\n",
-            "Selection controls: arrows/WASD pan | +/- zoom | Q/E orbit | F follow\n",
-            "Boundary: stable IDs only; no Bevy entity in portable model; read_only={}\n\n{}"
+            "Visual: {} / {}\n",
+            "Camera: ({:.2},{:.2}) zoom={:.2} follow={:?}\n",
+            "Boundary: stable IDs only; read_only={}\n\n{}"
         ),
         selection.stable_id.raw(),
-        selection
-            .local_entity
-            .map(|_| "adapter-local")
-            .unwrap_or("none"),
+        selection.local_entity.map(|_| "mapped").unwrap_or("none"),
         snapshot.selection.organism_id.map(|id| id.raw()),
         snapshot.selection.kind,
         snapshot.action_summary,
         snapshot.patch_summary,
         snapshot.drive_lines.join(", "),
-        snapshot.hormone_lines.join(", "),
         snapshot.visual.animation.label(),
         snapshot.visual.expression.label(),
-        snapshot.memory_topology_summary,
         camera.state.focus.x,
         camera.state.focus.z,
         camera.state.zoom,
-        camera.state.yaw_degrees,
         camera.state.follow_target.map(|id| id.raw()),
         snapshot.read_only,
         gpu.telemetry.inspector_lines()
@@ -1243,11 +1188,15 @@ pub fn graphical_inspector_overlay_text(
 
 pub fn readability_legend_overlay_text() -> String {
     [
-        "Readability Legend: [@] creature | [+] food | [!] hazard | [#] obstacle | [T] token",
-        "States: SUCCESS green | PAIN red | SLEEP blue | CURIOSITY amber | FAILURE red",
-        "Terrain/resource zone: dark green. All markers are presentation only; stable IDs stay portable.",
+        "Visual Guide: [@] creature | [+] food | [!] hazard | [#] obstacle | [T] token",
+        "Creature colors: cyan GPU proposals | green learned H_shadow | gray CPU fallback",
+        "All markers are presentation only. Stable IDs stay portable.",
     ]
     .join("\n")
+}
+
+pub fn alpha_controls_help_text() -> &'static str {
+    "Controls: Space run/pause | N step | 1/2/3 speed | F follow | Esc quit"
 }
 
 pub fn feedback_cue_overlay_text(
@@ -1257,11 +1206,10 @@ pub fn feedback_cue_overlay_text(
     let snapshot = &inspector.snapshot;
     format!(
         concat!(
-            "Display Feedback (non-authoritative)\n",
-            "Sealed cues: {}\n",
-            "Success={} pain={} sleep={} failure={}\n",
-            "Creature: {}/{} curiosity={:.2} sleep={:?}\n",
-            "Assets: entries={} optional={} required={}\n",
+            "Play Feedback (display-only)\n",
+            "Cues: {}\n",
+            "Food={} hazard={} sleep={} failure={}\n",
+            "Creature: {}/{} curiosity={:.2}\n",
             "Boundary: cues cannot act or mutate weights"
         ),
         feedback.event_labels().join(">"),
@@ -1284,10 +1232,37 @@ pub fn feedback_cue_overlay_text(
         snapshot.visual.animation.label(),
         snapshot.visual.expression.label(),
         snapshot.visual.cues.curiosity.value,
-        snapshot.visual.sleep_phase,
-        feedback.asset_manifest_entries,
-        feedback.optional_asset_fallbacks,
-        feedback.required_assets_available
+    )
+}
+
+pub fn alpha_save_load_note_text(summary: &crate::SaveLoadUxSmokeSummary) -> String {
+    format!(
+        concat!(
+            "Save/Load Alpha Note\n",
+            "Manual slot: {}  autosave: {}\n",
+            "Stable IDs: [{}]  schema={}\n",
+            "Reset/restart: close and relaunch this fixture."
+        ),
+        summary.manual_save_slot,
+        summary.autosave_slot,
+        summary
+            .stable_world_ids
+            .iter()
+            .map(|id| id.raw().to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
+        summary.schema_version,
+    )
+}
+
+pub fn alpha_playtest_status_note_text(summary: &AdvancedGameplayUxSummary) -> String {
+    format!(
+        concat!(
+            "Alpha Playtest Focus\n",
+            "Creature loop visible; advanced systems optional={} GPU optional.\n",
+            "Record: window, controls, inspector, fallback, confusing text."
+        ),
+        summary.optional_modes,
     )
 }
 

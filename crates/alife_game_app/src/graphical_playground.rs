@@ -6,7 +6,7 @@
 use crate::prelude::*;
 use crate::*;
 
-pub const S01_GRAPHICAL_WINDOW_TITLE: &str = "A-Life Graphical Playground";
+pub const S01_GRAPHICAL_WINDOW_TITLE: &str = "A-Life Alpha Playground";
 pub const S01_DEFAULT_FIXTURE_ROOT: &str = "crates/alife_world/tests/fixtures/p34";
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
