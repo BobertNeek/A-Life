@@ -56,6 +56,36 @@ Local command result on this machine:
 
 Product runtime claim: `CpuShadowGuardedStaticPlusLiveHShadow`.
 
+## Manual Long-Run Soak Evidence
+
+Manual soak command:
+
+```powershell
+cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-longrun-soak crates/alife_world/tests/fixtures/p34 --ticks 5000 --report-every 500
+```
+
+Local 5000-tick soak result:
+
+- Selected backend: `GpuPlastic`
+- Adapter: NVIDIA GeForce RTX 3050
+- Backend/API: Vulkan
+- Completed ticks: `5000`
+- GPU static dispatch ticks: `5000`
+- GPU proposal ticks: `5000`
+- CPU shadow parity checks: `5000`
+- Parity failures: `0`
+- H_shadow applications: `1`
+- H_shadow rejections: `0`
+- Compact active readback: `320000` bytes total
+- Post-seal H_shadow diagnostic readback: `48` bytes total
+- Wall time: `142803.4531 ms`
+- Average: `28.5607 ms/tick`
+- Product runtime claim: `CpuShadowGuardedStaticPlusLiveHShadow`
+- Full action-authoritative claim: `false`
+
+See `docs/productization/GPU_LONGRUN_SOAK_REPORT.md` for the full manual
+1000/5000 tick evidence and forced CPU fallback result.
+
 ## Fallback Behavior
 
 When GPU runtime availability is forced off with

@@ -8,21 +8,21 @@ use alife_game_app::{
     run_advanced_gameplay_ux_smoke, run_cognition_debug_timeline_smoke,
     run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
-    run_gpu_graphics_performance_evidence_smoke, run_gpu_product_hardening_smoke,
-    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
-    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
-    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, InspectorControlPanel, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    run_gpu_product_hardening_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
+    run_longrun_balance_with_config, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
+    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
     RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
@@ -524,6 +524,125 @@ fn full_gpu_runtime_combined_summary_validation_rejects_overclaimed_hshadow() {
     summary.plasticity_live_core_update_applied = false;
     summary.post_seal_delta_applied_records = 0;
 
+    assert!(summary.validate().is_err());
+}
+
+#[test]
+fn gpu_longrun_soak_config_is_manual_bounded_and_keeps_smoke_cap() {
+    let mut options = GpuLongrunSoakOptions::default();
+    options.validate().unwrap();
+    assert_eq!(
+        options.ticks,
+        alife_game_app::GPU_LONGRUN_SOAK_DEFAULT_TICKS
+    );
+    assert_eq!(
+        alife_game_app::FULL_GPU_NEURAL_RUNTIME_MAX_TICKS,
+        16,
+        "normal full-gpu-runtime-smoke must stay CI-capped"
+    );
+
+    options.ticks = 0;
+    assert!(options.validate().is_err());
+    options.ticks = alife_game_app::GPU_LONGRUN_SOAK_MAX_TICKS_MANUAL + 1;
+    assert!(options.validate().is_err());
+    options.ticks = 1;
+    options.report_every = 0;
+    assert!(options.validate().is_err());
+}
+
+#[test]
+fn gpu_longrun_soak_short_run_reports_no_overclaim() {
+    let _guard = gpu_plasticity_env_lock();
+    std::env::remove_var("ALIFE_GPU_PLASTICITY_DIAGNOSTIC_AVAILABLE");
+    std::env::remove_var("ALIFE_GPU_RUNTIME_AVAILABLE");
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_gpu_longrun_soak(
+        &launch,
+        GpuLongrunSoakOptions {
+            ticks: 3,
+            report_every: 1,
+            stop_on_first_parity_failure: true,
+            stop_on_first_hshadow_rejection: true,
+            json_path: None,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(summary.requested_ticks, 3);
+    assert_eq!(summary.ticks_completed, 3);
+    assert_eq!(summary.sealed_patches, 3);
+    assert!(summary.no_active_bulk_readback);
+    assert!(!summary.full_action_authoritative_claim);
+    assert!(summary.w_genetic_fixed_unchanged);
+    assert!(summary.lifetime_consolidated_unchanged);
+    assert!(summary.h_operational_unchanged);
+    if summary.selected_backend != "CpuReference" {
+        assert_eq!(summary.cpu_shadow_parity_checks, 3);
+        assert_eq!(summary.parity_failures, 0);
+        assert_eq!(summary.gpu_proposal_ticks, 3);
+        assert!(summary.compact_active_readback_bytes >= 64 * 3);
+        assert_eq!(
+            summary.product_runtime_claim,
+            "CpuShadowGuardedStaticPlusLiveHShadow"
+        );
+        assert!(summary.h_shadow_applications > 0);
+        assert!(summary.total_h_shadow_records_applied > 0);
+        assert!(summary.post_seal_readback_bytes > 0);
+    } else {
+        assert_eq!(summary.product_runtime_claim, "None");
+        assert_eq!(summary.gpu_proposal_ticks, 0);
+        assert_eq!(summary.h_shadow_applications, 0);
+    }
+    summary.validate().unwrap();
+}
+
+#[test]
+fn gpu_longrun_soak_forced_fallback_does_not_claim_gpu_work() {
+    let _guard = gpu_plasticity_env_lock();
+    std::env::set_var("ALIFE_GPU_RUNTIME_AVAILABLE", "0");
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_gpu_longrun_soak(
+        &launch,
+        GpuLongrunSoakOptions {
+            ticks: 3,
+            report_every: 1,
+            stop_on_first_parity_failure: true,
+            stop_on_first_hshadow_rejection: true,
+            json_path: None,
+        },
+    )
+    .unwrap();
+    std::env::remove_var("ALIFE_GPU_RUNTIME_AVAILABLE");
+
+    assert_eq!(summary.selected_backend, "CpuReference");
+    assert!(summary.fallback_reason.is_some());
+    assert_eq!(summary.sealed_patches, 3);
+    assert_eq!(summary.gpu_static_dispatched_ticks, 0);
+    assert_eq!(summary.gpu_proposal_ticks, 0);
+    assert_eq!(summary.h_shadow_applications, 0);
+    assert_eq!(summary.compact_active_readback_bytes, 0);
+    assert_eq!(summary.post_seal_readback_bytes, 0);
+    assert_eq!(summary.product_runtime_claim, "None");
+    assert!(!summary.full_action_authoritative_claim);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn gpu_longrun_soak_validation_rejects_full_action_authoritative_claim() {
+    let _guard = gpu_plasticity_env_lock();
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let mut summary = run_gpu_longrun_soak(
+        &launch,
+        GpuLongrunSoakOptions {
+            ticks: 1,
+            report_every: 1,
+            stop_on_first_parity_failure: true,
+            stop_on_first_hshadow_rejection: true,
+            json_path: None,
+        },
+    )
+    .unwrap();
+    summary.full_action_authoritative_claim = true;
     assert!(summary.validate().is_err());
 }
 
