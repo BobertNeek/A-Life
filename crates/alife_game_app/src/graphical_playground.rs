@@ -9,6 +9,39 @@ use crate::*;
 pub const S01_GRAPHICAL_WINDOW_TITLE: &str = "A-Life Graphical Playground";
 pub const S01_DEFAULT_FIXTURE_ROOT: &str = "crates/alife_world/tests/fixtures/p34";
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum GraphicalGpuRuntimeMode {
+    #[default]
+    CpuReference,
+    StaticPlasticCpuShadowGuarded,
+    AutoWithCpuFallback,
+}
+
+impl GraphicalGpuRuntimeMode {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::CpuReference => "cpu-reference",
+            Self::StaticPlasticCpuShadowGuarded => "static-plastic-cpu-shadow-guarded",
+            Self::AutoWithCpuFallback => "auto-with-cpu-fallback",
+        }
+    }
+
+    pub const fn requests_gpu(self) -> bool {
+        !matches!(self, Self::CpuReference)
+    }
+
+    pub fn parse(value: &str) -> Result<Self, GameAppShellError> {
+        match value {
+            "cpu-reference" => Ok(Self::CpuReference),
+            "static-plastic-cpu-shadow-guarded" => Ok(Self::StaticPlasticCpuShadowGuarded),
+            "auto-with-cpu-fallback" => Ok(Self::AutoWithCpuFallback),
+            _ => Err(GameAppShellError::InvalidGraphicalLaunch {
+                message: "graphical GPU mode must be cpu-reference, static-plastic-cpu-shadow-guarded, or auto-with-cpu-fallback",
+            }),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicalPlaygroundMode {
     Interactive,
@@ -39,6 +72,7 @@ impl GraphicalPlaygroundMode {
 pub struct GraphicalPlaygroundLaunchConfig {
     pub app_launch: AppShellLaunchConfig,
     pub mode: GraphicalPlaygroundMode,
+    pub gpu_mode: GraphicalGpuRuntimeMode,
     pub window_title: String,
 }
 
@@ -47,6 +81,7 @@ impl GraphicalPlaygroundLaunchConfig {
         Self {
             app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
             mode: GraphicalPlaygroundMode::Interactive,
+            gpu_mode: GraphicalGpuRuntimeMode::CpuReference,
             window_title: S01_GRAPHICAL_WINDOW_TITLE.to_string(),
         }
     }
@@ -55,8 +90,14 @@ impl GraphicalPlaygroundLaunchConfig {
         Self {
             app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
             mode: GraphicalPlaygroundMode::Smoke { seconds },
+            gpu_mode: GraphicalGpuRuntimeMode::CpuReference,
             window_title: format!("{S01_GRAPHICAL_WINDOW_TITLE} - smoke {seconds}s"),
         }
+    }
+
+    pub const fn with_gpu_mode(mut self, gpu_mode: GraphicalGpuRuntimeMode) -> Self {
+        self.gpu_mode = gpu_mode;
+        self
     }
 
     pub fn validate(&self) -> Result<(), GameAppShellError> {
@@ -87,6 +128,8 @@ pub struct GraphicalPlaygroundLaunchSummary {
     pub fixture_root: PathBuf,
     pub seed: u64,
     pub selected_backend: BackendSelection,
+    pub requested_gpu_mode: GraphicalGpuRuntimeMode,
+    pub gpu_mode_visible: bool,
     pub cpu_fallback_visible: bool,
     pub stable_id_overlay_visible: bool,
     pub object_count: usize,
@@ -98,7 +141,7 @@ pub struct GraphicalPlaygroundLaunchSummary {
 impl GraphicalPlaygroundLaunchSummary {
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:objects={}:creatures={}:food={}:backend={:?}:persistent={}:timeout={:?}",
+            "{}:{}:{}:objects={}:creatures={}:food={}:backend={:?}:gpu_mode={}:persistent={}:timeout={:?}",
             self.schema,
             self.schema_version,
             self.mode_label,
@@ -106,6 +149,7 @@ impl GraphicalPlaygroundLaunchSummary {
             self.creature_marker_count,
             self.food_marker_count,
             self.selected_backend,
+            self.requested_gpu_mode.label(),
             self.persistent_window,
             self.smoke_seconds
         )
@@ -130,6 +174,8 @@ pub fn validate_graphical_playground_launch(
         fixture_root: launch.app_launch.fixture_root.clone(),
         seed: startup.seed,
         selected_backend: startup.requested_backend,
+        requested_gpu_mode: launch.gpu_mode,
+        gpu_mode_visible: true,
         cpu_fallback_visible: true,
         stable_id_overlay_visible: true,
         object_count: presentation.object_count,

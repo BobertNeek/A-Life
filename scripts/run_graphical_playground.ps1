@@ -1,18 +1,36 @@
 param(
     [switch]$DryRun,
     [ValidateRange(0, 120)]
-    [int]$SmokeSeconds = 0
+    [int]$SmokeSeconds = 0,
+    [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
+    [string]$GpuMode = "static-plastic-cpu-shadow-guarded"
 )
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 
 if ($SmokeSeconds -gt 0) {
-    $ModeArgs = @("graphical-playground-smoke", "--seconds", "$SmokeSeconds")
+    $ModeArgs = @("graphical-playground")
+    $ModeArgs += "crates/alife_world/tests/fixtures/p34"
+    $ModeArgs += @("--gpu-mode", $GpuMode, "--smoke-seconds", "$SmokeSeconds")
     $ModeLabel = "bounded graphical playground smoke"
 } else {
     $ModeArgs = @("graphical-playground")
+    $ModeArgs += "crates/alife_world/tests/fixtures/p34"
+    $ModeArgs += @("--gpu-mode", $GpuMode)
     $ModeLabel = "persistent graphical playground"
+}
+
+$FeatureList = if ($GpuMode -eq "cpu-reference") { "bevy-app" } else { "bevy-app gpu-runtime" }
+
+function Format-CommandArgument {
+    param([string]$Value)
+
+    if ($Value -match "[\s'`"]") {
+        return "'" + ($Value -replace "'", "''") + "'"
+    }
+
+    return $Value
 }
 
 $Command = @(
@@ -21,17 +39,18 @@ $Command = @(
     "-p",
     "alife_game_app",
     "--features",
-    "bevy-app",
+    $FeatureList,
     "--bin",
     "alife_game_app",
     "--"
 )
 $Command += $ModeArgs
-$Command += "crates/alife_world/tests/fixtures/p34"
 
 Write-Host "A-Life $ModeLabel command:"
-Write-Host ($Command -join " ")
-Write-Host "Manual graphics path: requires local windowing/graphics support. CPU fallback is used for cognition/backend status."
+$DisplayCommand = ($Command | ForEach-Object { Format-CommandArgument $_ }) -join " "
+Write-Host $DisplayCommand
+Write-Host "Manual graphics path: requires local windowing/graphics support. Requested GPU mode: $GpuMode."
+Write-Host "GPU mode remains optional; CPU fallback is visible when hardware, feature, or validation gates are unavailable."
 Write-Host "Controls: Space pause/run, N step once, 1/2/3 speed, Esc quit."
 Write-Host "Camera/inspector: arrows/WASD pan, +/- zoom, Q/E orbit, F follow selected stable ID. Inspector is read-only."
 Write-Host "Readability: color+shape markers, stable-ID badges, display-only feedback legend, CPU fallback status."

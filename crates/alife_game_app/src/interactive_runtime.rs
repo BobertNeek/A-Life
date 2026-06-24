@@ -152,8 +152,21 @@ impl RuntimeControlPanel {
     }
 
     pub fn status_overlay_text(&self) -> String {
+        self.status_overlay_text_with_backend("Backend: CPU Reference fallback", "")
+    }
+
+    pub fn status_overlay_text_with_backend(
+        &self,
+        backend_line: &str,
+        extra_lines: &str,
+    ) -> String {
+        let extra = if extra_lines.trim().is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", extra_lines.trim())
+        };
         format!(
-            "A-Life Graphical Playground\nStatus: {}  speed={} tick/update\nMind tick: {}  World tick: {}\nLast action: {}  target={}\nLast status: {}  sealed_patch={} sealed_patches={} packed_logs={}\nBackend: CPU Reference fallback\n{}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit",
+            "A-Life Graphical Playground\nStatus: {}  speed={} tick/update\nMind tick: {}  World tick: {}\nLast action: {}  target={}\nLast status: {}  sealed_patch={} sealed_patches={} packed_logs={}\n{}\n{}{}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
@@ -168,7 +181,9 @@ impl RuntimeControlPanel {
             self.last_patch_sealed,
             self.sealed_patch_count,
             self.packed_record_count,
+            backend_line,
             crate::s08_runtime_overlay_status_line(),
+            extra,
         )
     }
 
@@ -188,7 +203,7 @@ impl RuntimeControlPanel {
         )
     }
 
-    fn record_tick(&mut self, summary: &LiveBrainTickSummary) {
+    pub fn record_tick(&mut self, summary: &LiveBrainTickSummary) {
         self.mind_tick = summary.tick_after.raw();
         self.world_tick = Some(summary.world_tick_after.raw());
         self.selected_action_kind = summary.selected_action_kind;

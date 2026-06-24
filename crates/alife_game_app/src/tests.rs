@@ -98,6 +98,11 @@ fn s01_graphical_playground_launch_plan_validates_without_graphics() {
     assert!(summary.persistent_window);
     assert_eq!(summary.seed, 4242);
     assert_eq!(summary.selected_backend, BackendSelection::CpuReference);
+    assert_eq!(
+        summary.requested_gpu_mode,
+        GraphicalGpuRuntimeMode::CpuReference
+    );
+    assert!(summary.gpu_mode_visible);
     assert!(summary.cpu_fallback_visible);
     assert!(summary.stable_id_overlay_visible);
     assert_eq!(summary.object_count, 2);
@@ -131,9 +136,13 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
 
     assert!(script.contains("[switch]$DryRun"));
     assert!(script.contains("[int]$SmokeSeconds"));
+    assert!(script.contains("[string]$GpuMode"));
     assert!(script.contains("graphical-playground"));
-    assert!(script.contains("graphical-playground-smoke"));
-    assert!(script.contains("--seconds"));
+    assert!(script.contains("--gpu-mode"));
+    assert!(script.contains("--smoke-seconds"));
+    assert!(script.contains("bevy-app gpu-runtime"));
+    assert!(script.contains("Format-CommandArgument"));
+    assert!(script.contains("$DisplayCommand"));
     assert!(script.contains("arrows/WASD pan"));
     assert!(script.contains("Inspector is read-only"));
     assert!(script.contains("Readability:"));
