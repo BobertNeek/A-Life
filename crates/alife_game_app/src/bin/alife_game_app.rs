@@ -258,7 +258,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -310,6 +310,9 @@ fn parse_full_gpu_runtime_mode(value: &str) -> Result<FullGpuRuntimeSmokeMode, S
         "static-shadow" => Ok(FullGpuRuntimeSmokeMode::StaticShadow),
         "static-action-authoritative" => Ok(FullGpuRuntimeSmokeMode::StaticActionAuthoritative),
         "static-plastic-shadow" => Ok(FullGpuRuntimeSmokeMode::StaticPlasticShadow),
+        "static-plastic-cpu-shadow-guarded" => {
+            Ok(FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded)
+        }
         "full-shadow" => Ok(FullGpuRuntimeSmokeMode::FullShadow),
         "full-action-authoritative" => Ok(FullGpuRuntimeSmokeMode::FullActionAuthoritative),
         _ => Err(format!("unknown full GPU runtime mode: {value}")),
@@ -681,10 +684,11 @@ fn format_full_gpu_runtime_summary(
     summary: &alife_game_app::FullGpuRuntimeSmokeSummary,
 ) -> String {
     format!(
-        "{prefix} schema={} version={} mode={} selected={} fallback={:?} hardware={} ticks={} actions={} sealed_patches={} packed_logs={} gpu_static={} gpu_used_for_proposals={} cpu_shadow_parity={} routing=tiles:{}/{} skipped:{} synapses:{} compact_readback_bytes={} bulk_readback_forbidden={} plasticity={} live_h_shadow_applied={} h_shadow_changed={} h_updates={} delta_records={}/{} delta_max={:.6} seq={:?} w_genetic_fixed_unchanged={} lifetime_unchanged={} h_operational_unchanged={} timing=upload:{:.4},gpu:{:.4},readback:{:.4},cpu_shadow:{:.4},total:{:.4} claim={} gap='{}'",
+        "{prefix} schema={} version={} mode={} combined={} selected={} fallback={:?} hardware={} ticks={} actions={} sealed_patches={} packed_logs={} gpu_static={} gpu_used_for_proposals={} cpu_shadow_parity={} routing=tiles:{}/{} skipped:{} synapses:{} compact_readback_bytes={} bulk_readback_forbidden={} plasticity={} live_h_shadow_applied={} post_seal_hshadow_applied={} replay_protected={} post_seal_diag_readback_bytes={} post_seal_diag_readback_ms={:.4} post_seal_diag_boundary={} h_shadow_changed={} h_updates={} delta_records={}/{} delta_max={:.6} seq={:?} w_genetic_fixed_unchanged={} lifetime_unchanged={} h_operational_unchanged={} timing=upload:{:.4},gpu:{:.4},readback:{:.4},cpu_shadow:{:.4},total:{:.4} claim={} unsupported_full_gap_remaining={} gap='{}'",
         summary.schema,
         summary.schema_version,
         summary.requested_mode,
+        summary.combined_mode,
         summary.selected_backend,
         summary.fallback_reason,
         summary.hardware_identifier.as_deref().unwrap_or("none"),
@@ -703,6 +707,11 @@ fn format_full_gpu_runtime_summary(
         summary.bulk_readback_forbidden,
         summary.plasticity_dispatched,
         summary.plasticity_live_core_update_applied,
+        summary.post_seal_hshadow_applied,
+        summary.post_seal_replay_protected,
+        summary.post_seal_diagnostic_readback_bytes,
+        summary.post_seal_diagnostic_readback_ms,
+        summary.post_seal_diagnostic_readback_boundary_scoped,
         summary.h_shadow_changed,
         summary.h_shadow_updated_values,
         summary.post_seal_delta_applied_records,
@@ -718,6 +727,7 @@ fn format_full_gpu_runtime_summary(
         summary.cpu_shadow_ms,
         summary.total_gpu_runtime_ms,
         summary.product_runtime_claim,
+        summary.unsupported_full_runtime_gap_remaining,
         summary.plasticity_live_gap,
     )
 }

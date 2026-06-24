@@ -20,8 +20,10 @@ GPU hardware performance remains manual unless measured on local hardware.
 Post-S11 local reports record adapter/device availability, bounded P25/P26
 diagnostic GPU timing, and a separate CPU-shadow-guarded static live-tick GPU
 smoke path. A post-S11 contract pass also records post-seal H_shadow
-application in static-plastic shadow mode. Full action-authoritative
-static+routing+plastic gameplay GPU timing remains unclaimed.
+application in static-plastic shadow mode, plus a combined CPU-shadow-guarded
+static/plastic live path with active proposal readback separated from
+boundary-scoped post-seal H_shadow diagnostic readback. Full action-authoritative static+routing+plastic
+gameplay GPU timing remains unclaimed.
 
 No release tag was created during S11.
 
@@ -83,8 +85,11 @@ High issues:
 Medium issues:
 
 - GPU adapter/device availability, bounded P25/P26 diagnostic timing, static
-  CPU-shadow-guarded live-tick timing, and static-plastic shadow H_shadow
-  application may be recorded on supported local hardware. Full
+  CPU-shadow-guarded live-tick timing, static-plastic shadow H_shadow
+  application, and combined static/plastic CPU-shadow-guarded live timing may
+  be recorded on supported local hardware. The combined path remains CPU-shadow
+  guarded and separates active compact proposal readback from post-seal
+  diagnostic H_shadow readback. Full
   action-authoritative static+routing+plastic gameplay GPU neural performance
   remains manual or unknown.
 - Extended balance, soak, and large-population evidence remain manual rather

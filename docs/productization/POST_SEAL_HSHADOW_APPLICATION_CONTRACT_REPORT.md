@@ -1,7 +1,8 @@
 # Post-Seal H_shadow Application Contract Report
 
 Status: implemented and validated for H_shadow-only live application in the
-optional GPU static-plastic shadow smoke path.
+optional GPU static-plastic shadow smoke path and the combined
+static-plastic-cpu-shadow-guarded smoke path.
 
 ## Contract
 
@@ -51,22 +52,37 @@ Local result on this machine:
 - lifetime-consolidated unchanged: `true`
 - H_operational unchanged: `true`
 - Active bulk neural readback: forbidden
+- Post-seal H_shadow diagnostic readback: boundary-scoped after patch sealing
 
 The smoke remains `ShadowOnly` because static-plastic shadow mode does not use
 GPU output for action proposals. The separate static-action-authoritative smoke
 uses GPU static scores for proposal scoring and remains CPU-shadow-guarded.
 
+The combined mode:
+
+```powershell
+cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- full-gpu-runtime-smoke crates/alife_world/tests/fixtures/p34 --mode static-plastic-cpu-shadow-guarded --ticks 3
+```
+
+uses CPU-shadow-verified GPU static scores for proposals and applies the
+post-seal H_shadow delta receipt in the same live path. Its honest product
+claim is `CpuShadowGuardedStaticPlusLiveHShadow`, not full
+action-authoritative. If post-seal GPU plasticity diagnostics are unavailable
+after static scoring succeeds, the combined mode keeps the static proposal path
+as `CpuShadowGuarded`, skips H_shadow application, and reports the gap
+explicitly.
+
 ## Closed Gap
 
 The previous missing alife_core-owned post-seal H_shadow application hook is
-closed for validated H_shadow-only deltas.
+closed for validated H_shadow-only deltas. The follow-up gap between separate
+static scoring and post-seal plasticity smoke paths is closed for the
+CPU-shadow-guarded combined mode.
 
 ## Remaining Gap
 
 A-Life still does not claim full action-authoritative static+routing+plastic GPU
-runtime. That requires one validated mode that combines GPU static/routing action
-scoring, post-seal GPU plasticity application, CPU shadow parity, normal action
-arbitration, and sealed ExperiencePatch ordering in the same live path.
+runtime. The combined mode still depends on CPU shadow parity as a runtime gate.
 
 ## Release Status
 
