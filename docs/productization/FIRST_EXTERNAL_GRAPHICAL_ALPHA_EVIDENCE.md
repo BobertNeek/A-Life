@@ -1,7 +1,8 @@
 # First External Graphical Alpha Evidence
 
-Status: local graphical alpha rehearsal complete; external tester evidence is
-still `MANUAL_EVIDENCE_MISSING`.
+Status: local graphical alpha rehearsal complete; local Codex Computer Use
+tester evidence captured. Independent human external tester evidence is still
+`MANUAL_EVIDENCE_MISSING`.
 
 Evidence date: 2026-06-24
 
@@ -25,8 +26,28 @@ Local rehearsal machine:
 
 External tester:
 
-- Availability: no external tester evidence was captured in this pass.
-- Classification: `MANUAL_EVIDENCE_MISSING`
+- Availability: no independent human external tester evidence was captured in
+  this pass.
+- Local computer-use tester: captured in
+  `docs/productization/EXTERNAL_ALPHA_TESTER_001_REPORT.md`.
+- Classification: local computer-use evidence captured; independent human
+  evidence remains `MANUAL_EVIDENCE_MISSING`.
+
+## External Tester 001 Update
+
+`docs/productization/EXTERNAL_ALPHA_TESTER_001_REPORT.md` records a local Codex
+Computer Use tester pass. The captured window opened as `A-Life Alpha Playground
+- smoke 60s`, selected `GpuPlastic`, showed the
+`CpuShadowGuardedStaticPlusLiveHShadow` claim, displayed stable-ID creature and
+food markers, showed read-only inspector/GPU status, sealed 16 patches, and
+closed cleanly through the smoke timeout.
+
+This pass is not an independent human external alpha. Computer Use key input
+could not verify Space/N/1/2/3/F/Esc interactions because the target window
+reported `foreground window did not report a process id`. A local screenshot
+was captured under `target/playtest_evidence/external_alpha_001/screenshots/`
+and remains untracked. The main findings are medium-severity inspector clipping,
+unverified manual controls, and partial hazard visibility in the P34 fixture.
 
 ## Launch Command Used
 
