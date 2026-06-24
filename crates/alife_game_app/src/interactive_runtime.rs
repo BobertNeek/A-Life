@@ -166,7 +166,7 @@ impl RuntimeControlPanel {
             format!("\n{}", extra_lines.trim())
         };
         format!(
-            "A-Life Graphical Playground\nStatus: {}  speed={} tick/update\nMind tick: {}  World tick: {}\nLast action: {}  target={}\nLast status: {}  sealed_patch={} sealed_patches={} packed_logs={}\n{}\n{}{}\nControls: Space pause/run | N step | 1/2/3 speed | Esc quit",
+            "A-Life Alpha Playground\nStatus: {}  speed={} tick/update  mind={} world={}\nAction: {} target={} status={}\nPatch: sealed={} total={} logs={}\n{}\nEvidence: CPU fallback is not GPU performance; no active neural readback{}\nControls: Space pause/run | N step | 1/2/3 speed | F follow | Esc quit",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
@@ -182,7 +182,6 @@ impl RuntimeControlPanel {
             self.sealed_patch_count,
             self.packed_record_count,
             backend_line,
-            crate::s08_runtime_overlay_status_line(),
             extra,
         )
     }

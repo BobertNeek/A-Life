@@ -245,6 +245,31 @@ pub struct GraphicalGpuRuntimeTelemetry {
 }
 
 impl GraphicalGpuRuntimeTelemetry {
+    pub fn pending(requested_mode: GraphicalGpuRuntimeMode) -> Self {
+        if !requested_mode.requests_gpu() {
+            return Self::cpu_reference(requested_mode, 0);
+        }
+        Self {
+            requested_mode,
+            selected_backend: "PendingFirstTick".to_string(),
+            fallback_reason: None,
+            hardware_identifier: None,
+            product_runtime_claim: "PendingTick".to_string(),
+            gpu_static_dispatched_ticks: 0,
+            gpu_scores_used_for_proposals: false,
+            cpu_shadow_parity: false,
+            parity_failures: 0,
+            sealed_patches: 0,
+            h_shadow_applications: 0,
+            last_h_shadow_delta: 0.0,
+            compact_readback_bytes: 0,
+            post_seal_readback_bytes: 0,
+            total_gpu_runtime_ms: 0.0,
+            no_active_bulk_readback: true,
+            full_action_authoritative_claim: false,
+        }
+    }
+
     pub fn cpu_reference(requested_mode: GraphicalGpuRuntimeMode, sealed_patches: usize) -> Self {
         Self {
             requested_mode,
@@ -273,7 +298,7 @@ impl GraphicalGpuRuntimeTelemetry {
 
     pub fn backend_line(&self) -> String {
         format!(
-            "Backend: requested={} selected={} fallback={}",
+            "Runtime mode: {}\nSelected: {}  fallback={}",
             self.requested_mode.label(),
             self.selected_backend,
             self.fallback_reason.as_deref().unwrap_or("none")
@@ -282,14 +307,12 @@ impl GraphicalGpuRuntimeTelemetry {
 
     pub fn overlay_lines(&self) -> String {
         format!(
-            "GPU Runtime: claim={} gpu_scores={} parity={} parity_failures={} h_shadow_apps={} compact_readback={} post_seal_readback={} no_bulk_readback={}",
+            "GPU claim: {}\nScores={} parity={} failures={} H_shadow_apps={}\nBoundary: CPU shadow gate; no active bulk readback={}",
             self.product_runtime_claim,
             self.gpu_scores_used_for_proposals,
             self.cpu_shadow_parity,
             self.parity_failures,
             self.h_shadow_applications,
-            self.compact_readback_bytes,
-            self.post_seal_readback_bytes,
             self.no_active_bulk_readback,
         )
     }
@@ -298,27 +321,26 @@ impl GraphicalGpuRuntimeTelemetry {
         format!(
             concat!(
                 "GPU Runtime\n",
-                "Requested: {} selected={} adapter={}\n",
-                "Claim: {} | scores_used={} | CPU_shadow_parity={} failures={}\n",
-                "Sealed patches={} H_shadow_apps={} last_delta={:.6}\n",
-                "Readback: compact={} post_seal={} | timing_ms={:.4}\n",
-                "Fallback: {}\n",
+                "Mode: {}\n",
+                "Selected: {} fallback={}\n",
+                "Claim: {}\n",
+                "Scores used={} CPU parity={} failures={}\n",
+                "Learning: H_shadow_apps={} last_delta={:.6}\n",
+                "Readback: compact={} post_seal={} timing_ms={:.4}\n",
                 "Boundary: CPU shadow remains the gate; not full action-authoritative."
             ),
             self.requested_mode.label(),
             self.selected_backend,
-            self.hardware_identifier.as_deref().unwrap_or("none"),
+            self.fallback_reason.as_deref().unwrap_or("none"),
             self.product_runtime_claim,
             self.gpu_scores_used_for_proposals,
             self.cpu_shadow_parity,
             self.parity_failures,
-            self.sealed_patches,
             self.h_shadow_applications,
             self.last_h_shadow_delta,
             self.compact_readback_bytes,
             self.post_seal_readback_bytes,
             self.total_gpu_runtime_ms,
-            self.fallback_reason.as_deref().unwrap_or("none"),
         )
     }
 
@@ -357,7 +379,7 @@ impl GraphicalGpuRuntimeController {
         Self {
             mode,
             h_shadow_applied_once: false,
-            telemetry: GraphicalGpuRuntimeTelemetry::cpu_reference(mode, 0),
+            telemetry: GraphicalGpuRuntimeTelemetry::pending(mode),
         }
     }
 
