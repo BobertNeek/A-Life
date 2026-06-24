@@ -21,16 +21,16 @@ use alife_game_app::{
     CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
     CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
     FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
-    GpuSustainedLearningSoakOptions, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
-    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
-    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
-    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, WorldEditCommand,
-    WorldEditorConfig, WorldEditorMode, WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA,
-    G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
+    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
+    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
+    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
+    SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -928,6 +928,60 @@ fn s02_runtime_controls_cannot_mutate_cognition_directly() {
     assert!(stepped[0].patch_sealed);
     panel.direct_cognition_mutation_allowed = true;
     assert!(panel.validate().is_err());
+}
+
+#[test]
+fn graphical_gpu_launch_config_defaults_cpu_and_validates_requested_mode() {
+    let cpu = alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
+    assert_eq!(cpu.gpu_mode, GraphicalGpuRuntimeMode::CpuReference);
+    let cpu_summary = alife_game_app::validate_graphical_playground_launch(&cpu).unwrap();
+    assert!(cpu_summary.gpu_mode_visible);
+    assert_eq!(
+        cpu_summary.requested_gpu_mode,
+        GraphicalGpuRuntimeMode::CpuReference
+    );
+
+    let gpu = alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(p34_fixture_root(), 5)
+        .with_gpu_mode(GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded);
+    let gpu_summary = alife_game_app::validate_graphical_playground_launch(&gpu).unwrap();
+    assert_eq!(
+        gpu_summary.requested_gpu_mode,
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
+    );
+    assert!(gpu_summary.cpu_fallback_visible);
+    assert!(gpu_summary
+        .signature_line()
+        .contains("gpu_mode=static-plastic"));
+}
+
+#[test]
+fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
+    let telemetry = GraphicalGpuRuntimeTelemetry {
+        requested_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        selected_backend: "GpuStatic".to_string(),
+        fallback_reason: None,
+        hardware_identifier: Some("local-test-adapter".to_string()),
+        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow".to_string(),
+        gpu_static_dispatched_ticks: 3,
+        gpu_scores_used_for_proposals: true,
+        cpu_shadow_parity: true,
+        parity_failures: 0,
+        sealed_patches: 3,
+        h_shadow_applications: 1,
+        last_h_shadow_delta: 0.015,
+        compact_readback_bytes: 64,
+        post_seal_readback_bytes: 64,
+        total_gpu_runtime_ms: 1.25,
+        no_active_bulk_readback: true,
+        full_action_authoritative_claim: false,
+    };
+    telemetry.validate().unwrap();
+    let overlay = telemetry.overlay_lines();
+    let inspector = telemetry.inspector_lines();
+    assert!(overlay.contains("gpu_scores=true"));
+    assert!(inspector.contains("CPU shadow remains the gate"));
+    assert!(inspector.contains("not full action-authoritative"));
+    assert!(!inspector.contains("Entity("));
 }
 
 #[test]
@@ -2748,11 +2802,18 @@ fn bevy_feature_s03_inspector_overlay_is_read_only_and_stable_id_based() {
         .world()
         .resource::<alife_game_app::bevy_shell::CreatureInspectorResource>()
         .clone();
+    let gpu = alife_game_app::bevy_shell::GraphicalGpuTelemetryResource {
+        telemetry: GraphicalGpuRuntimeTelemetry::cpu_reference(
+            GraphicalGpuRuntimeMode::CpuReference,
+            0,
+        ),
+    };
 
     let overlay = alife_game_app::bevy_shell::graphical_inspector_overlay_text(
         &camera,
         &selection,
         &inspector_resource,
+        &gpu,
     );
 
     assert_eq!(selection.stable_id, WorldEntityId(1));
@@ -2762,6 +2823,7 @@ fn bevy_feature_s03_inspector_overlay_is_read_only_and_stable_id_based() {
     assert!(overlay.contains("Action: action=Some(Interact)"));
     assert!(overlay.contains("Patch: sealed=true"));
     assert!(overlay.contains("stable IDs only"));
+    assert!(overlay.contains("GPU Runtime"));
     assert!(overlay.contains("read_only=true"));
     assert!(!overlay.contains("Entity("));
 }

@@ -1,5 +1,7 @@
 //! Feature-gated Bevy playground shell split during R13 remediation.
 
+use std::sync::{Arc, Mutex};
+
 use alife_bevy_adapter::{
     core_vec3_to_bevy, AffordanceTags, AlifeBevyAdapterPlugin, BevyEntityMap, CreatureBody,
     SensoryEmitter,
@@ -23,9 +25,10 @@ use crate::{
     run_live_brain_loop_smoke, AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
     CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
     CreatureInspectorSnapshot, CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError,
-    GameAppState, GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary,
-    GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand,
-    RuntimeControlPanel, VisibleMaterialKind, VisiblePlaceholderShape,
+    GameAppState, GraphicalGpuRuntimeController, GraphicalGpuRuntimeTelemetry,
+    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
+    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
     VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
 };
 
@@ -123,14 +126,17 @@ pub struct GraphicalPlaygroundSceneResource {
 pub struct GraphicalPlaygroundRunSummary {
     pub launch: GraphicalPlaygroundLaunchSummary,
     pub runtime: RuntimeControlPanel,
+    pub gpu: GraphicalGpuRuntimeTelemetry,
 }
 
 impl GraphicalPlaygroundRunSummary {
     pub fn signature_line(&self) -> String {
         format!(
-            "{}|{}",
+            "{}|{}|gpu={}:{}",
             self.launch.signature_line(),
-            self.runtime.signature_line()
+            self.runtime.signature_line(),
+            self.gpu.requested_mode.label(),
+            self.gpu.product_runtime_claim
         )
     }
 }
@@ -144,6 +150,17 @@ pub struct GraphicalRuntimeControlsResource {
 
 struct GraphicalRuntimeLoopResource {
     live: LiveBrainLoop,
+    gpu: GraphicalGpuRuntimeController,
+}
+
+#[derive(Clone, Resource)]
+struct GraphicalRuntimeCaptureSink(
+    Arc<Mutex<Option<(RuntimeControlPanel, GraphicalGpuRuntimeTelemetry)>>>,
+);
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalGpuTelemetryResource {
+    pub telemetry: GraphicalGpuRuntimeTelemetry,
 }
 
 impl GraphicalRuntimeControlsResource {
@@ -168,6 +185,7 @@ fn graphical_runtime_resources(
     (
         GraphicalRuntimeControlsResource,
         GraphicalRuntimeLoopResource,
+        GraphicalGpuTelemetryResource,
     ),
     GameAppShellError,
 > {
@@ -182,7 +200,15 @@ fn graphical_runtime_resources(
             .map(|seconds| seconds.min(S02_MAX_SMOKE_TICKS).max(1)),
         smoke_ticks_done: 0,
     };
-    Ok((controls, GraphicalRuntimeLoopResource { live }))
+    let gpu = GraphicalGpuRuntimeController::new(launch.gpu_mode);
+    let telemetry = GraphicalGpuTelemetryResource {
+        telemetry: gpu.telemetry().clone(),
+    };
+    Ok((
+        controls,
+        GraphicalRuntimeLoopResource { live, gpu },
+        telemetry,
+    ))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -365,8 +391,9 @@ pub fn build_graphical_playground_app_shell(
     let advanced = run_advanced_gameplay_ux_smoke()?;
     let local_entity =
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
-    let (controls, live_loop) = graphical_runtime_resources(launch)?;
+    let (controls, live_loop, gpu_telemetry) = graphical_runtime_resources(launch)?;
     app.insert_resource(controls)
+        .insert_resource(gpu_telemetry)
         .insert_non_send_resource(live_loop)
         .insert_resource(CameraNavigationResource {
             state: inspector.camera,
@@ -399,6 +426,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_selection_ring,
                 update_graphical_runtime_overlay,
                 update_graphical_inspector_overlay,
+                update_graphical_gpu_visual_cues,
                 update_graphical_feedback_overlay,
                 update_graphical_save_load_menu_overlay,
                 update_graphical_advanced_gameplay_overlay,
@@ -428,15 +456,23 @@ pub fn run_graphical_playground_window_with_controls(
     launch: &GraphicalPlaygroundLaunchConfig,
 ) -> Result<GraphicalPlaygroundRunSummary, GameAppShellError> {
     let (mut app, summary) = build_graphical_playground_app_shell(launch)?;
+    let capture = Arc::new(Mutex::new(None));
+    app.insert_resource(GraphicalRuntimeCaptureSink(capture.clone()))
+        .add_systems(Update, capture_graphical_runtime_snapshot);
     app.run();
-    let runtime = crate::run_runtime_controls_smoke(
-        &launch.app_launch,
-        launch.mode.smoke_seconds().unwrap_or(1),
-    )?
-    .panel;
+    let (runtime, gpu) = capture
+        .lock()
+        .map_err(|_| GameAppShellError::VisibleWorldMismatch {
+            message: "graphical runtime capture sink was poisoned",
+        })?
+        .clone()
+        .ok_or(GameAppShellError::VisibleWorldMismatch {
+            message: "graphical runtime exited before telemetry could be captured",
+        })?;
     Ok(GraphicalPlaygroundRunSummary {
         launch: summary,
         runtime,
+        gpu,
     })
 }
 
@@ -845,18 +881,18 @@ fn handle_graphical_runtime_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut runtime: ResMut<GraphicalRuntimeControlsResource>,
     mut live_loop: NonSendMut<GraphicalRuntimeLoopResource>,
+    mut gpu_telemetry: ResMut<GraphicalGpuTelemetryResource>,
     mut exits: MessageWriter<AppExit>,
 ) {
     let apply = |runtime: &mut GraphicalRuntimeControlsResource,
                  live_loop: &mut GraphicalRuntimeLoopResource,
+                 gpu_telemetry: &mut GraphicalGpuTelemetryResource,
                  command| {
-        if runtime
-            .panel
-            .apply_command(&mut live_loop.live, command)
-            .is_err()
-        {
+        if apply_graphical_runtime_command(&mut runtime.panel, live_loop, command).is_err() {
             runtime.panel.playback = crate::RuntimePlaybackState::Paused;
             runtime.panel.last_patch_sealed = false;
+        } else {
+            gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
         }
     };
 
@@ -864,6 +900,7 @@ fn handle_graphical_runtime_input(
         apply(
             &mut *runtime,
             &mut *live_loop,
+            &mut *gpu_telemetry,
             RuntimeControlCommand::RequestExit,
         );
         exits.write(AppExit::Success);
@@ -872,6 +909,7 @@ fn handle_graphical_runtime_input(
         apply(
             &mut *runtime,
             &mut *live_loop,
+            &mut *gpu_telemetry,
             RuntimeControlCommand::TogglePause,
         );
     }
@@ -879,6 +917,7 @@ fn handle_graphical_runtime_input(
         apply(
             &mut *runtime,
             &mut *live_loop,
+            &mut *gpu_telemetry,
             RuntimeControlCommand::StepOnce,
         );
     }
@@ -886,6 +925,7 @@ fn handle_graphical_runtime_input(
         apply(
             &mut *runtime,
             &mut *live_loop,
+            &mut *gpu_telemetry,
             RuntimeControlCommand::SetRunSpeed(1),
         );
     }
@@ -893,6 +933,7 @@ fn handle_graphical_runtime_input(
         apply(
             &mut *runtime,
             &mut *live_loop,
+            &mut *gpu_telemetry,
             RuntimeControlCommand::SetRunSpeed(2),
         );
     }
@@ -900,6 +941,7 @@ fn handle_graphical_runtime_input(
         apply(
             &mut *runtime,
             &mut *live_loop,
+            &mut *gpu_telemetry,
             RuntimeControlCommand::SetRunSpeed(3),
         );
     }
@@ -948,6 +990,7 @@ fn advance_graphical_runtime_loop(
     mut timer: ResMut<GraphicalRuntimeTickTimer>,
     mut runtime: ResMut<GraphicalRuntimeControlsResource>,
     mut live_loop: NonSendMut<GraphicalRuntimeLoopResource>,
+    mut gpu_telemetry: ResMut<GraphicalGpuTelemetryResource>,
 ) {
     timer.0.tick(time.delta());
     if !timer.0.just_finished() {
@@ -956,19 +999,82 @@ fn advance_graphical_runtime_loop(
 
     if let Some(target) = runtime.smoke_target_ticks {
         if runtime.smoke_ticks_done < target {
-            if let Ok(summaries) = runtime
-                .panel
-                .apply_command(&mut live_loop.live, RuntimeControlCommand::StepOnce)
-            {
+            if let Ok(summaries) = apply_graphical_runtime_command(
+                &mut runtime.panel,
+                &mut live_loop,
+                RuntimeControlCommand::StepOnce,
+            ) {
                 runtime.smoke_ticks_done = runtime
                     .smoke_ticks_done
                     .saturating_add(summaries.len() as u32);
+                gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
             }
         }
         return;
     }
 
-    let _ = runtime.panel.advance_if_running(&mut live_loop.live);
+    if runtime.panel.playback == RuntimePlaybackState::Running {
+        let ticks = runtime.panel.run_speed_ticks;
+        if apply_graphical_runtime_command(
+            &mut runtime.panel,
+            &mut live_loop,
+            RuntimeControlCommand::RunForTicks(ticks),
+        )
+        .is_ok()
+        {
+            gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
+        }
+    }
+}
+
+fn apply_graphical_runtime_command(
+    panel: &mut RuntimeControlPanel,
+    live_loop: &mut GraphicalRuntimeLoopResource,
+    command: RuntimeControlCommand,
+) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+    match command {
+        RuntimeControlCommand::TogglePause => {
+            panel.playback = match panel.playback {
+                RuntimePlaybackState::Paused => RuntimePlaybackState::Running,
+                RuntimePlaybackState::Running => RuntimePlaybackState::Paused,
+                RuntimePlaybackState::ShutdownRequested => RuntimePlaybackState::ShutdownRequested,
+            };
+            panel.validate()?;
+            Ok(Vec::new())
+        }
+        RuntimeControlCommand::StepOnce => {
+            panel.playback = RuntimePlaybackState::Paused;
+            let summary = live_loop.gpu.tick(&mut live_loop.live)?;
+            panel.record_tick(&summary);
+            panel.mind_tick = live_loop.live.mind().current_tick().raw();
+            panel.validate()?;
+            Ok(vec![summary])
+        }
+        RuntimeControlCommand::SetRunSpeed(speed) => {
+            panel.run_speed_ticks = speed.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
+            panel.playback = RuntimePlaybackState::Running;
+            panel.validate()?;
+            Ok(Vec::new())
+        }
+        RuntimeControlCommand::RunForTicks(ticks) => {
+            panel.playback = RuntimePlaybackState::Running;
+            let bounded = ticks.min(S02_MAX_SMOKE_TICKS);
+            let mut summaries = Vec::with_capacity(bounded as usize);
+            for _ in 0..bounded {
+                let summary = live_loop.gpu.tick(&mut live_loop.live)?;
+                panel.record_tick(&summary);
+                summaries.push(summary);
+            }
+            panel.mind_tick = live_loop.live.mind().current_tick().raw();
+            panel.validate()?;
+            Ok(summaries)
+        }
+        RuntimeControlCommand::RequestExit => {
+            panel.playback = RuntimePlaybackState::ShutdownRequested;
+            panel.validate()?;
+            Ok(Vec::new())
+        }
+    }
 }
 
 fn update_graphical_camera_transform(
@@ -1002,10 +1108,14 @@ fn update_graphical_selection_ring(
 
 fn update_graphical_runtime_overlay(
     runtime: Res<GraphicalRuntimeControlsResource>,
+    gpu: Res<GraphicalGpuTelemetryResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<RuntimeStatusOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = runtime.panel.status_overlay_text();
+        text.0 = runtime.panel.status_overlay_text_with_backend(
+            &gpu.telemetry.backend_line(),
+            &gpu.telemetry.overlay_lines(),
+        );
     }
 }
 
@@ -1013,10 +1123,43 @@ fn update_graphical_inspector_overlay(
     camera: Res<CameraNavigationResource>,
     selection: Res<SelectionResource>,
     inspector: Res<CreatureInspectorResource>,
+    gpu: Res<GraphicalGpuTelemetryResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<InspectorStatusOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = graphical_inspector_overlay_text(&camera, &selection, &inspector);
+        text.0 = graphical_inspector_overlay_text(&camera, &selection, &inspector, &gpu);
+    }
+}
+
+fn update_graphical_gpu_visual_cues(
+    gpu: Res<GraphicalGpuTelemetryResource>,
+    mut markers: bevy::prelude::Query<(&GraphicalPlaygroundMarker, &mut Sprite)>,
+) {
+    let agent_color = if gpu.telemetry.fallback_reason.is_some() {
+        Color::srgb(0.78, 0.78, 0.72)
+    } else if gpu.telemetry.h_shadow_applications > 0 {
+        Color::srgb(0.42, 1.0, 0.72)
+    } else if gpu.telemetry.gpu_scores_used_for_proposals && gpu.telemetry.cpu_shadow_parity {
+        Color::srgb(0.35, 0.86, 1.0)
+    } else {
+        Color::srgb(1.0, 0.88, 0.35)
+    };
+    for (marker, mut sprite) in &mut markers {
+        if marker.kind == WorldObjectKind::Agent {
+            sprite.color = agent_color;
+        }
+    }
+}
+
+fn capture_graphical_runtime_snapshot(
+    runtime: Res<GraphicalRuntimeControlsResource>,
+    gpu: Res<GraphicalGpuTelemetryResource>,
+    sink: Option<Res<GraphicalRuntimeCaptureSink>>,
+) {
+    if let Some(sink) = sink {
+        if let Ok(mut slot) = sink.0.lock() {
+            *slot = Some((runtime.panel.clone(), gpu.telemetry.clone()));
+        }
     }
 }
 
@@ -1056,6 +1199,7 @@ pub fn graphical_inspector_overlay_text(
     camera: &CameraNavigationResource,
     selection: &SelectionResource,
     inspector: &CreatureInspectorResource,
+    gpu: &GraphicalGpuTelemetryResource,
 ) -> String {
     let snapshot = &inspector.snapshot;
     format!(
@@ -1071,7 +1215,7 @@ pub fn graphical_inspector_overlay_text(
             "Memory/topology: {}\n",
             "Camera: focus=({:.2},{:.2}) zoom={:.2} yaw={:.1} follow={:?}\n",
             "Selection controls: arrows/WASD pan | +/- zoom | Q/E orbit | F follow\n",
-            "Boundary: stable IDs only; no Bevy entity in portable model; read_only={}"
+            "Boundary: stable IDs only; no Bevy entity in portable model; read_only={}\n\n{}"
         ),
         selection.stable_id.raw(),
         selection
@@ -1092,7 +1236,8 @@ pub fn graphical_inspector_overlay_text(
         camera.state.zoom,
         camera.state.yaw_degrees,
         camera.state.follow_target.map(|id| id.raw()),
-        snapshot.read_only
+        snapshot.read_only,
+        gpu.telemetry.inspector_lines()
     )
 }
 

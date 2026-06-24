@@ -116,6 +116,19 @@ This sustained-learning command uses deterministic episode rotation to collect
 repeated valid post-seal H_shadow applications without replaying stale deltas.
 See `docs/productization/GPU_SUSTAINED_LEARNING_SOAK_REPORT.md`.
 
+## Graphical Product Surface
+
+The combined mode is now exposed in the Bevy graphical playground:
+
+```powershell
+cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/p34 --gpu-mode static-plastic-cpu-shadow-guarded --smoke-seconds 20
+```
+
+The window overlays show requested GPU mode, selected backend/fallback, CPU
+shadow parity, compact readback, sealed patches, and post-seal H_shadow
+application status. The graphical presentation remains non-authoritative over
+the world/brain model.
+
 ## Fallback Behavior
 
 When GPU runtime availability is forced off with

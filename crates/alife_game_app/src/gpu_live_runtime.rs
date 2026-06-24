@@ -223,6 +223,288 @@ impl FullGpuRuntimeSmokeSummary {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphicalGpuRuntimeTelemetry {
+    pub requested_mode: GraphicalGpuRuntimeMode,
+    pub selected_backend: String,
+    pub fallback_reason: Option<String>,
+    pub hardware_identifier: Option<String>,
+    pub product_runtime_claim: String,
+    pub gpu_static_dispatched_ticks: u32,
+    pub gpu_scores_used_for_proposals: bool,
+    pub cpu_shadow_parity: bool,
+    pub parity_failures: u32,
+    pub sealed_patches: usize,
+    pub h_shadow_applications: u32,
+    pub last_h_shadow_delta: f32,
+    pub compact_readback_bytes: usize,
+    pub post_seal_readback_bytes: usize,
+    pub total_gpu_runtime_ms: f32,
+    pub no_active_bulk_readback: bool,
+    pub full_action_authoritative_claim: bool,
+}
+
+impl GraphicalGpuRuntimeTelemetry {
+    pub fn cpu_reference(requested_mode: GraphicalGpuRuntimeMode, sealed_patches: usize) -> Self {
+        Self {
+            requested_mode,
+            selected_backend: "CpuReference".to_string(),
+            fallback_reason: if requested_mode.requests_gpu() {
+                Some("FeatureDisabledOrUnavailable".to_string())
+            } else {
+                None
+            },
+            hardware_identifier: None,
+            product_runtime_claim: "None".to_string(),
+            gpu_static_dispatched_ticks: 0,
+            gpu_scores_used_for_proposals: false,
+            cpu_shadow_parity: false,
+            parity_failures: 0,
+            sealed_patches,
+            h_shadow_applications: 0,
+            last_h_shadow_delta: 0.0,
+            compact_readback_bytes: 0,
+            post_seal_readback_bytes: 0,
+            total_gpu_runtime_ms: 0.0,
+            no_active_bulk_readback: true,
+            full_action_authoritative_claim: false,
+        }
+    }
+
+    pub fn backend_line(&self) -> String {
+        format!(
+            "Backend: requested={} selected={} fallback={}",
+            self.requested_mode.label(),
+            self.selected_backend,
+            self.fallback_reason.as_deref().unwrap_or("none")
+        )
+    }
+
+    pub fn overlay_lines(&self) -> String {
+        format!(
+            "GPU Runtime: claim={} gpu_scores={} parity={} parity_failures={} h_shadow_apps={} compact_readback={} post_seal_readback={} no_bulk_readback={}",
+            self.product_runtime_claim,
+            self.gpu_scores_used_for_proposals,
+            self.cpu_shadow_parity,
+            self.parity_failures,
+            self.h_shadow_applications,
+            self.compact_readback_bytes,
+            self.post_seal_readback_bytes,
+            self.no_active_bulk_readback,
+        )
+    }
+
+    pub fn inspector_lines(&self) -> String {
+        format!(
+            concat!(
+                "GPU Runtime\n",
+                "Requested: {} selected={} adapter={}\n",
+                "Claim: {} | scores_used={} | CPU_shadow_parity={} failures={}\n",
+                "Sealed patches={} H_shadow_apps={} last_delta={:.6}\n",
+                "Readback: compact={} post_seal={} | timing_ms={:.4}\n",
+                "Fallback: {}\n",
+                "Boundary: CPU shadow remains the gate; not full action-authoritative."
+            ),
+            self.requested_mode.label(),
+            self.selected_backend,
+            self.hardware_identifier.as_deref().unwrap_or("none"),
+            self.product_runtime_claim,
+            self.gpu_scores_used_for_proposals,
+            self.cpu_shadow_parity,
+            self.parity_failures,
+            self.sealed_patches,
+            self.h_shadow_applications,
+            self.last_h_shadow_delta,
+            self.compact_readback_bytes,
+            self.post_seal_readback_bytes,
+            self.total_gpu_runtime_ms,
+            self.fallback_reason.as_deref().unwrap_or("none"),
+        )
+    }
+
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        alife_core::validate_finite(self.last_h_shadow_delta)?;
+        alife_core::validate_finite(self.total_gpu_runtime_ms)?;
+        if self.full_action_authoritative_claim {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical GPU telemetry must not claim full action-authoritative runtime",
+            });
+        }
+        if self.gpu_scores_used_for_proposals && !self.cpu_shadow_parity {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical GPU proposals require CPU shadow parity",
+            });
+        }
+        if !self.no_active_bulk_readback {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical GPU runtime must not allow active bulk neural readback",
+            });
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct GraphicalGpuRuntimeController {
+    mode: GraphicalGpuRuntimeMode,
+    #[allow(dead_code)]
+    h_shadow_applied_once: bool,
+    telemetry: GraphicalGpuRuntimeTelemetry,
+}
+
+impl GraphicalGpuRuntimeController {
+    pub fn new(mode: GraphicalGpuRuntimeMode) -> Self {
+        Self {
+            mode,
+            h_shadow_applied_once: false,
+            telemetry: GraphicalGpuRuntimeTelemetry::cpu_reference(mode, 0),
+        }
+    }
+
+    pub const fn mode(&self) -> GraphicalGpuRuntimeMode {
+        self.mode
+    }
+
+    pub fn telemetry(&self) -> &GraphicalGpuRuntimeTelemetry {
+        &self.telemetry
+    }
+
+    pub fn tick(
+        &mut self,
+        live: &mut LiveBrainLoop,
+    ) -> Result<LiveBrainTickSummary, GameAppShellError> {
+        match self.mode {
+            GraphicalGpuRuntimeMode::CpuReference => {
+                let proposals = live.current_context_proposals()?;
+                let tick = live.tick_with_proposals_detailed(proposals, true);
+                self.telemetry = GraphicalGpuRuntimeTelemetry::cpu_reference(
+                    self.mode,
+                    tick.summary.sealed_patch_count,
+                );
+                Ok(tick.summary)
+            }
+            GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
+            | GraphicalGpuRuntimeMode::AutoWithCpuFallback => self.tick_gpu_requested(live),
+        }
+    }
+
+    #[cfg(not(feature = "gpu-runtime"))]
+    fn tick_gpu_requested(
+        &mut self,
+        live: &mut LiveBrainLoop,
+    ) -> Result<LiveBrainTickSummary, GameAppShellError> {
+        let proposals = live.current_context_proposals()?;
+        let tick = live.tick_with_proposals_detailed(proposals, true);
+        self.telemetry =
+            GraphicalGpuRuntimeTelemetry::cpu_reference(self.mode, tick.summary.sealed_patch_count);
+        Ok(tick.summary)
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    fn tick_gpu_requested(
+        &mut self,
+        live: &mut LiveBrainLoop,
+    ) -> Result<LiveBrainTickSummary, GameAppShellError> {
+        use alife_gpu_backend::{
+            full_gpu_runtime_live_plasticity_schema, post_seal_delta_batch_from_plasticity_report,
+            run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
+            FullGpuRuntimeProductClaim,
+        };
+
+        let report = live.current_sensory_report()?;
+        let input = runtime_input_from_sensory(&report)?;
+        let static_report = run_full_gpu_runtime_static_tick(
+            input,
+            alife_gpu_backend::FullGpuRuntimeMode::GpuStaticPlasticCpuShadowGuarded,
+        )?;
+        let gpu_available = static_report.backend.fallback_reason.is_none();
+        let mut gpu_scores_used = false;
+        let mut plasticity_applied = false;
+        let mut last_delta = self.telemetry.last_h_shadow_delta;
+        let mut post_seal_readback = 0_usize;
+        let mut product_claim = format!("{:?}", static_report.product_runtime_claim);
+
+        let proposals = if gpu_available
+            && static_report.action_summary.is_some()
+            && static_report.cpu_shadow_parity_passed
+            && matches!(
+                static_report.product_runtime_claim,
+                FullGpuRuntimeProductClaim::CpuShadowGuarded
+                    | FullGpuRuntimeProductClaim::CpuShadowGuardedStaticPlusLiveHShadow
+            ) {
+            gpu_scores_used = true;
+            let action_summary = static_report.action_summary.clone().ok_or(
+                GameAppShellError::VisibleWorldMismatch {
+                    message: "graphical GPU scoring reported parity without action summary",
+                },
+            )?;
+            live.current_context_proposals_with_scores(scores_from_action_summary(action_summary)?)?
+        } else {
+            live.current_context_proposals()?
+        };
+
+        if gpu_available && !self.h_shadow_applied_once {
+            live.initialize_neural_projection_schema(full_gpu_runtime_live_plasticity_schema()?)?;
+        }
+        let tick = live.tick_with_proposals_detailed(proposals, !gpu_available);
+
+        if gpu_available
+            && gpu_scores_used
+            && tick.summary.patch_sealed
+            && !self.h_shadow_applied_once
+            && post_seal_gpu_plasticity_diagnostic_enabled()
+        {
+            if let Some(patch) = tick.sealed_patch.as_ref() {
+                let plasticity_report =
+                    run_full_gpu_runtime_post_seal_plasticity_diagnostic(input)?;
+                post_seal_readback = plasticity_report.diagnostic_readback_bytes;
+                let batch =
+                    post_seal_delta_batch_from_plasticity_report(patch, &plasticity_report)?;
+                let receipt = live.apply_post_seal_lifetime_deltas(patch, batch)?;
+                plasticity_applied = true;
+                self.h_shadow_applied_once = true;
+                last_delta = receipt.max_abs_delta;
+                product_claim = "CpuShadowGuardedStaticPlusLiveHShadow".to_string();
+            }
+        }
+
+        let h_shadow_applications =
+            self.telemetry.h_shadow_applications + u32::from(plasticity_applied);
+        if h_shadow_applications > 0 && gpu_scores_used && static_report.cpu_shadow_parity_passed {
+            product_claim = "CpuShadowGuardedStaticPlusLiveHShadow".to_string();
+        }
+
+        self.telemetry = GraphicalGpuRuntimeTelemetry {
+            requested_mode: self.mode,
+            selected_backend: format!("{:?}", static_report.backend.selected),
+            fallback_reason: static_report
+                .backend
+                .fallback_reason
+                .map(|reason| format!("{reason:?}")),
+            hardware_identifier: static_report.hardware_identifier.clone(),
+            product_runtime_claim: product_claim,
+            gpu_static_dispatched_ticks: self
+                .telemetry
+                .gpu_static_dispatched_ticks
+                .saturating_add(u32::from(gpu_available)),
+            gpu_scores_used_for_proposals: gpu_scores_used,
+            cpu_shadow_parity: static_report.cpu_shadow_parity_passed,
+            parity_failures: self.telemetry.parity_failures
+                + u32::from(!static_report.cpu_shadow_parity_passed),
+            sealed_patches: tick.summary.sealed_patch_count,
+            h_shadow_applications,
+            last_h_shadow_delta: last_delta,
+            compact_readback_bytes: static_report.readback.compact_readback_bytes,
+            post_seal_readback_bytes: post_seal_readback,
+            total_gpu_runtime_ms: static_report.timing.total_gpu_runtime_ms,
+            no_active_bulk_readback: static_report.readback.bulk_neural_readback_forbidden,
+            full_action_authoritative_claim: false,
+        };
+        self.telemetry.validate()?;
+        Ok(tick.summary)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuLongrunSoakOptions {
     pub ticks: u32,

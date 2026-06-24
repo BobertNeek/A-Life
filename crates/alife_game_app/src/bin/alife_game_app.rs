@@ -57,8 +57,8 @@ fn run() -> Result<String, String> {
             Ok(format_summary("G01 validated app config", &summary))
         }
         [command, fixture_root] if command == "bevy-smoke" => run_bevy_smoke(fixture_root),
-        [command, fixture_root] if command == "graphical-playground" => {
-            run_graphical_playground_interactive(fixture_root)
+        [command, rest @ ..] if command == "graphical-playground" => {
+            run_graphical_playground_cli(rest)
         }
         [command, flag, seconds, fixture_root]
             if command == "graphical-playground-smoke" && flag == "--seconds" =>
@@ -264,7 +264,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <p34-fixture-root> [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -512,7 +512,7 @@ fn format_graphical_playground_summary(
     summary: &alife_game_app::bevy_shell::GraphicalPlaygroundRunSummary,
 ) -> String {
     format!(
-        "{prefix} schema={} version={} title='{}' mode={} timeout={:?} seed={} backend={:?} objects={} creatures={} food={} cpu_fallback={} stable_ids={} persistent={} playback={} mind_tick={} world_tick={:?} action={:?}:{:?} sealed_patches={} packed_logs={} signature={}",
+        "{prefix} schema={} version={} title='{}' mode={} timeout={:?} seed={} backend={:?} gpu_mode={} gpu_selected={} gpu_claim={} gpu_scores={} cpu_shadow_parity={} h_shadow_apps={} fallback={:?} objects={} creatures={} food={} cpu_fallback={} stable_ids={} persistent={} playback={} mind_tick={} world_tick={:?} action={:?}:{:?} sealed_patches={} packed_logs={} signature={}",
         summary.launch.schema,
         summary.launch.schema_version,
         summary.launch.window_title,
@@ -520,6 +520,13 @@ fn format_graphical_playground_summary(
         summary.launch.smoke_seconds,
         summary.launch.seed,
         summary.launch.selected_backend,
+        summary.launch.requested_gpu_mode.label(),
+        summary.gpu.selected_backend,
+        summary.gpu.product_runtime_claim,
+        summary.gpu.gpu_scores_used_for_proposals,
+        summary.gpu.cpu_shadow_parity,
+        summary.gpu.h_shadow_applications,
+        summary.gpu.fallback_reason,
         summary.launch.object_count,
         summary.launch.creature_marker_count,
         summary.launch.food_marker_count,
@@ -1218,20 +1225,60 @@ fn run_bevy_smoke(_fixture_root: &str) -> Result<String, String> {
 }
 
 #[cfg(feature = "bevy-app")]
-fn run_graphical_playground_interactive(fixture_root: &str) -> Result<String, String> {
-    let launch = alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(fixture_root);
+fn run_graphical_playground_cli(args: &[String]) -> Result<String, String> {
+    use alife_game_app::GraphicalGpuRuntimeMode;
+
+    let Some(fixture_root) = args.first() else {
+        return Err("graphical-playground requires <p34-fixture-root>".to_string());
+    };
+    let mut gpu_mode = GraphicalGpuRuntimeMode::CpuReference;
+    let mut smoke_seconds = None;
+    let mut index = 1_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--gpu-mode" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--gpu-mode requires a value".to_string())?;
+                gpu_mode = GraphicalGpuRuntimeMode::parse(value).map_err(|err| err.to_string())?;
+                index += 2;
+            }
+            "--smoke-seconds" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--smoke-seconds requires a value".to_string())?;
+                smoke_seconds = Some(
+                    value
+                        .parse::<u32>()
+                        .map_err(|_| "--smoke-seconds must be an unsigned integer".to_string())?,
+                );
+                index += 2;
+            }
+            unknown => return Err(format!("unknown graphical-playground option: {unknown}")),
+        }
+    }
+    let launch = if let Some(seconds) = smoke_seconds {
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(fixture_root, seconds)
+    } else {
+        alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(fixture_root)
+    }
+    .with_gpu_mode(gpu_mode);
     let summary =
         alife_game_app::bevy_shell::run_graphical_playground_window_with_controls(&launch)
             .map_err(|err| err.to_string())?;
     Ok(format_graphical_playground_summary(
-        "S02 graphical playground closed",
+        if smoke_seconds.is_some() {
+            "S02 graphical playground smoke"
+        } else {
+            "S02 graphical playground closed"
+        },
         &summary,
     ))
 }
 
 #[cfg(not(feature = "bevy-app"))]
-fn run_graphical_playground_interactive(_fixture_root: &str) -> Result<String, String> {
-    Err("graphical-playground requires feature `bevy-app`; run `cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/p34`".to_string())
+fn run_graphical_playground_cli(_args: &[String]) -> Result<String, String> {
+    Err("graphical-playground requires feature `bevy-app`; run `cargo run -p alife_game_app --features \"bevy-app gpu-runtime\" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/p34 --gpu-mode static-plastic-cpu-shadow-guarded`".to_string())
 }
 
 #[cfg(feature = "bevy-app")]
