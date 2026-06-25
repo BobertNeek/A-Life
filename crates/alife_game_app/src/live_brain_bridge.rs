@@ -349,15 +349,22 @@ impl LiveBrainLoop {
         let mut proposals = Vec::new();
         for visible in report.visible_entities {
             match visible.kind {
-                WorldObjectKind::Food => proposals.push(proposal(
-                    HeadlessActionIds::EAT,
-                    ActionKind::Interact,
-                    Some(visible.id),
-                    None,
-                    scores.map_or(0.72, |scores| scores.food_score),
-                    scores.map_or(0.95, |scores| scores.confidence),
-                    visible.distance,
-                )?),
+                WorldObjectKind::Food => {
+                    let (action_id, kind) = if visible.distance > CA16_EAT_REACH_DISTANCE {
+                        (HeadlessActionIds::APPROACH, ActionKind::Move)
+                    } else {
+                        (HeadlessActionIds::EAT, ActionKind::Interact)
+                    };
+                    proposals.push(proposal(
+                        action_id,
+                        kind,
+                        Some(visible.id),
+                        None,
+                        scores.map_or(0.72, |scores| scores.food_score),
+                        scores.map_or(0.95, |scores| scores.confidence),
+                        visible.distance,
+                    )?)
+                }
                 WorldObjectKind::Hazard => proposals.push(proposal(
                     HeadlessActionIds::FLEE,
                     ActionKind::Move,

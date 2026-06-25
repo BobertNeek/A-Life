@@ -110,6 +110,9 @@ pub use motor_ring::*;
 mod homeostasis_runtime;
 pub use homeostasis_runtime::*;
 
+mod affordance_loop;
+pub use affordance_loop::*;
+
 mod population_social;
 pub use population_social::*;
 

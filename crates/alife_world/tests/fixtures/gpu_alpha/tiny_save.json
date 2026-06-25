@@ -86,7 +86,7 @@
         "label": "berry",
         "kind": "Food",
         "organism_id": null,
-        "position": { "x": 1.0, "y": 0.0, "z": 0.0 },
+        "position": { "x": 2.25, "y": 0.0, "z": 0.0 },
         "radius": 0.75,
         "nutrition": 0.75,
         "hazard_pain": 0.0,
