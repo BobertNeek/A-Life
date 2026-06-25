@@ -218,6 +218,52 @@ impl RuntimeControlPanel {
         )
     }
 
+    pub fn structured_status_panel_text_with_backend(&self, backend_line: &str) -> String {
+        let action = self.selected_action_kind.map_or("None", |action| {
+            action_badge_label_for_target(action, self.target_entity)
+        });
+        let goal = goal_label_from_action(self.selected_action_kind, self.target_entity);
+        let target = self
+            .target_entity
+            .map_or_else(|| "none".to_string(), |id| format!("stable:{id}"));
+        let terminal_line = self
+            .terminal_recovery_cause
+            .as_ref()
+            .map_or("Ready".to_string(), |cause| format!("Stopped: {cause}"));
+        format!(
+            concat!(
+                "Status\n",
+                "A-Life GPU Alpha Playground\n",
+                "State: {}  Speed: {}x\n",
+                "Tick: {}  World: {}\n",
+                "{}\n",
+                "Creature: stable:1\n",
+                "Goal: {}  Action: {}\n",
+                "Target: {}  Intent: {}\n",
+                "Patch: sealed={} count={}\n",
+                "Learning: H_shadow pulse\n",
+                "{}"
+            ),
+            self.playback.label(),
+            self.run_speed_ticks,
+            self.mind_tick,
+            self.world_tick
+                .map_or_else(|| "pending".to_string(), |tick| tick.to_string()),
+            backend_line,
+            goal,
+            action,
+            target,
+            self.intent_marker_label(),
+            self.last_patch_sealed,
+            self.sealed_patch_count,
+            terminal_line,
+        )
+    }
+
+    pub fn event_feed_panel_text(&self) -> String {
+        format!("Event Feed\n{}", self.player_event_lines())
+    }
+
     fn player_event_lines(&self) -> String {
         self.player_events
             .iter()
