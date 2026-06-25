@@ -1207,9 +1207,12 @@ fn ca05_structured_status_and_event_panels_keep_player_ui_compact() {
 fn bevy_feature_ca05_controls_and_boundary_footer_are_player_facing() {
     let controls = alife_game_app::bevy_shell::ca05_controls_bar_text();
     assert!(controls.contains("Controls"));
+    assert!(controls.contains("Left click select"));
     assert!(controls.contains("Space run/pause"));
     assert!(controls.contains("N step"));
     assert!(controls.contains("R reset"));
+    assert!(controls.contains("+/- zoom"));
+    assert!(controls.contains("F follow selected stable ID"));
     assert!(controls.contains("[!] hazard"));
     assert!(controls.contains("Stable IDs only"));
     assert!(!controls.contains("Entity("));
@@ -1239,6 +1242,98 @@ fn bevy_feature_ca05_controls_and_boundary_footer_are_player_facing() {
     assert!(footer.contains("no full action-authoritative"));
     assert!(footer.contains("no bulk readback=true"));
     assert!(!footer.contains("Entity("));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca06_mouse_selection_updates_stable_id_camera_and_inspector() {
+    let graphical_launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let launch = graphical_launch.app_launch.clone();
+    let presentation = load_visible_world_from_p34_save(&launch).unwrap();
+    let marker_records = presentation
+        .objects
+        .iter()
+        .map(|object| {
+            (
+                object.stable_id,
+                object.kind,
+                bevy::prelude::Vec3::new(object.position.x * 125.0, object.position.z * 125.0, 0.0),
+            )
+        })
+        .collect::<Vec<_>>();
+    let (_, _, food_translation) = marker_records
+        .iter()
+        .copied()
+        .find(|(stable_id, kind, _)| {
+            *stable_id == WorldEntityId(2) && *kind == WorldObjectKind::Food
+        })
+        .expect("gpu alpha fixture should expose stable food marker");
+    let picked = alife_game_app::bevy_shell::ca06_pick_stable_id_from_world_point(
+        bevy::prelude::Vec2::new(food_translation.x, food_translation.y),
+        marker_records
+            .iter()
+            .map(|(stable_id, kind, translation)| (*stable_id, *kind, *translation)),
+    );
+    assert_eq!(picked, Some(WorldEntityId(2)));
+    let missed = alife_game_app::bevy_shell::ca06_pick_stable_id_from_world_point(
+        bevy::prelude::Vec2::new(10_000.0, 10_000.0),
+        marker_records
+            .iter()
+            .map(|(stable_id, kind, translation)| (*stable_id, *kind, *translation)),
+    );
+    assert_eq!(missed, None);
+
+    let inspector_snapshot = run_creature_inspector_smoke(&launch).unwrap();
+    let mut selection = alife_game_app::bevy_shell::SelectionResource {
+        stable_id: inspector_snapshot.selection.stable_id,
+        local_entity: None,
+    };
+    let mut inspector = alife_game_app::bevy_shell::CreatureInspectorResource {
+        snapshot: inspector_snapshot.clone(),
+    };
+    let mut camera = alife_game_app::bevy_shell::CameraNavigationResource {
+        state: inspector_snapshot.camera,
+    };
+    let mut runtime =
+        alife_game_app::bevy_shell::GraphicalRuntimeControlsResource::new(&graphical_launch)
+            .unwrap();
+    let food_entity = bevy::prelude::Entity::PLACEHOLDER;
+
+    alife_game_app::bevy_shell::apply_graphical_stable_selection(
+        &presentation,
+        WorldEntityId(2),
+        Some(food_entity),
+        &mut selection,
+        &mut inspector,
+        &mut camera,
+        &mut runtime,
+    )
+    .unwrap();
+
+    let expected = select_visible_world_entity(&presentation, WorldEntityId(2)).unwrap();
+    assert_eq!(selection.stable_id, WorldEntityId(2));
+    assert_eq!(selection.local_entity, Some(food_entity));
+    assert_eq!(inspector.snapshot.selection.stable_id, WorldEntityId(2));
+    assert_eq!(camera.state.focus, expected.position);
+    assert!(runtime
+        .panel
+        .player_events
+        .iter()
+        .any(|event| event.contains("Mouse selected stable:2")));
+    let gpu = alife_game_app::bevy_shell::GraphicalGpuTelemetryResource {
+        telemetry: GraphicalGpuRuntimeTelemetry::pending(
+            GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        ),
+    };
+    let overlay = alife_game_app::bevy_shell::graphical_inspector_overlay_text(
+        &camera, &selection, &inspector, &gpu,
+    );
+    assert!(overlay.contains("Stable ID: 2"));
+    assert!(overlay.contains("map=mapped"));
+    assert!(overlay.contains("Cam:"));
+    assert!(overlay.contains("Read-only stable IDs"));
+    assert!(!overlay.contains("Entity("));
 }
 
 #[test]

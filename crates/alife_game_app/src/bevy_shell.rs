@@ -11,12 +11,13 @@ use alife_world::WorldObjectKind;
 use bevy::{
     app::AppExit,
     prelude::{
-        default, App, BackgroundColor, ButtonInput, Camera2d, ClearColor, Color, Component,
-        DefaultPlugins, Entity, KeyCode, MessageWriter, MinimalPlugins, Name, Node, NonSendMut,
-        PluginGroup, PositionType, Res, ResMut, Resource, Sprite, Text, Text2d, TextColor,
-        TextFont, Time, Timer, TimerMode, Transform, Update, Val, Vec2, Vec3, With, Without,
+        default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Component,
+        DefaultPlugins, Entity, GlobalTransform, KeyCode, MessageWriter, MinimalPlugins,
+        MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Res, ResMut, Resource,
+        Sprite, Text, Text2d, TextColor, TextFont, Time, Timer, TimerMode, Transform, Update, Val,
+        Vec2, Vec3, With, Without,
     },
-    window::{ExitCondition, PresentMode, Window, WindowPlugin, WindowTheme},
+    window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
 };
 
 use crate::{
@@ -66,6 +67,11 @@ pub struct VisibleWorldSceneResource {
     pub save_id: String,
     pub visible_signature: Vec<String>,
     pub headless_signature: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalVisibleWorldPresentationResource {
+    pub presentation: VisibleWorldPresentation,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -409,6 +415,9 @@ pub fn build_graphical_playground_app_shell(
     app.insert_resource(controls)
         .insert_resource(gpu_telemetry)
         .insert_non_send_resource(live_loop)
+        .insert_resource(GraphicalVisibleWorldPresentationResource {
+            presentation: presentation.clone(),
+        })
         .insert_resource(CameraNavigationResource {
             state: inspector.camera,
         })
@@ -435,6 +444,7 @@ pub fn build_graphical_playground_app_shell(
             (
                 handle_graphical_runtime_input,
                 handle_graphical_camera_selection_input,
+                handle_graphical_mouse_selection,
                 advance_graphical_runtime_loop,
                 update_graphical_camera_transform,
                 update_graphical_selection_ring,
@@ -1037,6 +1047,120 @@ fn handle_graphical_camera_selection_input(
     camera.state = next;
 }
 
+fn handle_graphical_mouse_selection(
+    mouse: Res<ButtonInput<MouseButton>>,
+    windows: bevy::prelude::Query<&Window, With<PrimaryWindow>>,
+    cameras: bevy::prelude::Query<(&Camera, &GlobalTransform), With<GraphicalMainCamera>>,
+    markers: bevy::prelude::Query<(Entity, &GraphicalPlaygroundMarker, &Transform)>,
+    map: Res<BevyEntityMap>,
+    presentation: Res<GraphicalVisibleWorldPresentationResource>,
+    mut selection: ResMut<SelectionResource>,
+    mut inspector: ResMut<CreatureInspectorResource>,
+    mut camera_state: ResMut<CameraNavigationResource>,
+    mut runtime: ResMut<GraphicalRuntimeControlsResource>,
+) {
+    if !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let Some(cursor_position) = window.cursor_position() else {
+        return;
+    };
+    let Ok((camera, camera_transform)) = cameras.single() else {
+        return;
+    };
+    let Ok(world_position) = camera.viewport_to_world_2d(camera_transform, cursor_position) else {
+        return;
+    };
+
+    let marker_data = markers.iter().filter_map(|(entity, marker, transform)| {
+        if map.bevy_entity(marker.stable_id) == Some(entity) {
+            Some((marker.stable_id, marker.kind, transform.translation))
+        } else {
+            None
+        }
+    });
+
+    let Some(stable_id) = ca06_pick_stable_id_from_world_point(world_position, marker_data) else {
+        return;
+    };
+    let local_entity = map.bevy_entity(stable_id);
+
+    if apply_graphical_stable_selection(
+        &presentation.presentation,
+        stable_id,
+        local_entity,
+        &mut selection,
+        &mut inspector,
+        &mut camera_state,
+        &mut runtime,
+    )
+    .is_err()
+    {
+        runtime
+            .panel
+            .record_terminal_recovery("mouse selection failed; stable ID not selectable");
+    }
+}
+
+pub fn ca06_marker_hit_radius(kind: WorldObjectKind) -> f32 {
+    match kind {
+        WorldObjectKind::Agent => 54.0,
+        WorldObjectKind::Food => 42.0,
+        WorldObjectKind::Hazard => 48.0,
+        WorldObjectKind::Obstacle => 50.0,
+        WorldObjectKind::Token => 44.0,
+    }
+}
+
+pub fn ca06_pick_stable_id_from_world_point(
+    world_point: Vec2,
+    markers: impl IntoIterator<Item = (WorldEntityId, WorldObjectKind, Vec3)>,
+) -> Option<WorldEntityId> {
+    markers
+        .into_iter()
+        .filter_map(|(stable_id, kind, translation)| {
+            let delta = Vec2::new(translation.x, translation.y) - world_point;
+            let distance_squared = delta.length_squared();
+            let radius = ca06_marker_hit_radius(kind);
+            if distance_squared <= radius * radius {
+                Some((stable_id, distance_squared))
+            } else {
+                None
+            }
+        })
+        .min_by(|left, right| {
+            left.1
+                .partial_cmp(&right.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(stable_id, _)| stable_id)
+}
+
+pub fn apply_graphical_stable_selection(
+    presentation: &VisibleWorldPresentation,
+    stable_id: WorldEntityId,
+    local_entity: Option<Entity>,
+    selection: &mut SelectionResource,
+    inspector: &mut CreatureInspectorResource,
+    camera: &mut CameraNavigationResource,
+    runtime: &mut GraphicalRuntimeControlsResource,
+) -> Result<(), GameAppShellError> {
+    let selection_snapshot = crate::select_visible_world_entity(presentation, stable_id)?;
+    selection.stable_id = stable_id;
+    selection.local_entity = local_entity;
+    camera.state = camera.state.focus_on(selection_snapshot.position)?;
+    inspector.snapshot.selection = selection_snapshot;
+    runtime
+        .panel
+        .record_control_event(format!("Mouse selected stable:{}.", stable_id.raw()));
+    runtime.panel.validate()?;
+    Ok(())
+}
+
 fn advance_graphical_runtime_loop(
     time: Res<Time>,
     mut timer: ResMut<GraphicalRuntimeTickTimer>,
@@ -1473,14 +1597,16 @@ pub fn readability_legend_overlay_text() -> String {
 pub fn ca05_controls_bar_text() -> &'static str {
     concat!(
         "Controls\n",
-        "Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit\n",
+        "Left click select | Space run/pause | N step | R reset\n",
+        "1/2/3 speed | WASD/arrows pan | +/- zoom | Q/E orbit\n",
+        "F follow selected stable ID | Esc quit\n",
         "Guide: [@] creature | [+] food | [!] hazard | [#] obstacle\n",
         "Visuals mirror model state. Stable IDs only."
     )
 }
 
 pub fn alpha_controls_help_text() -> &'static str {
-    "Controls: Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit"
+    "Controls: Left click select | Space run/pause | N step | R reset | +/- zoom | F follow | Esc quit"
 }
 
 pub fn ca05_boundary_footer_text(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
