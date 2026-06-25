@@ -9,12 +9,13 @@ use alife_game_app::{
     run_graphical_save_load_menu_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
     run_longrun_balance_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_shell_config, AppShellLaunchConfig, EnvironmentManifest, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    run_playable_survival_loop_smoke, run_player_sandbox_editor_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_shell_config,
+    AppShellLaunchConfig, EnvironmentManifest, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
 };
 
 fn main() -> ExitCode {
@@ -214,6 +215,9 @@ fn run() -> Result<String, String> {
             let summary = run_world_editor_smoke().map_err(|err| err.to_string())?;
             Ok(format_world_editor_summary("G13 world editor", &summary))
         }
+        [command, rest @ ..] if command == "player-sandbox-editor-smoke" => {
+            run_player_sandbox_editor_cli(rest)
+        }
         [command] if command == "cognition-debug-smoke" => {
             let panel = run_cognition_debug_timeline_smoke().map_err(|err| err.to_string())?;
             Ok(format_cognition_debug_summary(
@@ -288,7 +292,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -364,6 +368,53 @@ fn run_environment_launch_smoke_cli(args: &[String]) -> Result<String, String> {
         .map_err(|err| err.to_string())?;
     Ok(format_environment_launcher_summary(
         "CA10 environment launcher",
+        &summary,
+    ))
+}
+
+fn run_player_sandbox_editor_cli(args: &[String]) -> Result<String, String> {
+    let mut manifest_path = alife_game_app::default_environment_manifest_path();
+    let mut scenario_id = None::<String>;
+    let mut output_path = None::<PathBuf>;
+    let mut index = 0_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--manifest requires a path".to_string())?;
+                manifest_path = PathBuf::from(value);
+                index += 2;
+            }
+            "--scenario" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--scenario requires an environment id".to_string())?;
+                scenario_id = Some(value.clone());
+                index += 2;
+            }
+            "--output" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--output requires a save path".to_string())?;
+                output_path = Some(PathBuf::from(value));
+                index += 2;
+            }
+            unknown => {
+                return Err(format!(
+                    "unknown player-sandbox-editor-smoke option: {unknown}"
+                ))
+            }
+        }
+    }
+    let summary = run_player_sandbox_editor_smoke(
+        &manifest_path,
+        scenario_id.as_deref(),
+        output_path.as_deref(),
+    )
+    .map_err(|err| err.to_string())?;
+    Ok(format_player_sandbox_editor_summary(
+        "CA11 player sandbox editor",
         &summary,
     ))
 }
@@ -1158,6 +1209,36 @@ fn format_world_editor_summary(
             .join("+"),
         summary.simulation_resumed,
         summary.resumed_patch_sealed,
+        summary.signature_line()
+    )
+}
+
+fn format_player_sandbox_editor_summary(
+    prefix: &str,
+    summary: &alife_game_app::PlayerSandboxEditorSmokeSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} scenario={} initial_objects={} final_objects={} place_remove_food={}/{} place_remove_hazard={}/{} place_remove_obstacle={}/{} pause_required={} save_bytes={} output_written={} stable_ids={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.scenario_id,
+        summary.initial_object_count,
+        summary.final_object_count,
+        summary.placed_food,
+        summary.removed_food,
+        summary.placed_hazard,
+        summary.removed_hazard,
+        summary.placed_obstacle,
+        summary.removed_obstacle,
+        summary.edit_mode_required,
+        summary.saved_json_bytes,
+        summary.output_written,
+        summary
+            .stable_ids
+            .iter()
+            .map(|id| id.raw().to_string())
+            .collect::<Vec<_>>()
+            .join("+"),
         summary.signature_line()
     )
 }

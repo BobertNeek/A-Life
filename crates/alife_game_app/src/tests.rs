@@ -86,6 +86,56 @@ fn ca10_environment_manifest_reports_known_scenarios_for_bad_selection() {
 }
 
 #[test]
+fn ca11_player_sandbox_editor_edits_default_manifest_scenario() {
+    let manifest_path = default_environment_manifest_path();
+    let summary = run_player_sandbox_editor_smoke(&manifest_path, None, None).unwrap();
+    assert_eq!(summary.schema, CA11_PLAYER_SANDBOX_EDITOR_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA11_PLAYER_SANDBOX_EDITOR_SCHEMA_VERSION
+    );
+    assert_eq!(summary.scenario_id, "gpu-alpha");
+    assert_eq!(summary.initial_object_count, 4);
+    assert!(summary.final_object_count > summary.initial_object_count);
+    assert!(summary.placed_food && summary.removed_food);
+    assert!(summary.placed_hazard && summary.removed_hazard);
+    assert!(summary.placed_obstacle && summary.removed_obstacle);
+    assert!(summary.edit_mode_required);
+    assert!(!summary.output_written);
+    assert!(summary
+        .player_status_lines
+        .iter()
+        .any(|line| line.contains("portable stable-ID save")));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca11_player_sandbox_editor_can_select_legacy_p34_scenario() {
+    let manifest_path = default_environment_manifest_path();
+    let summary = run_player_sandbox_editor_smoke(&manifest_path, Some("p34"), None).unwrap();
+    assert_eq!(summary.scenario_id, "p34");
+    assert_eq!(summary.initial_object_count, 2);
+    assert!(summary.final_object_count > summary.initial_object_count);
+    assert!(summary.stable_ids.iter().all(|id| id.raw() > 0));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca11_player_sandbox_editor_can_write_optional_save_output() {
+    let manifest_path = default_environment_manifest_path();
+    let output = std::env::temp_dir().join("alife_ca11_player_sandbox_editor_save.json");
+    let _ = std::fs::remove_file(&output);
+    let summary =
+        run_player_sandbox_editor_smoke(&manifest_path, Some("gpu-alpha"), Some(&output)).unwrap();
+    assert!(summary.output_written);
+    assert!(output.exists());
+    let saved = PortableSaveFile::from_json_file(&output).unwrap();
+    let restored = saved.restore_headless_world().unwrap();
+    assert_eq!(restored.object_count(), summary.final_object_count);
+    let _ = std::fs::remove_file(&output);
+}
+
+#[test]
 fn paused_state_path_is_explicit_and_deterministic() {
     let mut launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     launch.start_paused = true;
