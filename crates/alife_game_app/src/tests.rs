@@ -136,6 +136,54 @@ fn ca11_player_sandbox_editor_can_write_optional_save_output() {
 }
 
 #[test]
+fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
+    let summary = validate_app_bundle_manifest(default_app_bundle_manifest_path()).unwrap();
+    assert_eq!(summary.schema, CA12_APP_BUNDLE_MANIFEST_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA12_APP_BUNDLE_MANIFEST_SCHEMA_VERSION
+    );
+    assert_eq!(summary.environment_scenarios, 2);
+    assert_eq!(summary.config_entries, 6);
+    assert_eq!(summary.shader_assets, 5);
+    assert_eq!(summary.discovered_shader_assets, 5);
+    assert_eq!(summary.placeholder_art_entries, 4);
+    assert!(summary.shader_discovery_complete);
+    assert!(summary.tiny_placeholder_art);
+    assert!(!summary.large_binary_assets_committed);
+    assert!(summary.missing_required_rejected);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca12_app_bundle_manifest_rejects_missing_required_entries() {
+    let source = std::fs::read_to_string(default_app_bundle_manifest_path()).unwrap();
+    let broken = source.replace(
+        "crates/alife_world/tests/fixtures/gpu_alpha/tiny_config.json",
+        "crates/alife_world/tests/fixtures/gpu_alpha/missing_config.json",
+    );
+    let path = std::env::temp_dir().join("alife_ca12_broken_bundle_manifest.json");
+    std::fs::write(&path, broken).unwrap();
+    let err = validate_app_bundle_manifest(&path).unwrap_err().to_string();
+    assert!(err.contains("required app bundle entry is missing"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn ca12_app_bundle_manifest_rejects_missing_shader_assets() {
+    let source = std::fs::read_to_string(default_app_bundle_manifest_path()).unwrap();
+    let broken = source.replace(
+        "crates/alife_gpu_backend/shaders/p25_static_forward.wgsl",
+        "crates/alife_gpu_backend/shaders/missing_static_forward.wgsl",
+    );
+    let path = std::env::temp_dir().join("alife_ca12_broken_shader_manifest.json");
+    std::fs::write(&path, broken).unwrap();
+    let err = validate_app_bundle_manifest(&path).unwrap_err().to_string();
+    assert!(err.contains("required shader asset is missing"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn paused_state_path_is_explicit_and_deterministic() {
     let mut launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     launch.start_paused = true;
