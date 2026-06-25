@@ -344,9 +344,6 @@ const GRAPHICAL_WORLD_SCALE: f32 = 125.0;
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer(Timer);
 
-#[derive(Debug, Resource)]
-struct GraphicalRuntimeTickTimer(Timer);
-
 pub fn build_minimal_bevy_app_shell(summary: AppStartupSummary) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
@@ -490,10 +487,6 @@ pub fn build_graphical_playground_app_shell(
         .insert_resource(GraphicalAdvancedGameplayResource {
             summary: advanced.clone(),
         })
-        .insert_resource(GraphicalRuntimeTickTimer(Timer::from_seconds(
-            0.35,
-            TimerMode::Repeating,
-        )))
         .add_systems(
             Update,
             (
@@ -1373,22 +1366,36 @@ pub fn apply_graphical_stable_selection(
 
 fn advance_graphical_runtime_loop(
     time: Res<Time>,
-    mut timer: ResMut<GraphicalRuntimeTickTimer>,
     mut runtime: ResMut<GraphicalRuntimeControlsResource>,
     mut live_loop: NonSendMut<GraphicalRuntimeLoopResource>,
     mut gpu_telemetry: ResMut<GraphicalGpuTelemetryResource>,
 ) {
-    timer.0.tick(time.delta());
-    if !timer.0.just_finished() {
-        return;
-    }
-
     if let Some(target) = runtime.smoke_target_ticks {
         if runtime.smoke_ticks_done < target {
+            let delta_seconds = time.delta_secs();
+            let speed = runtime.panel.run_speed_ticks;
+            let plan = match runtime.panel.scheduler.observe_render_frame(
+                delta_seconds,
+                RuntimePlaybackState::Running,
+                speed,
+            ) {
+                Ok(plan) => plan,
+                Err(err) => {
+                    runtime
+                        .panel
+                        .record_terminal_recovery(format!("scheduler failed: {err}"));
+                    return;
+                }
+            };
+            let remaining = target.saturating_sub(runtime.smoke_ticks_done);
+            let ticks = plan.ticks_to_run.min(remaining);
+            if ticks == 0 {
+                return;
+            }
             match apply_graphical_runtime_command(
                 &mut runtime.panel,
                 &mut live_loop,
-                RuntimeControlCommand::StepOnce,
+                RuntimeControlCommand::RunForTicks(ticks),
             ) {
                 Ok(summaries) => {
                     runtime.smoke_ticks_done = runtime
@@ -1406,12 +1413,27 @@ fn advance_graphical_runtime_loop(
         return;
     }
 
-    if runtime.panel.playback == RuntimePlaybackState::Running {
-        let ticks = runtime.panel.run_speed_ticks;
+    let playback = runtime.panel.playback;
+    let speed = runtime.panel.run_speed_ticks;
+    let plan =
+        match runtime
+            .panel
+            .scheduler
+            .observe_render_frame(time.delta_secs(), playback, speed)
+        {
+            Ok(plan) => plan,
+            Err(err) => {
+                runtime
+                    .panel
+                    .record_terminal_recovery(format!("scheduler failed: {err}"));
+                return;
+            }
+        };
+    if runtime.panel.playback == RuntimePlaybackState::Running && plan.ticks_to_run > 0 {
         match apply_graphical_runtime_command(
             &mut runtime.panel,
             &mut live_loop,
-            RuntimeControlCommand::RunForTicks(ticks),
+            RuntimeControlCommand::RunForTicks(plan.ticks_to_run),
         ) {
             Ok(_) => {
                 gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
@@ -1445,6 +1467,11 @@ fn apply_graphical_runtime_command(
             panel.playback = RuntimePlaybackState::Paused;
             let summary = live_loop.gpu.tick(&mut live_loop.live)?;
             panel.record_tick(&summary);
+            panel
+                .scheduler
+                .record_executed_ticks(crate::executed_live_tick_count(std::slice::from_ref(
+                    &summary,
+                )))?;
             panel.mind_tick = live_loop.live.mind().current_tick().raw();
             panel.validate()?;
             Ok(vec![summary])
@@ -1465,6 +1492,9 @@ fn apply_graphical_runtime_command(
                 panel.record_tick(&summary);
                 summaries.push(summary);
             }
+            panel
+                .scheduler
+                .record_executed_ticks(crate::executed_live_tick_count(&summaries))?;
             panel.mind_tick = live_loop.live.mind().current_tick().raw();
             panel.validate()?;
             Ok(summaries)

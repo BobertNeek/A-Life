@@ -51,6 +51,7 @@ pub struct RuntimeControlPanel {
     pub packed_record_count: usize,
     pub player_events: Vec<String>,
     pub terminal_recovery_cause: Option<String>,
+    pub scheduler: DoubleBufferedGraphicalScheduler,
     pub direct_cognition_mutation_allowed: bool,
 }
 
@@ -76,6 +77,7 @@ impl RuntimeControlPanel {
                 "Creature, food, and hazard markers are presentation-only.".to_string(),
             ],
             terminal_recovery_cause: None,
+            scheduler: DoubleBufferedGraphicalScheduler::default(),
             direct_cognition_mutation_allowed: false,
         }
     }
@@ -98,6 +100,7 @@ impl RuntimeControlPanel {
                 message: "S02 controls must not mutate cognition directly",
             });
         }
+        self.scheduler.validate()?;
         Ok(())
     }
 
@@ -146,6 +149,8 @@ impl RuntimeControlPanel {
         for summary in &summaries {
             self.record_tick(summary);
         }
+        self.scheduler
+            .record_executed_ticks(executed_live_tick_count(&summaries))?;
         self.mind_tick = live.mind().current_tick().raw();
         self.validate()?;
         Ok(summaries)
@@ -162,6 +167,8 @@ impl RuntimeControlPanel {
         for summary in &summaries {
             self.record_tick(summary);
         }
+        self.scheduler
+            .record_executed_ticks(executed_live_tick_count(&summaries))?;
         self.mind_tick = live.mind().current_tick().raw();
         self.validate()?;
         Ok(summaries)
@@ -199,13 +206,14 @@ impl RuntimeControlPanel {
             });
         let event_lines = self.player_event_lines();
         format!(
-            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
+            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
             self.world_tick
                 .map_or_else(|| "pending".to_string(), |tick| tick.to_string()),
             backend_line,
+            self.scheduler.overlay_line(),
             goal,
             action,
             target,
@@ -237,6 +245,7 @@ impl RuntimeControlPanel {
                 "State: {}  Speed: {}x\n",
                 "Tick: {}  World: {}\n",
                 "{}\n",
+                "{}\n",
                 "Creature: stable:1\n",
                 "Goal: {}  Action: {}\n",
                 "Target: {}  Intent: {}\n",
@@ -250,6 +259,7 @@ impl RuntimeControlPanel {
             self.world_tick
                 .map_or_else(|| "pending".to_string(), |tick| tick.to_string()),
             backend_line,
+            self.scheduler.overlay_line(),
             goal,
             action,
             target,
@@ -276,7 +286,7 @@ impl RuntimeControlPanel {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}",
+            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}",
             self.schema,
             self.schema_version,
             self.playback.label(),
@@ -286,7 +296,8 @@ impl RuntimeControlPanel {
             self.selected_action_kind,
             self.last_patch_sealed,
             self.sealed_patch_count,
-            self.packed_record_count
+            self.packed_record_count,
+            self.scheduler.signature_line()
         )
     }
 
@@ -388,6 +399,13 @@ impl RuntimeControlPanel {
 }
 
 pub const S02_MAX_PLAYER_EVENT_LINES: usize = 5;
+
+pub fn executed_live_tick_count(summaries: &[LiveBrainTickSummary]) -> u32 {
+    summaries
+        .iter()
+        .filter(|summary| summary.tick_after.raw() > summary.tick_before.raw())
+        .count() as u32
+}
 
 pub fn action_badge_label(kind: ActionKind) -> &'static str {
     action_badge_label_for_target(kind, None)

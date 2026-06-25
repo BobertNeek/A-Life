@@ -4,8 +4,8 @@ use alife_game_app::{
     default_app_bundle_manifest_path, load_visible_world_from_p34_save,
     run_advanced_gameplay_ux_smoke, run_cognition_debug_timeline_smoke,
     run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_environment_launcher_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
-    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    run_double_buffered_scheduler_smoke, run_environment_launcher_smoke, run_feedback_polish_smoke,
+    run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_save_load_menu_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
@@ -132,6 +132,15 @@ fn run() -> Result<String, String> {
                 run_graphical_controls_smoke(&launch).map_err(|err| err.to_string())?;
             Ok(format_graphical_controls_summary(
                 "Alpha graphical controls",
+                &summary,
+            ))
+        }
+        [command, fixture_root] if command == "double-buffered-scheduler-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary =
+                run_double_buffered_scheduler_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format_double_buffered_scheduler_summary(
+                "CA13 double-buffered scheduler",
                 &summary,
             ))
         }
@@ -296,7 +305,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | double-buffered-scheduler-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -712,6 +721,30 @@ fn format_graphical_controls_summary(
         summary.runtime.panel.sealed_patch_count,
         !summary.overlay_text.contains("Entity("),
         summary.runtime.panel.signature_line()
+    )
+}
+
+fn format_double_buffered_scheduler_summary(
+    prefix: &str,
+    summary: &alife_game_app::DoubleBufferedSchedulerSmokeSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} fixed_hz={} render_hz={} paused={} sub_tick={} fixed_tick={} step={} catch_up={} alpha={:.3} buffers={}/{} drift_us={} frame_drift_prevented={} signature={}",
+        summary.scheduler.schema,
+        summary.scheduler.schema_version,
+        summary.scheduler.config.fixed_tick_hz,
+        summary.scheduler.config.target_render_hz,
+        summary.paused_ticks,
+        summary.sub_tick_due,
+        summary.fixed_tick_due,
+        summary.step_ticks,
+        summary.catch_up_ticks,
+        summary.scheduler.render_alpha(),
+        summary.scheduler.front_buffer.label(),
+        summary.scheduler.back_buffer.label(),
+        summary.scheduler.accumulator_micros,
+        summary.frame_driven_drift_prevented,
+        summary.scheduler.signature_line()
     )
 }
 
