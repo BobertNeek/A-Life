@@ -1,0 +1,1082 @@
+{
+  "schema_version": 1,
+  "pack": "creatures_agi_roadmap_pack",
+  "plans": [
+    {
+      "id": "CA00",
+      "title": "Roadmap pack import, baseline audit, and status wiring",
+      "phase": "A",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R0",
+      "depends_on": [],
+      "next": [
+        "CA01"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA01",
+      "title": "GPU-first visible playable loop",
+      "phase": "A",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA00"
+      ],
+      "next": [
+        "CA02"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA02",
+      "title": "GPU alpha fixture with creature, food, hazard, and obstacle",
+      "phase": "A",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA01"
+      ],
+      "next": [
+        "CA03"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA03",
+      "title": "Visible intent, movement, targeting, and interaction feedback",
+      "phase": "A",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA02"
+      ],
+      "next": [
+        "CA04"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA04",
+      "title": "Reset, terminal-state recovery, and alpha run loop stability",
+      "phase": "A",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA03"
+      ],
+      "next": [
+        "CAR04"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CAR04",
+      "title": "Playable loop review before UI/content expansion",
+      "phase": "A",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA01-CA04"
+      ],
+      "next": [
+        "CA05"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA05",
+      "title": "Mockup-inspired UI layer 1: structured panels",
+      "phase": "B",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CAR04"
+      ],
+      "next": [
+        "CA06"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA06",
+      "title": "Camera, mouse selection, follow, and zoom polish",
+      "phase": "B",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA05"
+      ],
+      "next": [
+        "CA07"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA07",
+      "title": "Inspector bars and readable creature state",
+      "phase": "B",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA06"
+      ],
+      "next": [
+        "CA08"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA08",
+      "title": "First sensory feedback layer: VFX and procedural audio stubs",
+      "phase": "B",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA07"
+      ],
+      "next": [
+        "CAR08"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CAR08",
+      "title": "UI readability review",
+      "phase": "B",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA05-CA08"
+      ],
+      "next": [
+        "CA09"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA09",
+      "title": "Player-facing save/load menu in graphical app",
+      "phase": "C",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CAR08"
+      ],
+      "next": [
+        "CA10"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA10",
+      "title": "Configuration-driven environment launcher",
+      "phase": "C",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA09"
+      ],
+      "next": [
+        "CA11"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA11",
+      "title": "Player sandbox editor v1",
+      "phase": "C",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA10"
+      ],
+      "next": [
+        "CA12"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA12",
+      "title": "Asset bundle automation and ingestion",
+      "phase": "C",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA11"
+      ],
+      "next": [
+        "CAR12"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CAR12",
+      "title": "Persistence and content review",
+      "phase": "C",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA09-CA12"
+      ],
+      "next": [
+        "CA13"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA13",
+      "title": "Double-buffered graphical/game tick scheduler",
+      "phase": "D",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CAR12"
+      ],
+      "next": [
+        "CA14"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA14",
+      "title": "Competitive motor ring arbitration presentation/runtime bridge",
+      "phase": "D",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA13"
+      ],
+      "next": [
+        "CA15"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA15",
+      "title": "Allocation-bounded endocrine/homeostasis runtime",
+      "phase": "D",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA14"
+      ],
+      "next": [
+        "CA16"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA16",
+      "title": "Non-scripted movement, approach, eat, and affordance loop",
+      "phase": "D",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA15"
+      ],
+      "next": [
+        "CA17"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA17",
+      "title": "Hazard avoidance, pain, sleep, and failure recovery",
+      "phase": "D",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA16"
+      ],
+      "next": [
+        "CAR17"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CAR17",
+      "title": "Core gameplay review",
+      "phase": "D",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA13-CA17"
+      ],
+      "next": [
+        "CA18"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA18",
+      "title": "Multi-creature graphical population v1",
+      "phase": "E",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CAR17"
+      ],
+      "next": [
+        "CA19"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA19",
+      "title": "Resource ecology and terrain zones in graphical play",
+      "phase": "E",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA18"
+      ],
+      "next": [
+        "CA20"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA20",
+      "title": "Lifecycle, reproduction, death, and lineage UI",
+      "phase": "E",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA19"
+      ],
+      "next": [
+        "CA21"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA21",
+      "title": "Behavior tuning metrics loop",
+      "phase": "E",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA20"
+      ],
+      "next": [
+        "CA22"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA22",
+      "title": "Long-run ecological soak and balancing",
+      "phase": "E",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA21"
+      ],
+      "next": [
+        "CAR22"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CAR22",
+      "title": "Ecosystem review",
+      "phase": "E",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA18-CA22"
+      ],
+      "next": [
+        "CA23"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA23",
+      "title": "Graphical school mode and lesson panel",
+      "phase": "F",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CAR22"
+      ],
+      "next": [
+        "CA24"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA24",
+      "title": "Teacher avatar, gestures, speech tokens, and perception-only gating",
+      "phase": "F",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA23"
+      ],
+      "next": [
+        "CA25"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA25",
+      "title": "Curriculum authoring and verifier UI",
+      "phase": "F",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA24"
+      ],
+      "next": [
+        "CA26"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA26",
+      "title": "Real semantic provider adapter v1",
+      "phase": "F",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA25"
+      ],
+      "next": [
+        "CA27"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA27",
+      "title": "Internal SLM subconscious prior adapter",
+      "phase": "F",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA26"
+      ],
+      "next": [
+        "CAR27"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CAR27",
+      "title": "School and semantic safety review",
+      "phase": "F",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA23-CA27"
+      ],
+      "next": [
+        "CA28"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA28",
+      "title": "Topological concept overlay",
+      "phase": "G",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CAR27"
+      ],
+      "next": [
+        "CA29"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA29",
+      "title": "Creature memory/history journal",
+      "phase": "G",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA28"
+      ],
+      "next": [
+        "CA30"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA30",
+      "title": "Neural activity and lobe profiler view",
+      "phase": "G",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA29"
+      ],
+      "next": [
+        "CA31"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA31",
+      "title": "Player lab tools for behavior comparison",
+      "phase": "G",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA30"
+      ],
+      "next": [
+        "CAR31"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CAR31",
+      "title": "Cognition inspection review",
+      "phase": "G",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA28-CA31"
+      ],
+      "next": [
+        "CA32"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA32",
+      "title": "Real-time WGSL telemetry in app",
+      "phase": "H",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CAR31"
+      ],
+      "next": [
+        "CA33"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA33",
+      "title": "Batched multi-creature GPU runtime",
+      "phase": "H",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA32"
+      ],
+      "next": [
+        "CA34"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA34",
+      "title": "Sampled CPU-shadow graduation experiment",
+      "phase": "H",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA33"
+      ],
+      "next": [
+        "CA35"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA35",
+      "title": "Property-fuzz CPU/GPU parity gating",
+      "phase": "H",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CA34"
+      ],
+      "next": [
+        "CA36"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA36",
+      "title": "Multi-hour soak isolation",
+      "phase": "H",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA35"
+      ],
+      "next": [
+        "CAR36"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CAR36",
+      "title": "Performance and parity review",
+      "phase": "H",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA32-CA36"
+      ],
+      "next": [
+        "CA37"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA37",
+      "title": "Terrain, props, and world art style pass",
+      "phase": "I",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CAR36"
+      ],
+      "next": [
+        "CA38"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA38",
+      "title": "Creature animation state machine",
+      "phase": "I",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA37"
+      ],
+      "next": [
+        "CA39"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA39",
+      "title": "Drive-coupled audio and VFX",
+      "phase": "I",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA38"
+      ],
+      "next": [
+        "CA40"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA40",
+      "title": "Onboarding tutorial first session",
+      "phase": "I",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA39"
+      ],
+      "next": [
+        "CAR40"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CAR40",
+      "title": "Polish and tutorial review",
+      "phase": "I",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA37-CA40"
+      ],
+      "next": [
+        "CA41"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA41",
+      "title": "Windows zip packaging and run script",
+      "phase": "J",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R2",
+      "depends_on": [
+        "CAR40"
+      ],
+      "next": [
+        "CA42"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA42",
+      "title": "Runtime prerequisite and GPU diagnostics launcher",
+      "phase": "J",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA41"
+      ],
+      "next": [
+        "CA43"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA43",
+      "title": "Crash logs and tester feedback capture",
+      "phase": "J",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R1",
+      "depends_on": [
+        "CA42"
+      ],
+      "next": [
+        "CA44"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA44",
+      "title": "External alpha/beta playtest loop",
+      "phase": "J",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R4",
+      "depends_on": [
+        "CA43"
+      ],
+      "next": [
+        "CA45"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA45",
+      "title": "Release candidate gate and tag proposal",
+      "phase": "J",
+      "type": "implementation",
+      "mode": "Review Gate",
+      "review_class": "R4",
+      "depends_on": [
+        "CA44"
+      ],
+      "next": [
+        "CAR45"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CAR45",
+      "title": "Release readiness review",
+      "phase": "J",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA41-CA45"
+      ],
+      "next": [
+        "CA46"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA46",
+      "title": "Autonomous curriculum generation safety shell",
+      "phase": "K",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CAR45"
+      ],
+      "next": [
+        "CA47"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA47",
+      "title": "Multi-agent culture and observational learning",
+      "phase": "K",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA46"
+      ],
+      "next": [
+        "CA48"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA48",
+      "title": "Open-ended task playgrounds",
+      "phase": "K",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA47"
+      ],
+      "next": [
+        "CA49"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA49",
+      "title": "World-model prediction and curiosity loop",
+      "phase": "K",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA48"
+      ],
+      "next": [
+        "CA50"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA50",
+      "title": "ETF neural collapse/meta-learning research loop",
+      "phase": "K",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA49"
+      ],
+      "next": [
+        "CA51"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA51",
+      "title": "Evolutionary curriculum and genome search",
+      "phase": "K",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA50"
+      ],
+      "next": [
+        "CA52"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA52",
+      "title": "Sleep/consolidation curriculum and long-horizon memory",
+      "phase": "K",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA51"
+      ],
+      "next": [
+        "CAR52"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CAR52",
+      "title": "Cognitive depth review",
+      "phase": "K",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA46-CA52"
+      ],
+      "next": [
+        "CA53"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA53",
+      "title": "Creatures-inspired baseline benchmark suite",
+      "phase": "L",
+      "type": "implementation",
+      "mode": "Micro-Spec",
+      "review_class": "R2",
+      "depends_on": [
+        "CAR52"
+      ],
+      "next": [
+        "CA54"
+      ],
+      "hard_stop": false
+    },
+    {
+      "id": "CA54",
+      "title": "Safety/control evaluation suite",
+      "phase": "L",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA53"
+      ],
+      "next": [
+        "CA55"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA55",
+      "title": "Emergent language and social communication research",
+      "phase": "L",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA54"
+      ],
+      "next": [
+        "CA56"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA56",
+      "title": "Continual learning and non-catastrophic adaptation",
+      "phase": "L",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA55"
+      ],
+      "next": [
+        "CA57"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA57",
+      "title": "Self-model, affordance planning, and counterfactual diagnostics",
+      "phase": "L",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R3",
+      "depends_on": [
+        "CA56"
+      ],
+      "next": [
+        "CA58"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA58",
+      "title": "Theoretical AGI evaluation suite",
+      "phase": "L",
+      "type": "implementation",
+      "mode": "Full Spec Loop",
+      "review_class": "R4",
+      "depends_on": [
+        "CA57"
+      ],
+      "next": [
+        "CA59"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CA59",
+      "title": "AGI research phase lock and handoff",
+      "phase": "L",
+      "type": "implementation",
+      "mode": "Review Gate",
+      "review_class": "R4",
+      "depends_on": [
+        "CA58"
+      ],
+      "next": [
+        "CAR59"
+      ],
+      "hard_stop": true
+    },
+    {
+      "id": "CAR59",
+      "title": "Final theoretical AGI review",
+      "phase": "L",
+      "type": "review",
+      "mode": "Review Gate",
+      "review_class": "R3",
+      "depends_on": [
+        "CA53-CA59"
+      ],
+      "next": [],
+      "hard_stop": true
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "created_utc": "2026-06-25",
+  "plan_files": 60,
+  "review_gate_files": 12,
+  "total_files": 90,
+  "root": "docs/creatures_agi_roadmap_pack",
+  "first_plan": "CA00",
+  "last_review": "CAR59"
+}
