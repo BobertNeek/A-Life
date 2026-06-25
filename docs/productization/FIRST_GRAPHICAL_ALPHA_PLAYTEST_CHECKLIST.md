@@ -22,7 +22,7 @@ Record yes/no plus notes for each item.
 | Window opens with title containing `A-Life GPU Alpha Playground`. |  |  |
 | Creature marker is visible and distinguishable. |  |  |
 | Food marker is visible and distinguishable. |  |  |
-| Hazard marker is visible in the GPU alpha fixture, or explicit guide text explains any fallback fixture. |  |  |
+| Hazard and obstacle markers are visible in the GPU alpha fixture, or explicit guide text explains any fallback fixture. |  |  |
 | Selected creature stable ID is visible. |  |  |
 | Space toggles pause/run. |  |  |
 | `N` steps once. |  |  |

@@ -31,7 +31,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playgr
 ## What Is Visible
 
 - Persistent `A-Life GPU Alpha Playground` window with the GPU alpha fixture.
-- Creature, food, and hazard markers from stable world IDs.
+- Creature, food, hazard, and obstacle markers from stable world IDs.
 - Runtime overlay with CPU/GPU mode, tick status, selected action, sealed patch
   count, fallback status, and controls.
 - Read-only inspector overlay with selected creature state and GPU runtime
@@ -60,8 +60,8 @@ GPU alpha fixture became the default:
 - Product claim: `CpuShadowGuardedStaticPlusLiveHShadow`
 
 The current GPU-first launcher uses the `gpu_alpha` fixture by default so the
-first screen includes a real hazard marker instead of P34 guide-only hazard
-text.
+first screen includes real hazard and obstacle markers instead of P34
+guide-only hazard/obstacle text.
 
 The local Vulkan loader emitted warnings about a missing validation layer and a
 deprecated GOG Galaxy overlay layer manifest. The graphical smoke still exited

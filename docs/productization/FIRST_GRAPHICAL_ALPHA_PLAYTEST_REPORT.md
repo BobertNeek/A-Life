@@ -25,7 +25,7 @@ Expected first screen:
 
 - title/status panel labelled `A-Life GPU Alpha Playground`
 - readable GPU-first runtime mode, tick, action, patch, and controls
-- visible creature, food, and hazard markers from stable IDs in the GPU alpha fixture
+- visible creature, food, hazard, and obstacle markers from stable IDs in the GPU alpha fixture
 - compact read-only inspector with selected stable ID and creature state
 - GPU section with requested mode, selected backend, fallback, product claim,
   CPU shadow parity, and H_shadow application count
@@ -53,7 +53,7 @@ player-facing mode and is not GPU performance evidence.
 
 - The legacy P34 tiny fixture contains creature and food objects; the default
   GPU alpha launcher now uses `crates/alife_world/tests/fixtures/gpu_alpha`,
-  which adds a real stable-ID hazard marker.
+  which adds real stable-ID hazard and obstacle markers.
 - The reset flow is available through `R` in the graphical shell; relaunch also
   remains safe.
 - The inspector is intentionally read-only.
