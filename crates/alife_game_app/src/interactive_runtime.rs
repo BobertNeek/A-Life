@@ -165,7 +165,10 @@ impl RuntimeControlPanel {
     }
 
     pub fn status_overlay_text(&self) -> String {
-        self.status_overlay_text_with_backend("GPU: CpuFallback", "Fallback: CPU reference")
+        self.status_overlay_text_with_backend(
+            "GPU: CpuFallback degraded",
+            "Gate: CPU shadow; fallback uses CPU reference",
+        )
     }
 
     pub fn status_overlay_text_with_backend(
@@ -191,8 +194,9 @@ impl RuntimeControlPanel {
             }
             _ => "",
         };
+        let event_lines = self.player_event_lines();
         format!(
-            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Patch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents:\n- GPU proposal accepted after CPU shadow parity\n- Patch sealed count={}\n- H_shadow learning shown in green pulse{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
+            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Patch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents:\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
@@ -204,10 +208,41 @@ impl RuntimeControlPanel {
             target,
             self.last_patch_sealed,
             self.sealed_patch_count,
-            self.sealed_patch_count,
+            event_lines,
             extra,
             terminal_note,
         )
+    }
+
+    fn player_event_lines(&self) -> String {
+        if self.last_status.is_none() {
+            return [
+                "- Press Space to run, or N to step one GPU-backed tick.",
+                "- GPU path is armed; first tick will verify CPU shadow parity.",
+                "- Creature, food, and hazard markers are presentation-only.",
+            ]
+            .join("\n");
+        }
+
+        let mut lines = Vec::new();
+        if let Some(status) = self.last_status {
+            lines.push(format!("- Tick advanced with status {status:?}."));
+        }
+        if let Some(action) = self.selected_action_kind {
+            let target = self
+                .target_entity
+                .map_or_else(|| "no target".to_string(), |id| format!("stable:{id}"));
+            lines.push(format!("- Creature chose {action:?} toward {target}."));
+        } else {
+            lines.push("- Creature produced no selected action this tick.".to_string());
+        }
+        if self.last_patch_sealed {
+            lines.push(format!("- Patch sealed count={}.", self.sealed_patch_count));
+        } else {
+            lines.push("- Patch not sealed yet; press R if simulation stops.".to_string());
+        }
+        lines.push("- H_shadow learning pulse appears when count rises.".to_string());
+        lines.join("\n")
     }
 
     pub fn signature_line(&self) -> String {

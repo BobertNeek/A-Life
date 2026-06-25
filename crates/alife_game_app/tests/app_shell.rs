@@ -1069,7 +1069,7 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
     let overlay = telemetry.overlay_lines();
     let inspector = telemetry.inspector_lines();
     assert!(overlay.contains("scores=true"));
-    assert!(overlay.contains("no bulk readback=true"));
+    assert!(overlay.contains("No bulk neural readback=true"));
     assert!(inspector.contains("Claim:"));
     assert!(inspector.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
     assert!(inspector.contains("Gate: CPU shadow"));
@@ -1082,6 +1082,38 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
     assert_eq!(pending.selected_backend, "PendingFirstTick");
     assert_eq!(pending.product_runtime_claim, "PendingTick");
     assert!(pending.fallback_reason.is_none());
+}
+
+#[test]
+fn graphical_runtime_overlay_is_gpu_first_without_false_pretick_events() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    let pending = GraphicalGpuRuntimeTelemetry::pending(
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+    );
+
+    let initial =
+        panel.status_overlay_text_with_backend(&pending.backend_line(), &pending.overlay_lines());
+    assert!(initial.contains("A-Life GPU Alpha Playground"));
+    assert!(initial.contains("Press Space to run, or N to step"));
+    assert!(initial.contains("GPU path is armed"));
+    assert!(initial.contains("Gate: CPU shadow"));
+    assert!(!initial.contains("GPU proposal accepted after CPU shadow parity"));
+    assert!(!initial.contains("Patch sealed count=0"));
+    assert!(!initial.contains("Entity("));
+
+    let step = panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    assert_eq!(step.len(), 1);
+    let stepped =
+        panel.status_overlay_text_with_backend(&pending.backend_line(), &pending.overlay_lines());
+    assert!(stepped.contains("Tick advanced with status Normal"));
+    assert!(stepped.contains("Creature chose Interact toward stable:2"));
+    assert!(stepped.contains("Patch sealed count=1"));
+    assert!(stepped.contains("H_shadow learning pulse appears"));
+    assert!(!stepped.contains("Entity("));
 }
 
 #[test]
