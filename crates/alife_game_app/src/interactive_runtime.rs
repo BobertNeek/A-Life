@@ -241,6 +241,56 @@ impl RuntimeControlSmokeSummary {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphicalControlSmokeSummary {
+    pub runtime: RuntimeControlSmokeSummary,
+    pub toggle_pause_run_verified: bool,
+    pub speed_sequence: [u32; 3],
+    pub follow_target: Option<WorldEntityId>,
+    pub exit_requested: bool,
+    pub overlay_text: String,
+}
+
+impl GraphicalControlSmokeSummary {
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        self.runtime.validate()?;
+        if !self.toggle_pause_run_verified {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical control smoke must verify Space-equivalent pause/run toggle",
+            });
+        }
+        if self.speed_sequence != [1, 2, 3] || self.runtime.panel.run_speed_ticks != 3 {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical control smoke must verify 1/2/3 speed semantics",
+            });
+        }
+        if self.follow_target != Some(WorldEntityId(1)) {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical control smoke must verify F-equivalent stable-ID follow",
+            });
+        }
+        if !self.exit_requested
+            || self.runtime.panel.playback != RuntimePlaybackState::ShutdownRequested
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical control smoke must verify Esc-equivalent exit request",
+            });
+        }
+        if !self.overlay_text.contains("Controls:")
+            || self.overlay_text.contains("Entity(")
+            || !self
+                .overlay_text
+                .contains("CPU fallback is not GPU performance")
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message:
+                    "graphical control smoke overlay must stay player-facing and stable-ID safe",
+            });
+        }
+        Ok(())
+    }
+}
+
 pub fn run_runtime_controls_smoke(
     launch: &AppShellLaunchConfig,
     run_ticks: u32,
@@ -263,6 +313,54 @@ pub fn run_runtime_controls_smoke(
         step_produced: step.len(),
         run_produced: run.len(),
         all_patches_sealed,
+    };
+    summary.validate()?;
+    Ok(summary)
+}
+
+pub fn run_graphical_controls_smoke(
+    launch: &AppShellLaunchConfig,
+) -> Result<GraphicalControlSmokeSummary, GameAppShellError> {
+    let presentation = load_visible_world_from_p34_save(launch)?;
+    let selection = select_visible_world_entity(&presentation, WorldEntityId(1))?;
+    let camera = CameraNavigationState::top_down_default()
+        .focus_on(selection.position)?
+        .with_follow_target(selection.stable_id)?;
+
+    let mut live = LiveBrainLoop::from_p34_launch(launch)?;
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    let paused = live.update(LiveBrainTickControl::paused())?;
+    panel.mind_tick = live.mind().current_tick().raw();
+    panel.validate()?;
+
+    panel.apply_command(&mut live, RuntimeControlCommand::TogglePause)?;
+    let toggle_pause_run_verified = panel.playback == RuntimePlaybackState::Running;
+    let step = panel.apply_command(&mut live, RuntimeControlCommand::StepOnce)?;
+    panel.apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(1))?;
+    panel.apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(2))?;
+    panel.apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(3))?;
+    let run = panel.apply_command(&mut live, RuntimeControlCommand::RunForTicks(3))?;
+    panel.apply_command(&mut live, RuntimeControlCommand::RequestExit)?;
+
+    let all_patches_sealed = step
+        .iter()
+        .chain(run.iter())
+        .all(|summary| summary.patch_sealed);
+    let overlay_text = panel.status_overlay_text();
+    let runtime = RuntimeControlSmokeSummary {
+        panel,
+        paused_produced: paused.len(),
+        step_produced: step.len(),
+        run_produced: run.len(),
+        all_patches_sealed,
+    };
+    let summary = GraphicalControlSmokeSummary {
+        runtime,
+        toggle_pause_run_verified,
+        speed_sequence: [1, 2, 3],
+        follow_target: camera.follow_target,
+        exit_requested: true,
+        overlay_text,
     };
     summary.validate()?;
     Ok(summary)

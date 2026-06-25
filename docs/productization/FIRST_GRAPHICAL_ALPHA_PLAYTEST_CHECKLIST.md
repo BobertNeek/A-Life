@@ -22,7 +22,7 @@ Record yes/no plus notes for each item.
 | Window opens with title containing `A-Life Alpha Playground`. |  |  |
 | Creature marker is visible and distinguishable. |  |  |
 | Food marker is visible and distinguishable. |  |  |
-| Hazard marker or hazard guide symbol is visible and distinguishable. |  |  |
+| Hazard marker or explicit hazard guide is visible. P34 may show guide-only. |  |  |
 | Selected creature stable ID is visible. |  |  |
 | Space toggles pause/run. |  |  |
 | `N` steps once. |  |  |
@@ -44,6 +44,19 @@ Record yes/no plus notes for each item.
 - Terminal output from the launcher command.
 - Hardware notes: OS, CPU, GPU, driver if known, display resolution.
 - Any rendering glitches, confusing text, or controls that did not work.
+
+## Local Control Evidence Fallback
+
+If keyboard injection or desktop automation cannot verify controls, run this
+deterministic command from the repository root and record its result separately
+from human tester evidence:
+
+```powershell
+cargo run -p alife_game_app --bin alife_game_app -- graphical-controls-smoke crates/alife_world/tests/fixtures/p34
+```
+
+This command verifies the Space/N/1/2/3/F/Esc-equivalent control semantics
+through the same app control surface without requiring foreground key input.
 
 ## Finding Severity
 

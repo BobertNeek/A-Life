@@ -20,8 +20,8 @@ Expected first screen:
 - title/status panel labelled `A-Life Alpha Playground`
 - readable runtime mode, tick, action, patch, and controls
 - visible creature and food markers from stable IDs
-- visible hazard guide symbol for tester recognition
-- read-only inspector with selected stable ID and compact creature state
+- explicit hazard guide text for tester recognition; P34 may be guide-only
+- compact read-only inspector with selected stable ID and creature state
 - GPU section with requested mode, selected backend, fallback, product claim,
   CPU shadow parity, and H_shadow application count
 
@@ -46,10 +46,13 @@ alpha path and is not GPU performance evidence.
 ## Known Limitations
 
 - The P34 tiny fixture contains a creature and food object; the hazard is
-  currently represented in the visual guide unless a richer fixture is loaded.
+  represented by explicit guide-only text unless a richer fixture is loaded.
 - The reset flow is relaunch-based for this alpha pass.
 - The inspector is intentionally read-only.
 - GPU and graphics evidence is local/manual unless captured on a tester machine.
+- Computer Use key injection may fail on this Windows desktop; use
+  `graphical-controls-smoke` as local deterministic control evidence and keep
+  independent human control evidence separate.
 - No release tag was created.
 
 ## Playtest Checklist

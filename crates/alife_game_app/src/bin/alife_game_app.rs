@@ -5,10 +5,10 @@ use alife_game_app::{
     run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
     run_creature_visual_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
-    run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_headless_app_shell_smoke,
-    run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke,
-    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_onboarding_help_smoke,
-    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
+    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_fixed_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
+    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
     run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
@@ -115,6 +115,15 @@ fn run() -> Result<String, String> {
             let summary = run_runtime_controls_smoke(&launch, ticks).map_err(|err| err.to_string())?;
             Ok(format_runtime_controls_summary(
                 "S02 runtime controls",
+                &summary,
+            ))
+        }
+        [command, fixture_root] if command == "graphical-controls-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary =
+                run_graphical_controls_smoke(&launch).map_err(|err| err.to_string())?;
+            Ok(format_graphical_controls_summary(
+                "Alpha graphical controls",
                 &summary,
             ))
         }
@@ -488,6 +497,26 @@ fn format_runtime_controls_summary(
         summary.panel.sealed_patch_count,
         summary.panel.packed_record_count,
         summary.panel.signature_line()
+    )
+}
+
+fn format_graphical_controls_summary(
+    prefix: &str,
+    summary: &alife_game_app::GraphicalControlSmokeSummary,
+) -> String {
+    format!(
+        "{prefix} toggle={} speed={:?} follow={:?} exit={} playback={} step={} run={} sealed={} patches={} stable_id_only={} signature={}",
+        summary.toggle_pause_run_verified,
+        summary.speed_sequence,
+        summary.follow_target.map(|id| id.raw()),
+        summary.exit_requested,
+        summary.runtime.panel.playback.label(),
+        summary.runtime.step_produced,
+        summary.runtime.run_produced,
+        summary.runtime.all_patches_sealed,
+        summary.runtime.panel.sealed_patch_count,
+        !summary.overlay_text.contains("Entity("),
+        summary.runtime.panel.signature_line()
     )
 }
 

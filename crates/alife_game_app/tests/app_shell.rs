@@ -9,10 +9,10 @@ use alife_game_app::{
     run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
-    run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_headless_app_shell_smoke,
-    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_longrun_balance_with_config, run_onboarding_help_smoke,
-    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
+    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
+    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
+    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
     run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
@@ -1013,9 +1013,10 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
     let inspector = telemetry.inspector_lines();
     assert!(overlay.contains("Scores=true"));
     assert!(overlay.contains("no active bulk readback=true"));
-    assert!(inspector.contains("Claim: CpuShadowGuardedStaticPlusLiveHShadow"));
-    assert!(inspector.contains("CPU shadow remains the gate"));
-    assert!(inspector.contains("not full action-authoritative"));
+    assert!(inspector.contains("Claim:"));
+    assert!(inspector.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
+    assert!(inspector.contains("Gate: CPU shadow"));
+    assert!(inspector.contains("No full action-authoritative claim"));
     assert!(!inspector.contains("Entity("));
 
     let pending = GraphicalGpuRuntimeTelemetry::pending(
@@ -1024,6 +1025,27 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
     assert_eq!(pending.selected_backend, "PendingFirstTick");
     assert_eq!(pending.product_runtime_claim, "PendingTick");
     assert!(pending.fallback_reason.is_none());
+}
+
+#[test]
+fn graphical_controls_smoke_verifies_first_tester_controls_without_key_injection() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let summary = run_graphical_controls_smoke(&launch).unwrap();
+
+    assert!(summary.toggle_pause_run_verified);
+    assert_eq!(summary.speed_sequence, [1, 2, 3]);
+    assert_eq!(summary.follow_target, Some(WorldEntityId(1)));
+    assert!(summary.exit_requested);
+    assert_eq!(
+        summary.runtime.panel.playback,
+        RuntimePlaybackState::ShutdownRequested
+    );
+    assert_eq!(summary.runtime.step_produced, 1);
+    assert!(summary.runtime.run_produced > 0);
+    assert!(summary.runtime.all_patches_sealed);
+    assert!(summary.overlay_text.contains("Controls:"));
+    assert!(!summary.overlay_text.contains("Entity("));
+    summary.validate().unwrap();
 }
 
 #[test]
@@ -2864,11 +2886,13 @@ fn bevy_feature_s03_inspector_overlay_is_read_only_and_stable_id_based() {
     assert!(overlay.contains("Stable ID: 1"));
     assert!(overlay.contains("Action: action=Some(Interact)"));
     assert!(overlay.contains("Patch: sealed=true"));
-    assert!(overlay.contains("stable IDs only"));
+    assert!(overlay.contains("Read-only stable IDs"));
     assert!(overlay.contains("GPU Runtime"));
     assert!(overlay.contains("Mode: cpu-reference"));
-    assert!(overlay.contains("read_only=true"));
+    assert!(overlay.contains("Gate: CPU shadow"));
+    assert!(overlay.contains("No full action-authoritative claim"));
     assert!(!overlay.contains("Entity("));
+    assert!(overlay.lines().all(|line| line.chars().count() <= 46));
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2909,6 +2933,7 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
     assert!(legend.contains("[@] creature"));
     assert!(legend.contains("[+] food"));
     assert!(legend.contains("[!] hazard"));
+    assert!(legend.contains("hazard is guide-only"));
     assert!(legend.contains("[#] obstacle"));
     assert!(legend.contains("presentation only"));
 
