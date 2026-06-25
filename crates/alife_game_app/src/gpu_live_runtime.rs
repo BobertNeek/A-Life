@@ -314,7 +314,7 @@ impl GraphicalGpuRuntimeTelemetry {
 
     pub fn overlay_lines(&self) -> String {
         format!(
-            "Details: claim={} scores={} parity={} fail={}\nLearning: H_shadow apps={} readback={}B\nBoundary: CPU shadow gate; not full action-authoritative; no bulk readback={}",
+            "GPU detail: claim={} scores={} parity={} fail={}\nLearn: H_shadow apps={} active_readback={}B\nGate: CPU shadow; not full action-authoritative\nNo bulk neural readback={}",
             self.product_runtime_claim,
             self.gpu_scores_used_for_proposals,
             self.cpu_shadow_parity,
