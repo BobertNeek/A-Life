@@ -45,6 +45,11 @@ fn p34_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/alife_world/tests/fixtures/p34")
 }
 
+fn gpu_alpha_fixture_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../crates/alife_world/tests/fixtures/gpu_alpha")
+}
+
 fn gpu_plasticity_env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
@@ -198,7 +203,7 @@ fn first_graphical_alpha_playtest_docs_and_launcher_are_current() {
         std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
 
     for text in [&checklist, &report, &launcher] {
-        assert!(text.contains("A-Life Alpha Playground"));
+        assert!(text.contains("A-Life GPU Alpha Playground"));
         assert!(text.contains("-GpuMode static-plastic-cpu-shadow-guarded"));
         assert!(text.contains("CPU fallback") || text.contains("fallback"));
         assert!(!text.contains("gpu-report"));
@@ -311,6 +316,25 @@ fn visible_world_signature_matches_restored_headless_fixture_objects() {
     assert_eq!(presentation.kind_count(WorldObjectKind::Food), 1);
     assert_eq!(presentation.stable_ids()[0].raw(), 1);
     assert_eq!(presentation.stable_ids()[1].raw(), 2);
+}
+
+#[test]
+fn gpu_alpha_fixture_adds_real_hazard_marker_without_changing_stable_id_contract() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let presentation = load_visible_world_from_p34_save(&launch).unwrap();
+    compare_visible_world_to_headless(&presentation).unwrap();
+    assert_eq!(presentation.object_count, 3);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Agent), 1);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Food), 1);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Hazard), 1);
+    assert_eq!(
+        presentation
+            .stable_ids()
+            .iter()
+            .map(|id| id.raw())
+            .collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
 }
 
 #[test]
@@ -944,7 +968,7 @@ fn s02_runtime_controls_pause_step_and_run_through_sealed_live_loop() {
     assert!(summary
         .panel
         .status_overlay_text()
-        .contains("A-Life Alpha Playground"));
+        .contains("A-Life GPU Alpha Playground"));
     summary.validate().unwrap();
 }
 
@@ -964,14 +988,35 @@ fn s02_runtime_controls_cannot_mutate_cognition_directly() {
 }
 
 #[test]
-fn graphical_gpu_launch_config_defaults_cpu_and_validates_requested_mode() {
-    let cpu = alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
-    assert_eq!(cpu.gpu_mode, GraphicalGpuRuntimeMode::CpuReference);
+fn graphical_gpu_launch_config_defaults_gpu_first_and_preserves_cpu_choice() {
+    let gpu_default =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
+    assert_eq!(
+        gpu_default.gpu_mode,
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
+    );
+    let default_summary =
+        alife_game_app::validate_graphical_playground_launch(&gpu_default).unwrap();
+    assert!(default_summary.gpu_mode_visible);
+    assert!(default_summary.cpu_fallback_visible);
+    assert_eq!(
+        default_summary.requested_gpu_mode,
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
+    );
+
+    let cpu = alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root())
+        .with_gpu_mode(GraphicalGpuRuntimeMode::CpuReference);
     let cpu_summary = alife_game_app::validate_graphical_playground_launch(&cpu).unwrap();
-    assert!(cpu_summary.gpu_mode_visible);
     assert_eq!(
         cpu_summary.requested_gpu_mode,
         GraphicalGpuRuntimeMode::CpuReference
+    );
+    assert!(
+        alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root())
+            .with_gpu_mode(GraphicalGpuRuntimeMode::CpuReference)
+            .require_gpu(true)
+            .validate()
+            .is_err()
     );
 
     let gpu = alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(p34_fixture_root(), 5)
@@ -982,6 +1027,7 @@ fn graphical_gpu_launch_config_defaults_cpu_and_validates_requested_mode() {
         GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
     );
     assert!(gpu_summary.cpu_fallback_visible);
+    assert!(!gpu_summary.require_gpu);
     assert!(gpu_summary
         .signature_line()
         .contains("gpu_mode=static-plastic"));
@@ -1011,8 +1057,8 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
     telemetry.validate().unwrap();
     let overlay = telemetry.overlay_lines();
     let inspector = telemetry.inspector_lines();
-    assert!(overlay.contains("Scores=true"));
-    assert!(overlay.contains("no active bulk readback=true"));
+    assert!(overlay.contains("scores=true"));
+    assert!(overlay.contains("no bulk readback=true"));
     assert!(inspector.contains("Claim:"));
     assert!(inspector.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
     assert!(inspector.contains("Gate: CPU shadow"));
@@ -2319,10 +2365,10 @@ fn bevy_feature_s08_runtime_overlay_reports_honest_gpu_status() {
         .unwrap();
     let overlay = panel.status_overlay_text();
 
-    assert!(overlay.contains("A-Life Alpha Playground"));
-    assert!(overlay.contains("CPU fallback is not GPU performance"));
-    assert!(overlay.contains("no active neural readback"));
-    assert!(overlay.contains("Controls: Space pause/run"));
+    assert!(overlay.contains("A-Life GPU Alpha Playground"));
+    assert!(overlay.contains("GPU: CpuFallback"));
+    assert!(overlay.contains("CPU shadow"));
+    assert!(overlay.contains("Controls: Space run/pause"));
 }
 
 #[test]
@@ -2933,7 +2979,7 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
     assert!(legend.contains("[@] creature"));
     assert!(legend.contains("[+] food"));
     assert!(legend.contains("[!] hazard"));
-    assert!(legend.contains("hazard is guide-only"));
+    assert!(legend.contains("P34 remains guide-only"));
     assert!(legend.contains("[#] obstacle"));
     assert!(legend.contains("presentation only"));
 
@@ -2963,12 +3009,14 @@ fn bevy_feature_alpha_overlay_text_is_first_tester_readable() {
 
     let playtest_note = alife_game_app::bevy_shell::alpha_playtest_status_note_text(&advanced);
     assert!(playtest_note.contains("Alpha Playtest Focus"));
-    assert!(playtest_note.contains("GPU optional"));
+    assert!(playtest_note.contains("GPU-first"));
+    assert!(playtest_note.contains("CPU fallback is degraded safety mode"));
     assert!(playtest_note.contains("Record: window"));
     assert!(!playtest_note.contains("full action-authoritative"));
 
     let controls = alife_game_app::bevy_shell::alpha_controls_help_text();
     assert!(controls.contains("Space run/pause"));
+    assert!(controls.contains("R reset"));
     assert!(controls.contains("Esc quit"));
 }
 

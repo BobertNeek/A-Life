@@ -1,0 +1,189 @@
+{
+  "schema": "alife.p34.save_file.v1",
+  "schema_version": 1,
+  "save_id": "gpu-alpha-fixture",
+  "deterministic_seed": 4242,
+  "config": {
+    "schema": "alife.p34.runtime_config.v1",
+    "schema_version": 1,
+    "deterministic_seed": 4242,
+    "brain_class": "Nano512",
+    "benchmark_population_tier": 1,
+    "backend": {
+      "requested": "CpuReference",
+      "gpu_feature_enabled": false,
+      "fallback_to_cpu": true,
+      "validation_required": true
+    },
+    "features": {
+      "school_enabled": false,
+      "semantic_adapter_enabled": false,
+      "gpu_backend_enabled": false,
+      "offline_tools_required": false
+    },
+    "school": {
+      "teacher_enabled": false,
+      "curriculum_id": null,
+      "save_teacher_private_state": false
+    },
+    "semantic": {
+      "provider": null,
+      "required": false,
+      "fake_provider_allowed": true
+    },
+    "gpu_limits": {
+      "max_storage_buffers": 16,
+      "neural_budget_ms": 4.0,
+      "no_active_gameplay_readback": true
+    },
+    "logging": {
+      "enabled": true,
+      "packed_log_schema_version": 1,
+      "max_side_buffer_bytes": 4194304,
+      "relative_log_path": null
+    },
+    "asset_root": "assets",
+    "save_root": "saves"
+  },
+  "assets": {
+    "schema": "alife.p34.asset_manifest.v1",
+    "schema_version": 1,
+    "entries": [
+      {
+        "asset_id": "tiny-generated-weights",
+        "kind": "GeneratedWeights",
+        "relative_path": "assets/tiny_generated_weights_ref.json",
+        "digest": "fnv1a64:f2ee994a00d74a0d",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": null,
+        "provenance": "tiny GPU alpha fixture reference, not a bulk tensor"
+      }
+    ]
+  },
+  "world": {
+    "seed": 4242,
+    "tick": 2,
+    "next_entity_id": 6,
+    "objects": [
+      {
+        "id": 1,
+        "label": "agent",
+        "kind": "Agent",
+        "organism_id": 1,
+        "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+        "radius": 0.75,
+        "nutrition": 0.0,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 2,
+        "label": "berry",
+        "kind": "Food",
+        "organism_id": null,
+        "position": { "x": 1.0, "y": 0.0, "z": 0.0 },
+        "radius": 0.75,
+        "nutrition": 0.75,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 3,
+        "label": "thorn",
+        "kind": "Hazard",
+        "organism_id": null,
+        "position": { "x": 0.25, "y": 0.0, "z": 1.0 },
+        "radius": 0.65,
+        "nutrition": 0.0,
+        "hazard_pain": 0.65,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      }
+    ],
+    "last_touched_entities": []
+  },
+  "creatures": [
+    {
+      "organism_id": 1,
+      "genome_id": 17,
+      "brain_class": "Nano512",
+      "development_tick": 3,
+      "mind": {
+        "tick": 3,
+        "homeostasis": {
+          "schema_version": 1,
+          "tick": 3,
+          "drives": {
+            "hunger": 0.25,
+            "fatigue": 0.2,
+            "fear": 0.1,
+            "pain": 0.0,
+            "loneliness": 0.15,
+            "curiosity": 0.45,
+            "brain_atp": 0.75,
+            "temperature_stress": 0.0,
+            "reproductive_drive": 0.1,
+            "extension": [0.0, 0.0]
+          },
+          "hormones": {
+            "adrenaline": 0.2,
+            "cortisol": 0.2,
+            "dopamine": 0.5,
+            "oxytocin": 0.5,
+            "serotonin": 0.6,
+            "acetylcholine": 0.5,
+            "learning_modulator": 0.5,
+            "developmental_hormone": 0.5,
+            "sleep_pressure": 0.2,
+            "extension": [0.0, 0.0]
+          }
+        },
+        "memory_record_count": 1,
+        "memory_source_ids": [],
+        "concept_count": 1,
+        "edge_count": 0,
+        "simplex_count": 0,
+        "unresolved_gap_count": 0,
+        "sleep_state_label": "awake",
+        "diagnostics": ["fixture", "gpu-alpha"]
+      },
+      "weights": {
+        "generated_weight_asset_id": "tiny-generated-weights",
+        "genetic_fixed_digest": "fnv1a64:0000000000000001",
+        "genetic_layer_mutable": false,
+        "lifetime_consolidated_entries": 0,
+        "h_operational_entries": 0,
+        "h_shadow_entries": 0
+      },
+      "learning": {
+        "lifetime_learning_enabled": true,
+        "lamarckian_mode_enabled": false,
+        "last_consolidated_tick": 2
+      }
+    }
+  ],
+  "school": {
+    "schema_version": 1,
+    "enabled": false,
+    "active_curriculum_id": null,
+    "teacher_private_state_saved": false
+  },
+  "adapter_remap": {
+    "entries": []
+  },
+  "generated_weight_asset_refs": ["tiny-generated-weights"],
+  "etf_prototype_asset_refs": [],
+  "packed_log_schema_version": 1
+}

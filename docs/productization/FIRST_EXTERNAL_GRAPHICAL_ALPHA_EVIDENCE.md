@@ -1,5 +1,10 @@
 # First External Graphical Alpha Evidence
 
+Superseding note: the local evidence below preserves pre-GPU-first window
+titles and P34 fixture observations. Current first-player graphical alpha
+testing should use `A-Life GPU Alpha Playground` with
+`crates/alife_world/tests/fixtures/gpu_alpha`.
+
 Status: local graphical alpha rehearsal complete; local Codex Computer Use
 tester evidence captured. Independent human external tester evidence is still
 `MANUAL_EVIDENCE_MISSING`.

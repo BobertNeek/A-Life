@@ -1,7 +1,7 @@
 # First Graphical Alpha Playtest Checklist
 
 Use this checklist for the first external tester pass on the graphical A-Life
-alpha playground. This is not release approval and does not create a tag.
+GPU alpha playground. This is not release approval and does not create a tag.
 
 ## Recommended Command
 
@@ -19,10 +19,10 @@ Record yes/no plus notes for each item.
 
 | Check | Result | Notes / Evidence |
 | --- | --- | --- |
-| Window opens with title containing `A-Life Alpha Playground`. |  |  |
+| Window opens with title containing `A-Life GPU Alpha Playground`. |  |  |
 | Creature marker is visible and distinguishable. |  |  |
 | Food marker is visible and distinguishable. |  |  |
-| Hazard marker or explicit hazard guide is visible. P34 may show guide-only. |  |  |
+| Hazard marker is visible in the GPU alpha fixture, or explicit guide text explains any fallback fixture. |  |  |
 | Selected creature stable ID is visible. |  |  |
 | Space toggles pause/run. |  |  |
 | `N` steps once. |  |  |
@@ -53,6 +53,7 @@ from human tester evidence:
 
 ```powershell
 cargo run -p alife_game_app --bin alife_game_app -- graphical-controls-smoke crates/alife_world/tests/fixtures/p34
+cargo run -p alife_game_app --bin alife_game_app -- graphical-controls-smoke crates/alife_world/tests/fixtures/gpu_alpha
 ```
 
 This command verifies the Space/N/1/2/3/F/Esc-equivalent control semantics
@@ -69,7 +70,8 @@ through the same app control surface without requiring foreground key input.
 
 ## Boundaries
 
-- GPU is optional and CPU fallback is allowed.
+- The player-facing alpha target is GPU-first.
+- CPU fallback is allowed as a degraded safety mode and must be visible.
 - CPU fallback is not GPU performance evidence.
 - CPU shadow remains the gate for the current GPU runtime claim.
 - Do not create S12, G25, P37, or a release tag from this checklist.

@@ -297,9 +297,16 @@ impl GraphicalGpuRuntimeTelemetry {
     }
 
     pub fn backend_line(&self) -> String {
+        let status = if self.fallback_reason.is_some() {
+            "CpuFallback degraded"
+        } else if self.requested_mode.requests_gpu() {
+            "GpuPlastic"
+        } else {
+            "CpuReference"
+        };
         format!(
-            "Runtime mode: {}\nSelected: {}  fallback={}",
-            self.requested_mode.label(),
+            "GPU: {}  selected={}  fallback={}",
+            status,
             self.selected_backend,
             self.fallback_reason.as_deref().unwrap_or("none")
         )
@@ -307,12 +314,13 @@ impl GraphicalGpuRuntimeTelemetry {
 
     pub fn overlay_lines(&self) -> String {
         format!(
-            "GPU claim: {}\nScores={} parity={} failures={} H_shadow_apps={}\nBoundary: CPU shadow gate; no active bulk readback={}",
+            "Details: claim={} scores={} parity={} fail={}\nLearning: H_shadow apps={} readback={}B\nBoundary: CPU shadow gate; not full action-authoritative; no bulk readback={}",
             self.product_runtime_claim,
             self.gpu_scores_used_for_proposals,
             self.cpu_shadow_parity,
             self.parity_failures,
             self.h_shadow_applications,
+            self.compact_readback_bytes,
             self.no_active_bulk_readback,
         )
     }
@@ -323,7 +331,7 @@ impl GraphicalGpuRuntimeTelemetry {
                 "GPU Runtime\n",
                 "Mode: {}\n",
                 "Backend: {}\n",
-                "Fallback: {}\n",
+                "Fallback/degraded: {}\n",
                 "Claim:\n  {}\n",
                 "Scores={} parity={} fail={}\n",
                 "H_shadow apps={} last={:.5}\n",

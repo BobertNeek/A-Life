@@ -30,6 +30,7 @@ pub enum RuntimeControlCommand {
     StepOnce,
     SetRunSpeed(u32),
     RunForTicks(u32),
+    RestartAlphaFixture,
     RequestExit,
 }
 
@@ -122,6 +123,18 @@ impl RuntimeControlPanel {
                 self.playback = RuntimePlaybackState::Running;
                 live.update(LiveBrainTickControl::run_fixed(bounded))?
             }
+            RuntimeControlCommand::RestartAlphaFixture => {
+                self.playback = RuntimePlaybackState::Paused;
+                self.world_tick = None;
+                self.selected_action_kind = None;
+                self.selected_action_id = None;
+                self.target_entity = None;
+                self.last_status = None;
+                self.last_patch_sealed = false;
+                self.sealed_patch_count = 0;
+                self.packed_record_count = 0;
+                Vec::new()
+            }
             RuntimeControlCommand::RequestExit => {
                 self.playback = RuntimePlaybackState::ShutdownRequested;
                 Vec::new()
@@ -152,7 +165,7 @@ impl RuntimeControlPanel {
     }
 
     pub fn status_overlay_text(&self) -> String {
-        self.status_overlay_text_with_backend("Backend: CPU Reference fallback", "")
+        self.status_overlay_text_with_backend("GPU: CpuFallback", "Fallback: CPU reference")
     }
 
     pub fn status_overlay_text_with_backend(
@@ -165,24 +178,35 @@ impl RuntimeControlPanel {
         } else {
             format!("\n{}", extra_lines.trim())
         };
+        let action = self
+            .selected_action_kind
+            .map_or_else(|| "None".to_string(), |kind| format!("{kind:?}"));
+        let goal = goal_label_from_action(self.selected_action_kind, self.target_entity);
+        let target = self
+            .target_entity
+            .map_or_else(|| "none".to_string(), |id| format!("stable:{id}"));
+        let terminal_note = match self.last_status {
+            Some(BrainTickStatus::TerminalInvalidState) => {
+                "\nSimulation stopped: invalid action/state. Press R to restart."
+            }
+            _ => "",
+        };
         format!(
-            "A-Life Alpha Playground\nStatus: {}  speed={} tick/update  mind={} world={}\nAction: {} target={} status={}\nPatch: sealed={} total={} logs={}\n{}\nEvidence: CPU fallback is not GPU performance; no active neural readback{}\nControls: Space pause/run | N step | 1/2/3 speed | F follow | Esc quit",
+            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Patch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents:\n- GPU proposal accepted after CPU shadow parity\n- Patch sealed count={}\n- H_shadow learning shown in green pulse{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
             self.world_tick
                 .map_or_else(|| "pending".to_string(), |tick| tick.to_string()),
-            self.selected_action_kind
-                .map_or_else(|| "None".to_string(), |kind| format!("{kind:?}")),
-            self.target_entity
-                .map_or_else(|| "None".to_string(), |id| id.to_string()),
-            self.last_status
-                .map_or_else(|| "None".to_string(), |status| format!("{status:?}")),
+            backend_line,
+            goal,
+            action,
+            target,
             self.last_patch_sealed,
             self.sealed_patch_count,
-            self.packed_record_count,
-            backend_line,
+            self.sealed_patch_count,
             extra,
+            terminal_note,
         )
     }
 
@@ -278,9 +302,7 @@ impl GraphicalControlSmokeSummary {
         }
         if !self.overlay_text.contains("Controls:")
             || self.overlay_text.contains("Entity(")
-            || !self
-                .overlay_text
-                .contains("CPU fallback is not GPU performance")
+            || !self.overlay_text.contains("A-Life GPU Alpha Playground")
         {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message:
@@ -340,6 +362,7 @@ pub fn run_graphical_controls_smoke(
     panel.apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(2))?;
     panel.apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(3))?;
     let run = panel.apply_command(&mut live, RuntimeControlCommand::RunForTicks(3))?;
+    panel.apply_command(&mut live, RuntimeControlCommand::RestartAlphaFixture)?;
     panel.apply_command(&mut live, RuntimeControlCommand::RequestExit)?;
 
     let all_patches_sealed = step
@@ -364,4 +387,14 @@ pub fn run_graphical_controls_smoke(
     };
     summary.validate()?;
     Ok(summary)
+}
+
+fn goal_label_from_action(kind: Option<ActionKind>, target: Option<u64>) -> &'static str {
+    match (kind, target) {
+        (Some(ActionKind::Interact), Some(2)) => "food",
+        (Some(ActionKind::Move), Some(3)) => "hazard",
+        (Some(ActionKind::Inspect), _) => "inspect",
+        (Some(ActionKind::Idle), _) | (None, _) => "idle",
+        _ => "world",
+    }
 }

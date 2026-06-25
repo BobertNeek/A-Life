@@ -1,30 +1,37 @@
 # Graphical GPU Playability Report
 
-Status: product-facing graphical GPU mode added as an optional Bevy playground
-launch path.
+Status: product-facing graphical GPU mode is now the default Bevy alpha
+playground launch path. CPU fallback remains available but is presented as a
+degraded safety mode rather than the target player experience.
 
 ## Command
 
 ```powershell
-cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/p34 --gpu-mode static-plastic-cpu-shadow-guarded
+cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/gpu_alpha --gpu-mode static-plastic-cpu-shadow-guarded
 ```
 
 Bounded manual smoke:
 
 ```powershell
-cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/p34 --gpu-mode static-plastic-cpu-shadow-guarded --smoke-seconds 20
+cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/gpu_alpha --gpu-mode static-plastic-cpu-shadow-guarded --smoke-seconds 20
 ```
 
 Windows launcher:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 20
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 20 -GpuMode static-plastic-cpu-shadow-guarded
+```
+
+GPU-required evidence smoke:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 20 -GpuMode static-plastic-cpu-shadow-guarded -RequireGpu
 ```
 
 ## What Is Visible
 
-- Persistent A-Life window with the P34 tiny world fixture.
-- Creature, food, hazard, obstacle/token markers from stable world IDs.
+- Persistent `A-Life GPU Alpha Playground` window with the GPU alpha fixture.
+- Creature, food, and hazard markers from stable world IDs.
 - Runtime overlay with CPU/GPU mode, tick status, selected action, sealed patch
   count, fallback status, and controls.
 - Read-only inspector overlay with selected creature state and GPU runtime
@@ -39,7 +46,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playgr
 The graphical path reuses the existing combined runtime claim:
 `CpuShadowGuardedStaticPlusLiveHShadow`.
 
-Local 20-second graphical smoke result on this machine:
+Earlier local 20-second graphical smoke result on this machine, before the
+GPU alpha fixture became the default:
 
 - Command: `cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/p34 --gpu-mode static-plastic-cpu-shadow-guarded --smoke-seconds 20`
 - Selected GPU backend: `GpuPlastic`
@@ -50,6 +58,10 @@ Local 20-second graphical smoke result on this machine:
 - Sealed patches: `16`
 - Packed logs: `16`
 - Product claim: `CpuShadowGuardedStaticPlusLiveHShadow`
+
+The current GPU-first launcher uses the `gpu_alpha` fixture by default so the
+first screen includes a real hazard marker instead of P34 guide-only hazard
+text.
 
 The local Vulkan loader emitted warnings about a missing validation layer and a
 deprecated GOG Galaxy overlay layer manifest. The graphical smoke still exited
@@ -75,8 +87,9 @@ If GPU runtime is unavailable or forced off with:
 $env:ALIFE_GPU_RUNTIME_AVAILABLE="0"
 ```
 
-the graphical app continues through CPU reference ticks and displays CPU fallback
-status. CPU fallback is not GPU performance evidence.
+the graphical app continues through CPU reference ticks unless `-RequireGpu` is
+set, and displays CPU fallback as degraded status. CPU fallback is not GPU
+performance evidence.
 
 Local forced-fallback graphical smoke result:
 
@@ -93,6 +106,7 @@ Local forced-fallback graphical smoke result:
 
 - Space: pause/run
 - N: step once
+- R: reset/restart alpha fixture
 - 1/2/3: speed
 - arrows/WASD: pan
 - +/-: zoom
