@@ -5,7 +5,7 @@ use alife_core::{
 use alife_game_app::{
     compare_visible_world_to_headless, g17_feedback_manifest_path, g17_workspace_root,
     load_visible_world_from_p34_save, project_lod_without_behavior_change,
-    run_advanced_gameplay_ux_smoke, run_cognition_debug_timeline_smoke,
+    run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke, run_cognition_debug_timeline_smoke,
     run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
     run_double_buffered_scheduler_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
@@ -1174,6 +1174,77 @@ fn ca15_runtime_panel_updates_homeostasis_after_live_step() {
 }
 
 #[test]
+fn ca16_affordance_loop_approaches_then_eats_without_scripted_forcing() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_affordance_loop_smoke(&launch).unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::CA16_AFFORDANCE_LOOP_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::CA16_AFFORDANCE_LOOP_SCHEMA_VERSION
+    );
+    assert_eq!(summary.food_entity, WorldEntityId(2));
+    assert!(summary.moved_toward_food);
+    assert!(summary.initial_food_distance > summary.after_approach_food_distance);
+    assert_eq!(
+        summary.approach_tick.selected_action_kind,
+        Some(ActionKind::Move)
+    );
+    assert_eq!(
+        summary.approach_tick.selected_action_id,
+        Some(HeadlessActionIds::APPROACH)
+    );
+    assert_eq!(
+        summary.eat_tick.selected_action_kind,
+        Some(ActionKind::Interact)
+    );
+    assert_eq!(
+        summary.eat_tick.selected_action_id,
+        Some(HeadlessActionIds::EAT)
+    );
+    assert_eq!(
+        summary.approach_tick.target_entity,
+        Some(summary.food_entity)
+    );
+    assert_eq!(summary.eat_tick.target_entity, Some(summary.food_entity));
+    assert_eq!(
+        summary.eat_tick.physical_contact,
+        Some(alife_core::PhysicalContactKind::Consumed)
+    );
+    assert!(summary.approach_tick.patch_sealed);
+    assert!(summary.eat_tick.patch_sealed);
+    assert!(summary.sealed_patches >= 2);
+    assert!(summary.food_consumed);
+    assert!(!summary.food_visible_after_eat);
+    assert!(summary.hunger_after < summary.hunger_before);
+    assert!(summary.energy_after > summary.energy_before);
+    assert!(summary.normal_arbitration_preserved);
+    assert!(summary.no_scripted_action_forcing);
+    assert!(!summary.signature.contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca16_live_loop_uses_approach_when_food_is_outside_eat_radius() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    let summaries = panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    let first = summaries
+        .first()
+        .expect("CA16 should produce one live tick");
+
+    assert_eq!(first.selected_action_kind, Some(ActionKind::Move));
+    assert_eq!(first.selected_action_id, Some(HeadlessActionIds::APPROACH));
+    assert_eq!(first.target_entity, Some(WorldEntityId(2)));
+    assert!(first.patch_sealed);
+    assert_eq!(first.patch_success, Some(true));
+    assert!(first.action_failure.is_none());
+}
+
+#[test]
 fn graphical_gpu_launch_config_defaults_gpu_first_and_preserves_cpu_choice() {
     let gpu_default =
         alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
@@ -1288,15 +1359,24 @@ fn graphical_runtime_overlay_is_gpu_first_without_false_pretick_events() {
     let stepped =
         panel.status_overlay_text_with_backend(&pending.backend_line(), &pending.overlay_lines());
     assert!(stepped.contains("Tick advanced with status Normal"));
-    assert!(stepped.contains("Creature action EAT toward stable:2"));
+    assert!(stepped.contains("Creature action APPROACH toward stable:2"));
     assert!(stepped.contains("Intent line stable:1 -> stable:2"));
-    assert!(stepped.contains("Food interaction cue highlighted"));
     assert!(stepped.contains("Patch sealed count=1"));
     assert_eq!(
         panel.player_events.len(),
         alife_game_app::S02_MAX_PLAYER_EVENT_LINES
     );
+    assert_eq!(
+        panel.intent_marker_label(),
+        "stable:1 -> stable:2 (APPROACH)"
+    );
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
     assert_eq!(panel.intent_marker_label(), "stable:1 -> stable:2 (EAT)");
+    let eaten =
+        panel.status_overlay_text_with_backend(&pending.backend_line(), &pending.overlay_lines());
+    assert!(eaten.contains("Food interaction cue highlighted"));
     assert!(!stepped.contains("Entity("));
 }
 
@@ -1574,10 +1654,17 @@ fn ca03_action_badges_are_player_facing_and_stable_id_safe() {
         .apply_command(&mut live, RuntimeControlCommand::StepOnce)
         .unwrap();
 
-    assert_eq!(panel.intent_marker_label(), "stable:1 -> stable:2 (EAT)");
+    assert_eq!(
+        panel.intent_marker_label(),
+        "stable:1 -> stable:2 (APPROACH)"
+    );
     assert!(panel
         .status_overlay_text()
-        .contains("Intent: stable:1 -> stable:2 (EAT)"));
+        .contains("Intent: stable:1 -> stable:2 (APPROACH)"));
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    assert_eq!(panel.intent_marker_label(), "stable:1 -> stable:2 (EAT)");
     assert!(!panel.status_overlay_text().contains("Entity("));
 
     panel.selected_action_kind = Some(ActionKind::Move);
