@@ -91,6 +91,9 @@ pub use release_candidate::*;
 mod graphical_playground;
 pub use graphical_playground::*;
 
+mod environment_launcher;
+pub use environment_launcher::*;
+
 mod interactive_runtime;
 pub use interactive_runtime::*;
 

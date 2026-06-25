@@ -3,7 +3,11 @@ use crate::prelude::*;
 use super::*;
 
 fn p34_fixture_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/alife_world/tests/fixtures/p34")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/p34")
+}
+
+fn path_ends_with(path: &Path, suffix: &str) -> bool {
+    path.to_string_lossy().replace('\\', "/").ends_with(suffix)
 }
 
 #[test]
@@ -21,6 +25,64 @@ fn headless_app_shell_loads_p34_config_and_manifest() {
         summary.state_labels(),
         vec!["Boot", "LoadConfig", "DevMenu", "Running", "Shutdown"]
     );
+}
+
+#[test]
+fn ca10_environment_manifest_validates_and_selects_default_gpu_alpha() {
+    let manifest_path = default_environment_manifest_path();
+    let manifest = EnvironmentManifest::from_json_file(&manifest_path).unwrap();
+    manifest.validate(&manifest_path).unwrap();
+    assert_eq!(manifest.schema, CA10_ENVIRONMENT_MANIFEST_SCHEMA);
+    assert_eq!(
+        manifest.schema_version,
+        CA10_ENVIRONMENT_MANIFEST_SCHEMA_VERSION
+    );
+    assert_eq!(manifest.default_scenario_id, "gpu-alpha");
+    assert_eq!(manifest.scenario_ids(), vec!["gpu-alpha", "p34"]);
+
+    let summary = run_environment_launcher_smoke(&manifest_path, None).unwrap();
+    assert_eq!(summary.schema, CA10_ENVIRONMENT_MANIFEST_SCHEMA);
+    assert_eq!(summary.selected_scenario_id, "gpu-alpha");
+    assert_eq!(summary.scenario_count, 2);
+    assert!(path_ends_with(
+        &summary.fixture_root,
+        "crates/alife_world/tests/fixtures/gpu_alpha"
+    ));
+    assert_eq!(summary.seed, 4242);
+    assert_eq!(summary.object_count, 4);
+    assert_eq!(summary.creature_count, 1);
+    assert_eq!(summary.food_count, 1);
+    assert_eq!(summary.hazard_count, 1);
+    assert_eq!(summary.obstacle_count, 1);
+    assert!(summary
+        .player_visible_error_sample
+        .contains("Unknown scenario"));
+}
+
+#[test]
+fn ca10_environment_manifest_can_select_legacy_p34_fixture() {
+    let manifest_path = default_environment_manifest_path();
+    let summary = run_environment_launcher_smoke(&manifest_path, Some("p34")).unwrap();
+    assert_eq!(summary.selected_scenario_id, "p34");
+    assert!(path_ends_with(
+        &summary.fixture_root,
+        "crates/alife_world/tests/fixtures/p34"
+    ));
+    assert_eq!(summary.object_count, 2);
+    assert_eq!(summary.creature_count, 1);
+    assert_eq!(summary.food_count, 1);
+    assert_eq!(summary.hazard_count, 0);
+    assert_eq!(summary.obstacle_count, 0);
+}
+
+#[test]
+fn ca10_environment_manifest_reports_known_scenarios_for_bad_selection() {
+    let manifest_path = default_environment_manifest_path();
+    let err = select_environment_scenario(&manifest_path, Some("missing-arena"))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("unknown environment scenario 'missing-arena'"));
+    assert!(err.contains("Known scenarios: gpu-alpha, p34"));
 }
 
 #[test]
@@ -138,8 +200,13 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     assert!(script.contains("[switch]$DryRun"));
     assert!(script.contains("[int]$SmokeSeconds"));
     assert!(script.contains("[string]$GpuMode"));
+    assert!(script.contains("[string]$Scenario"));
+    assert!(script.contains("[string]$EnvironmentManifest"));
     assert!(script.contains("[string]$GraphicsBackend"));
     assert!(script.contains("graphical-playground"));
+    assert!(script.contains("--scenario"));
+    assert!(script.contains("gpu-alpha"));
+    assert!(script.contains("Environment manifest:"));
     assert!(script.contains("--gpu-mode"));
     assert!(script.contains("--smoke-seconds"));
     assert!(script.contains("bevy-app gpu-runtime"));
@@ -151,6 +218,7 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     assert!(script.contains("overriding inherited WGPU_BACKEND"));
     assert!(script.contains("-GraphicsBackend vulkan"));
     assert!(!script.contains("\"visible-world-smoke\""));
+    assert!(!script.contains("$ModeArgs += \"crates/alife_world/tests/fixtures/gpu_alpha\""));
 }
 
 #[test]

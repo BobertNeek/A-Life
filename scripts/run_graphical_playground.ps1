@@ -4,6 +4,9 @@ param(
     [int]$SmokeSeconds = 0,
     [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
     [string]$GpuMode = "static-plastic-cpu-shadow-guarded",
+    [ValidateSet("gpu-alpha", "p34")]
+    [string]$Scenario = "gpu-alpha",
+    [string]$EnvironmentManifest = "",
     [ValidateSet("auto", "dx12", "vulkan", "existing")]
     [string]$GraphicsBackend = "auto",
     [switch]$RequireGpu
@@ -14,14 +17,16 @@ $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 
 if ($SmokeSeconds -gt 0) {
     $ModeArgs = @("graphical-playground")
-    $ModeArgs += "crates/alife_world/tests/fixtures/gpu_alpha"
-    $ModeArgs += @("--gpu-mode", $GpuMode, "--smoke-seconds", "$SmokeSeconds")
+    $ModeArgs += @("--scenario", $Scenario, "--gpu-mode", $GpuMode, "--smoke-seconds", "$SmokeSeconds")
     $ModeLabel = "bounded graphical playground smoke"
 } else {
     $ModeArgs = @("graphical-playground")
-    $ModeArgs += "crates/alife_world/tests/fixtures/gpu_alpha"
-    $ModeArgs += @("--gpu-mode", $GpuMode)
+    $ModeArgs += @("--scenario", $Scenario, "--gpu-mode", $GpuMode)
     $ModeLabel = "persistent graphical playground"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($EnvironmentManifest)) {
+    $ModeArgs += @("--manifest", $EnvironmentManifest)
 }
 
 if ($RequireGpu) {
@@ -58,6 +63,12 @@ Write-Host "A-Life $ModeLabel command:"
 $DisplayCommand = ($Command | ForEach-Object { Format-CommandArgument $_ }) -join " "
 Write-Host $DisplayCommand
 Write-Host "Alpha tester command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 30 -GpuMode static-plastic-cpu-shadow-guarded"
+Write-Host "Scenario requested: $Scenario"
+if (-not [string]::IsNullOrWhiteSpace($EnvironmentManifest)) {
+    Write-Host "Environment manifest: $EnvironmentManifest"
+} else {
+    Write-Host "Environment manifest: crates/alife_game_app/environment_manifest.json"
+}
 Write-Host "GPU mode requested: $GpuMode"
 Write-Host "CPU fallback is safety fallback, not the target alpha path."
 Write-Host "Graphics backend requested: $GraphicsBackend"
