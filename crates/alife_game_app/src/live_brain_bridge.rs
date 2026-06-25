@@ -162,6 +162,10 @@ impl LiveBrainLoop {
         &self.mind
     }
 
+    pub(crate) fn mind_homeostasis_mut(&mut self) -> &mut HomeostaticSnapshot {
+        self.mind.homeostasis_mut()
+    }
+
     pub fn initialize_neural_projection_schema(
         &mut self,
         schema: NeuralProjectionSchema,

@@ -10,10 +10,10 @@ use alife_game_app::{
     run_double_buffered_scheduler_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
-    run_headless_app_shell_smoke, run_homeostasis_runtime_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
-    run_longrun_balance_with_config, run_motor_ring_arbitration_smoke, run_onboarding_help_smoke,
-    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_hazard_recovery_smoke, run_headless_app_shell_smoke, run_homeostasis_runtime_smoke,
+    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    run_longrun_balance_smoke, run_longrun_balance_with_config, run_motor_ring_arbitration_smoke,
+    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
     run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
@@ -1242,6 +1242,55 @@ fn ca16_live_loop_uses_approach_when_food_is_outside_eat_radius() {
     assert!(first.patch_sealed);
     assert_eq!(first.patch_success, Some(true));
     assert!(first.action_failure.is_none());
+}
+
+#[test]
+fn ca17_hazard_recovery_smoke_covers_avoidance_pain_sleep_and_failure_recovery() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_hazard_recovery_smoke(&launch).unwrap();
+
+    assert_eq!(summary.schema, alife_game_app::CA17_HAZARD_RECOVERY_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::CA17_HAZARD_RECOVERY_SCHEMA_VERSION
+    );
+    assert!(summary.fixture_hazard_visible);
+    assert_eq!(summary.hazard_entity, WorldEntityId(2));
+    assert!(summary.hazard_salience > 0.0);
+    assert!(summary.visible_hazard_cue);
+    assert!(summary.after_flee_hazard_distance > summary.initial_hazard_distance);
+    assert_eq!(
+        summary.flee_tick.selected_action_kind,
+        Some(ActionKind::Move)
+    );
+    assert_eq!(
+        summary.flee_tick.selected_action_id,
+        Some(HeadlessActionIds::FLEE)
+    );
+    assert_eq!(summary.flee_tick.target_entity, Some(summary.hazard_entity));
+    assert!(summary.flee_tick.patch_sealed);
+    assert!(summary.flee_tick.action_failure.is_none());
+    assert_eq!(
+        summary.pain_tick.physical_contact,
+        Some(alife_core::PhysicalContactKind::Collision)
+    );
+    assert!(summary.pain_after_contact > summary.pain_before);
+    assert!(summary.fear_after_contact > summary.fear_before);
+    assert_eq!(
+        summary.sleep_tick.selected_action_kind,
+        Some(ActionKind::Rest)
+    );
+    assert_ne!(summary.sleep_phase_after, alife_core::SleepPhase::Awake);
+    assert!(summary.fatigue_after_sleep < summary.fatigue_before_sleep);
+    assert!(summary.failure_tick.action_failure.is_some());
+    assert!(summary.failure_tick.patch_sealed);
+    assert!(summary.recovery_tick.patch_sealed);
+    assert!(summary.failure_recovered_with_sealed_patch);
+    assert!(summary.terminal_stagnation_avoided);
+    assert!(summary.normal_arbitration_preserved);
+    assert!(summary.no_scripted_terminal_escape);
+    assert!(!summary.signature.contains("Entity("));
+    summary.validate().unwrap();
 }
 
 #[test]

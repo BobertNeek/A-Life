@@ -372,14 +372,28 @@ impl RuntimeControlPanel {
                     (ActionKind::Interact, 2) => {
                         self.push_player_event("Food interaction cue highlighted.".to_string())
                     }
-                    (ActionKind::Move, 3) => {
+                    (ActionKind::Move, _)
+                        if summary.selected_action_id == Some(HeadlessActionIds::FLEE) =>
+                    {
                         self.push_player_event("Hazard avoidance cue highlighted.".to_string())
                     }
                     _ => {}
                 }
             }
+            if matches!(action, ActionKind::Rest) {
+                self.push_player_event("Sleep/rest transition cue highlighted.".to_string());
+            }
         } else {
             self.push_player_event("Creature produced no selected action this tick.".to_string());
+        }
+        if summary.physical_contact == Some(PhysicalContactKind::Collision) {
+            self.push_player_event("Hazard pain/fear feedback visible.".to_string());
+        }
+        if let Some(failure) = summary.action_failure {
+            self.push_player_event(format!(
+                "Recoverable failure {:?}; next sealed tick can continue.",
+                failure
+            ));
         }
         if summary.patch_sealed {
             self.push_player_event(format!(

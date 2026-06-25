@@ -113,6 +113,9 @@ pub use homeostasis_runtime::*;
 mod affordance_loop;
 pub use affordance_loop::*;
 
+mod hazard_recovery_loop;
+pub use hazard_recovery_loop::*;
+
 mod population_social;
 pub use population_social::*;
 
