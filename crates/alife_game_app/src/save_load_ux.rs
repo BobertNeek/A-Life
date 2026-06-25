@@ -125,7 +125,7 @@ impl SaveSlotMetadata {
             deterministic_seed: Some(save.deterministic_seed),
             world_tick: Some(save.world.tick),
             object_count: save.world.objects.len(),
-            stable_world_ids: save.world.objects.iter().map(|object| object.id).collect(),
+            stable_world_ids: sorted_save_world_ids(save),
             schema: Some(save.schema.clone()),
             schema_version: Some(save.schema_version),
             json_bytes,
@@ -691,12 +691,7 @@ impl GraphicalSaveLoadMenuSession {
     }
 
     pub fn stable_world_ids(&self) -> Vec<WorldEntityId> {
-        self.source_save
-            .world
-            .objects
-            .iter()
-            .map(|object| object.id)
-            .collect()
+        sorted_save_world_ids(&self.source_save)
     }
 
     pub fn last_error(&self) -> Option<&SaveLoadErrorDisplay> {
@@ -725,6 +720,17 @@ impl GraphicalSaveLoadMenuSession {
         }
         Ok(())
     }
+}
+
+fn sorted_save_world_ids(save: &PortableSaveFile) -> Vec<WorldEntityId> {
+    let mut ids = save
+        .world
+        .objects
+        .iter()
+        .map(|object| object.id)
+        .collect::<Vec<_>>();
+    ids.sort_by_key(|id| id.raw());
+    ids
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

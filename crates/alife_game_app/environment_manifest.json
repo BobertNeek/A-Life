@@ -6,13 +6,13 @@
     {
       "id": "gpu-alpha",
       "title": "GPU Alpha Playground",
-      "description": "Default GPU-first alpha arena with creature, food, hazard, and obstacle markers.",
+      "description": "Default GPU-first alpha arena with three stable-ID creatures, food, hazard, obstacle, and social proximity cues.",
       "fixture_root": "../alife_world/tests/fixtures/gpu_alpha",
       "config_file": "tiny_config.json",
       "asset_manifest_file": "tiny_asset_manifest.json",
       "save_file": "tiny_save.json",
       "player_visible": true,
-      "tags": ["gpu-first", "alpha", "creature", "food", "hazard", "obstacle"]
+      "tags": ["gpu-first", "alpha", "population", "creature", "food", "hazard", "obstacle"]
     },
     {
       "id": "p34",

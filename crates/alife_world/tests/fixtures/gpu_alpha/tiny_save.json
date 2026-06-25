@@ -64,7 +64,7 @@
   "world": {
     "seed": 4242,
     "tick": 2,
-    "next_entity_id": 6,
+    "next_entity_id": 7,
     "objects": [
       {
         "id": 1,
@@ -77,6 +77,36 @@
         "hazard_pain": 0.0,
         "token_id": null,
         "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 5,
+        "label": "forager",
+        "kind": "Agent",
+        "organism_id": 2,
+        "position": { "x": -1.35, "y": 0.0, "z": -0.65 },
+        "radius": 0.70,
+        "nutrition": 0.0,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": 0.35,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 6,
+        "label": "watcher",
+        "kind": "Agent",
+        "organism_id": 3,
+        "position": { "x": 1.10, "y": 0.0, "z": -1.10 },
+        "radius": 0.70,
+        "nutrition": 0.0,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": -0.15,
         "teacher_channel": null,
         "consumed": false,
         "carried_by": null
@@ -177,6 +207,122 @@
       "weights": {
         "generated_weight_asset_id": "tiny-generated-weights",
         "genetic_fixed_digest": "fnv1a64:0000000000000001",
+        "genetic_layer_mutable": false,
+        "lifetime_consolidated_entries": 0,
+        "h_operational_entries": 0,
+        "h_shadow_entries": 0
+      },
+      "learning": {
+        "lifetime_learning_enabled": true,
+        "lamarckian_mode_enabled": false,
+        "last_consolidated_tick": 2
+      }
+    },
+    {
+      "organism_id": 2,
+      "genome_id": 18,
+      "brain_class": "Nano512",
+      "development_tick": 3,
+      "mind": {
+        "tick": 3,
+        "homeostasis": {
+          "schema_version": 1,
+          "tick": 3,
+          "drives": {
+            "hunger": 0.35,
+            "fatigue": 0.16,
+            "fear": 0.08,
+            "pain": 0.0,
+            "loneliness": 0.22,
+            "curiosity": 0.52,
+            "brain_atp": 0.72,
+            "temperature_stress": 0.0,
+            "reproductive_drive": 0.08,
+            "extension": [0.0, 0.0]
+          },
+          "hormones": {
+            "adrenaline": 0.18,
+            "cortisol": 0.18,
+            "dopamine": 0.52,
+            "oxytocin": 0.54,
+            "serotonin": 0.58,
+            "acetylcholine": 0.5,
+            "learning_modulator": 0.48,
+            "developmental_hormone": 0.5,
+            "sleep_pressure": 0.16,
+            "extension": [0.0, 0.0]
+          }
+        },
+        "memory_record_count": 1,
+        "memory_source_ids": [],
+        "concept_count": 1,
+        "edge_count": 0,
+        "simplex_count": 0,
+        "unresolved_gap_count": 0,
+        "sleep_state_label": "awake",
+        "diagnostics": ["fixture", "gpu-alpha", "ca18-population"]
+      },
+      "weights": {
+        "generated_weight_asset_id": "tiny-generated-weights",
+        "genetic_fixed_digest": "fnv1a64:0000000000000002",
+        "genetic_layer_mutable": false,
+        "lifetime_consolidated_entries": 0,
+        "h_operational_entries": 0,
+        "h_shadow_entries": 0
+      },
+      "learning": {
+        "lifetime_learning_enabled": true,
+        "lamarckian_mode_enabled": false,
+        "last_consolidated_tick": 2
+      }
+    },
+    {
+      "organism_id": 3,
+      "genome_id": 19,
+      "brain_class": "Nano512",
+      "development_tick": 3,
+      "mind": {
+        "tick": 3,
+        "homeostasis": {
+          "schema_version": 1,
+          "tick": 3,
+          "drives": {
+            "hunger": 0.18,
+            "fatigue": 0.24,
+            "fear": 0.16,
+            "pain": 0.0,
+            "loneliness": 0.12,
+            "curiosity": 0.60,
+            "brain_atp": 0.76,
+            "temperature_stress": 0.0,
+            "reproductive_drive": 0.07,
+            "extension": [0.0, 0.0]
+          },
+          "hormones": {
+            "adrenaline": 0.24,
+            "cortisol": 0.20,
+            "dopamine": 0.48,
+            "oxytocin": 0.46,
+            "serotonin": 0.62,
+            "acetylcholine": 0.5,
+            "learning_modulator": 0.50,
+            "developmental_hormone": 0.5,
+            "sleep_pressure": 0.24,
+            "extension": [0.0, 0.0]
+          }
+        },
+        "memory_record_count": 1,
+        "memory_source_ids": [],
+        "concept_count": 1,
+        "edge_count": 0,
+        "simplex_count": 0,
+        "unresolved_gap_count": 0,
+        "sleep_state_label": "awake",
+        "diagnostics": ["fixture", "gpu-alpha", "ca18-population"]
+      },
+      "weights": {
+        "generated_weight_asset_id": "tiny-generated-weights",
+        "genetic_fixed_digest": "fnv1a64:0000000000000003",
         "genetic_layer_mutable": false,
         "lifetime_consolidated_entries": 0,
         "h_operational_entries": 0,
