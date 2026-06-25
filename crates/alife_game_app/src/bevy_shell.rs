@@ -21,16 +21,18 @@ use bevy::{
 };
 
 use crate::{
+    ca18_cycle_selected_creature, ca18_graphical_population_summary, ca18_social_proximity_cues,
     load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke,
     run_creature_visual_smoke, run_headless_app_shell_smoke, run_live_brain_loop_smoke,
-    AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary, CameraNavigationState,
-    CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
-    CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
-    GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
-    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
-    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
-    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
+    AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
+    Ca18GraphicalPopulationSummary, CameraNavigationState, CreatureAnimationState,
+    CreatureExpressionState, CreatureInspectorSnapshot, CreatureVisualSnapshot,
+    EntitySelectionSnapshot, GameAppShellError, GameAppState, GraphicalGpuRuntimeController,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
+    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
+    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
+    S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -126,6 +128,11 @@ pub struct VisibleCreatureState {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalPlaygroundSceneResource {
     pub summary: GraphicalPlaygroundLaunchSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalPopulationResource {
+    pub summary: Ca18GraphicalPopulationSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -245,6 +252,15 @@ pub struct ReadabilityLegendOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct FeedbackCueOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalPopulationOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalSocialProximityCue {
+    pub from_stable_id: WorldEntityId,
+    pub to_stable_id: WorldEntityId,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct SaveLoadMenuOverlay;
@@ -439,6 +455,7 @@ pub fn build_graphical_playground_app_shell(
     let summary = crate::validate_graphical_playground_launch(launch)?;
     let presentation = load_visible_world_from_p34_save(&launch.app_launch)?;
     crate::compare_visible_world_to_headless(&presentation)?;
+    let population_summary = ca18_graphical_population_summary(&presentation).ok();
 
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -492,6 +509,7 @@ pub fn build_graphical_playground_app_shell(
             (
                 handle_graphical_runtime_input,
                 handle_graphical_camera_selection_input,
+                handle_graphical_population_cycle_input,
                 handle_graphical_mouse_selection,
                 advance_graphical_runtime_loop,
                 update_graphical_camera_transform,
@@ -502,11 +520,15 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_feedback_pulses,
                 update_graphical_intent_feedback,
                 update_graphical_feedback_overlay,
+                update_graphical_population_overlay,
                 update_graphical_boundary_footer_overlay,
                 update_graphical_save_load_menu_overlay,
                 update_graphical_advanced_gameplay_overlay,
             ),
         );
+    if let Some(summary) = population_summary {
+        app.insert_resource(GraphicalPopulationResource { summary });
+    }
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
         app.insert_resource(GraphicalPlaygroundSmokeTimer(Timer::from_seconds(
@@ -536,6 +558,10 @@ pub fn build_ca03_intent_feedback_preview_app_shell(
         panel,
         smoke_target_ticks: None,
         smoke_ticks_done: 0,
+    })
+    .insert_resource(SelectionResource {
+        stable_id: WorldEntityId(1),
+        local_entity: None,
     })
     .add_systems(Update, update_graphical_intent_feedback);
     Ok(app)
@@ -689,6 +715,7 @@ fn spawn_graphical_playground_scene(
     }
     spawn_graphical_intent_feedback(app);
     spawn_ca08_feedback_pulses(app, presentation);
+    spawn_ca18_social_proximity_cues(app, presentation);
 
     app.insert_resource(VisibleWorldSceneResource {
         schema: presentation.schema,
@@ -721,6 +748,26 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.02, 0.03, 0.025, 0.82)),
         RuntimeStatusOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA18 graphical population overlay"),
+        Text::new("Population: loading stable-ID creatures..."),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.88, 0.96, 1.0)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(222.0),
+            left: Val::Px(12.0),
+            max_width: Val::Px(390.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.02, 0.035, 0.04, 0.78)),
+        GraphicalPopulationOverlay,
     ));
 
     app.world_mut().spawn((
@@ -825,6 +872,53 @@ fn spawn_graphical_playground_scene(
     ));
 
     Ok(())
+}
+
+fn spawn_ca18_social_proximity_cues(app: &mut App, presentation: &VisibleWorldPresentation) {
+    for cue in ca18_social_proximity_cues(presentation) {
+        let Some(from) = presentation
+            .objects
+            .iter()
+            .find(|object| object.stable_id == cue.from_stable_id)
+        else {
+            continue;
+        };
+        let Some(to) = presentation
+            .objects
+            .iter()
+            .find(|object| object.stable_id == cue.to_stable_id)
+        else {
+            continue;
+        };
+        let start = graphical_position(from);
+        let end = graphical_position(to);
+        let delta = end - start;
+        let length = (delta.x * delta.x + delta.y * delta.y).sqrt();
+        if length <= 1.0 {
+            continue;
+        }
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life CA18 social cue stable:{}-stable:{}",
+                cue.from_stable_id.raw(),
+                cue.to_stable_id.raw()
+            )),
+            Sprite {
+                color: Color::srgba(0.30, 0.82, 1.0, 0.28),
+                custom_size: Some(Vec2::new(length, 3.0)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new((start.x + end.x) * 0.5, (start.y + end.y) * 0.5, 0.22),
+                rotation: bevy::prelude::Quat::from_rotation_z(delta.y.atan2(delta.x)),
+                ..default()
+            },
+            GraphicalSocialProximityCue {
+                from_stable_id: cue.from_stable_id,
+                to_stable_id: cue.to_stable_id,
+            },
+        ));
+    }
 }
 
 fn spawn_graphical_intent_feedback(app: &mut App) {
@@ -1309,6 +1403,45 @@ fn handle_graphical_mouse_selection(
     }
 }
 
+fn handle_graphical_population_cycle_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    map: Res<BevyEntityMap>,
+    presentation: Res<GraphicalVisibleWorldPresentationResource>,
+    mut selection: ResMut<SelectionResource>,
+    mut inspector: ResMut<CreatureInspectorResource>,
+    mut camera_state: ResMut<CameraNavigationResource>,
+    mut runtime: ResMut<GraphicalRuntimeControlsResource>,
+) {
+    if !keyboard.just_pressed(KeyCode::Tab) {
+        return;
+    }
+    let Some(next_stable_id) =
+        ca18_cycle_selected_creature(&presentation.presentation, selection.stable_id)
+    else {
+        runtime
+            .panel
+            .record_control_event("No next creature available for Tab cycle.");
+        return;
+    };
+    let local_entity = map.bevy_entity(next_stable_id);
+    if apply_graphical_stable_selection(
+        &presentation.presentation,
+        next_stable_id,
+        local_entity,
+        &mut selection,
+        &mut inspector,
+        &mut camera_state,
+        &mut runtime,
+    )
+    .is_ok()
+    {
+        runtime.panel.record_control_event(format!(
+            "Cycled selected creature to stable:{}.",
+            next_stable_id.raw()
+        ));
+    }
+}
+
 pub fn ca06_marker_hit_radius(kind: WorldObjectKind) -> f32 {
     match kind {
         WorldObjectKind::Agent => 54.0,
@@ -1658,6 +1791,18 @@ fn update_graphical_feedback_pulses(
     }
 }
 
+fn update_graphical_population_overlay(
+    population: Option<Res<GraphicalPopulationResource>>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalPopulationOverlay>>,
+) {
+    let Some(population) = population else {
+        return;
+    };
+    for mut text in &mut overlays {
+        text.0 = population.summary.compact_overlay_text();
+    }
+}
+
 fn ca08_pulse_active(
     kind: Ca08SensoryCueKind,
     runtime: &RuntimeControlPanel,
@@ -1688,6 +1833,7 @@ fn ca08_pulse_color(kind: Ca08SensoryCueKind, active: bool) -> Color {
 
 fn update_graphical_intent_feedback(
     runtime: Res<GraphicalRuntimeControlsResource>,
+    selection: Res<SelectionResource>,
     markers: bevy::prelude::Query<
         (&GraphicalPlaygroundMarker, &Transform),
         (Without<GraphicalIntentLine>, Without<GraphicalActionBadge>),
@@ -1706,7 +1852,7 @@ fn update_graphical_intent_feedback(
     let target = runtime.panel.target_entity.map(WorldEntityId);
 
     for (marker, transform) in &markers {
-        if marker.kind == WorldObjectKind::Agent && marker.stable_id == WorldEntityId(1) {
+        if marker.kind == WorldObjectKind::Agent && marker.stable_id == selection.stable_id {
             creature_position = Some(transform.translation);
         }
         if Some(marker.stable_id) == target {
@@ -1990,16 +2136,16 @@ pub fn readability_legend_overlay_text() -> String {
 pub fn ca05_controls_bar_text() -> &'static str {
     concat!(
         "Controls\n",
-        "Left click select | Space run/pause | N step | R reset\n",
+        "Left click select | Tab cycle creatures | Space run/pause | N step | R reset\n",
         "1/2/3 speed | WASD/arrows pan | +/- zoom | Q/E orbit\n",
         "F follow selected stable ID | M save/load | F5 save | F9 load | Esc quit\n",
-        "Guide: [@] creature | [+] food | [!] hazard | [#] obstacle\n",
+        "Guide: [@] creature | [+] food | [!] hazard | [#] obstacle | blue social cue\n",
         "Visuals mirror model state. Stable IDs only."
     )
 }
 
 pub fn alpha_controls_help_text() -> &'static str {
-    "Controls: Left click select | Space run/pause | N step | R reset | M save/load | F5 save | F9 load | +/- zoom | F follow | Esc quit"
+    "Controls: Left click select | Tab cycle creatures | Space run/pause | N step | R reset | M save/load | F5 save | F9 load | +/- zoom | F follow | Esc quit"
 }
 
 pub fn ca05_boundary_footer_text(gpu: &GraphicalGpuRuntimeTelemetry) -> String {

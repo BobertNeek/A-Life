@@ -3,36 +3,38 @@ use alife_core::{
     CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, Validate, WorldEntityId,
 };
 use alife_game_app::{
-    compare_visible_world_to_headless, g17_feedback_manifest_path, g17_workspace_root,
-    load_visible_world_from_p34_save, project_lod_without_behavior_change,
-    run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke, run_cognition_debug_timeline_smoke,
-    run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_double_buffered_scheduler_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
-    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    ca18_creature_selection_ids, ca18_cycle_selected_creature, compare_visible_world_to_headless,
+    g17_feedback_manifest_path, g17_workspace_root, load_visible_world_from_p34_save,
+    project_lod_without_behavior_change, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
+    run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
+    run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_feedback_polish_smoke,
+    run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
-    run_hazard_recovery_smoke, run_headless_app_shell_smoke, run_homeostasis_runtime_smoke,
-    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_longrun_balance_with_config, run_motor_ring_arbitration_smoke,
-    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, Ca13TickBuffer, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, DoubleBufferedGraphicalScheduler, FeedbackAssetKind, FeedbackAssetManifest,
-    FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
-    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
-    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
-    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    run_graphical_population_smoke, run_hazard_recovery_smoke, run_headless_app_shell_smoke,
+    run_homeostasis_runtime_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
+    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
+    run_motor_ring_arbitration_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, DoubleBufferedGraphicalScheduler,
+    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
+    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel,
+    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
     RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
     SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
     WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
-    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    CA18_MAX_GRAPHICAL_CREATURES, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -332,12 +334,13 @@ fn visible_world_signature_matches_restored_headless_fixture_objects() {
 }
 
 #[test]
-fn gpu_alpha_fixture_adds_real_hazard_and_obstacle_markers_without_changing_stable_id_contract() {
+fn gpu_alpha_fixture_adds_multi_creature_hazard_and_obstacle_markers_without_changing_stable_id_contract(
+) {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();
     compare_visible_world_to_headless(&presentation).unwrap();
-    assert_eq!(presentation.object_count, 4);
-    assert_eq!(presentation.kind_count(WorldObjectKind::Agent), 1);
+    assert_eq!(presentation.object_count, 6);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Agent), 3);
     assert_eq!(presentation.kind_count(WorldObjectKind::Food), 1);
     assert_eq!(presentation.kind_count(WorldObjectKind::Hazard), 1);
     assert_eq!(presentation.kind_count(WorldObjectKind::Obstacle), 1);
@@ -347,7 +350,16 @@ fn gpu_alpha_fixture_adds_real_hazard_and_obstacle_markers_without_changing_stab
             .iter()
             .map(|id| id.raw())
             .collect::<Vec<_>>(),
-        vec![1, 2, 3, 4]
+        vec![1, 2, 3, 4, 5, 6]
+    );
+    let creature_ids = ca18_creature_selection_ids(&presentation)
+        .iter()
+        .map(|id| id.raw())
+        .collect::<Vec<_>>();
+    assert_eq!(creature_ids, vec![1, 5, 6]);
+    assert_eq!(
+        ca18_cycle_selected_creature(&presentation, WorldEntityId(1)),
+        Some(WorldEntityId(5))
     );
     let obstacle = presentation
         .objects
@@ -358,6 +370,44 @@ fn gpu_alpha_fixture_adds_real_hazard_and_obstacle_markers_without_changing_stab
     assert_eq!(obstacle.label, "stone");
     assert_eq!(obstacle.shape, VisiblePlaceholderShape::ObstacleCube);
     assert_eq!(obstacle.material, VisibleMaterialKind::Obstacle);
+}
+
+#[test]
+fn ca18_graphical_population_smoke_reports_bounded_stable_id_creature_cycle() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_graphical_population_smoke(&launch).unwrap();
+
+    assert_eq!(summary.schema, CA18_GRAPHICAL_POPULATION_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION
+    );
+    assert_eq!(summary.creature_count, 3);
+    assert_eq!(summary.population_cap, CA18_MAX_GRAPHICAL_CREATURES);
+    assert_eq!(
+        summary
+            .selectable_stable_ids
+            .iter()
+            .map(|id| id.raw())
+            .collect::<Vec<_>>(),
+        vec![1, 5, 6]
+    );
+    assert_eq!(summary.selected_stable_id, WorldEntityId(1));
+    assert!(!summary.social_cues.is_empty());
+    assert!(summary.bounded_performance);
+    assert!(summary.stable_id_selection_only);
+    assert!(summary.no_bevy_entity_ids_in_player_text);
+    assert!(summary.cpu_shadow_gate_preserved);
+    assert_eq!(
+        summary.product_runtime_claim,
+        "CpuShadowGuardedStaticPlusLiveHShadow"
+    );
+    let overlay = summary.compact_overlay_text();
+    assert!(overlay.contains("Population: 3/"));
+    assert!(overlay.contains("Tab stable IDs only"));
+    assert!(overlay.contains("CPU shadow gate preserved"));
+    assert!(!overlay.contains("Entity("));
+    summary.validate().unwrap();
 }
 
 #[test]
@@ -3904,13 +3954,17 @@ fn ca09_graphical_save_load_menu_opens_saves_loads_and_rejects_bad_saves() {
             WorldEntityId(1),
             WorldEntityId(2),
             WorldEntityId(3),
-            WorldEntityId(4)
+            WorldEntityId(4),
+            WorldEntityId(5),
+            WorldEntityId(6)
         ]
     );
     assert!(summary.overlay_text.contains("Save / Load"));
     assert!(summary.overlay_text.contains("F5 save"));
     assert!(summary.overlay_text.contains("F9 load"));
-    assert!(summary.overlay_text.contains("Stable IDs: [1, 2, 3, 4]"));
+    assert!(summary
+        .overlay_text
+        .contains("Stable IDs: [1, 2, 3, 4, 5, 6]"));
     assert!(summary.overlay_text.contains("partial_load=false"));
     assert!(summary.engine_local_token_absent);
     assert!(!summary.overlay_text.contains("Entity("));
@@ -3927,7 +3981,7 @@ fn ca09_graphical_save_load_session_keeps_closed_bar_compact_and_stable_id_safe(
     assert!(closed.contains("Save/Load: M menu"));
     assert!(closed.contains("F5 save"));
     assert!(closed.contains("F9 load"));
-    assert!(closed.contains("Stable IDs [1, 2, 3, 4]"));
+    assert!(closed.contains("Stable IDs [1, 2, 3, 4, 5, 6]"));
     assert!(!closed.contains("Entity("));
 
     let result = session.apply_command(alife_game_app::GraphicalSaveLoadMenuCommand::ToggleMenu);
@@ -3997,7 +4051,7 @@ fn bevy_feature_ca09_graphical_save_load_overlay_uses_live_menu_session() {
     assert!(overlay.contains("Save / Load"));
     assert!(overlay.contains("F5 save manual slot"));
     assert!(overlay.contains("F9 load manual slot"));
-    assert!(overlay.contains("Stable IDs: [1, 2, 3, 4]"));
+    assert!(overlay.contains("Stable IDs: [1, 2, 3, 4, 5, 6]"));
     assert!(overlay.contains("Boundary: stable IDs only"));
     assert!(!overlay.contains("Entity("));
 

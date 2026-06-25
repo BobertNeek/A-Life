@@ -116,6 +116,9 @@ pub use affordance_loop::*;
 mod hazard_recovery_loop;
 pub use hazard_recovery_loop::*;
 
+mod graphical_population;
+pub use graphical_population::*;
+
 mod population_social;
 pub use population_social::*;
 
