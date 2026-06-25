@@ -49,6 +49,7 @@ pub struct RuntimeControlPanel {
     pub last_patch_sealed: bool,
     pub sealed_patch_count: usize,
     pub packed_record_count: usize,
+    pub player_events: Vec<String>,
     pub direct_cognition_mutation_allowed: bool,
 }
 
@@ -68,6 +69,11 @@ impl RuntimeControlPanel {
             last_patch_sealed: false,
             sealed_patch_count: 0,
             packed_record_count: 0,
+            player_events: vec![
+                "Press Space to run, or N to step one GPU-backed tick.".to_string(),
+                "GPU path is armed; first tick will verify CPU shadow parity.".to_string(),
+                "Creature, food, and hazard markers are presentation-only.".to_string(),
+            ],
             direct_cognition_mutation_allowed: false,
         }
     }
@@ -107,6 +113,7 @@ impl RuntimeControlPanel {
                         RuntimePlaybackState::ShutdownRequested
                     }
                 };
+                self.push_player_event(format!("Playback changed to {}.", self.playback.label()));
                 Vec::new()
             }
             RuntimeControlCommand::StepOnce => {
@@ -116,6 +123,7 @@ impl RuntimeControlPanel {
             RuntimeControlCommand::SetRunSpeed(speed) => {
                 self.run_speed_ticks = speed.clamp(1, S02_MAX_RUN_TICKS_PER_UPDATE);
                 self.playback = RuntimePlaybackState::Running;
+                self.push_player_event(format!("Run speed set to {}x.", self.run_speed_ticks));
                 Vec::new()
             }
             RuntimeControlCommand::RunForTicks(ticks) => {
@@ -133,10 +141,13 @@ impl RuntimeControlPanel {
                 self.last_patch_sealed = false;
                 self.sealed_patch_count = 0;
                 self.packed_record_count = 0;
+                self.player_events.clear();
+                self.push_player_event("Alpha fixture reset; stable IDs preserved.".to_string());
                 Vec::new()
             }
             RuntimeControlCommand::RequestExit => {
                 self.playback = RuntimePlaybackState::ShutdownRequested;
+                self.push_player_event("Exit requested from graphical controls.".to_string());
                 Vec::new()
             }
         };
@@ -181,9 +192,9 @@ impl RuntimeControlPanel {
         } else {
             format!("\n{}", extra_lines.trim())
         };
-        let action = self
-            .selected_action_kind
-            .map_or_else(|| "None".to_string(), |kind| format!("{kind:?}"));
+        let action = self.selected_action_kind.map_or("None", |action| {
+            action_badge_label_for_target(action, self.target_entity)
+        });
         let goal = goal_label_from_action(self.selected_action_kind, self.target_entity);
         let target = self
             .target_entity
@@ -196,7 +207,7 @@ impl RuntimeControlPanel {
         };
         let event_lines = self.player_event_lines();
         format!(
-            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Patch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents:\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
+            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
@@ -206,6 +217,7 @@ impl RuntimeControlPanel {
             goal,
             action,
             target,
+            self.intent_marker_label(),
             self.last_patch_sealed,
             self.sealed_patch_count,
             event_lines,
@@ -215,34 +227,13 @@ impl RuntimeControlPanel {
     }
 
     fn player_event_lines(&self) -> String {
-        if self.last_status.is_none() {
-            return [
-                "- Press Space to run, or N to step one GPU-backed tick.",
-                "- GPU path is armed; first tick will verify CPU shadow parity.",
-                "- Creature, food, and hazard markers are presentation-only.",
-            ]
-            .join("\n");
-        }
-
-        let mut lines = Vec::new();
-        if let Some(status) = self.last_status {
-            lines.push(format!("- Tick advanced with status {status:?}."));
-        }
-        if let Some(action) = self.selected_action_kind {
-            let target = self
-                .target_entity
-                .map_or_else(|| "no target".to_string(), |id| format!("stable:{id}"));
-            lines.push(format!("- Creature chose {action:?} toward {target}."));
-        } else {
-            lines.push("- Creature produced no selected action this tick.".to_string());
-        }
-        if self.last_patch_sealed {
-            lines.push(format!("- Patch sealed count={}.", self.sealed_patch_count));
-        } else {
-            lines.push("- Patch not sealed yet; press R if simulation stops.".to_string());
-        }
-        lines.push("- H_shadow learning pulse appears when count rises.".to_string());
-        lines.join("\n")
+        self.player_events
+            .iter()
+            .rev()
+            .take(S02_MAX_PLAYER_EVENT_LINES)
+            .map(|line| format!("- {line}"))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn signature_line(&self) -> String {
@@ -271,6 +262,83 @@ impl RuntimeControlPanel {
         self.last_patch_sealed = summary.patch_sealed;
         self.sealed_patch_count = summary.sealed_patch_count;
         self.packed_record_count = summary.packed_record_count;
+        self.record_player_events_for_tick(summary);
+    }
+
+    fn record_player_events_for_tick(&mut self, summary: &LiveBrainTickSummary) {
+        self.push_player_event(format!("Tick advanced with status {:?}.", summary.status));
+        if let Some(action) = summary.selected_action_kind {
+            let target = summary.target_entity.map_or_else(
+                || "no target".to_string(),
+                |id| format!("stable:{}", id.raw()),
+            );
+            self.push_player_event(format!(
+                "Creature action {} toward {}.",
+                action_badge_label_for_target(action, summary.target_entity.map(|id| id.raw())),
+                target
+            ));
+            if let Some(target) = summary.target_entity {
+                self.push_player_event(format!("Intent line stable:1 -> stable:{}.", target.raw()));
+                match (action, target.raw()) {
+                    (ActionKind::Interact, 2) => {
+                        self.push_player_event("Food interaction cue highlighted.".to_string())
+                    }
+                    (ActionKind::Move, 3) => {
+                        self.push_player_event("Hazard avoidance cue highlighted.".to_string())
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            self.push_player_event("Creature produced no selected action this tick.".to_string());
+        }
+        if summary.patch_sealed {
+            self.push_player_event(format!(
+                "Patch sealed count={}.",
+                summary.sealed_patch_count
+            ));
+        } else {
+            self.push_player_event("Patch not sealed; press R if simulation stops.".to_string());
+        }
+    }
+
+    fn push_player_event(&mut self, event: String) {
+        self.player_events.push(event);
+        if self.player_events.len() > S02_MAX_PLAYER_EVENT_LINES {
+            let drain_count = self.player_events.len() - S02_MAX_PLAYER_EVENT_LINES;
+            self.player_events.drain(0..drain_count);
+        }
+    }
+
+    pub fn intent_marker_label(&self) -> String {
+        match (self.selected_action_kind, self.target_entity) {
+            (Some(action), Some(target)) => format!(
+                "stable:1 -> stable:{target} ({})",
+                action_badge_label_for_target(action, Some(target))
+            ),
+            (Some(action), None) => {
+                format!("stable:1 ({})", action_badge_label_for_target(action, None))
+            }
+            (None, _) => "pending".to_string(),
+        }
+    }
+}
+
+pub const S02_MAX_PLAYER_EVENT_LINES: usize = 5;
+
+pub fn action_badge_label(kind: ActionKind) -> &'static str {
+    action_badge_label_for_target(kind, None)
+}
+
+pub fn action_badge_label_for_target(kind: ActionKind, target_entity: Option<u64>) -> &'static str {
+    match kind {
+        ActionKind::Move if target_entity == Some(3) => "FLEE",
+        ActionKind::Move => "APPROACH",
+        ActionKind::Interact | ActionKind::Hold => "EAT",
+        ActionKind::Inspect => "INSPECT",
+        ActionKind::Rest => "SLEEP",
+        ActionKind::Idle => "IDLE",
+        ActionKind::Vocalize | ActionKind::Write | ActionKind::Gesture => "SIGNAL",
     }
 }
 
