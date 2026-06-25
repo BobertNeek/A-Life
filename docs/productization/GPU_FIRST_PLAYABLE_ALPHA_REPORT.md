@@ -70,7 +70,17 @@ failure instead of silent fallback.
 - R: reset/restart alpha fixture
 - 1/2/3: speed
 - F: follow selected stable ID
+- M: open or close save/load menu
+- F5: save manual slot
+- F9: load manual slot
 - Esc: quit
+
+## Save/Load
+
+The graphical alpha exposes a player-facing save/load panel. It uses the
+existing portable stable-ID save contract, shows manual slot metadata, and
+reports invalid-save errors with `partial_load=false`. No Bevy Entity IDs or
+GPU/renderer handles are saved or shown as portable IDs.
 
 ## Known Limitations
 

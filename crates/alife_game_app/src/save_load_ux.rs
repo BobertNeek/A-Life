@@ -544,6 +544,229 @@ pub struct SaveLoadUxSmokeSummary {
     pub menu: SaveLoadMenuState,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GraphicalSaveLoadMenuCommand {
+    ToggleMenu,
+    ManualSave,
+    LoadManualSlot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphicalSaveLoadMenuSession {
+    pub schema: &'static str,
+    pub schema_version: u16,
+    menu_open: bool,
+    manual_descriptor: SaveSlotDescriptor,
+    asset_root: PathBuf,
+    source_save: PortableSaveFile,
+    manager: SaveSlotManager,
+    last_action: Option<SaveLoadActionResult>,
+    load_applied_count: usize,
+    invalid_error_count: usize,
+}
+
+impl GraphicalSaveLoadMenuSession {
+    pub fn from_launch(launch: &AppShellLaunchConfig) -> Result<Self, GameAppShellError> {
+        let source_save = PortableSaveFile::from_json_file(&launch.save_path)?;
+        source_save.validate_with_asset_root(&launch.asset_root)?;
+        let mut manager = SaveSlotManager::new(G15_MAX_SAVE_SLOTS)?;
+        let manual_descriptor =
+            SaveSlotDescriptor::new("slot-0", "Manual Save 1", SaveSlotKind::Manual)?;
+        let initial_save = manager.save_slot(
+            manual_descriptor.clone(),
+            &source_save,
+            &launch.asset_root,
+            false,
+        );
+        if !initial_save.success {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA09 initial manual save slot must validate",
+            });
+        }
+        Ok(Self {
+            schema: G15_SAVE_LOAD_UX_SCHEMA,
+            schema_version: G15_SAVE_LOAD_UX_SCHEMA_VERSION,
+            menu_open: false,
+            manual_descriptor,
+            asset_root: launch.asset_root.clone(),
+            source_save,
+            manager,
+            last_action: Some(initial_save),
+            load_applied_count: 0,
+            invalid_error_count: 0,
+        })
+    }
+
+    pub fn apply_command(&mut self, command: GraphicalSaveLoadMenuCommand) -> SaveLoadActionResult {
+        match command {
+            GraphicalSaveLoadMenuCommand::ToggleMenu => {
+                self.menu_open = !self.menu_open;
+                SaveLoadActionResult::success(
+                    if self.menu_open {
+                        "open-menu"
+                    } else {
+                        "close-menu"
+                    },
+                    self.manual_descriptor.slot_id.clone(),
+                    None,
+                    self.source_save.world.objects.len(),
+                )
+            }
+            GraphicalSaveLoadMenuCommand::ManualSave => self.manual_save(),
+            GraphicalSaveLoadMenuCommand::LoadManualSlot => self.load_manual_slot(),
+        }
+    }
+
+    pub fn manual_save(&mut self) -> SaveLoadActionResult {
+        let result = self.manager.save_slot(
+            self.manual_descriptor.clone(),
+            &self.source_save,
+            &self.asset_root,
+            true,
+        );
+        self.last_action = Some(result.clone());
+        result
+    }
+
+    pub fn open(&mut self) {
+        self.menu_open = true;
+    }
+
+    pub const fn is_open(&self) -> bool {
+        self.menu_open
+    }
+
+    pub fn load_manual_slot(&mut self) -> SaveLoadActionResult {
+        let result = self
+            .manager
+            .load_slot(&self.manual_descriptor.slot_id, &self.asset_root);
+        if result.success {
+            self.load_applied_count = self.load_applied_count.saturating_add(1);
+        } else {
+            self.invalid_error_count = self.invalid_error_count.saturating_add(1);
+        }
+        self.last_action = Some(result.clone());
+        result
+    }
+
+    pub fn inject_invalid_schema_and_load(&mut self) -> SaveLoadActionResult {
+        let raw = self
+            .manager
+            .raw_slot_json(&self.manual_descriptor.slot_id)
+            .unwrap_or_default()
+            .replace(
+                &format!("\"schema_version\": {}", P34_SAVE_FILE_SCHEMA_VERSION),
+                "\"schema_version\": 999",
+            );
+        let descriptor =
+            match SaveSlotDescriptor::new("slot-invalid", "Invalid Save", SaveSlotKind::Manual) {
+                Ok(descriptor) => descriptor,
+                Err(error) => {
+                    let display = SaveLoadErrorDisplay::from_shell(error.to_string());
+                    let result =
+                        SaveLoadActionResult::failed("load", "slot-invalid", display, false);
+                    self.last_action = Some(result.clone());
+                    return result;
+                }
+            };
+        self.manager.import_raw_slot(descriptor.clone(), raw, true);
+        let result = self
+            .manager
+            .load_slot(&descriptor.slot_id, &self.asset_root);
+        if !result.success {
+            self.invalid_error_count = self.invalid_error_count.saturating_add(1);
+        }
+        self.last_action = Some(result.clone());
+        result
+    }
+
+    pub fn menu_state(&self) -> SaveLoadMenuState {
+        SaveLoadMenuState::from_manager(
+            &self.manager,
+            Some(self.manual_descriptor.slot_id.clone()),
+            AutosavePolicy::deterministic_default().enabled,
+            true,
+            &self.source_save,
+        )
+    }
+
+    pub fn stable_world_ids(&self) -> Vec<WorldEntityId> {
+        self.source_save
+            .world
+            .objects
+            .iter()
+            .map(|object| object.id)
+            .collect()
+    }
+
+    pub fn last_error(&self) -> Option<&SaveLoadErrorDisplay> {
+        self.last_action
+            .as_ref()
+            .and_then(|action| action.error.as_ref())
+            .or_else(|| self.manager.last_error())
+    }
+
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        if self.schema != G15_SAVE_LOAD_UX_SCHEMA
+            || self.schema_version != G15_SAVE_LOAD_UX_SCHEMA_VERSION
+            || self.manual_descriptor.slot_id != "slot-0"
+            || self.stable_world_ids().is_empty()
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message:
+                    "CA09 graphical save/load session must expose a valid manual stable-ID slot",
+            });
+        }
+        let text = graphical_save_load_menu_text(self);
+        if contains_engine_local_token(&text) {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA09 graphical save/load text must not expose engine-local tokens",
+            });
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GraphicalSaveLoadMenuSmokeSummary {
+    pub menu_opened: bool,
+    pub manual_save: SaveLoadActionResult,
+    pub manual_load: SaveLoadActionResult,
+    pub invalid_load: SaveLoadActionResult,
+    pub load_applied_count: usize,
+    pub invalid_error_count: usize,
+    pub stable_world_ids: Vec<WorldEntityId>,
+    pub overlay_text: String,
+    pub no_partial_load_after_error: bool,
+    pub engine_local_token_absent: bool,
+}
+
+impl GraphicalSaveLoadMenuSmokeSummary {
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        if !self.menu_opened
+            || !self.manual_save.success
+            || !self.manual_load.success
+            || self.invalid_load.success
+            || self.load_applied_count == 0
+            || self.invalid_error_count == 0
+            || self.stable_world_ids.is_empty()
+            || !self.no_partial_load_after_error
+            || !self.engine_local_token_absent
+            || !self.overlay_text.contains("Save / Load")
+            || !self.overlay_text.contains("F5 save")
+            || !self.overlay_text.contains("F9 load")
+            || !self.overlay_text.contains("Stable IDs")
+            || !self.overlay_text.contains("partial_load=false")
+            || contains_engine_local_token(&self.overlay_text)
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA09 graphical save/load smoke must prove menu, save, load, stable IDs, and no partial load after error",
+            });
+        }
+        Ok(())
+    }
+}
+
 impl SaveLoadUxSmokeSummary {
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
         if self.schema != G15_SAVE_LOAD_UX_SCHEMA
@@ -590,6 +813,86 @@ impl SaveLoadUxSmokeSummary {
                 .join("|"),
             self.config_menu.requested_backend as u8,
             self.menu.slots.len()
+        )
+    }
+}
+
+pub fn graphical_save_load_menu_text(session: &GraphicalSaveLoadMenuSession) -> String {
+    let state = session.menu_state();
+    let stable_ids = session
+        .stable_world_ids()
+        .iter()
+        .map(|id| id.raw().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let slot = state
+        .slots
+        .iter()
+        .find(|slot| slot.slot_id == session.manual_descriptor.slot_id)
+        .or_else(|| state.slots.first());
+    let slot_line = slot.map_or_else(
+        || "Slot 1: empty".to_string(),
+        |slot| {
+            format!(
+                "Slot 1: {} occupied={} save={} objects={} tick={}",
+                slot.display_name,
+                slot.occupied,
+                slot.save_id.as_deref().unwrap_or("empty"),
+                slot.object_count,
+                slot.world_tick
+                    .map(|tick| tick.raw().to_string())
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        },
+    );
+    let last_action = session.last_action.as_ref().map_or_else(
+        || "Last: ready".to_string(),
+        |action| {
+            if action.success {
+                format!(
+                    "Last: {} {} ok objects={} partial_load=false",
+                    action.action_label, action.slot_id, action.restored_object_count
+                )
+            } else {
+                let error = action
+                    .error
+                    .as_ref()
+                    .map(|error| format!("{} {}", error.code, error.message))
+                    .unwrap_or_else(|| "unknown error".to_string());
+                format!(
+                    "Last: {} {} failed: {} partial_load={}",
+                    action.action_label, action.slot_id, error, action.partial_load_applied
+                )
+            }
+        },
+    );
+    let error_line = session.last_error().map_or_else(
+        || "Errors: none".to_string(),
+        |error| {
+            format!(
+                "Errors: {} partial_load={}",
+                error.code, error.partial_load_applied
+            )
+        },
+    );
+    if session.menu_open {
+        format!(
+            concat!(
+                "Save / Load\n",
+                "{}\n",
+                "F5 save manual slot | F9 load manual slot | M close\n",
+                "{}\n",
+                "Stable IDs: [{}]\n",
+                "{}\n",
+                "{}\n",
+                "Boundary: stable IDs only; no Bevy Entity IDs; no partial load after errors."
+            ),
+            state.schema, slot_line, stable_ids, last_action, error_line
+        )
+    } else {
+        format!(
+            "Save/Load: M menu | F5 save | F9 load | slot={} | Stable IDs [{}] | {} | {}",
+            session.manual_descriptor.slot_id, stable_ids, last_action, error_line
         )
     }
 }
@@ -679,6 +982,36 @@ fn save_slot_menu_line(slot: &SaveSlotMetadata) -> String {
             .unwrap_or_else(|| "n/a".to_string()),
         slot.json_bytes
     )
+}
+
+pub fn run_graphical_save_load_menu_smoke(
+    launch: &AppShellLaunchConfig,
+) -> Result<GraphicalSaveLoadMenuSmokeSummary, GameAppShellError> {
+    let mut session = GraphicalSaveLoadMenuSession::from_launch(launch)?;
+    let open = session.apply_command(GraphicalSaveLoadMenuCommand::ToggleMenu);
+    let manual_save = session.apply_command(GraphicalSaveLoadMenuCommand::ManualSave);
+    let manual_load = session.apply_command(GraphicalSaveLoadMenuCommand::LoadManualSlot);
+    let invalid_load = session.inject_invalid_schema_and_load();
+    let overlay_text = graphical_save_load_menu_text(&session);
+    let summary = GraphicalSaveLoadMenuSmokeSummary {
+        menu_opened: open.success && session.is_open(),
+        manual_save,
+        manual_load,
+        invalid_load: invalid_load.clone(),
+        load_applied_count: session.load_applied_count,
+        invalid_error_count: session.invalid_error_count,
+        stable_world_ids: session.stable_world_ids(),
+        overlay_text,
+        no_partial_load_after_error: !invalid_load.partial_load_applied,
+        engine_local_token_absent: !contains_engine_local_token(
+            session
+                .manager
+                .raw_slot_json(&session.manual_descriptor.slot_id)
+                .unwrap_or_default(),
+        ),
+    };
+    summary.validate()?;
+    Ok(summary)
 }
 
 pub fn run_save_load_ux_smoke(

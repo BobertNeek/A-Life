@@ -329,9 +329,9 @@ pub struct GraphicalFeedbackCueResource {
     pub summary: crate::FeedbackPolishSummary,
 }
 
-#[derive(Debug, Clone, PartialEq, Resource)]
+#[derive(Debug, Clone, Resource)]
 pub struct GraphicalSaveLoadMenuResource {
-    pub summary: crate::SaveLoadUxSmokeSummary,
+    pub session: crate::GraphicalSaveLoadMenuSession,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -464,7 +464,7 @@ pub fn build_graphical_playground_app_shell(
     spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
     let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
     let feedback = crate::run_feedback_polish_smoke(&launch.app_launch)?;
-    let save_load = crate::run_save_load_ux_smoke(&launch.app_launch)?;
+    let save_load = crate::GraphicalSaveLoadMenuSession::from_launch(&launch.app_launch)?;
     let advanced = run_advanced_gameplay_ux_smoke()?;
     let local_entity =
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
@@ -486,9 +486,7 @@ pub fn build_graphical_playground_app_shell(
             snapshot: inspector,
         })
         .insert_resource(GraphicalFeedbackCueResource { summary: feedback })
-        .insert_resource(GraphicalSaveLoadMenuResource {
-            summary: save_load.clone(),
-        })
+        .insert_resource(GraphicalSaveLoadMenuResource { session: save_load })
         .insert_resource(GraphicalAdvancedGameplayResource {
             summary: advanced.clone(),
         })
@@ -812,6 +810,27 @@ fn spawn_graphical_playground_scene(
         BoundaryFooterOverlay,
     ));
 
+    app.world_mut().spawn((
+        Name::new("A-Life CA09 player save/load menu"),
+        Text::new("Save/Load: M menu | F5 save | F9 load"),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.92, 0.98, 0.90)),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(12.0),
+            left: Val::Px(250.0),
+            right: Val::Px(250.0),
+            max_width: Val::Px(640.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.015, 0.025, 0.018, 0.90)),
+        SaveLoadMenuOverlay,
+    ));
+
     Ok(())
 }
 
@@ -1062,6 +1081,7 @@ fn handle_graphical_runtime_input(
     mut runtime: ResMut<GraphicalRuntimeControlsResource>,
     mut live_loop: NonSendMut<GraphicalRuntimeLoopResource>,
     mut gpu_telemetry: ResMut<GraphicalGpuTelemetryResource>,
+    mut save_load: ResMut<GraphicalSaveLoadMenuResource>,
     mut exits: MessageWriter<AppExit>,
 ) {
     let apply = |runtime: &mut GraphicalRuntimeControlsResource,
@@ -1134,6 +1154,67 @@ fn handle_graphical_runtime_input(
             runtime
                 .panel
                 .record_terminal_recovery("reset failed; close and relaunch");
+        }
+    }
+    if keyboard.just_pressed(KeyCode::KeyM) {
+        let result = save_load
+            .session
+            .apply_command(crate::GraphicalSaveLoadMenuCommand::ToggleMenu);
+        runtime.panel.record_control_event(format!(
+            "Save/load menu {}.",
+            if save_load.session.is_open() {
+                "opened"
+            } else {
+                "closed"
+            }
+        ));
+        if !result.success {
+            runtime
+                .panel
+                .record_control_event("Save/load menu toggle failed.".to_string());
+        }
+    }
+    if keyboard.just_pressed(KeyCode::F5) {
+        save_load.session.open();
+        let result = save_load
+            .session
+            .apply_command(crate::GraphicalSaveLoadMenuCommand::ManualSave);
+        runtime.panel.record_control_event(if result.success {
+            "Manual save wrote Slot 1 with stable IDs.".to_string()
+        } else {
+            format!(
+                "Manual save failed: {}.",
+                result
+                    .error
+                    .as_ref()
+                    .map(|error| error.code.as_str())
+                    .unwrap_or("unknown")
+            )
+        });
+    }
+    if keyboard.just_pressed(KeyCode::F9) {
+        save_load.session.open();
+        let result = save_load
+            .session
+            .apply_command(crate::GraphicalSaveLoadMenuCommand::LoadManualSlot);
+        if result.success {
+            runtime.panel.record_control_event(
+                "Manual load restored Slot 1; stable IDs remapped.".to_string(),
+            );
+            if reset_graphical_runtime(&mut runtime, &mut live_loop, &mut gpu_telemetry).is_err() {
+                runtime
+                    .panel
+                    .record_terminal_recovery("load reset failed; close and relaunch");
+            }
+        } else {
+            runtime.panel.record_control_event(format!(
+                "Manual load failed without partial load: {}.",
+                result
+                    .error
+                    .as_ref()
+                    .map(|error| error.code.as_str())
+                    .unwrap_or("unknown")
+            ));
         }
     }
 }
@@ -1700,7 +1781,7 @@ fn update_graphical_save_load_menu_overlay(
     mut overlays: bevy::prelude::Query<&mut Text, With<SaveLoadMenuOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = alpha_save_load_note_text(&menu.summary);
+        text.0 = crate::graphical_save_load_menu_text(&menu.session);
     }
 }
 
@@ -1870,14 +1951,14 @@ pub fn ca05_controls_bar_text() -> &'static str {
         "Controls\n",
         "Left click select | Space run/pause | N step | R reset\n",
         "1/2/3 speed | WASD/arrows pan | +/- zoom | Q/E orbit\n",
-        "F follow selected stable ID | Esc quit\n",
+        "F follow selected stable ID | M save/load | F5 save | F9 load | Esc quit\n",
         "Guide: [@] creature | [+] food | [!] hazard | [#] obstacle\n",
         "Visuals mirror model state. Stable IDs only."
     )
 }
 
 pub fn alpha_controls_help_text() -> &'static str {
-    "Controls: Left click select | Space run/pause | N step | R reset | +/- zoom | F follow | Esc quit"
+    "Controls: Left click select | Space run/pause | N step | R reset | M save/load | F5 save | F9 load | +/- zoom | F follow | Esc quit"
 }
 
 pub fn ca05_boundary_footer_text(gpu: &GraphicalGpuRuntimeTelemetry) -> String {

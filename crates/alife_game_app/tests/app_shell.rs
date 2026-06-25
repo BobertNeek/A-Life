@@ -3559,6 +3559,64 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
     assert!(badges.iter().all(|badge| badge.contains("stable:")));
 }
 
+#[test]
+fn ca09_graphical_save_load_menu_opens_saves_loads_and_rejects_bad_saves() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = alife_game_app::run_graphical_save_load_menu_smoke(&launch).unwrap();
+
+    assert!(summary.menu_opened);
+    assert!(summary.manual_save.success);
+    assert!(summary.manual_load.success);
+    assert!(!summary.invalid_load.success);
+    assert_eq!(
+        summary
+            .invalid_load
+            .error
+            .as_ref()
+            .map(|error| error.code.as_str()),
+        Some("schema-version")
+    );
+    assert_eq!(
+        summary.stable_world_ids,
+        vec![
+            WorldEntityId(1),
+            WorldEntityId(2),
+            WorldEntityId(3),
+            WorldEntityId(4)
+        ]
+    );
+    assert!(summary.overlay_text.contains("Save / Load"));
+    assert!(summary.overlay_text.contains("F5 save"));
+    assert!(summary.overlay_text.contains("F9 load"));
+    assert!(summary.overlay_text.contains("Stable IDs: [1, 2, 3, 4]"));
+    assert!(summary.overlay_text.contains("partial_load=false"));
+    assert!(summary.engine_local_token_absent);
+    assert!(!summary.overlay_text.contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca09_graphical_save_load_session_keeps_closed_bar_compact_and_stable_id_safe() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut session = alife_game_app::GraphicalSaveLoadMenuSession::from_launch(&launch).unwrap();
+    session.validate().unwrap();
+
+    let closed = alife_game_app::graphical_save_load_menu_text(&session);
+    assert!(closed.contains("Save/Load: M menu"));
+    assert!(closed.contains("F5 save"));
+    assert!(closed.contains("F9 load"));
+    assert!(closed.contains("Stable IDs [1, 2, 3, 4]"));
+    assert!(!closed.contains("Entity("));
+
+    let result = session.apply_command(alife_game_app::GraphicalSaveLoadMenuCommand::ToggleMenu);
+    assert!(result.success);
+    let open = alife_game_app::graphical_save_load_menu_text(&session);
+    assert!(open.contains("Save / Load"));
+    assert!(open.contains("Boundary: stable IDs only"));
+    assert!(open.contains("no partial load after errors"));
+    assert!(!open.contains("Entity("));
+}
+
 #[cfg(feature = "bevy-app")]
 #[test]
 fn bevy_feature_alpha_overlay_text_is_first_tester_readable() {
@@ -3582,6 +3640,9 @@ fn bevy_feature_alpha_overlay_text_is_first_tester_readable() {
     let controls = alife_game_app::bevy_shell::alpha_controls_help_text();
     assert!(controls.contains("Space run/pause"));
     assert!(controls.contains("R reset"));
+    assert!(controls.contains("M save/load"));
+    assert!(controls.contains("F5 save"));
+    assert!(controls.contains("F9 load"));
     assert!(controls.contains("Esc quit"));
 }
 
@@ -3601,4 +3662,25 @@ fn bevy_feature_s05_save_load_menu_overlay_is_player_facing_and_stable_id_safe()
     assert!(overlay.contains("cpu_fallback=true"));
     assert!(overlay.contains("Boundary: stable IDs only"));
     assert!(!overlay.contains("Entity("));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca09_graphical_save_load_overlay_uses_live_menu_session() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut session = alife_game_app::GraphicalSaveLoadMenuSession::from_launch(&launch).unwrap();
+    session.apply_command(alife_game_app::GraphicalSaveLoadMenuCommand::ToggleMenu);
+    let overlay = alife_game_app::graphical_save_load_menu_text(&session);
+
+    assert!(overlay.contains("Save / Load"));
+    assert!(overlay.contains("F5 save manual slot"));
+    assert!(overlay.contains("F9 load manual slot"));
+    assert!(overlay.contains("Stable IDs: [1, 2, 3, 4]"));
+    assert!(overlay.contains("Boundary: stable IDs only"));
+    assert!(!overlay.contains("Entity("));
+
+    let controls = alife_game_app::bevy_shell::ca05_controls_bar_text();
+    assert!(controls.contains("M save/load"));
+    assert!(controls.contains("F5 save"));
+    assert!(controls.contains("F9 load"));
 }

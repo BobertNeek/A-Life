@@ -28,6 +28,9 @@ Record yes/no plus notes for each item.
 | `N` steps once. |  |  |
 | `1/2/3` speed controls are visible or testable. |  |  |
 | `F` follow is visible or testable. |  |  |
+| `M` opens/closes the save/load menu. |  |  |
+| `F5` saves the manual slot. |  |  |
+| `F9` loads the manual slot without Bevy Entity IDs. |  |  |
 | `Esc` closes the app cleanly. |  |  |
 | GPU status shows selected GPU mode or clear CPU fallback. |  |  |
 | Inspector is readable and read-only. |  |  |
@@ -54,10 +57,12 @@ from human tester evidence:
 ```powershell
 cargo run -p alife_game_app --bin alife_game_app -- graphical-controls-smoke crates/alife_world/tests/fixtures/p34
 cargo run -p alife_game_app --bin alife_game_app -- graphical-controls-smoke crates/alife_world/tests/fixtures/gpu_alpha
+cargo run -p alife_game_app --bin alife_game_app -- graphical-save-load-menu-smoke crates/alife_world/tests/fixtures/gpu_alpha
 ```
 
-This command verifies the Space/N/1/2/3/F/Esc-equivalent control semantics
-through the same app control surface without requiring foreground key input.
+These commands verify the Space/N/1/2/3/F/Esc-equivalent control semantics and
+the M/F5/F9 save-load path through the same app control surface without
+requiring foreground key input.
 
 ## Finding Severity
 
