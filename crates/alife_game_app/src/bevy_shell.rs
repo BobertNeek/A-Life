@@ -6,7 +6,7 @@ use alife_bevy_adapter::{
     core_vec3_to_bevy, AffordanceTags, AlifeBevyAdapterPlugin, BevyEntityMap, CreatureBody,
     SensoryEmitter,
 };
-use alife_core::{AffordanceBits, WorldEntityId};
+use alife_core::{ActionKind, AffordanceBits, WorldEntityId};
 use alife_world::WorldObjectKind;
 use bevy::{
     app::AppExit,
@@ -14,18 +14,18 @@ use bevy::{
         default, App, BackgroundColor, ButtonInput, Camera2d, ClearColor, Color, Component,
         DefaultPlugins, Entity, KeyCode, MessageWriter, MinimalPlugins, Name, Node, NonSendMut,
         PluginGroup, PositionType, Res, ResMut, Resource, Sprite, Text, Text2d, TextColor,
-        TextFont, Time, Timer, TimerMode, Transform, Update, Val, Vec2, Vec3, With,
+        TextFont, Time, Timer, TimerMode, Transform, Update, Val, Vec2, Vec3, With, Without,
     },
     window::{ExitCondition, PresentMode, Window, WindowPlugin, WindowTheme},
 };
 
 use crate::{
     load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke,
-    run_creature_visual_smoke, run_live_brain_loop_smoke, AdvancedGameplayUxSummary,
-    AppShellLaunchConfig, AppStartupSummary, CameraNavigationState, CreatureAnimationState,
-    CreatureExpressionState, CreatureInspectorSnapshot, CreatureVisualSnapshot,
-    EntitySelectionSnapshot, GameAppShellError, GameAppState, GraphicalGpuRuntimeController,
-    GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
+    run_creature_visual_smoke, run_headless_app_shell_smoke, run_live_brain_loop_smoke,
+    AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary, CameraNavigationState,
+    CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
+    CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
+    GraphicalGpuRuntimeController, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
     GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
     RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
     VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
@@ -252,6 +252,12 @@ pub struct GraphicalObjectBadge {
     pub kind: WorldObjectKind,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalIntentLine;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalActionBadge;
+
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalFeedbackCueResource {
     pub summary: crate::FeedbackPolishSummary,
@@ -432,6 +438,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_runtime_overlay,
                 update_graphical_inspector_overlay,
                 update_graphical_gpu_visual_cues,
+                update_graphical_intent_feedback,
                 update_graphical_feedback_overlay,
                 update_graphical_save_load_menu_overlay,
                 update_graphical_advanced_gameplay_overlay,
@@ -447,6 +454,28 @@ pub fn build_graphical_playground_app_shell(
     }
 
     Ok((app, summary))
+}
+
+pub fn build_ca03_intent_feedback_preview_app_shell(
+    launch: &GraphicalPlaygroundLaunchConfig,
+    panel: RuntimeControlPanel,
+) -> Result<App, GameAppShellError> {
+    let startup = run_headless_app_shell_smoke(&launch.app_launch)?;
+    let summary = crate::validate_graphical_playground_launch(launch)?;
+    let presentation = load_visible_world_from_p34_save(&launch.app_launch)?;
+    crate::compare_visible_world_to_headless(&presentation)?;
+    let mut app = build_minimal_bevy_app_shell(startup);
+    app.insert_resource(GraphicalPlaygroundSceneResource {
+        summary: summary.clone(),
+    });
+    spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
+    app.insert_resource(GraphicalRuntimeControlsResource {
+        panel,
+        smoke_target_ticks: None,
+        smoke_ticks_done: 0,
+    })
+    .add_systems(Update, update_graphical_intent_feedback);
+    Ok(app)
 }
 
 pub fn run_graphical_playground_window(
@@ -595,6 +624,7 @@ fn spawn_graphical_playground_scene(
     for object in &presentation.objects {
         spawn_graphical_object(app, object)?;
     }
+    spawn_graphical_intent_feedback(app);
 
     app.insert_resource(VisibleWorldSceneResource {
         schema: presentation.schema,
@@ -694,6 +724,31 @@ fn spawn_graphical_playground_scene(
     ));
 
     Ok(())
+}
+
+fn spawn_graphical_intent_feedback(app: &mut App) {
+    app.world_mut().spawn((
+        Name::new("A-Life CA03 stable-ID intent line"),
+        Sprite {
+            color: Color::srgba(0.42, 1.0, 0.58, 0.0),
+            custom_size: Some(Vec2::new(1.0, 5.0)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 0.0, 0.35),
+        GraphicalIntentLine,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA03 selected action badge"),
+        Text2d::new("Action: IDLE"),
+        TextFont {
+            font_size: 16.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.98, 0.96, 0.72)),
+        Transform::from_xyz(0.0, 88.0, 1.15),
+        GraphicalActionBadge,
+    ));
 }
 
 fn spawn_graphical_object(
@@ -1170,6 +1225,66 @@ fn update_graphical_gpu_visual_cues(
     }
 }
 
+fn update_graphical_intent_feedback(
+    runtime: Res<GraphicalRuntimeControlsResource>,
+    markers: bevy::prelude::Query<
+        (&GraphicalPlaygroundMarker, &Transform),
+        (Without<GraphicalIntentLine>, Without<GraphicalActionBadge>),
+    >,
+    mut lines: bevy::prelude::Query<
+        (&mut Sprite, &mut Transform),
+        (With<GraphicalIntentLine>, Without<GraphicalActionBadge>),
+    >,
+    mut badges: bevy::prelude::Query<
+        (&mut Text2d, &mut TextColor, &mut Transform),
+        (With<GraphicalActionBadge>, Without<GraphicalIntentLine>),
+    >,
+) {
+    let mut creature_position = None;
+    let mut target_position = None;
+    let target = runtime.panel.target_entity.map(WorldEntityId);
+
+    for (marker, transform) in &markers {
+        if marker.kind == WorldObjectKind::Agent && marker.stable_id == WorldEntityId(1) {
+            creature_position = Some(transform.translation);
+        }
+        if Some(marker.stable_id) == target {
+            target_position = Some(transform.translation);
+        }
+    }
+
+    let action_kind = runtime.panel.selected_action_kind;
+    let action_label = action_kind
+        .map(|action| crate::action_badge_label_for_target(action, runtime.panel.target_entity))
+        .unwrap_or("IDLE");
+    for (mut text, mut color, mut transform) in &mut badges {
+        text.0 = format!("Action: {action_label}");
+        color.0 = action_badge_color(action_kind, runtime.panel.target_entity);
+        if let Some(position) = creature_position {
+            transform.translation = position + Vec3::new(0.0, 72.0, 1.15);
+        }
+    }
+
+    for (mut sprite, mut transform) in &mut lines {
+        if let (Some(start), Some(end), Some(action)) =
+            (creature_position, target_position, action_kind)
+        {
+            let delta = end - start;
+            let length = (delta.x * delta.x + delta.y * delta.y).sqrt();
+            if length > 1.0 {
+                transform.translation =
+                    Vec3::new((start.x + end.x) * 0.5, (start.y + end.y) * 0.5, 0.32);
+                transform.rotation = bevy::prelude::Quat::from_rotation_z(delta.y.atan2(delta.x));
+                sprite.custom_size = Some(Vec2::new(length, 5.0));
+                sprite.color = intent_line_color(action, runtime.panel.target_entity);
+            }
+        } else {
+            sprite.color = Color::srgba(0.42, 1.0, 0.58, 0.0);
+            sprite.custom_size = Some(Vec2::new(1.0, 5.0));
+        }
+    }
+}
+
 fn capture_graphical_runtime_snapshot(
     runtime: Res<GraphicalRuntimeControlsResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
@@ -1179,6 +1294,34 @@ fn capture_graphical_runtime_snapshot(
         if let Ok(mut slot) = sink.0.lock() {
             *slot = Some((runtime.panel.clone(), gpu.telemetry.clone()));
         }
+    }
+}
+
+fn action_badge_color(action_kind: Option<ActionKind>, target_entity: Option<u64>) -> Color {
+    match action_kind {
+        Some(ActionKind::Move) if target_entity == Some(3) => Color::srgb(1.0, 0.34, 0.32),
+        Some(ActionKind::Move) => Color::srgb(0.48, 0.78, 1.0),
+        Some(ActionKind::Interact) | Some(ActionKind::Hold) => Color::srgb(0.42, 1.0, 0.58),
+        Some(ActionKind::Inspect) => Color::srgb(1.0, 0.88, 0.36),
+        Some(ActionKind::Rest) => Color::srgb(0.72, 0.65, 1.0),
+        Some(ActionKind::Vocalize) | Some(ActionKind::Write) | Some(ActionKind::Gesture) => {
+            Color::srgb(0.82, 0.68, 1.0)
+        }
+        Some(ActionKind::Idle) | None => Color::srgb(0.86, 0.88, 0.82),
+    }
+}
+
+fn intent_line_color(action_kind: ActionKind, target_entity: Option<u64>) -> Color {
+    match action_kind {
+        ActionKind::Move if target_entity == Some(3) => Color::srgba(1.0, 0.34, 0.32, 0.88),
+        ActionKind::Move => Color::srgba(0.48, 0.78, 1.0, 0.86),
+        ActionKind::Interact | ActionKind::Hold => Color::srgba(0.42, 1.0, 0.58, 0.88),
+        ActionKind::Inspect => Color::srgba(1.0, 0.88, 0.36, 0.84),
+        ActionKind::Rest => Color::srgba(0.72, 0.65, 1.0, 0.78),
+        ActionKind::Vocalize | ActionKind::Write | ActionKind::Gesture => {
+            Color::srgba(0.82, 0.68, 1.0, 0.82)
+        }
+        ActionKind::Idle => Color::srgba(0.86, 0.88, 0.82, 0.70),
     }
 }
 

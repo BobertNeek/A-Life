@@ -1097,7 +1097,9 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
 
 #[test]
 fn graphical_runtime_overlay_is_gpu_first_without_false_pretick_events() {
-    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let graphical_launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let launch = graphical_launch.app_launch.clone();
     let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
     let mut panel = RuntimeControlPanel::from_live_loop(&live);
     let pending = GraphicalGpuRuntimeTelemetry::pending(
@@ -1110,6 +1112,7 @@ fn graphical_runtime_overlay_is_gpu_first_without_false_pretick_events() {
     assert!(initial.contains("Press Space to run, or N to step"));
     assert!(initial.contains("GPU path is armed"));
     assert!(initial.contains("Gate: CPU shadow"));
+    assert!(initial.contains("Events (last 5):"));
     assert!(!initial.contains("GPU proposal accepted after CPU shadow parity"));
     assert!(!initial.contains("Patch sealed count=0"));
     assert!(!initial.contains("Entity("));
@@ -1121,10 +1124,160 @@ fn graphical_runtime_overlay_is_gpu_first_without_false_pretick_events() {
     let stepped =
         panel.status_overlay_text_with_backend(&pending.backend_line(), &pending.overlay_lines());
     assert!(stepped.contains("Tick advanced with status Normal"));
-    assert!(stepped.contains("Creature chose Interact toward stable:2"));
+    assert!(stepped.contains("Creature action EAT toward stable:2"));
+    assert!(stepped.contains("Intent line stable:1 -> stable:2"));
+    assert!(stepped.contains("Food interaction cue highlighted"));
     assert!(stepped.contains("Patch sealed count=1"));
-    assert!(stepped.contains("H_shadow learning pulse appears"));
+    assert_eq!(
+        panel.player_events.len(),
+        alife_game_app::S02_MAX_PLAYER_EVENT_LINES
+    );
+    assert_eq!(panel.intent_marker_label(), "stable:1 -> stable:2 (EAT)");
     assert!(!stepped.contains("Entity("));
+}
+
+#[test]
+fn graphical_runtime_event_feed_keeps_last_five_meaningful_events() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(1))
+        .unwrap();
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(2))
+        .unwrap();
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(3))
+        .unwrap();
+
+    assert_eq!(
+        panel.player_events.len(),
+        alife_game_app::S02_MAX_PLAYER_EVENT_LINES
+    );
+    assert!(panel
+        .player_events
+        .iter()
+        .any(|event| event.contains("Run speed set to 3x")));
+    assert!(panel
+        .player_events
+        .iter()
+        .any(|event| event.contains("Patch sealed count=")));
+    assert!(panel
+        .player_events
+        .iter()
+        .all(|event| !event.contains("Entity(")));
+}
+
+#[test]
+fn ca03_action_badges_are_player_facing_and_stable_id_safe() {
+    assert_eq!(
+        alife_game_app::action_badge_label(ActionKind::Move),
+        "APPROACH"
+    );
+    assert_eq!(
+        alife_game_app::action_badge_label_for_target(ActionKind::Move, Some(2)),
+        "APPROACH"
+    );
+    assert_eq!(
+        alife_game_app::action_badge_label_for_target(ActionKind::Move, Some(3)),
+        "FLEE"
+    );
+    assert_eq!(
+        alife_game_app::action_badge_label(ActionKind::Interact),
+        "EAT"
+    );
+    assert_eq!(
+        alife_game_app::action_badge_label(ActionKind::Inspect),
+        "INSPECT"
+    );
+    assert_eq!(
+        alife_game_app::action_badge_label(ActionKind::Rest),
+        "SLEEP"
+    );
+    assert_eq!(alife_game_app::action_badge_label(ActionKind::Idle), "IDLE");
+
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+
+    assert_eq!(panel.intent_marker_label(), "stable:1 -> stable:2 (EAT)");
+    assert!(panel
+        .status_overlay_text()
+        .contains("Intent: stable:1 -> stable:2 (EAT)"));
+    assert!(!panel.status_overlay_text().contains("Entity("));
+
+    panel.selected_action_kind = Some(ActionKind::Move);
+    panel.target_entity = Some(3);
+    assert_eq!(panel.intent_marker_label(), "stable:1 -> stable:3 (FLEE)");
+    assert!(panel
+        .status_overlay_text()
+        .contains("Creature: stable:1  Goal: hazard  Action: FLEE"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca03_intent_line_and_action_badge_are_stable_id_presentation_only() {
+    let graphical_launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let launch = graphical_launch.app_launch.clone();
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    panel.selected_action_kind = Some(ActionKind::Move);
+    panel.target_entity = Some(3);
+
+    let mut app = alife_game_app::bevy_shell::build_ca03_intent_feedback_preview_app_shell(
+        &graphical_launch,
+        panel,
+    )
+    .unwrap();
+    app.update();
+
+    let mut badge_query = app.world_mut().query_filtered::<
+        (&bevy::prelude::Text2d, &bevy::prelude::TextColor),
+        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalActionBadge>,
+    >();
+    let badges = badge_query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(badges.len(), 1);
+    assert_eq!(badges[0].0 .0.as_str(), "Action: FLEE");
+
+    let mut marker_query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalPlaygroundMarker,
+        &bevy::prelude::Transform,
+    )>();
+    let markers = marker_query
+        .iter(app.world())
+        .map(|(marker, transform)| (marker.stable_id.raw(), transform.translation))
+        .collect::<Vec<_>>();
+    assert!(markers.iter().any(|(id, _)| *id == 1));
+    assert!(markers.iter().any(|(id, _)| *id == 3));
+
+    let mut line_query = app.world_mut().query_filtered::<
+        (&bevy::prelude::Sprite, &bevy::prelude::Transform),
+        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalIntentLine>,
+    >();
+    let lines = line_query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(lines.len(), 1);
+    let line_size = lines[0]
+        .0
+        .custom_size
+        .expect("CA03 intent line should expose a visible bounded sprite");
+    assert!(
+        line_size.x > 1.0,
+        "expected visible intent line, size={line_size:?}, markers={markers:?}"
+    );
+    assert_eq!(line_size.y, 5.0);
+    assert!(lines[0].1.translation.z > 0.0);
 }
 
 #[test]
