@@ -1,5 +1,7 @@
 //! Split from the original playable-sim app shell during R13 remediation.
 
+use std::path::Path;
+
 use crate::prelude::*;
 use crate::*;
 
@@ -540,6 +542,191 @@ pub fn run_world_editor_smoke() -> Result<WorldEditorSmokeSummary, GameAppShellE
         resumed_patch_sealed: tick.brain.experience_patch.is_some(),
         cognition_direct_mutation_count: 0,
         edit_log: session.edits_applied.clone(),
+    };
+    summary.validate()?;
+    Ok(summary)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayerSandboxEditorSmokeSummary {
+    pub schema: &'static str,
+    pub schema_version: u16,
+    pub scenario_id: String,
+    pub initial_object_count: usize,
+    pub final_object_count: usize,
+    pub placed_food: bool,
+    pub removed_food: bool,
+    pub placed_hazard: bool,
+    pub removed_hazard: bool,
+    pub placed_obstacle: bool,
+    pub removed_obstacle: bool,
+    pub edit_mode_required: bool,
+    pub saved_roundtrip_signature: Vec<String>,
+    pub saved_json_bytes: usize,
+    pub output_written: bool,
+    pub player_status_lines: Vec<String>,
+    pub stable_ids: Vec<WorldEntityId>,
+}
+
+impl PlayerSandboxEditorSmokeSummary {
+    pub fn validate(&self) -> Result<(), ScaffoldContractError> {
+        if self.schema != CA11_PLAYER_SANDBOX_EDITOR_SCHEMA
+            || self.schema_version != CA11_PLAYER_SANDBOX_EDITOR_SCHEMA_VERSION
+            || self.scenario_id.is_empty()
+            || self.final_object_count <= self.initial_object_count
+            || !self.placed_food
+            || !self.removed_food
+            || !self.placed_hazard
+            || !self.removed_hazard
+            || !self.placed_obstacle
+            || !self.removed_obstacle
+            || !self.edit_mode_required
+            || self.saved_roundtrip_signature.is_empty()
+            || self.saved_json_bytes == 0
+            || self.player_status_lines.is_empty()
+            || self.stable_ids.len() < 3
+        {
+            return Err(ScaffoldContractError::MissingPhaseData);
+        }
+        for id in &self.stable_ids {
+            id.validate()?;
+        }
+        Ok(())
+    }
+
+    pub fn signature_line(&self) -> String {
+        format!(
+            "{}:{}:{}:initial={}:final={}:food={}/{}:hazard={}/{}:obstacle={}/{}:pause={}:bytes={}:saved={}",
+            self.schema,
+            self.schema_version,
+            self.scenario_id,
+            self.initial_object_count,
+            self.final_object_count,
+            self.placed_food,
+            self.removed_food,
+            self.placed_hazard,
+            self.removed_hazard,
+            self.placed_obstacle,
+            self.removed_obstacle,
+            self.edit_mode_required,
+            self.saved_json_bytes,
+            self.saved_roundtrip_signature.join("|")
+        )
+    }
+}
+
+pub fn run_player_sandbox_editor_smoke(
+    manifest_path: impl AsRef<Path>,
+    scenario_id: Option<&str>,
+    output_path: Option<&Path>,
+) -> Result<PlayerSandboxEditorSmokeSummary, GameAppShellError> {
+    let selection = select_environment_scenario(manifest_path, scenario_id)?;
+    let source_save = PortableSaveFile::from_json_file(&selection.launch.save_path)?;
+    let world = source_save.restore_headless_world()?;
+    let initial_object_count = world.object_count();
+    let mut session = WorldEditorSession::new(world, WorldEditorConfig::default())?;
+
+    let edit_mode_required = session
+        .apply_edit(WorldEditCommand::place_food(
+            "live-edit-rejected",
+            Vec3f::new(0.25, 0.0, 0.0),
+            0.25,
+        ))
+        .is_err();
+
+    session.enter_editor();
+
+    let temp_food = session
+        .apply_edit(WorldEditCommand::place_food(
+            "sandbox-temp-food",
+            Vec3f::new(1.6, 0.0, 0.0),
+            0.55,
+        ))?
+        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+    session.apply_edit(WorldEditCommand::Remove {
+        stable_id: temp_food,
+    })?;
+
+    let temp_hazard = session
+        .apply_edit(WorldEditCommand::place_hazard(
+            "sandbox-temp-hazard",
+            Vec3f::new(2.4, 0.0, 0.0),
+            0.45,
+        ))?
+        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+    session.apply_edit(WorldEditCommand::Remove {
+        stable_id: temp_hazard,
+    })?;
+
+    let temp_obstacle = session
+        .apply_edit(WorldEditCommand::place_obstacle(
+            "sandbox-temp-obstacle",
+            Vec3f::new(-2.4, 0.0, 0.0),
+            0.7,
+        ))?
+        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+    session.apply_edit(WorldEditCommand::Remove {
+        stable_id: temp_obstacle,
+    })?;
+
+    let final_food = session
+        .apply_edit(WorldEditCommand::place_food(
+            "sandbox-food",
+            Vec3f::new(1.2, 0.0, 0.0),
+            0.7,
+        ))?
+        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+    let final_hazard = session
+        .apply_edit(WorldEditCommand::place_hazard(
+            "sandbox-hazard",
+            Vec3f::new(3.2, 0.0, 0.0),
+            0.55,
+        ))?
+        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+    let final_obstacle = session
+        .apply_edit(WorldEditCommand::place_obstacle(
+            "sandbox-obstacle",
+            Vec3f::new(-1.9, 0.0, 0.0),
+            0.9,
+        ))?
+        .ok_or(ScaffoldContractError::MissingPhaseData)?;
+
+    let edited_save = session.save_portable("ca11-player-sandbox-edited")?;
+    let edited_json = edited_save.to_json_string_pretty()?;
+    let restored = PortableSaveFile::from_json_str(&edited_json)?.restore_headless_world()?;
+    let saved_roundtrip_signature = restored.stable_signature();
+    if let Some(path) = output_path {
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            std::fs::create_dir_all(parent).map_err(PersistenceError::Io)?;
+        }
+        edited_save.to_json_file(path)?;
+    }
+
+    let summary = PlayerSandboxEditorSmokeSummary {
+        schema: CA11_PLAYER_SANDBOX_EDITOR_SCHEMA,
+        schema_version: CA11_PLAYER_SANDBOX_EDITOR_SCHEMA_VERSION,
+        scenario_id: selection.entry.id,
+        initial_object_count,
+        final_object_count: restored.object_count(),
+        placed_food: true,
+        removed_food: true,
+        placed_hazard: true,
+        removed_hazard: true,
+        placed_obstacle: true,
+        removed_obstacle: true,
+        edit_mode_required,
+        saved_roundtrip_signature,
+        saved_json_bytes: edited_json.len(),
+        output_written: output_path.is_some(),
+        player_status_lines: vec![
+            "Sandbox editor paused simulation before applying edits.".to_string(),
+            "Placed and removed food, hazard, and obstacle markers.".to_string(),
+            "Edited scenario saved through portable stable-ID save data.".to_string(),
+        ],
+        stable_ids: vec![final_food, final_hazard, final_obstacle],
     };
     summary.validate()?;
     Ok(summary)
