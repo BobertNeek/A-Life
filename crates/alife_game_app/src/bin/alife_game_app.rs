@@ -3,8 +3,8 @@ use std::{env, path::PathBuf, process::ExitCode};
 use alife_game_app::{
     load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke,
     run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
-    run_creature_visual_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
-    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    run_creature_visual_smoke, run_environment_launcher_smoke, run_feedback_polish_smoke,
+    run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_save_load_menu_smoke, run_headless_app_shell_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_fixed_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
@@ -13,7 +13,7 @@ use alife_game_app::{
     run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
     run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
     run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_shell_config, AppShellLaunchConfig, FullGpuRuntimeSmokeMode,
+    validate_app_shell_config, AppShellLaunchConfig, EnvironmentManifest, FullGpuRuntimeSmokeMode,
     FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
 };
 
@@ -55,6 +55,12 @@ fn run() -> Result<String, String> {
             };
             let summary = validate_app_shell_config(&launch).map_err(|err| err.to_string())?;
             Ok(format_summary("G01 validated app config", &summary))
+        }
+        [command, rest @ ..] if command == "list-environments" => {
+            run_list_environments_cli(rest)
+        }
+        [command, rest @ ..] if command == "environment-launch-smoke" => {
+            run_environment_launch_smoke_cli(rest)
         }
         [command, fixture_root] if command == "bevy-smoke" => run_bevy_smoke(fixture_root),
         [command, rest @ ..] if command == "graphical-playground" => {
@@ -282,8 +288,84 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | bevy-smoke <p34-fixture-root> | graphical-playground <fixture-root> [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
+}
+
+fn run_list_environments_cli(args: &[String]) -> Result<String, String> {
+    let mut manifest_path = alife_game_app::default_environment_manifest_path();
+    let mut index = 0_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--manifest requires a path".to_string())?;
+                manifest_path = PathBuf::from(value);
+                index += 2;
+            }
+            unknown => return Err(format!("unknown list-environments option: {unknown}")),
+        }
+    }
+    let manifest =
+        EnvironmentManifest::from_json_file(&manifest_path).map_err(|err| err.to_string())?;
+    manifest
+        .validate(&manifest_path)
+        .map_err(|err| err.to_string())?;
+    let scenario_lines = manifest
+        .scenarios
+        .iter()
+        .map(|scenario| {
+            format!(
+                "{}:{}:visible={}:{}",
+                scenario.id, scenario.title, scenario.player_visible, scenario.description
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("|");
+    Ok(format!(
+        "CA10 environments schema={} version={} default={} count={} scenarios={}",
+        manifest.schema,
+        manifest.schema_version,
+        manifest.default_scenario_id,
+        manifest.scenarios.len(),
+        scenario_lines
+    ))
+}
+
+fn run_environment_launch_smoke_cli(args: &[String]) -> Result<String, String> {
+    let mut manifest_path = alife_game_app::default_environment_manifest_path();
+    let mut scenario_id = None::<String>;
+    let mut index = 0_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--manifest requires a path".to_string())?;
+                manifest_path = PathBuf::from(value);
+                index += 2;
+            }
+            "--scenario" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--scenario requires an environment id".to_string())?;
+                scenario_id = Some(value.clone());
+                index += 2;
+            }
+            unknown => {
+                return Err(format!(
+                    "unknown environment-launch-smoke option: {unknown}"
+                ))
+            }
+        }
+    }
+    let summary = run_environment_launcher_smoke(&manifest_path, scenario_id.as_deref())
+        .map_err(|err| err.to_string())?;
+    Ok(format_environment_launcher_summary(
+        "CA10 environment launcher",
+        &summary,
+    ))
 }
 
 fn run_full_gpu_runtime_cli(args: &[String]) -> Result<String, String> {
@@ -457,6 +539,31 @@ fn format_summary(prefix: &str, summary: &alife_game_app::AppStartupSummary) -> 
         summary.state_labels().join(">"),
         summary.bevy_feature_compiled,
         summary.graphics_required_for_default_path
+    )
+}
+
+fn format_environment_launcher_summary(
+    prefix: &str,
+    summary: &alife_game_app::EnvironmentLauncherSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} default={} selected={} title='{}' scenarios={} seed={} assets={} objects={} creatures={} food={} hazards={} obstacles={} fixture={} error_hint='{}' signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.default_scenario_id,
+        summary.selected_scenario_id,
+        summary.title,
+        summary.scenario_count,
+        summary.seed,
+        summary.asset_count,
+        summary.object_count,
+        summary.creature_count,
+        summary.food_count,
+        summary.hazard_count,
+        summary.obstacle_count,
+        summary.fixture_root.display(),
+        summary.player_visible_error_sample,
+        summary.signature_line()
     )
 }
 
@@ -1292,19 +1399,37 @@ fn run_bevy_smoke(_fixture_root: &str) -> Result<String, String> {
 
 #[cfg(feature = "bevy-app")]
 fn run_graphical_playground_cli(args: &[String]) -> Result<String, String> {
-    use alife_game_app::GraphicalGpuRuntimeMode;
+    use alife_game_app::{GraphicalGpuRuntimeMode, GraphicalPlaygroundMode};
 
     configure_windows_graphical_playground_environment();
 
-    let Some(fixture_root) = args.first() else {
-        return Err("graphical-playground requires <p34-fixture-root>".to_string());
-    };
+    let mut fixture_root = None::<PathBuf>;
+    let mut manifest_path = alife_game_app::default_environment_manifest_path();
+    let mut scenario_id = None::<String>;
     let mut gpu_mode = GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded;
     let mut smoke_seconds = None;
     let mut require_gpu = false;
-    let mut index = 1_usize;
+    let mut index = 0_usize;
     while index < args.len() {
         match args[index].as_str() {
+            value if !value.starts_with("--") && fixture_root.is_none() => {
+                fixture_root = Some(PathBuf::from(value));
+                index += 1;
+            }
+            "--manifest" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--manifest requires a path".to_string())?;
+                manifest_path = PathBuf::from(value);
+                index += 2;
+            }
+            "--scenario" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--scenario requires an environment id".to_string())?;
+                scenario_id = Some(value.clone());
+                index += 2;
+            }
             "--gpu-mode" => {
                 let value = args
                     .get(index + 1)
@@ -1330,13 +1455,33 @@ fn run_graphical_playground_cli(args: &[String]) -> Result<String, String> {
             unknown => return Err(format!("unknown graphical-playground option: {unknown}")),
         }
     }
-    let launch = if let Some(seconds) = smoke_seconds {
-        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(fixture_root, seconds)
+
+    let app_launch = if let Some(root) = fixture_root {
+        AppShellLaunchConfig::from_p34_fixture_root(root)
     } else {
-        alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(fixture_root)
-    }
-    .with_gpu_mode(gpu_mode)
-    .require_gpu(require_gpu);
+        alife_game_app::select_environment_scenario(&manifest_path, scenario_id.as_deref())
+            .map_err(|err| err.to_string())?
+            .launch
+    };
+    let mode = smoke_seconds
+        .map(|seconds| GraphicalPlaygroundMode::Smoke { seconds })
+        .unwrap_or(GraphicalPlaygroundMode::Interactive);
+    let window_title = if let Some(seconds) = smoke_seconds {
+        format!(
+            "{} - smoke {}s",
+            alife_game_app::S01_GRAPHICAL_WINDOW_TITLE,
+            seconds
+        )
+    } else {
+        alife_game_app::S01_GRAPHICAL_WINDOW_TITLE.to_string()
+    };
+    let launch = alife_game_app::GraphicalPlaygroundLaunchConfig {
+        app_launch,
+        mode,
+        gpu_mode,
+        window_title,
+        require_gpu,
+    };
     let summary =
         alife_game_app::bevy_shell::run_graphical_playground_window_with_controls(&launch)
             .map_err(|err| err.to_string())?;

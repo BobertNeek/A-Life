@@ -1,0 +1,29 @@
+{
+  "schema": "alife.ca10.environment_manifest.v1",
+  "schema_version": 1,
+  "default_scenario_id": "gpu-alpha",
+  "scenarios": [
+    {
+      "id": "gpu-alpha",
+      "title": "GPU Alpha Playground",
+      "description": "Default GPU-first alpha arena with creature, food, hazard, and obstacle markers.",
+      "fixture_root": "../alife_world/tests/fixtures/gpu_alpha",
+      "config_file": "tiny_config.json",
+      "asset_manifest_file": "tiny_asset_manifest.json",
+      "save_file": "tiny_save.json",
+      "player_visible": true,
+      "tags": ["gpu-first", "alpha", "creature", "food", "hazard", "obstacle"]
+    },
+    {
+      "id": "p34",
+      "title": "P34 Persistence Fixture",
+      "description": "Legacy tiny persistence fixture used by headless validation and compatibility smoke tests.",
+      "fixture_root": "../alife_world/tests/fixtures/p34",
+      "config_file": "tiny_config.json",
+      "asset_manifest_file": "tiny_asset_manifest.json",
+      "save_file": "tiny_save.json",
+      "player_visible": false,
+      "tags": ["headless", "persistence", "compatibility"]
+    }
+  ]
+}
