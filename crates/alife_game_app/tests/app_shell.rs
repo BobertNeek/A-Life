@@ -10,22 +10,22 @@ use alife_game_app::{
     run_double_buffered_scheduler_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
-    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
-    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
-    run_motor_ring_arbitration_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, DoubleBufferedGraphicalScheduler,
-    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel,
-    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    run_headless_app_shell_smoke, run_homeostasis_runtime_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
+    run_longrun_balance_with_config, run_motor_ring_arbitration_smoke, run_onboarding_help_smoke,
+    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, Ca13TickBuffer, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, DoubleBufferedGraphicalScheduler, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
+    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
     RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
@@ -1115,6 +1115,60 @@ fn ca14_runtime_panel_records_motor_ring_without_action_bypass() {
     assert!(panel
         .signature_line()
         .contains(alife_game_app::CA14_MOTOR_RING_PRESENTATION_SCHEMA));
+    assert!(!panel.status_overlay_text().contains("Entity("));
+    panel.validate().unwrap();
+}
+
+#[test]
+fn ca15_homeostasis_runtime_smoke_exposes_bounded_registers_and_modulation() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_homeostasis_runtime_smoke(&launch).unwrap();
+
+    assert_eq!(
+        summary.after.schema,
+        alife_game_app::CA15_HOMEOSTASIS_RUNTIME_SCHEMA
+    );
+    assert_eq!(
+        summary.after.registers.len(),
+        alife_game_app::CA15_HOMEOSTASIS_REGISTER_COUNT
+    );
+    assert!(summary.patch_sealed);
+    assert!(summary.finite_and_bounded);
+    assert!(summary.fixed_register_count);
+    assert!(summary.salience_learning_visible);
+    assert!(summary.after.salience_modulation > 0.0);
+    assert!(summary.after.learning_modulation > 0.0);
+    assert!(summary.after.panel_text().contains("Homeostasis"));
+    assert!(summary.after.panel_text().contains("Energy"));
+    assert!(summary.after.panel_text().contains("Hunger"));
+    assert!(summary.after.panel_text().contains("Fatigue"));
+    assert!(summary.after.panel_text().contains("Pain"));
+    assert!(summary.after.panel_text().contains("Stress"));
+    assert!(summary.after.panel_text().contains("sal="));
+    assert!(summary.after.panel_text().contains("learn="));
+    assert!(!summary.after.panel_text().contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca15_runtime_panel_updates_homeostasis_after_live_step() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    let before_tick = panel.homeostasis.tick;
+    let summaries = panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+
+    assert_eq!(summaries.len(), 1);
+    assert!(panel.homeostasis.tick.raw() > before_tick.raw());
+    assert!(panel.status_overlay_text().contains("Homeo E"));
+    assert!(panel
+        .structured_status_panel_text_with_backend("GPU: test")
+        .contains("Mods: sal="));
+    assert!(panel
+        .signature_line()
+        .contains(alife_game_app::CA15_HOMEOSTASIS_RUNTIME_SCHEMA));
     assert!(!panel.status_overlay_text().contains("Entity("));
     panel.validate().unwrap();
 }

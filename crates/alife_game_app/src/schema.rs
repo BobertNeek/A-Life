@@ -88,6 +88,9 @@ pub const CA14_MOTOR_RING_PRESENTATION_SCHEMA: &str =
     "alife.ca14.motor_ring_arbitration_presentation.v1";
 pub const CA14_MOTOR_RING_PRESENTATION_SCHEMA_VERSION: u16 = 1;
 pub const CA14_MAX_MOTOR_RING_CHANNELS: usize = 6;
+pub const CA15_HOMEOSTASIS_RUNTIME_SCHEMA: &str = "alife.ca15.endocrine_homeostasis_runtime.v1";
+pub const CA15_HOMEOSTASIS_RUNTIME_SCHEMA_VERSION: u16 = 1;
+pub const CA15_HOMEOSTASIS_REGISTER_COUNT: usize = 5;
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA: &str = "alife.s01.graphical_playground_shell.v1";
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION: u16 = 1;
 pub const S01_MAX_GRAPHICAL_SMOKE_SECONDS: u32 = 120;

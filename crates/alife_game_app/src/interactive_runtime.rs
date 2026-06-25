@@ -53,6 +53,7 @@ pub struct RuntimeControlPanel {
     pub terminal_recovery_cause: Option<String>,
     pub scheduler: DoubleBufferedGraphicalScheduler,
     pub motor_ring: MotorRingPresentation,
+    pub homeostasis: HomeostasisRuntimePresentation,
     pub direct_cognition_mutation_allowed: bool,
 }
 
@@ -80,6 +81,14 @@ impl RuntimeControlPanel {
             terminal_recovery_cause: None,
             scheduler: DoubleBufferedGraphicalScheduler::default(),
             motor_ring: MotorRingPresentation::pending(),
+            homeostasis: HomeostasisRuntimePresentation::from_live_loop(live).unwrap_or_else(
+                |_| {
+                    HomeostasisRuntimePresentation::pending(
+                        live.organism_id(),
+                        live.mind().current_tick(),
+                    )
+                },
+            ),
             direct_cognition_mutation_allowed: false,
         }
     }
@@ -104,6 +113,7 @@ impl RuntimeControlPanel {
         }
         self.scheduler.validate()?;
         self.motor_ring.validate()?;
+        self.homeostasis.validate()?;
         Ok(())
     }
 
@@ -161,6 +171,7 @@ impl RuntimeControlPanel {
         self.scheduler
             .record_executed_ticks(executed_live_tick_count(&summaries))?;
         self.mind_tick = live.mind().current_tick().raw();
+        self.record_homeostasis(live)?;
         self.validate()?;
         Ok(summaries)
     }
@@ -184,6 +195,7 @@ impl RuntimeControlPanel {
         self.scheduler
             .record_executed_ticks(executed_live_tick_count(&summaries))?;
         self.mind_tick = live.mind().current_tick().raw();
+        self.record_homeostasis(live)?;
         self.validate()?;
         Ok(summaries)
     }
@@ -220,7 +232,7 @@ impl RuntimeControlPanel {
             });
         let event_lines = self.player_event_lines();
         format!(
-            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\n{}\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
+            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\n{}\n{}\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
@@ -234,6 +246,7 @@ impl RuntimeControlPanel {
             self.intent_marker_label(),
             self.last_patch_sealed,
             self.sealed_patch_count,
+            self.homeostasis.compact_line(),
             self.motor_ring.compact_line(),
             event_lines,
             extra,
@@ -267,6 +280,8 @@ impl RuntimeControlPanel {
                 "Patch: sealed={} count={}\n",
                 "Learning: H_shadow pulse\n",
                 "{}\n",
+                "{}\n",
+                "{}\n",
                 "{}"
             ),
             self.playback.label(),
@@ -282,6 +297,8 @@ impl RuntimeControlPanel {
             self.intent_marker_label(),
             self.last_patch_sealed,
             self.sealed_patch_count,
+            self.homeostasis.compact_line(),
+            self.homeostasis.modulation_line(),
             self.motor_ring.compact_line(),
             terminal_line,
         )
@@ -303,7 +320,7 @@ impl RuntimeControlPanel {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}",
+            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}:{}",
             self.schema,
             self.schema_version,
             self.playback.label(),
@@ -315,7 +332,8 @@ impl RuntimeControlPanel {
             self.sealed_patch_count,
             self.packed_record_count,
             self.scheduler.signature_line(),
-            self.motor_ring.signature_line()
+            self.motor_ring.signature_line(),
+            self.homeostasis.signature_line()
         )
     }
 
@@ -396,6 +414,11 @@ impl RuntimeControlPanel {
             motor_ring.selected_label, motor_ring.winner_margin
         ));
         self.motor_ring = motor_ring;
+        Ok(())
+    }
+
+    pub fn record_homeostasis(&mut self, live: &LiveBrainLoop) -> Result<(), GameAppShellError> {
+        self.homeostasis = HomeostasisRuntimePresentation::from_live_loop(live)?;
         Ok(())
     }
 
