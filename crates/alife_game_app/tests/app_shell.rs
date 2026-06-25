@@ -1329,8 +1329,15 @@ fn bevy_feature_ca06_mouse_selection_updates_stable_id_camera_and_inspector() {
     let overlay = alife_game_app::bevy_shell::graphical_inspector_overlay_text(
         &camera, &selection, &inspector, &gpu,
     );
+    assert!(overlay.contains("Creature Inspector"));
     assert!(overlay.contains("Stable ID: 2"));
-    assert!(overlay.contains("map=mapped"));
+    assert!(overlay.contains("Stable ID: 2 (mapped)"));
+    assert!(overlay.contains("Energy "));
+    assert!(overlay.contains("Health "));
+    assert!(overlay.contains("Hunger "));
+    assert!(overlay.contains("Fatigue"));
+    assert!(overlay.contains("Fear   "));
+    assert!(overlay.contains("Learning: H_shadow="));
     assert!(overlay.contains("Cam:"));
     assert!(overlay.contains("Read-only stable IDs"));
     assert!(!overlay.contains("Entity("));
@@ -3340,15 +3347,87 @@ fn bevy_feature_s03_inspector_overlay_is_read_only_and_stable_id_based() {
 
     assert_eq!(selection.stable_id, WorldEntityId(1));
     assert_eq!(camera.state.follow_target, Some(WorldEntityId(1)));
-    assert!(overlay.contains("Read-only Inspector"));
+    assert!(overlay.contains("Creature Inspector"));
     assert!(overlay.contains("Stable ID: 1"));
-    assert!(overlay.contains("Action: action=Some(Interact)"));
+    assert!(overlay.contains("State: Awake"));
+    assert!(overlay.contains("Energy "));
+    assert!(overlay.contains("Health "));
+    assert!(overlay.contains("Hunger "));
+    assert!(overlay.contains("Fatigue"));
+    assert!(overlay.contains("Fear   "));
+    assert!(overlay.contains("Action: EAT"));
+    assert!(overlay.contains("Target: stable:2"));
     assert!(overlay.contains("Patch: sealed=true"));
+    assert!(overlay.contains("Learning: H_shadow="));
     assert!(overlay.contains("Read-only stable IDs"));
-    assert!(overlay.contains("GPU Runtime"));
-    assert!(overlay.contains("Mode: cpu-reference"));
-    assert!(overlay.contains("Gate: CPU shadow"));
-    assert!(overlay.contains("No full action-authoritative claim"));
+    assert!(overlay.contains("Tech: CpuReference"));
+    assert!(overlay.contains("gate=CPU shadow"));
+    assert!(overlay.contains("full_auth=false"));
+    assert!(!overlay.contains("Entity("));
+    assert!(overlay.lines().all(|line| line.chars().count() <= 46));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca07_inspector_bars_are_readable_and_player_facing() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let (app, _visible, inspector) =
+        alife_game_app::bevy_shell::build_creature_inspector_world_app_shell(&launch)
+            .expect("inspector app builds");
+    let camera = *app
+        .world()
+        .resource::<alife_game_app::bevy_shell::CameraNavigationResource>();
+    let selection = *app
+        .world()
+        .resource::<alife_game_app::bevy_shell::SelectionResource>();
+    let inspector_resource = alife_game_app::bevy_shell::CreatureInspectorResource {
+        snapshot: inspector,
+    };
+    let gpu = alife_game_app::bevy_shell::GraphicalGpuTelemetryResource {
+        telemetry: GraphicalGpuRuntimeTelemetry {
+            requested_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+            selected_backend: "GpuPlastic".to_string(),
+            fallback_reason: None,
+            hardware_identifier: Some("local-test".to_string()),
+            product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow".to_string(),
+            gpu_static_dispatched_ticks: 3,
+            gpu_scores_used_for_proposals: true,
+            cpu_shadow_parity: true,
+            parity_failures: 0,
+            sealed_patches: 3,
+            h_shadow_applications: 2,
+            last_h_shadow_delta: 0.0125,
+            compact_readback_bytes: 64,
+            post_seal_readback_bytes: 64,
+            total_gpu_runtime_ms: 1.25,
+            no_active_bulk_readback: true,
+            full_action_authoritative_claim: false,
+        },
+    };
+
+    let overlay = alife_game_app::bevy_shell::graphical_inspector_overlay_text(
+        &camera,
+        &selection,
+        &inspector_resource,
+        &gpu,
+    );
+    let bars = alife_game_app::bevy_shell::ca07_creature_state_bars(&inspector_resource.snapshot);
+
+    assert_eq!(bars.len(), 5);
+    assert!(bars
+        .iter()
+        .all(|line| line.contains('[') && line.contains(']')));
+    assert!(overlay.contains("Energy "));
+    assert!(overlay.contains("Health "));
+    assert!(overlay.contains("Hunger "));
+    assert!(overlay.contains("Fatigue"));
+    assert!(overlay.contains("Fear   "));
+    assert!(overlay.contains("State: Awake"));
+    assert!(overlay.contains("Learning: H_shadow=2 last=0.0125"));
+    assert!(overlay.contains("Tech: GpuPlastic"));
+    assert!(overlay.contains("gate=CPU shadow"));
+    assert!(overlay.contains("full_auth=false"));
+    assert!(!overlay.contains("GPU Runtime"));
     assert!(!overlay.contains("Entity("));
     assert!(overlay.lines().all(|line| line.chars().count() <= 46));
 }
