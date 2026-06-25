@@ -505,10 +505,12 @@ fn format_graphical_controls_summary(
     summary: &alife_game_app::GraphicalControlSmokeSummary,
 ) -> String {
     format!(
-        "{prefix} toggle={} speed={:?} follow={:?} exit={} playback={} step={} run={} sealed={} patches={} stable_id_only={} signature={}",
+        "{prefix} toggle={} speed={:?} follow={:?} reset={} terminal_guidance={} exit={} playback={} step={} run={} sealed={} patches={} stable_id_only={} signature={}",
         summary.toggle_pause_run_verified,
         summary.speed_sequence,
         summary.follow_target.map(|id| id.raw()),
+        summary.reset_verified,
+        summary.terminal_guidance_visible,
         summary.exit_requested,
         summary.runtime.panel.playback.label(),
         summary.runtime.step_produced,

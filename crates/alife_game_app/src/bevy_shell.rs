@@ -909,11 +909,15 @@ fn handle_graphical_runtime_input(
                  live_loop: &mut GraphicalRuntimeLoopResource,
                  gpu_telemetry: &mut GraphicalGpuTelemetryResource,
                  command| {
-        if apply_graphical_runtime_command(&mut runtime.panel, live_loop, command).is_err() {
-            runtime.panel.playback = crate::RuntimePlaybackState::Paused;
-            runtime.panel.last_patch_sealed = false;
-        } else {
-            gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
+        match apply_graphical_runtime_command(&mut runtime.panel, live_loop, command) {
+            Ok(_) => {
+                gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
+            }
+            Err(err) => {
+                runtime
+                    .panel
+                    .record_terminal_recovery(format!("runtime command failed: {err}"));
+            }
         }
     };
 
@@ -968,8 +972,9 @@ fn handle_graphical_runtime_input(
     }
     if keyboard.just_pressed(KeyCode::KeyR) {
         if reset_graphical_runtime(&mut runtime, &mut live_loop, &mut gpu_telemetry).is_err() {
-            runtime.panel.playback = crate::RuntimePlaybackState::Paused;
-            runtime.panel.last_patch_sealed = false;
+            runtime
+                .panel
+                .record_terminal_recovery("reset failed; close and relaunch");
         }
     }
 }
@@ -1026,15 +1031,22 @@ fn advance_graphical_runtime_loop(
 
     if let Some(target) = runtime.smoke_target_ticks {
         if runtime.smoke_ticks_done < target {
-            if let Ok(summaries) = apply_graphical_runtime_command(
+            match apply_graphical_runtime_command(
                 &mut runtime.panel,
                 &mut live_loop,
                 RuntimeControlCommand::StepOnce,
             ) {
-                runtime.smoke_ticks_done = runtime
-                    .smoke_ticks_done
-                    .saturating_add(summaries.len() as u32);
-                gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
+                Ok(summaries) => {
+                    runtime.smoke_ticks_done = runtime
+                        .smoke_ticks_done
+                        .saturating_add(summaries.len() as u32);
+                    gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
+                }
+                Err(err) => {
+                    runtime
+                        .panel
+                        .record_terminal_recovery(format!("runtime smoke tick failed: {err}"));
+                }
             }
         }
         return;
@@ -1042,14 +1054,19 @@ fn advance_graphical_runtime_loop(
 
     if runtime.panel.playback == RuntimePlaybackState::Running {
         let ticks = runtime.panel.run_speed_ticks;
-        if apply_graphical_runtime_command(
+        match apply_graphical_runtime_command(
             &mut runtime.panel,
             &mut live_loop,
             RuntimeControlCommand::RunForTicks(ticks),
-        )
-        .is_ok()
-        {
-            gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
+        ) {
+            Ok(_) => {
+                gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
+            }
+            Err(err) => {
+                runtime
+                    .panel
+                    .record_terminal_recovery(format!("runtime tick failed: {err}"));
+            }
         }
     }
 }
@@ -1066,6 +1083,7 @@ fn apply_graphical_runtime_command(
                 RuntimePlaybackState::Running => RuntimePlaybackState::Paused,
                 RuntimePlaybackState::ShutdownRequested => RuntimePlaybackState::ShutdownRequested,
             };
+            panel.record_control_event(format!("Playback changed to {}.", panel.playback.label()));
             panel.validate()?;
             Ok(Vec::new())
         }
@@ -1080,6 +1098,7 @@ fn apply_graphical_runtime_command(
         RuntimeControlCommand::SetRunSpeed(speed) => {
             panel.run_speed_ticks = speed.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
             panel.playback = RuntimePlaybackState::Running;
+            panel.record_control_event(format!("Run speed set to {}x.", panel.run_speed_ticks));
             panel.validate()?;
             Ok(Vec::new())
         }
@@ -1099,12 +1118,13 @@ fn apply_graphical_runtime_command(
         RuntimeControlCommand::RestartAlphaFixture => {
             live_loop.live = LiveBrainLoop::from_p34_launch(&live_loop.launch)?;
             live_loop.gpu = GraphicalGpuRuntimeController::new(live_loop.gpu.mode());
-            *panel = RuntimeControlPanel::from_live_loop(&live_loop.live);
+            panel.reset_to_alpha_fixture(&live_loop.live);
             panel.validate()?;
             Ok(Vec::new())
         }
         RuntimeControlCommand::RequestExit => {
             panel.playback = RuntimePlaybackState::ShutdownRequested;
+            panel.record_control_event("Exit requested from graphical controls.");
             panel.validate()?;
             Ok(Vec::new())
         }
@@ -1118,7 +1138,7 @@ fn reset_graphical_runtime(
 ) -> Result<(), GameAppShellError> {
     live_loop.live = LiveBrainLoop::from_p34_launch(&live_loop.launch)?;
     live_loop.gpu = GraphicalGpuRuntimeController::new(live_loop.gpu.mode());
-    runtime.panel = RuntimeControlPanel::from_live_loop(&live_loop.live);
+    runtime.panel.reset_to_alpha_fixture(&live_loop.live);
     runtime.smoke_ticks_done = 0;
     gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
     runtime.panel.validate()?;

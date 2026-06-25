@@ -50,6 +50,7 @@ pub struct RuntimeControlPanel {
     pub sealed_patch_count: usize,
     pub packed_record_count: usize,
     pub player_events: Vec<String>,
+    pub terminal_recovery_cause: Option<String>,
     pub direct_cognition_mutation_allowed: bool,
 }
 
@@ -74,6 +75,7 @@ impl RuntimeControlPanel {
                 "GPU path is armed; first tick will verify CPU shadow parity.".to_string(),
                 "Creature, food, and hazard markers are presentation-only.".to_string(),
             ],
+            terminal_recovery_cause: None,
             direct_cognition_mutation_allowed: false,
         }
     }
@@ -132,17 +134,7 @@ impl RuntimeControlPanel {
                 live.update(LiveBrainTickControl::run_fixed(bounded))?
             }
             RuntimeControlCommand::RestartAlphaFixture => {
-                self.playback = RuntimePlaybackState::Paused;
-                self.world_tick = None;
-                self.selected_action_kind = None;
-                self.selected_action_id = None;
-                self.target_entity = None;
-                self.last_status = None;
-                self.last_patch_sealed = false;
-                self.sealed_patch_count = 0;
-                self.packed_record_count = 0;
-                self.player_events.clear();
-                self.push_player_event("Alpha fixture reset; stable IDs preserved.".to_string());
+                self.reset_to_alpha_fixture(live);
                 Vec::new()
             }
             RuntimeControlCommand::RequestExit => {
@@ -199,12 +191,12 @@ impl RuntimeControlPanel {
         let target = self
             .target_entity
             .map_or_else(|| "none".to_string(), |id| format!("stable:{id}"));
-        let terminal_note = match self.last_status {
-            Some(BrainTickStatus::TerminalInvalidState) => {
-                "\nSimulation stopped: invalid action/state. Press R to restart."
-            }
-            _ => "",
-        };
+        let terminal_note = self
+            .terminal_recovery_cause
+            .as_ref()
+            .map_or(String::new(), |cause| {
+                format!("\nSimulation stopped: {cause}. Press R to restart.")
+            });
         let event_lines = self.player_event_lines();
         format!(
             "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
@@ -262,6 +254,10 @@ impl RuntimeControlPanel {
         self.last_patch_sealed = summary.patch_sealed;
         self.sealed_patch_count = summary.sealed_patch_count;
         self.packed_record_count = summary.packed_record_count;
+        self.terminal_recovery_cause = match summary.status {
+            BrainTickStatus::TerminalInvalidState => Some("invalid action/state".to_string()),
+            _ => None,
+        };
         self.record_player_events_for_tick(summary);
     }
 
@@ -300,6 +296,27 @@ impl RuntimeControlPanel {
         } else {
             self.push_player_event("Patch not sealed; press R if simulation stops.".to_string());
         }
+    }
+
+    pub fn record_terminal_recovery(&mut self, cause: impl Into<String>) {
+        let cause = cause.into();
+        self.playback = RuntimePlaybackState::Paused;
+        self.last_status = Some(BrainTickStatus::TerminalInvalidState);
+        self.last_patch_sealed = false;
+        self.terminal_recovery_cause = Some(cause.clone());
+        self.push_player_event(format!("Simulation stopped: {cause}. Press R to restart."));
+    }
+
+    pub fn record_control_event(&mut self, event: impl Into<String>) {
+        self.push_player_event(event.into());
+    }
+
+    pub fn reset_to_alpha_fixture(&mut self, live: &LiveBrainLoop) {
+        *self = Self::from_live_loop(live);
+        self.player_events.clear();
+        self.push_player_event(
+            "Alpha fixture reset; stable IDs preserved. Press Space or N to continue.".to_string(),
+        );
     }
 
     fn push_player_event(&mut self, event: String) {
@@ -374,6 +391,8 @@ pub struct GraphicalControlSmokeSummary {
     pub toggle_pause_run_verified: bool,
     pub speed_sequence: [u32; 3],
     pub follow_target: Option<WorldEntityId>,
+    pub reset_verified: bool,
+    pub terminal_guidance_visible: bool,
     pub exit_requested: bool,
     pub overlay_text: String,
 }
@@ -386,7 +405,7 @@ impl GraphicalControlSmokeSummary {
                 message: "graphical control smoke must verify Space-equivalent pause/run toggle",
             });
         }
-        if self.speed_sequence != [1, 2, 3] || self.runtime.panel.run_speed_ticks != 3 {
+        if self.speed_sequence != [1, 2, 3] {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message: "graphical control smoke must verify 1/2/3 speed semantics",
             });
@@ -394,6 +413,24 @@ impl GraphicalControlSmokeSummary {
         if self.follow_target != Some(WorldEntityId(1)) {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message: "graphical control smoke must verify F-equivalent stable-ID follow",
+            });
+        }
+        if !self.reset_verified || !self.overlay_text.contains("Alpha fixture reset") {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical control smoke must verify R-equivalent reset/restart",
+            });
+        }
+        if self.runtime.panel.run_speed_ticks != 1 {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical control smoke reset must restore default 1x speed",
+            });
+        }
+        if !self.terminal_guidance_visible
+            || !self.overlay_text.contains("Simulation stopped:")
+            || !self.overlay_text.contains("Press R to restart")
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "graphical control smoke must verify terminal recovery guidance",
             });
         }
         if !self.exit_requested
@@ -466,13 +503,22 @@ pub fn run_graphical_controls_smoke(
     panel.apply_command(&mut live, RuntimeControlCommand::SetRunSpeed(3))?;
     let run = panel.apply_command(&mut live, RuntimeControlCommand::RunForTicks(3))?;
     panel.apply_command(&mut live, RuntimeControlCommand::RestartAlphaFixture)?;
+    let reset_verified = panel
+        .player_events
+        .iter()
+        .any(|event| event.contains("Alpha fixture reset"));
+    let reset_overlay_text = panel.status_overlay_text();
+    panel.record_terminal_recovery("invalid action/state");
+    let terminal_guidance_visible = panel
+        .status_overlay_text()
+        .contains("Simulation stopped: invalid action/state. Press R to restart.");
     panel.apply_command(&mut live, RuntimeControlCommand::RequestExit)?;
 
     let all_patches_sealed = step
         .iter()
         .chain(run.iter())
         .all(|summary| summary.patch_sealed);
-    let overlay_text = panel.status_overlay_text();
+    let overlay_text = format!("{}\n{}", reset_overlay_text, panel.status_overlay_text());
     let runtime = RuntimeControlSmokeSummary {
         panel,
         paused_produced: paused.len(),
@@ -485,6 +531,8 @@ pub fn run_graphical_controls_smoke(
         toggle_pause_run_verified,
         speed_sequence: [1, 2, 3],
         follow_target: camera.follow_target,
+        reset_verified,
+        terminal_guidance_visible,
         exit_requested: true,
         overlay_text,
     };
