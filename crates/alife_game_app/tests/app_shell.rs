@@ -1174,6 +1174,74 @@ fn graphical_runtime_event_feed_keeps_last_five_meaningful_events() {
 }
 
 #[test]
+fn ca05_structured_status_and_event_panels_keep_player_ui_compact() {
+    let graphical_launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let launch = graphical_launch.app_launch.clone();
+    let live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    let pending = GraphicalGpuRuntimeTelemetry::pending(
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+    );
+
+    let status = panel.structured_status_panel_text_with_backend(&pending.backend_line());
+    assert!(status.contains("Status"));
+    assert!(status.contains("A-Life GPU Alpha Playground"));
+    assert!(status.contains("GPU: GpuPlastic"));
+    assert!(status.contains("Creature: stable:1"));
+    assert!(status.contains("Goal: idle"));
+    assert!(status.contains("Learning: H_shadow pulse"));
+    assert!(!status.contains("Events (last 5):"));
+    assert!(!status.contains("No full action-authoritative"));
+    assert!(!status.contains("Entity("));
+
+    panel.record_control_event("GPU proposal accepted after CPU shadow parity");
+    let events = panel.event_feed_panel_text();
+    assert!(events.contains("Event Feed"));
+    assert!(events.contains("GPU proposal accepted after CPU shadow parity"));
+    assert!(!events.contains("Entity("));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca05_controls_and_boundary_footer_are_player_facing() {
+    let controls = alife_game_app::bevy_shell::ca05_controls_bar_text();
+    assert!(controls.contains("Controls"));
+    assert!(controls.contains("Space run/pause"));
+    assert!(controls.contains("N step"));
+    assert!(controls.contains("R reset"));
+    assert!(controls.contains("[!] hazard"));
+    assert!(controls.contains("Stable IDs only"));
+    assert!(!controls.contains("Entity("));
+
+    let telemetry = GraphicalGpuRuntimeTelemetry {
+        requested_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        selected_backend: "GpuStatic".to_string(),
+        fallback_reason: None,
+        hardware_identifier: Some("local-test-adapter".to_string()),
+        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow".to_string(),
+        gpu_static_dispatched_ticks: 3,
+        gpu_scores_used_for_proposals: true,
+        cpu_shadow_parity: true,
+        parity_failures: 0,
+        sealed_patches: 3,
+        h_shadow_applications: 1,
+        last_h_shadow_delta: 0.015,
+        compact_readback_bytes: 64,
+        post_seal_readback_bytes: 64,
+        total_gpu_runtime_ms: 1.25,
+        no_active_bulk_readback: true,
+        full_action_authoritative_claim: false,
+    };
+    let footer = alife_game_app::bevy_shell::ca05_boundary_footer_text(&telemetry);
+    assert!(footer.contains("Boundary: CPU shadow gate"));
+    assert!(footer.contains("Claim: CpuShadowGuardedStaticPlusLiveHShadow"));
+    assert!(footer.contains("no full action-authoritative"));
+    assert!(footer.contains("no bulk readback=true"));
+    assert!(!footer.contains("Entity("));
+}
+
+#[test]
 fn ca04_terminal_recovery_and_reset_are_player_visible() {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
     let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();

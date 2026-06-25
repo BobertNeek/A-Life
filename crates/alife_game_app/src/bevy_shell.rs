@@ -247,6 +247,9 @@ pub struct SaveLoadMenuOverlay;
 pub struct AdvancedGameplayOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct BoundaryFooterOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalObjectBadge {
     pub stable_id: WorldEntityId,
     pub kind: WorldObjectKind,
@@ -440,6 +443,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_gpu_visual_cues,
                 update_graphical_intent_feedback,
                 update_graphical_feedback_overlay,
+                update_graphical_boundary_footer_overlay,
                 update_graphical_save_load_menu_overlay,
                 update_graphical_advanced_gameplay_overlay,
             ),
@@ -638,16 +642,12 @@ fn spawn_graphical_playground_scene(
     app.world_mut().spawn((
         Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "A-Life GPU Alpha Playground\nFixture: GPU alpha stable-ID world  seed={}\nMode: {}  GPU={}\nRequire GPU: {}  timeout={:?}\n{}\nStable IDs: creature=1 food=2 hazard=3 obstacle=4\nControls: Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit\nMarkers: green/cyan creature, bright food, red hazard, stone obstacle",
-            summary.seed,
-            summary.mode_label,
+            "Status\nA-Life GPU Alpha Playground\nState: launch  Speed: 1x\nTick: pending  World: pending\nGPU: {} requested\nCreature: stable:1\nGoal: idle  Action: None\nTarget: none  Intent: pending\nPatch: sealed=false count=0\nLearning: H_shadow pulse\nFixture seed={}",
             summary.requested_gpu_mode.label(),
-            summary.require_gpu,
-            summary.smoke_seconds,
-            crate::s08_runtime_overlay_status_line(),
+            summary.seed,
         )),
         TextFont {
-            font_size: 16.0,
+            font_size: 14.0,
             ..default()
         },
         TextColor(Color::srgb(0.88, 0.95, 0.88)),
@@ -655,7 +655,7 @@ fn spawn_graphical_playground_scene(
             position_type: PositionType::Absolute,
             top: Val::Px(12.0),
             left: Val::Px(12.0),
-            max_width: Val::Px(540.0),
+            max_width: Val::Px(390.0),
             padding: bevy::ui::UiRect::all(Val::Px(10.0)),
             ..default()
         },
@@ -664,8 +664,8 @@ fn spawn_graphical_playground_scene(
     ));
 
     app.world_mut().spawn((
-        Name::new("A-Life S04 readability legend overlay"),
-        Text::new(readability_legend_overlay_text()),
+        Name::new("A-Life CA05 controls and legend panel"),
+        Text::new(ca05_controls_bar_text()),
         TextFont {
             font_size: 13.0,
             ..default()
@@ -673,9 +673,9 @@ fn spawn_graphical_playground_scene(
         TextColor(Color::srgb(0.95, 0.94, 0.86)),
         Node {
             position_type: PositionType::Absolute,
-            bottom: Val::Px(14.0),
+            bottom: Val::Px(118.0),
             left: Val::Px(12.0),
-            max_width: Val::Px(620.0),
+            max_width: Val::Px(570.0),
             padding: bevy::ui::UiRect::all(Val::Px(10.0)),
             ..default()
         },
@@ -684,8 +684,8 @@ fn spawn_graphical_playground_scene(
     ));
 
     app.world_mut().spawn((
-        Name::new("A-Life S04 feedback cue overlay"),
-        Text::new("Feedback cues loading..."),
+        Name::new("A-Life CA05 event feed panel"),
+        Text::new("Event Feed\n- Waiting for first GPU-backed tick."),
         TextFont {
             font_size: 13.0,
             ..default()
@@ -693,9 +693,9 @@ fn spawn_graphical_playground_scene(
         TextColor(Color::srgb(0.94, 0.98, 0.94)),
         Node {
             position_type: PositionType::Absolute,
-            bottom: Val::Px(14.0),
+            bottom: Val::Px(118.0),
             right: Val::Px(12.0),
-            max_width: Val::Px(470.0),
+            max_width: Val::Px(460.0),
             padding: bevy::ui::UiRect::all(Val::Px(10.0)),
             ..default()
         },
@@ -707,7 +707,7 @@ fn spawn_graphical_playground_scene(
         Name::new("A-Life S03 read-only creature inspector overlay"),
         Text::new("Inspector loading..."),
         TextFont {
-            font_size: 14.0,
+            font_size: 13.0,
             ..default()
         },
         TextColor(Color::srgb(0.92, 0.96, 1.0)),
@@ -715,12 +715,32 @@ fn spawn_graphical_playground_scene(
             position_type: PositionType::Absolute,
             top: Val::Px(12.0),
             right: Val::Px(12.0),
-            max_width: Val::Px(420.0),
+            max_width: Val::Px(380.0),
             padding: bevy::ui::UiRect::all(Val::Px(10.0)),
             ..default()
         },
         BackgroundColor(Color::srgba(0.02, 0.025, 0.035, 0.86)),
         InspectorStatusOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA05 CPU-shadow boundary footer"),
+        Text::new("Boundary: CPU shadow gate | Claim: pending | no bulk readback=true"),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.82, 0.90, 0.84)),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(226.0),
+            left: Val::Px(12.0),
+            right: Val::Px(12.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.015, 0.02, 0.018, 0.86)),
+        BoundaryFooterOverlay,
     ));
 
     Ok(())
@@ -1180,10 +1200,9 @@ fn update_graphical_runtime_overlay(
     mut overlays: bevy::prelude::Query<&mut Text, With<RuntimeStatusOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = runtime.panel.status_overlay_text_with_backend(
-            &gpu.telemetry.backend_line(),
-            &gpu.telemetry.overlay_lines(),
-        );
+        text.0 = runtime
+            .panel
+            .structured_status_panel_text_with_backend(&gpu.telemetry.backend_line());
     }
 }
 
@@ -1346,12 +1365,20 @@ fn intent_line_color(action_kind: ActionKind, target_entity: Option<u64>) -> Col
 }
 
 fn update_graphical_feedback_overlay(
-    feedback: Res<GraphicalFeedbackCueResource>,
-    inspector: Res<CreatureInspectorResource>,
+    runtime: Res<GraphicalRuntimeControlsResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<FeedbackCueOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = feedback_cue_overlay_text(&feedback.summary, &inspector);
+        text.0 = runtime.panel.event_feed_panel_text();
+    }
+}
+
+fn update_graphical_boundary_footer_overlay(
+    gpu: Res<GraphicalGpuTelemetryResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<BoundaryFooterOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = ca05_boundary_footer_text(&gpu.telemetry);
     }
 }
 
@@ -1443,8 +1470,24 @@ pub fn readability_legend_overlay_text() -> String {
     .join("\n")
 }
 
+pub fn ca05_controls_bar_text() -> &'static str {
+    concat!(
+        "Controls\n",
+        "Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit\n",
+        "Guide: [@] creature | [+] food | [!] hazard | [#] obstacle\n",
+        "Visuals mirror model state. Stable IDs only."
+    )
+}
+
 pub fn alpha_controls_help_text() -> &'static str {
     "Controls: Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit"
+}
+
+pub fn ca05_boundary_footer_text(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
+    format!(
+        "Boundary: CPU shadow gate | Claim: {} | no full action-authoritative | no bulk readback={}",
+        gpu.product_runtime_claim, gpu.no_active_bulk_readback
+    )
 }
 
 pub fn feedback_cue_overlay_text(
