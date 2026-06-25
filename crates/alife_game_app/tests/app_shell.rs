@@ -218,6 +218,14 @@ fn first_graphical_alpha_playtest_docs_and_launcher_are_current() {
     assert!(launcher.contains("[string]$GraphicsBackend"));
     assert!(launcher.contains("overriding inherited WGPU_BACKEND"));
     assert!(launcher.contains("-GraphicsBackend vulkan"));
+
+    let app_cli =
+        std::fs::read_to_string(root.join("crates/alife_game_app/src/bin/alife_game_app.rs"))
+            .unwrap();
+    assert!(app_cli.contains("configure_windows_graphical_playground_environment"));
+    assert!(app_cli.contains("WGPU_BACKEND"));
+    assert!(app_cli.contains("dx12 for clean alpha launch"));
+    assert!(app_cli.contains("ALIFE_GRAPHICS_BACKEND=vulkan"));
 }
 
 #[test]

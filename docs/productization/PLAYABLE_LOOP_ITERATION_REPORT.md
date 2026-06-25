@@ -23,3 +23,35 @@ The graphical alpha is GPU-first and readable, but first-user evidence should st
 
 Screenshots/video:
 No media committed. Any screenshots remain under ignored `target/` evidence directories.
+
+## Iteration 2 - Direct graphical CLI Vulkan loader noise
+
+Issue observed:
+The PowerShell launcher avoided Vulkan overlay loader noise, but a direct
+`cargo run ... graphical-playground` invocation could still inherit or choose a
+Vulkan-capable wgpu instance before the launcher environment guard ran. On this
+Windows machine, the GOG Galaxy overlay manifest then printed repeated
+`wgpu_hal::vulkan::instance` `ERROR` lines even though the graphical GPU alpha
+smoke completed successfully.
+
+Fix made:
+`alife_game_app` now applies the same Windows graphical launch policy inside
+the `graphical-playground` CLI path before Bevy or the GPU runtime initializes.
+Normal Windows graphical alpha launches set `WGPU_BACKEND=dx12` for a clean
+product path and apply the Vulkan loader log filter. Vulkan remains available
+for diagnostics by setting `ALIFE_GRAPHICS_BACKEND=vulkan`, and
+`ALIFE_GRAPHICS_BACKEND=existing` preserves an explicitly managed environment.
+
+Command evidence:
+- `WGPU_BACKEND=vulkan; cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/gpu_alpha --gpu-mode static-plastic-cpu-shadow-guarded --smoke-seconds 5` passed and printed `Windows graphical backend: WGPU_BACKEND=dx12 for clean alpha launch` without repeated Vulkan loader overlay errors.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 5 -GpuMode static-plastic-cpu-shadow-guarded` passed without repeated Vulkan loader overlay errors.
+- `cargo test -p alife_game_app --test app_shell first_graphical_alpha_playtest_docs_and_launcher_are_current -- --nocapture` passed and now checks the direct CLI guard.
+
+Remaining player-facing problem:
+The graphical alpha launch no longer looks broken from Vulkan overlay noise.
+The next player-facing issue remains making ordinary Space/N play avoid or
+recover cleanly from terminal-invalid states during longer manual sessions.
+
+Screenshots/video:
+No media committed. Any screenshots remain under ignored `target/` evidence
+directories.
