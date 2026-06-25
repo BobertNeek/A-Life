@@ -68,6 +68,27 @@ Write-Host "Controls: Space pause/run, N step once, R reset, 1/2/3 speed, F foll
 Write-Host "Camera/inspector: arrows/WASD pan, +/- zoom, Q/E orbit, F follow selected stable ID. Inspector is read-only."
 Write-Host "Readability: color+shape markers, creature/food/hazard stable-ID badges, concise GPU/fallback status, read-only inspector."
 Write-Host "Reset/restart: press R or close and relaunch the GPU alpha fixture if the current run becomes confusing."
+$IsWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+    [System.Runtime.InteropServices.OSPlatform]::Windows
+)
+
+if ($IsWindowsHost -and [string]::IsNullOrWhiteSpace($env:WGPU_BACKEND)) {
+    $env:WGPU_BACKEND = "dx12"
+    Write-Host "Graphics backend: WGPU_BACKEND=dx12 for clean Windows alpha launch. Set WGPU_BACKEND=vulkan explicitly for Vulkan diagnostics."
+} elseif (-not [string]::IsNullOrWhiteSpace($env:WGPU_BACKEND)) {
+    Write-Host "Graphics backend: WGPU_BACKEND=$env:WGPU_BACKEND"
+}
+
+$VulkanLoaderFilter = "wgpu_hal::vulkan::instance=off"
+if ($IsWindowsHost -and [string]::IsNullOrWhiteSpace($env:ALIFE_SHOW_VULKAN_LOADER_LOGS)) {
+    if ([string]::IsNullOrWhiteSpace($env:RUST_LOG)) {
+        $env:RUST_LOG = "warn,$VulkanLoaderFilter"
+    } elseif ($env:RUST_LOG -notmatch "wgpu_hal::vulkan::instance") {
+        $env:RUST_LOG = "$env:RUST_LOG,$VulkanLoaderFilter"
+    }
+
+    Write-Host "Log filter: hiding non-fatal Vulkan loader layer noise from injected overlays. Set ALIFE_SHOW_VULKAN_LOADER_LOGS=1 for diagnostics."
+}
 
 if ($DryRun) {
     exit 0
