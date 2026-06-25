@@ -10,12 +10,12 @@ mod prelude {
     pub(crate) use alife_core::{
         cpu_reference_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId, ActionKind,
         ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput, BrainTickStatus,
-        ConceptCellId, Confidence, CreatureMind, DurationTicks, ExperiencePatch, GaussianClusterId,
-        GenomeId, HomeostaticSnapshot, Intensity, LineageId, NeuralProjectionSchema,
-        NormalizedScalar, OrganismId, PhysicalContactKind, PostSealLifetimeDeltaBatch,
-        PostSealLifetimeDeltaReceipt, ReferenceActionFailure, ScaffoldContractError, SleepPhase,
-        TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, Validate, Vec3f,
-        WorldEntityId,
+        ChemistryModulation, ConceptCellId, Confidence, CreatureMind, DurationTicks,
+        ExperiencePatch, GaussianClusterId, GenomeId, HomeostaticParameters, HomeostaticSnapshot,
+        Intensity, LineageId, NeuralProjectionSchema, NormalizedScalar, OrganismId,
+        PhysicalContactKind, PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt,
+        ReferenceActionFailure, ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel,
+        TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
         Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -106,6 +106,9 @@ pub use double_buffered_scheduler::*;
 
 mod motor_ring;
 pub use motor_ring::*;
+
+mod homeostasis_runtime;
+pub use homeostasis_runtime::*;
 
 mod population_social;
 pub use population_social::*;
