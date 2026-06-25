@@ -10,31 +10,33 @@ use alife_game_app::{
     run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_feedback_polish_smoke,
     run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
-    run_graphical_population_smoke, run_hazard_recovery_smoke, run_headless_app_shell_smoke,
-    run_homeostasis_runtime_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
-    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
-    run_motor_ring_arbitration_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, DoubleBufferedGraphicalScheduler,
-    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel,
-    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    run_graphical_ecology_smoke, run_graphical_population_smoke, run_hazard_recovery_smoke,
+    run_headless_app_shell_smoke, run_homeostasis_runtime_smoke, run_lifecycle_lineage_smoke,
+    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
+    run_longrun_balance_with_config, run_motor_ring_arbitration_smoke, run_onboarding_help_smoke,
+    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, Ca13TickBuffer, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, DoubleBufferedGraphicalScheduler, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
+    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
     RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
     SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
     WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
     CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
-    CA18_MAX_GRAPHICAL_CREATURES, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
+    CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA,
+    G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -408,6 +410,68 @@ fn ca18_graphical_population_smoke_reports_bounded_stable_id_creature_cycle() {
     assert!(overlay.contains("CPU shadow gate preserved"));
     assert!(!overlay.contains("Entity("));
     summary.validate().unwrap();
+}
+
+#[test]
+fn ca19_graphical_ecology_smoke_reports_zones_resource_cycle_and_roundtrip() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_graphical_ecology_smoke(&launch).unwrap();
+
+    assert_eq!(summary.schema, CA19_GRAPHICAL_ECOLOGY_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION
+    );
+    assert_eq!(summary.terrain_zones.len(), 2);
+    assert_eq!(summary.resources.len(), 1);
+    assert_eq!(summary.hazard_pressure_zone_count, 1);
+    assert!(summary.initial_metrics.active_resources >= 1);
+    assert!(summary.cycled_metrics.resources_regrown >= 1);
+    assert!(summary.cycled_metrics.resources_spawned >= 1);
+    assert!(summary.resource_regen_visible);
+    assert!(summary.food_spawned_indicator_visible);
+    assert!(summary.save_load_roundtrip_preserved);
+    assert!(summary.stable_ids_only);
+    assert!(summary.display_only);
+    assert_eq!(
+        summary.product_runtime_claim,
+        "CpuShadowGuardedStaticPlusLiveHShadow"
+    );
+
+    let overlay = summary.compact_overlay_text();
+    assert!(overlay.contains("Ecology: zones=2"));
+    assert!(overlay.contains("hazard zones=1"));
+    assert!(overlay.contains("regrown="));
+    assert!(overlay.contains("spawned="));
+    assert!(overlay.contains("roundtrip=true"));
+    assert!(!overlay.contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca19_graphical_ecology_overlay_text_is_display_only_and_stable_id_safe() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let ecology_summary = run_graphical_ecology_smoke(&launch).unwrap();
+    assert_eq!(ecology_summary.terrain_zones.len(), 2);
+    assert_eq!(ecology_summary.resources.len(), 1);
+    assert_eq!(ecology_summary.hazard_pressure_zone_count, 1);
+    assert!(ecology_summary.resource_regen_visible);
+    assert!(ecology_summary.food_spawned_indicator_visible);
+    assert!(ecology_summary.save_load_roundtrip_preserved);
+    assert!(ecology_summary
+        .terrain_zones
+        .iter()
+        .any(|zone| zone.kind == TerrainZoneKind::HazardField));
+
+    let overlay = alife_game_app::bevy_shell::ca19_ecology_overlay_text(&ecology_summary);
+    assert!(overlay.contains("Resource Ecology"));
+    assert!(overlay.contains("Terrain: grove:berry-grove"));
+    assert!(overlay.contains("hazard zones=1"));
+    assert!(overlay.contains("Resource cycle"));
+    assert!(overlay.contains("Boundary: terrain/resource visuals cannot emit actions"));
+    assert!(!overlay.contains("Entity("));
+    assert!(!overlay.contains("full action-authoritative"));
 }
 
 #[test]

@@ -119,6 +119,9 @@ pub use hazard_recovery_loop::*;
 mod graphical_population;
 pub use graphical_population::*;
 
+mod graphical_ecology;
+pub use graphical_ecology::*;
+
 mod population_social;
 pub use population_social::*;
 
