@@ -26,11 +26,11 @@ use crate::{
     AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary, CameraNavigationState,
     CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
     CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
-    GraphicalGpuRuntimeController, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
-    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
-    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
-    S02_MAX_SMOKE_TICKS,
+    GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
+    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
+    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -267,6 +267,63 @@ pub struct GraphicalIntentLine;
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalActionBadge;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ca08SensoryCueKind {
+    Reward,
+    Pain,
+    Sleep,
+    Learning,
+}
+
+impl Ca08SensoryCueKind {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Reward => "reward",
+            Self::Pain => "pain",
+            Self::Sleep => "sleep",
+            Self::Learning => "learning",
+        }
+    }
+
+    pub const fn audio_stub(self) -> &'static str {
+        match self {
+            Self::Reward => "soft-ping",
+            Self::Pain => "warning-pulse",
+            Self::Sleep => "rest-chime",
+            Self::Learning => "learn-spark",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ca08SensoryCueRow {
+    pub kind: Ca08SensoryCueKind,
+    pub target: Option<WorldEntityId>,
+    pub active: bool,
+}
+
+impl Ca08SensoryCueRow {
+    pub fn panel_line(self) -> String {
+        let target = self
+            .target
+            .map_or_else(|| "guide".to_string(), |id| format!("stable:{}", id.raw()));
+        let state = if self.active { "on" } else { "armed" };
+        format!(
+            "{}: {} | audio={} | {}",
+            self.kind.label(),
+            state,
+            self.kind.audio_stub(),
+            target
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalSensoryCuePulse {
+    pub kind: Ca08SensoryCueKind,
+    pub target_stable_id: Option<WorldEntityId>,
+}
+
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalFeedbackCueResource {
     pub summary: crate::FeedbackPolishSummary,
@@ -451,6 +508,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_runtime_overlay,
                 update_graphical_inspector_overlay,
                 update_graphical_gpu_visual_cues,
+                update_graphical_feedback_pulses,
                 update_graphical_intent_feedback,
                 update_graphical_feedback_overlay,
                 update_graphical_boundary_footer_overlay,
@@ -639,6 +697,7 @@ fn spawn_graphical_playground_scene(
         spawn_graphical_object(app, object)?;
     }
     spawn_graphical_intent_feedback(app);
+    spawn_ca08_feedback_pulses(app, presentation);
 
     app.insert_resource(VisibleWorldSceneResource {
         schema: presentation.schema,
@@ -779,6 +838,76 @@ fn spawn_graphical_intent_feedback(app: &mut App) {
         Transform::from_xyz(0.0, 88.0, 1.15),
         GraphicalActionBadge,
     ));
+}
+
+fn spawn_ca08_feedback_pulses(app: &mut App, presentation: &VisibleWorldPresentation) {
+    for pulse in ca08_pulse_targets_for_presentation(presentation) {
+        let Some(target_id) = pulse.target_stable_id else {
+            continue;
+        };
+        let Some(target) = presentation
+            .objects
+            .iter()
+            .find(|object| object.stable_id == target_id)
+        else {
+            continue;
+        };
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life CA08 {} pulse stable:{}",
+                pulse.kind.label(),
+                target.stable_id.raw()
+            )),
+            Sprite {
+                color: ca08_pulse_color(pulse.kind, false),
+                custom_size: Some(ca08_pulse_size(pulse.kind)),
+                ..default()
+            },
+            Transform::from_translation(graphical_position(target) + Vec3::new(0.0, 0.0, 0.28)),
+            pulse,
+        ));
+    }
+}
+
+pub fn ca08_pulse_targets_for_presentation(
+    presentation: &VisibleWorldPresentation,
+) -> Vec<GraphicalSensoryCuePulse> {
+    let agent = presentation
+        .objects
+        .iter()
+        .find(|object| object.kind == WorldObjectKind::Agent);
+    let food = presentation
+        .objects
+        .iter()
+        .find(|object| object.kind == WorldObjectKind::Food);
+    let hazard = presentation
+        .objects
+        .iter()
+        .find(|object| object.kind == WorldObjectKind::Hazard);
+
+    [
+        (Ca08SensoryCueKind::Reward, food.or(agent)),
+        (Ca08SensoryCueKind::Pain, hazard.or(agent)),
+        (Ca08SensoryCueKind::Sleep, agent),
+        (Ca08SensoryCueKind::Learning, agent),
+    ]
+    .into_iter()
+    .filter_map(|(kind, target)| {
+        target.map(|target| GraphicalSensoryCuePulse {
+            kind,
+            target_stable_id: Some(target.stable_id),
+        })
+    })
+    .collect()
+}
+
+fn ca08_pulse_size(kind: Ca08SensoryCueKind) -> Vec2 {
+    match kind {
+        Ca08SensoryCueKind::Reward => Vec2::new(74.0, 74.0),
+        Ca08SensoryCueKind::Pain => Vec2::new(86.0, 86.0),
+        Ca08SensoryCueKind::Sleep => Vec2::new(102.0, 64.0),
+        Ca08SensoryCueKind::Learning => Vec2::new(118.0, 74.0),
+    }
 }
 
 fn spawn_graphical_object(
@@ -1388,6 +1517,60 @@ fn update_graphical_gpu_visual_cues(
     }
 }
 
+fn update_graphical_feedback_pulses(
+    runtime: Res<GraphicalRuntimeControlsResource>,
+    gpu: Res<GraphicalGpuTelemetryResource>,
+    markers: bevy::prelude::Query<
+        (&GraphicalPlaygroundMarker, &Transform),
+        Without<GraphicalSensoryCuePulse>,
+    >,
+    mut pulses: bevy::prelude::Query<(&GraphicalSensoryCuePulse, &mut Sprite, &mut Transform)>,
+) {
+    let phase = (runtime.panel.mind_tick % 4) as f32;
+    let pulse_scale = 1.0 + phase * 0.035;
+    for (pulse, mut sprite, mut transform) in &mut pulses {
+        if let Some(target) = pulse.target_stable_id {
+            if let Some((_, marker_transform)) = markers
+                .iter()
+                .find(|(marker, _)| marker.stable_id == target)
+            {
+                transform.translation = marker_transform.translation + Vec3::new(0.0, 0.0, 0.28);
+            }
+        }
+        let active = ca08_pulse_active(pulse.kind, &runtime.panel, &gpu.telemetry);
+        sprite.color = ca08_pulse_color(pulse.kind, active);
+        transform.scale = Vec3::splat(if active { pulse_scale } else { 0.92 });
+    }
+}
+
+fn ca08_pulse_active(
+    kind: Ca08SensoryCueKind,
+    runtime: &RuntimeControlPanel,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> bool {
+    match kind {
+        Ca08SensoryCueKind::Reward => {
+            matches!(
+                runtime.selected_action_kind,
+                Some(ActionKind::Interact | ActionKind::Hold)
+            ) && runtime.target_entity == Some(2)
+        }
+        Ca08SensoryCueKind::Pain => runtime.target_entity == Some(3),
+        Ca08SensoryCueKind::Sleep => matches!(runtime.selected_action_kind, Some(ActionKind::Rest)),
+        Ca08SensoryCueKind::Learning => gpu.h_shadow_applications > 0,
+    }
+}
+
+fn ca08_pulse_color(kind: Ca08SensoryCueKind, active: bool) -> Color {
+    let alpha = if active { 0.54 } else { 0.20 };
+    match kind {
+        Ca08SensoryCueKind::Reward => Color::srgba(0.34, 1.0, 0.46, alpha),
+        Ca08SensoryCueKind::Pain => Color::srgba(1.0, 0.20, 0.18, alpha),
+        Ca08SensoryCueKind::Sleep => Color::srgba(0.48, 0.68, 1.0, alpha),
+        Ca08SensoryCueKind::Learning => Color::srgba(0.26, 1.0, 0.82, alpha),
+    }
+}
+
 fn update_graphical_intent_feedback(
     runtime: Res<GraphicalRuntimeControlsResource>,
     markers: bevy::prelude::Query<
@@ -1490,10 +1673,16 @@ fn intent_line_color(action_kind: ActionKind, target_entity: Option<u64>) -> Col
 
 fn update_graphical_feedback_overlay(
     runtime: Res<GraphicalRuntimeControlsResource>,
+    feedback: Res<GraphicalFeedbackCueResource>,
+    gpu: Res<GraphicalGpuTelemetryResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<FeedbackCueOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = runtime.panel.event_feed_panel_text();
+        text.0 = format!(
+            "{}\n{}",
+            runtime.panel.event_feed_panel_text(),
+            ca08_sensory_cue_panel_text(&feedback.summary, &gpu.telemetry)
+        );
     }
 }
 
@@ -1669,6 +1858,8 @@ pub fn readability_legend_overlay_text() -> String {
         "Other guide markers: [#] obstacle | [T] token",
         "GPU alpha fixture: creature+food+real hazard+obstacle. P34 remains guide-only.",
         "Creature colors: cyan GPU proposals | green learned H_shadow | gray CPU fallback",
+        "Sensory pulses: reward=green pain=red sleep=blue learning=teal.",
+        "Audio stubs: soft-ping warning-pulse rest-chime learn-spark.",
         "All markers are presentation only. Stable IDs stay portable.",
     ]
     .join("\n")
@@ -1704,10 +1895,15 @@ pub fn feedback_cue_overlay_text(
     format!(
         concat!(
             "Play Feedback (display-only)\n",
+            "{}\n",
             "Cues: {}\n",
             "Food={} hazard={} sleep={} failure={}\n",
             "Creature: {}/{} curiosity={:.2}\n",
             "Boundary: cues cannot act or mutate weights"
+        ),
+        ca08_sensory_cue_panel_text(
+            feedback,
+            &GraphicalGpuRuntimeTelemetry::cpu_reference(GraphicalGpuRuntimeMode::CpuReference, 0),
         ),
         feedback.event_labels().join(">"),
         feedback
@@ -1729,6 +1925,60 @@ pub fn feedback_cue_overlay_text(
         snapshot.visual.animation.label(),
         snapshot.visual.expression.label(),
         snapshot.visual.cues.curiosity.value,
+    )
+}
+
+pub fn ca08_sensory_feedback_cues(
+    feedback: &crate::FeedbackPolishSummary,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> Vec<Ca08SensoryCueRow> {
+    let mut reward = None;
+    let mut pain = None;
+    let mut sleep = None;
+    for event in &feedback.events {
+        match event.kind {
+            crate::FeedbackEventKind::FoodReward => reward = Some(event.stable_entity),
+            crate::FeedbackEventKind::HazardPain => pain = Some(event.stable_entity),
+            crate::FeedbackEventKind::SleepTransition => sleep = Some(event.stable_entity),
+            _ => {}
+        }
+    }
+    vec![
+        Ca08SensoryCueRow {
+            kind: Ca08SensoryCueKind::Reward,
+            target: reward.flatten().or(Some(WorldEntityId(2))),
+            active: reward.is_some(),
+        },
+        Ca08SensoryCueRow {
+            kind: Ca08SensoryCueKind::Pain,
+            target: pain.flatten().or(Some(WorldEntityId(3))),
+            active: pain.is_some(),
+        },
+        Ca08SensoryCueRow {
+            kind: Ca08SensoryCueKind::Sleep,
+            target: sleep.flatten().or(Some(WorldEntityId(1))),
+            active: sleep.is_some(),
+        },
+        Ca08SensoryCueRow {
+            kind: Ca08SensoryCueKind::Learning,
+            target: Some(WorldEntityId(1)),
+            active: gpu.h_shadow_applications > 0,
+        },
+    ]
+}
+
+pub fn ca08_sensory_cue_panel_text(
+    feedback: &crate::FeedbackPolishSummary,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> String {
+    let lines = ca08_sensory_feedback_cues(feedback, gpu)
+        .into_iter()
+        .map(Ca08SensoryCueRow::panel_line)
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Sensory Cues (display-only)\n{}\nBoundary: no action/weight authority",
+        lines
     )
 }
 

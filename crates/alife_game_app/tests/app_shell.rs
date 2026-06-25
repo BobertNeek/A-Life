@@ -3434,6 +3434,79 @@ fn bevy_feature_ca07_inspector_bars_are_readable_and_player_facing() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
+fn bevy_feature_ca08_sensory_feedback_cues_are_display_only_and_readable() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let feedback = run_feedback_polish_smoke(&launch).unwrap();
+    let gpu = GraphicalGpuRuntimeTelemetry {
+        requested_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        selected_backend: "GpuPlastic".to_string(),
+        fallback_reason: None,
+        hardware_identifier: Some("local-test".to_string()),
+        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow".to_string(),
+        gpu_static_dispatched_ticks: 3,
+        gpu_scores_used_for_proposals: true,
+        cpu_shadow_parity: true,
+        parity_failures: 0,
+        sealed_patches: 3,
+        h_shadow_applications: 2,
+        last_h_shadow_delta: 0.0125,
+        compact_readback_bytes: 64,
+        post_seal_readback_bytes: 64,
+        total_gpu_runtime_ms: 1.25,
+        no_active_bulk_readback: true,
+        full_action_authoritative_claim: false,
+    };
+
+    let rows = alife_game_app::bevy_shell::ca08_sensory_feedback_cues(&feedback, &gpu);
+    let panel = alife_game_app::bevy_shell::ca08_sensory_cue_panel_text(&feedback, &gpu);
+    let legend = alife_game_app::bevy_shell::readability_legend_overlay_text();
+
+    assert_eq!(rows.len(), 4);
+    assert!(rows
+        .iter()
+        .any(|row| row.kind.label() == "reward" && row.active));
+    assert!(rows
+        .iter()
+        .any(|row| row.kind.label() == "pain" && row.active));
+    assert!(rows
+        .iter()
+        .any(|row| row.kind.label() == "sleep" && row.active));
+    assert!(rows
+        .iter()
+        .any(|row| row.kind.label() == "learning" && row.active));
+    assert!(panel.contains("Sensory Cues (display-only)"));
+    assert!(panel.contains("soft-ping"));
+    assert!(panel.contains("warning-pulse"));
+    assert!(panel.contains("rest-chime"));
+    assert!(panel.contains("learn-spark"));
+    assert!(panel.contains("Boundary: no action/weight authority"));
+    assert!(!panel.contains("Entity("));
+    assert!(legend.contains("reward=green"));
+    assert!(legend.contains("learning=teal"));
+    assert!(legend.contains("Audio stubs"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca08_graphical_pulse_markers_spawn_without_model_authority() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let presentation = load_visible_world_from_p34_save(&launch).unwrap();
+    let pulses = alife_game_app::bevy_shell::ca08_pulse_targets_for_presentation(&presentation);
+    let labels = pulses
+        .iter()
+        .map(|pulse| pulse.kind.label())
+        .collect::<Vec<_>>();
+
+    assert_eq!(pulses.len(), 4);
+    assert!(labels.contains(&"reward"));
+    assert!(labels.contains(&"pain"));
+    assert!(labels.contains(&"sleep"));
+    assert!(labels.contains(&"learning"));
+    assert!(pulses.iter().all(|pulse| pulse.target_stable_id.is_some()));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
 fn bevy_feature_s04_readability_feedback_is_display_only() {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     let (app, visible, _inspector) =
