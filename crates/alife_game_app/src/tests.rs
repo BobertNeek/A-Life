@@ -138,6 +138,7 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     assert!(script.contains("[switch]$DryRun"));
     assert!(script.contains("[int]$SmokeSeconds"));
     assert!(script.contains("[string]$GpuMode"));
+    assert!(script.contains("[string]$GraphicsBackend"));
     assert!(script.contains("graphical-playground"));
     assert!(script.contains("--gpu-mode"));
     assert!(script.contains("--smoke-seconds"));
@@ -147,6 +148,8 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     assert!(script.contains("arrows/WASD pan"));
     assert!(script.contains("Inspector is read-only"));
     assert!(script.contains("Readability:"));
+    assert!(script.contains("overriding inherited WGPU_BACKEND"));
+    assert!(script.contains("-GraphicsBackend vulkan"));
     assert!(!script.contains("\"visible-world-smoke\""));
 }
 

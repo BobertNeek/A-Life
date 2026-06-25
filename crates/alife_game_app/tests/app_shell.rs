@@ -215,6 +215,9 @@ fn first_graphical_alpha_playtest_docs_and_launcher_are_current() {
     assert!(report.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
     assert!(report.contains("not full action-authoritative"));
     assert!(launcher.contains("Reset/restart"));
+    assert!(launcher.contains("[string]$GraphicsBackend"));
+    assert!(launcher.contains("overriding inherited WGPU_BACKEND"));
+    assert!(launcher.contains("-GraphicsBackend vulkan"));
 }
 
 #[test]
