@@ -7,7 +7,7 @@ use alife_bevy_adapter::{
     SensoryEmitter,
 };
 use alife_core::{ActionKind, AffordanceBits, WorldEntityId};
-use alife_world::WorldObjectKind;
+use alife_world::{TerrainZoneKind, WorldObjectKind};
 use bevy::{
     app::AppExit,
     prelude::{
@@ -22,17 +22,18 @@ use bevy::{
 
 use crate::{
     ca18_cycle_selected_creature, ca18_graphical_population_summary, ca18_social_proximity_cues,
-    load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke,
-    run_creature_visual_smoke, run_headless_app_shell_smoke, run_live_brain_loop_smoke,
-    AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
-    Ca18GraphicalPopulationSummary, CameraNavigationState, CreatureAnimationState,
-    CreatureExpressionState, CreatureInspectorSnapshot, CreatureVisualSnapshot,
-    EntitySelectionSnapshot, GameAppShellError, GameAppState, GraphicalGpuRuntimeController,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
-    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
-    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
-    S02_MAX_SMOKE_TICKS,
+    ca19_graphical_ecology_summary, load_visible_world_from_p34_save,
+    run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
+    run_headless_app_shell_smoke, run_live_brain_loop_smoke, AdvancedGameplayUxSummary,
+    AppShellLaunchConfig, AppStartupSummary, Ca18GraphicalPopulationSummary,
+    Ca19GraphicalEcologySummary, Ca19TerrainZoneVisual, CameraNavigationState,
+    CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
+    CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
+    GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
+    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
+    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -133,6 +134,11 @@ pub struct GraphicalPlaygroundSceneResource {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalPopulationResource {
     pub summary: Ca18GraphicalPopulationSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalEcologyResource {
+    pub summary: Ca19GraphicalEcologySummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -255,6 +261,15 @@ pub struct FeedbackCueOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalPopulationOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalEcologyOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTerrainZoneMarker {
+    pub zone_id: alife_world::EcologyZoneId,
+    pub kind: TerrainZoneKind,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalSocialProximityCue {
@@ -456,6 +471,7 @@ pub fn build_graphical_playground_app_shell(
     let presentation = load_visible_world_from_p34_save(&launch.app_launch)?;
     crate::compare_visible_world_to_headless(&presentation)?;
     let population_summary = ca18_graphical_population_summary(&presentation).ok();
+    let ecology_summary = ca19_graphical_ecology_summary(&launch.app_launch).ok();
 
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -475,7 +491,7 @@ pub fn build_graphical_playground_app_shell(
     .insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     });
-    spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
+    spawn_graphical_playground_scene(&mut app, &presentation, &summary, ecology_summary.as_ref())?;
     let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
     let feedback = crate::run_feedback_polish_smoke(&launch.app_launch)?;
     let save_load = crate::GraphicalSaveLoadMenuSession::from_launch(&launch.app_launch)?;
@@ -521,6 +537,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_intent_feedback,
                 update_graphical_feedback_overlay,
                 update_graphical_population_overlay,
+                update_graphical_ecology_overlay,
                 update_graphical_boundary_footer_overlay,
                 update_graphical_save_load_menu_overlay,
                 update_graphical_advanced_gameplay_overlay,
@@ -528,6 +545,9 @@ pub fn build_graphical_playground_app_shell(
         );
     if let Some(summary) = population_summary {
         app.insert_resource(GraphicalPopulationResource { summary });
+    }
+    if let Some(summary) = ecology_summary {
+        app.insert_resource(GraphicalEcologyResource { summary });
     }
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
@@ -553,7 +573,7 @@ pub fn build_ca03_intent_feedback_preview_app_shell(
     app.insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     });
-    spawn_graphical_playground_scene(&mut app, &presentation, &summary)?;
+    spawn_graphical_playground_scene(&mut app, &presentation, &summary, None)?;
     app.insert_resource(GraphicalRuntimeControlsResource {
         panel,
         smoke_target_ticks: None,
@@ -692,6 +712,7 @@ fn spawn_graphical_playground_scene(
     app: &mut App,
     presentation: &VisibleWorldPresentation,
     summary: &GraphicalPlaygroundLaunchSummary,
+    ecology: Option<&Ca19GraphicalEcologySummary>,
 ) -> Result<(), GameAppShellError> {
     app.world_mut().spawn((Camera2d, GraphicalMainCamera));
     app.world_mut().spawn((
@@ -709,6 +730,9 @@ fn spawn_graphical_playground_scene(
         },
         VisibleWorldDebugLabel("ground:p34-fixture".to_string()),
     ));
+    if let Some(ecology) = ecology {
+        spawn_ca19_terrain_zone_visuals(app, ecology);
+    }
 
     for object in &presentation.objects {
         spawn_graphical_object(app, object)?;
@@ -768,6 +792,26 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.02, 0.035, 0.04, 0.78)),
         GraphicalPopulationOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA19 graphical ecology overlay"),
+        Text::new("Ecology: loading terrain zones..."),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.90, 1.0, 0.86)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(314.0),
+            left: Val::Px(12.0),
+            max_width: Val::Px(390.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.025, 0.04, 0.025, 0.78)),
+        GraphicalEcologyOverlay,
     ));
 
     app.world_mut().spawn((
@@ -918,6 +962,44 @@ fn spawn_ca18_social_proximity_cues(app: &mut App, presentation: &VisibleWorldPr
                 to_stable_id: cue.to_stable_id,
             },
         ));
+    }
+}
+
+fn spawn_ca19_terrain_zone_visuals(app: &mut App, ecology: &Ca19GraphicalEcologySummary) {
+    for zone in &ecology.terrain_zones {
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life CA19 terrain zone {} stable-zone:{}",
+                zone.kind.label(),
+                zone.zone_id.raw()
+            )),
+            Sprite {
+                color: ca19_terrain_zone_color(zone),
+                custom_size: Some(Vec2::splat(zone.radius * GRAPHICAL_WORLD_SCALE * 2.0)),
+                ..default()
+            },
+            Transform::from_xyz(
+                zone.center.x * GRAPHICAL_WORLD_SCALE,
+                zone.center.z * GRAPHICAL_WORLD_SCALE,
+                -1.0,
+            ),
+            GraphicalTerrainZoneMarker {
+                zone_id: zone.zone_id,
+                kind: zone.kind,
+            },
+        ));
+    }
+}
+
+fn ca19_terrain_zone_color(zone: &Ca19TerrainZoneVisual) -> Color {
+    match zone.kind {
+        TerrainZoneKind::HazardField => Color::srgba(0.95, 0.12, 0.12, 0.22),
+        TerrainZoneKind::Grove | TerrainZoneKind::Meadow => {
+            Color::srgba(0.20, 0.72, 0.30, 0.20 + zone.resource_bias * 0.10)
+        }
+        TerrainZoneKind::Wetland => Color::srgba(0.18, 0.48, 0.84, 0.22),
+        TerrainZoneKind::Rocky => Color::srgba(0.55, 0.52, 0.46, 0.22),
+        TerrainZoneKind::Nest => Color::srgba(0.78, 0.62, 0.22, 0.22),
     }
 }
 
@@ -1803,6 +1885,18 @@ fn update_graphical_population_overlay(
     }
 }
 
+fn update_graphical_ecology_overlay(
+    ecology: Option<Res<GraphicalEcologyResource>>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalEcologyOverlay>>,
+) {
+    let Some(ecology) = ecology else {
+        return;
+    };
+    for mut text in &mut overlays {
+        text.0 = ca19_ecology_overlay_text(&ecology.summary);
+    }
+}
+
 fn ca08_pulse_active(
     kind: Ca08SensoryCueKind,
     runtime: &RuntimeControlPanel,
@@ -2124,13 +2218,27 @@ pub fn readability_legend_overlay_text() -> String {
     [
         "Visual Guide: [@] creature | [+] food | [!] hazard",
         "Other guide markers: [#] obstacle | [T] token",
-        "GPU alpha fixture: creature+food+real hazard+obstacle. P34 remains guide-only.",
+        "GPU alpha fixture: creature+food+real hazard+obstacle + terrain zones. P34 remains guide-only.",
         "Creature colors: cyan GPU proposals | green learned H_shadow | gray CPU fallback",
         "Sensory pulses: reward=green pain=red sleep=blue learning=teal.",
+        "Terrain zones: green resource bias | red hazard pressure.",
         "Audio stubs: soft-ping warning-pulse rest-chime learn-spark.",
         "All markers are presentation only. Stable IDs stay portable.",
     ]
     .join("\n")
+}
+
+pub fn ca19_ecology_overlay_text(summary: &Ca19GraphicalEcologySummary) -> String {
+    format!(
+        concat!(
+            "Resource Ecology\n",
+            "{}\n",
+            "Hazard pressure zones visible={} | stable IDs only\n",
+            "Boundary: terrain/resource visuals cannot emit actions"
+        ),
+        summary.compact_overlay_text(),
+        summary.hazard_pressure_zone_count,
+    )
 }
 
 pub fn ca05_controls_bar_text() -> &'static str {

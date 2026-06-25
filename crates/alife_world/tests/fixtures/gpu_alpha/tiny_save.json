@@ -157,7 +157,62 @@
         "carried_by": null
       }
     ],
-    "last_touched_entities": []
+    "last_touched_entities": [],
+    "ecology": {
+      "schema": "alife.g07.world_ecology.v1",
+      "schema_version": 1,
+      "config": {
+        "max_world_objects": 16,
+        "max_resource_records": 8,
+        "max_zones": 4,
+        "max_spawn_per_tick": 1,
+        "cycle_length_ticks": 24
+      },
+      "zones": [
+        {
+          "id": 1,
+          "label": "berry-grove",
+          "kind": "Grove",
+          "center": { "x": 2.0, "y": 0.0, "z": 0.0 },
+          "radius": 1.75,
+          "resource_bias": 0.85,
+          "hazard_pressure": 0.0
+        },
+        {
+          "id": 2,
+          "label": "thorn-field",
+          "kind": "HazardField",
+          "center": { "x": 0.25, "y": 0.0, "z": 1.0 },
+          "radius": 1.45,
+          "resource_bias": 0.10,
+          "hazard_pressure": 0.65
+        }
+      ],
+      "resources": [
+        {
+          "object_id": 2,
+          "home_zone": 1,
+          "base_nutrition": 0.75,
+          "regrow_after_ticks": 6,
+          "decay_after_ticks": 6,
+          "consumed_at_tick": null,
+          "last_regrown_tick": null,
+          "low_salience_marker": false
+        }
+      ],
+      "spawn_policies": [],
+      "metrics": {
+        "active_resources": 1,
+        "consumed_resources": 0,
+        "active_hazards": 1,
+        "zones": 2,
+        "resources_regrown": 0,
+        "resources_spawned": 0,
+        "resources_decayed": 0,
+        "cleanup_marked": 0,
+        "cap_rejections": 0
+      }
+    }
   },
   "creatures": [
     {
