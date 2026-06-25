@@ -6,8 +6,8 @@
 use crate::prelude::*;
 use crate::*;
 
-pub const S01_GRAPHICAL_WINDOW_TITLE: &str = "A-Life Alpha Playground";
-pub const S01_DEFAULT_FIXTURE_ROOT: &str = "crates/alife_world/tests/fixtures/p34";
+pub const S01_GRAPHICAL_WINDOW_TITLE: &str = "A-Life GPU Alpha Playground";
+pub const S01_DEFAULT_FIXTURE_ROOT: &str = "crates/alife_world/tests/fixtures/gpu_alpha";
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicalGpuRuntimeMode {
@@ -74,6 +74,7 @@ pub struct GraphicalPlaygroundLaunchConfig {
     pub mode: GraphicalPlaygroundMode,
     pub gpu_mode: GraphicalGpuRuntimeMode,
     pub window_title: String,
+    pub require_gpu: bool,
 }
 
 impl GraphicalPlaygroundLaunchConfig {
@@ -81,8 +82,9 @@ impl GraphicalPlaygroundLaunchConfig {
         Self {
             app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
             mode: GraphicalPlaygroundMode::Interactive,
-            gpu_mode: GraphicalGpuRuntimeMode::CpuReference,
+            gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
             window_title: S01_GRAPHICAL_WINDOW_TITLE.to_string(),
+            require_gpu: false,
         }
     }
 
@@ -90,13 +92,19 @@ impl GraphicalPlaygroundLaunchConfig {
         Self {
             app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
             mode: GraphicalPlaygroundMode::Smoke { seconds },
-            gpu_mode: GraphicalGpuRuntimeMode::CpuReference,
+            gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
             window_title: format!("{S01_GRAPHICAL_WINDOW_TITLE} - smoke {seconds}s"),
+            require_gpu: false,
         }
     }
 
     pub const fn with_gpu_mode(mut self, gpu_mode: GraphicalGpuRuntimeMode) -> Self {
         self.gpu_mode = gpu_mode;
+        self
+    }
+
+    pub const fn require_gpu(mut self, require_gpu: bool) -> Self {
+        self.require_gpu = require_gpu;
         self
     }
 
@@ -112,6 +120,11 @@ impl GraphicalPlaygroundLaunchConfig {
                     message: "graphical smoke seconds must be in 1..=120",
                 });
             }
+        }
+        if self.require_gpu && !self.gpu_mode.requests_gpu() {
+            return Err(GameAppShellError::InvalidGraphicalLaunch {
+                message: "RequireGpu needs a GPU runtime mode, not cpu-reference",
+            });
         }
         Ok(())
     }
@@ -129,27 +142,31 @@ pub struct GraphicalPlaygroundLaunchSummary {
     pub seed: u64,
     pub selected_backend: BackendSelection,
     pub requested_gpu_mode: GraphicalGpuRuntimeMode,
+    pub require_gpu: bool,
     pub gpu_mode_visible: bool,
     pub cpu_fallback_visible: bool,
     pub stable_id_overlay_visible: bool,
     pub object_count: usize,
     pub creature_marker_count: usize,
     pub food_marker_count: usize,
+    pub hazard_marker_count: usize,
     pub visible_signature: Vec<String>,
 }
 
 impl GraphicalPlaygroundLaunchSummary {
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:objects={}:creatures={}:food={}:backend={:?}:gpu_mode={}:persistent={}:timeout={:?}",
+            "{}:{}:{}:objects={}:creatures={}:food={}:hazards={}:backend={:?}:gpu_mode={}:require_gpu={}:persistent={}:timeout={:?}",
             self.schema,
             self.schema_version,
             self.mode_label,
             self.object_count,
             self.creature_marker_count,
             self.food_marker_count,
+            self.hazard_marker_count,
             self.selected_backend,
             self.requested_gpu_mode.label(),
+            self.require_gpu,
             self.persistent_window,
             self.smoke_seconds
         )
@@ -175,12 +192,14 @@ pub fn validate_graphical_playground_launch(
         seed: startup.seed,
         selected_backend: startup.requested_backend,
         requested_gpu_mode: launch.gpu_mode,
+        require_gpu: launch.require_gpu,
         gpu_mode_visible: true,
         cpu_fallback_visible: true,
         stable_id_overlay_visible: true,
         object_count: presentation.object_count,
         creature_marker_count: presentation.kind_count(WorldObjectKind::Agent),
         food_marker_count: presentation.kind_count(WorldObjectKind::Food),
+        hazard_marker_count: presentation.kind_count(WorldObjectKind::Hazard),
         visible_signature: presentation.visible_signature,
     })
 }

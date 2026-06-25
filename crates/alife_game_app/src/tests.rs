@@ -100,8 +100,9 @@ fn s01_graphical_playground_launch_plan_validates_without_graphics() {
     assert_eq!(summary.selected_backend, BackendSelection::CpuReference);
     assert_eq!(
         summary.requested_gpu_mode,
-        GraphicalGpuRuntimeMode::CpuReference
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
     );
+    assert!(!summary.require_gpu);
     assert!(summary.gpu_mode_visible);
     assert!(summary.cpu_fallback_visible);
     assert!(summary.stable_id_overlay_visible);

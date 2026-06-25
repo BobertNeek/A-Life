@@ -149,6 +149,7 @@ pub struct GraphicalRuntimeControlsResource {
 }
 
 struct GraphicalRuntimeLoopResource {
+    launch: AppShellLaunchConfig,
     live: LiveBrainLoop,
     gpu: GraphicalGpuRuntimeController,
 }
@@ -206,7 +207,11 @@ fn graphical_runtime_resources(
     };
     Ok((
         controls,
-        GraphicalRuntimeLoopResource { live, gpu },
+        GraphicalRuntimeLoopResource {
+            launch: launch.app_launch.clone(),
+            live,
+            gpu,
+        },
         telemetry,
     ))
 }
@@ -371,7 +376,7 @@ pub fn build_graphical_playground_app_shell(
         primary_window: Some(Window {
             title: launch.window_title.clone(),
             name: Some("alife.graphical_playground".to_string()),
-            resolution: (1120, 700).into(),
+            resolution: (1180, 760).into(),
             present_mode: PresentMode::AutoVsync,
             window_theme: Some(WindowTheme::Dark),
             ..default()
@@ -467,6 +472,11 @@ pub fn run_graphical_playground_window_with_controls(
         .ok_or(GameAppShellError::VisibleWorldMismatch {
             message: "graphical runtime exited before telemetry could be captured",
         })?;
+    if launch.require_gpu && gpu.fallback_reason.is_some() {
+        return Err(GameAppShellError::InvalidGraphicalLaunch {
+            message: "RequireGpu requested a real GPU path, but graphical runtime fell back to CPU",
+        });
+    }
     Ok(GraphicalPlaygroundRunSummary {
         launch: summary,
         runtime,
@@ -598,9 +608,11 @@ fn spawn_graphical_playground_scene(
     app.world_mut().spawn((
         Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "A-Life Alpha Playground\nFixture: P34 tiny world  seed={}\nMode: {}  timeout={:?}\n{}\nStable IDs: creature=1 food=2\nControls: Space pause/run | N step | 1/2/3 speed | F follow | Esc quit\nMarkers: cyan/green creature, bright food, red hazard symbol in guide",
+            "A-Life GPU Alpha Playground\nFixture: GPU alpha stable-ID world  seed={}\nMode: {}  GPU={}\nRequire GPU: {}  timeout={:?}\n{}\nStable IDs: creature=1 food=2 hazard=3\nControls: Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit\nMarkers: green/cyan creature, bright food, red hazard",
             summary.seed,
             summary.mode_label,
+            summary.requested_gpu_mode.label(),
+            summary.require_gpu,
             summary.smoke_seconds,
             crate::s08_runtime_overlay_status_line(),
         )),
@@ -613,7 +625,7 @@ fn spawn_graphical_playground_scene(
             position_type: PositionType::Absolute,
             top: Val::Px(12.0),
             left: Val::Px(12.0),
-            max_width: Val::Px(520.0),
+            max_width: Val::Px(540.0),
             padding: bevy::ui::UiRect::all(Val::Px(10.0)),
             ..default()
         },
@@ -899,6 +911,12 @@ fn handle_graphical_runtime_input(
             RuntimeControlCommand::SetRunSpeed(3),
         );
     }
+    if keyboard.just_pressed(KeyCode::KeyR) {
+        if reset_graphical_runtime(&mut runtime, &mut live_loop, &mut gpu_telemetry).is_err() {
+            runtime.panel.playback = crate::RuntimePlaybackState::Paused;
+            runtime.panel.last_patch_sealed = false;
+        }
+    }
 }
 
 fn handle_graphical_camera_selection_input(
@@ -1023,12 +1041,33 @@ fn apply_graphical_runtime_command(
             panel.validate()?;
             Ok(summaries)
         }
+        RuntimeControlCommand::RestartAlphaFixture => {
+            live_loop.live = LiveBrainLoop::from_p34_launch(&live_loop.launch)?;
+            live_loop.gpu = GraphicalGpuRuntimeController::new(live_loop.gpu.mode());
+            *panel = RuntimeControlPanel::from_live_loop(&live_loop.live);
+            panel.validate()?;
+            Ok(Vec::new())
+        }
         RuntimeControlCommand::RequestExit => {
             panel.playback = RuntimePlaybackState::ShutdownRequested;
             panel.validate()?;
             Ok(Vec::new())
         }
     }
+}
+
+fn reset_graphical_runtime(
+    runtime: &mut GraphicalRuntimeControlsResource,
+    live_loop: &mut GraphicalRuntimeLoopResource,
+    gpu_telemetry: &mut GraphicalGpuTelemetryResource,
+) -> Result<(), GameAppShellError> {
+    live_loop.live = LiveBrainLoop::from_p34_launch(&live_loop.launch)?;
+    live_loop.gpu = GraphicalGpuRuntimeController::new(live_loop.gpu.mode());
+    runtime.panel = RuntimeControlPanel::from_live_loop(&live_loop.live);
+    runtime.smoke_ticks_done = 0;
+    gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
+    runtime.panel.validate()?;
+    Ok(())
 }
 
 fn update_graphical_camera_transform(
@@ -1086,8 +1125,9 @@ fn update_graphical_inspector_overlay(
 }
 
 fn update_graphical_gpu_visual_cues(
+    runtime: Res<GraphicalRuntimeControlsResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
-    mut markers: bevy::prelude::Query<(&GraphicalPlaygroundMarker, &mut Sprite)>,
+    mut markers: bevy::prelude::Query<(&GraphicalPlaygroundMarker, &mut Sprite, &mut Transform)>,
 ) {
     let agent_color = if gpu.telemetry.fallback_reason.is_some() {
         Color::srgb(0.78, 0.78, 0.72)
@@ -1098,9 +1138,34 @@ fn update_graphical_gpu_visual_cues(
     } else {
         Color::srgb(1.0, 0.88, 0.35)
     };
-    for (marker, mut sprite) in &mut markers {
-        if marker.kind == WorldObjectKind::Agent {
-            sprite.color = agent_color;
+    let learning_scale = if gpu.telemetry.h_shadow_applications > 0 {
+        1.18
+    } else {
+        1.0
+    };
+    let action_scale = if runtime.panel.playback == RuntimePlaybackState::Running {
+        1.08
+    } else {
+        1.0
+    };
+    let target = runtime.panel.target_entity.map(WorldEntityId);
+    for (marker, mut sprite, mut transform) in &mut markers {
+        match marker.kind {
+            WorldObjectKind::Agent => {
+                sprite.color = agent_color;
+                transform.scale = Vec3::splat(learning_scale * action_scale);
+            }
+            WorldObjectKind::Food if target == Some(marker.stable_id) => {
+                sprite.color = Color::srgb(1.0, 0.95, 0.28);
+                transform.scale = Vec3::splat(1.14);
+            }
+            WorldObjectKind::Hazard => {
+                sprite.color = Color::srgb(1.0, 0.16, 0.18);
+                transform.scale = Vec3::splat(1.06);
+            }
+            _ => {
+                transform.scale = Vec3::splat(1.0);
+            }
         }
     }
 }
@@ -1206,9 +1271,9 @@ fn compact_overlay_line(value: &str, max_chars: usize) -> String {
 
 pub fn readability_legend_overlay_text() -> String {
     [
-        "Visual Guide: [@] creature | [+] food | [!] hazard guide",
+        "Visual Guide: [@] creature | [+] food | [!] hazard",
         "Other guide markers: [#] obstacle | [T] token",
-        "P34 tiny fixture: creature+food; hazard is guide-only.",
+        "GPU alpha fixture: creature+food+real hazard. P34 remains guide-only.",
         "Creature colors: cyan GPU proposals | green learned H_shadow | gray CPU fallback",
         "All markers are presentation only. Stable IDs stay portable.",
     ]
@@ -1216,7 +1281,7 @@ pub fn readability_legend_overlay_text() -> String {
 }
 
 pub fn alpha_controls_help_text() -> &'static str {
-    "Controls: Space run/pause | N step | 1/2/3 speed | F follow | Esc quit"
+    "Controls: Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit"
 }
 
 pub fn feedback_cue_overlay_text(
@@ -1261,7 +1326,7 @@ pub fn alpha_save_load_note_text(summary: &crate::SaveLoadUxSmokeSummary) -> Str
             "Save/Load Alpha Note\n",
             "Manual slot: {}  autosave: {}\n",
             "Stable IDs: [{}]  schema={}\n",
-            "Reset/restart: close and relaunch this fixture."
+            "Reset/restart: press R or close and relaunch this fixture."
         ),
         summary.manual_save_slot,
         summary.autosave_slot,
@@ -1279,8 +1344,8 @@ pub fn alpha_playtest_status_note_text(summary: &AdvancedGameplayUxSummary) -> S
     format!(
         concat!(
             "Alpha Playtest Focus\n",
-            "Creature loop visible; advanced systems optional={} GPU optional.\n",
-            "Record: window, controls, inspector, fallback, confusing text."
+            "GPU-first creature loop visible; advanced systems optional={}. CPU fallback is degraded safety mode.\n",
+            "Record: window, controls, inspector, fallback warning, confusing text."
         ),
         summary.optional_modes,
     )

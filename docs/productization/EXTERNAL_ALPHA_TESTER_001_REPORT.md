@@ -4,6 +4,11 @@ Status: local Codex Computer Use tester evidence captured. This is a real
 computer-use playtest on the local Windows machine, not an independent human
 external tester pass.
 
+Superseding note: this report preserves the original local evidence text and
+window title from the pre-GPU-first alpha pass. Current first-player testing
+should use `A-Life GPU Alpha Playground` through
+`scripts/run_graphical_playground.ps1` and the `gpu_alpha` fixture.
+
 Evidence date: 2026-06-24
 
 ## Scope

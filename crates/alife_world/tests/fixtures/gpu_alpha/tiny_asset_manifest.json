@@ -1,0 +1,26 @@
+{
+  "schema": "alife.p34.asset_manifest.v1",
+  "schema_version": 1,
+  "entries": [
+    {
+      "asset_id": "tiny-generated-weights",
+      "kind": "GeneratedWeights",
+      "relative_path": "assets/tiny_generated_weights_ref.json",
+      "digest": "fnv1a64:f2ee994a00d74a0d",
+      "presence": "Required",
+      "schema_version": 1,
+      "size_bytes": null,
+      "provenance": "tiny GPU alpha fixture reference, not a bulk tensor"
+    },
+    {
+      "asset_id": "tiny-etf-prototypes",
+      "kind": "EtfPrototypes",
+      "relative_path": "assets/optional_etf_prototypes.json",
+      "digest": "fnv1a64:0000000000000001",
+      "presence": "Optional",
+      "schema_version": 1,
+      "size_bytes": null,
+      "provenance": "optional missing fixture proves optional assets are tolerated"
+    }
+  ]
+}

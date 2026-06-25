@@ -1,0 +1,42 @@
+{
+  "schema": "alife.p34.runtime_config.v1",
+  "schema_version": 1,
+  "deterministic_seed": 4242,
+  "brain_class": "Nano512",
+  "benchmark_population_tier": 1,
+  "backend": {
+    "requested": "CpuReference",
+    "gpu_feature_enabled": false,
+    "fallback_to_cpu": true,
+    "validation_required": true
+  },
+  "features": {
+    "school_enabled": false,
+    "semantic_adapter_enabled": false,
+    "gpu_backend_enabled": false,
+    "offline_tools_required": false
+  },
+  "school": {
+    "teacher_enabled": false,
+    "curriculum_id": null,
+    "save_teacher_private_state": false
+  },
+  "semantic": {
+    "provider": null,
+    "required": false,
+    "fake_provider_allowed": true
+  },
+  "gpu_limits": {
+    "max_storage_buffers": 16,
+    "neural_budget_ms": 4.0,
+    "no_active_gameplay_readback": true
+  },
+  "logging": {
+    "enabled": true,
+    "packed_log_schema_version": 1,
+    "max_side_buffer_bytes": 4194304,
+    "relative_log_path": null
+  },
+  "asset_root": "assets",
+  "save_root": "saves"
+}

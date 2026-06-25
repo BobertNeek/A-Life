@@ -121,7 +121,7 @@ See `docs/productization/GPU_SUSTAINED_LEARNING_SOAK_REPORT.md`.
 The combined mode is now exposed in the Bevy graphical playground:
 
 ```powershell
-cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/p34 --gpu-mode static-plastic-cpu-shadow-guarded --smoke-seconds 20
+cargo run -p alife_game_app --features "bevy-app gpu-runtime" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/gpu_alpha --gpu-mode static-plastic-cpu-shadow-guarded --smoke-seconds 20
 ```
 
 The window overlays show requested GPU mode, selected backend/fallback, CPU
