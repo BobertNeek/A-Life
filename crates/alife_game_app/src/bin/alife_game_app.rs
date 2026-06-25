@@ -1259,6 +1259,8 @@ fn run_bevy_smoke(_fixture_root: &str) -> Result<String, String> {
 fn run_graphical_playground_cli(args: &[String]) -> Result<String, String> {
     use alife_game_app::GraphicalGpuRuntimeMode;
 
+    configure_windows_graphical_playground_environment();
+
     let Some(fixture_root) = args.first() else {
         return Err("graphical-playground requires <p34-fixture-root>".to_string());
     };
@@ -1311,6 +1313,67 @@ fn run_graphical_playground_cli(args: &[String]) -> Result<String, String> {
         },
         &summary,
     ))
+}
+
+#[cfg(feature = "bevy-app")]
+fn configure_windows_graphical_playground_environment() {
+    if !cfg!(windows) {
+        return;
+    }
+
+    let backend_request = env::var("ALIFE_GRAPHICS_BACKEND")
+        .or_else(|_| env::var("ALIFE_GRAPHICAL_BACKEND"))
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "dx12".to_string());
+
+    match backend_request.as_str() {
+        "existing" => {
+            eprintln!(
+                "Windows graphical backend: respecting existing WGPU_BACKEND={}.",
+                env::var("WGPU_BACKEND").unwrap_or_else(|_| "<unset>".to_string())
+            );
+        }
+        "vulkan" | "vk" => {
+            env::set_var("WGPU_BACKEND", "vulkan");
+            eprintln!(
+                "Windows graphical backend: Vulkan diagnostics requested; injected overlay loader warnings may appear."
+            );
+        }
+        "dx12" | "d3d12" | "auto" => {
+            let previous = env::var("WGPU_BACKEND").ok();
+            env::set_var("WGPU_BACKEND", "dx12");
+            if matches!(previous.as_deref(), Some("dx12")) {
+                eprintln!("Windows graphical backend: WGPU_BACKEND=dx12.");
+            } else {
+                eprintln!(
+                    "Windows graphical backend: WGPU_BACKEND=dx12 for clean alpha launch; set ALIFE_GRAPHICS_BACKEND=vulkan for Vulkan diagnostics."
+                );
+            }
+        }
+        other => {
+            eprintln!(
+                "Windows graphical backend: unknown ALIFE_GRAPHICS_BACKEND={other}; using dx12 for clean alpha launch."
+            );
+            env::set_var("WGPU_BACKEND", "dx12");
+        }
+    }
+
+    if env::var("ALIFE_SHOW_VULKAN_LOADER_LOGS").is_ok() {
+        return;
+    }
+
+    const VULKAN_LOADER_FILTER: &str = "wgpu_hal::vulkan::instance=off";
+    match env::var("RUST_LOG") {
+        Ok(value) if value.contains("wgpu_hal::vulkan::instance") => {}
+        Ok(value) if !value.trim().is_empty() => {
+            env::set_var("RUST_LOG", format!("{value},{VULKAN_LOADER_FILTER}"));
+        }
+        _ => {
+            env::set_var("RUST_LOG", format!("warn,{VULKAN_LOADER_FILTER}"));
+        }
+    }
 }
 
 #[cfg(not(feature = "bevy-app"))]
