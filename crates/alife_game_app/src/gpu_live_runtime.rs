@@ -404,15 +404,24 @@ impl GraphicalGpuRuntimeController {
         &mut self,
         live: &mut LiveBrainLoop,
     ) -> Result<LiveBrainTickSummary, GameAppShellError> {
+        Ok(self.tick_with_motor_ring(live)?.0)
+    }
+
+    pub fn tick_with_motor_ring(
+        &mut self,
+        live: &mut LiveBrainLoop,
+    ) -> Result<(LiveBrainTickSummary, MotorRingPresentation), GameAppShellError> {
         match self.mode {
             GraphicalGpuRuntimeMode::CpuReference => {
                 let proposals = live.current_context_proposals()?;
+                let motor_ring =
+                    MotorRingPresentation::from_proposals(live.organism_id(), &proposals)?;
                 let tick = live.tick_with_proposals_detailed(proposals, true);
                 self.telemetry = GraphicalGpuRuntimeTelemetry::cpu_reference(
                     self.mode,
                     tick.summary.sealed_patch_count,
                 );
-                Ok(tick.summary)
+                Ok((tick.summary, motor_ring))
             }
             GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
             | GraphicalGpuRuntimeMode::AutoWithCpuFallback => self.tick_gpu_requested(live),
@@ -423,19 +432,20 @@ impl GraphicalGpuRuntimeController {
     fn tick_gpu_requested(
         &mut self,
         live: &mut LiveBrainLoop,
-    ) -> Result<LiveBrainTickSummary, GameAppShellError> {
+    ) -> Result<(LiveBrainTickSummary, MotorRingPresentation), GameAppShellError> {
         let proposals = live.current_context_proposals()?;
+        let motor_ring = MotorRingPresentation::from_proposals(live.organism_id(), &proposals)?;
         let tick = live.tick_with_proposals_detailed(proposals, true);
         self.telemetry =
             GraphicalGpuRuntimeTelemetry::cpu_reference(self.mode, tick.summary.sealed_patch_count);
-        Ok(tick.summary)
+        Ok((tick.summary, motor_ring))
     }
 
     #[cfg(feature = "gpu-runtime")]
     fn tick_gpu_requested(
         &mut self,
         live: &mut LiveBrainLoop,
-    ) -> Result<LiveBrainTickSummary, GameAppShellError> {
+    ) -> Result<(LiveBrainTickSummary, MotorRingPresentation), GameAppShellError> {
         use alife_gpu_backend::{
             full_gpu_runtime_live_plasticity_schema, post_seal_delta_batch_from_plasticity_report,
             run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
@@ -477,6 +487,7 @@ impl GraphicalGpuRuntimeController {
         if gpu_available && !self.h_shadow_applied_once {
             live.initialize_neural_projection_schema(full_gpu_runtime_live_plasticity_schema()?)?;
         }
+        let motor_ring = MotorRingPresentation::from_proposals(live.organism_id(), &proposals)?;
         let tick = live.tick_with_proposals_detailed(proposals, !gpu_available);
 
         if gpu_available
@@ -532,7 +543,7 @@ impl GraphicalGpuRuntimeController {
             full_action_authoritative_claim: false,
         };
         self.telemetry.validate()?;
-        Ok(tick.summary)
+        Ok((tick.summary, motor_ring))
     }
 }
 

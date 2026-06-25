@@ -81,6 +81,12 @@ pub struct LiveBrainTickDetailed {
     pub sealed_patch: Option<ExperiencePatch>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveBrainTickBatch {
+    pub summaries: Vec<LiveBrainTickSummary>,
+    pub motor_ring: Option<MotorRingPresentation>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LiveBrainProposalScores {
     pub food_score: f32,
@@ -238,21 +244,43 @@ impl LiveBrainLoop {
         &mut self,
         control: LiveBrainTickControl,
     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
+        Ok(self.update_with_motor_ring(control)?.summaries)
+    }
+
+    pub fn update_with_motor_ring(
+        &mut self,
+        control: LiveBrainTickControl,
+    ) -> Result<LiveBrainTickBatch, GameAppShellError> {
         let ticks = match control.mode {
             LiveBrainRunMode::Paused => 0,
             LiveBrainRunMode::StepOnce => 1,
             LiveBrainRunMode::RunFixed => control.fixed_ticks.min(16),
         };
         let mut summaries = Vec::with_capacity(ticks as usize);
+        let mut motor_ring = None;
         for _ in 0..ticks {
             let proposals = self.proposals_from_current_sensory()?;
+            motor_ring = Some(MotorRingPresentation::from_proposals(
+                self.organism_id,
+                &proposals,
+            )?);
             summaries.push(self.tick_with_proposals(proposals));
         }
-        Ok(summaries)
+        Ok(LiveBrainTickBatch {
+            summaries,
+            motor_ring,
+        })
     }
 
     pub fn current_context_proposals(&self) -> Result<Vec<ActionProposal>, GameAppShellError> {
         self.proposals_from_current_sensory()
+    }
+
+    pub fn current_motor_ring_presentation(
+        &self,
+    ) -> Result<MotorRingPresentation, GameAppShellError> {
+        let proposals = self.proposals_from_current_sensory()?;
+        MotorRingPresentation::from_proposals(self.organism_id, &proposals)
     }
 
     pub fn current_sensory_report(&self) -> Result<HeadlessSensoryReport, GameAppShellError> {
