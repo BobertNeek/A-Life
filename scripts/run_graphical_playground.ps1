@@ -4,6 +4,8 @@ param(
     [int]$SmokeSeconds = 0,
     [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
     [string]$GpuMode = "static-plastic-cpu-shadow-guarded",
+    [ValidateSet("auto", "dx12", "vulkan", "existing")]
+    [string]$GraphicsBackend = "auto",
     [switch]$RequireGpu
 )
 
@@ -58,6 +60,7 @@ Write-Host $DisplayCommand
 Write-Host "Alpha tester command: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 30 -GpuMode static-plastic-cpu-shadow-guarded"
 Write-Host "GPU mode requested: $GpuMode"
 Write-Host "CPU fallback is safety fallback, not the target alpha path."
+Write-Host "Graphics backend requested: $GraphicsBackend"
 if ($RequireGpu) {
     Write-Host "RequireGpu: enabled. A CPU fallback exits as a clear GPU-unavailable failure."
 } else {
@@ -72,9 +75,31 @@ $IsWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatfo
     [System.Runtime.InteropServices.OSPlatform]::Windows
 )
 
-if ($IsWindowsHost -and [string]::IsNullOrWhiteSpace($env:WGPU_BACKEND)) {
-    $env:WGPU_BACKEND = "dx12"
-    Write-Host "Graphics backend: WGPU_BACKEND=dx12 for clean Windows alpha launch. Set WGPU_BACKEND=vulkan explicitly for Vulkan diagnostics."
+if ($IsWindowsHost) {
+    $EffectiveGraphicsBackend = if ($GraphicsBackend -eq "auto") { "dx12" } else { $GraphicsBackend }
+
+    if ($EffectiveGraphicsBackend -eq "existing") {
+        if ([string]::IsNullOrWhiteSpace($env:WGPU_BACKEND)) {
+            Write-Host "Graphics backend: existing WGPU_BACKEND is empty; wgpu will choose its default."
+        } else {
+            Write-Host "Graphics backend: respecting existing WGPU_BACKEND=$env:WGPU_BACKEND"
+        }
+    } else {
+        $PreviousWgpuBackend = $env:WGPU_BACKEND
+        $env:WGPU_BACKEND = $EffectiveGraphicsBackend
+
+        if ([string]::IsNullOrWhiteSpace($PreviousWgpuBackend) -or $PreviousWgpuBackend -eq $EffectiveGraphicsBackend) {
+            Write-Host "Graphics backend: WGPU_BACKEND=$EffectiveGraphicsBackend for clean Windows alpha launch."
+        } else {
+            Write-Host "Graphics backend: overriding inherited WGPU_BACKEND=$PreviousWgpuBackend with $EffectiveGraphicsBackend for clean Windows alpha launch."
+        }
+
+        if ($EffectiveGraphicsBackend -eq "vulkan") {
+            Write-Host "Graphics backend: Vulkan diagnostics requested; injected overlay loader warnings may appear if ALIFE_SHOW_VULKAN_LOADER_LOGS=1."
+        } else {
+            Write-Host "Graphics backend: use -GraphicsBackend vulkan only for Vulkan diagnostics."
+        }
+    }
 } elseif (-not [string]::IsNullOrWhiteSpace($env:WGPU_BACKEND)) {
     Write-Host "Graphics backend: WGPU_BACKEND=$env:WGPU_BACKEND"
 }
