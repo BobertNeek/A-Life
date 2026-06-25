@@ -48,6 +48,9 @@ pub use schema::*;
 mod app_shell;
 pub use app_shell::*;
 
+mod app_bundle_ingestion;
+pub use app_bundle_ingestion::*;
+
 mod visible_world;
 pub use visible_world::*;
 

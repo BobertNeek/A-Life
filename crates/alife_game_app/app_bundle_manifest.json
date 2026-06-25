@@ -1,0 +1,72 @@
+{
+  "schema": "alife.ca12.app_bundle_manifest.v1",
+  "schema_version": 1,
+  "bundle_id": "ca12-app-runtime-bundle",
+  "environment_manifest": "crates/alife_game_app/environment_manifest.json",
+  "placeholder_art_manifest": "crates/alife_game_app/placeholder_art_manifest.json",
+  "entries": [
+    {
+      "id": "gpu-alpha-config",
+      "kind": "runtime-config",
+      "relative_path": "crates/alife_world/tests/fixtures/gpu_alpha/tiny_config.json",
+      "required": true
+    },
+    {
+      "id": "gpu-alpha-assets",
+      "kind": "asset-manifest",
+      "relative_path": "crates/alife_world/tests/fixtures/gpu_alpha/tiny_asset_manifest.json",
+      "required": true
+    },
+    {
+      "id": "gpu-alpha-save",
+      "kind": "portable-save",
+      "relative_path": "crates/alife_world/tests/fixtures/gpu_alpha/tiny_save.json",
+      "required": true
+    },
+    {
+      "id": "p34-config",
+      "kind": "runtime-config",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_config.json",
+      "required": true
+    },
+    {
+      "id": "p34-assets",
+      "kind": "asset-manifest",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
+      "required": true
+    },
+    {
+      "id": "p34-save",
+      "kind": "portable-save",
+      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_save.json",
+      "required": true
+    }
+  ],
+  "shader_assets": [
+    {
+      "id": "p24-contract",
+      "relative_path": "crates/alife_gpu_backend/shaders/p24_contract.wgsl",
+      "required": true
+    },
+    {
+      "id": "p25-static-forward",
+      "relative_path": "crates/alife_gpu_backend/shaders/p25_static_forward.wgsl",
+      "required": true
+    },
+    {
+      "id": "p26-plasticity",
+      "relative_path": "crates/alife_gpu_backend/shaders/p26_plasticity.wgsl",
+      "required": true
+    },
+    {
+      "id": "p27-supertile-routing",
+      "relative_path": "crates/alife_gpu_backend/shaders/p27_supertile_routing.wgsl",
+      "required": true
+    },
+    {
+      "id": "p28-recompaction-autophagy",
+      "relative_path": "crates/alife_gpu_backend/shaders/p28_recompaction_autophagy.wgsl",
+      "required": true
+    }
+  ]
+}

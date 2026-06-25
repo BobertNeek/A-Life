@@ -1,0 +1,35 @@
+{
+  "schema": "alife.ca12.placeholder_art_manifest.v1",
+  "schema_version": 1,
+  "manifest_id": "ca12-placeholder-art",
+  "entries": [
+    {
+      "id": "alpha-creature-marker",
+      "kind": "creature",
+      "shape": "circle",
+      "color": "cyan",
+      "description": "GPU alpha creature marker placeholder"
+    },
+    {
+      "id": "alpha-food-marker",
+      "kind": "food",
+      "shape": "square",
+      "color": "green",
+      "description": "Food resource marker placeholder"
+    },
+    {
+      "id": "alpha-hazard-marker",
+      "kind": "hazard",
+      "shape": "triangle",
+      "color": "red",
+      "description": "Hazard warning marker placeholder"
+    },
+    {
+      "id": "alpha-obstacle-marker",
+      "kind": "obstacle",
+      "shape": "block",
+      "color": "yellow",
+      "description": "Obstacle marker placeholder"
+    }
+  ]
+}
