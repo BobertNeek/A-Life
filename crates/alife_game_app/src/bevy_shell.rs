@@ -625,7 +625,7 @@ fn spawn_graphical_playground_scene(
         Name::new("A-Life S04 readability legend overlay"),
         Text::new(readability_legend_overlay_text()),
         TextFont {
-            font_size: 14.0,
+            font_size: 13.0,
             ..default()
         },
         TextColor(Color::srgb(0.95, 0.94, 0.86)),
@@ -1156,39 +1156,59 @@ pub fn graphical_inspector_overlay_text(
     gpu: &GraphicalGpuTelemetryResource,
 ) -> String {
     let snapshot = &inspector.snapshot;
+    let action = compact_overlay_line(&snapshot.action_summary, 36);
+    let patch = compact_overlay_line(&snapshot.patch_summary, 36);
+    let drives = compact_overlay_line(&snapshot.drive_lines.join(", "), 36);
+    let follow = camera
+        .state
+        .follow_target
+        .map_or_else(|| "none".to_string(), |id| id.raw().to_string());
     format!(
         concat!(
             "Read-only Inspector\n",
-            "Stable ID: {}  adapter={}\n",
-            "Organism: {:?} kind={:?}\n",
+            "Stable ID: {} map={}\n",
+            "Org: {:?} kind={:?}\n",
             "Action: {}\n",
             "Patch: {}\n",
             "Drives: {}\n",
-            "Visual: {} / {}\n",
-            "Camera: ({:.2},{:.2}) zoom={:.2} follow={:?}\n",
-            "Boundary: stable IDs only; read_only={}\n\n{}"
+            "Visual: {}/{}\n",
+            "Cam: ({:.1},{:.1}) z={:.1}\n",
+            "Follow: {}\n",
+            "Read-only stable IDs\n\n{}"
         ),
         selection.stable_id.raw(),
         selection.local_entity.map(|_| "mapped").unwrap_or("none"),
         snapshot.selection.organism_id.map(|id| id.raw()),
         snapshot.selection.kind,
-        snapshot.action_summary,
-        snapshot.patch_summary,
-        snapshot.drive_lines.join(", "),
+        action,
+        patch,
+        drives,
         snapshot.visual.animation.label(),
         snapshot.visual.expression.label(),
         camera.state.focus.x,
         camera.state.focus.z,
         camera.state.zoom,
-        camera.state.follow_target.map(|id| id.raw()),
-        snapshot.read_only,
+        follow,
         gpu.telemetry.inspector_lines()
     )
 }
 
+fn compact_overlay_line(value: &str, max_chars: usize) -> String {
+    let char_count = value.chars().count();
+    if char_count <= max_chars {
+        return value.to_string();
+    }
+    let keep = max_chars.saturating_sub(3);
+    let mut compact = value.chars().take(keep).collect::<String>();
+    compact.push_str("...");
+    compact
+}
+
 pub fn readability_legend_overlay_text() -> String {
     [
-        "Visual Guide: [@] creature | [+] food | [!] hazard | [#] obstacle | [T] token",
+        "Visual Guide: [@] creature | [+] food | [!] hazard guide",
+        "Other guide markers: [#] obstacle | [T] token",
+        "P34 tiny fixture: creature+food; hazard is guide-only.",
         "Creature colors: cyan GPU proposals | green learned H_shadow | gray CPU fallback",
         "All markers are presentation only. Stable IDs stay portable.",
     ]

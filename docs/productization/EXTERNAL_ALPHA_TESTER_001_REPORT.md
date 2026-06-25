@@ -122,15 +122,15 @@ smoke run or prevent GPU selection.
 
 ### MEDIUM
 
-- The right read-only inspector/GPU runtime panel is horizontally clipped in the
-  captured 1134x738 window. A first alpha tester can see the section, but not
-  all field values.
-- Manual controls were not verified through Computer Use because key injection
-  failed with `foreground window did not report a process id`. Controls are
-  visible in-window, but human tester interaction evidence is still needed.
-- The P34 fixture did not show a distinct hazard object in the captured world
-  view. The first-tester checklist should continue treating hazard visibility
-  as partial unless a richer fixture or clearer hazard guide is used.
+- Remediated after this local evidence pass: the right read-only
+  inspector/GPU runtime panel was compacted so key fields fit at the captured
+  1134x738 size.
+- Remediated after this local evidence pass: deterministic control evidence was
+  added through `graphical-controls-smoke` because Computer Use key injection
+  failed with `foreground window did not report a process id`.
+- Clarified after this local evidence pass: the P34 fixture has creature and
+  food markers, while hazard visibility is represented by an explicit guide-only
+  warning line unless a richer fixture is loaded.
 
 ### LOW
 
@@ -152,6 +152,6 @@ readiness and does not change the GPU runtime claim.
 
 ## Next Recommendation
 
-Fix or improve the clipped inspector layout before broadening the alpha tester
-pool, then collect one independent human tester pass that manually exercises
-pause/run, step, speed, follow, and quit controls.
+Collect one independent human tester pass that manually exercises pause/run,
+step, speed, follow, and quit controls. Use `graphical-controls-smoke` as local
+deterministic control evidence when Computer Use key injection is unavailable.

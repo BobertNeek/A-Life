@@ -322,12 +322,14 @@ impl GraphicalGpuRuntimeTelemetry {
             concat!(
                 "GPU Runtime\n",
                 "Mode: {}\n",
-                "Selected: {} fallback={}\n",
-                "Claim: {}\n",
-                "Scores used={} CPU parity={} failures={}\n",
-                "Learning: H_shadow_apps={} last_delta={:.6}\n",
-                "Readback: compact={} post_seal={} timing_ms={:.4}\n",
-                "Boundary: CPU shadow remains the gate; not full action-authoritative."
+                "Backend: {}\n",
+                "Fallback: {}\n",
+                "Claim:\n  {}\n",
+                "Scores={} parity={} fail={}\n",
+                "H_shadow apps={} last={:.5}\n",
+                "Readback c={} post={}\n",
+                "Gate: CPU shadow\n",
+                "No full action-authoritative claim"
             ),
             self.requested_mode.label(),
             self.selected_backend,
@@ -340,7 +342,6 @@ impl GraphicalGpuRuntimeTelemetry {
             self.last_h_shadow_delta,
             self.compact_readback_bytes,
             self.post_seal_readback_bytes,
-            self.total_gpu_runtime_ms,
         )
     }
 
