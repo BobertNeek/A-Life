@@ -1174,6 +1174,38 @@ fn graphical_runtime_event_feed_keeps_last_five_meaningful_events() {
 }
 
 #[test]
+fn ca04_terminal_recovery_and_reset_are_player_visible() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    panel.record_terminal_recovery("invalid action/state");
+    let terminal = panel.status_overlay_text();
+    assert!(terminal.contains("Simulation stopped: invalid action/state. Press R to restart."));
+    assert!(terminal.contains("Controls: Space run/pause | N step | R reset | Esc quit"));
+    assert!(panel
+        .player_events
+        .iter()
+        .any(|event| event.contains("Press R to restart")));
+    assert!(!terminal.contains("Entity("));
+
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::RestartAlphaFixture)
+        .unwrap();
+    let reset = panel.status_overlay_text();
+    assert!(reset.contains("Alpha fixture reset; stable IDs preserved"));
+    assert!(!reset.contains("Simulation stopped:"));
+    assert_eq!(panel.playback, RuntimePlaybackState::Paused);
+    assert_eq!(panel.world_tick, None);
+    assert_eq!(panel.sealed_patch_count, 0);
+    assert_eq!(panel.packed_record_count, 0);
+    assert_eq!(panel.intent_marker_label(), "pending");
+}
+
+#[test]
 fn ca03_action_badges_are_player_facing_and_stable_id_safe() {
     assert_eq!(
         alife_game_app::action_badge_label(ActionKind::Move),
@@ -1288,6 +1320,8 @@ fn graphical_controls_smoke_verifies_first_tester_controls_without_key_injection
     assert!(summary.toggle_pause_run_verified);
     assert_eq!(summary.speed_sequence, [1, 2, 3]);
     assert_eq!(summary.follow_target, Some(WorldEntityId(1)));
+    assert!(summary.reset_verified);
+    assert!(summary.terminal_guidance_visible);
     assert!(summary.exit_requested);
     assert_eq!(
         summary.runtime.panel.playback,
@@ -1296,7 +1330,15 @@ fn graphical_controls_smoke_verifies_first_tester_controls_without_key_injection
     assert_eq!(summary.runtime.step_produced, 1);
     assert!(summary.runtime.run_produced > 0);
     assert!(summary.runtime.all_patches_sealed);
+    assert!(summary.overlay_text.contains("Alpha fixture reset"));
+    assert!(summary
+        .overlay_text
+        .contains("Simulation stopped: invalid action/state"));
+    assert!(summary.overlay_text.contains("Press R to restart"));
     assert!(summary.overlay_text.contains("Controls:"));
+    assert!(!summary
+        .overlay_text
+        .contains("full action-authoritative claim=true"));
     assert!(!summary.overlay_text.contains("Entity("));
     summary.validate().unwrap();
 }
