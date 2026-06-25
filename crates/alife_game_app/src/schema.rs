@@ -77,6 +77,13 @@ pub const CA12_PLACEHOLDER_ART_MANIFEST_SCHEMA: &str = "alife.ca12.placeholder_a
 pub const CA12_PLACEHOLDER_ART_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const CA12_MAX_BUNDLE_FILE_BYTES: u64 = 64 * 1024;
 pub const CA12_MAX_BUNDLE_ENTRIES: usize = 32;
+pub const CA13_DOUBLE_BUFFERED_SCHEDULER_SCHEMA: &str =
+    "alife.ca13.double_buffered_graphical_scheduler.v1";
+pub const CA13_DOUBLE_BUFFERED_SCHEDULER_SCHEMA_VERSION: u16 = 1;
+pub const CA13_FIXED_SIM_TICK_HZ: u32 = 20;
+pub const CA13_TARGET_RENDER_FRAME_HZ: u32 = 60;
+pub const CA13_MAX_CATCH_UP_TICKS_PER_FRAME: u32 = 4;
+pub const CA13_MAX_ACCUMULATOR_MICROS: u64 = 250_000;
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA: &str = "alife.s01.graphical_playground_shell.v1";
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION: u16 = 1;
 pub const S01_MAX_GRAPHICAL_SMOKE_SECONDS: u32 = 120;

@@ -100,6 +100,9 @@ pub use environment_launcher::*;
 mod interactive_runtime;
 pub use interactive_runtime::*;
 
+mod double_buffered_scheduler;
+pub use double_buffered_scheduler::*;
+
 mod population_social;
 pub use population_social::*;
 

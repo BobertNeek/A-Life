@@ -7,7 +7,7 @@ use alife_game_app::{
     load_visible_world_from_p34_save, project_lod_without_behavior_change,
     run_advanced_gameplay_ux_smoke, run_cognition_debug_timeline_smoke,
     run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
+    run_double_buffered_scheduler_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
@@ -17,10 +17,10 @@ use alife_game_app::{
     run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
     run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
     run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, CadenceTarget,
+    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, Ca13TickBuffer, CadenceTarget,
     CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    CreatureLifeStage, DoubleBufferedGraphicalScheduler, FeedbackAssetKind, FeedbackAssetManifest,
+    FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
     GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
     InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
     LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
@@ -1007,6 +1007,63 @@ fn s02_runtime_controls_cannot_mutate_cognition_directly() {
     assert!(stepped[0].patch_sealed);
     panel.direct_cognition_mutation_allowed = true;
     assert!(panel.validate().is_err());
+}
+
+#[test]
+fn ca13_double_buffered_scheduler_uses_fixed_cadence_not_render_frames() {
+    let mut scheduler = DoubleBufferedGraphicalScheduler::default();
+
+    let paused = scheduler
+        .observe_render_frame(1.0, RuntimePlaybackState::Paused, 1)
+        .unwrap();
+    assert_eq!(paused.ticks_to_run, 0);
+    assert_eq!(scheduler.fixed_tick_index, 0);
+    assert_eq!(scheduler.paused_frames, 1);
+
+    let sub_tick = scheduler
+        .observe_render_frame(0.016, RuntimePlaybackState::Running, 1)
+        .unwrap();
+    assert_eq!(sub_tick.ticks_to_run, 0);
+    assert!(scheduler.render_alpha_milli > 0);
+
+    let fixed_tick = scheduler
+        .observe_render_frame(0.034, RuntimePlaybackState::Running, 1)
+        .unwrap();
+    assert_eq!(fixed_tick.ticks_to_run, 1);
+    scheduler
+        .record_executed_ticks(fixed_tick.ticks_to_run)
+        .unwrap();
+    assert_eq!(scheduler.fixed_tick_index, 1);
+    assert_eq!(scheduler.front_buffer, Ca13TickBuffer::B);
+
+    let catch_up = scheduler
+        .observe_render_frame(1.0, RuntimePlaybackState::Running, 1)
+        .unwrap();
+    assert_eq!(
+        catch_up.ticks_to_run,
+        alife_game_app::CA13_MAX_CATCH_UP_TICKS_PER_FRAME
+    );
+    assert!(catch_up.catch_up_capped);
+    assert!(scheduler.catch_up_ticks_dropped > 0);
+    assert!(scheduler.overlay_line().contains("fixed=20Hz"));
+    assert!(!scheduler.overlay_line().contains("Entity("));
+}
+
+#[test]
+fn ca13_scheduler_smoke_proves_pause_step_and_catchup_bounds() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_double_buffered_scheduler_smoke(&launch).unwrap();
+
+    assert_eq!(summary.paused_ticks, 0);
+    assert_eq!(summary.sub_tick_due, 0);
+    assert_eq!(summary.fixed_tick_due, 1);
+    assert_eq!(summary.step_ticks, 1);
+    assert!(summary.frame_driven_drift_prevented);
+    assert!(summary
+        .scheduler
+        .signature_line()
+        .contains("alife.ca13.double_buffered_graphical_scheduler.v1"));
+    summary.validate().unwrap();
 }
 
 #[test]
@@ -3308,6 +3365,14 @@ fn bevy_feature_graphical_playground_carries_s02_runtime_controls() {
         runtime.panel.schema,
         alife_game_app::S02_RUNTIME_CONTROLS_SCHEMA
     );
+    assert_eq!(
+        runtime.panel.scheduler.schema,
+        alife_game_app::CA13_DOUBLE_BUFFERED_SCHEDULER_SCHEMA
+    );
+    assert!(runtime
+        .panel
+        .structured_status_panel_text_with_backend("GPU: test")
+        .contains("Scheduler: fixed=20Hz"));
 }
 
 #[cfg(feature = "bevy-app")]
