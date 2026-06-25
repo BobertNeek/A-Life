@@ -1535,40 +1535,70 @@ pub fn graphical_inspector_overlay_text(
     gpu: &GraphicalGpuTelemetryResource,
 ) -> String {
     let snapshot = &inspector.snapshot;
-    let action = compact_overlay_line(&snapshot.action_summary, 36);
-    let patch = compact_overlay_line(&snapshot.patch_summary, 36);
-    let drives = compact_overlay_line(&snapshot.drive_lines.join(", "), 36);
+    let action = snapshot
+        .visual
+        .selected_action_kind
+        .map(|kind| {
+            crate::action_badge_label_for_target(
+                kind,
+                snapshot.visual.target_entity.map(|id| id.raw()),
+            )
+        })
+        .unwrap_or("IDLE");
+    let target = snapshot
+        .visual
+        .target_entity
+        .map_or_else(|| "none".to_string(), |id| format!("stable:{}", id.raw()));
+    let patch = compact_overlay_line(&snapshot.patch_summary, 34);
     let follow = camera
         .state
         .follow_target
         .map_or_else(|| "none".to_string(), |id| id.raw().to_string());
+    let sleep = ca07_awake_sleep_status(snapshot);
+    let bars = ca07_creature_state_bars(snapshot).join("\n");
+    let learning = ca07_learning_summary(&gpu.telemetry);
+    let tech = ca07_compact_technical_summary(&gpu.telemetry);
+    let fallback = compact_overlay_line(
+        gpu.telemetry.fallback_reason.as_deref().unwrap_or("none"),
+        30,
+    );
     format!(
         concat!(
-            "Read-only Inspector\n",
-            "Stable ID: {} map={}\n",
-            "Org: {:?} kind={:?}\n",
-            "Action: {}\n",
+            "Creature Inspector\n",
+            "Stable ID: {} ({})\n",
+            "Kind: {:?}  Org: {}\n",
+            "State: {}  {}/{}\n",
+            "{}\n",
+            "Action: {}  Target: {}\n",
             "Patch: {}\n",
-            "Drives: {}\n",
-            "Visual: {}/{}\n",
-            "Cam: ({:.1},{:.1}) z={:.1}\n",
-            "Follow: {}\n",
-            "Read-only stable IDs\n\n{}"
+            "Learning: {}\n",
+            "Cam: ({:.1},{:.1}) z={:.1} follow={}\n",
+            "Read-only stable IDs\n",
+            "Fallback: {}\n",
+            "Tech: {}\n",
+            "Claim: full_auth=false"
         ),
         selection.stable_id.raw(),
         selection.local_entity.map(|_| "mapped").unwrap_or("none"),
-        snapshot.selection.organism_id.map(|id| id.raw()),
         snapshot.selection.kind,
-        action,
-        patch,
-        drives,
+        snapshot
+            .selection
+            .organism_id
+            .map_or_else(|| "none".to_string(), |id| id.raw().to_string()),
+        sleep,
         snapshot.visual.animation.label(),
         snapshot.visual.expression.label(),
+        bars,
+        action,
+        target,
+        patch,
+        learning,
         camera.state.focus.x,
         camera.state.focus.z,
         camera.state.zoom,
         follow,
-        gpu.telemetry.inspector_lines()
+        fallback,
+        tech,
     )
 }
 
@@ -1581,6 +1611,56 @@ fn compact_overlay_line(value: &str, max_chars: usize) -> String {
     let mut compact = value.chars().take(keep).collect::<String>();
     compact.push_str("...");
     compact
+}
+
+pub fn ca07_creature_state_bars(snapshot: &CreatureInspectorSnapshot) -> Vec<String> {
+    let cues = snapshot.visual.cues;
+    let health = ca07_health_value(cues.pain.value, cues.fear.value);
+    vec![
+        ca07_bar_line("Energy", cues.energy.value),
+        ca07_bar_line("Health", health),
+        ca07_bar_line("Hunger", cues.hunger.value),
+        ca07_bar_line("Fatigue", cues.fatigue.value),
+        ca07_bar_line("Fear", cues.fear.value),
+    ]
+}
+
+fn ca07_bar_line(label: &str, value: f32) -> String {
+    let value = value.clamp(0.0, 1.0);
+    let filled = (value * 10.0).round().clamp(0.0, 10.0) as usize;
+    let empty = 10usize.saturating_sub(filled);
+    format!(
+        "{:<7}[{}{}] {:>3}%",
+        label,
+        "#".repeat(filled),
+        ".".repeat(empty),
+        (value * 100.0).round() as u32
+    )
+}
+
+fn ca07_health_value(pain: f32, fear: f32) -> f32 {
+    (1.0 - pain.clamp(0.0, 1.0).max(fear.clamp(0.0, 1.0) * 0.5)).clamp(0.0, 1.0)
+}
+
+fn ca07_awake_sleep_status(snapshot: &CreatureInspectorSnapshot) -> &'static str {
+    match snapshot.visual.sleep_phase {
+        alife_core::SleepPhase::Awake => "Awake",
+        alife_core::SleepPhase::EnteringSleep => "Entering sleep",
+        alife_core::SleepPhase::Consolidating => "Consolidating",
+        alife_core::SleepPhase::Waking => "Waking",
+        alife_core::SleepPhase::ForcedRecoverySleep => "Recovery sleep",
+    }
+}
+
+fn ca07_learning_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
+    format!(
+        "H_shadow={} last={:.4}",
+        gpu.h_shadow_applications, gpu.last_h_shadow_delta
+    )
+}
+
+fn ca07_compact_technical_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
+    format!("{} gate=CPU shadow", gpu.selected_backend)
 }
 
 pub fn readability_legend_overlay_text() -> String {
