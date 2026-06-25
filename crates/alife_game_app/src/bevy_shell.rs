@@ -1465,7 +1465,8 @@ fn apply_graphical_runtime_command(
         }
         RuntimeControlCommand::StepOnce => {
             panel.playback = RuntimePlaybackState::Paused;
-            let summary = live_loop.gpu.tick(&mut live_loop.live)?;
+            let (summary, motor_ring) = live_loop.gpu.tick_with_motor_ring(&mut live_loop.live)?;
+            panel.record_motor_ring(motor_ring)?;
             panel.record_tick(&summary);
             panel
                 .scheduler
@@ -1488,7 +1489,9 @@ fn apply_graphical_runtime_command(
             let bounded = ticks.min(S02_MAX_SMOKE_TICKS);
             let mut summaries = Vec::with_capacity(bounded as usize);
             for _ in 0..bounded {
-                let summary = live_loop.gpu.tick(&mut live_loop.live)?;
+                let (summary, motor_ring) =
+                    live_loop.gpu.tick_with_motor_ring(&mut live_loop.live)?;
+                panel.record_motor_ring(motor_ring)?;
                 panel.record_tick(&summary);
                 summaries.push(summary);
             }
@@ -1571,6 +1574,7 @@ fn update_graphical_runtime_overlay(
 }
 
 fn update_graphical_inspector_overlay(
+    runtime: Res<GraphicalRuntimeControlsResource>,
     camera: Res<CameraNavigationResource>,
     selection: Res<SelectionResource>,
     inspector: Res<CreatureInspectorResource>,
@@ -1578,7 +1582,7 @@ fn update_graphical_inspector_overlay(
     mut overlays: bevy::prelude::Query<&mut Text, With<InspectorStatusOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = graphical_inspector_overlay_text(&camera, &selection, &inspector, &gpu);
+        text.0 = graphical_inspector_overlay_text(&runtime, &camera, &selection, &inspector, &gpu);
     }
 }
 
@@ -1829,6 +1833,7 @@ pub fn save_load_menu_overlay_text(summary: &crate::SaveLoadUxSmokeSummary) -> S
 }
 
 pub fn graphical_inspector_overlay_text(
+    runtime: &GraphicalRuntimeControlsResource,
     camera: &CameraNavigationResource,
     selection: &SelectionResource,
     inspector: &CreatureInspectorResource,
@@ -1874,6 +1879,7 @@ pub fn graphical_inspector_overlay_text(
             "Learning: {}\n",
             "Cam: ({:.1},{:.1}) z={:.1} follow={}\n",
             "Read-only stable IDs\n",
+            "{}\n",
             "Fallback: {}\n",
             "Tech: {}\n",
             "Claim: full_auth=false"
@@ -1897,6 +1903,7 @@ pub fn graphical_inspector_overlay_text(
         camera.state.focus.z,
         camera.state.zoom,
         follow,
+        runtime.panel.motor_ring.panel_text(),
         fallback,
         tech,
     )

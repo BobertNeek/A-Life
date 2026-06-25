@@ -84,6 +84,10 @@ pub const CA13_FIXED_SIM_TICK_HZ: u32 = 20;
 pub const CA13_TARGET_RENDER_FRAME_HZ: u32 = 60;
 pub const CA13_MAX_CATCH_UP_TICKS_PER_FRAME: u32 = 4;
 pub const CA13_MAX_ACCUMULATOR_MICROS: u64 = 250_000;
+pub const CA14_MOTOR_RING_PRESENTATION_SCHEMA: &str =
+    "alife.ca14.motor_ring_arbitration_presentation.v1";
+pub const CA14_MOTOR_RING_PRESENTATION_SCHEMA_VERSION: u16 = 1;
+pub const CA14_MAX_MOTOR_RING_CHANNELS: usize = 6;
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA: &str = "alife.s01.graphical_playground_shell.v1";
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION: u16 = 1;
 pub const S01_MAX_GRAPHICAL_SMOKE_SECONDS: u32 = 120;

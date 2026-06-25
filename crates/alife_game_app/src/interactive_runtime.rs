@@ -34,7 +34,7 @@ pub enum RuntimeControlCommand {
     RequestExit,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RuntimeControlPanel {
     pub schema: &'static str,
     pub schema_version: u16,
@@ -52,6 +52,7 @@ pub struct RuntimeControlPanel {
     pub player_events: Vec<String>,
     pub terminal_recovery_cause: Option<String>,
     pub scheduler: DoubleBufferedGraphicalScheduler,
+    pub motor_ring: MotorRingPresentation,
     pub direct_cognition_mutation_allowed: bool,
 }
 
@@ -78,6 +79,7 @@ impl RuntimeControlPanel {
             ],
             terminal_recovery_cause: None,
             scheduler: DoubleBufferedGraphicalScheduler::default(),
+            motor_ring: MotorRingPresentation::pending(),
             direct_cognition_mutation_allowed: false,
         }
     }
@@ -101,6 +103,7 @@ impl RuntimeControlPanel {
             });
         }
         self.scheduler.validate()?;
+        self.motor_ring.validate()?;
         Ok(())
     }
 
@@ -109,7 +112,7 @@ impl RuntimeControlPanel {
         live: &mut LiveBrainLoop,
         command: RuntimeControlCommand,
     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
-        let summaries = match command {
+        let (summaries, motor_ring) = match command {
             RuntimeControlCommand::TogglePause => {
                 self.playback = match self.playback {
                     RuntimePlaybackState::Paused => RuntimePlaybackState::Running,
@@ -119,33 +122,39 @@ impl RuntimeControlPanel {
                     }
                 };
                 self.push_player_event(format!("Playback changed to {}.", self.playback.label()));
-                Vec::new()
+                (Vec::new(), None)
             }
             RuntimeControlCommand::StepOnce => {
                 self.playback = RuntimePlaybackState::Paused;
-                live.update(LiveBrainTickControl::step_once())?
+                let batch = live.update_with_motor_ring(LiveBrainTickControl::step_once())?;
+                (batch.summaries, batch.motor_ring)
             }
             RuntimeControlCommand::SetRunSpeed(speed) => {
                 self.run_speed_ticks = speed.clamp(1, S02_MAX_RUN_TICKS_PER_UPDATE);
                 self.playback = RuntimePlaybackState::Running;
                 self.push_player_event(format!("Run speed set to {}x.", self.run_speed_ticks));
-                Vec::new()
+                (Vec::new(), None)
             }
             RuntimeControlCommand::RunForTicks(ticks) => {
                 let bounded = ticks.min(S02_MAX_SMOKE_TICKS);
                 self.playback = RuntimePlaybackState::Running;
-                live.update(LiveBrainTickControl::run_fixed(bounded))?
+                let batch =
+                    live.update_with_motor_ring(LiveBrainTickControl::run_fixed(bounded))?;
+                (batch.summaries, batch.motor_ring)
             }
             RuntimeControlCommand::RestartAlphaFixture => {
                 self.reset_to_alpha_fixture(live);
-                Vec::new()
+                (Vec::new(), None)
             }
             RuntimeControlCommand::RequestExit => {
                 self.playback = RuntimePlaybackState::ShutdownRequested;
                 self.push_player_event("Exit requested from graphical controls.".to_string());
-                Vec::new()
+                (Vec::new(), None)
             }
         };
+        if let Some(motor_ring) = motor_ring {
+            self.record_motor_ring(motor_ring)?;
+        }
         for summary in &summaries {
             self.record_tick(summary);
         }
@@ -163,7 +172,12 @@ impl RuntimeControlPanel {
         if self.playback != RuntimePlaybackState::Running {
             return Ok(Vec::new());
         }
-        let summaries = live.update(LiveBrainTickControl::run_fixed(self.run_speed_ticks))?;
+        let batch =
+            live.update_with_motor_ring(LiveBrainTickControl::run_fixed(self.run_speed_ticks))?;
+        let summaries = batch.summaries;
+        if let Some(motor_ring) = batch.motor_ring {
+            self.record_motor_ring(motor_ring)?;
+        }
         for summary in &summaries {
             self.record_tick(summary);
         }
@@ -206,7 +220,7 @@ impl RuntimeControlPanel {
             });
         let event_lines = self.player_event_lines();
         format!(
-            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
+            "A-Life GPU Alpha Playground\nState: {}  speed={}x  tick={} world={}\n{}\n{}\nCreature: stable:1  Goal: {}  Action: {}\nTarget: {}  Intent: {}\nPatch: sealed={} count={}\nLearning: H_shadow pulse visible when count rises\n{}\nEvents (last 5):\n{}{}\nControls: Space run/pause | N step | R reset | Esc quit{}",
             self.playback.label(),
             self.run_speed_ticks,
             self.mind_tick,
@@ -220,6 +234,7 @@ impl RuntimeControlPanel {
             self.intent_marker_label(),
             self.last_patch_sealed,
             self.sealed_patch_count,
+            self.motor_ring.compact_line(),
             event_lines,
             extra,
             terminal_note,
@@ -251,6 +266,7 @@ impl RuntimeControlPanel {
                 "Target: {}  Intent: {}\n",
                 "Patch: sealed={} count={}\n",
                 "Learning: H_shadow pulse\n",
+                "{}\n",
                 "{}"
             ),
             self.playback.label(),
@@ -266,6 +282,7 @@ impl RuntimeControlPanel {
             self.intent_marker_label(),
             self.last_patch_sealed,
             self.sealed_patch_count,
+            self.motor_ring.compact_line(),
             terminal_line,
         )
     }
@@ -286,7 +303,7 @@ impl RuntimeControlPanel {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}",
+            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}",
             self.schema,
             self.schema_version,
             self.playback.label(),
@@ -297,7 +314,8 @@ impl RuntimeControlPanel {
             self.last_patch_sealed,
             self.sealed_patch_count,
             self.packed_record_count,
-            self.scheduler.signature_line()
+            self.scheduler.signature_line(),
+            self.motor_ring.signature_line()
         )
     }
 
@@ -366,6 +384,19 @@ impl RuntimeControlPanel {
 
     pub fn record_control_event(&mut self, event: impl Into<String>) {
         self.push_player_event(event.into());
+    }
+
+    pub fn record_motor_ring(
+        &mut self,
+        motor_ring: MotorRingPresentation,
+    ) -> Result<(), GameAppShellError> {
+        motor_ring.validate()?;
+        self.push_player_event(format!(
+            "Motor ring winner={} margin={:.2}.",
+            motor_ring.selected_label, motor_ring.winner_margin
+        ));
+        self.motor_ring = motor_ring;
+        Ok(())
     }
 
     pub fn reset_to_alpha_fixture(&mut self, live: &LiveBrainLoop) {

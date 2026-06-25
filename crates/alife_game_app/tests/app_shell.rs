@@ -12,19 +12,20 @@ use alife_game_app::{
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
     run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
-    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, Ca13TickBuffer, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, DoubleBufferedGraphicalScheduler, FeedbackAssetKind, FeedbackAssetManifest,
-    FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
-    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
-    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
-    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    run_motor_ring_arbitration_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, DoubleBufferedGraphicalScheduler,
+    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
+    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel,
+    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
     RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
@@ -1067,6 +1068,58 @@ fn ca13_scheduler_smoke_proves_pause_step_and_catchup_bounds() {
 }
 
 #[test]
+fn ca14_motor_ring_arbitration_smoke_preserves_p09_boundary() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_motor_ring_arbitration_smoke(&launch).unwrap();
+
+    assert!(summary.patch_sealed);
+    assert!(!summary.direct_action_bypass);
+    assert_eq!(
+        summary.ring.schema,
+        alife_game_app::CA14_MOTOR_RING_PRESENTATION_SCHEMA
+    );
+    assert_eq!(
+        summary.ring.channels.len(),
+        alife_game_app::CA14_MAX_MOTOR_RING_CHANNELS
+    );
+    assert_eq!(
+        summary
+            .ring
+            .channels
+            .iter()
+            .filter(|channel| channel.selected)
+            .count(),
+        1
+    );
+    assert!(summary.ring.panel_text().contains("Motor Ring"));
+    assert!(summary.ring.panel_text().contains("normal arbitration"));
+    assert!(summary.ring.panel_text().contains("no direct bypass"));
+    assert!(!summary.ring.panel_text().contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca14_runtime_panel_records_motor_ring_without_action_bypass() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    let summaries = panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+
+    assert_eq!(summaries.len(), 1);
+    assert!(panel.motor_ring.selected_action_id.is_some());
+    assert!(panel.motor_ring.structured_arbitration_preserved);
+    assert!(panel.motor_ring.no_direct_action_bypass);
+    assert!(panel.status_overlay_text().contains("Motor Ring: winner="));
+    assert!(panel
+        .signature_line()
+        .contains(alife_game_app::CA14_MOTOR_RING_PRESENTATION_SCHEMA));
+    assert!(!panel.status_overlay_text().contains("Entity("));
+    panel.validate().unwrap();
+}
+
+#[test]
 fn graphical_gpu_launch_config_defaults_gpu_first_and_preserves_cpu_choice() {
     let gpu_default =
         alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root());
@@ -1384,7 +1437,7 @@ fn bevy_feature_ca06_mouse_selection_updates_stable_id_camera_and_inspector() {
         ),
     };
     let overlay = alife_game_app::bevy_shell::graphical_inspector_overlay_text(
-        &camera, &selection, &inspector, &gpu,
+        &runtime, &camera, &selection, &inspector, &gpu,
     );
     assert!(overlay.contains("Creature Inspector"));
     assert!(overlay.contains("Stable ID: 2"));
@@ -3402,8 +3455,15 @@ fn bevy_feature_s03_inspector_overlay_is_read_only_and_stable_id_based() {
             0,
         ),
     };
+    let live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let runtime = alife_game_app::bevy_shell::GraphicalRuntimeControlsResource {
+        panel: RuntimeControlPanel::from_live_loop(&live),
+        smoke_target_ticks: None,
+        smoke_ticks_done: 0,
+    };
 
     let overlay = alife_game_app::bevy_shell::graphical_inspector_overlay_text(
+        &runtime,
         &camera,
         &selection,
         &inspector_resource,
@@ -3469,8 +3529,15 @@ fn bevy_feature_ca07_inspector_bars_are_readable_and_player_facing() {
             full_action_authoritative_claim: false,
         },
     };
+    let live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let runtime = alife_game_app::bevy_shell::GraphicalRuntimeControlsResource {
+        panel: RuntimeControlPanel::from_live_loop(&live),
+        smoke_target_ticks: None,
+        smoke_ticks_done: 0,
+    };
 
     let overlay = alife_game_app::bevy_shell::graphical_inspector_overlay_text(
+        &runtime,
         &camera,
         &selection,
         &inspector_resource,
