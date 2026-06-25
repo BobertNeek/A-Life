@@ -69,7 +69,7 @@ if ($RequireGpu) {
 Write-Host "Title: A-Life GPU Alpha Playground."
 Write-Host "Controls: Space pause/run, N step once, R reset, 1/2/3 speed, F follow, Esc quit."
 Write-Host "Camera/inspector: arrows/WASD pan, +/- zoom, Q/E orbit, F follow selected stable ID. Inspector is read-only."
-Write-Host "Readability: color+shape markers, creature/food/hazard stable-ID badges, concise GPU/fallback status, read-only inspector."
+Write-Host "Readability: color+shape markers, creature/food/hazard/obstacle stable-ID badges, concise GPU/fallback status, read-only inspector."
 Write-Host "Reset/restart: press R or close and relaunch the GPU alpha fixture if the current run becomes confusing."
 $IsWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
     [System.Runtime.InteropServices.OSPlatform]::Windows

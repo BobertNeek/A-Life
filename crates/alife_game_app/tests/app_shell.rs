@@ -28,9 +28,10 @@ use alife_game_app::{
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
     RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
-    SaveSlotManager, SchoolModeSaveState, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
-    WorldEditorSession, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
+    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
+    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -330,22 +331,32 @@ fn visible_world_signature_matches_restored_headless_fixture_objects() {
 }
 
 #[test]
-fn gpu_alpha_fixture_adds_real_hazard_marker_without_changing_stable_id_contract() {
+fn gpu_alpha_fixture_adds_real_hazard_and_obstacle_markers_without_changing_stable_id_contract() {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();
     compare_visible_world_to_headless(&presentation).unwrap();
-    assert_eq!(presentation.object_count, 3);
+    assert_eq!(presentation.object_count, 4);
     assert_eq!(presentation.kind_count(WorldObjectKind::Agent), 1);
     assert_eq!(presentation.kind_count(WorldObjectKind::Food), 1);
     assert_eq!(presentation.kind_count(WorldObjectKind::Hazard), 1);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Obstacle), 1);
     assert_eq!(
         presentation
             .stable_ids()
             .iter()
             .map(|id| id.raw())
             .collect::<Vec<_>>(),
-        vec![1, 2, 3]
+        vec![1, 2, 3, 4]
     );
+    let obstacle = presentation
+        .objects
+        .iter()
+        .find(|object| object.kind == WorldObjectKind::Obstacle)
+        .expect("gpu alpha fixture should include a real obstacle marker");
+    assert_eq!(obstacle.stable_id.raw(), 4);
+    assert_eq!(obstacle.label, "stone");
+    assert_eq!(obstacle.shape, VisiblePlaceholderShape::ObstacleCube);
+    assert_eq!(obstacle.material, VisibleMaterialKind::Obstacle);
 }
 
 #[test]
@@ -3022,8 +3033,9 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
     assert!(legend.contains("[@] creature"));
     assert!(legend.contains("[+] food"));
     assert!(legend.contains("[!] hazard"));
-    assert!(legend.contains("P34 remains guide-only"));
     assert!(legend.contains("[#] obstacle"));
+    assert!(legend.contains("P34 remains guide-only"));
+    assert!(legend.contains("creature+food+real hazard+obstacle"));
     assert!(legend.contains("presentation only"));
 
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();

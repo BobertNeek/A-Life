@@ -110,6 +110,21 @@
         "teacher_channel": null,
         "consumed": false,
         "carried_by": null
+      },
+      {
+        "id": 4,
+        "label": "stone",
+        "kind": "Obstacle",
+        "organism_id": null,
+        "position": { "x": -0.65, "y": 0.0, "z": 0.75 },
+        "radius": 0.55,
+        "nutrition": 0.0,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
       }
     ],
     "last_touched_entities": []

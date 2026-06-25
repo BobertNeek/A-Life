@@ -608,7 +608,7 @@ fn spawn_graphical_playground_scene(
     app.world_mut().spawn((
         Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "A-Life GPU Alpha Playground\nFixture: GPU alpha stable-ID world  seed={}\nMode: {}  GPU={}\nRequire GPU: {}  timeout={:?}\n{}\nStable IDs: creature=1 food=2 hazard=3\nControls: Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit\nMarkers: green/cyan creature, bright food, red hazard",
+            "A-Life GPU Alpha Playground\nFixture: GPU alpha stable-ID world  seed={}\nMode: {}  GPU={}\nRequire GPU: {}  timeout={:?}\n{}\nStable IDs: creature=1 food=2 hazard=3 obstacle=4\nControls: Space run/pause | N step | R reset | 1/2/3 speed | F follow | Esc quit\nMarkers: green/cyan creature, bright food, red hazard, stone obstacle",
             summary.seed,
             summary.mode_label,
             summary.requested_gpu_mode.label(),
@@ -1273,7 +1273,7 @@ pub fn readability_legend_overlay_text() -> String {
     [
         "Visual Guide: [@] creature | [+] food | [!] hazard",
         "Other guide markers: [#] obstacle | [T] token",
-        "GPU alpha fixture: creature+food+real hazard. P34 remains guide-only.",
+        "GPU alpha fixture: creature+food+real hazard+obstacle. P34 remains guide-only.",
         "Creature colors: cyan GPU proposals | green learned H_shadow | gray CPU fallback",
         "All markers are presentation only. Stable IDs stay portable.",
     ]

@@ -51,6 +51,7 @@ The fixture contains stable-ID markers for:
 - creature `stable:1`
 - food `stable:2`
 - hazard `stable:3`
+- obstacle `stable:4`
 
 The legacy P34 fixture remains available for compatibility and headless tests.
 
