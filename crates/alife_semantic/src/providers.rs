@@ -67,6 +67,7 @@ impl SemanticContextRequest {
         self
     }
 
+    #[allow(dead_code)]
     fn gaussian_bin_hash(&self) -> u64 {
         EgocentricBinHasher::new().hash(self.observer_offset, EgocentricBinGrid::default())
     }
@@ -90,6 +91,7 @@ pub trait SemanticContextProvider {
 }
 
 /// Keep adapters small and deterministic; this helper performs full conversion.
+#[allow(dead_code)]
 pub(crate) fn synthesize_context_bundle(
     request: &SemanticContextRequest,
 ) -> Result<SemanticContextBundle, ScaffoldContractError> {

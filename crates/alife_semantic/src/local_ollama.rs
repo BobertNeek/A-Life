@@ -65,11 +65,19 @@ impl LocalSemanticModelManifest {
             .iter()
             .find(|model| model.model_role == "semantic_embedding_provider")
     }
+
+    pub fn slm_subconscious_prior_model(&self) -> Option<&LocalSemanticModelEntry> {
+        self.models
+            .iter()
+            .find(|model| model.model_role == "slm_subconscious_prior")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LocalSemanticModelEntry {
     pub repo_id: String,
+    #[serde(default)]
+    pub target_repo_id: Option<String>,
     pub model_role: String,
     pub license: String,
     pub selected_file: String,
@@ -85,6 +93,10 @@ pub struct LocalSemanticModelEntry {
 impl LocalSemanticModelEntry {
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
         if self.repo_id.trim().is_empty()
+            || self
+                .target_repo_id
+                .as_deref()
+                .is_some_and(|target| target.trim().is_empty())
             || self.model_role.trim().is_empty()
             || self.license.trim().is_empty()
             || self.selected_file.trim().is_empty()
@@ -98,6 +110,10 @@ impl LocalSemanticModelEntry {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         if self.repo_id.contains("api")
+            || self
+                .target_repo_id
+                .as_deref()
+                .is_some_and(|target| target.contains("api") || target.contains("http"))
             || self.runtime_backend.contains("cloud")
             || self.ollama_model.contains("http")
             || self.expected_local_path.contains("Entity(")

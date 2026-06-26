@@ -9,6 +9,8 @@ mod fake;
 mod gaussian;
 #[cfg(feature = "local-ollama")]
 mod local_ollama;
+#[cfg(feature = "local-ollama")]
+mod local_slm_prior;
 #[cfg(feature = "gaussian-adapter")]
 mod providers;
 #[cfg(feature = "gaussian-adapter")]
@@ -315,4 +317,13 @@ pub use local_ollama::{
     LocalOllamaEmbeddingProvider, LocalSemanticModelEntry, LocalSemanticModelManifest,
     CA26_DEFAULT_OLLAMA_MODEL, CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
     CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION, CA26_LOCAL_SEMANTIC_PROVIDER_ID,
+};
+
+#[cfg(feature = "local-ollama")]
+pub use local_slm_prior::{
+    parse_slm_prior_json, LocalOllamaSlmPriorConfig, LocalOllamaSlmPriorProvider,
+    LocalSlmPriorAsyncQueue, LocalSlmPriorOutput, LocalSlmPriorQueue, LocalSlmPriorRequest,
+    SlmLexiconAssociation, CA27_DEFAULT_OLLAMA_MODEL, CA27_LOCAL_SLM_PRIOR_ID,
+    CA27_MAX_PERCEPTION_TAGS, CA27_MAX_SALIENCE_LABELS, CA27_SLM_PRIOR_OUTPUT_SCHEMA,
+    CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION,
 };
