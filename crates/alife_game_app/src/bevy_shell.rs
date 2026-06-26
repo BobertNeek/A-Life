@@ -15,7 +15,7 @@ use bevy::{
         DefaultPlugins, Entity, GlobalTransform, KeyCode, MessageWriter, MinimalPlugins,
         MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Res, ResMut, Resource,
         Sprite, Text, Text2d, TextColor, TextFont, Time, Timer, TimerMode, Transform, Update, Val,
-        Vec2, Vec3, With, Without,
+        Vec2, Vec3, Visibility, With, Without,
     },
     window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
 };
@@ -27,14 +27,14 @@ use crate::{
     run_creature_visual_smoke, run_headless_app_shell_smoke, run_live_brain_loop_smoke,
     AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
     Ca18GraphicalPopulationSummary, Ca19GraphicalEcologySummary, Ca19TerrainZoneVisual,
-    Ca20GraphicalLifecycleSummary, CameraNavigationState, CreatureAnimationState,
-    CreatureExpressionState, CreatureInspectorSnapshot, CreatureVisualSnapshot,
-    EntitySelectionSnapshot, GameAppShellError, GameAppState, GraphicalGpuRuntimeController,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
-    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
-    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
-    S02_MAX_SMOKE_TICKS,
+    Ca20GraphicalLifecycleSummary, Ca23GraphicalSchoolSummary, CameraNavigationState,
+    CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
+    CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
+    GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
+    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
+    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -145,6 +145,11 @@ pub struct GraphicalEcologyResource {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalLifecycleResource {
     pub summary: Ca20GraphicalLifecycleSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalSchoolResource {
+    pub summary: Ca23GraphicalSchoolSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -273,6 +278,14 @@ pub struct GraphicalEcologyOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalLifecycleOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalSchoolOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTeacherCueMarker {
+    pub stable_id: WorldEntityId,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalTerrainZoneMarker {
@@ -482,6 +495,7 @@ pub fn build_graphical_playground_app_shell(
     let population_summary = ca18_graphical_population_summary(&presentation).ok();
     let ecology_summary = ca19_graphical_ecology_summary(&launch.app_launch).ok();
     let lifecycle_summary = ca20_graphical_lifecycle_summary().ok();
+    let school_summary = crate::run_graphical_school_mode_smoke()?;
 
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -501,7 +515,13 @@ pub fn build_graphical_playground_app_shell(
     .insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     });
-    spawn_graphical_playground_scene(&mut app, &presentation, &summary, ecology_summary.as_ref())?;
+    spawn_graphical_playground_scene(
+        &mut app,
+        &presentation,
+        &summary,
+        ecology_summary.as_ref(),
+        Some(&school_summary),
+    )?;
     let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
     let feedback = crate::run_feedback_polish_smoke(&launch.app_launch)?;
     let save_load = crate::GraphicalSaveLoadMenuSession::from_launch(&launch.app_launch)?;
@@ -553,6 +573,13 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_save_load_menu_overlay,
                 update_graphical_advanced_gameplay_overlay,
             ),
+        )
+        .add_systems(
+            Update,
+            (
+                handle_graphical_school_toggle_input,
+                update_graphical_school_overlay,
+            ),
         );
     if let Some(summary) = population_summary {
         app.insert_resource(GraphicalPopulationResource { summary });
@@ -563,6 +590,9 @@ pub fn build_graphical_playground_app_shell(
     if let Some(summary) = lifecycle_summary {
         app.insert_resource(GraphicalLifecycleResource { summary });
     }
+    app.insert_resource(GraphicalSchoolResource {
+        summary: school_summary,
+    });
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
         app.insert_resource(GraphicalPlaygroundSmokeTimer(Timer::from_seconds(
@@ -587,7 +617,7 @@ pub fn build_ca03_intent_feedback_preview_app_shell(
     app.insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     });
-    spawn_graphical_playground_scene(&mut app, &presentation, &summary, None)?;
+    spawn_graphical_playground_scene(&mut app, &presentation, &summary, None, None)?;
     app.insert_resource(GraphicalRuntimeControlsResource {
         panel,
         smoke_target_ticks: None,
@@ -727,6 +757,7 @@ fn spawn_graphical_playground_scene(
     presentation: &VisibleWorldPresentation,
     summary: &GraphicalPlaygroundLaunchSummary,
     ecology: Option<&Ca19GraphicalEcologySummary>,
+    school: Option<&Ca23GraphicalSchoolSummary>,
 ) -> Result<(), GameAppShellError> {
     app.world_mut().spawn((Camera2d, GraphicalMainCamera));
     app.world_mut().spawn((
@@ -750,6 +781,9 @@ fn spawn_graphical_playground_scene(
 
     for object in &presentation.objects {
         spawn_graphical_object(app, object)?;
+    }
+    if let Some(school) = school {
+        spawn_ca23_school_teacher_markers(app, school);
     }
     spawn_graphical_intent_feedback(app);
     spawn_ca08_feedback_pulses(app, presentation);
@@ -846,6 +880,30 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.045, 0.030, 0.018, 0.78)),
         GraphicalLifecycleOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA23 graphical school panel"),
+        Text::new(
+            school
+                .map(ca23_school_overlay_text)
+                .unwrap_or_else(|| "School Mode: disabled".to_string()),
+        ),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.94, 0.88, 1.0)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(516.0),
+            left: Val::Px(12.0),
+            max_width: Val::Px(390.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.035, 0.022, 0.052, 0.80)),
+        GraphicalSchoolOverlay,
     ));
 
     app.world_mut().spawn((
@@ -1216,6 +1274,47 @@ fn spawn_graphical_object(
         },
     ));
     Ok(())
+}
+
+fn spawn_ca23_school_teacher_markers(app: &mut App, school: &Ca23GraphicalSchoolSummary) {
+    app.world_mut().spawn((
+        Name::new(format!(
+            "A-Life CA23 teacher cue stable:{}",
+            school.teacher_avatar_stable_id.raw()
+        )),
+        Text2d::new(format!(
+            "[T] teacher stable:{}\nperception cue",
+            school.teacher_avatar_stable_id.raw()
+        )),
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.82, 0.66, 1.0)),
+        Transform::from_translation(Vec3::new(-300.0, 132.0, 1.08)),
+        GraphicalTeacherCueMarker {
+            stable_id: school.teacher_avatar_stable_id,
+        },
+    ));
+
+    if let Some(cue) = school.cue_markers.first() {
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life CA23 lesson cue stable:{}",
+                cue.stable_id.raw()
+            )),
+            Text2d::new(format!("[T] lesson cue\nstable:{}", cue.stable_id.raw())),
+            TextFont {
+                font_size: 13.0,
+                ..default()
+            },
+            TextColor(Color::srgb(0.92, 0.78, 1.0)),
+            Transform::from_translation(Vec3::new(-210.0, 96.0, 1.08)),
+            GraphicalTeacherCueMarker {
+                stable_id: cue.stable_id,
+            },
+        ));
+    }
 }
 
 fn inspector_local_entity(
@@ -1943,6 +2042,39 @@ fn update_graphical_lifecycle_overlay(
     }
 }
 
+fn handle_graphical_school_toggle_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    school: Option<ResMut<GraphicalSchoolResource>>,
+) {
+    if !keyboard.just_pressed(KeyCode::KeyT) {
+        return;
+    }
+    if let Some(mut school) = school {
+        school.summary.toggle_school_enabled();
+    }
+}
+
+fn update_graphical_school_overlay(
+    school: Option<Res<GraphicalSchoolResource>>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalSchoolOverlay>>,
+    mut cue_markers: bevy::prelude::Query<&mut Visibility, With<GraphicalTeacherCueMarker>>,
+) {
+    let Some(school) = school else {
+        return;
+    };
+    for mut text in &mut overlays {
+        text.0 = ca23_school_overlay_text(&school.summary);
+    }
+    let visibility = if school.summary.school_enabled {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    for mut marker_visibility in &mut cue_markers {
+        *marker_visibility = visibility;
+    }
+}
+
 fn ca08_pulse_active(
     kind: Ca08SensoryCueKind,
     runtime: &RuntimeControlPanel,
@@ -2299,10 +2431,17 @@ pub fn ca20_lifecycle_overlay_text(summary: &Ca20GraphicalLifecycleSummary) -> S
     )
 }
 
+pub fn ca23_school_overlay_text(summary: &Ca23GraphicalSchoolSummary) -> String {
+    format!(
+        "{}\nSchool visuals are display-only; teacher cues cannot emit actions.",
+        summary.compact_overlay_text()
+    )
+}
+
 pub fn ca05_controls_bar_text() -> &'static str {
     concat!(
         "Controls\n",
-        "Left click select | Tab cycle creatures | Space run/pause | N step | R reset\n",
+        "Left click select | Tab cycle creatures | Space run/pause | N step | R reset | T school\n",
         "1/2/3 speed | WASD/arrows pan | +/- zoom | Q/E orbit\n",
         "F follow selected stable ID | M save/load | F5 save | F9 load | Esc quit\n",
         "Guide: [@] creature | [+] food | [!] hazard | [#] obstacle | blue social cue\n",
@@ -2311,7 +2450,7 @@ pub fn ca05_controls_bar_text() -> &'static str {
 }
 
 pub fn alpha_controls_help_text() -> &'static str {
-    "Controls: Left click select | Tab cycle creatures | Space run/pause | N step | R reset | M save/load | F5 save | F9 load | +/- zoom | F follow | Esc quit"
+    "Controls: Left click select | Tab cycle creatures | Space run/pause | N step | R reset | T school | M save/load | F5 save | F9 load | +/- zoom | F follow | Esc quit"
 }
 
 pub fn ca05_boundary_footer_text(gpu: &GraphicalGpuRuntimeTelemetry) -> String {

@@ -13,18 +13,18 @@ use alife_game_app::{
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_ecology_smoke, run_graphical_lifecycle_smoke, run_graphical_population_smoke,
-    run_hazard_recovery_smoke, run_headless_app_shell_smoke, run_homeostasis_runtime_smoke,
-    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
-    run_longrun_balance_smoke, run_longrun_balance_with_config, run_motor_ring_arbitration_smoke,
-    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig,
-    BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget, CameraNavigationState,
-    ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
-    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
+    run_graphical_school_mode_smoke, run_hazard_recovery_smoke, run_headless_app_shell_smoke,
+    run_homeostasis_runtime_smoke, run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke,
+    run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
+    run_motor_ring_arbitration_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
     FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
     GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
     GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
@@ -41,8 +41,9 @@ use alife_game_app::{
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
     CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
     CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
-    CA22_MANUAL_HEADLESS_TICKS, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION,
+    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -3190,6 +3191,73 @@ fn school_mode_save_state_roundtrips_without_teacher_private_state() {
     );
     assert!(!loaded.cue_entity_ids.is_empty());
     loaded.validate().unwrap();
+}
+
+#[test]
+fn ca23_graphical_school_mode_smoke_reports_toggle_teacher_lesson_and_verifier_boundary() {
+    let summary = run_graphical_school_mode_smoke().unwrap();
+
+    assert_eq!(summary.schema, CA23_GRAPHICAL_SCHOOL_SCHEMA);
+    assert_eq!(summary.schema_version, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION);
+    assert!(summary.school_enabled);
+    assert_eq!(summary.toggle_key, "T");
+    assert_eq!(summary.teacher_avatar_stable_id, WorldEntityId(2));
+    assert_eq!(summary.learner_stable_id, WorldEntityId(1));
+    assert_eq!(summary.active_lesson_id, 10_100);
+    assert!(summary.verifier_uses_sealed_patches);
+    assert!(summary.verifier_passed);
+    assert_eq!(summary.sealed_patch_count, 1);
+    assert!(!summary.cue_markers.is_empty());
+    assert!(summary
+        .cue_markers
+        .iter()
+        .all(|marker| marker.perception_only));
+    assert!(summary.perception_only_boundary_visible);
+    assert!(summary.direct_motor_bypass_blocked);
+    assert!(summary.hidden_vector_injection_blocked);
+    assert!(summary.display_only);
+
+    let overlay = summary.compact_overlay_text();
+    assert!(overlay.contains("School Mode: on"));
+    assert!(overlay.contains("[T toggle]"));
+    assert!(overlay.contains("Teacher: stable:2"));
+    assert!(overlay.contains("Verifier: sealed patches=1 pass=true"));
+    assert!(overlay.contains("Boundary: perception-only"));
+    assert!(!overlay.contains("Entity("));
+
+    let mut disabled = summary.clone();
+    disabled.toggle_school_enabled();
+    assert!(!disabled.school_enabled);
+    let disabled_overlay = disabled.compact_overlay_text();
+    assert!(disabled_overlay.contains("School Mode: off"));
+    assert!(disabled_overlay.contains("[T toggle]"));
+    assert!(disabled_overlay.contains("Teacher cues hidden"));
+    assert!(disabled_overlay.contains("sealed-patch"));
+    assert!(disabled_overlay.contains("no motor bypass"));
+    assert!(!disabled_overlay.contains("Entity("));
+
+    summary.validate().unwrap();
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca23_school_overlay_is_toggleable_and_perception_only() {
+    let mut summary = run_graphical_school_mode_smoke().unwrap();
+    let expanded = alife_game_app::bevy_shell::ca23_school_overlay_text(&summary);
+    assert!(expanded.contains("School Mode: on"));
+    assert!(expanded.contains("teacher stable:2") || expanded.contains("Teacher: stable:2"));
+    assert!(expanded.contains("sealed patches=1"));
+    assert!(expanded.contains("teacher cues cannot emit actions"));
+    assert!(expanded.contains("no hidden vectors"));
+    assert!(!expanded.contains("Entity("));
+    assert!(!expanded.contains("full action-authoritative"));
+
+    summary.toggle_school_enabled();
+    let disabled = alife_game_app::bevy_shell::ca23_school_overlay_text(&summary);
+    assert!(disabled.contains("School Mode: off"));
+    assert!(disabled.contains("Teacher cues hidden"));
+    assert!(disabled.contains("teacher cues cannot emit actions"));
+    assert!(!disabled.contains("Entity("));
 }
 
 #[test]
