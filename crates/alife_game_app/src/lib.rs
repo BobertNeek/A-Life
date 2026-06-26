@@ -25,8 +25,8 @@ mod prelude {
         TEACHER_SCHOOL_SCHEMA_VERSION,
     };
     pub(crate) use alife_semantic::{
-        BoundedSemanticEmbedding, FakeSemanticProvider, LocalOllamaEmbeddingConfig,
-        LocalOllamaEmbeddingProvider, LocalOllamaSlmPriorConfig, LocalOllamaSlmPriorProvider,
+        BoundedSemanticEmbedding, FakeSemanticProvider, LlamaCppEmbeddingConfig,
+        LlamaCppEmbeddingProvider, LlamaCppSlmPriorConfig, LlamaCppSlmPriorProvider,
         LocalSemanticModelManifest, LocalSlmPriorAsyncQueue, LocalSlmPriorOutput,
         LocalSlmPriorRequest, SemanticCodeDescriptor, SemanticConceptBinding,
         SemanticContextBundle, SemanticContextProvider, SemanticContextRequest,

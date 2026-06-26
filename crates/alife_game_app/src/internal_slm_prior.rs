@@ -24,7 +24,9 @@ pub struct InternalSlmPriorSmokeSummary {
     pub license: String,
     pub runtime_backend: String,
     pub expected_local_path: String,
-    pub ollama_model: String,
+    pub llamacpp_alias: String,
+    pub llamacpp_host: String,
+    pub llamacpp_port: u16,
     pub sha256: String,
     pub downloaded_locally: bool,
     pub inference_smoke_passed: bool,
@@ -58,13 +60,15 @@ impl InternalSlmPriorSmokeSummary {
             || self.repo_id != "Qwen/Qwen3-4B-GGUF"
             || self.model_role != "slm_subconscious_prior"
             || self.license != "apache-2.0"
-            || self.runtime_backend != "ollama-localhost-gguf"
+            || self.runtime_backend != "llamacpp-server-gguf"
             || self.expected_local_path.contains("Entity(")
-            || self.ollama_model.trim().is_empty()
+            || self.llamacpp_alias.trim().is_empty()
+            || !matches!(self.llamacpp_host.as_str(), "127.0.0.1" | "localhost")
+            || self.llamacpp_port == 0
             || self.sha256.len() != 64
             || !self.downloaded_locally
             || !self.inference_smoke_passed
-            || self.local_runtime != "ollama-localhost"
+            || self.local_runtime != "llama.cpp-localhost"
             || self.queue_capacity == 0
             || self.queued_requests == 0
             || self.processed_requests != self.queued_requests
@@ -89,11 +93,12 @@ impl InternalSlmPriorSmokeSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
             self.schema_version,
             self.repo_id,
             self.runtime_backend,
-            self.ollama_model,
+            self.llamacpp_alias,
+            self.llamacpp_port,
             self.salience_label_count,
             self.lexicon_association_count,
             self.perception_tag_count,
@@ -125,9 +130,11 @@ pub fn run_internal_slm_prior_smoke_with_manifest(
                 message: "CA27 model manifest must contain slm_subconscious_prior",
             })?;
 
-    let config = LocalOllamaSlmPriorConfig {
-        model: model.ollama_model.clone(),
-        ..LocalOllamaSlmPriorConfig::default()
+    let config = LlamaCppSlmPriorConfig {
+        model: model.llamacpp_alias.clone(),
+        host: model.llamacpp_host.clone(),
+        port: model.llamacpp_port,
+        ..LlamaCppSlmPriorConfig::default()
     };
     let timeout_ms = config.timeout_ms;
     let queue_capacity = config.max_queue_depth;
@@ -147,16 +154,17 @@ pub fn run_internal_slm_prior_smoke_with_manifest(
     validate_slm_prior_output(&output)?;
 
     let malformed_output_rejected = alife_semantic::parse_slm_prior_json(
-        &model.ollama_model,
+        &model.llamacpp_alias,
         r#"{"salience_labels":["food"],"context_summary":"bad","lexicon_associations":{"food":0.8},"perception_tags":["near"],"action":"eat"}"#,
     )
     .is_err();
     let unavailable_is_user_action_required =
-        LocalOllamaSlmPriorProvider::new(LocalOllamaSlmPriorConfig {
+        LlamaCppSlmPriorProvider::new(LlamaCppSlmPriorConfig {
             port: 9,
             timeout_ms: 1_000,
-            model: model.ollama_model.clone(),
-            ..LocalOllamaSlmPriorConfig::default()
+            model: model.llamacpp_alias.clone(),
+            host: model.llamacpp_host.clone(),
+            ..LlamaCppSlmPriorConfig::default()
         })
         .map_err(GameAppShellError::Core)?
         .generate_prior("teacher token food")
@@ -178,11 +186,13 @@ pub fn run_internal_slm_prior_smoke_with_manifest(
         license: model.license.clone(),
         runtime_backend: model.runtime_backend.clone(),
         expected_local_path: model.expected_local_path.clone(),
-        ollama_model: model.ollama_model.clone(),
+        llamacpp_alias: model.llamacpp_alias.clone(),
+        llamacpp_host: model.llamacpp_host.clone(),
+        llamacpp_port: model.llamacpp_port,
         sha256: model.sha256.clone(),
         downloaded_locally: model.downloaded_locally,
         inference_smoke_passed: true,
-        local_runtime: "ollama-localhost".to_string(),
+        local_runtime: "llama.cpp-localhost".to_string(),
         queue_capacity,
         queued_requests,
         processed_requests: 1,
@@ -199,7 +209,7 @@ pub fn run_internal_slm_prior_smoke_with_manifest(
         unavailable_is_user_action_required,
         feature_disabled_is_nonfatal: true,
         notes: vec![
-            "real local Qwen3 SLM prior via Ollama localhost".to_string(),
+            "real local Qwen3 SLM prior via llama.cpp localhost".to_string(),
             "output is structured and bounded before game context".to_string(),
             "private prior cannot act, bypass arbitration, inject hidden vectors, or rewrite weights".to_string(),
         ],

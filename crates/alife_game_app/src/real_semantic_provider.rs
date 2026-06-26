@@ -24,7 +24,9 @@ pub struct RealSemanticProviderSmokeSummary {
     pub license: String,
     pub runtime_backend: String,
     pub expected_local_path: String,
-    pub ollama_model: String,
+    pub llamacpp_alias: String,
+    pub llamacpp_host: String,
+    pub llamacpp_port: u16,
     pub sha256: String,
     pub downloaded_locally: bool,
     pub inference_smoke_passed: bool,
@@ -54,13 +56,15 @@ impl RealSemanticProviderSmokeSummary {
             || self.repo_id != "Qwen/Qwen3-Embedding-0.6B-GGUF"
             || self.model_role != "semantic_embedding_provider"
             || self.license != "apache-2.0"
-            || self.runtime_backend != "ollama-localhost-gguf"
+            || self.runtime_backend != "llamacpp-server-gguf"
             || self.expected_local_path.contains("Entity(")
-            || self.ollama_model.trim().is_empty()
+            || self.llamacpp_alias.trim().is_empty()
+            || !matches!(self.llamacpp_host.as_str(), "127.0.0.1" | "localhost")
+            || self.llamacpp_port == 0
             || self.sha256.len() != 64
             || !self.downloaded_locally
             || !self.inference_smoke_passed
-            || self.local_runtime != "ollama-localhost"
+            || self.local_runtime != "llama.cpp-localhost"
             || self.input_chars == 0
             || self.raw_embedding_dims == 0
             || self.raw_embedding_dims > 8_192
@@ -83,11 +87,12 @@ impl RealSemanticProviderSmokeSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
             self.schema_version,
             self.repo_id,
             self.runtime_backend,
-            self.ollama_model,
+            self.llamacpp_alias,
+            self.llamacpp_port,
             self.raw_embedding_dims,
             self.projected_embedding_dims,
             self.semantic_code_count,
@@ -124,12 +129,14 @@ pub fn run_real_semantic_provider_smoke_with_manifest(
                 message: "CA26 model manifest must contain semantic_embedding_provider",
             })?;
 
-    let config = LocalOllamaEmbeddingConfig {
-        model: model.ollama_model.clone(),
-        ..LocalOllamaEmbeddingConfig::default()
+    let config = LlamaCppEmbeddingConfig {
+        model: model.llamacpp_alias.clone(),
+        host: model.llamacpp_host.clone(),
+        port: model.llamacpp_port,
+        ..LlamaCppEmbeddingConfig::default()
     };
     let timeout_ms = config.timeout_ms;
-    let provider = LocalOllamaEmbeddingProvider::new(config).map_err(GameAppShellError::Core)?;
+    let provider = LlamaCppEmbeddingProvider::new(config).map_err(GameAppShellError::Core)?;
     let capability = provider.capability_manifest(true);
     capability.validate().map_err(GameAppShellError::Core)?;
     if capability.can_issue_actions || capability.can_rewrite_weights {
@@ -159,11 +166,13 @@ pub fn run_real_semantic_provider_smoke_with_manifest(
         license: model.license.clone(),
         runtime_backend: model.runtime_backend.clone(),
         expected_local_path: model.expected_local_path.clone(),
-        ollama_model: model.ollama_model.clone(),
+        llamacpp_alias: model.llamacpp_alias.clone(),
+        llamacpp_host: model.llamacpp_host.clone(),
+        llamacpp_port: model.llamacpp_port,
         sha256: model.sha256.clone(),
         downloaded_locally: model.downloaded_locally,
         inference_smoke_passed: true,
-        local_runtime: "ollama-localhost".to_string(),
+        local_runtime: "llama.cpp-localhost".to_string(),
         input_chars: CA26_SMOKE_INPUT.chars().count(),
         raw_embedding_dims: embedding.raw_dims,
         projected_embedding_dims: CA26_EMBEDDING_PROJECTION_DIMS,
@@ -177,7 +186,7 @@ pub fn run_real_semantic_provider_smoke_with_manifest(
         can_rewrite_weights: capability.can_rewrite_weights,
         hidden_vector_injection: false,
         notes: vec![
-            "real local Qwen3 embedding via Ollama localhost".to_string(),
+            "real local Qwen3 embedding via llama.cpp localhost".to_string(),
             "bounded projection enters only semantic context metadata".to_string(),
             "semantic provider cannot act, select motors, or rewrite weights".to_string(),
         ],

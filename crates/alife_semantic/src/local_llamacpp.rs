@@ -1,6 +1,6 @@
 //! CA26: localhost-only semantic embedding provider boundary.
 //!
-//! This module talks to a local Ollama process backed by a locally installed
+//! This module talks to a local llama.cpp process backed by a locally installed
 //! open-weight embedding model. It never calls a hosted inference API and it
 //! returns bounded context data, not actions or weight updates.
 
@@ -14,15 +14,16 @@ use std::{
 
 use alife_core::ScaffoldContractError;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{build_semantic_context, SemanticCodeDescriptor, SemanticProviderCapabilityManifest};
 
 pub const CA26_LOCAL_MODEL_MANIFEST_SCHEMA: &str = "alife.ca26.local_semantic_models.v1";
 pub const CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION: u16 = 1;
-pub const CA26_LOCAL_SEMANTIC_PROVIDER_ID: &str = "qwen3-embedding-0.6b-local-ollama";
-pub const CA26_DEFAULT_OLLAMA_MODEL: &str = "alife-qwen3-embedding-0.6b";
-pub const CA26_DEFAULT_OLLAMA_HOST: &str = "127.0.0.1";
-pub const CA26_DEFAULT_OLLAMA_PORT: u16 = 11_434;
+pub const CA26_LOCAL_SEMANTIC_PROVIDER_ID: &str = "qwen3-embedding-0.6b-local-llamacpp";
+pub const CA26_DEFAULT_LLAMA_CPP_EMBEDDING_ALIAS: &str = "alife-qwen3-embedding-0.6b";
+pub const CA26_DEFAULT_LLAMA_CPP_HOST: &str = "127.0.0.1";
+pub const CA26_DEFAULT_LLAMA_CPP_EMBEDDING_PORT: u16 = 18_082;
 pub const CA26_EMBEDDING_PROJECTION_DIMS: usize = 32;
 pub const CA26_MAX_RAW_EMBEDDING_DIMS: usize = 8_192;
 pub const CA26_MAX_CONTEXT_INPUT_CHARS: usize = 512;
@@ -83,7 +84,9 @@ pub struct LocalSemanticModelEntry {
     pub selected_file: String,
     pub runtime_backend: String,
     pub expected_local_path: String,
-    pub ollama_model: String,
+    pub llamacpp_alias: String,
+    pub llamacpp_host: String,
+    pub llamacpp_port: u16,
     pub sha256: String,
     pub downloaded_locally: bool,
     pub inference_smoke_passed: bool,
@@ -100,9 +103,11 @@ impl LocalSemanticModelEntry {
             || self.model_role.trim().is_empty()
             || self.license.trim().is_empty()
             || self.selected_file.trim().is_empty()
-            || self.runtime_backend != "ollama-localhost-gguf"
+            || self.runtime_backend != "llamacpp-server-gguf"
             || self.expected_local_path.trim().is_empty()
-            || self.ollama_model.trim().is_empty()
+            || self.llamacpp_alias.trim().is_empty()
+            || validate_local_llamacpp_host(&self.llamacpp_host).is_err()
+            || self.llamacpp_port == 0
             || self.sha256.len() != 64
             || self.limitations.is_empty()
             || self.limitations.len() > 8
@@ -115,7 +120,8 @@ impl LocalSemanticModelEntry {
                 .as_deref()
                 .is_some_and(|target| target.contains("api") || target.contains("http"))
             || self.runtime_backend.contains("cloud")
-            || self.ollama_model.contains("http")
+            || self.llamacpp_alias.contains("http")
+            || self.llamacpp_host.contains("://")
             || self.expected_local_path.contains("Entity(")
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
@@ -125,7 +131,7 @@ impl LocalSemanticModelEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalOllamaEmbeddingConfig {
+pub struct LlamaCppEmbeddingConfig {
     pub host: String,
     pub port: u16,
     pub model: String,
@@ -134,12 +140,12 @@ pub struct LocalOllamaEmbeddingConfig {
     pub projected_dims: usize,
 }
 
-impl Default for LocalOllamaEmbeddingConfig {
+impl Default for LlamaCppEmbeddingConfig {
     fn default() -> Self {
         Self {
-            host: CA26_DEFAULT_OLLAMA_HOST.to_string(),
-            port: CA26_DEFAULT_OLLAMA_PORT,
-            model: CA26_DEFAULT_OLLAMA_MODEL.to_string(),
+            host: CA26_DEFAULT_LLAMA_CPP_HOST.to_string(),
+            port: CA26_DEFAULT_LLAMA_CPP_EMBEDDING_PORT,
+            model: CA26_DEFAULT_LLAMA_CPP_EMBEDDING_ALIAS.to_string(),
             timeout_ms: 120_000,
             max_input_chars: CA26_MAX_CONTEXT_INPUT_CHARS,
             projected_dims: CA26_EMBEDDING_PROJECTION_DIMS,
@@ -147,9 +153,9 @@ impl Default for LocalOllamaEmbeddingConfig {
     }
 }
 
-impl LocalOllamaEmbeddingConfig {
+impl LlamaCppEmbeddingConfig {
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
-        if self.host != CA26_DEFAULT_OLLAMA_HOST
+        if validate_local_llamacpp_host(&self.host).is_err()
             || self.port == 0
             || self.model.trim().is_empty()
             || self.model.contains("http")
@@ -162,6 +168,67 @@ impl LocalOllamaEmbeddingConfig {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         Ok(())
+    }
+}
+
+pub fn validate_local_llamacpp_host(host: &str) -> Result<(), ScaffoldContractError> {
+    match host.trim() {
+        "127.0.0.1" | "localhost" => Ok(()),
+        _ => Err(ScaffoldContractError::ScalarOutOfRange),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LlamaCppServerClient {
+    pub host: String,
+    pub port: u16,
+    pub timeout_ms: u64,
+}
+
+impl LlamaCppServerClient {
+    pub fn new(host: String, port: u16, timeout_ms: u64) -> Result<Self, ScaffoldContractError> {
+        if validate_local_llamacpp_host(&host).is_err() || port == 0 || timeout_ms == 0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(Self {
+            host,
+            port,
+            timeout_ms,
+        })
+    }
+
+    pub fn address(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+
+    pub fn post_json(&self, path: &str, body: &str) -> Result<String, String> {
+        if !path.starts_with("/v1/") || path.contains("://") {
+            return Err("local llama.cpp path must be a relative /v1 endpoint".to_string());
+        }
+        let address = self.address();
+        let timeout = Duration::from_millis(self.timeout_ms);
+        let mut stream = TcpStream::connect(&address).map_err(|err| {
+            format!("USER_ACTION_REQUIRED: local llama.cpp unavailable at {address}: {err}")
+        })?;
+        stream
+            .set_read_timeout(Some(timeout))
+            .map_err(|err| err.to_string())?;
+        stream
+            .set_write_timeout(Some(timeout))
+            .map_err(|err| err.to_string())?;
+
+        let http = format!(
+            "POST {path} HTTP/1.1\r\nHost: {address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream
+            .write_all(http.as_bytes())
+            .map_err(|err| format!("local llama.cpp request failed: {err}"))?;
+        let mut response = String::new();
+        stream
+            .read_to_string(&mut response)
+            .map_err(|err| format!("local llama.cpp response failed: {err}"))?;
+        Ok(response)
     }
 }
 
@@ -194,18 +261,18 @@ impl BoundedSemanticEmbedding {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalOllamaEmbeddingProvider {
-    pub config: LocalOllamaEmbeddingConfig,
+pub struct LlamaCppEmbeddingProvider {
+    pub config: LlamaCppEmbeddingConfig,
 }
 
-impl LocalOllamaEmbeddingProvider {
-    pub fn new(config: LocalOllamaEmbeddingConfig) -> Result<Self, ScaffoldContractError> {
+impl LlamaCppEmbeddingProvider {
+    pub fn new(config: LlamaCppEmbeddingConfig) -> Result<Self, ScaffoldContractError> {
         config.validate()?;
         Ok(Self { config })
     }
 
     pub fn capability_manifest(&self, available: bool) -> SemanticProviderCapabilityManifest {
-        SemanticProviderCapabilityManifest::local_ollama_embedding(
+        SemanticProviderCapabilityManifest::local_llamacpp_embedding(
             CA26_LOCAL_SEMANTIC_PROVIDER_ID,
             available,
         )
@@ -259,33 +326,17 @@ impl LocalOllamaEmbeddingProvider {
     fn request_embedding(&self, input: &str) -> Result<Vec<f32>, String> {
         let request = serde_json::json!({
             "model": self.config.model,
-            "input": [input],
+            "input": input,
         });
         let body = request.to_string();
-        let address = format!("{}:{}", self.config.host, self.config.port);
-        let timeout = Duration::from_millis(self.config.timeout_ms);
-        let mut stream = TcpStream::connect(&address).map_err(|err| {
-            format!("USER_ACTION_REQUIRED: local Ollama unavailable at {address}: {err}")
-        })?;
-        stream
-            .set_read_timeout(Some(timeout))
-            .map_err(|err| err.to_string())?;
-        stream
-            .set_write_timeout(Some(timeout))
-            .map_err(|err| err.to_string())?;
-
-        let http = format!(
-            "POST /api/embed HTTP/1.1\r\nHost: {address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-        );
-        stream
-            .write_all(http.as_bytes())
-            .map_err(|err| format!("local Ollama request failed: {err}"))?;
-        let mut response = String::new();
-        stream
-            .read_to_string(&mut response)
-            .map_err(|err| format!("local Ollama response failed: {err}"))?;
-        parse_ollama_embedding_response(&response)
+        let client = LlamaCppServerClient::new(
+            self.config.host.clone(),
+            self.config.port,
+            self.config.timeout_ms,
+        )
+        .map_err(|err| format!("invalid local llama.cpp client config: {err:?}"))?;
+        let response = client.post_json("/v1/embeddings", &body)?;
+        parse_llamacpp_embedding_response(&response)
     }
 }
 
@@ -322,20 +373,43 @@ pub fn project_embedding_to_i8(
 }
 
 #[derive(Debug, Deserialize)]
-struct OllamaEmbedResponse {
+struct LlamaCppEmbeddingResponse {
     model: Option<String>,
-    embeddings: Vec<Vec<f32>>,
+    data: Vec<LlamaCppEmbeddingData>,
 }
 
 #[derive(Debug, Deserialize)]
-struct OllamaErrorResponse {
-    error: String,
+struct LlamaCppEmbeddingData {
+    embedding: Vec<f32>,
 }
 
-fn parse_ollama_embedding_response(response: &str) -> Result<Vec<f32>, String> {
+#[derive(Debug, Deserialize)]
+struct LlamaCppErrorResponse {
+    error: LlamaCppErrorValue,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum LlamaCppErrorValue {
+    Message { message: String },
+    Text(String),
+    Other(Value),
+}
+
+impl LlamaCppErrorValue {
+    fn into_message(self) -> String {
+        match self {
+            Self::Message { message } => message,
+            Self::Text(text) => text,
+            Self::Other(value) => value.to_string(),
+        }
+    }
+}
+
+fn parse_llamacpp_embedding_response(response: &str) -> Result<Vec<f32>, String> {
     let (header, body) = response
         .split_once("\r\n\r\n")
-        .ok_or_else(|| "local Ollama response missing HTTP body".to_string())?;
+        .ok_or_else(|| "local llama.cpp response missing HTTP body".to_string())?;
     let body = if header
         .lines()
         .any(|line| line.eq_ignore_ascii_case("Transfer-Encoding: chunked"))
@@ -345,32 +419,33 @@ fn parse_ollama_embedding_response(response: &str) -> Result<Vec<f32>, String> {
         body.to_string()
     };
     if !header.starts_with("HTTP/1.1 200") && !header.starts_with("HTTP/1.0 200") {
-        let message = serde_json::from_str::<OllamaErrorResponse>(&body)
-            .map(|err| err.error)
+        let message = serde_json::from_str::<LlamaCppErrorResponse>(&body)
+            .map(|err| err.error.into_message())
             .unwrap_or_else(|_| body.trim().to_string());
         return Err(format!(
-            "USER_ACTION_REQUIRED: local Ollama embedding request failed: {message}"
+            "USER_ACTION_REQUIRED: local llama.cpp embedding request failed: {message}"
         ));
     }
     let response =
-        serde_json::from_str::<OllamaEmbedResponse>(&body).map_err(|err| err.to_string())?;
+        serde_json::from_str::<LlamaCppEmbeddingResponse>(&body).map_err(|err| err.to_string())?;
     if response
         .model
         .as_deref()
         .is_some_and(|model| model.trim().is_empty())
     {
-        return Err("local Ollama returned an empty model label".to_string());
+        return Err("local llama.cpp returned an empty model label".to_string());
     }
     let embedding = response
-        .embeddings
+        .data
         .into_iter()
         .next()
-        .ok_or_else(|| "local Ollama returned no embedding vectors".to_string())?;
+        .map(|item| item.embedding)
+        .ok_or_else(|| "local llama.cpp returned no embedding vectors".to_string())?;
     if embedding.is_empty()
         || embedding.len() > CA26_MAX_RAW_EMBEDDING_DIMS
         || embedding.iter().any(|value| !value.is_finite())
     {
-        return Err("local Ollama returned invalid embedding values".to_string());
+        return Err("local llama.cpp returned invalid embedding values".to_string());
     }
     Ok(embedding)
 }
@@ -381,20 +456,20 @@ fn decode_chunked_http_body(body: &str) -> Result<String, String> {
     loop {
         let (size_line, rest) = remaining
             .split_once("\r\n")
-            .ok_or_else(|| "chunked Ollama response missing chunk size".to_string())?;
+            .ok_or_else(|| "chunked llama.cpp response missing chunk size".to_string())?;
         let size_text = size_line.split(';').next().unwrap_or_default().trim();
         let size = usize::from_str_radix(size_text, 16)
-            .map_err(|_| "chunked Ollama response has invalid chunk size".to_string())?;
+            .map_err(|_| "chunked llama.cpp response has invalid chunk size".to_string())?;
         if size == 0 {
             return Ok(decoded);
         }
         if rest.len() < size + 2 {
-            return Err("chunked Ollama response ended inside a chunk".to_string());
+            return Err("chunked llama.cpp response ended inside a chunk".to_string());
         }
         decoded.push_str(&rest[..size]);
         let trailer = &rest[size..];
         if !trailer.starts_with("\r\n") {
-            return Err("chunked Ollama response missing chunk terminator".to_string());
+            return Err("chunked llama.cpp response missing chunk terminator".to_string());
         }
         remaining = &trailer[2..];
     }
@@ -428,9 +503,11 @@ mod tests {
                     "model_role":"semantic_embedding_provider",
                     "license":"apache-2.0",
                     "selected_file":"Qwen3-Embedding-0.6B-Q8_0.gguf",
-                    "runtime_backend":"ollama-localhost-gguf",
+                    "runtime_backend":"llamacpp-server-gguf",
                     "expected_local_path":"models/local/qwen3-embedding-0.6b-gguf/Qwen3-Embedding-0.6B-Q8_0.gguf",
-                    "ollama_model":"alife-qwen3-embedding-0.6b",
+                    "llamacpp_alias":"alife-qwen3-embedding-0.6b",
+                    "llamacpp_host":"127.0.0.1",
+                    "llamacpp_port":18082,
                     "sha256":"06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
                     "downloaded_locally":true,
                     "inference_smoke_passed":true,
@@ -444,11 +521,11 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_ollama_model_is_user_action_required_not_fake_output() {
-        let provider = LocalOllamaEmbeddingProvider::new(LocalOllamaEmbeddingConfig {
+    fn unavailable_llamacpp_alias_is_user_action_required_not_fake_output() {
+        let provider = LlamaCppEmbeddingProvider::new(LlamaCppEmbeddingConfig {
             port: 9,
             timeout_ms: 1_000,
-            ..LocalOllamaEmbeddingConfig::default()
+            ..LlamaCppEmbeddingConfig::default()
         })
         .unwrap();
         let err = provider.embed_text("teacher token food").unwrap_err();
@@ -456,17 +533,28 @@ mod tests {
     }
 
     #[test]
-    fn chunked_ollama_response_decodes_before_json_parse() {
+    fn chunked_llamacpp_response_decodes_before_json_parse() {
+        let decoded = decode_chunked_http_body("5\r\nhello\r\n0\r\n\r\n").unwrap();
+        assert_eq!(decoded, "hello");
+    }
+
+    #[test]
+    fn openai_compatible_embedding_response_parses() {
         let response = concat!(
             "HTTP/1.1 200 OK\r\n",
-            "Transfer-Encoding: chunked\r\n",
+            "Content-Type: application/json\r\n",
             "\r\n",
-            "26\r\n",
-            "{\"model\":\"m\",\"embeddings\":[[1.0,2.0]]}\r\n",
-            "0\r\n",
-            "\r\n"
+            "{\"model\":\"m\",\"data\":[{\"embedding\":[1.0,2.0]}]}"
         );
-        let embedding = parse_ollama_embedding_response(response).unwrap();
+        let embedding = parse_llamacpp_embedding_response(response).unwrap();
         assert_eq!(embedding, vec![1.0, 2.0]);
+    }
+
+    #[test]
+    fn remote_llamacpp_hosts_are_rejected() {
+        assert!(validate_local_llamacpp_host("127.0.0.1").is_ok());
+        assert!(validate_local_llamacpp_host("localhost").is_ok());
+        assert!(validate_local_llamacpp_host("https://api.example.com").is_err());
+        assert!(validate_local_llamacpp_host("192.168.1.5").is_err());
     }
 }

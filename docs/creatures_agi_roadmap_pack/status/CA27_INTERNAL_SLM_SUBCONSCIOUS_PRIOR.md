@@ -1,6 +1,6 @@
 # CA27 Internal SLM Subconscious Prior
 
-Status: complete pending CAR27 review.
+Status: complete; active runtime superseded by direct llama.cpp.
 
 ## Scope
 
@@ -9,26 +9,30 @@ The prior is private and optional. It produces bounded perception/context hints
 only and cannot issue actions, bypass P09 arbitration, inject hidden vectors, or
 rewrite weights.
 
+Prior Ollama evidence from CA27 is historical only. Active runtime code, setup,
+and smoke commands use direct localhost-only llama.cpp / `llama-server`.
+
 ## Local Model
 
 | Field | Value |
 | --- | --- |
 | Target model | `Qwen/Qwen3-4B-Instruct-2507` |
 | Runnable local artifact | `Qwen/Qwen3-4B-GGUF` / `Qwen3-4B-Q4_K_M.gguf` |
-| Runtime | `ollama-localhost-gguf` |
-| Ollama model | `alife-qwen3-4b-prior` |
+| Runtime | `llamacpp-server-gguf` |
+| llama.cpp alias | `alife-qwen3-4b-prior` |
+| Endpoint | `http://127.0.0.1:18081/v1/chat/completions` |
 | Local path | `models/local/qwen3-4b-gguf/Qwen3-4B-Q4_K_M.gguf` |
 | SHA-256 | `7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5` |
 | License | Apache-2.0 |
 
 The exact 2507 target repository was verified as available, but the local
-runtime used the Qwen3 4B GGUF artifact because it is the clean local
-Ollama/GGUF path on this machine. This is recorded in the tracked manifest and
-is not presented as the exact 2507 artifact.
+runtime uses the Qwen3 4B GGUF artifact because it is the clean local GGUF file
+selected for llama.cpp on this machine. This is recorded in the tracked manifest
+and is not presented as the exact 2507 artifact.
 
 ## Runtime Boundary
 
-- Localhost-only Ollama inference.
+- Localhost-only llama.cpp inference.
 - No paid, cloud, remote, or hosted inference API.
 - Queue depth is bounded and inference runs through a worker-thread async
   request boundary so the app-facing queue does not execute model inference
@@ -48,6 +52,12 @@ is not presented as the exact 2507 artifact.
 Focused real inference command:
 
 ```powershell
+cargo run -p alife_game_app --bin alife_game_app -- llamacpp-slm-prior-smoke
+```
+
+Compatibility smoke command:
+
+```powershell
 cargo run -p alife_game_app --bin alife_game_app -- internal-slm-prior-smoke
 ```
 
@@ -61,8 +71,8 @@ Expected output boundary:
 
 - `target_repo_id=Qwen/Qwen3-4B-Instruct-2507`
 - `repo_id=Qwen/Qwen3-4B-GGUF`
-- `runtime=ollama-localhost-gguf`
-- `model=alife-qwen3-4b-prior`
+- `runtime=llamacpp-server-gguf`
+- `alias=alife-qwen3-4b-prior`
 - `can_issue_actions=false`
 - `can_rewrite_weights=false`
 - `can_bypass_arbitration=false`
@@ -71,8 +81,8 @@ Expected output boundary:
 ## Known Limitations
 
 - The SLM prior is not a teacher and does not directly affect motor output.
-- The local model must be installed and runnable through Ollama for the real
-  inference smoke to pass.
+- The local model must be installed and runnable through `llama-server` for the
+  real inference smoke to pass.
 - The selected local runtime uses the Qwen3 4B GGUF artifact rather than an
   exact `Qwen/Qwen3-4B-Instruct-2507` GGUF file.
 - This does not change the existing GPU runtime claim and does not create a

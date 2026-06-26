@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 mod fake;
 #[cfg(feature = "gaussian-adapter")]
 mod gaussian;
-#[cfg(feature = "local-ollama")]
-mod local_ollama;
-#[cfg(feature = "local-ollama")]
+#[cfg(feature = "local-llamacpp")]
+mod local_llamacpp;
+#[cfg(feature = "local-llamacpp")]
 mod local_slm_prior;
 #[cfg(feature = "gaussian-adapter")]
 mod providers;
@@ -49,7 +49,7 @@ pub enum SemanticProviderKind {
     Disabled,
     FakeLocalTable,
     ExternalExtension,
-    LocalOllamaEmbedding,
+    LlamaCppEmbedding,
 }
 
 impl SemanticProviderKind {
@@ -58,7 +58,7 @@ impl SemanticProviderKind {
             Self::Disabled => "disabled",
             Self::FakeLocalTable => "fake-local-table",
             Self::ExternalExtension => "external-extension",
-            Self::LocalOllamaEmbedding => "local-ollama-embedding",
+            Self::LlamaCppEmbedding => "local-llamacpp-embedding",
         }
     }
 }
@@ -113,12 +113,12 @@ impl SemanticProviderConfig {
         }
     }
 
-    pub fn local_ollama_embedding(provider_id: impl Into<String>) -> Self {
+    pub fn local_llamacpp_embedding(provider_id: impl Into<String>) -> Self {
         Self {
             schema: G11_SEMANTIC_PROVIDER_SCHEMA.to_string(),
             schema_version: G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
             provider_id: provider_id.into(),
-            provider_kind: SemanticProviderKind::LocalOllamaEmbedding,
+            provider_kind: SemanticProviderKind::LlamaCppEmbedding,
             required: false,
             max_display_entries: 8,
         }
@@ -199,10 +199,10 @@ impl SemanticProviderCapabilityManifest {
         )
     }
 
-    pub fn local_ollama_embedding(provider_id: impl Into<String>, available: bool) -> Self {
+    pub fn local_llamacpp_embedding(provider_id: impl Into<String>, available: bool) -> Self {
         Self::new(
             provider_id,
-            SemanticProviderKind::LocalOllamaEmbedding,
+            SemanticProviderKind::LlamaCppEmbedding,
             available,
             true,
             true,
@@ -311,19 +311,20 @@ pub use semantic::{
 #[cfg(feature = "fake-semantic-provider")]
 pub use fake::FakeSemanticProvider;
 
-#[cfg(feature = "local-ollama")]
-pub use local_ollama::{
-    project_embedding_to_i8, BoundedSemanticEmbedding, LocalOllamaEmbeddingConfig,
-    LocalOllamaEmbeddingProvider, LocalSemanticModelEntry, LocalSemanticModelManifest,
-    CA26_DEFAULT_OLLAMA_MODEL, CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
+#[cfg(feature = "local-llamacpp")]
+pub use local_llamacpp::{
+    project_embedding_to_i8, BoundedSemanticEmbedding, LlamaCppEmbeddingConfig,
+    LlamaCppEmbeddingProvider, LocalSemanticModelEntry, LocalSemanticModelManifest,
+    CA26_DEFAULT_LLAMA_CPP_EMBEDDING_ALIAS, CA26_DEFAULT_LLAMA_CPP_EMBEDDING_PORT,
+    CA26_DEFAULT_LLAMA_CPP_HOST, CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
     CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION, CA26_LOCAL_SEMANTIC_PROVIDER_ID,
 };
 
-#[cfg(feature = "local-ollama")]
+#[cfg(feature = "local-llamacpp")]
 pub use local_slm_prior::{
-    parse_slm_prior_json, LocalOllamaSlmPriorConfig, LocalOllamaSlmPriorProvider,
+    parse_slm_prior_json, LlamaCppSlmPriorConfig, LlamaCppSlmPriorProvider,
     LocalSlmPriorAsyncQueue, LocalSlmPriorOutput, LocalSlmPriorQueue, LocalSlmPriorRequest,
-    SlmLexiconAssociation, CA27_DEFAULT_OLLAMA_MODEL, CA27_LOCAL_SLM_PRIOR_ID,
-    CA27_MAX_PERCEPTION_TAGS, CA27_MAX_SALIENCE_LABELS, CA27_SLM_PRIOR_OUTPUT_SCHEMA,
-    CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION,
+    SlmLexiconAssociation, CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS, CA27_DEFAULT_LLAMA_CPP_SLM_PORT,
+    CA27_LOCAL_SLM_PRIOR_ID, CA27_MAX_PERCEPTION_TAGS, CA27_MAX_SALIENCE_LABELS,
+    CA27_SLM_PRIOR_OUTPUT_SCHEMA, CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION,
 };
