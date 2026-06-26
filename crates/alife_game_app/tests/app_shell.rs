@@ -8,8 +8,9 @@ use alife_game_app::{
     project_lod_without_behavior_change, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
     run_behavior_tuning_metrics_smoke, run_behavior_tuning_metrics_with_config,
     run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
-    run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_feedback_polish_smoke,
-    run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_ecological_soak_smoke,
+    run_ecological_soak_with_config, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
+    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_ecology_smoke, run_graphical_lifecycle_smoke, run_graphical_population_smoke,
     run_hazard_recovery_smoke, run_headless_app_shell_smoke, run_homeostasis_runtime_smoke,
@@ -23,24 +24,25 @@ use alife_game_app::{
     validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig,
     BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget, CameraNavigationState,
     ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
-    DoubleBufferedGraphicalScheduler, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
-    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
-    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
-    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
-    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
-    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
-    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
-    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
+    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
+    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
+    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
+    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
     CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
-    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
+    CA22_MANUAL_HEADLESS_TICKS, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -2577,6 +2579,111 @@ fn ca21_behavior_tuning_report_is_reproducible_and_not_overclaimed() {
     assert!(!first.report_markdown.contains("full action-authoritative"));
     assert!(first.scenario_sweeps.iter().all(|sweep| sweep.bounded_ci));
     first.validate().unwrap();
+}
+
+#[test]
+fn ca22_ecological_soak_smoke_records_bounds_and_remaining_issues() {
+    let summary = run_ecological_soak_smoke().unwrap();
+
+    assert_eq!(summary.schema, CA22_ECOLOGICAL_SOAK_SCHEMA);
+    assert_eq!(summary.schema_version, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION);
+    assert_eq!(
+        summary.metrics.headless_ticks_completed,
+        CA22_FAST_HEADLESS_TICKS
+    );
+    assert_eq!(
+        summary.metrics.headless_ticks_requested,
+        CA22_FAST_HEADLESS_TICKS
+    );
+    assert_eq!(summary.metrics.first_failure_tick, None);
+    assert!(summary.metrics.ecology_metric_samples > 0);
+    assert_eq!(summary.findings.len(), CA21_REQUIRED_DETECTOR_COUNT);
+    assert!(summary.metrics.population_bounds_enforced);
+    assert!(summary.metrics.resource_bounds_enforced);
+    assert!(summary.metrics.no_unsealed_learning);
+    assert!(summary.metrics.resources_regrown_or_spawned);
+    assert!(summary.config_first_tuning);
+    assert!(!summary.full_emergent_ecology_claim);
+    assert_eq!(
+        summary.gpu_product_claim,
+        "CpuShadowGuardedStaticPlusLiveHShadow"
+    );
+    assert!(summary.cpu_shadow_parity_preserved);
+    assert!(summary.manual_10k_command.contains("--ignored"));
+    assert!(summary
+        .manual_10k_command
+        .contains("ca22_manual_10k_ecological_soak"));
+    assert!(summary
+        .graphical_bounded_command
+        .contains("run_graphical_playground.ps1"));
+    assert!(summary.report_markdown.contains("Remaining issues"));
+    assert!(summary.report_markdown.contains("config-first"));
+    assert!(summary
+        .report_markdown
+        .contains("full action-authoritative GPU runtime are not claimed"));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca22_ecological_soak_config_bounds_are_enforced() {
+    let mut config = EcologicalSoakConfig::fast_ci();
+    config.headless_ticks = 0;
+    assert!(config.validate().is_err());
+
+    let mut config = EcologicalSoakConfig::fast_ci();
+    config.headless_ticks = CA22_MANUAL_HEADLESS_TICKS + 1;
+    assert!(config.validate().is_err());
+
+    let mut config = EcologicalSoakConfig::fast_ci();
+    config.population_cap = alife_game_app::G08_MAX_POPULATION_CAP + 1;
+    assert!(config.validate().is_err());
+
+    let mut config = EcologicalSoakConfig::fast_ci();
+    config.report_every = config.headless_ticks + 1;
+    assert!(config.validate().is_err());
+}
+
+#[test]
+fn ca22_ecological_soak_report_is_reproducible_and_honest() {
+    let first = run_ecological_soak_with_config(EcologicalSoakConfig::fast_ci()).unwrap();
+    let second = run_ecological_soak_with_config(EcologicalSoakConfig::fast_ci()).unwrap();
+
+    assert_eq!(first.signature_line(), second.signature_line());
+    assert_eq!(first.report_markdown, second.report_markdown);
+    assert!(first
+        .findings
+        .iter()
+        .any(|finding| finding.status == BehaviorTuningFindingStatus::KnownLimitation));
+    assert!(first.report_markdown.contains(
+        "Full emergent ecology and full action-authoritative GPU runtime are not claimed"
+    ));
+    assert!(first
+        .report_markdown
+        .contains("CPU shadow parity and CPU fallback remain preserved"));
+    assert!(!first.report_markdown.contains("release tag"));
+    first.validate().unwrap();
+}
+
+#[test]
+#[ignore = "manual CA22 10k ecology soak: cargo test -p alife_game_app --test app_shell ca22_manual_10k_ecological_soak -- --ignored --nocapture"]
+fn ca22_manual_10k_ecological_soak() {
+    let summary = run_ecological_soak_with_config(EcologicalSoakConfig::manual_10k()).unwrap();
+
+    assert_eq!(
+        summary.metrics.headless_ticks_completed,
+        CA22_MANUAL_HEADLESS_TICKS
+    );
+    assert_eq!(
+        summary.metrics.headless_ticks_requested,
+        CA22_MANUAL_HEADLESS_TICKS
+    );
+    assert_eq!(summary.metrics.first_failure_tick, None);
+    assert!(summary.metrics.ecology_metric_samples >= 10);
+    assert!(summary.metrics.population_bounds_enforced);
+    assert!(summary.metrics.resource_bounds_enforced);
+    assert!(summary.metrics.no_unsealed_learning);
+    assert!(!summary.full_emergent_ecology_claim);
+    summary.validate().unwrap();
 }
 
 #[test]

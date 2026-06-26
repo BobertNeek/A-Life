@@ -4,8 +4,8 @@ use alife_game_app::{
     default_app_bundle_manifest_path, load_visible_world_from_p34_save,
     run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke, run_behavior_tuning_metrics_smoke,
     run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
-    run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_environment_launcher_smoke,
-    run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
+    run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_ecological_soak_smoke,
+    run_environment_launcher_smoke, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
     run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_ecology_smoke, run_graphical_lifecycle_smoke, run_graphical_population_smoke,
@@ -360,6 +360,13 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
+        [command] if command == "ecological-soak-smoke" => {
+            let summary = run_ecological_soak_smoke().map_err(|err| err.to_string())?;
+            Ok(format_ecological_soak_summary(
+                "CA22 ecological soak",
+                &summary,
+            ))
+        }
         [command] if command == "onboarding-help-smoke" => {
             let summary = run_onboarding_help_smoke().map_err(|err| err.to_string())?;
             Ok(format_onboarding_help_summary(
@@ -392,7 +399,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | semantic-provider-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -1691,6 +1698,38 @@ fn format_behavior_tuning_summary(
         summary.metrics.food_success_rate,
         summary.metrics.hazard_avoidance_score,
         summary.metrics.max_population_observed,
+        summary.signature_line()
+    )
+}
+
+fn format_ecological_soak_summary(
+    prefix: &str,
+    summary: &alife_game_app::EcologicalSoakSummary,
+) -> String {
+    let finding_statuses = summary
+        .findings
+        .iter()
+        .map(|finding| format!("{}={}", finding.id, finding.status.label()))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{prefix} schema={} version={} mode={} ticks={}/{} graphical_ticks={} findings={} survival={:.3} food={:.3} hazard={:.3} population={} resources={} sealed={} config_first={} full_emergent_claim={} gpu_claim={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.config.mode.label(),
+        summary.metrics.headless_ticks_completed,
+        summary.metrics.headless_ticks_requested,
+        summary.metrics.graphical_ticks_bounded,
+        finding_statuses,
+        summary.metrics.survival_score,
+        summary.metrics.food_success_rate,
+        summary.metrics.hazard_avoidance_score,
+        summary.metrics.max_population_observed,
+        summary.metrics.max_resources_observed,
+        summary.metrics.sealed_patch_count,
+        summary.config_first_tuning,
+        summary.full_emergent_ecology_claim,
+        summary.gpu_product_claim,
         summary.signature_line()
     )
 }
