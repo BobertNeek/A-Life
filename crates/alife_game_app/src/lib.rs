@@ -26,11 +26,14 @@ mod prelude {
     };
     pub(crate) use alife_semantic::{
         BoundedSemanticEmbedding, FakeSemanticProvider, LocalOllamaEmbeddingConfig,
-        LocalOllamaEmbeddingProvider, LocalSemanticModelManifest, SemanticCodeDescriptor,
-        SemanticConceptBinding, SemanticContextBundle, SemanticContextProvider,
-        SemanticContextRequest, SemanticProviderCapabilityManifest, SemanticProviderConfig,
-        SemanticProviderKind, CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
-        CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION, G11_SEMANTIC_PROVIDER_SCHEMA,
+        LocalOllamaEmbeddingProvider, LocalOllamaSlmPriorConfig, LocalOllamaSlmPriorProvider,
+        LocalSemanticModelManifest, LocalSlmPriorAsyncQueue, LocalSlmPriorOutput,
+        LocalSlmPriorRequest, SemanticCodeDescriptor, SemanticConceptBinding,
+        SemanticContextBundle, SemanticContextProvider, SemanticContextRequest,
+        SemanticProviderCapabilityManifest, SemanticProviderConfig, SemanticProviderKind,
+        CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
+        CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION, CA27_SLM_PRIOR_OUTPUT_SCHEMA,
+        CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION, G11_SEMANTIC_PROVIDER_SCHEMA,
         G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::persistence::{
@@ -154,6 +157,9 @@ pub use semantic_provider_display::*;
 
 mod real_semantic_provider;
 pub use real_semantic_provider::*;
+
+mod internal_slm_prior;
+pub use internal_slm_prior::*;
 
 mod advanced_gameplay_ux;
 pub use advanced_gameplay_ux::*;
