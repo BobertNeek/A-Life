@@ -1,0 +1,35 @@
+{
+  "schema": "alife.ca25.curriculum_authoring.v1",
+  "schema_version": 1,
+  "curriculum_id": "ca25-grounded-food-token",
+  "title": "Grounded food word and verifier lesson",
+  "lessons": [
+    {
+      "lesson_id": 10100,
+      "title": "Name the teaching berry",
+      "step_kind": "name_object",
+      "teacher_cues": [
+        "teacher says food",
+        "teacher points",
+        "berry highlighted",
+        "visible praise"
+      ],
+      "verifier_conditions": [
+        {
+          "kind": "heard_token",
+          "token_id": 77,
+          "channel": "hearing"
+        },
+        {
+          "kind": "no_hidden_semantic_context"
+        },
+        {
+          "kind": "no_direct_teacher_action_selection"
+        },
+        {
+          "kind": "selected_by_arbitration"
+        }
+      ]
+    }
+  ]
+}

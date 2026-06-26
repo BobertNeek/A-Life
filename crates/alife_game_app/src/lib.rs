@@ -128,6 +128,9 @@ pub use graphical_lifecycle::*;
 mod graphical_school;
 pub use graphical_school::*;
 
+mod curriculum_authoring;
+pub use curriculum_authoring::*;
+
 mod behavior_tuning;
 pub use behavior_tuning::*;
 

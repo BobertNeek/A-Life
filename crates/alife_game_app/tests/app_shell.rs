@@ -8,9 +8,9 @@ use alife_game_app::{
     project_lod_without_behavior_change, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
     run_behavior_tuning_metrics_smoke, run_behavior_tuning_metrics_with_config,
     run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
-    run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_ecological_soak_smoke,
-    run_ecological_soak_with_config, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
-    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    run_creature_visual_smoke, run_curriculum_authoring_smoke, run_double_buffered_scheduler_smoke,
+    run_ecological_soak_smoke, run_ecological_soak_with_config, run_feedback_polish_smoke,
+    run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_ecology_smoke, run_graphical_lifecycle_smoke, run_graphical_population_smoke,
     run_graphical_school_mode_smoke, run_hazard_recovery_smoke, run_headless_app_shell_smoke,
@@ -24,13 +24,14 @@ use alife_game_app::{
     run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
     AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig, BehaviorTuningFindingStatus,
     Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, DoubleBufferedGraphicalScheduler,
-    EcologicalSoakConfig, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
-    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
-    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
-    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
+    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
+    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
+    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
     RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
@@ -43,6 +44,7 @@ use alife_game_app::{
     CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
     CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
     CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION,
+    CA25_CURRICULUM_AUTHORING_SCHEMA, CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -3192,6 +3194,72 @@ fn ca24_teacher_world_cues_are_visible_audible_and_perception_only() {
     assert!(!overlay.contains("Entity("));
     assert!(!overlay.contains("action-authoritative"));
     summary.validate().unwrap();
+}
+
+#[test]
+fn ca25_curriculum_authoring_validates_manifest_progress_and_save_state() {
+    let summary = run_curriculum_authoring_smoke().unwrap();
+
+    assert_eq!(summary.schema, CA25_CURRICULUM_AUTHORING_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION
+    );
+    assert_eq!(summary.curriculum_id, "ca25-grounded-food-token");
+    assert_eq!(summary.lesson_count, 1);
+    assert_eq!(summary.active_lesson_id, 10_100);
+    assert!(summary.verifier_uses_sealed_patches);
+    assert!(summary.verifier_passed);
+    assert_eq!(summary.completed_lesson_ids, vec![10_100]);
+    assert!(summary
+        .verifier_condition_labels
+        .iter()
+        .any(|label| label.contains("heard_token:77")));
+    assert!(summary.progress_display.contains("Progress: 1/1"));
+    assert!(summary.editor_panel_text.contains("validator-only JSON"));
+    assert!(summary
+        .editor_panel_text
+        .contains("Boundary: perception-only"));
+    assert!(!summary.model_inference_required);
+    assert!(!summary.fake_model_output_used);
+    assert!(!summary.can_issue_actions);
+    assert!(!summary.can_rewrite_weights);
+    assert!(!summary.progress_display.contains("Entity("));
+    assert!(!summary.editor_panel_text.contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca25_lesson_manifest_rejects_fake_model_and_invalid_verifier_shape() {
+    let mut manifest = LessonManifest::from_json_file(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/ca25/lesson_manifest.json"),
+    )
+    .unwrap();
+    manifest.lessons[0].verifier_conditions.clear();
+    let json = serde_json::to_string(&manifest).unwrap();
+    assert!(LessonManifest::from_json_str(&json)
+        .unwrap_err()
+        .to_string()
+        .contains("lesson entry"));
+
+    let save = CurriculumLessonSaveState {
+        schema: CA25_CURRICULUM_AUTHORING_SCHEMA.to_string(),
+        schema_version: CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
+        curriculum_id: "ca25-grounded-food-token".to_string(),
+        active_lesson_id: 10_100,
+        completed_lesson_ids: vec![10_100],
+        verifier_passed: true,
+        editor_dirty: false,
+        teacher_private_state_saved: false,
+        model_inference_saved: false,
+    };
+    let loaded =
+        CurriculumLessonSaveState::from_json_str(&save.to_json_string_pretty().unwrap()).unwrap();
+    assert_eq!(save.signature_line(), loaded.signature_line());
+
+    let mut bad = loaded;
+    bad.model_inference_saved = true;
+    assert!(bad.validate().is_err());
 }
 
 #[test]
