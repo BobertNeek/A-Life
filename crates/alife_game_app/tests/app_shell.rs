@@ -20,22 +20,23 @@ use alife_game_app::{
     run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
     run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
     run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
-    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
-    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
-    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
-    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
-    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
-    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
-    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    run_semantic_provider_smoke, run_teacher_world_cues_smoke, run_world_ecology_loop_smoke,
+    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
+    AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig, BehaviorTuningFindingStatus,
+    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, DoubleBufferedGraphicalScheduler,
+    EcologicalSoakConfig, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
+    LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
+    PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
+    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
+    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
+    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
+    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
+    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
@@ -3136,10 +3137,60 @@ fn school_mode_dispatches_teacher_cue_as_sensory_event() {
         && cue.channel == alife_core::TeacherPerceptionChannel::Hearing
         && cue.perception_only
         && !cue.direct_motor_bypass));
+    assert!(summary.cues.iter().any(|cue| cue.gesture_id == Some(24)
+        && cue.channel == alife_core::TeacherPerceptionChannel::Gesture
+        && cue.perception_only
+        && !cue.direct_motor_bypass));
     assert!(summary
         .world_signature
         .iter()
         .any(|line| line.contains("teacher-word-food")));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca24_teacher_world_cues_are_visible_audible_and_perception_only() {
+    let summary = run_teacher_world_cues_smoke().unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::CA24_TEACHER_WORLD_CUES_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::CA24_TEACHER_WORLD_CUES_SCHEMA_VERSION
+    );
+    assert_eq!(summary.teacher_avatar_stable_id, WorldEntityId(2));
+    assert_eq!(summary.learner_stable_id, WorldEntityId(1));
+    assert_eq!(summary.active_lesson_id, 10_100);
+    assert!(summary.visible_world_events);
+    assert!(summary.audible_token_events);
+    assert!(summary.gesture_events);
+    assert!(summary.lesson_conditions_are_sensory_environmental);
+    assert!(summary.verifier_uses_sealed_patches);
+    assert!(summary.direct_motor_bypass_rejected);
+    assert!(summary.hidden_vector_injection_blocked);
+    assert!(summary.no_action_authority);
+    assert!(summary
+        .cue_objects
+        .iter()
+        .all(|cue| cue.perception_only && !cue.direct_motor_bypass));
+    assert!(summary
+        .cue_objects
+        .iter()
+        .any(|cue| cue.compact_line().contains("speech token")));
+    assert!(summary
+        .cue_objects
+        .iter()
+        .any(|cue| cue.compact_line().contains("gesture marker")));
+    let overlay = summary.compact_overlay_text();
+    assert!(overlay.contains("Teacher Cues"));
+    assert!(overlay.contains("Speech token: true"));
+    assert!(overlay.contains("Gesture: true"));
+    assert!(overlay.contains("sensory/environmental"));
+    assert!(overlay.contains("no direct motor bypass"));
+    assert!(!overlay.contains("Entity("));
+    assert!(!overlay.contains("action-authoritative"));
     summary.validate().unwrap();
 }
 
@@ -3246,6 +3297,8 @@ fn bevy_feature_ca23_school_overlay_is_toggleable_and_perception_only() {
     let expanded = alife_game_app::bevy_shell::ca23_school_overlay_text(&summary);
     assert!(expanded.contains("School Mode: on"));
     assert!(expanded.contains("teacher stable:2") || expanded.contains("Teacher: stable:2"));
+    assert!(expanded.contains("via Hearing"));
+    assert!(expanded.contains("via Gesture"));
     assert!(expanded.contains("sealed patches=1"));
     assert!(expanded.contains("teacher cues cannot emit actions"));
     assert!(expanded.contains("no hidden vectors"));
