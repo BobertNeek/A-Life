@@ -1,13 +1,11 @@
 //! CA27: localhost-only internal SLM subconscious prior boundary.
 //!
 //! The local SLM prior produces bounded perception/context hints from a real
-//! local Ollama model. It is private prior data: no action commands, motor
+//! local llama.cpp model. It is private prior data: no action commands, motor
 //! bypasses, hidden vectors, or weight updates are exposed.
 
 use std::{
     collections::VecDeque,
-    io::{Read, Write},
-    net::TcpStream,
     sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
     thread,
     time::Duration,
@@ -17,12 +15,15 @@ use alife_core::ScaffoldContractError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::local_ollama::{CA26_DEFAULT_OLLAMA_HOST, CA26_DEFAULT_OLLAMA_PORT};
+use crate::local_llamacpp::{
+    validate_local_llamacpp_host, LlamaCppServerClient, CA26_DEFAULT_LLAMA_CPP_HOST,
+};
 
 pub const CA27_SLM_PRIOR_OUTPUT_SCHEMA: &str = "alife.ca27.local_slm_prior_output.v1";
 pub const CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION: u16 = 1;
 pub const CA27_LOCAL_SLM_PRIOR_ID: &str = "qwen3-4b-local-slm-prior";
-pub const CA27_DEFAULT_OLLAMA_MODEL: &str = "alife-qwen3-4b-prior";
+pub const CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS: &str = "alife-qwen3-4b-prior";
+pub const CA27_DEFAULT_LLAMA_CPP_SLM_PORT: u16 = 18_081;
 pub const CA27_MAX_PROMPT_CHARS: usize = 768;
 pub const CA27_MAX_CONTEXT_SUMMARY_CHARS: usize = 160;
 pub const CA27_MAX_SALIENCE_LABELS: usize = 4;
@@ -31,7 +32,7 @@ pub const CA27_MAX_PERCEPTION_TAGS: usize = 6;
 pub const CA27_MAX_QUEUE_DEPTH: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalOllamaSlmPriorConfig {
+pub struct LlamaCppSlmPriorConfig {
     pub host: String,
     pub port: u16,
     pub model: String,
@@ -41,12 +42,12 @@ pub struct LocalOllamaSlmPriorConfig {
     pub num_predict: u16,
 }
 
-impl Default for LocalOllamaSlmPriorConfig {
+impl Default for LlamaCppSlmPriorConfig {
     fn default() -> Self {
         Self {
-            host: CA26_DEFAULT_OLLAMA_HOST.to_string(),
-            port: CA26_DEFAULT_OLLAMA_PORT,
-            model: CA27_DEFAULT_OLLAMA_MODEL.to_string(),
+            host: CA26_DEFAULT_LLAMA_CPP_HOST.to_string(),
+            port: CA27_DEFAULT_LLAMA_CPP_SLM_PORT,
+            model: CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS.to_string(),
             timeout_ms: 180_000,
             max_prompt_chars: CA27_MAX_PROMPT_CHARS,
             max_queue_depth: CA27_MAX_QUEUE_DEPTH,
@@ -55,9 +56,9 @@ impl Default for LocalOllamaSlmPriorConfig {
     }
 }
 
-impl LocalOllamaSlmPriorConfig {
+impl LlamaCppSlmPriorConfig {
     pub fn validate(&self) -> Result<(), ScaffoldContractError> {
-        if self.host != CA26_DEFAULT_OLLAMA_HOST
+        if validate_local_llamacpp_host(&self.host).is_err()
             || self.port == 0
             || self.model.trim().is_empty()
             || self.model.contains("http")
@@ -185,7 +186,7 @@ impl LocalSlmPriorOutput {
 
 #[derive(Debug, Clone)]
 pub struct LocalSlmPriorQueue {
-    config: LocalOllamaSlmPriorConfig,
+    config: LlamaCppSlmPriorConfig,
     pending: VecDeque<LocalSlmPriorRequest>,
 }
 
@@ -201,18 +202,18 @@ enum LocalSlmPriorWork {
 ///
 /// The queue is asynchronous in the app sense: enqueue is non-blocking, local
 /// model inference runs on a dedicated worker thread, and callers receive a
-/// bounded result handle. The model call itself remains a localhost Ollama HTTP
+/// bounded result handle. The model call itself remains a localhost llama.cpp HTTP
 /// request with explicit timeouts.
 #[derive(Debug)]
 pub struct LocalSlmPriorAsyncQueue {
-    config: LocalOllamaSlmPriorConfig,
+    config: LlamaCppSlmPriorConfig,
     sender: SyncSender<LocalSlmPriorWork>,
 }
 
 impl LocalSlmPriorAsyncQueue {
-    pub fn new(config: LocalOllamaSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
+    pub fn new(config: LlamaCppSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
         config.validate()?;
-        let provider = LocalOllamaSlmPriorProvider::new(config.clone())?;
+        let provider = LlamaCppSlmPriorProvider::new(config.clone())?;
         let (sender, receiver) = mpsc::sync_channel(config.max_queue_depth);
         thread::Builder::new()
             .name("alife-ca27-local-slm-prior".to_string())
@@ -263,7 +264,7 @@ impl LocalSlmPriorAsyncQueue {
 }
 
 fn run_slm_prior_worker(
-    provider: LocalOllamaSlmPriorProvider,
+    provider: LlamaCppSlmPriorProvider,
     receiver: mpsc::Receiver<LocalSlmPriorWork>,
 ) {
     while let Ok(work) = receiver.recv() {
@@ -280,7 +281,7 @@ fn run_slm_prior_worker(
 }
 
 impl LocalSlmPriorQueue {
-    pub fn new(config: LocalOllamaSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
+    pub fn new(config: LlamaCppSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
         config.validate()?;
         Ok(Self {
             config,
@@ -303,7 +304,7 @@ impl LocalSlmPriorQueue {
 
     pub fn process_next(
         &mut self,
-        provider: &LocalOllamaSlmPriorProvider,
+        provider: &LlamaCppSlmPriorProvider,
     ) -> Result<Option<LocalSlmPriorOutput>, String> {
         let Some(request) = self.pending.pop_front() else {
             return Ok(None);
@@ -316,12 +317,12 @@ impl LocalSlmPriorQueue {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalOllamaSlmPriorProvider {
-    pub config: LocalOllamaSlmPriorConfig,
+pub struct LlamaCppSlmPriorProvider {
+    pub config: LlamaCppSlmPriorConfig,
 }
 
-impl LocalOllamaSlmPriorProvider {
-    pub fn new(config: LocalOllamaSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
+impl LlamaCppSlmPriorProvider {
+    pub fn new(config: LlamaCppSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
         config.validate()?;
         Ok(Self { config })
     }
@@ -341,71 +342,88 @@ impl LocalOllamaSlmPriorProvider {
     }
 
     fn request_generate(&self, bounded_context: &str) -> Result<String, String> {
-        let prompt = format!(
+        let system_prompt = concat!(
+            "You are a private A-Life subconscious semantic prior. ",
+            "Return exactly one compact JSON object and no prose. ",
+            "Do not include thinking text, markdown fences, commands, motor plans, ",
+            "weight changes, vectors, Bevy entities, or arbitration text. ",
+            "Allowed keys only: salience_labels, context_summary, lexicon_associations, perception_tags."
+        );
+        let user_prompt = format!(
             concat!(
-                "Produce exactly one compact JSON object and no prose. ",
                 "Required shape: {{\"salience_labels\":[\"food\",\"hazard\"],",
                 "\"context_summary\":\"short sensory context\",",
                 "\"lexicon_associations\":{{\"food\":0.8,\"hazard\":0.7}},",
                 "\"perception_tags\":[\"near\",\"sees\"]}}. ",
-                "Use only lowercase short labels. No extra keys. ",
-                "Do not include commands, motor plans, weight changes, vectors, ",
-                "Bevy entities, or arbitration text. Context: {}"
+                "Use only lowercase short labels. Context: {}"
             ),
             bounded_context
         );
         let request = serde_json::json!({
             "model": self.config.model,
-            "prompt": prompt,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
             "stream": false,
-            "format": "json",
-            "options": {
-                "temperature": 0,
-                "num_predict": self.config.num_predict,
-            }
+            "temperature": 0.0,
+            "max_tokens": self.config.num_predict,
+            "response_format": {"type": "json_object"}
         });
         let body = request.to_string();
-        let address = format!("{}:{}", self.config.host, self.config.port);
-        let timeout = Duration::from_millis(self.config.timeout_ms);
-        let mut stream = TcpStream::connect(&address).map_err(|err| {
-            format!("USER_ACTION_REQUIRED: local Ollama unavailable at {address}: {err}")
-        })?;
-        stream
-            .set_read_timeout(Some(timeout))
-            .map_err(|err| err.to_string())?;
-        stream
-            .set_write_timeout(Some(timeout))
-            .map_err(|err| err.to_string())?;
-
-        let http = format!(
-            "POST /api/generate HTTP/1.1\r\nHost: {address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-        );
-        stream
-            .write_all(http.as_bytes())
-            .map_err(|err| format!("local Ollama generation request failed: {err}"))?;
-        let mut response = String::new();
-        stream
-            .read_to_string(&mut response)
-            .map_err(|err| format!("local Ollama generation response failed: {err}"))?;
-        parse_ollama_generate_response(&response)
+        let client = LlamaCppServerClient::new(
+            self.config.host.clone(),
+            self.config.port,
+            self.config.timeout_ms,
+        )
+        .map_err(|err| format!("invalid local llama.cpp client config: {err:?}"))?;
+        let response = client.post_json("/v1/chat/completions", &body)?;
+        parse_llamacpp_chat_response(&response)
     }
 }
 
 #[derive(Debug, Deserialize)]
-struct OllamaGenerateResponse {
-    response: String,
+struct LlamaCppChatResponse {
+    choices: Vec<LlamaCppChatChoice>,
 }
 
 #[derive(Debug, Deserialize)]
-struct OllamaErrorResponse {
-    error: String,
+struct LlamaCppChatChoice {
+    message: LlamaCppChatMessage,
 }
 
-fn parse_ollama_generate_response(response: &str) -> Result<String, String> {
+#[derive(Debug, Deserialize)]
+struct LlamaCppChatMessage {
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct LlamaCppErrorResponse {
+    error: LlamaCppErrorValue,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum LlamaCppErrorValue {
+    Message { message: String },
+    Text(String),
+    Other(Value),
+}
+
+impl LlamaCppErrorValue {
+    fn into_message(self) -> String {
+        match self {
+            Self::Message { message } => message,
+            Self::Text(text) => text,
+            Self::Other(value) => value.to_string(),
+        }
+    }
+}
+
+fn parse_llamacpp_chat_response(response: &str) -> Result<String, String> {
     let (header, body) = response
         .split_once("\r\n\r\n")
-        .ok_or_else(|| "local Ollama generation response missing HTTP body".to_string())?;
+        .ok_or_else(|| "local llama.cpp generation response missing HTTP body".to_string())?;
     let body = if header
         .lines()
         .any(|line| line.eq_ignore_ascii_case("Transfer-Encoding: chunked"))
@@ -415,19 +433,40 @@ fn parse_ollama_generate_response(response: &str) -> Result<String, String> {
         body.to_string()
     };
     if !header.starts_with("HTTP/1.1 200") && !header.starts_with("HTTP/1.0 200") {
-        let message = serde_json::from_str::<OllamaErrorResponse>(&body)
-            .map(|err| err.error)
+        let message = serde_json::from_str::<LlamaCppErrorResponse>(&body)
+            .map(|err| err.error.into_message())
             .unwrap_or_else(|_| body.trim().to_string());
         return Err(format!(
-            "USER_ACTION_REQUIRED: local Ollama SLM prior request failed: {message}"
+            "USER_ACTION_REQUIRED: local llama.cpp SLM prior request failed: {message}"
         ));
     }
     let response =
-        serde_json::from_str::<OllamaGenerateResponse>(&body).map_err(|err| err.to_string())?;
-    if response.response.trim().is_empty() {
-        return Err("local Ollama returned empty CA27 SLM output".to_string());
+        serde_json::from_str::<LlamaCppChatResponse>(&body).map_err(|err| err.to_string())?;
+    let content = response
+        .choices
+        .into_iter()
+        .next()
+        .map(|choice| choice.message.content)
+        .ok_or_else(|| "local llama.cpp returned no chat choices".to_string())?;
+    let content = extract_json_object_text(&content)?;
+    if content.trim().is_empty() {
+        return Err("local llama.cpp returned empty CA27 SLM output".to_string());
     }
-    Ok(response.response)
+    Ok(content)
+}
+
+fn extract_json_object_text(content: &str) -> Result<String, String> {
+    let trimmed = content.trim();
+    let start = trimmed
+        .find('{')
+        .ok_or_else(|| "local llama.cpp SLM output did not contain a JSON object".to_string())?;
+    let end = trimmed
+        .rfind('}')
+        .ok_or_else(|| "local llama.cpp SLM output JSON object was incomplete".to_string())?;
+    if end < start {
+        return Err("local llama.cpp SLM output JSON bounds are invalid".to_string());
+    }
+    Ok(trimmed[start..=end].to_string())
 }
 
 pub fn parse_slm_prior_json(model: &str, json: &str) -> Result<LocalSlmPriorOutput, String> {
@@ -593,20 +632,20 @@ fn decode_chunked_http_body(body: &str) -> Result<String, String> {
     loop {
         let (size_line, rest) = remaining
             .split_once("\r\n")
-            .ok_or_else(|| "chunked Ollama response missing chunk size".to_string())?;
+            .ok_or_else(|| "chunked llama.cpp response missing chunk size".to_string())?;
         let size_text = size_line.split(';').next().unwrap_or_default().trim();
         let size = usize::from_str_radix(size_text, 16)
-            .map_err(|_| "chunked Ollama response has invalid chunk size".to_string())?;
+            .map_err(|_| "chunked llama.cpp response has invalid chunk size".to_string())?;
         if size == 0 {
             return Ok(decoded);
         }
         if rest.len() < size + 2 {
-            return Err("chunked Ollama response ended inside a chunk".to_string());
+            return Err("chunked llama.cpp response ended inside a chunk".to_string());
         }
         decoded.push_str(&rest[..size]);
         let trailer = &rest[size..];
         if !trailer.starts_with("\r\n") {
-            return Err("chunked Ollama response missing chunk terminator".to_string());
+            return Err("chunked llama.cpp response missing chunk terminator".to_string());
         }
         remaining = &trailer[2..];
     }
@@ -627,7 +666,7 @@ mod tests {
 
     #[test]
     fn parser_accepts_bounded_structured_prior_without_authority() {
-        let output = parse_slm_prior_json(CA27_DEFAULT_OLLAMA_MODEL, valid_json()).unwrap();
+        let output = parse_slm_prior_json(CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS, valid_json()).unwrap();
         assert_eq!(output.salience_labels.len(), 2);
         assert_eq!(output.lexicon_associations.len(), 2);
         assert!(!output.can_issue_actions);
@@ -639,9 +678,9 @@ mod tests {
 
     #[test]
     fn malformed_or_authoritative_output_rejects() {
-        assert!(parse_slm_prior_json(CA27_DEFAULT_OLLAMA_MODEL, "{}").is_err());
+        assert!(parse_slm_prior_json(CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS, "{}").is_err());
         assert!(parse_slm_prior_json(
-            CA27_DEFAULT_OLLAMA_MODEL,
+            CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS,
             r#"{
                 "salience_labels":["food"],
                 "context_summary":"Creature sees food.",
@@ -652,7 +691,7 @@ mod tests {
         )
         .is_err());
         assert!(parse_slm_prior_json(
-            CA27_DEFAULT_OLLAMA_MODEL,
+            CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS,
             r#"{
                 "salience_labels":["motor command"],
                 "context_summary":"Creature sees food.",
@@ -664,10 +703,40 @@ mod tests {
     }
 
     #[test]
+    fn openai_compatible_chat_response_extracts_bounded_json() {
+        let response = concat!(
+            "HTTP/1.1 200 OK\r\n",
+            "Content-Type: application/json\r\n",
+            "\r\n",
+            "{\"choices\":[{\"message\":{\"content\":\"```json\\n{\\\"salience_labels\\\":[\\\"food\\\"],\\\"context_summary\\\":\\\"food nearby\\\",\\\"lexicon_associations\\\":{\\\"food\\\":0.8},\\\"perception_tags\\\":[\\\"near\\\"]}\\n```\"}}]}"
+        );
+        let json = parse_llamacpp_chat_response(response).unwrap();
+        let output = parse_slm_prior_json(CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS, &json).unwrap();
+        assert_eq!(output.salience_labels, vec!["food"]);
+        assert!(!output.can_issue_actions);
+    }
+
+    #[test]
+    fn remote_llamacpp_slm_host_rejects() {
+        assert!(LlamaCppSlmPriorConfig {
+            host: "localhost".to_string(),
+            ..LlamaCppSlmPriorConfig::default()
+        }
+        .validate()
+        .is_ok());
+        assert!(LlamaCppSlmPriorConfig {
+            host: "https://api.example.com".to_string(),
+            ..LlamaCppSlmPriorConfig::default()
+        }
+        .validate()
+        .is_err());
+    }
+
+    #[test]
     fn queue_is_bounded_and_preserves_request_validation() {
-        let config = LocalOllamaSlmPriorConfig {
+        let config = LlamaCppSlmPriorConfig {
             max_queue_depth: 2,
-            ..LocalOllamaSlmPriorConfig::default()
+            ..LlamaCppSlmPriorConfig::default()
         };
         let mut queue = LocalSlmPriorQueue::new(config).unwrap();
         queue
@@ -693,10 +762,10 @@ mod tests {
 
     #[test]
     fn unavailable_local_model_is_user_action_required_not_fake_output() {
-        let provider = LocalOllamaSlmPriorProvider::new(LocalOllamaSlmPriorConfig {
+        let provider = LlamaCppSlmPriorProvider::new(LlamaCppSlmPriorConfig {
             port: 9,
             timeout_ms: 1_000,
-            ..LocalOllamaSlmPriorConfig::default()
+            ..LlamaCppSlmPriorConfig::default()
         })
         .unwrap();
         let err = provider.generate_prior("teacher token food").unwrap_err();

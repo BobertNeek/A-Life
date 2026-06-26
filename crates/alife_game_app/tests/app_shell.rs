@@ -52,13 +52,14 @@ use alife_game_app::{
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_semantic::{
-    parse_slm_prior_json, project_embedding_to_i8, LocalOllamaEmbeddingConfig,
-    LocalOllamaEmbeddingProvider, LocalOllamaSlmPriorConfig, LocalOllamaSlmPriorProvider,
+    parse_slm_prior_json, project_embedding_to_i8, LlamaCppEmbeddingConfig,
+    LlamaCppEmbeddingProvider, LlamaCppSlmPriorConfig, LlamaCppSlmPriorProvider,
     LocalSemanticModelManifest, LocalSlmPriorAsyncQueue, LocalSlmPriorQueue, LocalSlmPriorRequest,
-    SemanticProviderCapabilityManifest, CA26_EMBEDDING_PROJECTION_DIMS,
-    CA26_LOCAL_MODEL_MANIFEST_SCHEMA, CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION,
-    CA26_LOCAL_SEMANTIC_PROVIDER_ID, CA27_DEFAULT_OLLAMA_MODEL, CA27_SLM_PRIOR_OUTPUT_SCHEMA,
-    CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION,
+    SemanticProviderCapabilityManifest, CA26_DEFAULT_LLAMA_CPP_EMBEDDING_PORT,
+    CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
+    CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION, CA26_LOCAL_SEMANTIC_PROVIDER_ID,
+    CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS, CA27_DEFAULT_LLAMA_CPP_SLM_PORT,
+    CA27_SLM_PRIOR_OUTPUT_SCHEMA, CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -3467,8 +3468,10 @@ fn ca26_local_model_manifest_is_real_local_only_and_bounded() {
     assert_eq!(model.repo_id, "Qwen/Qwen3-Embedding-0.6B-GGUF");
     assert_eq!(model.model_role, "semantic_embedding_provider");
     assert_eq!(model.license, "apache-2.0");
-    assert_eq!(model.runtime_backend, "ollama-localhost-gguf");
-    assert_eq!(model.ollama_model, "alife-qwen3-embedding-0.6b");
+    assert_eq!(model.runtime_backend, "llamacpp-server-gguf");
+    assert_eq!(model.llamacpp_alias, "alife-qwen3-embedding-0.6b");
+    assert_eq!(model.llamacpp_host, "127.0.0.1");
+    assert_eq!(model.llamacpp_port, CA26_DEFAULT_LLAMA_CPP_EMBEDDING_PORT);
     assert_eq!(model.sha256.len(), 64);
     assert!(model.downloaded_locally);
     assert!(model.inference_smoke_passed);
@@ -3489,7 +3492,7 @@ fn ca26_local_embedding_projection_bounds_context_and_blocks_authority() {
     assert_eq!(projected.len(), CA26_EMBEDDING_PROJECTION_DIMS);
     assert!(projected.iter().any(|value| *value != 0));
 
-    let capability = SemanticProviderCapabilityManifest::local_ollama_embedding(
+    let capability = SemanticProviderCapabilityManifest::local_llamacpp_embedding(
         CA26_LOCAL_SEMANTIC_PROVIDER_ID,
         true,
     );
@@ -3502,10 +3505,10 @@ fn ca26_local_embedding_projection_bounds_context_and_blocks_authority() {
 
 #[test]
 fn ca26_unavailable_local_model_is_user_action_required_not_fake_output() {
-    let provider = LocalOllamaEmbeddingProvider::new(LocalOllamaEmbeddingConfig {
+    let provider = LlamaCppEmbeddingProvider::new(LlamaCppEmbeddingConfig {
         port: 9,
         timeout_ms: 1_000,
-        ..LocalOllamaEmbeddingConfig::default()
+        ..LlamaCppEmbeddingConfig::default()
     })
     .unwrap();
     let err = provider.embed_text("teacher token food").unwrap_err();
@@ -3514,7 +3517,7 @@ fn ca26_unavailable_local_model_is_user_action_required_not_fake_output() {
 }
 
 #[test]
-#[ignore = "manual CA26 real local Ollama smoke: cargo test -p alife_game_app --test app_shell ca26_real_local_semantic_provider_smoke -- --ignored --nocapture"]
+#[ignore = "manual CA26 real local llama.cpp smoke: cargo test -p alife_game_app --test app_shell ca26_real_local_semantic_provider_smoke -- --ignored --nocapture"]
 fn ca26_real_local_semantic_provider_smoke() {
     let summary = run_real_semantic_provider_smoke().unwrap();
     assert_eq!(summary.schema, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA);
@@ -3523,7 +3526,8 @@ fn ca26_real_local_semantic_provider_smoke() {
         CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION
     );
     assert_eq!(summary.repo_id, "Qwen/Qwen3-Embedding-0.6B-GGUF");
-    assert_eq!(summary.runtime_backend, "ollama-localhost-gguf");
+    assert_eq!(summary.runtime_backend, "llamacpp-server-gguf");
+    assert_eq!(summary.llamacpp_port, CA26_DEFAULT_LLAMA_CPP_EMBEDDING_PORT);
     assert!(summary.downloaded_locally);
     assert!(summary.inference_smoke_passed);
     assert!(summary.raw_embedding_dims > 0);
@@ -3554,8 +3558,10 @@ fn ca27_local_slm_manifest_is_real_local_only_and_bounded() {
     assert_eq!(model.repo_id, "Qwen/Qwen3-4B-GGUF");
     assert_eq!(model.model_role, "slm_subconscious_prior");
     assert_eq!(model.license, "apache-2.0");
-    assert_eq!(model.runtime_backend, "ollama-localhost-gguf");
-    assert_eq!(model.ollama_model, CA27_DEFAULT_OLLAMA_MODEL);
+    assert_eq!(model.runtime_backend, "llamacpp-server-gguf");
+    assert_eq!(model.llamacpp_alias, CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS);
+    assert_eq!(model.llamacpp_host, "127.0.0.1");
+    assert_eq!(model.llamacpp_port, CA27_DEFAULT_LLAMA_CPP_SLM_PORT);
     assert_eq!(model.sha256.len(), 64);
     assert!(model.downloaded_locally);
     assert!(model.inference_smoke_passed);
@@ -3573,7 +3579,7 @@ fn ca27_local_slm_manifest_is_real_local_only_and_bounded() {
 #[test]
 fn ca27_slm_prior_parser_queue_and_boundaries_block_authority() {
     let output = parse_slm_prior_json(
-        CA27_DEFAULT_OLLAMA_MODEL,
+        CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS,
         r#"{
             "salience_labels":["food","hazard"],
             "context_summary":"Creature sees food near a hazard.",
@@ -3591,9 +3597,9 @@ fn ca27_slm_prior_parser_queue_and_boundaries_block_authority() {
     assert!(!output.hidden_vector_injection);
     assert!(output.bounded_context_only);
 
-    let config = LocalOllamaSlmPriorConfig {
+    let config = LlamaCppSlmPriorConfig {
         max_queue_depth: 1,
-        ..LocalOllamaSlmPriorConfig::default()
+        ..LlamaCppSlmPriorConfig::default()
     };
     let mut queue = LocalSlmPriorQueue::new(config).unwrap();
     queue
@@ -3613,7 +3619,7 @@ fn ca27_slm_prior_parser_queue_and_boundaries_block_authority() {
 #[test]
 fn ca27_slm_prior_malformed_output_and_unavailable_model_reject() {
     assert!(parse_slm_prior_json(
-        CA27_DEFAULT_OLLAMA_MODEL,
+        CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS,
         r#"{
             "salience_labels":["food"],
             "context_summary":"Creature sees food.",
@@ -3624,10 +3630,10 @@ fn ca27_slm_prior_malformed_output_and_unavailable_model_reject() {
     )
     .is_err());
 
-    let provider = LocalOllamaSlmPriorProvider::new(LocalOllamaSlmPriorConfig {
+    let provider = LlamaCppSlmPriorProvider::new(LlamaCppSlmPriorConfig {
         port: 9,
         timeout_ms: 1_000,
-        ..LocalOllamaSlmPriorConfig::default()
+        ..LlamaCppSlmPriorConfig::default()
     })
     .unwrap();
     let err = provider.generate_prior("teacher token food").unwrap_err();
@@ -3637,10 +3643,10 @@ fn ca27_slm_prior_malformed_output_and_unavailable_model_reject() {
 
 #[test]
 fn ca27_slm_prior_async_queue_reports_unavailable_without_fake_output() {
-    let queue = LocalSlmPriorAsyncQueue::new(LocalOllamaSlmPriorConfig {
+    let queue = LocalSlmPriorAsyncQueue::new(LlamaCppSlmPriorConfig {
         port: 9,
         timeout_ms: 1_000,
-        ..LocalOllamaSlmPriorConfig::default()
+        ..LlamaCppSlmPriorConfig::default()
     })
     .unwrap();
     assert_eq!(queue.capacity(), 4);
@@ -3657,7 +3663,7 @@ fn ca27_slm_prior_async_queue_reports_unavailable_without_fake_output() {
 }
 
 #[test]
-#[ignore = "manual CA27 real local Ollama smoke: cargo test -p alife_game_app --test app_shell ca27_real_local_slm_prior_smoke -- --ignored --nocapture"]
+#[ignore = "manual CA27 real local llama.cpp smoke: cargo test -p alife_game_app --test app_shell ca27_real_local_slm_prior_smoke -- --ignored --nocapture"]
 fn ca27_real_local_slm_prior_smoke() {
     let summary = run_internal_slm_prior_smoke().unwrap();
     assert_eq!(summary.schema, CA27_INTERNAL_SLM_PRIOR_SCHEMA);
@@ -3668,8 +3674,9 @@ fn ca27_real_local_slm_prior_smoke() {
     assert_eq!(summary.target_repo_id, "Qwen/Qwen3-4B-Instruct-2507");
     assert_eq!(summary.repo_id, "Qwen/Qwen3-4B-GGUF");
     assert_eq!(summary.model_role, "slm_subconscious_prior");
-    assert_eq!(summary.runtime_backend, "ollama-localhost-gguf");
-    assert_eq!(summary.ollama_model, CA27_DEFAULT_OLLAMA_MODEL);
+    assert_eq!(summary.runtime_backend, "llamacpp-server-gguf");
+    assert_eq!(summary.llamacpp_alias, CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS);
+    assert_eq!(summary.llamacpp_port, CA27_DEFAULT_LLAMA_CPP_SLM_PORT);
     assert!(summary.downloaded_locally);
     assert!(summary.inference_smoke_passed);
     assert!(summary.salience_label_count > 0);

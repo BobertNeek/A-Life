@@ -6,6 +6,11 @@ PASS_WITH_NOTES
 
 No blocker, high, or medium findings remain for the CA23-CA27 tranche. CA28 may proceed only after the required user/ChatGPT consultation because CAR27 is a hard-stop review gate.
 
+Post-review update: the Ollama evidence referenced below is historical. The
+active runtime has been superseded by the direct localhost-only llama.cpp /
+`llama-server` migration recorded in
+`docs/creatures_agi_roadmap_pack/model_selection/LLAMA_CPP_RUNTIME_MIGRATION_REPORT.md`.
+
 ## Scope Reviewed
 
 - CA23 graphical school mode and lesson panel.

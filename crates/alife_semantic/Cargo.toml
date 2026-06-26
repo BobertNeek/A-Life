@@ -14,4 +14,4 @@ serde_json.workspace = true
 default = []
 gaussian-adapter = []
 fake-semantic-provider = ["gaussian-adapter"]
-local-ollama = ["gaussian-adapter"]
+local-llamacpp = ["gaussian-adapter"]
