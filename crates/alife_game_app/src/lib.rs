@@ -125,6 +125,9 @@ pub use graphical_ecology::*;
 mod graphical_lifecycle;
 pub use graphical_lifecycle::*;
 
+mod behavior_tuning;
+pub use behavior_tuning::*;
+
 mod population_social;
 pub use population_social::*;
 
