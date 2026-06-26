@@ -105,6 +105,10 @@ pub const CA19_GRAPHICAL_ECOLOGY_SCHEMA: &str = "alife.ca19.graphical_ecology.v1
 pub const CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION: u16 = 1;
 pub const CA19_MIN_TERRAIN_ZONES: usize = 2;
 pub const CA19_MAX_TERRAIN_ZONE_VISUALS: usize = 8;
+
+pub const CA20_GRAPHICAL_LIFECYCLE_SCHEMA: &str = "alife.ca20.graphical_lifecycle.v1";
+pub const CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION: u16 = 1;
+pub const CA20_MAX_LIFECYCLE_EVENT_ROWS: usize = 6;
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA: &str = "alife.s01.graphical_playground_shell.v1";
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION: u16 = 1;
 pub const S01_MAX_GRAPHICAL_SMOKE_SECONDS: u32 = 120;

@@ -22,18 +22,19 @@ use bevy::{
 
 use crate::{
     ca18_cycle_selected_creature, ca18_graphical_population_summary, ca18_social_proximity_cues,
-    ca19_graphical_ecology_summary, load_visible_world_from_p34_save,
-    run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_headless_app_shell_smoke, run_live_brain_loop_smoke, AdvancedGameplayUxSummary,
-    AppShellLaunchConfig, AppStartupSummary, Ca18GraphicalPopulationSummary,
-    Ca19GraphicalEcologySummary, Ca19TerrainZoneVisual, CameraNavigationState,
-    CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
-    CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
-    GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
-    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
-    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
-    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
+    ca19_graphical_ecology_summary, ca20_graphical_lifecycle_summary,
+    load_visible_world_from_p34_save, run_advanced_gameplay_ux_smoke, run_creature_inspector_smoke,
+    run_creature_visual_smoke, run_headless_app_shell_smoke, run_live_brain_loop_smoke,
+    AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
+    Ca18GraphicalPopulationSummary, Ca19GraphicalEcologySummary, Ca19TerrainZoneVisual,
+    Ca20GraphicalLifecycleSummary, CameraNavigationState, CreatureAnimationState,
+    CreatureExpressionState, CreatureInspectorSnapshot, CreatureVisualSnapshot,
+    EntitySelectionSnapshot, GameAppShellError, GameAppState, GraphicalGpuRuntimeController,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
+    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
+    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
+    S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -139,6 +140,11 @@ pub struct GraphicalPopulationResource {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalEcologyResource {
     pub summary: Ca19GraphicalEcologySummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalLifecycleResource {
+    pub summary: Ca20GraphicalLifecycleSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -264,6 +270,9 @@ pub struct GraphicalPopulationOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalEcologyOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalLifecycleOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalTerrainZoneMarker {
@@ -472,6 +481,7 @@ pub fn build_graphical_playground_app_shell(
     crate::compare_visible_world_to_headless(&presentation)?;
     let population_summary = ca18_graphical_population_summary(&presentation).ok();
     let ecology_summary = ca19_graphical_ecology_summary(&launch.app_launch).ok();
+    let lifecycle_summary = ca20_graphical_lifecycle_summary().ok();
 
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -538,6 +548,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_feedback_overlay,
                 update_graphical_population_overlay,
                 update_graphical_ecology_overlay,
+                update_graphical_lifecycle_overlay,
                 update_graphical_boundary_footer_overlay,
                 update_graphical_save_load_menu_overlay,
                 update_graphical_advanced_gameplay_overlay,
@@ -548,6 +559,9 @@ pub fn build_graphical_playground_app_shell(
     }
     if let Some(summary) = ecology_summary {
         app.insert_resource(GraphicalEcologyResource { summary });
+    }
+    if let Some(summary) = lifecycle_summary {
+        app.insert_resource(GraphicalLifecycleResource { summary });
     }
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
@@ -812,6 +826,26 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.025, 0.04, 0.025, 0.78)),
         GraphicalEcologyOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA20 graphical lifecycle overlay"),
+        Text::new("Lifecycle: loading lineage events..."),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 0.93, 0.80)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(414.0),
+            left: Val::Px(12.0),
+            max_width: Val::Px(390.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.045, 0.030, 0.018, 0.78)),
+        GraphicalLifecycleOverlay,
     ));
 
     app.world_mut().spawn((
@@ -1897,6 +1931,18 @@ fn update_graphical_ecology_overlay(
     }
 }
 
+fn update_graphical_lifecycle_overlay(
+    lifecycle: Option<Res<GraphicalLifecycleResource>>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalLifecycleOverlay>>,
+) {
+    let Some(lifecycle) = lifecycle else {
+        return;
+    };
+    for mut text in &mut overlays {
+        text.0 = ca20_lifecycle_overlay_text(&lifecycle.summary);
+    }
+}
+
 fn ca08_pulse_active(
     kind: Ca08SensoryCueKind,
     runtime: &RuntimeControlPanel,
@@ -2238,6 +2284,18 @@ pub fn ca19_ecology_overlay_text(summary: &Ca19GraphicalEcologySummary) -> Strin
         ),
         summary.compact_overlay_text(),
         summary.hazard_pressure_zone_count,
+    )
+}
+
+pub fn ca20_lifecycle_overlay_text(summary: &Ca20GraphicalLifecycleSummary) -> String {
+    format!(
+        concat!(
+            "{}\n",
+            "Birth/death events visible; population cap enforced.\n",
+            "Boundary: birth assets initialize only; lifetime state not inherited.\n",
+            "Stable IDs only; lineage visuals cannot emit actions."
+        ),
+        summary.compact_overlay_text(),
     )
 }
 

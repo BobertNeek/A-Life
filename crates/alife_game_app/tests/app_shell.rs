@@ -10,11 +10,11 @@ use alife_game_app::{
     run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_feedback_polish_smoke,
     run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
-    run_graphical_ecology_smoke, run_graphical_population_smoke, run_hazard_recovery_smoke,
-    run_headless_app_shell_smoke, run_homeostasis_runtime_smoke, run_lifecycle_lineage_smoke,
-    run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
-    run_longrun_balance_with_config, run_motor_ring_arbitration_smoke, run_onboarding_help_smoke,
-    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_graphical_ecology_smoke, run_graphical_lifecycle_smoke, run_graphical_population_smoke,
+    run_hazard_recovery_smoke, run_headless_app_shell_smoke, run_homeostasis_runtime_smoke,
+    run_lifecycle_lineage_smoke, run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke,
+    run_longrun_balance_smoke, run_longrun_balance_with_config, run_motor_ring_arbitration_smoke,
+    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
     run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
@@ -34,7 +34,8 @@ use alife_game_app::{
     WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
     CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
-    CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA,
+    CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
+    CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA,
     G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -470,6 +471,60 @@ fn bevy_feature_ca19_graphical_ecology_overlay_text_is_display_only_and_stable_i
     assert!(overlay.contains("hazard zones=1"));
     assert!(overlay.contains("Resource cycle"));
     assert!(overlay.contains("Boundary: terrain/resource visuals cannot emit actions"));
+    assert!(!overlay.contains("Entity("));
+    assert!(!overlay.contains("full action-authoritative"));
+}
+
+#[test]
+fn ca20_graphical_lifecycle_smoke_reports_birth_death_lineage_and_roundtrip() {
+    let summary = run_graphical_lifecycle_smoke().unwrap();
+
+    assert_eq!(summary.schema, CA20_GRAPHICAL_LIFECYCLE_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION
+    );
+    assert!(summary.living_population <= summary.population_cap);
+    assert_eq!(summary.births, 1);
+    assert_eq!(summary.deaths, 1);
+    assert_eq!(summary.lineage_count, 1);
+    assert!(summary.genetic_lifetime_separated);
+    assert!(summary.birth_weight_assets_are_initializers);
+    assert!(summary.save_load_lineages_roundtrip);
+    assert!(summary
+        .event_rows
+        .iter()
+        .any(|row| row.label == LifecycleEventKind::Birth.label()));
+    assert!(summary
+        .event_rows
+        .iter()
+        .any(|row| row.label == LifecycleEventKind::Death.label()));
+    assert!(!summary.signature.contains("Entity("));
+
+    let overlay = summary.compact_overlay_text();
+    assert!(overlay.contains("Lifecycle"));
+    assert!(overlay.contains("Births:1"));
+    assert!(overlay.contains("Deaths:1"));
+    assert!(overlay.contains("Genetic fixed separate from lifetime: true"));
+    assert!(overlay.contains("Save/load lineages: true"));
+    assert!(!overlay.contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca20_lifecycle_overlay_is_player_facing_and_boundary_safe() {
+    let summary = run_graphical_lifecycle_smoke().unwrap();
+    let overlay = alife_game_app::bevy_shell::ca20_lifecycle_overlay_text(&summary);
+
+    assert!(overlay.contains("Lifecycle"));
+    assert!(overlay.contains("Birth/death events visible"));
+    assert!(overlay.contains("population cap enforced"));
+    assert!(overlay.contains("birth assets initialize only"));
+    assert!(overlay.contains("lifetime state not inherited"));
+    assert!(overlay.contains("Stable IDs only"));
+    assert!(overlay.contains("lineage visuals cannot emit actions"));
+    assert!(overlay.contains("gen"));
     assert!(!overlay.contains("Entity("));
     assert!(!overlay.contains("full action-authoritative"));
 }
