@@ -6,6 +6,7 @@ use alife_game_app::{
     ca18_creature_selection_ids, ca18_cycle_selected_creature, compare_visible_world_to_headless,
     g17_feedback_manifest_path, g17_workspace_root, load_visible_world_from_p34_save,
     project_lod_without_behavior_change, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
+    run_behavior_tuning_metrics_smoke, run_behavior_tuning_metrics_with_config,
     run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
     run_creature_visual_smoke, run_double_buffered_scheduler_smoke, run_feedback_polish_smoke,
     run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
@@ -19,10 +20,11 @@ use alife_game_app::{
     run_product_qa_hardening_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
     run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
     run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, Ca13TickBuffer, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, DoubleBufferedGraphicalScheduler, FeedbackAssetKind, FeedbackAssetManifest,
-    FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig,
+    BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget, CameraNavigationState,
+    ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
+    DoubleBufferedGraphicalScheduler, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
     GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
     InspectorControlPanel, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig,
     LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig,
@@ -35,8 +37,9 @@ use alife_game_app::{
     CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
-    CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA,
-    G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
+    CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
+    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
@@ -2485,6 +2488,95 @@ fn longrun_balance_is_reproducible_by_seed_and_config() {
 
     assert_eq!(first.signature_line(), second.signature_line());
     assert_eq!(first.report_markdown, second.report_markdown);
+}
+
+#[test]
+fn ca21_behavior_tuning_metrics_detect_required_degeneracy_classes() {
+    let summary = run_behavior_tuning_metrics_smoke().unwrap();
+
+    assert_eq!(summary.schema, CA21_BEHAVIOR_TUNING_SCHEMA);
+    assert_eq!(summary.schema_version, CA21_BEHAVIOR_TUNING_SCHEMA_VERSION);
+    assert_eq!(summary.findings.len(), CA21_REQUIRED_DETECTOR_COUNT);
+    assert_eq!(summary.scenario_sweeps.len(), CA21_SCENARIO_SWEEP_COUNT);
+
+    let finding_ids = summary
+        .findings
+        .iter()
+        .map(|finding| finding.id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        finding_ids,
+        vec![
+            "stagnation",
+            "catatonia",
+            "overfeeding",
+            "hazard-suicide",
+            "population-collapse"
+        ]
+    );
+
+    let overfeeding = summary
+        .findings
+        .iter()
+        .find(|finding| finding.id == "overfeeding")
+        .unwrap();
+    assert_eq!(
+        overfeeding.status,
+        BehaviorTuningFindingStatus::KnownLimitation
+    );
+    let hazard = summary
+        .findings
+        .iter()
+        .find(|finding| finding.id == "hazard-suicide")
+        .unwrap();
+    assert_eq!(hazard.status, BehaviorTuningFindingStatus::KnownLimitation);
+    assert!(summary.no_hidden_overfitting);
+    assert!(summary
+        .report_markdown
+        .contains("Known degenerate behavior list"));
+    assert!(summary.report_markdown.contains("No hidden overfitting"));
+    assert!(summary
+        .known_degenerate_behaviors
+        .iter()
+        .any(|behavior| behavior.contains("overfeeding risk")));
+    assert!(summary
+        .known_degenerate_behaviors
+        .iter()
+        .any(|behavior| behavior.contains("hazard-suicide risk")));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca21_behavior_tuning_config_bounds_are_enforced() {
+    let mut config = BehaviorTuningConfig::fast_ci();
+    config.minimum_sealed_patches = 0;
+    assert!(config.validate().is_err());
+
+    let mut config = BehaviorTuningConfig::fast_ci();
+    config.overfeeding_watch_threshold = 1.5;
+    assert!(config.validate().is_err());
+
+    let mut config = BehaviorTuningConfig::fast_ci();
+    config.minimum_population_observed = alife_game_app::G08_MAX_POPULATION_CAP + 1;
+    assert!(config.validate().is_err());
+}
+
+#[test]
+fn ca21_behavior_tuning_report_is_reproducible_and_not_overclaimed() {
+    let first = run_behavior_tuning_metrics_with_config(BehaviorTuningConfig::fast_ci()).unwrap();
+    let second = run_behavior_tuning_metrics_with_config(BehaviorTuningConfig::fast_ci()).unwrap();
+
+    assert_eq!(first.signature_line(), second.signature_line());
+    assert_eq!(first.report_markdown, second.report_markdown);
+    assert!(first
+        .report_markdown
+        .contains("does not alter action arbitration"));
+    assert!(first
+        .report_markdown
+        .contains("CPU fallback and CPU shadow parity remain separate"));
+    assert!(!first.report_markdown.contains("full action-authoritative"));
+    assert!(first.scenario_sweeps.iter().all(|sweep| sweep.bounded_ci));
+    first.validate().unwrap();
 }
 
 #[test]
