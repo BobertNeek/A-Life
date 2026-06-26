@@ -27,14 +27,15 @@ use crate::{
     run_creature_visual_smoke, run_headless_app_shell_smoke, run_live_brain_loop_smoke,
     AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
     Ca18GraphicalPopulationSummary, Ca19GraphicalEcologySummary, Ca19TerrainZoneVisual,
-    Ca20GraphicalLifecycleSummary, Ca23GraphicalSchoolSummary, CameraNavigationState,
-    CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
-    CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
-    GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
-    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
-    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
-    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
+    Ca20GraphicalLifecycleSummary, Ca23GraphicalSchoolSummary, Ca23TeacherCueMarker,
+    CameraNavigationState, CreatureAnimationState, CreatureExpressionState,
+    CreatureInspectorSnapshot, CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError,
+    GameAppState, GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode,
+    GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
+    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
+    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
+    S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -1297,24 +1298,39 @@ fn spawn_ca23_school_teacher_markers(app: &mut App, school: &Ca23GraphicalSchool
         },
     ));
 
-    if let Some(cue) = school.cue_markers.first() {
+    for (index, cue) in school.cue_markers.iter().take(4).enumerate() {
+        let row = index as f32;
         app.world_mut().spawn((
             Name::new(format!(
-                "A-Life CA23 lesson cue stable:{}",
+                "A-Life CA24 teacher world cue stable:{}",
                 cue.stable_id.raw()
             )),
-            Text2d::new(format!("[T] lesson cue\nstable:{}", cue.stable_id.raw())),
+            Text2d::new(ca24_teacher_cue_marker_text(cue)),
             TextFont {
                 font_size: 13.0,
                 ..default()
             },
             TextColor(Color::srgb(0.92, 0.78, 1.0)),
-            Transform::from_translation(Vec3::new(-210.0, 96.0, 1.08)),
+            Transform::from_translation(Vec3::new(-210.0 + row * 116.0, 96.0 - row * 18.0, 1.08)),
             GraphicalTeacherCueMarker {
                 stable_id: cue.stable_id,
             },
         ));
     }
+}
+
+fn ca24_teacher_cue_marker_text(cue: &Ca23TeacherCueMarker) -> String {
+    let kind = match cue.channel {
+        alife_core::TeacherPerceptionChannel::Hearing => "speech token",
+        alife_core::TeacherPerceptionChannel::Gesture => "gesture marker",
+        alife_core::TeacherPerceptionChannel::Object => "object highlight",
+        alife_core::TeacherPerceptionChannel::Writing => "writing token",
+        alife_core::TeacherPerceptionChannel::Vision => "feedback cue",
+    };
+    format!(
+        "[T] {kind}\nstable:{}\nperception-only",
+        cue.stable_id.raw()
+    )
 }
 
 fn inspector_local_entity(

@@ -445,6 +445,7 @@ pub fn run_school_mode_smoke_with_config(
             kind: CurriculumStepKind::NameObject,
             prompt_cues: vec![
                 TeacherPerceptualEvent::spoken_token(lesson_id, 77),
+                TeacherPerceptualEvent::gesture(lesson_id, 24),
                 TeacherPerceptualEvent::object_highlight(
                     lesson_id,
                     object_id,
@@ -609,6 +610,11 @@ pub fn run_school_mode_smoke_with_config(
             TeacherInputKind::SpokenToken,
             Some(cue_token_id),
             "heard teacher word",
+        ),
+        (
+            TeacherInputKind::Gesture,
+            Some(teacher_avatar_stable_id),
+            "teacher points",
         ),
         (
             TeacherInputKind::ObjectHighlight,
