@@ -18,26 +18,26 @@ use alife_game_app::{
     run_live_brain_loop_smoke, run_longrun_balance_smoke, run_longrun_balance_with_config,
     run_motor_ring_arbitration_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
     run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
-    AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig, BehaviorTuningFindingStatus,
-    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
-    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
-    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
-    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
-    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
-    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
-    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
-    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke,
+    run_real_semantic_provider_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_teacher_world_cues_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler,
+    EcologicalSoakConfig, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    InspectorControlPanel, LessonManifest, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
+    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
+    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
@@ -45,8 +45,15 @@ use alife_game_app::{
     CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
     CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION,
     CA25_CURRICULUM_AUTHORING_SCHEMA, CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
+    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+};
+use alife_semantic::{
+    project_embedding_to_i8, LocalOllamaEmbeddingConfig, LocalOllamaEmbeddingProvider,
+    LocalSemanticModelManifest, SemanticProviderCapabilityManifest, CA26_EMBEDDING_PROJECTION_DIMS,
+    CA26_LOCAL_MODEL_MANIFEST_SCHEMA, CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION,
+    CA26_LOCAL_SEMANTIC_PROVIDER_ID,
 };
 use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
@@ -3437,6 +3444,94 @@ fn semantic_provider_config_rejects_unknown_schema_and_kind() {
 
     assert!(summary.unknown_schema_rejected);
     assert!(summary.unknown_provider_kind_rejected);
+}
+
+#[test]
+fn ca26_local_model_manifest_is_real_local_only_and_bounded() {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/model_manifests/local_semantic_models.json");
+    let manifest = LocalSemanticModelManifest::from_json_file(&manifest_path).unwrap();
+    manifest.validate().unwrap();
+    assert_eq!(manifest.schema, CA26_LOCAL_MODEL_MANIFEST_SCHEMA);
+    assert_eq!(
+        manifest.schema_version,
+        CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION
+    );
+
+    let model = manifest.semantic_embedding_model().unwrap();
+    assert_eq!(model.repo_id, "Qwen/Qwen3-Embedding-0.6B-GGUF");
+    assert_eq!(model.model_role, "semantic_embedding_provider");
+    assert_eq!(model.license, "apache-2.0");
+    assert_eq!(model.runtime_backend, "ollama-localhost-gguf");
+    assert_eq!(model.ollama_model, "alife-qwen3-embedding-0.6b");
+    assert_eq!(model.sha256.len(), 64);
+    assert!(model.downloaded_locally);
+    assert!(model.inference_smoke_passed);
+    assert!(model
+        .limitations
+        .iter()
+        .any(|limitation| limitation.contains("perception-context-only")));
+    assert!(!model.runtime_backend.contains("cloud"));
+    assert!(!model.expected_local_path.contains("Entity("));
+}
+
+#[test]
+fn ca26_local_embedding_projection_bounds_context_and_blocks_authority() {
+    let raw = (0..1024)
+        .map(|index| ((index % 31) as f32 / 31.0) - 0.5)
+        .collect::<Vec<_>>();
+    let projected = project_embedding_to_i8(&raw).unwrap();
+    assert_eq!(projected.len(), CA26_EMBEDDING_PROJECTION_DIMS);
+    assert!(projected.iter().any(|value| *value != 0));
+
+    let capability = SemanticProviderCapabilityManifest::local_ollama_embedding(
+        CA26_LOCAL_SEMANTIC_PROVIDER_ID,
+        true,
+    );
+    capability.validate().unwrap();
+    assert!(capability.available);
+    assert!(capability.bounded_context);
+    assert!(!capability.can_issue_actions);
+    assert!(!capability.can_rewrite_weights);
+}
+
+#[test]
+fn ca26_unavailable_local_model_is_user_action_required_not_fake_output() {
+    let provider = LocalOllamaEmbeddingProvider::new(LocalOllamaEmbeddingConfig {
+        port: 9,
+        timeout_ms: 1_000,
+        ..LocalOllamaEmbeddingConfig::default()
+    })
+    .unwrap();
+    let err = provider.embed_text("teacher token food").unwrap_err();
+    assert!(err.contains("USER_ACTION_REQUIRED"));
+    assert!(!err.contains("fake"));
+}
+
+#[test]
+#[ignore = "manual CA26 real local Ollama smoke: cargo test -p alife_game_app --test app_shell ca26_real_local_semantic_provider_smoke -- --ignored --nocapture"]
+fn ca26_real_local_semantic_provider_smoke() {
+    let summary = run_real_semantic_provider_smoke().unwrap();
+    assert_eq!(summary.schema, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION
+    );
+    assert_eq!(summary.repo_id, "Qwen/Qwen3-Embedding-0.6B-GGUF");
+    assert_eq!(summary.runtime_backend, "ollama-localhost-gguf");
+    assert!(summary.downloaded_locally);
+    assert!(summary.inference_smoke_passed);
+    assert!(summary.raw_embedding_dims > 0);
+    assert_eq!(
+        summary.projected_embedding_dims,
+        CA26_EMBEDDING_PROJECTION_DIMS
+    );
+    assert!(summary.context_vectors_bounded);
+    assert!(!summary.fake_model_output_used);
+    assert!(!summary.can_issue_actions);
+    assert!(!summary.can_rewrite_weights);
+    assert!(!summary.hidden_vector_injection);
+    summary.validate().unwrap();
 }
 
 #[test]

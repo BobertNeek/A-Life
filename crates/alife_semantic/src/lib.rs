@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 mod fake;
 #[cfg(feature = "gaussian-adapter")]
 mod gaussian;
+#[cfg(feature = "local-ollama")]
+mod local_ollama;
 #[cfg(feature = "gaussian-adapter")]
 mod providers;
 #[cfg(feature = "gaussian-adapter")]
@@ -45,6 +47,7 @@ pub enum SemanticProviderKind {
     Disabled,
     FakeLocalTable,
     ExternalExtension,
+    LocalOllamaEmbedding,
 }
 
 impl SemanticProviderKind {
@@ -53,6 +56,7 @@ impl SemanticProviderKind {
             Self::Disabled => "disabled",
             Self::FakeLocalTable => "fake-local-table",
             Self::ExternalExtension => "external-extension",
+            Self::LocalOllamaEmbedding => "local-ollama-embedding",
         }
     }
 }
@@ -102,6 +106,17 @@ impl SemanticProviderConfig {
             schema_version: G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
             provider_id: provider_id.into(),
             provider_kind: SemanticProviderKind::ExternalExtension,
+            required: false,
+            max_display_entries: 8,
+        }
+    }
+
+    pub fn local_ollama_embedding(provider_id: impl Into<String>) -> Self {
+        Self {
+            schema: G11_SEMANTIC_PROVIDER_SCHEMA.to_string(),
+            schema_version: G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
+            provider_id: provider_id.into(),
+            provider_kind: SemanticProviderKind::LocalOllamaEmbedding,
             required: false,
             max_display_entries: 8,
         }
@@ -176,6 +191,16 @@ impl SemanticProviderCapabilityManifest {
         Self::new(
             provider_id,
             SemanticProviderKind::ExternalExtension,
+            available,
+            true,
+            true,
+        )
+    }
+
+    pub fn local_ollama_embedding(provider_id: impl Into<String>, available: bool) -> Self {
+        Self::new(
+            provider_id,
+            SemanticProviderKind::LocalOllamaEmbedding,
             available,
             true,
             true,
@@ -283,3 +308,11 @@ pub use semantic::{
 
 #[cfg(feature = "fake-semantic-provider")]
 pub use fake::FakeSemanticProvider;
+
+#[cfg(feature = "local-ollama")]
+pub use local_ollama::{
+    project_embedding_to_i8, BoundedSemanticEmbedding, LocalOllamaEmbeddingConfig,
+    LocalOllamaEmbeddingProvider, LocalSemanticModelEntry, LocalSemanticModelManifest,
+    CA26_DEFAULT_OLLAMA_MODEL, CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
+    CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION, CA26_LOCAL_SEMANTIC_PROVIDER_ID,
+};

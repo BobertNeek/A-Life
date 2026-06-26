@@ -12,12 +12,11 @@ use alife_semantic::{
 use alife_semantic::{
     build_gaussian_context, build_semantic_context, EgocentricBinGrid, EgocentricBinHasher,
     GaussianClusterObservation, SemanticCodeDescriptor, SemanticConceptBinding,
-    SemanticContextRequest, MAX_GAUSSIAN_CONTEXT_CLUSTERS, MAX_SEMANTIC_CODE_COUNT,
-    MAX_SEMANTIC_CONTEXT_BINDINGS,
+    MAX_GAUSSIAN_CONTEXT_CLUSTERS, MAX_SEMANTIC_CODE_COUNT, MAX_SEMANTIC_CONTEXT_BINDINGS,
 };
 
 #[cfg(feature = "fake-semantic-provider")]
-use alife_semantic::{FakeSemanticProvider, SemanticContextProvider};
+use alife_semantic::{FakeSemanticProvider, SemanticContextProvider, SemanticContextRequest};
 
 #[test]
 fn missing_semantic_provider_stays_nonfatal() {
