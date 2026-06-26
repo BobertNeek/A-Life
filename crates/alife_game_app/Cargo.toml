@@ -10,7 +10,7 @@ alife_core = { path = "../alife_core" }
 alife_bevy_adapter = { path = "../alife_bevy_adapter", optional = true }
 alife_gpu_backend = { path = "../alife_gpu_backend", optional = true }
 alife_school = { path = "../alife_school" }
-alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider"] }
+alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider", "local-ollama"] }
 alife_world = { path = "../alife_world" }
 bevy = { workspace = true, optional = true }
 serde.workspace = true

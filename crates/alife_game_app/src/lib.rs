@@ -25,10 +25,13 @@ mod prelude {
         TEACHER_SCHOOL_SCHEMA_VERSION,
     };
     pub(crate) use alife_semantic::{
-        FakeSemanticProvider, SemanticCodeDescriptor, SemanticConceptBinding,
-        SemanticContextBundle, SemanticContextProvider, SemanticContextRequest,
-        SemanticProviderCapabilityManifest, SemanticProviderConfig, SemanticProviderKind,
-        G11_SEMANTIC_PROVIDER_SCHEMA, G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
+        BoundedSemanticEmbedding, FakeSemanticProvider, LocalOllamaEmbeddingConfig,
+        LocalOllamaEmbeddingProvider, LocalSemanticModelManifest, SemanticCodeDescriptor,
+        SemanticConceptBinding, SemanticContextBundle, SemanticContextProvider,
+        SemanticContextRequest, SemanticProviderCapabilityManifest, SemanticProviderConfig,
+        SemanticProviderKind, CA26_EMBEDDING_PROJECTION_DIMS, CA26_LOCAL_MODEL_MANIFEST_SCHEMA,
+        CA26_LOCAL_MODEL_MANIFEST_SCHEMA_VERSION, G11_SEMANTIC_PROVIDER_SCHEMA,
+        G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::persistence::{
         AssetManifest, BackendSelection, PersistenceError, PortableSaveFile, RuntimeConfig,
@@ -148,6 +151,9 @@ pub use school_mode::*;
 
 mod semantic_provider_display;
 pub use semantic_provider_display::*;
+
+mod real_semantic_provider;
+pub use real_semantic_provider::*;
 
 mod advanced_gameplay_ux;
 pub use advanced_gameplay_ux::*;

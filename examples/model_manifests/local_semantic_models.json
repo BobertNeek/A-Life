@@ -1,0 +1,24 @@
+{
+  "schema": "alife.ca26.local_semantic_models.v1",
+  "schema_version": 1,
+  "models": [
+    {
+      "repo_id": "Qwen/Qwen3-Embedding-0.6B-GGUF",
+      "model_role": "semantic_embedding_provider",
+      "license": "apache-2.0",
+      "selected_file": "Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "runtime_backend": "ollama-localhost-gguf",
+      "expected_local_path": "models/local/qwen3-embedding-0.6b-gguf/Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "ollama_model": "alife-qwen3-embedding-0.6b",
+      "sha256": "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
+      "downloaded_locally": true,
+      "inference_smoke_passed": true,
+      "limitations": [
+        "localhost-only",
+        "requires local Ollama model import before smoke",
+        "embedding is projected and bounded before game context",
+        "perception-context-only; cannot issue actions or rewrite weights"
+      ]
+    }
+  ]
+}
