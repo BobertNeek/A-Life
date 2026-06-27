@@ -290,6 +290,9 @@ pub struct GraphicalTopologyOverlay;
 pub struct GraphicalMemoryJournalOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalNeuralActivityProfilerOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalTeacherCueMarker {
     pub stable_id: WorldEntityId,
 }
@@ -578,6 +581,12 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_lifecycle_overlay,
                 update_graphical_topology_overlay,
                 update_graphical_memory_journal_overlay,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                update_graphical_neural_activity_profiler_overlay,
                 update_graphical_boundary_footer_overlay,
                 update_graphical_save_load_menu_overlay,
             ),
@@ -957,6 +966,28 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.048, 0.036, 0.012, 0.86)),
         GraphicalMemoryJournalOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA30 neural activity profiler"),
+        Text::new(
+            "Neural Profiler (compact)\nbrain=0 neurons=0 tick=0\nlobes: pending compact summary\ntiles 0/0 skip=0 syn 0/0\nroute pending backend=PendingFirstTick fallback=none\nBoundary: compact summary; offline export only",
+        ),
+        TextFont {
+            font_size: 10.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.72, 0.92, 1.0)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(626.0),
+            right: Val::Px(12.0),
+            max_width: Val::Px(430.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.012, 0.024, 0.048, 0.86)),
+        GraphicalNeuralActivityProfilerOverlay,
     ));
 
     app.world_mut().spawn((
@@ -1886,6 +1917,11 @@ fn apply_graphical_runtime_command(
             panel.record_tick(&summary);
             panel.record_topology_overlay(&live_loop.live, std::slice::from_ref(&summary))?;
             panel.record_memory_journal(&live_loop.live, std::slice::from_ref(&summary))?;
+            panel.record_neural_profiler(
+                &live_loop.live,
+                std::slice::from_ref(&summary),
+                Some(live_loop.gpu.telemetry()),
+            )?;
             panel
                 .scheduler
                 .record_executed_ticks(crate::executed_live_tick_count(std::slice::from_ref(
@@ -1915,6 +1951,11 @@ fn apply_graphical_runtime_command(
             }
             panel.record_topology_overlay(&live_loop.live, &summaries)?;
             panel.record_memory_journal(&live_loop.live, &summaries)?;
+            panel.record_neural_profiler(
+                &live_loop.live,
+                &summaries,
+                Some(live_loop.gpu.telemetry()),
+            )?;
             panel
                 .scheduler
                 .record_executed_ticks(crate::executed_live_tick_count(&summaries))?;
@@ -2129,6 +2170,15 @@ fn update_graphical_memory_journal_overlay(
 ) {
     for mut text in &mut overlays {
         text.0 = runtime.panel.memory_journal.panel_text();
+    }
+}
+
+fn update_graphical_neural_activity_profiler_overlay(
+    runtime: Res<GraphicalRuntimeControlsResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalNeuralActivityProfilerOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = runtime.panel.neural_profiler.panel_text();
     }
 }
 

@@ -168,6 +168,9 @@ pub use topological_concept_overlay::*;
 mod memory_history_journal;
 pub use memory_history_journal::*;
 
+mod neural_activity_profiler;
+pub use neural_activity_profiler::*;
+
 mod advanced_gameplay_ux;
 pub use advanced_gameplay_ux::*;
 
