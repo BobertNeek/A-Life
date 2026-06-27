@@ -21,13 +21,14 @@ use alife_game_app::{
     run_motor_ring_arbitration_smoke, run_neural_activity_profiler_smoke,
     run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_real_semantic_provider_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
-    run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, write_behavior_comparison_lab_report,
-    AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig, BehaviorTuningFindingStatus,
-    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    run_product_qa_hardening_smoke, run_real_semantic_provider_smoke,
+    run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, write_behavior_comparison_lab_report, AppShellLaunchConfig,
+    AutosavePolicy, BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer,
+    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
     CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
     DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
     FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
@@ -37,26 +38,28 @@ use alife_game_app::{
     LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
     PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
-    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
-    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
-    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
-    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
-    CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
-    CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
-    CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
-    CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
-    CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
-    CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION,
-    CA25_CURRICULUM_AUTHORING_SCHEMA, CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
-    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION,
-    CA27_INTERNAL_SLM_PRIOR_SCHEMA, CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION,
-    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
-    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION,
-    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION,
-    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION,
-    CA31_MAX_REPORT_BYTES, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    RealtimeWgslTelemetrySummary, ReleaseCandidateArea, ReleaseCandidateGateStatus,
+    RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState,
+    S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState,
+    VisibleMaterialKind, VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig,
+    WorldEditorMode, WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA,
+    CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION, CA18_MAX_GRAPHICAL_CREATURES,
+    CA19_GRAPHICAL_ECOLOGY_SCHEMA, CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION,
+    CA20_GRAPHICAL_LIFECYCLE_SCHEMA, CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION,
+    CA21_BEHAVIOR_TUNING_SCHEMA, CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT,
+    CA21_SCENARIO_SWEEP_COUNT, CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION,
+    CA22_FAST_HEADLESS_TICKS, CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA,
+    CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION, CA25_CURRICULUM_AUTHORING_SCHEMA,
+    CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA,
+    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION, CA27_INTERNAL_SLM_PRIOR_SCHEMA,
+    CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA,
+    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA,
+    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA,
+    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA,
+    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION, CA31_MAX_REPORT_BYTES,
+    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
+    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_semantic::{
     parse_slm_prior_json, project_embedding_to_i8, LlamaCppEmbeddingConfig,
@@ -84,6 +87,28 @@ fn p34_fixture_root() -> PathBuf {
 fn gpu_alpha_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../crates/alife_world/tests/fixtures/gpu_alpha")
+}
+
+fn test_wgsl_telemetry() -> RealtimeWgslTelemetrySummary {
+    RealtimeWgslTelemetrySummary {
+        schema: CA32_REALTIME_WGSL_TELEMETRY_SCHEMA,
+        schema_version: CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
+        tick_marker: 3,
+        timing_available: true,
+        timing_kind: "host-observed-active-wgsl-tick",
+        upload_ms: 0.10,
+        compute_submit_poll_ms: 0.80,
+        compact_readback_ms: 0.20,
+        cpu_shadow_ms: 0.15,
+        total_gpu_runtime_ms: 1.10,
+        routing_total_tiles: 8,
+        routing_active_tiles: 3,
+        routing_skipped_tiles: 5,
+        routing_active_synapses: 384,
+        compact_readback_bytes: 64,
+        nonblocking_hot_path: true,
+        unavailable_reason: None,
+    }
 }
 
 fn gpu_plasticity_env_lock() -> MutexGuard<'static, ()> {
@@ -1555,6 +1580,7 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
         compact_readback_bytes: 64,
         post_seal_readback_bytes: 64,
         total_gpu_runtime_ms: 1.25,
+        wgsl: test_wgsl_telemetry(),
         no_active_bulk_readback: true,
         full_action_authoritative_claim: false,
     };
@@ -1562,6 +1588,8 @@ fn graphical_gpu_telemetry_overlay_is_honest_and_bounded() {
     let overlay = telemetry.overlay_lines();
     let inspector = telemetry.inspector_lines();
     assert!(overlay.contains("scores=true"));
+    assert!(overlay.contains("WGSL: tick=3"));
+    assert!(overlay.contains("compute=0.80ms"));
     assert!(overlay.contains("No bulk neural readback=true"));
     assert!(inspector.contains("Claim:"));
     assert!(inspector.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
@@ -1724,6 +1752,7 @@ fn bevy_feature_ca05_controls_and_boundary_footer_are_player_facing() {
         compact_readback_bytes: 64,
         post_seal_readback_bytes: 64,
         total_gpu_runtime_ms: 1.25,
+        wgsl: test_wgsl_telemetry(),
         no_active_bulk_readback: true,
         full_action_authoritative_claim: false,
     };
@@ -3837,6 +3866,40 @@ fn ca30_neural_activity_profiler_blocks_bulk_readback_and_action_authority() {
 }
 
 #[test]
+fn ca32_realtime_wgsl_telemetry_exposes_timing_split_and_routing_counters() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_realtime_wgsl_telemetry_smoke(&launch, 3).unwrap();
+
+    assert_eq!(summary.schema, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION
+    );
+    assert_eq!(summary.requested_ticks, 3);
+    assert_eq!(summary.ticks_completed, 3);
+    assert!(summary.cpu_shadow_gate);
+    assert!(summary.no_active_bulk_readback);
+    assert!(!summary.full_action_authoritative_claim);
+    assert!(summary.telemetry.nonblocking_hot_path);
+    assert!(summary.ui_summary.contains("WGSL:"));
+    assert!(summary.ui_summary.contains("compute="));
+    assert!(summary.ui_summary.contains("tiles"));
+    assert!(!summary.ui_summary.contains("Entity("));
+    assert!(!summary.ui_summary.contains("full action-authoritative"));
+    if summary.telemetry.timing_available {
+        assert!(summary.telemetry.routing_total_tiles > 0);
+        assert!(summary.telemetry.routing_active_tiles <= summary.telemetry.routing_total_tiles);
+        assert!(summary.telemetry.compact_readback_bytes > 0);
+    } else {
+        assert!(
+            summary.fallback_reason.is_some() || summary.telemetry.unavailable_reason.is_some(),
+            "unavailable WGSL telemetry must report an explicit fallback reason"
+        );
+    }
+    summary.validate().unwrap();
+}
+
+#[test]
 fn ca31_behavior_comparison_lab_compares_scenarios_and_exports_small_report() {
     let manifest = alife_game_app::default_environment_manifest_path();
     let summary =
@@ -4723,6 +4786,7 @@ fn bevy_feature_ca07_inspector_bars_are_readable_and_player_facing() {
             compact_readback_bytes: 64,
             post_seal_readback_bytes: 64,
             total_gpu_runtime_ms: 1.25,
+            wgsl: test_wgsl_telemetry(),
             no_active_bulk_readback: true,
             full_action_authoritative_claim: false,
         },
@@ -4783,6 +4847,7 @@ fn bevy_feature_ca08_sensory_feedback_cues_are_display_only_and_readable() {
         compact_readback_bytes: 64,
         post_seal_readback_bytes: 64,
         total_gpu_runtime_ms: 1.25,
+        wgsl: test_wgsl_telemetry(),
         no_active_bulk_readback: true,
         full_action_authoritative_claim: false,
     };

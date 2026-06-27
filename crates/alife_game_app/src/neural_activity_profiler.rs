@@ -33,6 +33,10 @@ pub struct NeuralRouteStatusSummary {
     pub gpu_scores_used_for_proposals: bool,
     pub compact_readback_bytes: usize,
     pub post_seal_readback_bytes: usize,
+    pub wgsl_timing_available: bool,
+    pub wgsl_upload_ms: f32,
+    pub wgsl_compute_ms: f32,
+    pub wgsl_readback_ms: f32,
     pub no_active_bulk_readback: bool,
     pub product_runtime_claim: String,
     pub full_action_authoritative_claim: bool,
@@ -130,6 +134,10 @@ impl NeuralActivityProfilerSnapshot {
                 gpu_scores_used_for_proposals: false,
                 compact_readback_bytes: 0,
                 post_seal_readback_bytes: 0,
+                wgsl_timing_available: false,
+                wgsl_upload_ms: 0.0,
+                wgsl_compute_ms: 0.0,
+                wgsl_readback_ms: 0.0,
                 no_active_bulk_readback: true,
                 product_runtime_claim: "PendingTick".to_string(),
                 full_action_authoritative_claim: false,
@@ -175,6 +183,16 @@ impl NeuralActivityProfilerSnapshot {
         validate_ca30_display_line(&self.route_status.requested_mode)?;
         validate_ca30_display_line(&self.route_status.selected_backend)?;
         validate_ca30_display_line(&self.route_status.product_runtime_claim)?;
+        for value in [
+            self.route_status.wgsl_upload_ms,
+            self.route_status.wgsl_compute_ms,
+            self.route_status.wgsl_readback_ms,
+        ] {
+            alife_core::validate_finite(value)?;
+            if value < 0.0 {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+        }
         if let Some(reason) = &self.route_status.fallback_reason {
             validate_ca30_display_line(reason)?;
         }
@@ -212,6 +230,7 @@ impl NeuralActivityProfilerSnapshot {
                 "tiles {}/{} skip={} syn {}/{}\n",
                 "route {} backend={} fallback={}\n",
                 "scores={} parity={} readback={}B post={}B\n",
+                "wgsl available={} up={:.2}ms compute={:.2}ms read={:.2}ms\n",
                 "Boundary: compact summary; offline export only"
             ),
             self.brain_class_id,
@@ -230,6 +249,10 @@ impl NeuralActivityProfilerSnapshot {
             self.route_status.cpu_shadow_parity,
             self.route_status.compact_readback_bytes,
             self.route_status.post_seal_readback_bytes,
+            self.route_status.wgsl_timing_available,
+            self.route_status.wgsl_upload_ms,
+            self.route_status.wgsl_compute_ms,
+            self.route_status.wgsl_readback_ms,
         )
     }
 
@@ -351,6 +374,10 @@ pub(crate) fn route_status_from_gpu(
             gpu_scores_used_for_proposals: gpu.gpu_scores_used_for_proposals,
             compact_readback_bytes: gpu.compact_readback_bytes,
             post_seal_readback_bytes: gpu.post_seal_readback_bytes,
+            wgsl_timing_available: gpu.wgsl.timing_available,
+            wgsl_upload_ms: gpu.wgsl.upload_ms,
+            wgsl_compute_ms: gpu.wgsl.compute_submit_poll_ms,
+            wgsl_readback_ms: gpu.wgsl.compact_readback_ms,
             no_active_bulk_readback: gpu.no_active_bulk_readback,
             product_runtime_claim: gpu.product_runtime_claim.clone(),
             full_action_authoritative_claim: gpu.full_action_authoritative_claim,
@@ -364,6 +391,10 @@ pub(crate) fn route_status_from_gpu(
             gpu_scores_used_for_proposals: false,
             compact_readback_bytes: 0,
             post_seal_readback_bytes: 0,
+            wgsl_timing_available: false,
+            wgsl_upload_ms: 0.0,
+            wgsl_compute_ms: 0.0,
+            wgsl_readback_ms: 0.0,
             no_active_bulk_readback: true,
             product_runtime_claim: "None".to_string(),
             full_action_authoritative_claim: false,
@@ -383,16 +414,27 @@ fn tile_summary_from(
         .max_active_synapses
         .max(brain_class.compute_budget.max_active_synapses);
     if let Some(gpu) = gpu {
-        let active = if gpu.gpu_static_dispatched_ticks > 0 {
+        let active = if gpu.wgsl.timing_available {
+            max_active_tiles.min(gpu.wgsl.routing_active_tiles)
+        } else if gpu.gpu_static_dispatched_ticks > 0 {
             max_active_tiles.min(gpu.gpu_static_dispatched_ticks.saturating_mul(4).max(1))
         } else {
             0
         };
-        let active_synapses = active.saturating_mul(128).min(max_active_synapses);
+        let skipped_tiles = if gpu.wgsl.timing_available {
+            gpu.wgsl.routing_skipped_tiles.min(max_active_tiles)
+        } else {
+            max_active_tiles.saturating_sub(active)
+        };
+        let active_synapses = if gpu.wgsl.timing_available {
+            gpu.wgsl.routing_active_synapses.min(max_active_synapses)
+        } else {
+            active.saturating_mul(128).min(max_active_synapses)
+        };
         return NeuralTileActivitySummary {
             active_tiles: active,
             max_active_tiles,
-            skipped_tiles: max_active_tiles.saturating_sub(active),
+            skipped_tiles,
             active_synapses,
             max_active_synapses,
             source: "gpu-telemetry-compact",

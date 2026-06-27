@@ -224,6 +224,162 @@ impl FullGpuRuntimeSmokeSummary {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct RealtimeWgslTelemetrySummary {
+    pub schema: &'static str,
+    pub schema_version: u16,
+    pub tick_marker: u64,
+    pub timing_available: bool,
+    pub timing_kind: &'static str,
+    pub upload_ms: f32,
+    pub compute_submit_poll_ms: f32,
+    pub compact_readback_ms: f32,
+    pub cpu_shadow_ms: f32,
+    pub total_gpu_runtime_ms: f32,
+    pub routing_total_tiles: u32,
+    pub routing_active_tiles: u32,
+    pub routing_skipped_tiles: u32,
+    pub routing_active_synapses: u32,
+    pub compact_readback_bytes: usize,
+    pub nonblocking_hot_path: bool,
+    pub unavailable_reason: Option<String>,
+}
+
+impl RealtimeWgslTelemetrySummary {
+    pub fn pending(tick_marker: u64) -> Self {
+        Self {
+            schema: CA32_REALTIME_WGSL_TELEMETRY_SCHEMA,
+            schema_version: CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
+            tick_marker,
+            timing_available: false,
+            timing_kind: "pending-first-tick",
+            upload_ms: 0.0,
+            compute_submit_poll_ms: 0.0,
+            compact_readback_ms: 0.0,
+            cpu_shadow_ms: 0.0,
+            total_gpu_runtime_ms: 0.0,
+            routing_total_tiles: 0,
+            routing_active_tiles: 0,
+            routing_skipped_tiles: 0,
+            routing_active_synapses: 0,
+            compact_readback_bytes: 0,
+            nonblocking_hot_path: true,
+            unavailable_reason: None,
+        }
+    }
+
+    pub fn cpu_fallback(tick_marker: u64, reason: impl Into<String>) -> Self {
+        Self {
+            unavailable_reason: Some(reason.into()),
+            timing_kind: "cpu-fallback-no-wgsl-dispatch",
+            ..Self::pending(tick_marker)
+        }
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    pub fn from_static_tick_report(
+        tick_marker: u64,
+        report: &alife_gpu_backend::FullGpuRuntimeStaticTickReport,
+    ) -> Self {
+        if let Some(reason) = report.backend.fallback_reason {
+            return Self::cpu_fallback(tick_marker, format!("{reason:?}"));
+        }
+        Self {
+            schema: CA32_REALTIME_WGSL_TELEMETRY_SCHEMA,
+            schema_version: CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
+            tick_marker,
+            timing_available: true,
+            timing_kind: "host-observed-active-wgsl-tick",
+            upload_ms: report.timing.upload_ms,
+            compute_submit_poll_ms: report.timing.gpu_submit_poll_ms,
+            compact_readback_ms: report.timing.compact_readback_ms,
+            cpu_shadow_ms: report.timing.cpu_shadow_ms,
+            total_gpu_runtime_ms: report.timing.total_gpu_runtime_ms,
+            routing_total_tiles: report.routing.total_tiles,
+            routing_active_tiles: report.routing.active_tiles,
+            routing_skipped_tiles: report.routing.skipped_tiles,
+            routing_active_synapses: report.routing.active_synapses,
+            compact_readback_bytes: report.readback.compact_readback_bytes,
+            nonblocking_hot_path: true,
+            unavailable_reason: None,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        if self.schema != CA32_REALTIME_WGSL_TELEMETRY_SCHEMA
+            || self.schema_version != CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION
+            || !self.nonblocking_hot_path
+            || self.timing_kind.is_empty()
+            || self.timing_kind.contains("full-action-authoritative")
+            || self.timing_kind.contains("Entity(")
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA32 realtime WGSL telemetry summary violated schema or boundary",
+            });
+        }
+        for value in [
+            self.upload_ms,
+            self.compute_submit_poll_ms,
+            self.compact_readback_ms,
+            self.cpu_shadow_ms,
+            self.total_gpu_runtime_ms,
+        ] {
+            alife_core::validate_finite(value)?;
+            if value < 0.0 {
+                return Err(GameAppShellError::VisibleWorldMismatch {
+                    message: "CA32 realtime WGSL telemetry timing must be non-negative",
+                });
+            }
+        }
+        if self.timing_available
+            && (self.routing_total_tiles == 0
+                || self.routing_active_tiles > self.routing_total_tiles
+                || self.routing_skipped_tiles > self.routing_total_tiles
+                || self.compact_readback_bytes == 0)
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message:
+                    "CA32 realtime WGSL telemetry requires routing counters and compact readback",
+            });
+        }
+        if let Some(reason) = &self.unavailable_reason {
+            if reason.contains("http://")
+                || reason.contains("https://")
+                || reason.contains("Entity(")
+            {
+                return Err(GameAppShellError::VisibleWorldMismatch {
+                    message: "CA32 realtime WGSL telemetry unavailable reason must stay local and stable-ID safe",
+                });
+            }
+        }
+        Ok(())
+    }
+
+    pub fn compact_line(&self) -> String {
+        if !self.timing_available {
+            return format!(
+                "WGSL: unavailable ({}) nonblocking=true",
+                self.unavailable_reason
+                    .as_deref()
+                    .unwrap_or(self.timing_kind)
+            );
+        }
+        format!(
+            "WGSL: tick={} up={:.2}ms compute={:.2}ms read={:.2}ms cpu={:.2}ms tiles={}/{} skip={} syn={} rb={}B",
+            self.tick_marker,
+            self.upload_ms,
+            self.compute_submit_poll_ms,
+            self.compact_readback_ms,
+            self.cpu_shadow_ms,
+            self.routing_active_tiles,
+            self.routing_total_tiles,
+            self.routing_skipped_tiles,
+            self.routing_active_synapses,
+            self.compact_readback_bytes
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct GraphicalGpuRuntimeTelemetry {
     pub requested_mode: GraphicalGpuRuntimeMode,
     pub selected_backend: String,
@@ -240,6 +396,7 @@ pub struct GraphicalGpuRuntimeTelemetry {
     pub compact_readback_bytes: usize,
     pub post_seal_readback_bytes: usize,
     pub total_gpu_runtime_ms: f32,
+    pub wgsl: RealtimeWgslTelemetrySummary,
     pub no_active_bulk_readback: bool,
     pub full_action_authoritative_claim: bool,
 }
@@ -265,6 +422,7 @@ impl GraphicalGpuRuntimeTelemetry {
             compact_readback_bytes: 0,
             post_seal_readback_bytes: 0,
             total_gpu_runtime_ms: 0.0,
+            wgsl: RealtimeWgslTelemetrySummary::pending(0),
             no_active_bulk_readback: true,
             full_action_authoritative_claim: false,
         }
@@ -291,6 +449,7 @@ impl GraphicalGpuRuntimeTelemetry {
             compact_readback_bytes: 0,
             post_seal_readback_bytes: 0,
             total_gpu_runtime_ms: 0.0,
+            wgsl: RealtimeWgslTelemetrySummary::cpu_fallback(0, "CpuReference"),
             no_active_bulk_readback: true,
             full_action_authoritative_claim: false,
         }
@@ -314,11 +473,12 @@ impl GraphicalGpuRuntimeTelemetry {
 
     pub fn overlay_lines(&self) -> String {
         format!(
-            "GPU detail: claim={} scores={} parity={} fail={}\nLearn: H_shadow apps={} active_readback={}B\nGate: CPU shadow; not full action-authoritative\nNo bulk neural readback={}",
+            "GPU detail: claim={} scores={} parity={} fail={}\n{}\nLearn: H_shadow apps={} active_readback={}B\nGate: CPU shadow; not full action-authoritative\nNo bulk neural readback={}",
             self.product_runtime_claim,
             self.gpu_scores_used_for_proposals,
             self.cpu_shadow_parity,
             self.parity_failures,
+            self.wgsl.compact_line(),
             self.h_shadow_applications,
             self.compact_readback_bytes,
             self.no_active_bulk_readback,
@@ -336,6 +496,7 @@ impl GraphicalGpuRuntimeTelemetry {
                 "Scores={} parity={} fail={}\n",
                 "H_shadow apps={} last={:.5}\n",
                 "Readback c={} post={}\n",
+                "{}\n",
                 "Gate: CPU shadow\n",
                 "No full action-authoritative claim"
             ),
@@ -350,10 +511,12 @@ impl GraphicalGpuRuntimeTelemetry {
             self.last_h_shadow_delta,
             self.compact_readback_bytes,
             self.post_seal_readback_bytes,
+            self.wgsl.compact_line(),
         )
     }
 
     pub fn validate(&self) -> Result<(), GameAppShellError> {
+        self.wgsl.validate()?;
         alife_core::validate_finite(self.last_h_shadow_delta)?;
         alife_core::validate_finite(self.total_gpu_runtime_ms)?;
         if self.full_action_authoritative_claim {
@@ -375,9 +538,116 @@ impl GraphicalGpuRuntimeTelemetry {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct RealtimeWgslTelemetrySmokeSummary {
+    pub schema: &'static str,
+    pub schema_version: u16,
+    pub requested_ticks: u32,
+    pub ticks_completed: u32,
+    pub telemetry: RealtimeWgslTelemetrySummary,
+    pub selected_backend: String,
+    pub fallback_reason: Option<String>,
+    pub cpu_shadow_gate: bool,
+    pub cpu_shadow_parity: bool,
+    pub gpu_scores_used_for_proposals: bool,
+    pub h_shadow_applications: u32,
+    pub no_active_bulk_readback: bool,
+    pub full_action_authoritative_claim: bool,
+    pub ui_summary: String,
+}
+
+impl RealtimeWgslTelemetrySmokeSummary {
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        self.telemetry.validate()?;
+        if self.schema != CA32_REALTIME_WGSL_TELEMETRY_SCHEMA
+            || self.schema_version != CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION
+            || self.requested_ticks == 0
+            || self.ticks_completed == 0
+            || self.ticks_completed > self.requested_ticks
+            || !self.cpu_shadow_gate
+            || !self.no_active_bulk_readback
+            || self.full_action_authoritative_claim
+            || self.ui_summary.contains("Entity(")
+            || self.ui_summary.contains("full action-authoritative")
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA32 realtime WGSL telemetry smoke violated boundary",
+            });
+        }
+        if self.gpu_scores_used_for_proposals && !self.cpu_shadow_parity {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA32 realtime WGSL telemetry must preserve CPU shadow gate",
+            });
+        }
+        if self.telemetry.timing_available
+            && (!self.ui_summary.contains("WGSL:")
+                || !self.ui_summary.contains("compute=")
+                || !self.ui_summary.contains("tiles="))
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA32 realtime WGSL telemetry UI summary must expose timing split and routing counters",
+            });
+        }
+        Ok(())
+    }
+}
+
+pub fn run_realtime_wgsl_telemetry_smoke(
+    launch: &AppShellLaunchConfig,
+    ticks: u32,
+) -> Result<RealtimeWgslTelemetrySmokeSummary, GameAppShellError> {
+    if ticks == 0 || ticks > S02_MAX_SMOKE_TICKS {
+        return Err(GameAppShellError::VisibleWorldMismatch {
+            message:
+                "CA32 realtime WGSL telemetry smoke ticks must stay in 1..=S02_MAX_SMOKE_TICKS",
+        });
+    }
+    let mut live = LiveBrainLoop::from_p34_launch(launch)?;
+    let mut controller =
+        GraphicalGpuRuntimeController::new(GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded);
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    let mut completed = 0_u32;
+    for _ in 0..ticks {
+        let (summary, motor_ring) = controller.tick_with_motor_ring(&mut live)?;
+        panel.record_tick(&summary);
+        panel.record_motor_ring(motor_ring)?;
+        panel.record_homeostasis(&live)?;
+        panel.record_topology_overlay(&live, std::slice::from_ref(&summary))?;
+        panel.record_memory_journal(&live, std::slice::from_ref(&summary))?;
+        panel.record_neural_profiler(&live, &[summary], Some(controller.telemetry()))?;
+        completed = completed.saturating_add(1);
+    }
+    let telemetry = controller.telemetry().clone();
+    let ui_summary = format!(
+        "{}\n{}",
+        telemetry.wgsl.compact_line(),
+        panel.neural_profiler.panel_text()
+    );
+    let summary = RealtimeWgslTelemetrySmokeSummary {
+        schema: CA32_REALTIME_WGSL_TELEMETRY_SCHEMA,
+        schema_version: CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
+        requested_ticks: ticks,
+        ticks_completed: completed,
+        telemetry: telemetry.wgsl.clone(),
+        selected_backend: telemetry.selected_backend,
+        fallback_reason: telemetry.fallback_reason,
+        cpu_shadow_gate: true,
+        cpu_shadow_parity: telemetry.cpu_shadow_parity,
+        gpu_scores_used_for_proposals: telemetry.gpu_scores_used_for_proposals,
+        h_shadow_applications: telemetry.h_shadow_applications,
+        no_active_bulk_readback: telemetry.no_active_bulk_readback,
+        full_action_authoritative_claim: telemetry.full_action_authoritative_claim,
+        ui_summary,
+    };
+    summary.validate()?;
+    Ok(summary)
+}
+
 #[derive(Debug)]
 pub struct GraphicalGpuRuntimeController {
     mode: GraphicalGpuRuntimeMode,
+    #[allow(dead_code)]
+    schema_initialized: bool,
     #[allow(dead_code)]
     h_shadow_applied_once: bool,
     telemetry: GraphicalGpuRuntimeTelemetry,
@@ -387,6 +657,7 @@ impl GraphicalGpuRuntimeController {
     pub fn new(mode: GraphicalGpuRuntimeMode) -> Self {
         Self {
             mode,
+            schema_initialized: false,
             h_shadow_applied_once: false,
             telemetry: GraphicalGpuRuntimeTelemetry::pending(mode),
         }
@@ -484,8 +755,9 @@ impl GraphicalGpuRuntimeController {
             live.current_context_proposals()?
         };
 
-        if gpu_available && !self.h_shadow_applied_once {
+        if gpu_available && !self.schema_initialized && live.mind().current_tick().raw() == 0 {
             live.initialize_neural_projection_schema(full_gpu_runtime_live_plasticity_schema()?)?;
+            self.schema_initialized = true;
         }
         let motor_ring = MotorRingPresentation::from_proposals(live.organism_id(), &proposals)?;
         let tick = live.tick_with_proposals_detailed(proposals, !gpu_available);
@@ -493,6 +765,7 @@ impl GraphicalGpuRuntimeController {
         if gpu_available
             && gpu_scores_used
             && tick.summary.patch_sealed
+            && self.schema_initialized
             && !self.h_shadow_applied_once
             && post_seal_gpu_plasticity_diagnostic_enabled()
         {
@@ -539,6 +812,10 @@ impl GraphicalGpuRuntimeController {
             compact_readback_bytes: static_report.readback.compact_readback_bytes,
             post_seal_readback_bytes: post_seal_readback,
             total_gpu_runtime_ms: static_report.timing.total_gpu_runtime_ms,
+            wgsl: RealtimeWgslTelemetrySummary::from_static_tick_report(
+                tick.summary.tick_after.raw(),
+                &static_report,
+            ),
             no_active_bulk_readback: static_report.readback.bulk_neural_readback_forbidden,
             full_action_authoritative_claim: false,
         };
