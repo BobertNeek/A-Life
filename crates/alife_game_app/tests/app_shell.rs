@@ -17,29 +17,29 @@ use alife_game_app::{
     run_homeostasis_runtime_smoke, run_internal_slm_prior_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
     run_longrun_balance_with_config, run_memory_history_journal_smoke,
-    run_motor_ring_arbitration_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke,
-    run_real_semantic_provider_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig,
-    BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget, CameraNavigationState,
-    ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
-    CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
-    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest,
-    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
-    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
-    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
-    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
-    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    run_motor_ring_arbitration_smoke, run_neural_activity_profiler_smoke,
+    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_real_semantic_provider_smoke, run_release_candidate_smoke,
+    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler,
+    EcologicalSoakConfig, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    InspectorControlPanel, LessonManifest, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
+    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
+    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
@@ -51,6 +51,7 @@ use alife_game_app::{
     CA27_INTERNAL_SLM_PRIOR_SCHEMA, CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION,
     CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
     CA29_MEMORY_HISTORY_JOURNAL_SCHEMA, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION,
+    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -3777,6 +3778,58 @@ fn ca29_memory_history_journal_cannot_replay_actions_or_mutate_cognition() {
     assert!(summary
         .panel_text
         .contains("Save/load: stable memory IDs visible"));
+    assert!(!summary.panel_text.contains("full action-authoritative"));
+}
+
+#[test]
+fn ca30_neural_activity_profiler_shows_lobes_tiles_and_route_status() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_neural_activity_profiler_smoke(&launch).unwrap();
+
+    assert_eq!(
+        summary.snapshot.schema,
+        CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA
+    );
+    assert_eq!(
+        summary.snapshot.schema_version,
+        CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION
+    );
+    assert!(summary.snapshot.neuron_count >= 512);
+    assert!(!summary.snapshot.lobe_rows.is_empty());
+    assert!(summary.snapshot.tile_summary.max_active_tiles > 0);
+    assert!(summary.snapshot.tile_summary.max_active_synapses > 0);
+    assert!(summary.snapshot.route_status.cpu_shadow_gate);
+    assert!(summary.panel_text.contains("Neural Profiler (compact)"));
+    assert!(summary.panel_text.contains("tiles "));
+    assert!(summary.panel_text.contains("route "));
+    assert!(summary.status_text.contains("Neural:"));
+    assert!(!summary.panel_text.contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca30_neural_activity_profiler_blocks_bulk_readback_and_action_authority() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_neural_activity_profiler_smoke(&launch).unwrap();
+
+    assert!(summary.snapshot.read_only);
+    assert!(summary.snapshot.compact_summary_only);
+    assert!(summary.snapshot.offline_export_boundary);
+    assert!(!summary.snapshot.active_bulk_readback_allowed);
+    assert!(!summary.snapshot.can_emit_actions);
+    assert!(!summary.snapshot.can_mutate_weights);
+    assert!(
+        !summary
+            .snapshot
+            .route_status
+            .full_action_authoritative_claim
+    );
+    assert!(summary.bulk_readback_blocked);
+    assert!(summary.action_authority_blocked);
+    assert!(summary.weight_mutation_blocked);
+    assert!(summary
+        .panel_text
+        .contains("Boundary: compact summary; offline export only"));
     assert!(!summary.panel_text.contains("full action-authoritative"));
 }
 

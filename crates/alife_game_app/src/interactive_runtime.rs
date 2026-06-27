@@ -56,6 +56,7 @@ pub struct RuntimeControlPanel {
     pub homeostasis: HomeostasisRuntimePresentation,
     pub topology_overlay: TopologicalConceptOverlaySnapshot,
     pub memory_journal: CreatureMemoryHistoryJournalSnapshot,
+    pub neural_profiler: NeuralActivityProfilerSnapshot,
     pub direct_cognition_mutation_allowed: bool,
 }
 
@@ -105,6 +106,13 @@ impl RuntimeControlPanel {
                         live.mind().current_tick(),
                     )
                 }),
+            neural_profiler: NeuralActivityProfilerSnapshot::from_live_loop(live, &[], None)
+                .unwrap_or_else(|_| {
+                    NeuralActivityProfilerSnapshot::pending(
+                        live.organism_id(),
+                        live.mind().current_tick(),
+                    )
+                }),
             direct_cognition_mutation_allowed: false,
         }
     }
@@ -132,6 +140,7 @@ impl RuntimeControlPanel {
         self.homeostasis.validate()?;
         self.topology_overlay.validate()?;
         self.memory_journal.validate()?;
+        self.neural_profiler.validate()?;
         Ok(())
     }
 
@@ -192,6 +201,7 @@ impl RuntimeControlPanel {
         self.record_homeostasis(live)?;
         self.record_topology_overlay(live, &summaries)?;
         self.record_memory_journal(live, &summaries)?;
+        self.record_neural_profiler(live, &summaries, None)?;
         self.validate()?;
         Ok(summaries)
     }
@@ -218,6 +228,7 @@ impl RuntimeControlPanel {
         self.record_homeostasis(live)?;
         self.record_topology_overlay(live, &summaries)?;
         self.record_memory_journal(live, &summaries)?;
+        self.record_neural_profiler(live, &summaries, None)?;
         self.validate()?;
         Ok(summaries)
     }
@@ -306,6 +317,7 @@ impl RuntimeControlPanel {
                 "{}\n",
                 "{}\n",
                 "{}\n",
+                "{}\n",
                 "{}"
             ),
             self.playback.label(),
@@ -324,6 +336,7 @@ impl RuntimeControlPanel {
             self.homeostasis.compact_line(),
             self.topology_overlay.compact_line(),
             self.memory_journal.compact_line(),
+            self.neural_profiler.compact_line(),
             self.homeostasis.modulation_line(),
             self.motor_ring.compact_line(),
             terminal_line,
@@ -346,7 +359,7 @@ impl RuntimeControlPanel {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}:{}:{}:{}",
+            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}:{}:{}:{}:{}",
             self.schema,
             self.schema_version,
             self.playback.label(),
@@ -361,7 +374,8 @@ impl RuntimeControlPanel {
             self.motor_ring.signature_line(),
             self.homeostasis.signature_line(),
             self.topology_overlay.signature_line(),
-            self.memory_journal.signature_line()
+            self.memory_journal.signature_line(),
+            self.neural_profiler.signature_line()
         )
     }
 
@@ -493,6 +507,17 @@ impl RuntimeControlPanel {
             CreatureMemoryHistoryJournalSnapshot::from_live_loop(live, recent_summaries)?;
         snapshot.preserve_previous_patches_if_empty(&previous_patches)?;
         self.memory_journal = snapshot;
+        Ok(())
+    }
+
+    pub fn record_neural_profiler(
+        &mut self,
+        live: &LiveBrainLoop,
+        recent_summaries: &[LiveBrainTickSummary],
+        gpu: Option<&GraphicalGpuRuntimeTelemetry>,
+    ) -> Result<(), GameAppShellError> {
+        self.neural_profiler =
+            NeuralActivityProfilerSnapshot::from_live_loop(live, recent_summaries, gpu)?;
         Ok(())
     }
 
