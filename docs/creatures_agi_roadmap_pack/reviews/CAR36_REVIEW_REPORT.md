@@ -188,3 +188,105 @@ No fix prompt is required. There are no blocker, high, or medium findings.
 
 Stop for user/ChatGPT consultation at CAR36. If this review is accepted, the
 next manifest item is CA37 - Terrain, props, and world art style pass.
+
+## CONSULTATION_PACKET
+
+### Commits
+
+- CA32 merge: `5ea1ea9` - Merge CA32 real-time WGSL telemetry.
+- CA33 merge: `f39b5f0` - Merge CA33 batched multi-creature GPU runtime.
+- CA34 merge: `1763ec8` - Merge CA34 sampled CPU-shadow graduation experiment.
+- CA35 merge: `06db66c` - Merge CA35 property fuzz CPU GPU parity gating.
+- CA36 merge: `38cc3d5` - Merge CA36 multi-hour soak isolation protocol.
+- CAR36 merge: `a6f1f5c` - Merge CAR36 performance parity review.
+
+### Files Changed In Reviewed Tranche
+
+- `crates/alife_game_app/src/bin/alife_game_app.rs`
+- `crates/alife_game_app/src/gpu_live_runtime.rs`
+- `crates/alife_game_app/src/lib.rs`
+- `crates/alife_game_app/src/live_brain_bridge.rs`
+- `crates/alife_game_app/src/neural_activity_profiler.rs`
+- `crates/alife_game_app/src/schema.rs`
+- `crates/alife_game_app/src/soak_isolation.rs`
+- `crates/alife_game_app/tests/app_shell.rs`
+- `crates/alife_gpu_backend/src/full_runtime.rs`
+- `crates/alife_gpu_backend/tests/property_fuzz_parity_gating.rs`
+- `docs/creatures_agi_roadmap_pack/status/CA32_REALTIME_WGSL_TELEMETRY.md`
+- `docs/creatures_agi_roadmap_pack/status/CA33_BATCHED_MULTI_CREATURE_GPU_RUNTIME.md`
+- `docs/creatures_agi_roadmap_pack/status/CA34_SAMPLED_CPU_SHADOW_GRADUATION.md`
+- `docs/creatures_agi_roadmap_pack/status/CA35_PROPERTY_FUZZ_CPU_GPU_PARITY.md`
+- `docs/creatures_agi_roadmap_pack/status/CA36_MULTI_HOUR_SOAK_ISOLATION.md`
+- `docs/creatures_agi_roadmap_pack/reviews/CAR36_REVIEW_REPORT.md`
+- `docs/creatures_agi_roadmap_pack/status/ROADMAP_PROGRESS.md`
+
+### Validation
+
+- CA32-CA36 focused review checks passed.
+- GPU runtime and GPU timing benchmark commands passed and wrote only untracked
+  `target/artifacts/` reports.
+- Graphical GPU smoke passed with `GpuPlastic`, fallback `None`, GPU scores
+  enabled, CPU shadow parity true, and stable IDs true.
+- Forced fallback graphical smoke passed with `CpuReference`,
+  `HardwareUnavailable`, GPU claim `None`, and fallback visible.
+- Full validation passed on the CAR36 branch and again after merging CAR36 to
+  `main`.
+- `main` was pushed clean at `a6f1f5c`.
+
+### Known Limitations
+
+- Multi-hour soak execution is documented but remains manual/operator-run.
+- Local RTX 3050/Vulkan results are local evidence only, not cross-machine GPU
+  performance proof.
+- CA34 sampled CPU-shadow mode is not full action-authoritative GPU runtime.
+- CA37 has not started.
+
+### Disputed Decisions
+
+None. The only review notes are LOW and accepted as evidence boundaries:
+
+- Manual multi-hour soak remains outside normal validation.
+- Sampled CPU-shadow wording must remain non-authoritative.
+
+### Next-Plan Recommendation
+
+If ChatGPT/user consultation accepts CAR36, proceed to CA37 - Terrain, props,
+and world art style pass. CA37 should stay scoped to app/assets/docs, tiny
+versioned assets or procedural shapes, readable color language, asset manifest
+validation, and no release or action-authority claims.
+
+### Exact Prompt Requested From User/ChatGPT
+
+```text
+Review CAR36 for the A-Life Creatures-to-AGI roadmap.
+
+CAR36 verdict: PASS_WITH_NOTES.
+
+Scope reviewed: CA32 real-time WGSL telemetry, CA33 batched multi-creature GPU runtime, CA34 sampled CPU-shadow graduation experiment, CA35 property-fuzz CPU/GPU parity gating, and CA36 multi-hour soak isolation.
+
+Key evidence:
+- CA32 telemetry selected GpuPlastic with CPU shadow gate true, parity true, compact readback 64B, no bulk readback, and no full action-authoritative claim.
+- CA33 batched GPU runtime selected RTX 3050/Vulkan GpuPlastic, checked CPU shadow every creature/tick, had zero parity failures, applied H_shadow updates, and kept full_action_authoritative_claim=false.
+- CA34 sampled GPU runtime selected GpuPlastic, used cpu_shadow_every=2, had zero parity failures, and used the bounded claim SampledCpuShadowGuardedStaticPlusLiveHShadow.
+- CA35 property fuzz parity tests passed.
+- CA36 soak isolation protocol records 10k+/multi-hour manual commands and keeps artifacts under target/.
+- Graphical GPU smoke and forced CPU fallback smoke passed.
+- Full validation passed before and after merge.
+
+Findings:
+- No BLOCKER/HIGH/MEDIUM findings.
+- LOW: multi-hour soak remains manual/operator-run.
+- LOW: sampled CPU-shadow wording must not be promoted to full action-authoritative GPU runtime.
+
+Invariants:
+- No S12/G25/P37.
+- No release tag.
+- No tracked screenshots/logs/target/model artifacts.
+- alife_core remains dependency-clean.
+- CPU fallback and CPU shadow parity remain.
+- No active bulk neural readback.
+- No fake providers or paid/cloud APIs.
+
+Question:
+Do you accept CAR36 and authorize CA37 - Terrain, props, and world art style pass?
+```
