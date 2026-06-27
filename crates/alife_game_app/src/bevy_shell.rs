@@ -284,6 +284,9 @@ pub struct GraphicalLifecycleOverlay;
 pub struct GraphicalSchoolOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTopologyOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalTeacherCueMarker {
     pub stable_id: WorldEntityId,
 }
@@ -570,6 +573,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_population_overlay,
                 update_graphical_ecology_overlay,
                 update_graphical_lifecycle_overlay,
+                update_graphical_topology_overlay,
                 update_graphical_boundary_footer_overlay,
                 update_graphical_save_load_menu_overlay,
                 update_graphical_advanced_gameplay_overlay,
@@ -905,6 +909,28 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.035, 0.022, 0.052, 0.80)),
         GraphicalSchoolOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA28 topological concept overlay"),
+        Text::new(
+            "Concept Map (read-only)\nnodes=0 edges=0 gaps=0 tick=0\nnode: waiting for sealed topology update\nedge: pending concept relation\ngap: none open\nevent link: pending sealed behavior\nBoundary: bias/context only; no actions",
+        ),
+        TextFont {
+            font_size: 11.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.74, 1.0, 0.92)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(362.0),
+            right: Val::Px(12.0),
+            max_width: Val::Px(380.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.012, 0.036, 0.032, 0.84)),
+        GraphicalTopologyOverlay,
     ));
 
     app.world_mut().spawn((
@@ -1832,6 +1858,7 @@ fn apply_graphical_runtime_command(
             let (summary, motor_ring) = live_loop.gpu.tick_with_motor_ring(&mut live_loop.live)?;
             panel.record_motor_ring(motor_ring)?;
             panel.record_tick(&summary);
+            panel.record_topology_overlay(&live_loop.live, std::slice::from_ref(&summary))?;
             panel
                 .scheduler
                 .record_executed_ticks(crate::executed_live_tick_count(std::slice::from_ref(
@@ -1859,6 +1886,7 @@ fn apply_graphical_runtime_command(
                 panel.record_tick(&summary);
                 summaries.push(summary);
             }
+            panel.record_topology_overlay(&live_loop.live, &summaries)?;
             panel
                 .scheduler
                 .record_executed_ticks(crate::executed_live_tick_count(&summaries))?;
@@ -2055,6 +2083,15 @@ fn update_graphical_lifecycle_overlay(
     };
     for mut text in &mut overlays {
         text.0 = ca20_lifecycle_overlay_text(&lifecycle.summary);
+    }
+}
+
+fn update_graphical_topology_overlay(
+    runtime: Res<GraphicalRuntimeControlsResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalTopologyOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = runtime.panel.topology_overlay.panel_text();
     }
 }
 

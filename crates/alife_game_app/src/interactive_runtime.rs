@@ -54,6 +54,7 @@ pub struct RuntimeControlPanel {
     pub scheduler: DoubleBufferedGraphicalScheduler,
     pub motor_ring: MotorRingPresentation,
     pub homeostasis: HomeostasisRuntimePresentation,
+    pub topology_overlay: TopologicalConceptOverlaySnapshot,
     pub direct_cognition_mutation_allowed: bool,
 }
 
@@ -89,6 +90,13 @@ impl RuntimeControlPanel {
                     )
                 },
             ),
+            topology_overlay: TopologicalConceptOverlaySnapshot::from_live_loop(live, &[])
+                .unwrap_or_else(|_| {
+                    TopologicalConceptOverlaySnapshot::pending(
+                        live.organism_id(),
+                        live.mind().current_tick(),
+                    )
+                }),
             direct_cognition_mutation_allowed: false,
         }
     }
@@ -114,6 +122,7 @@ impl RuntimeControlPanel {
         self.scheduler.validate()?;
         self.motor_ring.validate()?;
         self.homeostasis.validate()?;
+        self.topology_overlay.validate()?;
         Ok(())
     }
 
@@ -172,6 +181,7 @@ impl RuntimeControlPanel {
             .record_executed_ticks(executed_live_tick_count(&summaries))?;
         self.mind_tick = live.mind().current_tick().raw();
         self.record_homeostasis(live)?;
+        self.record_topology_overlay(live, &summaries)?;
         self.validate()?;
         Ok(summaries)
     }
@@ -196,6 +206,7 @@ impl RuntimeControlPanel {
             .record_executed_ticks(executed_live_tick_count(&summaries))?;
         self.mind_tick = live.mind().current_tick().raw();
         self.record_homeostasis(live)?;
+        self.record_topology_overlay(live, &summaries)?;
         self.validate()?;
         Ok(summaries)
     }
@@ -282,6 +293,7 @@ impl RuntimeControlPanel {
                 "{}\n",
                 "{}\n",
                 "{}\n",
+                "{}\n",
                 "{}"
             ),
             self.playback.label(),
@@ -298,6 +310,7 @@ impl RuntimeControlPanel {
             self.last_patch_sealed,
             self.sealed_patch_count,
             self.homeostasis.compact_line(),
+            self.topology_overlay.compact_line(),
             self.homeostasis.modulation_line(),
             self.motor_ring.compact_line(),
             terminal_line,
@@ -320,7 +333,7 @@ impl RuntimeControlPanel {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}:{}",
+            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}:{}:{}",
             self.schema,
             self.schema_version,
             self.playback.label(),
@@ -333,7 +346,8 @@ impl RuntimeControlPanel {
             self.packed_record_count,
             self.scheduler.signature_line(),
             self.motor_ring.signature_line(),
-            self.homeostasis.signature_line()
+            self.homeostasis.signature_line(),
+            self.topology_overlay.signature_line()
         )
     }
 
@@ -403,6 +417,12 @@ impl RuntimeControlPanel {
         } else {
             self.push_player_event("Patch not sealed; press R if simulation stops.".to_string());
         }
+        if summary.topology_updates > 0 {
+            self.push_player_event(format!(
+                "Concept map updated from sealed patch; topology+{} bias-only.",
+                summary.topology_updates
+            ));
+        }
     }
 
     pub fn record_terminal_recovery(&mut self, cause: impl Into<String>) {
@@ -433,6 +453,19 @@ impl RuntimeControlPanel {
 
     pub fn record_homeostasis(&mut self, live: &LiveBrainLoop) -> Result<(), GameAppShellError> {
         self.homeostasis = HomeostasisRuntimePresentation::from_live_loop(live)?;
+        Ok(())
+    }
+
+    pub fn record_topology_overlay(
+        &mut self,
+        live: &LiveBrainLoop,
+        recent_summaries: &[LiveBrainTickSummary],
+    ) -> Result<(), GameAppShellError> {
+        let previous_event_links = self.topology_overlay.event_links.clone();
+        let mut snapshot =
+            TopologicalConceptOverlaySnapshot::from_live_loop(live, recent_summaries)?;
+        snapshot.preserve_previous_event_links_if_empty(&previous_event_links)?;
+        self.topology_overlay = snapshot;
         Ok(())
     }
 

@@ -10,12 +10,13 @@ mod prelude {
     pub(crate) use alife_core::{
         cpu_reference_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId, ActionKind,
         ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput, BrainTickStatus,
-        ChemistryModulation, ConceptCellId, Confidence, CreatureMind, DurationTicks,
-        ExperiencePatch, GaussianClusterId, GenomeId, HomeostaticParameters, HomeostaticSnapshot,
-        Intensity, LineageId, NeuralProjectionSchema, NormalizedScalar, OrganismId,
-        PhysicalContactKind, PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt,
-        ReferenceActionFailure, ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel,
-        TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
+        ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence, CreatureMind,
+        DurationTicks, EdgeRelationKind, ExperiencePatch, GapResolutionStatus, GaussianClusterId,
+        GenomeId, HomeostaticParameters, HomeostaticSnapshot, Intensity, LineageId,
+        NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
+        PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, ReferenceActionFailure,
+        ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel, TeacherPerceptionChannel,
+        Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
         Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -160,6 +161,9 @@ pub use real_semantic_provider::*;
 
 mod internal_slm_prior;
 pub use internal_slm_prior::*;
+
+mod topological_concept_overlay;
+pub use topological_concept_overlay::*;
 
 mod advanced_gameplay_ux;
 pub use advanced_gameplay_ux::*;
