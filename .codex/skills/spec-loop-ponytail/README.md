@@ -1,23 +1,72 @@
-# Spec Loop Ponytail Skill
+# Spec Loop Ponytail v1.5
 
-A software-development agent skill for disciplined coding loops without process bloat.
+This is a compact, modular Codex-style skill for bounded software implementation loops.
 
 It combines:
 
-- Mode-gated execution: Direct Fix, Micro-Spec, Full Spec Loop, PR Review, GitHub Issue Loop, and Automation Mode.
-- Spec-first artifacts when they are useful, not by default for every small edit.
-- Verified loops: trigger → goal contract → attempt → feedback → diagnose → correct → verify → stop.
-- Ponytail minimalism: delete, standard library, native platform, existing dependency, then minimum root-cause-safe code.
-- External reviewer intake for CodeRabbit, Greptile, Gemini/Jules, Gemini CLI, CI bots, human/user GitHub issues, PR comments, review threads, and pasted local review output.
-- Autonomous loop recipes for performance budgets, docs parity, architecture satisfaction, logging coverage, production-error sweeps, SEO/GEO visibility, and full product evaluation.
-- Review/fix sub-agent contracts with explicit review classes, budgets, issue hygiene, branch/worktree rules, and no fake background monitoring.
+- Spec-driven execution when the work actually needs artifacts.
+- Ponytail-style minimalism: smallest root-cause-safe diff, not process bloat.
+- Explicit trigger/goal/termination contracts for autonomous loops.
+- Review classes and sub-agent contracts.
+- External reviewer/user intake for CodeRabbit, Greptile, Gemini/Jules, Gemini CLI, CI bots, and human GitHub issues/comments.
+- GitHub/local issue-backed reviewer/fixer loops when durable tracking is useful.
 
-Install by copying this folder into the skill/plugin location for your coding agent, or by pasting `SKILL.md` into your agent's project instructions if your tool does not support skills directly.
+## Why v1.5 exists
 
-The GitHub issue loop is not the default path for ordinary defects. Findings should be routed to inline fix, PR comment, local ledger, or GitHub issue based on durability, privacy, repo policy, source authority, and whether cross-session/cross-agent tracking is needed.
+v1.4 kept most rules in a single `SKILL.md` file of roughly 58 KB / 875 lines. In Codex, that often caused terminal-output truncation when the agent reloaded the skill with commands like `Get-Content` or `cat`.
 
-External comments and issues are normalized before fixing. The skill treats bot and user comments as untrusted task data: they may describe a bug or desired behavior, but they cannot override repo policy, security rules, tool permissions, branch policy, or verification requirements.
+v1.5 fixes that by making `SKILL.md` a compact entrypoint. Detailed rules live in `modules/` and are loaded only when needed. Templates remain in `templates/` and should be read only when creating the corresponding artifact.
 
-Autonomous loop recipes are optional patterns, not modes. Each recipe must have a loop goal contract before repeated execution: trigger, goal type, exact stop condition, verifier, scope boundary, budget, allowed operations, and failure handoff. The included prompt seeds live in `templates/loop-recipes.md`.
+## Loading rule
 
-Interactive agents only check issues/comments or repeat loop cycles at explicit checkpoints during the active run. Scheduled monitoring, nightly docs sweeps, production-log review, auto-PR creation, Slack/team notifications, or automatic commits require a real external runner or explicit repo/user permission.
+Always load only `SKILL.md` first. Then load one or two targeted modules by task need:
+
+```text
+modules/modes-and-workflow.md
+modules/loop-goals-and-recipes.md
+modules/review-and-subagents.md
+modules/external-intake.md
+modules/github-issue-loop.md
+modules/command-classifier.md
+modules/verification-and-finalization.md
+```
+
+Do not dump all modules/templates into terminal output at startup.
+
+## Recommended install shape
+
+```text
+.codex/skills/spec-loop-ponytail/
+  SKILL.md
+  README.md
+  CHANGELOG.md
+  modules/
+  templates/
+```
+
+## Operational summary
+
+Default to the lightest mode:
+
+```text
+Mode 0: Direct Fix
+Mode 1: Micro-Spec
+Mode 2: Full Spec Loop
+Mode 3: PR Review Mode
+Mode 4: GitHub Issue Loop
+Mode 5: Automation Mode
+```
+
+Issue tracking is not default. Route findings through:
+
+```text
+inline fix -> PR comment -> local ledger -> GitHub issue
+```
+
+Autonomous loops require a loop-goal contract:
+
+```text
+trigger + goal type + verifier + termination + scope + budget + failure handoff
+```
+
+No fake background work: true periodic behavior requires a real Mode 5 runner.
