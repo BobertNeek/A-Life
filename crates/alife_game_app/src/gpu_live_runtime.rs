@@ -649,6 +649,50 @@ impl BatchedGpuRuntimeOptions {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SampledGpuRuntimeOptions {
+    pub max_creatures: usize,
+    pub ticks: u32,
+    pub warmup_ticks: u32,
+    pub cpu_shadow_every: u32,
+    pub json_path: Option<PathBuf>,
+}
+
+impl Default for SampledGpuRuntimeOptions {
+    fn default() -> Self {
+        Self {
+            max_creatures: CA33_MAX_BATCH_CREATURES,
+            ticks: 4,
+            warmup_ticks: 1,
+            cpu_shadow_every: 2,
+            json_path: None,
+        }
+    }
+}
+
+impl SampledGpuRuntimeOptions {
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        if self.max_creatures < 2
+            || self.max_creatures > CA33_MAX_BATCH_CREATURES
+            || self.ticks == 0
+            || self.ticks > CA34_MAX_SAMPLED_TICKS
+            || self.warmup_ticks == 0
+            || self.warmup_ticks > self.ticks
+            || self.cpu_shadow_every < 2
+            || self.cpu_shadow_every > CA34_MAX_SAMPLED_TICKS
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA34 sampled GPU runtime requires bounded manual ticks, warmup, and sample interval >= 2",
+            });
+        }
+        Ok(())
+    }
+
+    pub fn should_check_cpu_shadow(&self, tick_index: u32) -> bool {
+        tick_index < self.warmup_ticks || tick_index.is_multiple_of(self.cpu_shadow_every)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BatchedGpuRuntimeSummary {
     pub schema: &'static str,
@@ -689,6 +733,138 @@ pub struct BatchedGpuRuntimeSummary {
     pub no_active_bulk_readback: bool,
     pub stable_id_only: bool,
     pub per_creature: Vec<BatchedGpuRuntimeCreatureSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SampledGpuRuntimeCreatureSummary {
+    pub stable_id: WorldEntityId,
+    pub organism_id: OrganismId,
+    pub selected_backend: String,
+    pub fallback_reason: Option<String>,
+    pub gpu_scores_used_for_proposals: u32,
+    pub cpu_shadow_checks: u32,
+    pub cpu_shadow_skipped: u32,
+    pub parity_failures: u32,
+    pub first_parity_failure_tick: Option<u32>,
+    pub sealed_patches: usize,
+    pub post_seal_hshadow_applications: u32,
+    pub h_shadow_delta_records: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SampledGpuRuntimeSummary {
+    pub schema: &'static str,
+    pub schema_version: u16,
+    pub requested_mode: String,
+    pub batch_size: usize,
+    pub max_batch_size: usize,
+    pub ticks_run: u32,
+    pub warmup_ticks: u32,
+    pub cpu_shadow_every: u32,
+    pub sampled_cpu_shadow_enabled: bool,
+    pub fallback_on_first_failure: bool,
+    pub selected_backend: String,
+    pub fallback_reason: Option<String>,
+    pub hardware_identifier: Option<String>,
+    pub shared_gpu_session: bool,
+    pub gpu_static_dispatched_creatures: u32,
+    pub gpu_proposal_creatures: u32,
+    pub cpu_shadow_checks: u32,
+    pub cpu_shadow_skipped_creatures: u32,
+    pub parity_failures: u32,
+    pub first_parity_failure_tick: Option<u32>,
+    pub forced_cpu_after_failure: bool,
+    pub fallback_creatures: u32,
+    pub compact_readback_bytes: usize,
+    pub post_seal_readback_bytes: usize,
+    pub post_seal_hshadow_applications: u32,
+    pub h_shadow_delta_records: u32,
+    pub max_h_shadow_abs_delta: f32,
+    pub w_genetic_fixed_unchanged: bool,
+    pub lifetime_consolidated_unchanged: bool,
+    pub h_operational_unchanged: bool,
+    pub total_upload_ms: f32,
+    pub total_submit_poll_ms: f32,
+    pub total_compact_readback_ms: f32,
+    pub total_post_seal_readback_ms: f32,
+    pub total_cpu_shadow_ms: f32,
+    pub product_runtime_claim: String,
+    pub full_action_authoritative_claim: bool,
+    pub no_active_bulk_readback: bool,
+    pub stable_id_only: bool,
+    pub per_creature: Vec<SampledGpuRuntimeCreatureSummary>,
+}
+
+impl SampledGpuRuntimeSummary {
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        if self.schema != CA34_SAMPLED_GPU_RUNTIME_SCHEMA
+            || self.schema_version != CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION
+            || self.batch_size < 2
+            || self.batch_size > self.max_batch_size
+            || self.max_batch_size > CA33_MAX_BATCH_CREATURES
+            || self.ticks_run == 0
+            || self.ticks_run > CA34_MAX_SAMPLED_TICKS
+            || self.warmup_ticks == 0
+            || self.warmup_ticks > self.ticks_run
+            || self.cpu_shadow_every < 2
+            || !self.sampled_cpu_shadow_enabled
+            || !self.fallback_on_first_failure
+            || !self.shared_gpu_session
+            || !self.no_active_bulk_readback
+            || !self.stable_id_only
+            || self.full_action_authoritative_claim
+            || self.per_creature.len() != self.batch_size
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA34 sampled GPU runtime summary violated scope or boundary",
+            });
+        }
+        alife_core::validate_finite(self.max_h_shadow_abs_delta)?;
+        if self.parity_failures > 0
+            && (self.first_parity_failure_tick.is_none() || !self.forced_cpu_after_failure)
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message:
+                    "CA34 sampled parity failure must record first failure and force CPU fallback",
+            });
+        }
+        if self.selected_backend != "CpuReference"
+            && self.parity_failures == 0
+            && self.cpu_shadow_skipped_creatures == 0
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message:
+                    "CA34 sampled mode must skip at least one CPU shadow check when GPU is active",
+            });
+        }
+        if self.post_seal_hshadow_applications > 0
+            && (!self.w_genetic_fixed_unchanged
+                || !self.lifetime_consolidated_unchanged
+                || !self.h_operational_unchanged
+                || self.h_shadow_delta_records == 0)
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA34 sampled H_shadow application must preserve fixed layers",
+            });
+        }
+        if self.product_runtime_claim == "FullActionAuthoritative"
+            || self.product_runtime_claim == "ActionAuthoritative"
+        {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "CA34 must not claim full action-authoritative GPU runtime",
+            });
+        }
+        Ok(())
+    }
+
+    pub fn write_json(&self, path: impl AsRef<Path>) -> Result<(), GameAppShellError> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, serde_json::to_string_pretty(self)?)?;
+        Ok(())
+    }
 }
 
 impl BatchedGpuRuntimeSummary {
@@ -844,6 +1020,86 @@ pub fn run_batched_gpu_runtime_smoke(
         parity_failures: 0,
         fallback_creatures: targets.len() as u32,
         plasticity_dispatched_creatures: 0,
+        post_seal_hshadow_applications: 0,
+        h_shadow_delta_records: 0,
+        max_h_shadow_abs_delta: 0.0,
+        w_genetic_fixed_unchanged: true,
+        lifetime_consolidated_unchanged: true,
+        h_operational_unchanged: true,
+        total_upload_ms: 0.0,
+        total_submit_poll_ms: 0.0,
+        total_compact_readback_ms: 0.0,
+        total_post_seal_readback_ms: 0.0,
+        total_cpu_shadow_ms: 0.0,
+        product_runtime_claim: "None".to_string(),
+        full_action_authoritative_claim: false,
+        no_active_bulk_readback: true,
+        stable_id_only: true,
+        per_creature,
+    };
+    summary.validate()?;
+    if let Some(path) = options.json_path {
+        summary.write_json(path)?;
+    }
+    Ok(summary)
+}
+
+#[cfg(not(feature = "gpu-runtime"))]
+pub fn run_sampled_gpu_runtime_smoke(
+    launch: &AppShellLaunchConfig,
+    options: SampledGpuRuntimeOptions,
+) -> Result<SampledGpuRuntimeSummary, GameAppShellError> {
+    options.validate()?;
+    let targets = ca33_batch_targets(launch, options.max_creatures)?;
+    let mut per_creature = Vec::with_capacity(targets.len());
+    for target in &targets {
+        let mut live = LiveBrainLoop::from_p34_launch_for_organism(launch, target.organism_id)?;
+        let summaries = live.update(LiveBrainTickControl::run_fixed(options.ticks))?;
+        let last = summaries
+            .last()
+            .ok_or(GameAppShellError::VisibleWorldMismatch {
+                message: "CA34 CPU fallback sampled batch did not tick a creature",
+            })?;
+        per_creature.push(SampledGpuRuntimeCreatureSummary {
+            stable_id: target.stable_id,
+            organism_id: target.organism_id,
+            selected_backend: "CpuReference".to_string(),
+            fallback_reason: Some("FeatureDisabled".to_string()),
+            gpu_scores_used_for_proposals: 0,
+            cpu_shadow_checks: 0,
+            cpu_shadow_skipped: 0,
+            parity_failures: 0,
+            first_parity_failure_tick: None,
+            sealed_patches: last.sealed_patch_count,
+            post_seal_hshadow_applications: 0,
+            h_shadow_delta_records: 0,
+        });
+    }
+    let summary = SampledGpuRuntimeSummary {
+        schema: CA34_SAMPLED_GPU_RUNTIME_SCHEMA,
+        schema_version: CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
+        requested_mode: "sampled-cpu-shadow-guarded".to_string(),
+        batch_size: targets.len(),
+        max_batch_size: options.max_creatures,
+        ticks_run: options.ticks,
+        warmup_ticks: options.warmup_ticks,
+        cpu_shadow_every: options.cpu_shadow_every,
+        sampled_cpu_shadow_enabled: true,
+        fallback_on_first_failure: true,
+        selected_backend: "CpuReference".to_string(),
+        fallback_reason: Some("FeatureDisabled".to_string()),
+        hardware_identifier: None,
+        shared_gpu_session: true,
+        gpu_static_dispatched_creatures: 0,
+        gpu_proposal_creatures: 0,
+        cpu_shadow_checks: 0,
+        cpu_shadow_skipped_creatures: 0,
+        parity_failures: 0,
+        first_parity_failure_tick: None,
+        forced_cpu_after_failure: false,
+        fallback_creatures: targets.len() as u32,
+        compact_readback_bytes: 0,
+        post_seal_readback_bytes: 0,
         post_seal_hshadow_applications: 0,
         h_shadow_delta_records: 0,
         max_h_shadow_abs_delta: 0.0,
@@ -1108,6 +1364,286 @@ pub fn run_batched_gpu_runtime_smoke(
         parity_failures,
         fallback_creatures,
         plasticity_dispatched_creatures,
+        post_seal_hshadow_applications,
+        h_shadow_delta_records,
+        max_h_shadow_abs_delta,
+        w_genetic_fixed_unchanged,
+        lifetime_consolidated_unchanged,
+        h_operational_unchanged,
+        total_upload_ms,
+        total_submit_poll_ms,
+        total_compact_readback_ms,
+        total_post_seal_readback_ms,
+        total_cpu_shadow_ms,
+        product_runtime_claim,
+        full_action_authoritative_claim: false,
+        no_active_bulk_readback: true,
+        stable_id_only: true,
+        per_creature,
+    };
+    summary.validate()?;
+    if let Some(path) = options.json_path {
+        summary.write_json(path)?;
+    }
+    Ok(summary)
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub fn run_sampled_gpu_runtime_smoke(
+    launch: &AppShellLaunchConfig,
+    options: SampledGpuRuntimeOptions,
+) -> Result<SampledGpuRuntimeSummary, GameAppShellError> {
+    use alife_gpu_backend::{
+        full_gpu_runtime_live_plasticity_schema, post_seal_delta_batch_from_plasticity_report,
+        FullGpuRuntimeProductClaim, FullGpuRuntimeSession,
+    };
+
+    options.validate()?;
+    let targets = ca33_batch_targets(launch, options.max_creatures)?;
+    let mut lives = targets
+        .iter()
+        .map(|target| LiveBrainLoop::from_p34_launch_for_organism(launch, target.organism_id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut schema_initialized = vec![false; lives.len()];
+    let mode = FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded;
+    let session = FullGpuRuntimeSession::new(backend_mode(mode))?;
+
+    let mut per_creature = targets
+        .iter()
+        .map(|target| SampledGpuRuntimeCreatureSummary {
+            stable_id: target.stable_id,
+            organism_id: target.organism_id,
+            selected_backend: "CpuReference".to_string(),
+            fallback_reason: None,
+            gpu_scores_used_for_proposals: 0,
+            cpu_shadow_checks: 0,
+            cpu_shadow_skipped: 0,
+            parity_failures: 0,
+            first_parity_failure_tick: None,
+            sealed_patches: 0,
+            post_seal_hshadow_applications: 0,
+            h_shadow_delta_records: 0,
+        })
+        .collect::<Vec<_>>();
+
+    let mut selected_backend = "CpuReference".to_string();
+    let mut fallback_reason = None;
+    let mut hardware_identifier = None;
+    let mut compact_readback_bytes = 0_usize;
+    let mut post_seal_readback_bytes = 0_usize;
+    let mut gpu_static_dispatched_creatures = 0_u32;
+    let mut gpu_proposal_creatures = 0_u32;
+    let mut cpu_shadow_checks = 0_u32;
+    let mut cpu_shadow_skipped_creatures = 0_u32;
+    let mut parity_failures = 0_u32;
+    let mut first_parity_failure_tick = None;
+    let mut forced_cpu_after_failure = false;
+    let mut fallback_creatures = 0_u32;
+    let mut post_seal_hshadow_applications = 0_u32;
+    let mut h_shadow_delta_records = 0_u32;
+    let mut max_h_shadow_abs_delta = 0.0_f32;
+    let mut w_genetic_fixed_unchanged = true;
+    let mut lifetime_consolidated_unchanged = true;
+    let mut h_operational_unchanged = true;
+    let mut total_upload_ms = 0.0_f32;
+    let mut total_submit_poll_ms = 0.0_f32;
+    let mut total_compact_readback_ms = 0.0_f32;
+    let mut total_post_seal_readback_ms = 0.0_f32;
+    let mut total_cpu_shadow_ms = 0.0_f32;
+
+    for tick_index in 0..options.ticks {
+        let check_cpu_shadow = options.should_check_cpu_shadow(tick_index);
+        let inputs = lives
+            .iter()
+            .map(|live| {
+                live.current_sensory_report()
+                    .and_then(|report| runtime_input_from_sensory(&report))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let static_reports = inputs
+            .iter()
+            .copied()
+            .map(|input| {
+                session
+                    .run_static_tick_sampled(input, check_cpu_shadow)
+                    .map_err(GameAppShellError::from)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        for (index, static_report) in static_reports.iter().enumerate() {
+            if index == 0 {
+                selected_backend = format!("{:?}", static_report.backend.selected);
+                fallback_reason = static_report
+                    .backend
+                    .fallback_reason
+                    .map(|reason| format!("{reason:?}"));
+                hardware_identifier = static_report.hardware_identifier.clone();
+            }
+            total_upload_ms += static_report.timing.upload_ms;
+            total_submit_poll_ms += static_report.timing.gpu_submit_poll_ms;
+            total_compact_readback_ms += static_report.timing.compact_readback_ms;
+            total_cpu_shadow_ms += static_report.timing.cpu_shadow_ms;
+            compact_readback_bytes = compact_readback_bytes
+                .saturating_add(static_report.readback.compact_readback_bytes);
+
+            let gpu_static_available = static_report.action_summary.is_some()
+                && static_report.backend.fallback_reason.is_none();
+            if static_report.action_summary.is_some() {
+                gpu_static_dispatched_creatures = gpu_static_dispatched_creatures.saturating_add(1);
+            }
+            if static_report.backend.fallback_reason.is_some() || forced_cpu_after_failure {
+                fallback_creatures = fallback_creatures.saturating_add(1);
+            }
+            if static_report.cpu_shadow_checked {
+                cpu_shadow_checks = cpu_shadow_checks.saturating_add(1);
+                per_creature[index].cpu_shadow_checks =
+                    per_creature[index].cpu_shadow_checks.saturating_add(1);
+                if !static_report.cpu_shadow_parity_passed {
+                    parity_failures = parity_failures.saturating_add(1);
+                    per_creature[index].parity_failures =
+                        per_creature[index].parity_failures.saturating_add(1);
+                    per_creature[index]
+                        .first_parity_failure_tick
+                        .get_or_insert(tick_index);
+                    first_parity_failure_tick.get_or_insert(tick_index);
+                    forced_cpu_after_failure = true;
+                }
+            } else {
+                cpu_shadow_skipped_creatures = cpu_shadow_skipped_creatures.saturating_add(1);
+                per_creature[index].cpu_shadow_skipped =
+                    per_creature[index].cpu_shadow_skipped.saturating_add(1);
+            }
+            if gpu_static_available && !schema_initialized[index] {
+                lives[index].initialize_neural_projection_schema(
+                    full_gpu_runtime_live_plasticity_schema()?,
+                )?;
+                schema_initialized[index] = true;
+            }
+
+            let use_gpu_scores = !forced_cpu_after_failure
+                && gpu_static_available
+                && (!static_report.cpu_shadow_checked || static_report.cpu_shadow_parity_passed)
+                && matches!(
+                    static_report.product_runtime_claim,
+                    FullGpuRuntimeProductClaim::CpuShadowGuarded
+                        | FullGpuRuntimeProductClaim::CpuShadowGuardedStaticPlusLiveHShadow
+                );
+            let proposals = if use_gpu_scores {
+                gpu_proposal_creatures = gpu_proposal_creatures.saturating_add(1);
+                per_creature[index].gpu_scores_used_for_proposals = per_creature[index]
+                    .gpu_scores_used_for_proposals
+                    .saturating_add(1);
+                let action_summary = static_report.action_summary.clone().ok_or(
+                    GameAppShellError::VisibleWorldMismatch {
+                        message: "CA34 sampled GPU scoring accepted without action summary",
+                    },
+                )?;
+                lives[index].current_context_proposals_with_scores(scores_from_action_summary(
+                    action_summary,
+                )?)?
+            } else {
+                lives[index].current_context_proposals()?
+            };
+            let tick = lives[index].tick_with_proposals_detailed(proposals, !use_gpu_scores);
+
+            let creature = &mut per_creature[index];
+            creature.selected_backend = format!("{:?}", static_report.backend.selected);
+            creature.fallback_reason = if forced_cpu_after_failure {
+                Some("SampledParityFailure".to_string())
+            } else {
+                static_report
+                    .backend
+                    .fallback_reason
+                    .map(|reason| format!("{reason:?}"))
+            };
+            creature.sealed_patches = tick.summary.sealed_patch_count;
+
+            if tick.summary.patch_sealed
+                && use_gpu_scores
+                && static_report.cpu_shadow_checked
+                && static_report.cpu_shadow_parity_passed
+                && creature.post_seal_hshadow_applications == 0
+                && post_seal_gpu_plasticity_diagnostic_enabled()
+            {
+                let plasticity_report =
+                    session.run_post_seal_plasticity_diagnostic(inputs[index])?;
+                total_submit_poll_ms += plasticity_report.submit_poll_ms;
+                total_post_seal_readback_ms += plasticity_report.diagnostic_readback_ms;
+                post_seal_readback_bytes = post_seal_readback_bytes
+                    .saturating_add(plasticity_report.diagnostic_readback_bytes);
+                w_genetic_fixed_unchanged &= plasticity_report.genetic_fixed_unchanged;
+                lifetime_consolidated_unchanged &=
+                    plasticity_report.lifetime_consolidated_unchanged;
+                h_operational_unchanged &= plasticity_report.h_operational_unchanged;
+                if plasticity_report.cpu_shadow_parity_passed
+                    && plasticity_report.genetic_fixed_unchanged
+                    && plasticity_report.lifetime_consolidated_unchanged
+                    && plasticity_report.h_operational_unchanged
+                    && !plasticity_report.h_shadow_delta_records.is_empty()
+                {
+                    if let Some(patch) = tick.sealed_patch.as_ref() {
+                        let batch = post_seal_delta_batch_from_plasticity_report(
+                            patch,
+                            &plasticity_report,
+                        )?;
+                        let receipt = lives[index].apply_post_seal_lifetime_deltas(patch, batch)?;
+                        post_seal_hshadow_applications =
+                            post_seal_hshadow_applications.saturating_add(1);
+                        h_shadow_delta_records =
+                            h_shadow_delta_records.saturating_add(receipt.applied_records);
+                        max_h_shadow_abs_delta = max_h_shadow_abs_delta.max(receipt.max_abs_delta);
+                        creature.post_seal_hshadow_applications =
+                            creature.post_seal_hshadow_applications.saturating_add(1);
+                        creature.h_shadow_delta_records = creature
+                            .h_shadow_delta_records
+                            .saturating_add(receipt.applied_records);
+                    }
+                }
+            }
+        }
+    }
+
+    let product_runtime_claim = if selected_backend == "CpuReference" {
+        "None"
+    } else if parity_failures > 0 {
+        "SampledCpuShadowFallback"
+    } else if gpu_proposal_creatures > 0 && post_seal_hshadow_applications > 0 {
+        "SampledCpuShadowGuardedStaticPlusLiveHShadow"
+    } else if gpu_proposal_creatures > 0 {
+        "SampledCpuShadowGuarded"
+    } else {
+        "None"
+    }
+    .to_string();
+    if forced_cpu_after_failure {
+        fallback_reason.get_or_insert_with(|| "SampledParityFailure".to_string());
+    }
+
+    let summary = SampledGpuRuntimeSummary {
+        schema: CA34_SAMPLED_GPU_RUNTIME_SCHEMA,
+        schema_version: CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
+        requested_mode: "sampled-cpu-shadow-guarded".to_string(),
+        batch_size: targets.len(),
+        max_batch_size: options.max_creatures,
+        ticks_run: options.ticks,
+        warmup_ticks: options.warmup_ticks,
+        cpu_shadow_every: options.cpu_shadow_every,
+        sampled_cpu_shadow_enabled: true,
+        fallback_on_first_failure: true,
+        selected_backend,
+        fallback_reason,
+        hardware_identifier,
+        shared_gpu_session: true,
+        gpu_static_dispatched_creatures,
+        gpu_proposal_creatures,
+        cpu_shadow_checks,
+        cpu_shadow_skipped_creatures,
+        parity_failures,
+        first_parity_failure_tick,
+        forced_cpu_after_failure,
+        fallback_creatures,
+        compact_readback_bytes,
+        post_seal_readback_bytes,
         post_seal_hshadow_applications,
         h_shadow_delta_records,
         max_h_shadow_abs_delta,

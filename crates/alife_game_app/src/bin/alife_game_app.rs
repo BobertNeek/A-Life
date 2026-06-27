@@ -20,12 +20,14 @@ use alife_game_app::{
     run_player_sandbox_editor_smoke, run_population_performance_lod_smoke,
     run_population_social_loop_smoke, run_product_qa_hardening_smoke,
     run_real_semantic_provider_smoke, run_realtime_wgsl_telemetry_smoke,
-    run_release_candidate_smoke, run_runtime_controls_smoke, run_save_load_ux_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
-    run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_bundle_manifest, validate_app_shell_config, write_behavior_comparison_lab_report,
-    AppShellLaunchConfig, BatchedGpuRuntimeOptions, EnvironmentManifest, FullGpuRuntimeSmokeMode,
+    run_release_candidate_smoke, run_runtime_controls_smoke, run_sampled_gpu_runtime_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_bundle_manifest,
+    validate_app_shell_config, write_behavior_comparison_lab_report, AppShellLaunchConfig,
+    BatchedGpuRuntimeOptions, EnvironmentManifest, FullGpuRuntimeSmokeMode,
     FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    SampledGpuRuntimeOptions,
 };
 
 fn main() -> ExitCode {
@@ -482,6 +484,9 @@ fn run() -> Result<String, String> {
         [command, rest @ ..] if command == "batched-gpu-runtime-smoke" => {
             run_batched_gpu_runtime_cli(rest)
         }
+        [command, rest @ ..] if command == "sampled-gpu-runtime-smoke" => {
+            run_sampled_gpu_runtime_cli(rest)
+        }
         [command, rest @ ..] if command == "gpu-longrun-soak" => run_gpu_longrun_soak_cli(rest),
         [command, rest @ ..] if command == "gpu-sustained-learning-soak" => {
             run_gpu_sustained_learning_soak_cli(rest)
@@ -593,7 +598,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] [--cpu-shadow-every 1] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] [--cpu-shadow-every 1] [--json path] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] [--warmup-ticks N] [--cpu-shadow-every N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -907,6 +912,72 @@ fn run_batched_gpu_runtime_cli(args: &[String]) -> Result<String, String> {
     let summary = run_batched_gpu_runtime_smoke(&launch, options).map_err(|err| err.to_string())?;
     Ok(format_batched_gpu_runtime_summary(
         "CA33 batched GPU runtime",
+        &summary,
+    ))
+}
+
+fn run_sampled_gpu_runtime_cli(args: &[String]) -> Result<String, String> {
+    let Some(fixture_root) = args.first() else {
+        return Err("sampled-gpu-runtime-smoke requires <p34-fixture-root>".to_string());
+    };
+    let mut options = SampledGpuRuntimeOptions::default();
+    let mut index = 1_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--creatures" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--creatures requires a value".to_string())?;
+                options.max_creatures = value
+                    .parse::<usize>()
+                    .map_err(|_| "--creatures must be an unsigned integer".to_string())?;
+                index += 2;
+            }
+            "--ticks" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--ticks requires a value".to_string())?;
+                options.ticks = value
+                    .parse::<u32>()
+                    .map_err(|_| "--ticks must be an unsigned integer".to_string())?;
+                index += 2;
+            }
+            "--warmup-ticks" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--warmup-ticks requires a value".to_string())?;
+                options.warmup_ticks = value
+                    .parse::<u32>()
+                    .map_err(|_| "--warmup-ticks must be an unsigned integer".to_string())?;
+                index += 2;
+            }
+            "--cpu-shadow-every" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--cpu-shadow-every requires a value".to_string())?;
+                options.cpu_shadow_every = value
+                    .parse::<u32>()
+                    .map_err(|_| "--cpu-shadow-every must be an unsigned integer".to_string())?;
+                index += 2;
+            }
+            "--json" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--json requires a path".to_string())?;
+                options.json_path = Some(PathBuf::from(value));
+                index += 2;
+            }
+            unknown => {
+                return Err(format!(
+                    "unknown sampled-gpu-runtime-smoke option: {unknown}"
+                ))
+            }
+        }
+    }
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+    let summary = run_sampled_gpu_runtime_smoke(&launch, options).map_err(|err| err.to_string())?;
+    Ok(format_sampled_gpu_runtime_summary(
+        "CA34 sampled GPU runtime",
         &summary,
     ))
 }
@@ -1824,6 +1895,74 @@ fn format_batched_gpu_runtime_summary(
         summary.parity_failures,
         summary.fallback_creatures,
         summary.plasticity_dispatched_creatures,
+        summary.post_seal_hshadow_applications,
+        summary.h_shadow_delta_records,
+        summary.max_h_shadow_abs_delta,
+        summary.w_genetic_fixed_unchanged,
+        summary.lifetime_consolidated_unchanged,
+        summary.h_operational_unchanged,
+        summary.total_upload_ms,
+        summary.total_submit_poll_ms,
+        summary.total_compact_readback_ms,
+        summary.total_post_seal_readback_ms,
+        summary.total_cpu_shadow_ms,
+        summary.product_runtime_claim,
+        summary.full_action_authoritative_claim,
+        summary.no_active_bulk_readback,
+        summary.stable_id_only,
+        creatures,
+    )
+}
+
+fn format_sampled_gpu_runtime_summary(
+    prefix: &str,
+    summary: &alife_game_app::SampledGpuRuntimeSummary,
+) -> String {
+    let creatures = summary
+        .per_creature
+        .iter()
+        .map(|creature| {
+            format!(
+                "stable:{}:org:{}:backend={}:gpu_scores={}:checks={}:skipped={}:failures={}:sealed={}:h_apps={}",
+                creature.stable_id.raw(),
+                creature.organism_id.raw(),
+                creature.selected_backend,
+                creature.gpu_scores_used_for_proposals,
+                creature.cpu_shadow_checks,
+                creature.cpu_shadow_skipped,
+                creature.parity_failures,
+                creature.sealed_patches,
+                creature.post_seal_hshadow_applications
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("|");
+    format!(
+        "{prefix} schema={} version={} mode={} batch={}/{} ticks={} warmup={} cpu_shadow_every={} sampled={} fallback_on_first_failure={} selected={} fallback={:?} hardware={} shared_session={} gpu_static_creatures={} gpu_proposal_creatures={} cpu_shadow_checks={} cpu_shadow_skipped={} parity_failures={} first_parity_failure={:?} forced_cpu_after_failure={} fallback_creatures={} compact_readback_bytes={} post_seal_readback_bytes={} h_apps={} h_records={} h_delta_max={:.6} w_genetic_fixed_unchanged={} lifetime_unchanged={} h_operational_unchanged={} timing=upload:{:.4},gpu:{:.4},compact_readback:{:.4},post_seal_readback:{:.4},cpu_shadow:{:.4} claim={} full_action_authoritative_claim={} no_active_bulk_readback={} stable_id_only={} creatures={}",
+        summary.schema,
+        summary.schema_version,
+        summary.requested_mode,
+        summary.batch_size,
+        summary.max_batch_size,
+        summary.ticks_run,
+        summary.warmup_ticks,
+        summary.cpu_shadow_every,
+        summary.sampled_cpu_shadow_enabled,
+        summary.fallback_on_first_failure,
+        summary.selected_backend,
+        summary.fallback_reason,
+        summary.hardware_identifier.as_deref().unwrap_or("none"),
+        summary.shared_gpu_session,
+        summary.gpu_static_dispatched_creatures,
+        summary.gpu_proposal_creatures,
+        summary.cpu_shadow_checks,
+        summary.cpu_shadow_skipped_creatures,
+        summary.parity_failures,
+        summary.first_parity_failure_tick,
+        summary.forced_cpu_after_failure,
+        summary.fallback_creatures,
+        summary.compact_readback_bytes,
+        summary.post_seal_readback_bytes,
         summary.post_seal_hshadow_applications,
         summary.h_shadow_delta_records,
         summary.max_h_shadow_abs_delta,

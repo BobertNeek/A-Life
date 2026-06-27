@@ -152,6 +152,7 @@ pub struct FullGpuRuntimeStaticTickReport {
     pub backend: GpuRuntimeBackendStatus,
     pub hardware_identifier: Option<String>,
     pub action_summary: Option<GpuActionSummaryStagingRecord>,
+    pub cpu_shadow_checked: bool,
     pub cpu_shadow_action_summary: Option<GpuActionSummaryStagingRecord>,
     pub cpu_shadow_parity_passed: bool,
     pub routing: FullGpuRuntimeRoutingReport,
@@ -258,7 +259,15 @@ impl FullGpuRuntimeSession {
         &self,
         input: FullGpuRuntimeStaticTickInput,
     ) -> Result<FullGpuRuntimeStaticTickReport, ScaffoldContractError> {
-        pollster::block_on(self.run_static_tick_async(input))
+        pollster::block_on(self.run_static_tick_with_cpu_shadow_async(input, true))
+    }
+
+    pub fn run_static_tick_sampled(
+        &self,
+        input: FullGpuRuntimeStaticTickInput,
+        cpu_shadow_required: bool,
+    ) -> Result<FullGpuRuntimeStaticTickReport, ScaffoldContractError> {
+        pollster::block_on(self.run_static_tick_with_cpu_shadow_async(input, cpu_shadow_required))
     }
 
     pub fn run_post_seal_plasticity_diagnostic(
@@ -408,9 +417,10 @@ impl FullGpuRuntimeSession {
         })
     }
 
-    async fn run_static_tick_async(
+    async fn run_static_tick_with_cpu_shadow_async(
         &self,
         input: FullGpuRuntimeStaticTickInput,
+        cpu_shadow_required: bool,
     ) -> Result<FullGpuRuntimeStaticTickReport, ScaffoldContractError> {
         input.validate()?;
         match &self.execution {
@@ -438,8 +448,12 @@ impl FullGpuRuntimeSession {
                 let upload_ms = elapsed_ms(upload_start);
 
                 let cpu_shadow_start = Instant::now();
-                let cpu = plan.execute_cpu_diagnostic(&activation_q)?;
-                let cpu_summary = action_summary_config.cpu_action_summary(&cpu.activations_q)?;
+                let cpu_summary = if cpu_shadow_required {
+                    let cpu = plan.execute_cpu_diagnostic(&activation_q)?;
+                    Some(action_summary_config.cpu_action_summary(&cpu.activations_q)?)
+                } else {
+                    None
+                };
                 let cpu_shadow_ms = elapsed_ms(cpu_shadow_start);
 
                 let gpu = run_static_forward_gpu_action_summary_timed(
@@ -450,7 +464,9 @@ impl FullGpuRuntimeSession {
                     action_summary_config,
                 )
                 .await?;
-                let parity = gpu.action_summary == cpu_summary;
+                let parity = cpu_summary
+                    .as_ref()
+                    .is_none_or(|cpu_summary| gpu.action_summary == *cpu_summary);
                 let (backend, parity_fallback_note) = if parity {
                     (*backend, None)
                 } else {
@@ -499,7 +515,8 @@ impl FullGpuRuntimeSession {
                     backend,
                     hardware_identifier: Some(hardware_identifier.clone()),
                     action_summary: Some(gpu.action_summary),
-                    cpu_shadow_action_summary: Some(cpu_summary),
+                    cpu_shadow_checked: cpu_shadow_required,
+                    cpu_shadow_action_summary: cpu_summary,
                     cpu_shadow_parity_passed: parity,
                     routing,
                     readback,
@@ -901,6 +918,7 @@ async fn run_full_gpu_runtime_static_tick_async(
             info.name, info.backend, info.device_type, info.driver_info
         )),
         action_summary: Some(gpu.action_summary),
+        cpu_shadow_checked: true,
         cpu_shadow_action_summary: Some(cpu_summary),
         cpu_shadow_parity_passed: parity,
         routing,
@@ -1067,6 +1085,7 @@ fn cpu_status_report(
         backend,
         hardware_identifier,
         action_summary: None,
+        cpu_shadow_checked: true,
         cpu_shadow_action_summary: Some(cpu_summary),
         cpu_shadow_parity_passed: false,
         routing: routing_report(&plan),

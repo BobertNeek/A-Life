@@ -23,26 +23,26 @@ use alife_game_app::{
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_product_qa_hardening_smoke, run_real_semantic_provider_smoke,
     run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, write_behavior_comparison_lab_report, AppShellLaunchConfig,
-    AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus,
-    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
-    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
-    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
-    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, write_behavior_comparison_lab_report,
+    AppShellLaunchConfig, AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig,
+    BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget, CameraNavigationState,
+    ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
+    CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
+    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
+    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest,
+    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
     LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
     PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     RealtimeWgslTelemetrySummary, ReleaseCandidateArea, ReleaseCandidateGateStatus,
     RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState,
-    S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState,
-    VisibleMaterialKind, VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig,
-    WorldEditorMode, WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA,
+    S08EvidenceStatus, SampledGpuRuntimeOptions, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
+    SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape, WorldEditCommand,
+    WorldEditorConfig, WorldEditorMode, WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA,
     CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION, CA18_MAX_GRAPHICAL_CREATURES,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA, CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION,
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA, CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION,
@@ -59,6 +59,7 @@ use alife_game_app::{
     CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION, CA31_MAX_REPORT_BYTES,
     CA32_REALTIME_WGSL_TELEMETRY_SCHEMA, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
     CA33_BATCHED_GPU_RUNTIME_SCHEMA, CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION,
+    CA34_SAMPLED_GPU_RUNTIME_SCHEMA, CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -3957,6 +3958,79 @@ fn ca33_batched_gpu_runtime_uses_stable_id_population_and_honest_claims() {
 fn ca33_batched_gpu_runtime_rejects_sampled_shadow_until_ca34() {
     let options = BatchedGpuRuntimeOptions {
         cpu_shadow_every: 2,
+        ..Default::default()
+    };
+    assert!(options.validate().is_err());
+}
+
+#[test]
+fn ca34_sampled_gpu_runtime_reports_sampled_policy_without_overclaim() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_sampled_gpu_runtime_smoke(
+        &launch,
+        SampledGpuRuntimeOptions {
+            max_creatures: 3,
+            ticks: 4,
+            warmup_ticks: 1,
+            cpu_shadow_every: 2,
+            json_path: None,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(summary.schema, CA34_SAMPLED_GPU_RUNTIME_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION
+    );
+    assert_eq!(summary.batch_size, 3);
+    assert_eq!(summary.ticks_run, 4);
+    assert_eq!(summary.warmup_ticks, 1);
+    assert_eq!(summary.cpu_shadow_every, 2);
+    assert!(summary.sampled_cpu_shadow_enabled);
+    assert!(summary.fallback_on_first_failure);
+    assert!(summary.shared_gpu_session);
+    assert!(summary.no_active_bulk_readback);
+    assert!(summary.stable_id_only);
+    assert!(!summary.full_action_authoritative_claim);
+    assert_ne!(summary.product_runtime_claim, "FullActionAuthoritative");
+    assert_ne!(summary.product_runtime_claim, "ActionAuthoritative");
+    assert_eq!(summary.per_creature.len(), 3);
+    assert_eq!(
+        summary
+            .per_creature
+            .iter()
+            .map(|creature| creature.stable_id)
+            .collect::<Vec<_>>(),
+        vec![WorldEntityId(1), WorldEntityId(5), WorldEntityId(6)]
+    );
+    if summary.selected_backend != "CpuReference" {
+        assert!(summary.cpu_shadow_checks > 0);
+        assert!(summary.cpu_shadow_skipped_creatures > 0);
+        assert!(summary.gpu_static_dispatched_creatures >= summary.batch_size as u32);
+        assert_eq!(summary.parity_failures, 0);
+        assert!(!summary.forced_cpu_after_failure);
+        assert!(summary
+            .product_runtime_claim
+            .starts_with("SampledCpuShadow"));
+    } else {
+        assert!(summary.fallback_reason.is_some());
+        assert_eq!(summary.cpu_shadow_skipped_creatures, 0);
+        assert_eq!(summary.product_runtime_claim, "None");
+    }
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca34_sampled_gpu_runtime_requires_manual_sample_interval() {
+    let options = SampledGpuRuntimeOptions {
+        cpu_shadow_every: 1,
+        ..Default::default()
+    };
+    assert!(options.validate().is_err());
+
+    let options = SampledGpuRuntimeOptions {
+        ticks: 0,
         ..Default::default()
     };
     assert!(options.validate().is_err());
