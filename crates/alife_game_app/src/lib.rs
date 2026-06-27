@@ -165,6 +165,9 @@ pub use internal_slm_prior::*;
 mod topological_concept_overlay;
 pub use topological_concept_overlay::*;
 
+mod memory_history_journal;
+pub use memory_history_journal::*;
+
 mod advanced_gameplay_ux;
 pub use advanced_gameplay_ux::*;
 

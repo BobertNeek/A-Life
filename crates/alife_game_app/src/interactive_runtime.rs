@@ -55,6 +55,7 @@ pub struct RuntimeControlPanel {
     pub motor_ring: MotorRingPresentation,
     pub homeostasis: HomeostasisRuntimePresentation,
     pub topology_overlay: TopologicalConceptOverlaySnapshot,
+    pub memory_journal: CreatureMemoryHistoryJournalSnapshot,
     pub direct_cognition_mutation_allowed: bool,
 }
 
@@ -97,6 +98,13 @@ impl RuntimeControlPanel {
                         live.mind().current_tick(),
                     )
                 }),
+            memory_journal: CreatureMemoryHistoryJournalSnapshot::from_live_loop(live, &[])
+                .unwrap_or_else(|_| {
+                    CreatureMemoryHistoryJournalSnapshot::pending(
+                        live.organism_id(),
+                        live.mind().current_tick(),
+                    )
+                }),
             direct_cognition_mutation_allowed: false,
         }
     }
@@ -123,6 +131,7 @@ impl RuntimeControlPanel {
         self.motor_ring.validate()?;
         self.homeostasis.validate()?;
         self.topology_overlay.validate()?;
+        self.memory_journal.validate()?;
         Ok(())
     }
 
@@ -182,6 +191,7 @@ impl RuntimeControlPanel {
         self.mind_tick = live.mind().current_tick().raw();
         self.record_homeostasis(live)?;
         self.record_topology_overlay(live, &summaries)?;
+        self.record_memory_journal(live, &summaries)?;
         self.validate()?;
         Ok(summaries)
     }
@@ -207,6 +217,7 @@ impl RuntimeControlPanel {
         self.mind_tick = live.mind().current_tick().raw();
         self.record_homeostasis(live)?;
         self.record_topology_overlay(live, &summaries)?;
+        self.record_memory_journal(live, &summaries)?;
         self.validate()?;
         Ok(summaries)
     }
@@ -294,6 +305,7 @@ impl RuntimeControlPanel {
                 "{}\n",
                 "{}\n",
                 "{}\n",
+                "{}\n",
                 "{}"
             ),
             self.playback.label(),
@@ -311,6 +323,7 @@ impl RuntimeControlPanel {
             self.sealed_patch_count,
             self.homeostasis.compact_line(),
             self.topology_overlay.compact_line(),
+            self.memory_journal.compact_line(),
             self.homeostasis.modulation_line(),
             self.motor_ring.compact_line(),
             terminal_line,
@@ -333,7 +346,7 @@ impl RuntimeControlPanel {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}:{}:{}",
+            "{}:{}:{}:speed={}:mind_tick={}:world_tick={:?}:action={:?}:sealed={}:patches={}:packed={}:{}:{}:{}:{}:{}",
             self.schema,
             self.schema_version,
             self.playback.label(),
@@ -347,7 +360,8 @@ impl RuntimeControlPanel {
             self.scheduler.signature_line(),
             self.motor_ring.signature_line(),
             self.homeostasis.signature_line(),
-            self.topology_overlay.signature_line()
+            self.topology_overlay.signature_line(),
+            self.memory_journal.signature_line()
         )
     }
 
@@ -466,6 +480,19 @@ impl RuntimeControlPanel {
             TopologicalConceptOverlaySnapshot::from_live_loop(live, recent_summaries)?;
         snapshot.preserve_previous_event_links_if_empty(&previous_event_links)?;
         self.topology_overlay = snapshot;
+        Ok(())
+    }
+
+    pub fn record_memory_journal(
+        &mut self,
+        live: &LiveBrainLoop,
+        recent_summaries: &[LiveBrainTickSummary],
+    ) -> Result<(), GameAppShellError> {
+        let previous_patches = self.memory_journal.recent_patches.clone();
+        let mut snapshot =
+            CreatureMemoryHistoryJournalSnapshot::from_live_loop(live, recent_summaries)?;
+        snapshot.preserve_previous_patches_if_empty(&previous_patches)?;
+        self.memory_journal = snapshot;
         Ok(())
     }
 

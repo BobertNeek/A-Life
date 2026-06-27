@@ -39,6 +39,7 @@ Initial state: pack imported, no CA plans complete.
 | CA27 | complete | `codex/CA27-internal-slm-subconscious-prior-adapter` | branch tip | Historical CA27 evidence used localhost Ollama; active runtime is superseded by direct llama.cpp migration. Bounded salience/context/lexicon/tag output, async queue, and no action/weight/vector authority evidence are recorded in `status/CA27_INTERNAL_SLM_SUBCONSCIOUS_PRIOR.md`; next executable plan is CAR27 hard-stop review. |
 | CAR27 | complete | `codex/CAR27-school-semantic-safety-review` | branch tip | School/semantic safety review recorded in `reviews/CAR27_REVIEW_REPORT.md` with verdict `PASS_WITH_NOTES`; next executable plan is CA28 after user/ChatGPT consultation. |
 | CA28 | complete | `codex/CA28-topological-concept-overlay` | branch tip | Read-only concept map overlay, topology event links, and no-action-bypass evidence recorded in `status/CA28_TOPOLOGICAL_CONCEPT_OVERLAY.md`; next executable plan is CA29. |
+| CA29 | complete | `codex/CA29-creature-memory-history-journal` | branch tip | Read-only memory/history journal, recent sealed patch rows, expectancy bias summaries, save/load visibility, and no-action-replay evidence recorded in `status/CA29_MEMORY_HISTORY_JOURNAL.md`; next executable plan is CA30. |
 
 Post-CAR27 blocking migration: active local model runtime was migrated from
 Ollama to direct localhost-only llama.cpp / `llama-server` on
