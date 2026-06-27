@@ -16,29 +16,30 @@ use alife_game_app::{
     run_graphical_school_mode_smoke, run_hazard_recovery_smoke, run_headless_app_shell_smoke,
     run_homeostasis_runtime_smoke, run_internal_slm_prior_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
-    run_longrun_balance_with_config, run_motor_ring_arbitration_smoke, run_onboarding_help_smoke,
-    run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_real_semantic_provider_smoke, run_release_candidate_smoke,
-    run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
-    run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler,
-    EcologicalSoakConfig, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
-    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    InspectorControlPanel, LessonManifest, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
-    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
-    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
-    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
-    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
-    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    run_longrun_balance_with_config, run_memory_history_journal_smoke,
+    run_motor_ring_arbitration_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke,
+    run_real_semantic_provider_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig,
+    BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget, CameraNavigationState,
+    ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
+    CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
+    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
+    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest,
+    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
+    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
+    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
+    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
+    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
+    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
@@ -49,6 +50,7 @@ use alife_game_app::{
     CA26_REAL_SEMANTIC_PROVIDER_SCHEMA, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION,
     CA27_INTERNAL_SLM_PRIOR_SCHEMA, CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION,
     CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
+    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -3731,6 +3733,50 @@ fn ca28_topological_concept_overlay_cannot_emit_actions_or_mutate_cognition() {
     assert!(summary.topology_action_bypass_blocked);
     assert!(!summary.direct_cognition_mutation_allowed);
     assert!(summary.panel_text.contains("event tick="));
+    assert!(!summary.panel_text.contains("full action-authoritative"));
+}
+
+#[test]
+fn ca29_memory_history_journal_shows_recent_patches_and_biases() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_memory_history_journal_smoke(&launch).unwrap();
+
+    assert_eq!(summary.snapshot.schema, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA);
+    assert_eq!(
+        summary.snapshot.schema_version,
+        CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION
+    );
+    assert!(summary.snapshot.memory_record_count >= 1);
+    assert!(!summary.snapshot.recent_patches.is_empty());
+    assert!(!summary.snapshot.recent_memories.is_empty());
+    assert!(!summary.snapshot.expectancy_rows.is_empty());
+    assert!(summary.panel_text.contains("Memory Journal (read-only)"));
+    assert!(summary.panel_text.contains("patch tick="));
+    assert!(summary.panel_text.contains("bias from m"));
+    assert!(summary.status_text.contains("Memory:"));
+    assert!(!summary.panel_text.contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca29_memory_history_journal_cannot_replay_actions_or_mutate_cognition() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_memory_history_journal_smoke(&launch).unwrap();
+
+    assert!(summary.snapshot.read_only);
+    assert!(summary.snapshot.expectancy_bias_only);
+    assert!(summary.snapshot.save_load_visible);
+    assert!(!summary.snapshot.can_replay_actions);
+    assert!(!summary.snapshot.can_emit_actions);
+    assert!(!summary.snapshot.direct_cognition_mutation_allowed);
+    assert!(summary.action_replay_blocked);
+    assert!(!summary.direct_cognition_mutation_allowed);
+    assert!(summary
+        .panel_text
+        .contains("Boundary: expectancy bias only; no action replay"));
+    assert!(summary
+        .panel_text
+        .contains("Save/load: stable memory IDs visible"));
     assert!(!summary.panel_text.contains("full action-authoritative"));
 }
 

@@ -287,6 +287,9 @@ pub struct GraphicalSchoolOverlay;
 pub struct GraphicalTopologyOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalMemoryJournalOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalTeacherCueMarker {
     pub stable_id: WorldEntityId,
 }
@@ -574,11 +577,12 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_ecology_overlay,
                 update_graphical_lifecycle_overlay,
                 update_graphical_topology_overlay,
+                update_graphical_memory_journal_overlay,
                 update_graphical_boundary_footer_overlay,
                 update_graphical_save_load_menu_overlay,
-                update_graphical_advanced_gameplay_overlay,
             ),
         )
+        .add_systems(Update, update_graphical_advanced_gameplay_overlay)
         .add_systems(
             Update,
             (
@@ -931,6 +935,28 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.012, 0.036, 0.032, 0.84)),
         GraphicalTopologyOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA29 creature memory history journal"),
+        Text::new(
+            "Memory Journal (read-only)\nmemories=0 tick=0 patches=0 bias_rows=0\npatch: waiting for sealed experience\nmemory: waiting for stored expectancy\nbias: neutral expectancy\nSave/load: stable memory IDs visible\nBoundary: expectancy bias only; no action replay",
+        ),
+        TextFont {
+            font_size: 11.0,
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 0.95, 0.72)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(488.0),
+            right: Val::Px(12.0),
+            max_width: Val::Px(430.0),
+            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.048, 0.036, 0.012, 0.86)),
+        GraphicalMemoryJournalOverlay,
     ));
 
     app.world_mut().spawn((
@@ -1859,6 +1885,7 @@ fn apply_graphical_runtime_command(
             panel.record_motor_ring(motor_ring)?;
             panel.record_tick(&summary);
             panel.record_topology_overlay(&live_loop.live, std::slice::from_ref(&summary))?;
+            panel.record_memory_journal(&live_loop.live, std::slice::from_ref(&summary))?;
             panel
                 .scheduler
                 .record_executed_ticks(crate::executed_live_tick_count(std::slice::from_ref(
@@ -1887,6 +1914,7 @@ fn apply_graphical_runtime_command(
                 summaries.push(summary);
             }
             panel.record_topology_overlay(&live_loop.live, &summaries)?;
+            panel.record_memory_journal(&live_loop.live, &summaries)?;
             panel
                 .scheduler
                 .record_executed_ticks(crate::executed_live_tick_count(&summaries))?;
@@ -2092,6 +2120,15 @@ fn update_graphical_topology_overlay(
 ) {
     for mut text in &mut overlays {
         text.0 = runtime.panel.topology_overlay.panel_text();
+    }
+}
+
+fn update_graphical_memory_journal_overlay(
+    runtime: Res<GraphicalRuntimeControlsResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalMemoryJournalOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = runtime.panel.memory_journal.panel_text();
     }
 }
 
