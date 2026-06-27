@@ -6,11 +6,12 @@ use alife_game_app::{
     ca18_creature_selection_ids, ca18_cycle_selected_creature, compare_visible_world_to_headless,
     g17_feedback_manifest_path, g17_workspace_root, load_visible_world_from_p34_save,
     project_lod_without_behavior_change, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
-    run_behavior_tuning_metrics_smoke, run_behavior_tuning_metrics_with_config,
-    run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
-    run_creature_visual_smoke, run_curriculum_authoring_smoke, run_double_buffered_scheduler_smoke,
-    run_ecological_soak_smoke, run_ecological_soak_with_config, run_feedback_polish_smoke,
-    run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    run_behavior_comparison_lab_smoke, run_behavior_tuning_metrics_smoke,
+    run_behavior_tuning_metrics_with_config, run_cognition_debug_timeline_smoke,
+    run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
+    run_curriculum_authoring_smoke, run_double_buffered_scheduler_smoke, run_ecological_soak_smoke,
+    run_ecological_soak_with_config, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
+    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_ecology_smoke, run_graphical_lifecycle_smoke, run_graphical_population_smoke,
     run_graphical_school_mode_smoke, run_hazard_recovery_smoke, run_headless_app_shell_smoke,
@@ -24,22 +25,23 @@ use alife_game_app::{
     run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
     run_semantic_provider_smoke, run_teacher_world_cues_smoke,
     run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
-    BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
-    CreatureLifeStage, CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler,
-    EcologicalSoakConfig, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
-    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
-    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    InspectorControlPanel, LessonManifest, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
-    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
-    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
-    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
-    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
-    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    select_visible_world_entity, validate_app_shell_config, write_behavior_comparison_lab_report,
+    AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig, BehaviorTuningFindingStatus,
+    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
+    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
+    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
+    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
+    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
+    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
+    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
+    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
+    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
@@ -52,8 +54,9 @@ use alife_game_app::{
     CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
     CA29_MEMORY_HISTORY_JOURNAL_SCHEMA, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION,
     CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION,
-    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION,
+    CA31_MAX_REPORT_BYTES, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_semantic::{
     parse_slm_prior_json, project_embedding_to_i8, LlamaCppEmbeddingConfig,
@@ -3831,6 +3834,60 @@ fn ca30_neural_activity_profiler_blocks_bulk_readback_and_action_authority() {
         .panel_text
         .contains("Boundary: compact summary; offline export only"));
     assert!(!summary.panel_text.contains("full action-authoritative"));
+}
+
+#[test]
+fn ca31_behavior_comparison_lab_compares_scenarios_and_exports_small_report() {
+    let manifest = alife_game_app::default_environment_manifest_path();
+    let summary =
+        run_behavior_comparison_lab_smoke(&manifest, Some("gpu-alpha"), Some("p34"), 8).unwrap();
+
+    assert_eq!(summary.schema, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION
+    );
+    assert_eq!(summary.scenario_a.scenario_id, "gpu-alpha");
+    assert_eq!(summary.scenario_b.scenario_id, "p34");
+    assert!(summary.scenario_a.creature_count > summary.scenario_b.creature_count);
+    assert!(summary.panel.signatures_differ);
+    assert!(summary.panel.panel_text.contains("A/B Scenario Runner"));
+    assert!(summary.report_markdown.contains("Behavior Signatures"));
+    assert!(summary.report_bytes <= CA31_MAX_REPORT_BYTES);
+    assert!(!summary.report_markdown.contains("Entity("));
+
+    let output = std::env::temp_dir().join("alife_ca31_behavior_comparison_report.md");
+    write_behavior_comparison_lab_report(&summary, &output).unwrap();
+    let exported = std::fs::read_to_string(&output).unwrap();
+    let _ = std::fs::remove_file(&output);
+    assert_eq!(exported, summary.report_markdown);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca31_behavior_comparison_lab_is_read_only_and_has_no_action_authority() {
+    let manifest = alife_game_app::default_environment_manifest_path();
+    let summary =
+        run_behavior_comparison_lab_smoke(&manifest, Some("gpu-alpha"), Some("p34"), 4).unwrap();
+
+    assert!(summary.scenario_a.isolated_run);
+    assert!(summary.scenario_b.isolated_run);
+    assert!(summary.scenario_a.report_only);
+    assert!(summary.scenario_b.report_only);
+    assert!(summary.scenario_a.no_hidden_training_mutation);
+    assert!(summary.scenario_b.no_hidden_training_mutation);
+    assert!(summary.panel.read_only);
+    assert!(summary.panel.stable_ids_only);
+    assert!(!summary.direct_cognition_mutation_allowed);
+    assert!(!summary.semantic_action_authority);
+    assert!(!summary.gpu_action_authority_claim);
+    assert!(summary
+        .report_markdown
+        .contains("CPU shadow parity remains the gate"));
+    assert!(summary
+        .report_markdown
+        .contains("no full action-authoritative GPU runtime is claimed"));
+    assert!(summary.validate().is_ok());
 }
 
 #[test]
