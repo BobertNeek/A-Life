@@ -6,12 +6,12 @@ use alife_game_app::{
     ca18_creature_selection_ids, ca18_cycle_selected_creature, compare_visible_world_to_headless,
     g17_feedback_manifest_path, g17_workspace_root, load_visible_world_from_p34_save,
     project_lod_without_behavior_change, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
-    run_behavior_comparison_lab_smoke, run_behavior_tuning_metrics_smoke,
-    run_behavior_tuning_metrics_with_config, run_cognition_debug_timeline_smoke,
-    run_content_authoring_smoke, run_creature_inspector_smoke, run_creature_visual_smoke,
-    run_curriculum_authoring_smoke, run_double_buffered_scheduler_smoke, run_ecological_soak_smoke,
-    run_ecological_soak_with_config, run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
-    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    run_batched_gpu_runtime_smoke, run_behavior_comparison_lab_smoke,
+    run_behavior_tuning_metrics_smoke, run_behavior_tuning_metrics_with_config,
+    run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
+    run_creature_visual_smoke, run_curriculum_authoring_smoke, run_double_buffered_scheduler_smoke,
+    run_ecological_soak_smoke, run_ecological_soak_with_config, run_feedback_polish_smoke,
+    run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_ecology_smoke, run_graphical_lifecycle_smoke, run_graphical_population_smoke,
     run_graphical_school_mode_smoke, run_hazard_recovery_smoke, run_headless_app_shell_smoke,
@@ -27,8 +27,8 @@ use alife_game_app::{
     run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke,
     run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
     validate_app_shell_config, write_behavior_comparison_lab_report, AppShellLaunchConfig,
-    AutosavePolicy, BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer,
-    CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus,
+    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
     CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
     DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
     FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
@@ -58,6 +58,7 @@ use alife_game_app::{
     CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA,
     CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION, CA31_MAX_REPORT_BYTES,
     CA32_REALTIME_WGSL_TELEMETRY_SCHEMA, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
+    CA33_BATCHED_GPU_RUNTIME_SCHEMA, CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -3897,6 +3898,68 @@ fn ca32_realtime_wgsl_telemetry_exposes_timing_split_and_routing_counters() {
         );
     }
     summary.validate().unwrap();
+}
+
+#[test]
+fn ca33_batched_gpu_runtime_uses_stable_id_population_and_honest_claims() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_batched_gpu_runtime_smoke(
+        &launch,
+        BatchedGpuRuntimeOptions {
+            max_creatures: 3,
+            ticks: 1,
+            cpu_shadow_every: 1,
+            json_path: None,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(summary.schema, CA33_BATCHED_GPU_RUNTIME_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION
+    );
+    assert_eq!(summary.batch_size, 3);
+    assert_eq!(summary.per_creature.len(), 3);
+    assert!(summary.shared_gpu_session);
+    assert!(summary.cpu_shadow_checked_every_tick);
+    assert!(summary.sampled_cpu_shadow_deferred_to_ca34);
+    assert!(summary.no_active_bulk_readback);
+    assert!(summary.stable_id_only);
+    assert!(!summary.full_action_authoritative_claim);
+    assert_ne!(summary.product_runtime_claim, "FullActionAuthoritative");
+    assert_eq!(
+        summary
+            .per_creature
+            .iter()
+            .map(|creature| creature.stable_id)
+            .collect::<Vec<_>>(),
+        vec![WorldEntityId(1), WorldEntityId(5), WorldEntityId(6)]
+    );
+    if summary.selected_backend != "CpuReference" {
+        assert!(summary.gpu_static_dispatched_creatures >= summary.batch_size as u32);
+        assert_eq!(summary.parity_failures, 0);
+        assert!(summary.cpu_shadow_parity_checks >= summary.batch_size as u32);
+        assert!(summary.compact_readback_bytes >= summary.batch_size * 64);
+        assert!(
+            summary.product_runtime_claim == "CpuShadowGuarded"
+                || summary.product_runtime_claim == "CpuShadowGuardedStaticPlusLiveHShadow"
+        );
+    } else {
+        assert!(summary.fallback_reason.is_some());
+        assert_eq!(summary.gpu_proposal_creatures, 0);
+        assert_eq!(summary.product_runtime_claim, "None");
+    }
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca33_batched_gpu_runtime_rejects_sampled_shadow_until_ca34() {
+    let options = BatchedGpuRuntimeOptions {
+        cpu_shadow_every: 2,
+        ..Default::default()
+    };
+    assert!(options.validate().is_err());
 }
 
 #[test]
