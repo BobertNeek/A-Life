@@ -42,6 +42,7 @@ Initial state: pack imported, no CA plans complete.
 | CA29 | complete | `codex/CA29-creature-memory-history-journal` | branch tip | Read-only memory/history journal, recent sealed patch rows, expectancy bias summaries, save/load visibility, and no-action-replay evidence recorded in `status/CA29_MEMORY_HISTORY_JOURNAL.md`; next executable plan is CA30. |
 | CA30 | complete | `codex/CA30-neural-activity-lobe-profiler-view` | branch tip | Compact neural activity profiler, lobe bars, active tile/synapse bounds, route status, and no-bulk-readback boundary recorded in `status/CA30_NEURAL_ACTIVITY_PROFILER.md`; next executable plan is CA31. |
 | CA31 | complete | `codex/CA31-player-lab-tools-behavior-comparison` | branch tip | A/B scenario runner, behavior signatures, read-only comparison panel, and small report export recorded in `status/CA31_BEHAVIOR_COMPARISON_LAB.md`; next executable plan is CAR31 hard-stop review. |
+| CAR31 | complete | `codex/CAR31-cognition-inspection-review` | branch tip | Cognition inspection review recorded in `reviews/CAR31_REVIEW_REPORT.md` with verdict `PASS_WITH_NOTES`; next executable plan is CA32 after user/ChatGPT consultation. |
 
 Post-CAR27 blocking migration: active local model runtime was migrated from
 Ollama to direct localhost-only llama.cpp / `llama-server` on
