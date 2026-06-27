@@ -19,12 +19,12 @@ use alife_game_app::{
     run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_player_sandbox_editor_smoke, run_population_performance_lod_smoke,
     run_population_social_loop_smoke, run_product_qa_hardening_smoke,
-    run_real_semantic_provider_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_bundle_manifest,
-    validate_app_shell_config, write_behavior_comparison_lab_report, AppShellLaunchConfig,
-    EnvironmentManifest, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    run_real_semantic_provider_smoke, run_realtime_wgsl_telemetry_smoke,
+    run_release_candidate_smoke, run_runtime_controls_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_bundle_manifest, validate_app_shell_config, write_behavior_comparison_lab_report,
+    AppShellLaunchConfig, EnvironmentManifest, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
     GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
 };
 
@@ -195,6 +195,36 @@ fn run() -> Result<String, String> {
                 summary.action_authority_blocked,
                 summary.weight_mutation_blocked,
                 summary.snapshot.signature_line()
+            ))
+        }
+        [command, fixture_root] if command == "realtime-wgsl-telemetry-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary =
+                run_realtime_wgsl_telemetry_smoke(&launch, 3).map_err(|err| err.to_string())?;
+            Ok(format!(
+                "CA32 realtime WGSL telemetry schema={} version={} ticks={}/{} backend={} fallback={:?} available={} up_ms={:.3} compute_ms={:.3} read_ms={:.3} cpu_shadow_ms={:.3} tiles={}/{} skipped={} syn={} readback={}B nonblocking={} cpu_shadow_gate={} parity={} scores={} h_shadow_apps={} no_bulk_readback={} full_action_authoritative=false",
+                summary.schema,
+                summary.schema_version,
+                summary.ticks_completed,
+                summary.requested_ticks,
+                summary.selected_backend,
+                summary.fallback_reason,
+                summary.telemetry.timing_available,
+                summary.telemetry.upload_ms,
+                summary.telemetry.compute_submit_poll_ms,
+                summary.telemetry.compact_readback_ms,
+                summary.telemetry.cpu_shadow_ms,
+                summary.telemetry.routing_active_tiles,
+                summary.telemetry.routing_total_tiles,
+                summary.telemetry.routing_skipped_tiles,
+                summary.telemetry.routing_active_synapses,
+                summary.telemetry.compact_readback_bytes,
+                summary.telemetry.nonblocking_hot_path,
+                summary.cpu_shadow_gate,
+                summary.cpu_shadow_parity,
+                summary.gpu_scores_used_for_proposals,
+                summary.h_shadow_applications,
+                summary.no_active_bulk_readback,
             ))
         }
         [command, rest @ ..] if command == "behavior-comparison-lab-smoke" => {
@@ -560,7 +590,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--smoke-seconds N] [--require-gpu] | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] [--json path] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] [--json path] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] [--episode-ticks N] [--json path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
