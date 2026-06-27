@@ -18,23 +18,24 @@ use alife_game_app::{
     run_homeostasis_runtime_smoke, run_internal_slm_prior_smoke, run_lifecycle_lineage_smoke,
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
     run_longrun_balance_with_config, run_memory_history_journal_smoke,
-    run_motor_ring_arbitration_smoke, run_neural_activity_profiler_smoke,
-    run_onboarding_help_smoke, run_platform_package_smoke, run_playable_survival_loop_smoke,
-    run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_real_semantic_provider_smoke,
-    run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
-    run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, write_behavior_comparison_lab_report,
-    AppShellLaunchConfig, AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig,
-    BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget, CameraNavigationState,
-    ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
-    CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
-    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest,
-    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    run_motor_ring_arbitration_smoke, run_multi_hour_soak_isolation_smoke,
+    run_neural_activity_profiler_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
+    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
+    run_population_social_loop_smoke, run_product_qa_hardening_smoke,
+    run_real_semantic_provider_smoke, run_realtime_wgsl_telemetry_smoke,
+    run_release_candidate_smoke, run_runtime_controls_smoke, run_sampled_gpu_runtime_smoke,
+    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
+    run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
+    validate_app_shell_config, write_behavior_comparison_lab_report, AppShellLaunchConfig,
+    AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus,
+    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
+    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
+    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
+    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest, LifecycleEventKind,
+    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
     LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
     PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
@@ -60,6 +61,7 @@ use alife_game_app::{
     CA32_REALTIME_WGSL_TELEMETRY_SCHEMA, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
     CA33_BATCHED_GPU_RUNTIME_SCHEMA, CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION,
     CA34_SAMPLED_GPU_RUNTIME_SCHEMA, CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
+    CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA, CA36_SOAK_ISOLATION_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -1086,6 +1088,66 @@ fn gpu_sustained_learning_soak_validation_rejects_overclaim() {
     summary.product_runtime_claim = "CpuShadowGuardedStaticPlusLiveHShadow".to_string();
     summary.gpu_proposal_ticks = 1;
     assert!(summary.validate().is_err());
+}
+
+#[test]
+fn ca36_soak_isolation_protocol_records_manual_untracked_artifacts() {
+    let summary = run_multi_hour_soak_isolation_smoke().unwrap();
+
+    assert_eq!(summary.schema, CA36_SOAK_ISOLATION_SCHEMA);
+    assert_eq!(summary.schema_version, CA36_SOAK_ISOLATION_SCHEMA_VERSION);
+    assert!(summary.artifact_root.starts_with("target/"));
+    assert!(summary.default_report_path.starts_with("target/"));
+    assert!(summary.report_artifacts_untracked);
+    assert_eq!(summary.manual_10k_commands.len(), 3);
+    assert!(summary
+        .manual_10k_commands
+        .iter()
+        .all(|command| command.min_ticks >= Some(CA36_MIN_MANUAL_TICKS)));
+    assert!(summary
+        .manual_10k_commands
+        .iter()
+        .any(|command| command.command.contains("gpu-sustained-learning-soak")));
+    assert!(summary
+        .manual_10k_commands
+        .iter()
+        .any(|command| command.command.contains("gpu-longrun-soak")));
+    assert!(summary
+        .manual_10k_commands
+        .iter()
+        .any(|command| command.command.contains("ca22_manual_10k_ecological_soak")));
+    assert!(summary.report_markdown.contains("Get-Process"));
+    assert!(summary.report_markdown.contains("WorkingSet64"));
+    assert!(summary
+        .report_markdown
+        .contains("target/ca36_soak_isolation"));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca36_soak_isolation_protocol_preserves_gpu_truth_boundaries() {
+    let summary = run_multi_hour_soak_isolation_smoke().unwrap();
+
+    assert!(summary.cpu_fallback_preserved);
+    assert!(summary.cpu_shadow_parity_preserved);
+    assert!(summary.no_active_bulk_readback);
+    assert!(!summary.full_action_authoritative_claim);
+    assert!(!summary.release_tag_created);
+    assert!(summary
+        .report_markdown
+        .contains("not full action-authoritative"));
+    assert!(summary
+        .precision_drift_counters
+        .iter()
+        .any(|counter| counter.name == "cpu_shadow_parity_checks"));
+    assert!(summary
+        .precision_drift_counters
+        .iter()
+        .any(|counter| counter.name == "h_shadow_delta_max"));
+    assert!(summary
+        .precision_drift_counters
+        .iter()
+        .any(|counter| counter.name == "working_set_private_memory"));
 }
 
 #[test]

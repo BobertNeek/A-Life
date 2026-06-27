@@ -47,6 +47,7 @@ Initial state: pack imported, no CA plans complete.
 | CA33 | complete | `codex/CA33-batched-multi-creature-gpu-runtime` | branch tip | Bounded batched multi-creature GPU runtime smoke, shared GPU session, per-creature compact summaries, and every-tick CPU shadow checks recorded in `status/CA33_BATCHED_MULTI_CREATURE_GPU_RUNTIME.md`; next executable plan is CA34. |
 | CA34 | complete | `codex/CA34-sampled-cpu-shadow-graduation-experiment` | branch tip | Manual sampled CPU-shadow experiment, warmup/sample interval, first-failure CPU fallback, and sampled non-authoritative claim recorded in `status/CA34_SAMPLED_CPU_SHADOW_GRADUATION.md`; next executable plan is CA35. |
 | CA35 | complete | `codex/CA35-property-fuzz-cpu-gpu-parity-gating` | branch tip | Deterministic property-style static/routing/plastic parity fuzz tests and stable repro strings recorded in `status/CA35_PROPERTY_FUZZ_CPU_GPU_PARITY.md`; next executable plan is CA36. |
+| CA36 | complete | `codex/CA36-multi-hour-soak-isolation` | branch tip | Manual 10k+/multi-hour soak protocol, untracked target report path, memory/process monitoring, and precision/drift counters recorded in `status/CA36_MULTI_HOUR_SOAK_ISOLATION.md`; next executable plan is CAR36 hard-stop review. |
 
 Post-CAR27 blocking migration: active local model runtime was migrated from
 Ollama to direct localhost-only llama.cpp / `llama-server` on
