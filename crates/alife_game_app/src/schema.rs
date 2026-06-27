@@ -140,6 +140,12 @@ pub const CA33_MAX_BATCH_TICKS: u32 = 8;
 pub const CA34_SAMPLED_GPU_RUNTIME_SCHEMA: &str = "alife.ca34.sampled_gpu_runtime.v1";
 pub const CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION: u16 = 1;
 pub const CA34_MAX_SAMPLED_TICKS: u32 = 16;
+pub const CA36_SOAK_ISOLATION_SCHEMA: &str = "alife.ca36.multi_hour_soak_isolation.v1";
+pub const CA36_SOAK_ISOLATION_SCHEMA_VERSION: u16 = 1;
+pub const CA36_MIN_MANUAL_TICKS: u32 = 10_000;
+pub const CA36_MIN_MULTI_HOUR_HOURS: u32 = 2;
+pub const CA36_DEFAULT_REPORT_PATH: &str =
+    "target/ca36_soak_isolation/CA36_MULTI_HOUR_SOAK_ISOLATION.md";
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA: &str = "alife.s01.graphical_playground_shell.v1";
 pub const S01_GRAPHICAL_PLAYGROUND_SCHEMA_VERSION: u16 = 1;
 pub const S01_MAX_GRAPHICAL_SMOKE_SECONDS: u32 = 120;

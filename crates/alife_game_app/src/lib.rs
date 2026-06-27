@@ -189,6 +189,9 @@ pub use gpu_product_telemetry::*;
 mod gpu_live_runtime;
 pub use gpu_live_runtime::*;
 
+mod soak_isolation;
+pub use soak_isolation::*;
+
 mod world_editor;
 pub use world_editor::*;
 
