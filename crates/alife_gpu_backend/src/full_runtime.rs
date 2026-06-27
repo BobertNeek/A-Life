@@ -188,6 +188,47 @@ pub struct FullGpuRuntimeBackendReport {
     pub plasticity: Option<FullGpuRuntimePlasticityReport>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct BatchedFullGpuRuntimeCreatureInput {
+    pub stable_id: u64,
+    pub organism_id: u64,
+    pub input: FullGpuRuntimeStaticTickInput,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BatchedFullGpuRuntimeCreatureReport {
+    pub stable_id: u64,
+    pub organism_id: u64,
+    pub static_tick: FullGpuRuntimeStaticTickReport,
+    pub plasticity: Option<FullGpuRuntimePlasticityReport>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BatchedFullGpuRuntimeLayoutReport {
+    pub batch_size: usize,
+    pub max_batch_size: usize,
+    pub shared_session: bool,
+    pub per_creature_compact_record_bytes: usize,
+    pub total_compact_readback_bytes: usize,
+    pub total_post_seal_diagnostic_readback_bytes: usize,
+    pub cpu_shadow_parity_checks: u32,
+    pub parity_failures: u32,
+    pub fallback_batches: u32,
+    pub plasticity_creatures: u32,
+    pub total_upload_ms: f32,
+    pub total_submit_poll_ms: f32,
+    pub total_compact_readback_ms: f32,
+    pub total_cpu_shadow_ms: f32,
+    pub total_post_seal_readback_ms: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BatchedFullGpuRuntimeReport {
+    pub mode: FullGpuRuntimeMode,
+    pub layout: BatchedFullGpuRuntimeLayoutReport,
+    pub creatures: Vec<BatchedFullGpuRuntimeCreatureReport>,
+}
+
 pub struct FullGpuRuntimeSession {
     mode: FullGpuRuntimeMode,
     execution: FullGpuRuntimeSessionExecution,
@@ -585,6 +626,94 @@ pub fn run_full_gpu_runtime_post_seal_plasticity_diagnostic(
 pub fn full_gpu_runtime_live_plasticity_schema(
 ) -> Result<NeuralProjectionSchema, ScaffoldContractError> {
     live_static_schema(0.1)
+}
+
+pub fn run_batched_full_gpu_runtime_static_plastic(
+    inputs: &[BatchedFullGpuRuntimeCreatureInput],
+    mode: FullGpuRuntimeMode,
+    max_batch_size: usize,
+    run_plasticity: bool,
+) -> Result<BatchedFullGpuRuntimeReport, ScaffoldContractError> {
+    if inputs.is_empty() || inputs.len() > max_batch_size {
+        return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
+    }
+    for input in inputs {
+        input.input.validate()?;
+    }
+
+    let session = FullGpuRuntimeSession::new(mode)?;
+    let mut creatures = Vec::with_capacity(inputs.len());
+    let mut total_compact_readback_bytes = 0_usize;
+    let mut total_post_seal_diagnostic_readback_bytes = 0_usize;
+    let mut cpu_shadow_parity_checks = 0_u32;
+    let mut parity_failures = 0_u32;
+    let mut fallback_batches = 0_u32;
+    let mut plasticity_creatures = 0_u32;
+    let mut total_upload_ms = 0.0_f32;
+    let mut total_submit_poll_ms = 0.0_f32;
+    let mut total_compact_readback_ms = 0.0_f32;
+    let mut total_cpu_shadow_ms = 0.0_f32;
+    let mut total_post_seal_readback_ms = 0.0_f32;
+
+    for input in inputs {
+        let static_tick = session.run_static_tick(input.input)?;
+        total_compact_readback_bytes = total_compact_readback_bytes
+            .saturating_add(static_tick.readback.compact_readback_bytes);
+        cpu_shadow_parity_checks = cpu_shadow_parity_checks.saturating_add(1);
+        parity_failures =
+            parity_failures.saturating_add(u32::from(!static_tick.cpu_shadow_parity_passed));
+        fallback_batches = fallback_batches
+            .saturating_add(u32::from(static_tick.backend.fallback_reason.is_some()));
+        total_upload_ms += static_tick.timing.upload_ms;
+        total_submit_poll_ms += static_tick.timing.gpu_submit_poll_ms;
+        total_compact_readback_ms += static_tick.timing.compact_readback_ms;
+        total_cpu_shadow_ms += static_tick.timing.cpu_shadow_ms;
+
+        let plasticity = if run_plasticity
+            && static_tick.backend.fallback_reason.is_none()
+            && static_tick.cpu_shadow_parity_passed
+            && mode.requests_plasticity()
+        {
+            let report = session.run_post_seal_plasticity_diagnostic(input.input)?;
+            total_submit_poll_ms += report.submit_poll_ms;
+            total_post_seal_readback_ms += report.diagnostic_readback_ms;
+            total_post_seal_diagnostic_readback_bytes = total_post_seal_diagnostic_readback_bytes
+                .saturating_add(report.diagnostic_readback_bytes);
+            plasticity_creatures = plasticity_creatures.saturating_add(1);
+            Some(report)
+        } else {
+            None
+        };
+
+        creatures.push(BatchedFullGpuRuntimeCreatureReport {
+            stable_id: input.stable_id,
+            organism_id: input.organism_id,
+            static_tick,
+            plasticity,
+        });
+    }
+
+    Ok(BatchedFullGpuRuntimeReport {
+        mode,
+        layout: BatchedFullGpuRuntimeLayoutReport {
+            batch_size: inputs.len(),
+            max_batch_size,
+            shared_session: true,
+            per_creature_compact_record_bytes: GPU_ACTION_SUMMARY_RECORD_BYTES,
+            total_compact_readback_bytes,
+            total_post_seal_diagnostic_readback_bytes,
+            cpu_shadow_parity_checks,
+            parity_failures,
+            fallback_batches,
+            plasticity_creatures,
+            total_upload_ms,
+            total_submit_poll_ms,
+            total_compact_readback_ms,
+            total_cpu_shadow_ms,
+            total_post_seal_readback_ms,
+        },
+        creatures,
+    })
 }
 
 pub fn post_seal_delta_batch_from_plasticity_report(

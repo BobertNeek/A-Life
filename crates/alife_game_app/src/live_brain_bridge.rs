@@ -111,6 +111,35 @@ impl LiveBrainLoop {
         let manifest = AssetManifest::from_json_file(&launch.asset_manifest_path)?;
         manifest.validate_with_root(&launch.asset_root)?;
         let save = PortableSaveFile::from_json_file(&launch.save_path)?;
+        let creature = save
+            .creatures
+            .first()
+            .ok_or(GameAppShellError::VisibleWorldMismatch {
+                message: "portable save must include at least one creature for G03",
+            })?;
+        Self::from_validated_save(&config, &manifest, &save, creature.organism_id, launch)
+    }
+
+    pub fn from_p34_launch_for_organism(
+        launch: &AppShellLaunchConfig,
+        organism_id: OrganismId,
+    ) -> Result<Self, GameAppShellError> {
+        let config = RuntimeConfig::from_json_file(&launch.config_path)?;
+        config.validate()?;
+        let manifest = AssetManifest::from_json_file(&launch.asset_manifest_path)?;
+        manifest.validate_with_root(&launch.asset_root)?;
+        let save = PortableSaveFile::from_json_file(&launch.save_path)?;
+        Self::from_validated_save(&config, &manifest, &save, organism_id, launch)
+    }
+
+    fn from_validated_save(
+        config: &RuntimeConfig,
+        manifest: &AssetManifest,
+        save: &PortableSaveFile,
+        organism_id: OrganismId,
+        launch: &AppShellLaunchConfig,
+    ) -> Result<Self, GameAppShellError> {
+        manifest.validate_with_root(&launch.asset_root)?;
         save.validate_with_asset_root(&launch.asset_root)?;
         if save.deterministic_seed != config.deterministic_seed {
             return Err(GameAppShellError::VisibleWorldMismatch {
@@ -119,9 +148,10 @@ impl LiveBrainLoop {
         }
         let creature = save
             .creatures
-            .first()
+            .iter()
+            .find(|creature| creature.organism_id == organism_id)
             .ok_or(GameAppShellError::VisibleWorldMismatch {
-                message: "portable save must include at least one creature for G03",
+                message: "portable save must include requested organism for live brain loop",
             })?;
         let world = save.restore_headless_world()?;
         let mut mind = CreatureMind::scaffold(
