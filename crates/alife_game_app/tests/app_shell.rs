@@ -21,24 +21,24 @@ use alife_game_app::{
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_product_qa_hardening_smoke, run_real_semantic_provider_smoke, run_release_candidate_smoke,
     run_runtime_controls_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
-    AppShellLaunchConfig, AutosavePolicy, BehaviorTuningConfig, BehaviorTuningFindingStatus,
-    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
-    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
-    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
-    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand,
-    RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus, SaveSlotDescriptor, SaveSlotKind,
-    SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape,
-    WorldEditCommand, WorldEditorConfig, WorldEditorMode, WorldEditorSession,
-    CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_topological_concept_overlay_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, AppShellLaunchConfig, AutosavePolicy,
+    BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CreatureAnimationState, CreatureExpressionState,
+    CreatureLifeStage, CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler,
+    EcologicalSoakConfig, FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind,
+    FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions,
+    GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    InspectorControlPanel, LessonManifest, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, ReleaseCandidateArea, ReleaseCandidateGateStatus, RenderDetailLevel,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, S08EvidenceStatus,
+    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
+    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
     CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
     CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
     CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
@@ -48,6 +48,7 @@ use alife_game_app::{
     CA25_CURRICULUM_AUTHORING_SCHEMA, CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
     CA26_REAL_SEMANTIC_PROVIDER_SCHEMA, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION,
     CA27_INTERNAL_SLM_PRIOR_SCHEMA, CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION,
+    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -3689,6 +3690,48 @@ fn ca27_real_local_slm_prior_smoke() {
     assert!(summary.malformed_output_rejected);
     assert!(summary.unavailable_is_user_action_required);
     summary.validate().unwrap();
+}
+
+#[test]
+fn ca28_topological_concept_overlay_shows_read_only_nodes_edges_and_events() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_topological_concept_overlay_smoke(&launch).unwrap();
+
+    assert_eq!(
+        summary.snapshot.schema,
+        CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA
+    );
+    assert_eq!(
+        summary.snapshot.schema_version,
+        CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION
+    );
+    assert!(summary.snapshot.concept_count >= 1);
+    assert!(summary.snapshot.edge_count >= 1);
+    assert!(!summary.snapshot.nodes.is_empty());
+    assert!(!summary.snapshot.edges.is_empty());
+    assert!(!summary.snapshot.event_links.is_empty());
+    assert!(summary.panel_text.contains("Concept Map (read-only)"));
+    assert!(summary
+        .panel_text
+        .contains("Boundary: bias/context only; no actions"));
+    assert!(summary.status_text.contains("Concepts:"));
+    assert!(!summary.panel_text.contains("Entity("));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca28_topological_concept_overlay_cannot_emit_actions_or_mutate_cognition() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_topological_concept_overlay_smoke(&launch).unwrap();
+
+    assert!(summary.snapshot.read_only);
+    assert!(summary.snapshot.bias_only);
+    assert!(!summary.snapshot.can_emit_actions);
+    assert!(!summary.snapshot.direct_cognition_mutation_allowed);
+    assert!(summary.topology_action_bypass_blocked);
+    assert!(!summary.direct_cognition_mutation_allowed);
+    assert!(summary.panel_text.contains("event tick="));
+    assert!(!summary.panel_text.contains("full action-authoritative"));
 }
 
 #[test]

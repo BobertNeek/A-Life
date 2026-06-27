@@ -38,9 +38,10 @@ Initial state: pack imported, no CA plans complete.
 | CA26 | complete | `codex/CA26-real-semantic-provider-adapter-v1` | branch tip | Historical CA26 evidence used localhost Ollama; active runtime is superseded by direct llama.cpp migration. Bounded 32-dim context projection, model manifest, and no action/weight authority evidence are recorded in `status/CA26_REAL_SEMANTIC_PROVIDER_ADAPTER.md`; next executable plan is CA27. |
 | CA27 | complete | `codex/CA27-internal-slm-subconscious-prior-adapter` | branch tip | Historical CA27 evidence used localhost Ollama; active runtime is superseded by direct llama.cpp migration. Bounded salience/context/lexicon/tag output, async queue, and no action/weight/vector authority evidence are recorded in `status/CA27_INTERNAL_SLM_SUBCONSCIOUS_PRIOR.md`; next executable plan is CAR27 hard-stop review. |
 | CAR27 | complete | `codex/CAR27-school-semantic-safety-review` | branch tip | School/semantic safety review recorded in `reviews/CAR27_REVIEW_REPORT.md` with verdict `PASS_WITH_NOTES`; next executable plan is CA28 after user/ChatGPT consultation. |
+| CA28 | complete | `codex/CA28-topological-concept-overlay` | branch tip | Read-only concept map overlay, topology event links, and no-action-bypass evidence recorded in `status/CA28_TOPOLOGICAL_CONCEPT_OVERLAY.md`; next executable plan is CA29. |
 
-Post-CAR27 blocking migration: active local model runtime is migrated from
+Post-CAR27 blocking migration: active local model runtime was migrated from
 Ollama to direct localhost-only llama.cpp / `llama-server` on
-`codex/migrate-local-model-runtime-to-llamacpp`. CA28 must not start until this
-migration is validated and merged. The migration report is
+`codex/migrate-local-model-runtime-to-llamacpp`, validated, merged, and accepted
+before CA28. The migration report is
 `docs/creatures_agi_roadmap_pack/model_selection/LLAMA_CPP_RUNTIME_MIGRATION_REPORT.md`.
