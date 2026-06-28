@@ -147,7 +147,7 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
     assert_eq!(summary.config_entries, 6);
     assert_eq!(summary.shader_assets, 5);
     assert_eq!(summary.discovered_shader_assets, 5);
-    assert_eq!(summary.placeholder_art_entries, 4);
+    assert_eq!(summary.placeholder_art_entries, 10);
     assert!(summary.shader_discovery_complete);
     assert!(summary.tiny_placeholder_art);
     assert!(!summary.large_binary_assets_committed);
