@@ -3377,7 +3377,67 @@ fn platform_package_smoke_validates_scripts_manifest_and_artifact_policy() {
             && !command.windows_command.contains("gpu-report")
             && !command.windows_command.contains("ALIFE_GPU_BACKEND")
     }));
+    assert!(summary.commands.iter().any(|command| command.id
+        == "ca41-windows-alpha-package-dry-run"
+        && command
+            .windows_command
+            .contains("scripts/package_windows_alpha.ps1 -DryRun")));
+    assert!(summary.commands.iter().any(|command| command.id
+        == "ca41-windows-alpha-package-runner-dry-run"
+        && command
+            .windows_command
+            .contains("run_windows_alpha_package.ps1 -DryRun")));
     summary.validate().unwrap();
+}
+
+#[test]
+fn ca41_windows_alpha_package_scripts_are_cargo_free_for_testers_and_artifact_safe() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let package_script =
+        std::fs::read_to_string(root.join("scripts/package_windows_alpha.ps1")).unwrap();
+    let runner_script =
+        std::fs::read_to_string(root.join("scripts/run_windows_alpha_package.ps1")).unwrap();
+    let status_doc = std::fs::read_to_string(
+        root.join("docs/creatures_agi_roadmap_pack/status/CA41_WINDOWS_ZIP_PACKAGE.md"),
+    )
+    .unwrap();
+
+    assert!(package_script.contains("cargo"));
+    assert!(package_script.contains("--release"));
+    assert!(package_script.contains("target/artifacts/ca41_windows_alpha"));
+    assert!(package_script.contains("Compress-Archive"));
+    assert!(package_script.contains("AllowedRootWithSeparator"));
+    assert!(package_script.contains("PackageChildren"));
+    assert!(package_script.contains("Select-Object -ExpandProperty FullName"));
+    assert!(package_script.contains("package_metadata.json"));
+    assert!(package_script.contains("working_tree_dirty"));
+    assert!(package_script.contains("crates/alife_game_app/environment_manifest.json"));
+    assert!(package_script.contains("crates/alife_game_app/app_bundle_manifest.json"));
+    assert!(package_script.contains("crates/alife_gpu_backend/shaders"));
+    assert!(package_script.contains("crates/alife_world/tests/fixtures/gpu_alpha"));
+    assert!(package_script.contains("release_tag_created = $false"));
+    assert!(!package_script.contains("git tag"));
+    assert!(!package_script.contains("bash scripts/check.sh"));
+
+    assert!(runner_script.contains("alife_game_app.exe"));
+    assert!(runner_script.contains("graphical-playground"));
+    assert!(runner_script.contains("--manifest"));
+    assert!(runner_script.contains("--scenario"));
+    assert!(runner_script.contains("--gpu-mode"));
+    assert!(runner_script.contains("static-plastic-cpu-shadow-guarded"));
+    assert!(runner_script.contains("CPU fallback is safety fallback"));
+    assert!(runner_script.contains("Full action-authoritative GPU runtime claim: false"));
+    assert!(!runner_script.contains("cargo run"));
+    assert!(!runner_script.contains("bash scripts/check.sh"));
+    assert!(!runner_script.contains("ALIFE_GPU_BACKEND"));
+
+    assert!(status_doc.contains("CA41"));
+    assert!(status_doc.contains("scripts/package_windows_alpha.ps1"));
+    assert!(status_doc.contains("scripts/run_windows_alpha_package.ps1"));
+    assert!(status_doc.contains("target/artifacts/ca41_windows_alpha"));
+    assert!(status_doc.contains("No release tag"));
+    assert!(status_doc.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
+    assert!(status_doc.contains("not full action-authoritative"));
 }
 
 #[test]

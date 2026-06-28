@@ -334,6 +334,31 @@ pub fn platform_package_commands() -> Vec<PlatformPackageCommand> {
             requires_graphics: false,
             requires_gpu: false,
         },
+        PlatformPackageCommand {
+            id: "ca41-windows-alpha-package-dry-run".to_string(),
+            kind: PackageSmokeKind::Validation,
+            windows_command:
+                "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_alpha.ps1 -DryRun"
+                    .to_string(),
+            non_windows_command:
+                "Windows-only CA41 packaging dry-run; use PowerShell on Windows.".to_string(),
+            manual: false,
+            requires_graphics: false,
+            requires_gpu: false,
+        },
+        PlatformPackageCommand {
+            id: "ca41-windows-alpha-package-runner-dry-run".to_string(),
+            kind: PackageSmokeKind::GraphicalManual,
+            windows_command:
+                "powershell -NoProfile -ExecutionPolicy Bypass -File target/artifacts/ca41_windows_alpha/alife-gpu-alpha-windows/run_windows_alpha_package.ps1 -DryRun"
+                    .to_string(),
+            non_windows_command:
+                "Windows-only packaged graphical alpha runner; use PowerShell on Windows."
+                    .to_string(),
+            manual: true,
+            requires_graphics: true,
+            requires_gpu: false,
+        },
     ]
 }
 

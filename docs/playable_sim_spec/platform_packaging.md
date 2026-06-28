@@ -60,6 +60,36 @@ Validate the bundle discipline with:
 cargo run -p alife_game_app --bin alife_game_app -- platform-package-smoke
 ```
 
+## CA41 Windows Alpha ZIP Package
+
+The Creatures-to-AGI CA41 packaging pass adds a local Windows alpha package
+builder. This is still a local artifact discipline: it does not publish,
+sign, tag, or claim release readiness.
+
+Dry-run the builder:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_alpha.ps1 -DryRun
+```
+
+Build a release EXE, copy the app manifests, tiny fixtures, WGSL shaders, and
+package-local runner, then create a ZIP under `target/artifacts/`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_alpha.ps1
+```
+
+Run the assembled package without Cargo:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File target/artifacts/ca41_windows_alpha/alife-gpu-alpha-windows/run_windows_alpha_package.ps1
+```
+
+The package defaults to GPU-first
+`static-plastic-cpu-shadow-guarded`, keeps CPU fallback available as
+safety/degraded mode, preserves CPU shadow parity, and does not claim full
+action-authoritative GPU runtime.
+
 ## Required Validation Wrappers
 
 On Windows, use the wrapper scripts for repository validation:
