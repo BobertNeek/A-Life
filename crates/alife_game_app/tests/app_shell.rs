@@ -6,14 +6,15 @@ use alife_game_app::{
     ca18_creature_selection_ids, ca18_cycle_selected_creature, ca39_drive_audio_vfx_summary,
     compare_visible_world_to_headless, g17_feedback_manifest_path, g17_workspace_root,
     load_visible_world_from_p34_save, project_lod_without_behavior_change,
-    run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke, run_batched_gpu_runtime_smoke,
-    run_behavior_comparison_lab_smoke, run_behavior_tuning_metrics_smoke,
-    run_behavior_tuning_metrics_with_config, run_cognition_debug_timeline_smoke,
-    run_content_authoring_smoke, run_creature_animation_state_machine_smoke,
-    run_creature_inspector_smoke, run_creature_visual_smoke, run_curriculum_authoring_smoke,
-    run_double_buffered_scheduler_smoke, run_drive_coupled_audio_vfx_smoke,
-    run_ecological_soak_smoke, run_ecological_soak_with_config, run_feedback_polish_smoke,
-    run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
+    render_ca43_crash_summary, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
+    run_batched_gpu_runtime_smoke, run_behavior_comparison_lab_smoke,
+    run_behavior_tuning_metrics_smoke, run_behavior_tuning_metrics_with_config,
+    run_cognition_debug_timeline_smoke, run_content_authoring_smoke,
+    run_creature_animation_state_machine_smoke, run_creature_inspector_smoke,
+    run_creature_visual_smoke, run_curriculum_authoring_smoke, run_double_buffered_scheduler_smoke,
+    run_drive_coupled_audio_vfx_smoke, run_ecological_soak_smoke, run_ecological_soak_with_config,
+    run_feedback_polish_smoke, run_full_gpu_runtime_smoke,
+    run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
     run_graphical_ecology_smoke, run_graphical_lifecycle_smoke, run_graphical_population_smoke,
     run_graphical_school_mode_smoke, run_hazard_recovery_smoke, run_headless_app_shell_smoke,
@@ -28,12 +29,13 @@ use alife_game_app::{
     run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
     run_runtime_prereq_diagnostics, run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke,
     run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
-    run_topological_concept_overlay_smoke, run_world_art_style_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
-    write_behavior_comparison_lab_report, AppShellLaunchConfig, AutosavePolicy,
-    BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer,
-    Ca39DriveCueKind, Ca39RuntimeCueEvidence, CadenceTarget, CameraNavigationState,
-    ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
+    run_tester_feedback_capture_smoke, run_topological_concept_overlay_smoke,
+    run_world_art_style_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, write_behavior_comparison_lab_report,
+    AppShellLaunchConfig, AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig,
+    BehaviorTuningFindingStatus, Ca13TickBuffer, Ca39DriveCueKind, Ca39RuntimeCueEvidence,
+    Ca43LogDirectoryPolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
+    CrashSummaryInput, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
     CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
     FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
     FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
@@ -76,7 +78,8 @@ use alife_game_app::{
     CA39_REQUIRED_DRIVE_CUE_COUNT, CA40_ONBOARDING_TUTORIAL_SCHEMA,
     CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION, CA40_REQUIRED_CHECKLIST_ITEMS,
     CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA, CA42_RUNTIME_PREREQ_SCHEMA,
-    CA42_RUNTIME_PREREQ_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    CA42_RUNTIME_PREREQ_SCHEMA_VERSION, CA43_TESTER_FEEDBACK_SCHEMA,
+    CA43_TESTER_FEEDBACK_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
     G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_semantic::{
@@ -3692,6 +3695,111 @@ fn ca42_launcher_scripts_run_preflight_and_keep_artifacts_untracked() {
         .any(|command| command.id == "ca42-runtime-prereq-smoke"
             && command.windows_command.contains("runtime-prereq-smoke")));
     assert!(!summary.generated_artifacts_tracked);
+}
+
+#[test]
+fn ca43_tester_feedback_capture_smoke_validates_policy_template_and_scripts() {
+    let summary = run_tester_feedback_capture_smoke().unwrap();
+
+    assert_eq!(summary.schema, CA43_TESTER_FEEDBACK_SCHEMA);
+    assert_eq!(summary.schema_version, CA43_TESTER_FEEDBACK_SCHEMA_VERSION);
+    assert!(summary
+        .policy
+        .repo_feedback_dir
+        .starts_with("target/artifacts"));
+    assert_eq!(
+        summary.policy.package_feedback_dir,
+        PathBuf::from("diagnostics/ca43_tester_feedback")
+    );
+    assert!(summary.policy.artifacts_must_remain_untracked);
+    assert!(summary.policy.sanitize_paths_required);
+    assert!(summary.launcher_script_wired);
+    assert!(summary.package_script_wired);
+    assert!(summary.docs_template_present);
+    assert!(!summary.tracked_artifacts_present);
+    assert!(summary.no_release_tag_claim);
+    assert!(summary.no_core_dependency_change_required);
+    assert!(summary.crash_summary.user_action_required);
+    assert!(summary.crash_summary.commit_media_forbidden);
+    assert!(summary
+        .feedback_template
+        .severity_labels
+        .contains(&"BLOCKER"));
+    summary
+        .validate(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .unwrap();
+
+    let package = run_platform_package_smoke().unwrap();
+    assert!(package
+        .commands
+        .iter()
+        .any(|command| command.id == "ca43-tester-feedback-smoke"
+            && command.windows_command.contains("tester-feedback-smoke")
+            && !command.manual
+            && !command.requires_graphics
+            && !command.requires_gpu));
+}
+
+#[test]
+fn ca43_crash_summary_sanitizes_local_paths_and_forbids_committed_media() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let input = CrashSummaryInput::sample_for_workspace(&root);
+    let summary = render_ca43_crash_summary(&input, &root);
+    let markdown = summary.to_markdown();
+
+    assert!(!summary
+        .sanitized_command
+        .contains(&root.display().to_string()));
+    assert!(!summary
+        .sanitized_log_path
+        .contains(&root.display().to_string()));
+    assert!(!summary
+        .sanitized_stderr_tail
+        .contains(&root.display().to_string()));
+    assert!(summary.sanitized_command.contains("<local-path>"));
+    assert!(markdown.contains("Commit media/log artifacts: `false`"));
+    assert!(markdown.contains("User action required: `true`"));
+    summary.validate(&root).unwrap();
+}
+
+#[test]
+fn ca43_launcher_scripts_report_local_feedback_paths_without_tracking_artifacts() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let repo_script =
+        std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
+    let package_runner =
+        std::fs::read_to_string(root.join("scripts/run_windows_alpha_package.ps1")).unwrap();
+    let package_script =
+        std::fs::read_to_string(root.join("scripts/package_windows_alpha.ps1")).unwrap();
+    let status_doc = std::fs::read_to_string(
+        root.join("docs/creatures_agi_roadmap_pack/status/CA43_CRASH_LOGS_TESTER_FEEDBACK.md"),
+    )
+    .unwrap();
+    let template = std::fs::read_to_string(
+        root.join("docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md"),
+    )
+    .unwrap();
+
+    for text in [&repo_script, &package_runner] {
+        assert!(text.contains("ca43_tester_feedback"));
+        assert!(text.contains("crash_summary.md"));
+        assert!(text.contains("tester_feedback_template.md"));
+        assert!(text.contains("Write-Ca43CrashSummary"));
+        assert!(text.contains("Convert-ToCa43SafeText"));
+        assert!(text.contains("Commit media/log artifacts: false"));
+        assert!(!text.contains("git tag"));
+        assert!(!text.contains("bash scripts/check.sh"));
+    }
+    assert!(repo_script.contains("target/artifacts/ca43_tester_feedback"));
+    assert!(package_runner.contains("diagnostics/ca43_tester_feedback"));
+    assert!(package_script.contains("CA43_TESTER_FEEDBACK_TEMPLATE.md"));
+    assert!(status_doc.contains("target/artifacts/ca43_tester_feedback"));
+    assert!(status_doc.contains("diagnostics/ca43_tester_feedback"));
+    assert!(status_doc.contains("Full action-authoritative GPU runtime is not claimed"));
+    assert!(template.contains("A-Life Alpha Tester Feedback Template"));
+    assert!(template.contains("Do not attach or commit screenshots"));
+    assert!(template.contains("Release/tag recommendation: defer"));
+    assert!(Ca43LogDirectoryPolicy::default().validate().is_ok());
 }
 
 #[test]

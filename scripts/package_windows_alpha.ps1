@@ -105,6 +105,7 @@ $CopyFiles = @(
     "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
     "crates/alife_world/tests/fixtures/p34/tiny_save.json",
     "crates/alife_world/tests/fixtures/p34/assets/tiny_generated_weights_ref.json",
+    "docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md",
     "examples/model_manifests/local_semantic_models.json"
 )
 
@@ -196,6 +197,7 @@ try {
             "crates/alife_game_app",
             "crates/alife_world/tests/fixtures/gpu_alpha",
             "crates/alife_world/tests/fixtures/p34",
+            "docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md",
             "crates/alife_gpu_backend/shaders",
             "examples/model_manifests/local_semantic_models.json"
         )
@@ -221,6 +223,11 @@ This package is GPU-first and requests `static-plastic-cpu-shadow-guarded` by
 default. CPU fallback remains available and is visibly degraded/safety mode.
 This is not a full action-authoritative GPU runtime claim and no release tag is
 created by the package builder.
+
+If launch fails, the runner writes a sanitized CA43 crash summary and tester
+feedback template under `diagnostics/ca43_tester_feedback/`. Keep those files
+local or reference them externally; do not commit screenshots, logs, captures,
+target artifacts, model files, or caches.
 "@ | Set-Content -Encoding UTF8 (Join-Path $PackageRoot "README_PACKAGE.md")
 
     if (-not $NoZip) {
