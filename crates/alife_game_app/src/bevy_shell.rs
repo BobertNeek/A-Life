@@ -33,8 +33,8 @@ use crate::{
     CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
     GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
     GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
-    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
-    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
+    GraphicalPlaygroundViewMode, LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand,
+    RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
     VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
 };
 
@@ -131,6 +131,11 @@ pub struct VisibleCreatureState {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalPlaygroundSceneResource {
     pub summary: GraphicalPlaygroundLaunchSummary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
+pub struct GraphicalViewModeResource {
+    pub mode: GraphicalPlaygroundViewMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -364,6 +369,12 @@ pub struct GraphicalObjectBadge {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalObjectGlyph {
+    pub stable_id: WorldEntityId,
+    pub kind: WorldObjectKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalIntentLine;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -568,6 +579,9 @@ pub fn build_graphical_playground_app_shell(
     .insert_resource(ClearColor(Color::srgb(0.045, 0.065, 0.055)))
     .insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
+    })
+    .insert_resource(GraphicalViewModeResource {
+        mode: summary.view_mode,
     });
     spawn_graphical_playground_scene(
         &mut app,
@@ -737,6 +751,9 @@ pub fn build_ca03_intent_feedback_preview_app_shell(
     app.insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     });
+    app.insert_resource(GraphicalViewModeResource {
+        mode: summary.view_mode,
+    });
     spawn_graphical_playground_scene(&mut app, &presentation, &summary, None, None, None)?;
     app.insert_resource(GraphicalRuntimeControlsResource {
         panel,
@@ -904,14 +921,14 @@ fn spawn_graphical_playground_scene(
     }
 
     for object in &presentation.objects {
-        spawn_graphical_object(app, object)?;
+        spawn_graphical_object(app, object, summary.view_mode)?;
     }
     if let Some(school) = school {
-        spawn_ca23_school_teacher_markers(app, school);
+        spawn_ca23_school_teacher_markers(app, school, summary.view_mode);
     }
-    spawn_graphical_intent_feedback(app);
+    spawn_graphical_intent_feedback(app, summary.view_mode);
     spawn_ca08_feedback_pulses(app, presentation);
-    spawn_ca18_social_proximity_cues(app, presentation);
+    spawn_ca18_social_proximity_cues(app, presentation, summary.view_mode);
 
     app.insert_resource(VisibleWorldSceneResource {
         schema: presentation.schema,
@@ -925,7 +942,7 @@ fn spawn_graphical_playground_scene(
     app.world_mut().spawn((
         Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "Status\nA-Life GPU Alpha Playground\nState: launch  Speed: 1x\nTick: pending  World: pending\nGPU: {} requested\nCreature: stable:1\nGoal: idle  Action: None\nTarget: none  Intent: pending\nPatch: sealed=false count=0\nLearning: H_shadow pulse\nFixture seed={}",
+            "A-Life GPU Alpha\nState: launch  Speed: 1x\nGPU: {}\nCreature: selected\nControls: Space | N | R | Esc\nseed={}",
             summary.requested_gpu_mode.label(),
             summary.seed,
         )),
@@ -938,11 +955,11 @@ fn spawn_graphical_playground_scene(
             position_type: PositionType::Absolute,
             top: Val::Px(12.0),
             left: Val::Px(12.0),
-            max_width: Val::Px(350.0),
+            max_width: Val::Px(320.0),
             padding: bevy::ui::UiRect::all(Val::Px(8.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.02, 0.03, 0.025, 0.70)),
+        BackgroundColor(Color::srgba(0.02, 0.03, 0.025, 0.58)),
         RuntimeStatusOverlay,
     ));
 
@@ -1105,7 +1122,13 @@ fn spawn_graphical_playground_scene(
 
     app.world_mut().spawn((
         Name::new("A-Life CA05 controls and legend panel"),
-        Text::new(ca05_controls_bar_text()),
+        Text::new(
+            if summary.view_mode == GraphicalPlaygroundViewMode::Player {
+                ca42a_player_controls_bar_text()
+            } else {
+                ca05_controls_bar_text()
+            },
+        ),
         TextFont {
             font_size: 10.0,
             ..default()
@@ -1119,13 +1142,13 @@ fn spawn_graphical_playground_scene(
             padding: bevy::ui::UiRect::all(Val::Px(7.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.025, 0.025, 0.02, 0.56)),
+        BackgroundColor(Color::srgba(0.025, 0.025, 0.02, 0.46)),
         ReadabilityLegendOverlay,
     ));
 
     app.world_mut().spawn((
         Name::new("A-Life CA05 event feed panel"),
-        Text::new("Event Feed\n- Waiting for first GPU-backed tick."),
+        Text::new("Events: waiting for first tick"),
         TextFont {
             font_size: 9.0,
             ..default()
@@ -1135,11 +1158,11 @@ fn spawn_graphical_playground_scene(
             position_type: PositionType::Absolute,
             bottom: Val::Px(18.0),
             right: Val::Px(12.0),
-            max_width: Val::Px(310.0),
+            max_width: Val::Px(270.0),
             padding: bevy::ui::UiRect::all(Val::Px(7.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.018, 0.03, 0.024, 0.58)),
+        BackgroundColor(Color::srgba(0.018, 0.03, 0.024, 0.44)),
         FeedbackCueOverlay,
     ));
 
@@ -1161,6 +1184,7 @@ fn spawn_graphical_playground_scene(
             ..default()
         },
         BackgroundColor(Color::srgba(0.018, 0.036, 0.02, 0.62)),
+        view_mode_visibility(summary.view_mode.dev_overlay_visible()),
         GraphicalOnboardingTutorialOverlay,
     ));
 
@@ -1230,7 +1254,12 @@ fn spawn_graphical_playground_scene(
     Ok(())
 }
 
-fn spawn_ca18_social_proximity_cues(app: &mut App, presentation: &VisibleWorldPresentation) {
+fn spawn_ca18_social_proximity_cues(
+    app: &mut App,
+    presentation: &VisibleWorldPresentation,
+    view_mode: GraphicalPlaygroundViewMode,
+) {
+    let visibility = view_mode_visibility(view_mode.topology_lines_visible());
     for cue in ca18_social_proximity_cues(presentation) {
         let Some(from) = presentation
             .objects
@@ -1273,7 +1302,16 @@ fn spawn_ca18_social_proximity_cues(app: &mut App, presentation: &VisibleWorldPr
                 from_stable_id: cue.from_stable_id,
                 to_stable_id: cue.to_stable_id,
             },
+            visibility,
         ));
+    }
+}
+
+fn view_mode_visibility(visible: bool) -> Visibility {
+    if visible {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
     }
 }
 
@@ -1422,11 +1460,11 @@ fn ca37_seeded_terrain_hash(seed: u64, ix: i32, iz: i32) -> i32 {
 fn ca37_terrain_tile_color(seed: u64, material_id: &str, ix: i32, iz: i32) -> Color {
     let shade = ((ca37_seeded_terrain_hash(seed, ix, iz) % 7) as f32) * 0.008;
     match material_id {
-        "neutral-soil" => Color::srgba(0.39 + shade, 0.29 + shade, 0.17, 0.26),
-        "resource-grove" => Color::srgba(0.14 + shade, 0.48 + shade, 0.18, 0.29),
-        "hazard-pressure" => Color::srgba(0.58 + shade, 0.20, 0.15, 0.27),
-        "stone-dressing" => Color::srgba(0.31 + shade, 0.34 + shade, 0.27, 0.22),
-        _ => Color::srgba(0.17 + shade, 0.39 + shade, 0.18, 0.22),
+        "neutral-soil" => Color::srgba(0.39 + shade, 0.29 + shade, 0.17, 0.13),
+        "resource-grove" => Color::srgba(0.14 + shade, 0.48 + shade, 0.18, 0.15),
+        "hazard-pressure" => Color::srgba(0.58 + shade, 0.20, 0.15, 0.16),
+        "stone-dressing" => Color::srgba(0.31 + shade, 0.34 + shade, 0.27, 0.12),
+        _ => Color::srgba(0.17 + shade, 0.39 + shade, 0.18, 0.12),
     }
 }
 
@@ -1445,7 +1483,8 @@ pub fn ca37_world_art_overlay_text(summary: &Ca37WorldArtStyleSummary) -> String
     summary.compact_overlay_text()
 }
 
-fn spawn_graphical_intent_feedback(app: &mut App) {
+fn spawn_graphical_intent_feedback(app: &mut App, view_mode: GraphicalPlaygroundViewMode) {
+    let visibility = view_mode_visibility(view_mode.world_labels_visible());
     app.world_mut().spawn((
         Name::new("A-Life CA03 stable-ID intent line"),
         Sprite {
@@ -1454,6 +1493,7 @@ fn spawn_graphical_intent_feedback(app: &mut App) {
             ..default()
         },
         Transform::from_xyz(0.0, 0.0, 0.35),
+        visibility,
         GraphicalIntentLine,
     ));
 
@@ -1466,6 +1506,7 @@ fn spawn_graphical_intent_feedback(app: &mut App) {
         },
         TextColor(Color::srgb(0.98, 0.96, 0.72)),
         Transform::from_xyz(0.0, 56.0, 1.15),
+        visibility,
         GraphicalActionBadge,
     ));
 }
@@ -1543,6 +1584,7 @@ fn ca08_pulse_size(kind: Ca08SensoryCueKind) -> Vec2 {
 fn spawn_graphical_object(
     app: &mut App,
     object: &VisibleWorldObjectPresentation,
+    view_mode: GraphicalPlaygroundViewMode,
 ) -> Result<(), GameAppShellError> {
     let material = object.material;
     let marker_position = graphical_position(object);
@@ -1618,6 +1660,7 @@ fn spawn_graphical_object(
     app.world_mut()
         .resource_mut::<BevyEntityMap>()
         .bind(entity, object.stable_id)?;
+    spawn_graphical_object_glyphs(app, object, marker_position);
 
     app.world_mut().spawn((
         Name::new(format!("A-Life label stable:{}", object.stable_id.raw())),
@@ -1628,6 +1671,7 @@ fn spawn_graphical_object(
         },
         TextColor(readability_label_color(object.kind)),
         Transform::from_translation(marker_position + graphical_badge_offset(object.kind)),
+        view_mode_visibility(view_mode.world_labels_visible()),
         GraphicalObjectBadge {
             stable_id: object.stable_id,
             kind: object.kind,
@@ -1636,7 +1680,144 @@ fn spawn_graphical_object(
     Ok(())
 }
 
-fn spawn_ca23_school_teacher_markers(app: &mut App, school: &Ca23GraphicalSchoolSummary) {
+fn spawn_graphical_object_glyphs(
+    app: &mut App,
+    object: &VisibleWorldObjectPresentation,
+    marker_position: Vec3,
+) {
+    match object.kind {
+        WorldObjectKind::Agent => {
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(0.0, 5.0, 0.95),
+                Vec2::new(42.0, 18.0),
+                Color::srgba(0.78, 0.98, 0.92, 0.72),
+                0.0,
+            );
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(14.0, 5.0, 1.0),
+                Vec2::new(6.0, 6.0),
+                Color::srgba(0.02, 0.08, 0.07, 0.88),
+                0.0,
+            );
+        }
+        WorldObjectKind::Food => {
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(0.0, 0.0, 0.94),
+                Vec2::new(12.0, 42.0),
+                Color::srgba(0.62, 1.0, 0.42, 0.82),
+                0.0,
+            );
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(0.0, 0.0, 0.95),
+                Vec2::new(42.0, 12.0),
+                Color::srgba(0.62, 1.0, 0.42, 0.82),
+                0.0,
+            );
+        }
+        WorldObjectKind::Hazard => {
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(0.0, 0.0, 0.96),
+                Vec2::new(52.0, 52.0),
+                Color::srgba(1.0, 0.08, 0.10, 0.78),
+                45.0,
+            );
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(0.0, 4.0, 1.02),
+                Vec2::new(8.0, 30.0),
+                Color::srgba(1.0, 0.92, 0.70, 0.92),
+                0.0,
+            );
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(0.0, -18.0, 1.02),
+                Vec2::new(9.0, 9.0),
+                Color::srgba(1.0, 0.92, 0.70, 0.92),
+                0.0,
+            );
+        }
+        WorldObjectKind::Obstacle => {
+            for (x, y, size) in [(-15.0, -8.0, 22.0), (3.0, 6.0, 30.0), (24.0, -3.0, 18.0)] {
+                spawn_object_glyph_rect(
+                    app,
+                    object,
+                    marker_position + Vec3::new(x, y, 0.94),
+                    Vec2::splat(size),
+                    Color::srgba(0.72, 0.70, 0.64, 0.70),
+                    12.0,
+                );
+            }
+        }
+        WorldObjectKind::Token => {
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(0.0, 0.0, 0.94),
+                Vec2::new(36.0, 10.0),
+                Color::srgba(0.94, 0.82, 1.0, 0.70),
+                0.0,
+            );
+            spawn_object_glyph_rect(
+                app,
+                object,
+                marker_position + Vec3::new(0.0, 0.0, 0.95),
+                Vec2::new(10.0, 36.0),
+                Color::srgba(0.94, 0.82, 1.0, 0.70),
+                0.0,
+            );
+        }
+    }
+}
+
+fn spawn_object_glyph_rect(
+    app: &mut App,
+    object: &VisibleWorldObjectPresentation,
+    translation: Vec3,
+    size: Vec2,
+    color: Color,
+    rotation_degrees: f32,
+) {
+    app.world_mut().spawn((
+        Name::new(format!(
+            "A-Life player glyph {:?} stable:{}",
+            object.kind,
+            object.stable_id.raw()
+        )),
+        Sprite {
+            color,
+            custom_size: Some(size),
+            ..default()
+        },
+        Transform {
+            translation,
+            rotation: bevy::prelude::Quat::from_rotation_z(rotation_degrees.to_radians()),
+            ..default()
+        },
+        GraphicalObjectGlyph {
+            stable_id: object.stable_id,
+            kind: object.kind,
+        },
+    ));
+}
+
+fn spawn_ca23_school_teacher_markers(
+    app: &mut App,
+    school: &Ca23GraphicalSchoolSummary,
+    view_mode: GraphicalPlaygroundViewMode,
+) {
+    let visibility = view_mode_visibility(view_mode.teacher_debug_labels_visible());
     app.world_mut().spawn((
         Name::new(format!(
             "A-Life CA23 teacher cue stable:{}",
@@ -1649,6 +1830,7 @@ fn spawn_ca23_school_teacher_markers(app: &mut App, school: &Ca23GraphicalSchool
         },
         TextColor(Color::srgb(0.82, 0.66, 1.0)),
         Transform::from_translation(Vec3::new(-300.0, 132.0, 1.08)),
+        visibility,
         GraphicalTeacherCueMarker {
             stable_id: school.teacher_avatar_stable_id,
         },
@@ -1668,6 +1850,7 @@ fn spawn_ca23_school_teacher_markers(app: &mut App, school: &Ca23GraphicalSchool
             },
             TextColor(Color::srgb(0.92, 0.78, 1.0)),
             Transform::from_translation(Vec3::new(-210.0 + row * 116.0, 96.0 - row * 18.0, 1.08)),
+            visibility,
             GraphicalTeacherCueMarker {
                 stable_id: cue.stable_id,
             },
@@ -2295,10 +2478,15 @@ fn update_graphical_selection_ring(
 fn update_graphical_runtime_overlay(
     runtime: Res<GraphicalRuntimeControlsResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
+    view_mode: Res<GraphicalViewModeResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<RuntimeStatusOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = graphical_player_status_overlay_text(&runtime.panel, &gpu.telemetry);
+        text.0 = if view_mode.mode == GraphicalPlaygroundViewMode::Player {
+            graphical_player_status_overlay_text(&runtime.panel, &gpu.telemetry)
+        } else {
+            graphical_full_debug_status_overlay_text(&runtime.panel, &gpu.telemetry)
+        };
     }
 }
 
@@ -2308,10 +2496,15 @@ fn update_graphical_inspector_overlay(
     selection: Res<SelectionResource>,
     inspector: Res<CreatureInspectorResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
+    view_mode: Res<GraphicalViewModeResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<InspectorStatusOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = graphical_inspector_overlay_text(&runtime, &camera, &selection, &inspector, &gpu);
+        text.0 = if view_mode.mode == GraphicalPlaygroundViewMode::Player {
+            graphical_player_inspector_overlay_text(&selection, &inspector, &gpu)
+        } else {
+            graphical_inspector_overlay_text(&runtime, &camera, &selection, &inspector, &gpu)
+        };
     }
 }
 
@@ -2531,6 +2724,7 @@ fn handle_graphical_school_toggle_input(
 
 fn update_graphical_school_overlay(
     school: Option<Res<GraphicalSchoolResource>>,
+    view_mode: Res<GraphicalViewModeResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalSchoolOverlay>>,
     mut cue_markers: bevy::prelude::Query<&mut Visibility, With<GraphicalTeacherCueMarker>>,
 ) {
@@ -2540,11 +2734,12 @@ fn update_graphical_school_overlay(
     for mut text in &mut overlays {
         text.0 = ca23_school_overlay_text(&school.summary);
     }
-    let visibility = if school.summary.school_enabled {
-        Visibility::Visible
-    } else {
-        Visibility::Hidden
-    };
+    let visibility =
+        if school.summary.school_enabled && view_mode.mode.teacher_debug_labels_visible() {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     for mut marker_visibility in &mut cue_markers {
         *marker_visibility = visibility;
     }
@@ -2683,9 +2878,14 @@ fn update_graphical_feedback_overlay(
     runtime: Res<GraphicalRuntimeControlsResource>,
     feedback: Res<GraphicalFeedbackCueResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
+    view_mode: Res<GraphicalViewModeResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<FeedbackCueOverlay>>,
 ) {
     for mut text in &mut overlays {
+        if view_mode.mode == GraphicalPlaygroundViewMode::Player {
+            text.0 = ca42a_collapsed_event_chip_text(&runtime.panel, &gpu.telemetry);
+            continue;
+        }
         let cue_panel = crate::ca39_drive_audio_vfx_panel_text_from_graphical(
             &feedback.summary,
             &gpu.telemetry,
@@ -2799,6 +2999,38 @@ pub fn graphical_player_status_overlay_text(
     panel: &RuntimeControlPanel,
     gpu: &GraphicalGpuRuntimeTelemetry,
 ) -> String {
+    let action = panel.selected_action_kind.map_or("Idle", |kind| {
+        crate::action_badge_label_for_target(kind, panel.target_entity)
+    });
+    let goal = graphical_goal_label(panel.selected_action_kind, panel.target_entity);
+    let status = panel.terminal_recovery_cause.as_ref().map_or_else(
+        || panel.playback.label().to_string(),
+        |_| "stopped - reset".to_string(),
+    );
+    format!(
+        concat!(
+            "A-Life GPU Alpha\n",
+            "{}  speed={}x  tick={}\n",
+            "GPU: {}\n",
+            "Creature: selected  Goal: {}\n",
+            "Action: {}\n",
+            "Learning: H_shadow {}\n",
+            "Controls: Space | N | R | Esc"
+        ),
+        status,
+        panel.run_speed_ticks,
+        panel.mind_tick,
+        ca42a_gpu_status_chip(gpu),
+        goal,
+        action,
+        gpu.h_shadow_applications,
+    )
+}
+
+pub fn graphical_full_debug_status_overlay_text(
+    panel: &RuntimeControlPanel,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> String {
     let action = panel.selected_action_kind.map_or("None", |kind| {
         crate::action_badge_label_for_target(kind, panel.target_entity)
     });
@@ -2847,6 +3079,82 @@ pub fn graphical_player_status_overlay_text(
         panel.sealed_patch_count,
         gpu.h_shadow_applications,
         gpu.last_h_shadow_delta,
+    )
+}
+
+pub fn graphical_player_inspector_overlay_text(
+    selection: &SelectionResource,
+    inspector: &CreatureInspectorResource,
+    gpu: &GraphicalGpuTelemetryResource,
+) -> String {
+    let snapshot = &inspector.snapshot;
+    let bars = ca07_creature_state_bars(snapshot)
+        .into_iter()
+        .take(3)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let action = snapshot
+        .visual
+        .selected_action_kind
+        .map(|kind| {
+            crate::action_badge_label_for_target(
+                kind,
+                snapshot.visual.target_entity.map(|id| id.raw()),
+            )
+        })
+        .unwrap_or("IDLE");
+    let target = snapshot
+        .visual
+        .target_entity
+        .map_or_else(|| "none".to_string(), |id| format!("stable:{}", id.raw()));
+    format!(
+        concat!(
+            "Creature\n",
+            "Selected stable:{}\n",
+            "State: {} {}/{}\n",
+            "{}\n",
+            "Action: {}  Target: {}\n",
+            "GPU: {}\n",
+            "Gate: CPU shadow"
+        ),
+        selection.stable_id.raw(),
+        ca07_awake_sleep_status(snapshot),
+        snapshot.visual.animation.label(),
+        snapshot.visual.expression.label(),
+        bars,
+        action,
+        target,
+        ca42a_gpu_status_chip(&gpu.telemetry),
+    )
+}
+
+fn ca42a_gpu_status_chip(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
+    if let Some(reason) = gpu.fallback_reason.as_deref() {
+        format!("CPU fallback ({})", compact_overlay_line(reason, 18))
+    } else if gpu.selected_backend == "PendingFirstTick" {
+        "arming".to_string()
+    } else if gpu.selected_backend.to_ascii_lowercase().contains("gpu") {
+        "ON".to_string()
+    } else {
+        compact_overlay_line(&gpu.selected_backend, 20)
+    }
+}
+
+fn ca42a_collapsed_event_chip_text(
+    panel: &RuntimeControlPanel,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> String {
+    if let Some(cause) = panel.terminal_recovery_cause.as_deref() {
+        return format!("Events: stopped - {cause}. Press R");
+    }
+    let last_event = panel
+        .player_events
+        .last()
+        .map(|event| compact_overlay_line(event, 44))
+        .unwrap_or_else(|| "waiting for first tick".to_string());
+    format!(
+        "Events: tick {} | {} | H_shadow {}",
+        panel.mind_tick, last_event, gpu.h_shadow_applications
     )
 }
 
@@ -2971,6 +3279,13 @@ pub fn ca05_controls_bar_text() -> &'static str {
     concat!(
         "Controls: click | Tab | Space run/pause | N step | R reset | Esc\n",
         "View: WASD | +/- zoom | F follow | M save/load | F5 save | F9 load | [!] hazard"
+    )
+}
+
+pub fn ca42a_player_controls_bar_text() -> &'static str {
+    concat!(
+        "Controls: click select | Space run/pause | N step | R reset | Esc quit\n",
+        "Camera: WASD/arrows pan | +/- zoom | F follow | Dev: launch -ViewMode dev-overlay"
     )
 }
 
