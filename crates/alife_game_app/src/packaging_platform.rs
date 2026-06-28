@@ -372,6 +372,19 @@ pub fn platform_package_commands() -> Vec<PlatformPackageCommand> {
             requires_graphics: false,
             requires_gpu: false,
         },
+        PlatformPackageCommand {
+            id: "ca43-tester-feedback-smoke".to_string(),
+            kind: PackageSmokeKind::Validation,
+            windows_command:
+                "cargo run -p alife_game_app --bin alife_game_app -- tester-feedback-smoke"
+                    .to_string(),
+            non_windows_command:
+                "cargo run -p alife_game_app --bin alife_game_app -- tester-feedback-smoke"
+                    .to_string(),
+            manual: false,
+            requires_graphics: false,
+            requires_gpu: false,
+        },
     ]
 }
 

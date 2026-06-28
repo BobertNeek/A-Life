@@ -56,6 +56,7 @@ Initial state: pack imported, no CA plans complete.
 | CAR40 | complete | `codex/CAR40-polish-and-tutorial-review` | branch tip | Polish/tutorial review recorded in `reviews/CAR40_REVIEW_REPORT.md` with verdict `PASS_WITH_NOTES`; next executable plan is CA41 after user/ChatGPT consultation. |
 | CA41 | complete | `codex/CA41-windows-zip-packaging-and-run-script` | branch tip | Windows release-package builder, package-local graphical runner, package metadata, and artifact-safe ZIP discipline recorded in `status/CA41_WINDOWS_ZIP_PACKAGE.md`; next executable plan is CA42. |
 | CA42 | complete | `codex/CA42-runtime-prerequisite-gpu-diagnostics-launcher` | branch tip | Runtime prerequisite preflight, GPU/windowing diagnostics, explicit RequireGpu blocking, degraded CPU fallback labeling, and log paths recorded in `status/CA42_RUNTIME_PREREQ_DIAGNOSTICS.md`; next executable plan is CA43. |
+| CA43 | complete | `codex/CA43-crash-logs-and-tester-feedback-capture` | branch tip | Sanitized crash summaries, local feedback directory policy, tester feedback template, and launcher/package wiring recorded in `status/CA43_CRASH_LOGS_TESTER_FEEDBACK.md`; next executable plan is CA44. |
 
 Post-CAR27 blocking migration: active local model runtime was migrated from
 Ollama to direct localhost-only llama.cpp / `llama-server` on

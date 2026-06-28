@@ -99,6 +99,9 @@ pub use packaging_platform::*;
 mod runtime_prereq_diagnostics;
 pub use runtime_prereq_diagnostics::*;
 
+mod tester_feedback_capture;
+pub use tester_feedback_capture::*;
+
 mod product_qa;
 pub use product_qa::*;
 
