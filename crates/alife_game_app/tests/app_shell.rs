@@ -8,7 +8,8 @@ use alife_game_app::{
     project_lod_without_behavior_change, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
     run_batched_gpu_runtime_smoke, run_behavior_comparison_lab_smoke,
     run_behavior_tuning_metrics_smoke, run_behavior_tuning_metrics_with_config,
-    run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
+    run_cognition_debug_timeline_smoke, run_content_authoring_smoke,
+    run_creature_animation_state_machine_smoke, run_creature_inspector_smoke,
     run_creature_visual_smoke, run_curriculum_authoring_smoke, run_double_buffered_scheduler_smoke,
     run_ecological_soak_smoke, run_ecological_soak_with_config, run_feedback_polish_smoke,
     run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
@@ -65,8 +66,10 @@ use alife_game_app::{
     CA37_MIN_PALETTE_MATERIALS, CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
     CA37_MIN_WORLD_DRESSING_PROPS, CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
     CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES, CA37_WORLD_ART_STYLE_SCHEMA,
-    CA37_WORLD_ART_STYLE_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    CA37_WORLD_ART_STYLE_SCHEMA_VERSION, CA38_CREATURE_ANIMATION_SCHEMA,
+    CA38_CREATURE_ANIMATION_SCHEMA_VERSION, CA38_REQUIRED_ANIMATION_STATES,
+    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_semantic::{
     parse_slm_prior_json, project_embedding_to_i8, LlamaCppEmbeddingConfig,
@@ -403,19 +406,35 @@ fn gpu_alpha_fixture_adds_multi_creature_hazard_and_obstacle_markers_without_cha
     let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();
     compare_visible_world_to_headless(&presentation).unwrap();
-    assert_eq!(presentation.object_count, 6);
+    assert_eq!(presentation.object_count, 12);
     assert_eq!(presentation.kind_count(WorldObjectKind::Agent), 3);
-    assert_eq!(presentation.kind_count(WorldObjectKind::Food), 1);
-    assert_eq!(presentation.kind_count(WorldObjectKind::Hazard), 1);
-    assert_eq!(presentation.kind_count(WorldObjectKind::Obstacle), 1);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Food), 3);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Hazard), 3);
+    assert_eq!(presentation.kind_count(WorldObjectKind::Obstacle), 3);
     assert_eq!(
         presentation
             .stable_ids()
             .iter()
             .map(|id| id.raw())
             .collect::<Vec<_>>(),
-        vec![1, 2, 3, 4, 5, 6]
+        (1_u64..=12).collect::<Vec<_>>()
     );
+    let (min_x, max_x) = presentation
+        .objects
+        .iter()
+        .map(|object| object.position.x)
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), x| {
+            (min.min(x), max.max(x))
+        });
+    let (min_z, max_z) = presentation
+        .objects
+        .iter()
+        .map(|object| object.position.z)
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), z| {
+            (min.min(z), max.max(z))
+        });
+    assert!(max_x - min_x >= 30.0);
+    assert!(max_z - min_z >= 18.0);
     let creature_ids = ca18_creature_selection_ids(&presentation)
         .iter()
         .map(|id| id.raw())
@@ -484,9 +503,9 @@ fn ca19_graphical_ecology_smoke_reports_zones_resource_cycle_and_roundtrip() {
         summary.schema_version,
         CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION
     );
-    assert_eq!(summary.terrain_zones.len(), 2);
-    assert_eq!(summary.resources.len(), 1);
-    assert_eq!(summary.hazard_pressure_zone_count, 1);
+    assert!(summary.terrain_zones.len() >= 4);
+    assert!(summary.resources.len() >= 3);
+    assert!(summary.hazard_pressure_zone_count >= 2);
     assert!(summary.initial_metrics.active_resources >= 1);
     assert!(summary.cycled_metrics.resources_regrown >= 1);
     assert!(summary.cycled_metrics.resources_spawned >= 1);
@@ -501,8 +520,8 @@ fn ca19_graphical_ecology_smoke_reports_zones_resource_cycle_and_roundtrip() {
     );
 
     let overlay = summary.compact_overlay_text();
-    assert!(overlay.contains("Ecology: zones=2"));
-    assert!(overlay.contains("hazard zones=1"));
+    assert!(overlay.contains("Ecology: zones=4"));
+    assert!(overlay.contains("hazard zones=3"));
     assert!(overlay.contains("regrown="));
     assert!(overlay.contains("spawned="));
     assert!(overlay.contains("roundtrip=true"));
@@ -515,9 +534,9 @@ fn ca19_graphical_ecology_smoke_reports_zones_resource_cycle_and_roundtrip() {
 fn bevy_feature_ca19_graphical_ecology_overlay_text_is_display_only_and_stable_id_safe() {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
     let ecology_summary = run_graphical_ecology_smoke(&launch).unwrap();
-    assert_eq!(ecology_summary.terrain_zones.len(), 2);
-    assert_eq!(ecology_summary.resources.len(), 1);
-    assert_eq!(ecology_summary.hazard_pressure_zone_count, 1);
+    assert!(ecology_summary.terrain_zones.len() >= 4);
+    assert!(ecology_summary.resources.len() >= 3);
+    assert!(ecology_summary.hazard_pressure_zone_count >= 2);
     assert!(ecology_summary.resource_regen_visible);
     assert!(ecology_summary.food_spawned_indicator_visible);
     assert!(ecology_summary.save_load_roundtrip_preserved);
@@ -529,7 +548,7 @@ fn bevy_feature_ca19_graphical_ecology_overlay_text_is_display_only_and_stable_i
     let overlay = alife_game_app::bevy_shell::ca19_ecology_overlay_text(&ecology_summary);
     assert!(overlay.contains("Resource Ecology"));
     assert!(overlay.contains("Terrain: grove:berry-grove"));
-    assert!(overlay.contains("hazard zones=1"));
+    assert!(overlay.contains("hazard zones=3"));
     assert!(overlay.contains("Resource cycle"));
     assert!(overlay.contains("Boundary: terrain/resource visuals cannot emit actions"));
     assert!(!overlay.contains("Entity("));
@@ -558,9 +577,12 @@ fn ca37_world_art_style_smoke_validates_palette_props_and_manifest() {
         summary.visual_map_tile_count,
         CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES
     );
-    assert!(summary.visual_map_span_world_units >= 20.0);
-    assert!(!summary.true_large_world_exploration);
-    assert_eq!(summary.ecology_zone_count, 2);
+    assert!(summary.visual_map_span_world_units >= 60.0);
+    assert!(summary.true_large_world_exploration);
+    assert!(summary.camera_can_pan_large_world);
+    assert!(summary.distributed_stable_world_objects);
+    assert!(summary.generated_terrain_guides_resource_hazard_placement);
+    assert!(summary.ecology_zone_count >= 4);
     assert!(summary.resource_zone_materials > 0);
     assert!(summary.hazard_zone_materials > 0);
     assert!(summary.app_bundle_manifest_validated);
@@ -587,10 +609,53 @@ fn ca37_world_art_style_smoke_validates_palette_props_and_manifest() {
         .any(|prop| prop.material_id == "stone-dressing"));
 
     let overlay = summary.compact_overlay_text();
-    assert!(overlay.contains("World Art: procedural visual map"));
-    assert!(overlay.contains("true exploration worldgen=false"));
+    assert!(overlay.contains("World Map: seeded procedural terrain"));
+    assert!(overlay.contains("Exploration: stable-ID creatures/resources/hazards distributed"));
     assert!(!overlay.contains("Entity("));
     assert!(!overlay.contains("full action-authoritative"));
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca38_creature_animation_state_machine_maps_required_states_without_authority() {
+    let summary = run_creature_animation_state_machine_smoke().unwrap();
+
+    assert_eq!(summary.schema, CA38_CREATURE_ANIMATION_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA38_CREATURE_ANIMATION_SCHEMA_VERSION
+    );
+    assert!(summary.states.len() >= CA38_REQUIRED_ANIMATION_STATES);
+    assert!(summary.display_only);
+    assert!(summary.inspector_accurate);
+    assert!(summary.fallback_visible);
+    assert!(summary.stable_ids_only);
+    assert!(summary.no_action_authority);
+    assert!(summary.no_cognition_mutation);
+    assert_eq!(
+        summary.product_runtime_claim,
+        "CpuShadowGuardedStaticPlusLiveHShadow"
+    );
+    for required in [
+        "idle-breathe",
+        "move-lean",
+        "eat-reach",
+        "flee-alert",
+        "sleep-curl",
+        "pain-flinch",
+        "social-signal",
+    ] {
+        assert!(summary.states.iter().any(|pose| pose.pose_id == required));
+    }
+    assert!(summary.states.iter().all(|pose| pose.display_only));
+    assert!(summary
+        .states
+        .iter()
+        .all(|pose| pose.scale_x.is_finite() && pose.scale_y.is_finite()));
+    assert!(!summary.signature_line().contains("Entity("));
+    assert!(!summary
+        .signature_line()
+        .contains("full action-authoritative"));
     summary.validate().unwrap();
 }
 
@@ -675,9 +740,10 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
         full_action_authoritative_claim: false,
     };
     let player_hud = alife_game_app::bevy_shell::graphical_player_status_overlay_text(&panel, &gpu);
-    assert!(overlay.contains("World Art: procedural visual map"));
-    assert!(legend.contains("generated visual terrain map"));
-    assert!(legend.contains("display-only"));
+    assert!(overlay.contains("World Map: seeded procedural terrain"));
+    assert!(overlay.contains("stable-ID creatures/resources/hazards distributed"));
+    assert!(legend.contains("seeded large terrain"));
+    assert!(legend.contains("Terrain guides placement"));
     assert!(controls.contains("Controls: click"));
     assert!(controls.contains("[!] hazard"));
     assert!(player_hud.contains("A-Life GPU Alpha Playground"));
@@ -693,6 +759,67 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(!controls.contains("Entity("));
     assert!(!player_hud.contains("Entity("));
     assert!(!overlay.contains("full action-authoritative"));
+    assert!(!player_hud.contains("full action-authoritative"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca38_creature_animation_pose_is_display_only_and_readable() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch)
+            .expect("CA38 graphical animation shell should build");
+    app.update();
+
+    let animation_summary = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalCreatureAnimationResource>()
+        .summary
+        .clone();
+    assert!(animation_summary.display_only);
+    assert!(animation_summary.fallback_visible);
+    assert!(animation_summary.no_action_authority);
+    assert!(animation_summary.no_cognition_mutation);
+
+    let mut pose_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalCreatureAnimationPose>();
+    let poses = pose_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert!(poses.len() >= 3);
+    assert!(poses.iter().all(|pose| pose.display_only));
+    assert!(poses.iter().all(|pose| pose.stable_id.raw() > 0));
+    assert!(poses.iter().any(|pose| pose.pose_id == "idle-breathe"));
+
+    let mut live = LiveBrainLoop::from_p34_launch(&launch.app_launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::RunForTicks(3))
+        .unwrap();
+    let gpu = GraphicalGpuRuntimeTelemetry {
+        requested_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        selected_backend: "GpuPlastic".to_string(),
+        fallback_reason: None,
+        hardware_identifier: Some("local-test".to_string()),
+        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow".to_string(),
+        gpu_static_dispatched_ticks: 3,
+        gpu_scores_used_for_proposals: true,
+        cpu_shadow_parity: true,
+        parity_failures: 0,
+        sealed_patches: panel.sealed_patch_count,
+        h_shadow_applications: 2,
+        last_h_shadow_delta: 0.0125,
+        compact_readback_bytes: 64,
+        post_seal_readback_bytes: 64,
+        total_gpu_runtime_ms: 1.25,
+        wgsl: test_wgsl_telemetry(),
+        no_active_bulk_readback: true,
+        full_action_authoritative_claim: false,
+    };
+    let player_hud = alife_game_app::bevy_shell::graphical_player_status_overlay_text(&panel, &gpu);
+    assert!(player_hud.contains("Pose:"));
+    assert!(player_hud.contains("Gate: CPU shadow; full_auth=false"));
+    assert!(!player_hud.contains("Entity("));
     assert!(!player_hud.contains("full action-authoritative"));
 }
 
@@ -5298,9 +5425,9 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
     assert!(legend.contains("[+] food"));
     assert!(legend.contains("[!] hazard"));
     assert!(legend.contains("[#] obstacle/rock"));
-    assert!(legend.contains("P34 remains guide-only"));
-    assert!(legend.contains("creature+food+real hazard+obstacle"));
-    assert!(legend.contains("presentation only"));
+    assert!(legend.contains("seeded large terrain"));
+    assert!(legend.contains("distributed stable-ID food, hazards, and obstacles"));
+    assert!(legend.contains("world/core arbitration still owns actions"));
 
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();
     let badges = presentation
@@ -5332,21 +5459,14 @@ fn ca09_graphical_save_load_menu_opens_saves_loads_and_rejects_bad_saves() {
     );
     assert_eq!(
         summary.stable_world_ids,
-        vec![
-            WorldEntityId(1),
-            WorldEntityId(2),
-            WorldEntityId(3),
-            WorldEntityId(4),
-            WorldEntityId(5),
-            WorldEntityId(6)
-        ]
+        (1..=12).map(WorldEntityId).collect::<Vec<_>>()
     );
     assert!(summary.overlay_text.contains("Save / Load"));
     assert!(summary.overlay_text.contains("F5 save"));
     assert!(summary.overlay_text.contains("F9 load"));
     assert!(summary
         .overlay_text
-        .contains("Stable IDs: [1, 2, 3, 4, 5, 6]"));
+        .contains("Stable IDs: [1, 2, 3, 4, 5, 6, 7, 8"));
     assert!(summary.overlay_text.contains("partial_load=false"));
     assert!(summary.engine_local_token_absent);
     assert!(!summary.overlay_text.contains("Entity("));
@@ -5363,7 +5483,7 @@ fn ca09_graphical_save_load_session_keeps_closed_bar_compact_and_stable_id_safe(
     assert!(closed.contains("Save/Load: M menu"));
     assert!(closed.contains("F5 save"));
     assert!(closed.contains("F9 load"));
-    assert!(closed.contains("Stable IDs [1, 2, 3, 4, 5, 6]"));
+    assert!(closed.contains("Stable IDs [1, 2, 3, 4, 5, 6, 7, 8"));
     assert!(!closed.contains("Entity("));
 
     let result = session.apply_command(alife_game_app::GraphicalSaveLoadMenuCommand::ToggleMenu);
@@ -5433,7 +5553,7 @@ fn bevy_feature_ca09_graphical_save_load_overlay_uses_live_menu_session() {
     assert!(overlay.contains("Save / Load"));
     assert!(overlay.contains("F5 save manual slot"));
     assert!(overlay.contains("F9 load manual slot"));
-    assert!(overlay.contains("Stable IDs: [1, 2, 3, 4, 5, 6]"));
+    assert!(overlay.contains("Stable IDs: [1, 2, 3, 4, 5, 6, 7, 8"));
     assert!(overlay.contains("Boundary: stable IDs only"));
     assert!(!overlay.contains("Entity("));
 

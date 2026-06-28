@@ -4,7 +4,8 @@ use alife_game_app::{
     default_app_bundle_manifest_path, load_visible_world_from_p34_save,
     run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke, run_batched_gpu_runtime_smoke,
     run_behavior_comparison_lab_smoke, run_behavior_tuning_metrics_smoke,
-    run_cognition_debug_timeline_smoke, run_content_authoring_smoke, run_creature_inspector_smoke,
+    run_cognition_debug_timeline_smoke, run_content_authoring_smoke,
+    run_creature_animation_state_machine_smoke, run_creature_inspector_smoke,
     run_creature_visual_smoke, run_curriculum_authoring_smoke,
     run_curriculum_authoring_smoke_with_manifest, run_double_buffered_scheduler_smoke,
     run_ecological_soak_smoke, run_environment_launcher_smoke, run_feedback_polish_smoke,
@@ -271,17 +272,39 @@ fn run() -> Result<String, String> {
             let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
             let summary = run_world_art_style_smoke(&launch).map_err(|err| err.to_string())?;
             Ok(format!(
-                "CA37 world art schema={} version={} palette={} props={} zones={} resource_materials={} hazard_materials={} manifest_validated={} placeholder_art_entries={} display_only={} claim={} signature={}",
+                "CA37 world art schema={} version={} seed={} palette={} props={} tiles={} span_world_units={:.1} large_world_exploration={} distributed_objects={} zones={} resource_materials={} hazard_materials={} manifest_validated={} placeholder_art_entries={} display_only={} claim={} signature={}",
                 summary.schema,
                 summary.schema_version,
+                summary.seed,
                 summary.palette.len(),
                 summary.dressing_props.len(),
+                summary.visual_map_tile_count,
+                summary.visual_map_span_world_units,
+                summary.true_large_world_exploration,
+                summary.distributed_stable_world_objects,
                 summary.ecology_zone_count,
                 summary.resource_zone_materials,
                 summary.hazard_zone_materials,
                 summary.app_bundle_manifest_validated,
                 summary.placeholder_art_entries,
                 summary.display_only,
+                summary.product_runtime_claim,
+                summary.signature_line()
+            ))
+        }
+        [command] if command == "creature-animation-state-smoke" => {
+            let summary =
+                run_creature_animation_state_machine_smoke().map_err(|err| err.to_string())?;
+            Ok(format!(
+                "CA38 creature animation schema={} version={} states={} display_only={} fallback_visible={} stable_ids_only={} no_action_authority={} no_cognition_mutation={} claim={} signature={}",
+                summary.schema,
+                summary.schema_version,
+                summary.states.len(),
+                summary.display_only,
+                summary.fallback_visible,
+                summary.stable_ids_only,
+                summary.no_action_authority,
+                summary.no_cognition_mutation,
                 summary.product_runtime_claim,
                 summary.signature_line()
             ))

@@ -74,8 +74,8 @@ $env:ALIFE_GPU_RUNTIME_AVAILABLE="0"; powershell -NoProfile -ExecutionPolicy Byp
 Observed CA37 smoke summary:
 
 ```text
-palette=6 props=8 zones=2 resource_materials=2 hazard_materials=1 manifest_validated=true placeholder_art_entries=10 display_only=true claim=CpuShadowGuardedStaticPlusLiveHShadow
-signature=alife.ca37.world_art_style.v1:1:palette=6:props=8:visual_tiles=1271:zones=2:resource=2:hazard=1:display_only=true:claim=CpuShadowGuardedStaticPlusLiveHShadow
+tiles=7081 span_world_units=62.0 large_world_exploration=true distributed_objects=true zones=4 resource_materials=4 hazard_materials=3
+signature=alife.ca37.world_art_style.v1:1:seed=4242:palette=6:props=8:visual_tiles=7081:span=62.0:zones=4:resource=4:hazard=3:explore=true:display_only=true:claim=CpuShadowGuardedStaticPlusLiveHShadow
 ```
 
 Local screenshot review found that the first CA37 rendering still looked like a
@@ -85,9 +85,14 @@ adding a deterministic larger generated visual terrain map, reducing broad
 terrain-zone alpha, shortening world labels/action badges, shrinking
 controls/event panels, and hiding older subsystem diagnostic panels from the
 default graphical first view.
-A final local Alt+Print app-window capture showed the compact HUD, visible
-terrain palette, visible creature/food/hazard markers, and a fitted inspector.
-The capture remains under `target/ca37_visual_check/` and is not tracked.
+Later user review found the alpha still read as a single-screen board. The
+active CA38 branch corrects that stale CA37 surface by expanding the generated
+terrain to a seeded `97x73` tile map, spreading stable-ID food, hazards,
+obstacles, and ecology zones across the map, and requiring world-art smoke to
+prove `large_world_exploration=true`.
+
+Any local app-window captures remain under `target/` evidence folders and are
+not tracked.
 
 ## Commands Run
 
@@ -116,12 +121,13 @@ in the CA37 receipt.
 
 ## Known Limitations
 
-- CA37 improves readability through procedural/textual metadata, a larger
-  deterministic visual terrain map, blended terrain washes, and sprite dressing
-  only; it is not a full art-production pass.
-- The map is a visual terrain presentation, not large-world simulation terrain.
-  Creatures still do not explore a procedurally generated simulation world in
-  CA37.
+- CA37/CA38 now provide a deterministic large alpha terrain presentation with
+  distributed stable-ID resources, hazards, obstacles, and ecology zones; it is
+  still not a full art-production pass.
+- The generated map is the graphical alpha exploration surface, but terrain does
+  not add new physics, navigation, sensory-backend, topology, or cognition
+  authority. Existing world/core arbitration and stable-ID world objects remain
+  the only gameplay authority.
 - Props are flat/2.5D visual cues, not physics objects, navigation obstacles,
   sensory sources, or world-generation authority.
 - Broad CA19 terrain-zone sprites remain as faint visual hints only; they no
@@ -138,6 +144,8 @@ presentation reference:
   grove, hazard pressure, stone dressing, and school/cue accent.
 - A deterministic larger visual terrain map that uses palette thinking for
   generated safe, resource, hazard, soil, and stone regions.
+- A seeded alpha terrain surface large enough for camera panning and distributed
+  stable-ID creature/resource/hazard/object placement.
 - Lightweight terrain/prop dressing: soil paths, leaf patches, warning shards,
   stone chips, and cue accents.
 - 2.5D-style visual depth cues through sprite size, placement, and layering.
@@ -150,8 +158,8 @@ The following runtime ideas were explicitly deferred:
 - Custom algebraic raycasting or sensory/spatial-query rewrites.
 - Icosahedral/spherical/planet topology.
 - New physics, navigation, sensory, or world-generation authority.
-- True large-world procedural simulation terrain and creature exploration over
-  generated terrain.
+- Runtime chunk streaming, terrain compression, pathfinding over generated
+  topology, and physics/sensory systems derived from terrain cells.
 - Async token/action validation or ExperiencePatch transaction changes.
 
 ## Artifacts Tracked

@@ -28,14 +28,14 @@ use crate::{
     AdvancedGameplayUxSummary, AppShellLaunchConfig, AppStartupSummary,
     Ca18GraphicalPopulationSummary, Ca19GraphicalEcologySummary, Ca19TerrainZoneVisual,
     Ca20GraphicalLifecycleSummary, Ca23GraphicalSchoolSummary, Ca23TeacherCueMarker,
-    Ca37WorldArtStyleSummary, CameraNavigationState, CreatureAnimationState,
-    CreatureExpressionState, CreatureInspectorSnapshot, CreatureVisualSnapshot,
-    EntitySelectionSnapshot, GameAppShellError, GameAppState, GraphicalGpuRuntimeController,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
-    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, LiveBrainLoop, LiveBrainTickSummary,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
-    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
-    S02_MAX_SMOKE_TICKS,
+    Ca37WorldArtStyleSummary, Ca38CreatureAnimationSummary, CameraNavigationState,
+    CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
+    CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
+    GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
+    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
+    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
+    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -156,6 +156,11 @@ pub struct GraphicalSchoolResource {
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalWorldArtStyleResource {
     pub summary: Ca37WorldArtStyleSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalCreatureAnimationResource {
+    pub summary: Ca38CreatureAnimationSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -321,6 +326,14 @@ pub struct GraphicalWorldArtTerrainTile {
     pub tile_x: i32,
     pub tile_z: i32,
     pub material_id: &'static str,
+    pub display_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalCreatureAnimationPose {
+    pub stable_id: WorldEntityId,
+    pub pose_id: &'static str,
+    pub action_label: &'static str,
     pub display_only: bool,
 }
 
@@ -526,6 +539,7 @@ pub fn build_graphical_playground_app_shell(
     let population_summary = ca18_graphical_population_summary(&presentation).ok();
     let ecology_summary = ca19_graphical_ecology_summary(&launch.app_launch).ok();
     let world_art_summary = ca37_world_art_style_summary(&launch.app_launch).ok();
+    let animation_summary = crate::ca38_creature_animation_summary().ok();
     let lifecycle_summary = ca20_graphical_lifecycle_summary().ok();
     let school_summary = crate::run_graphical_school_mode_smoke()?;
 
@@ -567,6 +581,11 @@ pub fn build_graphical_playground_app_shell(
         .insert_non_send_resource(live_loop)
         .insert_resource(GraphicalVisibleWorldPresentationResource {
             presentation: presentation.clone(),
+        })
+        .insert_resource(GraphicalCreatureAnimationResource {
+            summary: animation_summary
+                .clone()
+                .unwrap_or_else(|| crate::ca38_creature_animation_summary().unwrap()),
         })
         .insert_resource(CameraNavigationResource {
             state: inspector.camera,
@@ -631,6 +650,9 @@ pub fn build_graphical_playground_app_shell(
     if let Some(summary) = world_art_summary {
         app.insert_resource(GraphicalWorldArtStyleResource { summary });
     }
+    if let Some(summary) = animation_summary {
+        app.insert_resource(GraphicalCreatureAnimationResource { summary });
+    }
     if let Some(summary) = lifecycle_summary {
         app.insert_resource(GraphicalLifecycleResource { summary });
     }
@@ -658,6 +680,7 @@ pub fn build_graphical_playground_preview_app_shell(
     crate::compare_visible_world_to_headless(&presentation)?;
     let ecology_summary = ca19_graphical_ecology_summary(&launch.app_launch).ok();
     let world_art_summary = ca37_world_art_style_summary(&launch.app_launch).ok();
+    let animation_summary = crate::ca38_creature_animation_summary().ok();
     let school_summary = crate::run_graphical_school_mode_smoke().ok();
     let mut app = build_minimal_bevy_app_shell(startup);
     spawn_graphical_playground_scene(
@@ -670,6 +693,9 @@ pub fn build_graphical_playground_preview_app_shell(
     )?;
     if let Some(summary) = world_art_summary {
         app.insert_resource(GraphicalWorldArtStyleResource { summary });
+    }
+    if let Some(summary) = animation_summary {
+        app.insert_resource(GraphicalCreatureAnimationResource { summary });
     }
     Ok((app, summary))
 }
@@ -1244,7 +1270,7 @@ fn ca19_terrain_zone_color(zone: &Ca19TerrainZoneVisual) -> Color {
 }
 
 fn spawn_ca37_world_art_dressing(app: &mut App, summary: &Ca37WorldArtStyleSummary) {
-    spawn_ca37_world_art_terrain_canvas(app);
+    spawn_ca37_world_art_terrain_canvas(app, summary);
     for prop in &summary.dressing_props {
         app.world_mut().spawn((
             Name::new(format!("A-Life CA37 {} {}", prop.material_id, prop.id)),
@@ -1271,26 +1297,27 @@ fn spawn_ca37_world_art_dressing(app: &mut App, summary: &Ca37WorldArtStyleSumma
     }
 }
 
-fn spawn_ca37_world_art_terrain_canvas(app: &mut App) {
-    let half_width = (crate::CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES as i32) / 2;
-    let half_height = (crate::CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES as i32) / 2;
+fn spawn_ca37_world_art_terrain_canvas(app: &mut App, summary: &Ca37WorldArtStyleSummary) {
+    let half_width = (summary.visual_map_width_tiles as i32) / 2;
+    let half_height = (summary.visual_map_height_tiles as i32) / 2;
     for ix in -half_width..=half_width {
         for iz in -half_height..=half_height {
-            let material_id = ca37_terrain_tile_material(ix, iz);
-            let jitter_x = ((ix * 17 + iz * 5).rem_euclid(11) as f32 - 5.0) * 5.2;
-            let jitter_y = ((ix * 7 - iz * 13).rem_euclid(11) as f32 - 5.0) * 4.6;
-            let width = 106.0 + ((ix * 3 + iz * 5).rem_euclid(5) as f32) * 9.0;
-            let height = 92.0 + ((ix * 11 - iz * 2).rem_euclid(5) as f32) * 8.0;
+            let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+            let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
+            let jitter_x = ((hash % 13) as f32 - 6.0) * 3.2;
+            let jitter_y = (((hash / 13) % 13) as f32 - 6.0) * 2.8;
+            let width = 84.0 + ((hash % 5) as f32) * 6.0;
+            let height = 76.0 + (((hash / 5) % 5) as f32) * 5.5;
             app.world_mut().spawn((
                 Name::new(format!("A-Life CA37 terrain wash {material_id} {ix}:{iz}")),
                 Sprite {
-                    color: ca37_terrain_tile_color(material_id, ix, iz),
+                    color: ca37_terrain_tile_color(summary.seed, material_id, ix, iz),
                     custom_size: Some(Vec2::new(width, height)),
                     ..default()
                 },
                 Transform::from_xyz(
-                    ix as f32 * 80.0 + jitter_x,
-                    iz as f32 * 78.0 + jitter_y,
+                    ix as f32 * 78.0 + jitter_x,
+                    iz as f32 * 76.0 + jitter_y,
                     -1.45,
                 ),
                 GraphicalWorldArtTerrainTile {
@@ -1304,25 +1331,33 @@ fn spawn_ca37_world_art_terrain_canvas(app: &mut App) {
     }
 }
 
-fn ca37_terrain_tile_material(ix: i32, iz: i32) -> &'static str {
-    let hash = ca37_terrain_hash(ix, iz);
-    let resource_dx = ix - 10;
-    let resource_dz = iz + 5;
-    let hazard_dx = ix - 5;
-    let hazard_dz = iz - 6;
-    let west_stone_dx = ix + 13;
-    let west_stone_dz = iz - 1;
+fn ca37_terrain_tile_material(seed: u64, ix: i32, iz: i32) -> &'static str {
+    let hash = ca37_seeded_terrain_hash(seed, ix, iz);
+    let resource_dx = ix - 27;
+    let resource_dz = iz + 19;
+    let north_resource_dx = ix + 30;
+    let north_resource_dz = iz - 17;
+    let hazard_dx = ix - 17;
+    let hazard_dz = iz - 22;
+    let east_hazard_dx = ix + 32;
+    let east_hazard_dz = iz + 19;
+    let west_stone_dx = ix + 28;
+    let west_stone_dz = iz - 2;
     let soil_path = (iz - (ix / 3)).abs() <= 1 || (iz + (ix / 4)).abs() <= 1;
-    if resource_dx * resource_dx + resource_dz * resource_dz < 72 || hash % 29 == 3 {
+    if resource_dx * resource_dx + resource_dz * resource_dz < 130
+        || north_resource_dx * north_resource_dx + north_resource_dz * north_resource_dz < 96
+        || hash % 41 == 3
+    {
         "resource-grove"
-    } else if hazard_dx * hazard_dx + hazard_dz * hazard_dz < 82
-        || (ix > 4 && iz > 1 && hash % 7 < 3)
+    } else if hazard_dx * hazard_dx + hazard_dz * hazard_dz < 118
+        || east_hazard_dx * east_hazard_dx + east_hazard_dz * east_hazard_dz < 102
+        || (ix > 6 && iz > 4 && hash % 9 < 3)
     {
         "hazard-pressure"
     } else if soil_path {
         "neutral-soil"
-    } else if west_stone_dx * west_stone_dx + west_stone_dz * west_stone_dz < 38
-        || (ix < -10 && hash % 11 < 4)
+    } else if west_stone_dx * west_stone_dx + west_stone_dz * west_stone_dz < 86
+        || (ix < -22 && hash % 11 < 4)
     {
         "stone-dressing"
     } else {
@@ -1330,18 +1365,19 @@ fn ca37_terrain_tile_material(ix: i32, iz: i32) -> &'static str {
     }
 }
 
-fn ca37_terrain_hash(ix: i32, iz: i32) -> i32 {
-    (ix * 73 + iz * 151 + ix * iz * 17 + 4096).rem_euclid(97)
+fn ca37_seeded_terrain_hash(seed: u64, ix: i32, iz: i32) -> i32 {
+    let seed_part = (seed as i64 % 65_521) as i32;
+    (ix * 73 + iz * 151 + ix * iz * 17 + seed_part).rem_euclid(193)
 }
 
-fn ca37_terrain_tile_color(material_id: &str, ix: i32, iz: i32) -> Color {
-    let shade = ((ix * 11 + iz * 19).rem_euclid(5) as f32) * 0.012;
+fn ca37_terrain_tile_color(seed: u64, material_id: &str, ix: i32, iz: i32) -> Color {
+    let shade = ((ca37_seeded_terrain_hash(seed, ix, iz) % 7) as f32) * 0.008;
     match material_id {
-        "neutral-soil" => Color::srgba(0.39 + shade, 0.29 + shade, 0.17, 0.30),
-        "resource-grove" => Color::srgba(0.14 + shade, 0.48 + shade, 0.18, 0.33),
-        "hazard-pressure" => Color::srgba(0.58 + shade, 0.20, 0.15, 0.30),
-        "stone-dressing" => Color::srgba(0.31 + shade, 0.34 + shade, 0.27, 0.24),
-        _ => Color::srgba(0.17 + shade, 0.39 + shade, 0.18, 0.25),
+        "neutral-soil" => Color::srgba(0.39 + shade, 0.29 + shade, 0.17, 0.26),
+        "resource-grove" => Color::srgba(0.14 + shade, 0.48 + shade, 0.18, 0.29),
+        "hazard-pressure" => Color::srgba(0.58 + shade, 0.20, 0.15, 0.27),
+        "stone-dressing" => Color::srgba(0.31 + shade, 0.34 + shade, 0.27, 0.22),
+        _ => Color::srgba(0.17 + shade, 0.39 + shade, 0.18, 0.22),
     }
 }
 
@@ -1497,6 +1533,16 @@ fn spawn_graphical_object(
                 if let Some(organism_id) = object.organism_id {
                     entity_mut.insert(CreatureBody::new(organism_id, object.stable_id)?);
                 }
+                let pose = crate::ca38_creature_pose_for_state(
+                    CreatureAnimationState::Idle,
+                    CreatureExpressionState::Neutral,
+                );
+                entity_mut.insert(GraphicalCreatureAnimationPose {
+                    stable_id: object.stable_id,
+                    pose_id: pose.pose_id,
+                    action_label: pose.action_label,
+                    display_only: true,
+                });
             }
             WorldObjectKind::Food => {
                 entity_mut.insert(AffordanceTags::food(object.nutrition));
@@ -2223,7 +2269,12 @@ fn update_graphical_inspector_overlay(
 fn update_graphical_gpu_visual_cues(
     runtime: Res<GraphicalRuntimeControlsResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
-    mut markers: bevy::prelude::Query<(&GraphicalPlaygroundMarker, &mut Sprite, &mut Transform)>,
+    mut markers: bevy::prelude::Query<(
+        &GraphicalPlaygroundMarker,
+        &mut Sprite,
+        &mut Transform,
+        Option<&mut GraphicalCreatureAnimationPose>,
+    )>,
 ) {
     let agent_color = if gpu.telemetry.fallback_reason.is_some() {
         Color::srgb(0.78, 0.78, 0.72)
@@ -2234,22 +2285,21 @@ fn update_graphical_gpu_visual_cues(
     } else {
         Color::srgb(1.0, 0.88, 0.35)
     };
-    let learning_scale = if gpu.telemetry.h_shadow_applications > 0 {
-        1.18
-    } else {
-        1.0
-    };
-    let action_scale = if runtime.panel.playback == RuntimePlaybackState::Running {
-        1.08
-    } else {
-        1.0
-    };
     let target = runtime.panel.target_entity.map(WorldEntityId);
-    for (marker, mut sprite, mut transform) in &mut markers {
+    for (marker, mut sprite, mut transform, pose_component) in &mut markers {
         match marker.kind {
             WorldObjectKind::Agent => {
+                let pose = ca38_pose_from_runtime(&runtime.panel, &gpu.telemetry);
                 sprite.color = agent_color;
-                transform.scale = Vec3::splat(learning_scale * action_scale);
+                sprite.custom_size = Some(ca38_graphical_creature_size(pose));
+                transform.scale = Vec3::splat(ca38_graphical_creature_scale(pose, &gpu.telemetry));
+                transform.rotation =
+                    bevy::prelude::Quat::from_rotation_z(pose.rotation_degrees.to_radians());
+                if let Some(mut pose_component) = pose_component {
+                    pose_component.pose_id = pose.pose_id;
+                    pose_component.action_label = pose.action_label;
+                    pose_component.display_only = pose.display_only;
+                }
             }
             WorldObjectKind::Food if target == Some(marker.stable_id) => {
                 sprite.color = Color::srgb(1.0, 0.95, 0.28);
@@ -2264,6 +2314,59 @@ fn update_graphical_gpu_visual_cues(
             }
         }
     }
+}
+
+fn ca38_pose_from_runtime(
+    panel: &RuntimeControlPanel,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> crate::Ca38CreaturePose {
+    let animation = match panel.selected_action_kind {
+        Some(ActionKind::Move) if panel.target_entity == Some(3) => CreatureAnimationState::Afraid,
+        Some(ActionKind::Move) => CreatureAnimationState::Moving,
+        Some(ActionKind::Interact) | Some(ActionKind::Hold) => CreatureAnimationState::Interacting,
+        Some(ActionKind::Inspect) => CreatureAnimationState::Inspecting,
+        Some(ActionKind::Rest) => CreatureAnimationState::Sleeping,
+        Some(ActionKind::Vocalize) | Some(ActionKind::Write) | Some(ActionKind::Gesture) => {
+            CreatureAnimationState::Signaling
+        }
+        Some(ActionKind::Idle) | None => {
+            if gpu.fallback_reason.is_some() {
+                CreatureAnimationState::Resting
+            } else {
+                CreatureAnimationState::Idle
+            }
+        }
+    };
+    let expression = if panel.terminal_recovery_cause.is_some() {
+        CreatureExpressionState::Pained
+    } else if panel.target_entity == Some(3) {
+        CreatureExpressionState::Afraid
+    } else if panel.target_entity == Some(2) {
+        CreatureExpressionState::Hungry
+    } else if gpu.fallback_reason.is_some() {
+        CreatureExpressionState::Tired
+    } else if gpu.h_shadow_applications > 0 {
+        CreatureExpressionState::Energized
+    } else {
+        CreatureExpressionState::Neutral
+    };
+    crate::ca38_creature_pose_for_state(animation, expression)
+}
+
+fn ca38_graphical_creature_size(pose: crate::Ca38CreaturePose) -> Vec2 {
+    Vec2::new(78.0 * pose.scale_x, 46.0 * pose.scale_y)
+}
+
+fn ca38_graphical_creature_scale(
+    pose: crate::Ca38CreaturePose,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> f32 {
+    let learning = if gpu.h_shadow_applications > 0 {
+        1.08
+    } else {
+        1.0
+    };
+    1.0 + pose.pulse * 0.08 * learning
 }
 
 fn update_graphical_feedback_pulses(
@@ -2590,6 +2693,7 @@ pub fn graphical_inspector_overlay_text(
     let bars = ca07_creature_state_bars(snapshot).join("\n");
     let learning = ca07_learning_summary(&gpu.telemetry);
     let tech = ca07_compact_technical_summary(&gpu.telemetry);
+    let pose = crate::ca38_animation_label_line(&snapshot.visual);
     let fallback = compact_overlay_line(
         gpu.telemetry.fallback_reason.as_deref().unwrap_or("none"),
         22,
@@ -2601,6 +2705,7 @@ pub fn graphical_inspector_overlay_text(
             "State: {}  {}/{}\n",
             "{}\n",
             "Action: {}  Target: {}\n",
+            "Pose: {}\n",
             "Patch: {}\n",
             "Learning: {}\n",
             "GPU: {}  fallback={}\n",
@@ -2616,6 +2721,7 @@ pub fn graphical_inspector_overlay_text(
         bars,
         action,
         target,
+        compact_overlay_line(&pose, 34),
         patch,
         learning,
         compact_overlay_line(&gpu.telemetry.selected_backend, 14),
@@ -2643,6 +2749,7 @@ pub fn graphical_player_status_overlay_text(
     } else {
         "fallback: none".to_string()
     };
+    let pose = ca38_pose_from_runtime(panel, gpu);
     let status = panel.terminal_recovery_cause.as_ref().map_or_else(
         || panel.playback.label().to_string(),
         |_| "paused: reset available".to_string(),
@@ -2654,6 +2761,7 @@ pub fn graphical_player_status_overlay_text(
             "GPU: {}  {}\n",
             "Creature: stable:1  Goal: {}\n",
             "Action: {}  Target: {}\n",
+            "Pose: {} ({})\n",
             "Patch: sealed={} count={}\n",
             "Learning: H_shadow apps={} delta={:.4}\n",
             "Gate: CPU shadow; full_auth=false\n",
@@ -2668,6 +2776,8 @@ pub fn graphical_player_status_overlay_text(
         goal,
         action,
         target,
+        pose.action_label,
+        pose.pose_id,
         panel.last_patch_sealed,
         panel.sealed_patch_count,
         gpu.h_shadow_applications,
@@ -2751,10 +2861,10 @@ fn ca07_compact_technical_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String 
 pub fn readability_legend_overlay_text() -> String {
     [
         "Visual Guide: [@] creature | [+] food | [!] hazard | [#] obstacle/rock | [T] cue",
-        "GPU alpha fixture: creature+food+real hazard+obstacle. P34 remains guide-only.",
-        "World art: generated visual terrain map, soil paths, groves, hazard pressure, stone props.",
+        "GPU alpha map: seeded large terrain with distributed stable-ID food, hazards, and obstacles.",
+        "World art: procedural terrain, soil paths, groves, hazard pressure, stone props.",
         "Cues: reward=green pain=red sleep=blue learning=teal. Audio stubs are display-only.",
-        "All terrain, props, and cues are presentation only. Stable IDs stay portable.",
+        "Terrain guides placement; world/core arbitration still owns actions. Stable IDs stay portable.",
     ]
     .join("\n")
 }
