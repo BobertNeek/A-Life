@@ -4,6 +4,8 @@ param(
     [int]$SmokeSeconds = 0,
     [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
     [string]$GpuMode = "static-plastic-cpu-shadow-guarded",
+    [ValidateSet("player", "dev-overlay", "full-debug")]
+    [string]$ViewMode = "player",
     [ValidateSet("gpu-alpha", "p34")]
     [string]$Scenario = "gpu-alpha",
     [string]$EnvironmentManifest = "",
@@ -18,11 +20,11 @@ $EffectiveGraphicsBackend = $GraphicsBackend
 
 if ($SmokeSeconds -gt 0) {
     $ModeArgs = @("graphical-playground")
-    $ModeArgs += @("--scenario", $Scenario, "--gpu-mode", $GpuMode, "--smoke-seconds", "$SmokeSeconds")
+    $ModeArgs += @("--scenario", $Scenario, "--gpu-mode", $GpuMode, "--view-mode", $ViewMode, "--smoke-seconds", "$SmokeSeconds")
     $ModeLabel = "bounded graphical playground smoke"
 } else {
     $ModeArgs = @("graphical-playground")
-    $ModeArgs += @("--scenario", $Scenario, "--gpu-mode", $GpuMode)
+    $ModeArgs += @("--scenario", $Scenario, "--gpu-mode", $GpuMode, "--view-mode", $ViewMode)
     $ModeLabel = "persistent graphical playground"
 }
 
@@ -72,6 +74,7 @@ if (-not [string]::IsNullOrWhiteSpace($EnvironmentManifest)) {
     Write-Host "Environment manifest: crates/alife_game_app/environment_manifest.json"
 }
 Write-Host "GPU mode requested: $GpuMode"
+Write-Host "View mode requested: $ViewMode"
 Write-Host "CPU fallback is safety fallback, not the target alpha path."
 Write-Host "Graphics backend requested: $GraphicsBackend"
 if ($RequireGpu) {
@@ -82,7 +85,7 @@ if ($RequireGpu) {
 Write-Host "Title: A-Life GPU Alpha Playground."
 Write-Host "Controls: left click select, Space pause/run, N step once, R reset, 1/2/3 speed, F follow, Esc quit."
 Write-Host "Camera/inspector: arrows/WASD pan, +/- zoom, Q/E orbit, F follow selected stable ID. Inspector is read-only."
-Write-Host "Readability: color+shape markers, creature/food/hazard/obstacle stable-ID badges, concise GPU/fallback status, read-only inspector."
+Write-Host "Readability: default Player View hides debug labels; use -ViewMode dev-overlay or -ViewMode full-debug for diagnostics."
 Write-Host "Reset/restart: press R or close and relaunch the GPU alpha fixture if the current run becomes confusing."
 $IsWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
     [System.Runtime.InteropServices.OSPlatform]::Windows

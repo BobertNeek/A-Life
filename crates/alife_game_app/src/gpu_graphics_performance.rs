@@ -190,7 +190,10 @@ pub fn run_gpu_graphics_performance_evidence_smoke(
             .to_string();
     let launch_window_smoke_status = if graphical.smoke_seconds == Some(5)
         && graphical.cpu_fallback_visible
-        && graphical.stable_id_overlay_visible
+        && graphical.player_view_acceptance.dev_overlay_hidden
+        && graphical
+            .player_view_acceptance
+            .stable_id_labels_hidden_except_selected
     {
         "configured-ci-safe-smoke; real window timing remains manual unless captured".to_string()
     } else {

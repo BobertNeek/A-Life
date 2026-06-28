@@ -265,7 +265,14 @@ fn s01_graphical_playground_launch_plan_validates_without_graphics() {
     assert!(!summary.require_gpu);
     assert!(summary.gpu_mode_visible);
     assert!(summary.cpu_fallback_visible);
-    assert!(summary.stable_id_overlay_visible);
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+    assert!(!summary.stable_id_overlay_visible);
+    assert!(summary.player_view_acceptance.dev_overlay_hidden);
+    assert!(
+        summary
+            .player_view_acceptance
+            .stable_id_labels_hidden_except_selected
+    );
     assert_eq!(summary.object_count, 2);
     assert_eq!(summary.creature_marker_count, 1);
     assert_eq!(summary.food_marker_count, 1);

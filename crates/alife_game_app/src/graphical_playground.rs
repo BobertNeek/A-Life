@@ -68,11 +68,107 @@ impl GraphicalPlaygroundMode {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum GraphicalPlaygroundViewMode {
+    #[default]
+    Player,
+    DevOverlay,
+    FullDebug,
+}
+
+impl GraphicalPlaygroundViewMode {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Player => "player",
+            Self::DevOverlay => "dev-overlay",
+            Self::FullDebug => "full-debug",
+        }
+    }
+
+    pub const fn dev_overlay_visible(self) -> bool {
+        matches!(self, Self::DevOverlay | Self::FullDebug)
+    }
+
+    pub const fn full_debug_visible(self) -> bool {
+        matches!(self, Self::FullDebug)
+    }
+
+    pub const fn world_labels_visible(self) -> bool {
+        matches!(self, Self::DevOverlay | Self::FullDebug)
+    }
+
+    pub const fn topology_lines_visible(self) -> bool {
+        matches!(self, Self::DevOverlay | Self::FullDebug)
+    }
+
+    pub const fn teacher_debug_labels_visible(self) -> bool {
+        matches!(self, Self::FullDebug)
+    }
+
+    pub fn parse(value: &str) -> Result<Self, GameAppShellError> {
+        match value {
+            "player" => Ok(Self::Player),
+            "dev-overlay" => Ok(Self::DevOverlay),
+            "full-debug" => Ok(Self::FullDebug),
+            _ => Err(GameAppShellError::InvalidGraphicalLaunch {
+                message: "graphical view mode must be player, dev-overlay, or full-debug",
+            }),
+        }
+    }
+}
+
+pub const CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA: f32 = 0.16;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphicalPlayerViewAcceptanceSummary {
+    pub view_mode: GraphicalPlaygroundViewMode,
+    pub dev_overlay_hidden: bool,
+    pub full_debug_hidden: bool,
+    pub event_feed_collapsed: bool,
+    pub stable_id_labels_hidden_except_selected: bool,
+    pub terrain_overlay_max_opacity: f32,
+    pub internal_patch_gpu_claim_spam_hidden: bool,
+    pub topology_lines_hidden: bool,
+    pub teacher_debug_labels_hidden_unless_school: bool,
+}
+
+impl GraphicalPlayerViewAcceptanceSummary {
+    pub const fn for_view_mode(view_mode: GraphicalPlaygroundViewMode) -> Self {
+        Self {
+            view_mode,
+            dev_overlay_hidden: !view_mode.dev_overlay_visible(),
+            full_debug_hidden: !view_mode.full_debug_visible(),
+            event_feed_collapsed: !view_mode.full_debug_visible(),
+            stable_id_labels_hidden_except_selected: !view_mode.world_labels_visible(),
+            terrain_overlay_max_opacity: CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA,
+            internal_patch_gpu_claim_spam_hidden: !view_mode.full_debug_visible(),
+            topology_lines_hidden: !view_mode.topology_lines_visible(),
+            teacher_debug_labels_hidden_unless_school: !view_mode.teacher_debug_labels_visible(),
+        }
+    }
+
+    pub fn signature_line(&self) -> String {
+        format!(
+            "view_mode={} dev_overlay_hidden={} full_debug_hidden={} event_feed_collapsed={} stable_labels_hidden={} terrain_alpha_max={:.2} internal_spam_hidden={} topology_lines_hidden={} teacher_debug_hidden={}",
+            self.view_mode.label(),
+            self.dev_overlay_hidden,
+            self.full_debug_hidden,
+            self.event_feed_collapsed,
+            self.stable_id_labels_hidden_except_selected,
+            self.terrain_overlay_max_opacity,
+            self.internal_patch_gpu_claim_spam_hidden,
+            self.topology_lines_hidden,
+            self.teacher_debug_labels_hidden_unless_school,
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GraphicalPlaygroundLaunchConfig {
     pub app_launch: AppShellLaunchConfig,
     pub mode: GraphicalPlaygroundMode,
     pub gpu_mode: GraphicalGpuRuntimeMode,
+    pub view_mode: GraphicalPlaygroundViewMode,
     pub window_title: String,
     pub require_gpu: bool,
 }
@@ -83,6 +179,7 @@ impl GraphicalPlaygroundLaunchConfig {
             app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
             mode: GraphicalPlaygroundMode::Interactive,
             gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+            view_mode: GraphicalPlaygroundViewMode::Player,
             window_title: S01_GRAPHICAL_WINDOW_TITLE.to_string(),
             require_gpu: false,
         }
@@ -93,6 +190,7 @@ impl GraphicalPlaygroundLaunchConfig {
             app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
             mode: GraphicalPlaygroundMode::Smoke { seconds },
             gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+            view_mode: GraphicalPlaygroundViewMode::Player,
             window_title: format!("{S01_GRAPHICAL_WINDOW_TITLE} - smoke {seconds}s"),
             require_gpu: false,
         }
@@ -100,6 +198,11 @@ impl GraphicalPlaygroundLaunchConfig {
 
     pub const fn with_gpu_mode(mut self, gpu_mode: GraphicalGpuRuntimeMode) -> Self {
         self.gpu_mode = gpu_mode;
+        self
+    }
+
+    pub const fn with_view_mode(mut self, view_mode: GraphicalPlaygroundViewMode) -> Self {
+        self.view_mode = view_mode;
         self
     }
 
@@ -142,10 +245,12 @@ pub struct GraphicalPlaygroundLaunchSummary {
     pub seed: u64,
     pub selected_backend: BackendSelection,
     pub requested_gpu_mode: GraphicalGpuRuntimeMode,
+    pub view_mode: GraphicalPlaygroundViewMode,
     pub require_gpu: bool,
     pub gpu_mode_visible: bool,
     pub cpu_fallback_visible: bool,
     pub stable_id_overlay_visible: bool,
+    pub player_view_acceptance: GraphicalPlayerViewAcceptanceSummary,
     pub object_count: usize,
     pub creature_marker_count: usize,
     pub food_marker_count: usize,
@@ -156,7 +261,7 @@ pub struct GraphicalPlaygroundLaunchSummary {
 impl GraphicalPlaygroundLaunchSummary {
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:objects={}:creatures={}:food={}:hazards={}:backend={:?}:gpu_mode={}:require_gpu={}:persistent={}:timeout={:?}",
+            "{}:{}:{}:objects={}:creatures={}:food={}:hazards={}:backend={:?}:gpu_mode={}:view_mode={}:require_gpu={}:persistent={}:timeout={:?}:{}",
             self.schema,
             self.schema_version,
             self.mode_label,
@@ -166,9 +271,11 @@ impl GraphicalPlaygroundLaunchSummary {
             self.hazard_marker_count,
             self.selected_backend,
             self.requested_gpu_mode.label(),
+            self.view_mode.label(),
             self.require_gpu,
             self.persistent_window,
-            self.smoke_seconds
+            self.smoke_seconds,
+            self.player_view_acceptance.signature_line(),
         )
     }
 }
@@ -192,10 +299,14 @@ pub fn validate_graphical_playground_launch(
         seed: startup.seed,
         selected_backend: startup.requested_backend,
         requested_gpu_mode: launch.gpu_mode,
+        view_mode: launch.view_mode,
         require_gpu: launch.require_gpu,
         gpu_mode_visible: true,
         cpu_fallback_visible: true,
-        stable_id_overlay_visible: true,
+        stable_id_overlay_visible: launch.view_mode.world_labels_visible(),
+        player_view_acceptance: GraphicalPlayerViewAcceptanceSummary::for_view_mode(
+            launch.view_mode,
+        ),
         object_count: presentation.object_count,
         creature_marker_count: presentation.kind_count(WorldObjectKind::Agent),
         food_marker_count: presentation.kind_count(WorldObjectKind::Food),

@@ -37,46 +37,47 @@ use alife_game_app::{
     CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
     FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
     FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest,
-    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
-    LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    RealtimeWgslTelemetrySummary, ReleaseCandidateArea, ReleaseCandidateGateStatus,
-    RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState,
-    RuntimePrereqDiagnosticsOptions, S08EvidenceStatus, SampledGpuRuntimeOptions,
-    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
-    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
-    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
-    CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
-    CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
-    CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
-    CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
-    CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
-    CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION,
-    CA25_CURRICULUM_AUTHORING_SCHEMA, CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
-    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION,
-    CA27_INTERNAL_SLM_PRIOR_SCHEMA, CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION,
-    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
-    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION,
-    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION,
-    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION,
-    CA31_MAX_REPORT_BYTES, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA,
-    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION, CA33_BATCHED_GPU_RUNTIME_SCHEMA,
-    CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION, CA34_SAMPLED_GPU_RUNTIME_SCHEMA,
-    CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION, CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA,
-    CA36_SOAK_ISOLATION_SCHEMA_VERSION, CA37_MIN_PALETTE_MATERIALS,
-    CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES, CA37_MIN_WORLD_DRESSING_PROPS,
-    CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES, CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES,
-    CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES, CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES,
-    CA37_WORLD_ART_STYLE_SCHEMA, CA37_WORLD_ART_STYLE_SCHEMA_VERSION,
-    CA38_CREATURE_ANIMATION_SCHEMA, CA38_CREATURE_ANIMATION_SCHEMA_VERSION,
-    CA38_REQUIRED_ANIMATION_STATES, CA39_DRIVE_AUDIO_VFX_SCHEMA,
-    CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION, CA39_REQUIRED_DRIVE_CUE_COUNT,
-    CA40_ONBOARDING_TUTORIAL_SCHEMA, CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION,
-    CA40_REQUIRED_CHECKLIST_ITEMS, CA42_RUNTIME_PREREQ_SCHEMA, CA42_RUNTIME_PREREQ_SCHEMA_VERSION,
-    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundViewMode,
+    InspectorControlPanel, LessonManifest, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, RealtimeWgslTelemetrySummary, ReleaseCandidateArea,
+    ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, RuntimePrereqDiagnosticsOptions, S08EvidenceStatus,
+    SampledGpuRuntimeOptions, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
+    SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape, WorldEditCommand,
+    WorldEditorConfig, WorldEditorMode, WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA,
+    CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION, CA18_MAX_GRAPHICAL_CREATURES,
+    CA19_GRAPHICAL_ECOLOGY_SCHEMA, CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION,
+    CA20_GRAPHICAL_LIFECYCLE_SCHEMA, CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION,
+    CA21_BEHAVIOR_TUNING_SCHEMA, CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT,
+    CA21_SCENARIO_SWEEP_COUNT, CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION,
+    CA22_FAST_HEADLESS_TICKS, CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA,
+    CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION, CA25_CURRICULUM_AUTHORING_SCHEMA,
+    CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA,
+    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION, CA27_INTERNAL_SLM_PRIOR_SCHEMA,
+    CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA,
+    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA,
+    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA,
+    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA,
+    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION, CA31_MAX_REPORT_BYTES,
+    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
+    CA33_BATCHED_GPU_RUNTIME_SCHEMA, CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION,
+    CA34_SAMPLED_GPU_RUNTIME_SCHEMA, CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
+    CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA, CA36_SOAK_ISOLATION_SCHEMA_VERSION,
+    CA37_MIN_PALETTE_MATERIALS, CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
+    CA37_MIN_WORLD_DRESSING_PROPS, CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES,
+    CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES, CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
+    CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES, CA37_WORLD_ART_STYLE_SCHEMA,
+    CA37_WORLD_ART_STYLE_SCHEMA_VERSION, CA38_CREATURE_ANIMATION_SCHEMA,
+    CA38_CREATURE_ANIMATION_SCHEMA_VERSION, CA38_REQUIRED_ANIMATION_STATES,
+    CA39_DRIVE_AUDIO_VFX_SCHEMA, CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION,
+    CA39_REQUIRED_DRIVE_CUE_COUNT, CA40_ONBOARDING_TUTORIAL_SCHEMA,
+    CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION, CA40_REQUIRED_CHECKLIST_ITEMS,
+    CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA, CA42_RUNTIME_PREREQ_SCHEMA,
+    CA42_RUNTIME_PREREQ_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_semantic::{
     parse_slm_prior_json, project_embedding_to_i8, LlamaCppEmbeddingConfig,
@@ -293,6 +294,9 @@ fn first_graphical_alpha_playtest_docs_and_launcher_are_current() {
     assert!(report.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
     assert!(report.contains("not full action-authoritative"));
     assert!(launcher.contains("Reset/restart"));
+    assert!(launcher.contains("[string]$ViewMode = \"player\""));
+    assert!(launcher.contains("--view-mode"));
+    assert!(launcher.contains("-ViewMode dev-overlay"));
     assert!(launcher.contains("[string]$GraphicsBackend"));
     assert!(launcher.contains("overriding inherited WGPU_BACKEND"));
     assert!(launcher.contains("-GraphicsBackend vulkan"));
@@ -861,11 +865,12 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(legend.contains("Terrain guides placement"));
     assert!(controls.contains("Controls: click"));
     assert!(controls.contains("[!] hazard"));
-    assert!(player_hud.contains("A-Life GPU Alpha Playground"));
-    assert!(player_hud.contains("GPU: GpuPlastic"));
-    assert!(player_hud.contains("Gate: CPU shadow; full_auth=false"));
-    assert!(player_hud.contains("Learning: H_shadow apps=2"));
+    assert!(player_hud.contains("A-Life GPU Alpha"));
+    assert!(player_hud.contains("GPU: ON"));
+    assert!(player_hud.contains("Learning: H_shadow 2"));
     assert!(player_hud.lines().count() <= 10);
+    assert!(!player_hud.contains("stable:"));
+    assert!(!player_hud.contains("Patch:"));
     assert!(!player_hud.contains("Concepts:"));
     assert!(!player_hud.contains("Memory:"));
     assert!(!player_hud.contains("Neural:"));
@@ -932,8 +937,12 @@ fn bevy_feature_ca38_creature_animation_pose_is_display_only_and_readable() {
         full_action_authoritative_claim: false,
     };
     let player_hud = alife_game_app::bevy_shell::graphical_player_status_overlay_text(&panel, &gpu);
-    assert!(player_hud.contains("Pose:"));
-    assert!(player_hud.contains("Gate: CPU shadow; full_auth=false"));
+    let debug_hud =
+        alife_game_app::bevy_shell::graphical_full_debug_status_overlay_text(&panel, &gpu);
+    assert!(!player_hud.contains("Pose:"));
+    assert!(!player_hud.contains("Gate: CPU shadow; full_auth=false"));
+    assert!(debug_hud.contains("Pose:"));
+    assert!(debug_hud.contains("Gate: CPU shadow; full_auth=false"));
     assert!(!player_hud.contains("Entity("));
     assert!(!player_hud.contains("full action-authoritative"));
 }
@@ -2029,6 +2038,144 @@ fn graphical_gpu_launch_config_defaults_gpu_first_and_preserves_cpu_choice() {
     assert!(gpu_summary
         .signature_line()
         .contains("gpu_mode=static-plastic"));
+}
+
+#[test]
+fn ca42a_default_graphical_launch_uses_player_view_acceptance() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let summary = alife_game_app::validate_graphical_playground_launch(&launch).unwrap();
+    let acceptance = &summary.player_view_acceptance;
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+    assert!(!summary.stable_id_overlay_visible);
+    assert!(acceptance.dev_overlay_hidden);
+    assert!(acceptance.full_debug_hidden);
+    assert!(acceptance.event_feed_collapsed);
+    assert!(acceptance.stable_id_labels_hidden_except_selected);
+    assert!(acceptance.internal_patch_gpu_claim_spam_hidden);
+    assert!(acceptance.topology_lines_hidden);
+    assert!(acceptance.teacher_debug_labels_hidden_unless_school);
+    assert!(acceptance.terrain_overlay_max_opacity <= CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA);
+    assert!(summary.signature_line().contains("view_mode=player"));
+    assert!(summary.signature_line().contains("dev_overlay_hidden=true"));
+}
+
+#[test]
+fn ca42a_dev_overlay_and_full_debug_modes_remain_available() {
+    let dev = alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5)
+        .with_view_mode(GraphicalPlaygroundViewMode::DevOverlay);
+    let dev_summary = alife_game_app::validate_graphical_playground_launch(&dev).unwrap();
+    assert_eq!(
+        dev_summary.view_mode,
+        GraphicalPlaygroundViewMode::DevOverlay
+    );
+    assert!(dev_summary.stable_id_overlay_visible);
+    assert!(!dev_summary.player_view_acceptance.dev_overlay_hidden);
+    assert!(dev_summary.player_view_acceptance.full_debug_hidden);
+
+    let full = alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5)
+        .with_view_mode(GraphicalPlaygroundViewMode::FullDebug);
+    let full_summary = alife_game_app::validate_graphical_playground_launch(&full).unwrap();
+    assert_eq!(
+        full_summary.view_mode,
+        GraphicalPlaygroundViewMode::FullDebug
+    );
+    assert!(full_summary.stable_id_overlay_visible);
+    assert!(!full_summary.player_view_acceptance.dev_overlay_hidden);
+    assert!(!full_summary.player_view_acceptance.full_debug_hidden);
+
+    assert!(GraphicalPlaygroundViewMode::parse("player").is_ok());
+    assert!(GraphicalPlaygroundViewMode::parse("dev-overlay").is_ok());
+    assert!(GraphicalPlaygroundViewMode::parse("full-debug").is_ok());
+    assert!(GraphicalPlaygroundViewMode::parse("debug-dashboard").is_err());
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn ca42a_player_hud_is_compact_and_debug_spam_free() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let mut live = LiveBrainLoop::from_p34_launch(&launch).unwrap();
+    let mut panel = RuntimeControlPanel::from_live_loop(&live);
+    panel
+        .apply_command(&mut live, RuntimeControlCommand::StepOnce)
+        .unwrap();
+    let gpu = GraphicalGpuRuntimeTelemetry {
+        requested_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        selected_backend: "GpuPlastic".to_string(),
+        fallback_reason: None,
+        hardware_identifier: Some("local-test".to_string()),
+        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow".to_string(),
+        gpu_static_dispatched_ticks: 1,
+        gpu_scores_used_for_proposals: true,
+        cpu_shadow_parity: true,
+        parity_failures: 0,
+        sealed_patches: panel.sealed_patch_count,
+        h_shadow_applications: 1,
+        last_h_shadow_delta: 0.004,
+        compact_readback_bytes: 64,
+        post_seal_readback_bytes: 64,
+        total_gpu_runtime_ms: 1.0,
+        wgsl: test_wgsl_telemetry(),
+        no_active_bulk_readback: true,
+        full_action_authoritative_claim: false,
+    };
+
+    let player_hud = alife_game_app::bevy_shell::graphical_player_status_overlay_text(&panel, &gpu);
+    let debug_hud =
+        alife_game_app::bevy_shell::graphical_full_debug_status_overlay_text(&panel, &gpu);
+
+    assert!(player_hud.contains("A-Life GPU Alpha"));
+    assert!(player_hud.contains("GPU: ON"));
+    assert!(player_hud.contains("Controls: Space | N | R | Esc"));
+    assert!(player_hud.lines().count() <= 7);
+    assert!(!player_hud.contains("stable:"));
+    assert!(!player_hud.contains("Patch:"));
+    assert!(!player_hud.contains("sealed="));
+    assert!(!player_hud.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
+    assert!(!player_hud.contains("full_auth"));
+    assert!(debug_hud.contains("Creature: stable:1"));
+    assert!(debug_hud.contains("Patch: sealed="));
+    assert!(debug_hud.contains("Gate: CPU shadow; full_auth=false"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn ca42a_player_view_uses_shape_glyphs_not_default_text_labels() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch).unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+    assert!(!summary.stable_id_overlay_visible);
+
+    let mut glyph_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalObjectGlyph>();
+    let glyphs = glyph_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert!(glyphs.len() >= summary.object_count);
+    assert!(glyphs
+        .iter()
+        .any(|glyph| glyph.kind == WorldObjectKind::Agent));
+    assert!(glyphs
+        .iter()
+        .any(|glyph| glyph.kind == WorldObjectKind::Food));
+    assert!(glyphs
+        .iter()
+        .any(|glyph| glyph.kind == WorldObjectKind::Hazard));
+    assert!(glyphs
+        .iter()
+        .any(|glyph| glyph.kind == WorldObjectKind::Obstacle));
+
+    let mut badge_query = app.world_mut().query::<(
+        &bevy::prelude::Visibility,
+        &alife_game_app::bevy_shell::GraphicalObjectBadge,
+    )>();
+    assert!(badge_query
+        .iter(app.world())
+        .all(|(visibility, _)| *visibility == bevy::prelude::Visibility::Hidden));
 }
 
 #[test]
