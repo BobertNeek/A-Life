@@ -326,9 +326,13 @@ impl ConceptCell {
 
         append_unique_bounded(&mut self.bindings.objects, bindings.objects.drain(..))?;
         append_unique_bounded(&mut self.bindings.words, bindings.words.drain(..))?;
-        append_unique_bounded(&mut self.bindings.drives, bindings.drives.drain(..))?;
-        append_unique_bounded(&mut self.bindings.actions, bindings.actions.drain(..))?;
-        append_unique_bounded(&mut self.bindings.locations, bindings.locations.drain(..))?;
+        merge_drive_bindings(&mut self.bindings.drives, bindings.drives.drain(..))?;
+        merge_action_observations(&mut self.bindings.actions, bindings.actions.drain(..))?;
+        merge_location_samples(
+            &mut self.bindings.locations,
+            bindings.locations.drain(..),
+            tick,
+        )?;
         append_unique_bounded(&mut self.bindings.agents, bindings.agents.drain(..))?;
         append_unique_bounded(
             &mut self.bindings.semantic_refs,
@@ -621,7 +625,7 @@ impl Default for TopologicalMapConfig {
         Self {
             max_concepts: 256,
             max_edges: 512,
-            max_simplexes: 256,
+            max_simplexes: 1024,
             max_unresolved_gaps: 64,
             edge_decay_per_tick: NormalizedScalar(0.01),
         }
@@ -1134,6 +1138,67 @@ fn append_unique_bounded<T: Copy + PartialEq>(
                 return Err(ScaffoldContractError::TopologyCapacityExceeded);
             }
             target.push(value);
+        }
+    }
+    Ok(())
+}
+
+fn merge_drive_bindings(
+    target: &mut Vec<DriveBinding>,
+    values: impl Iterator<Item = DriveBinding>,
+) -> Result<(), ScaffoldContractError> {
+    for value in values {
+        value.validate_contract()?;
+        if let Some(existing) = target
+            .iter_mut()
+            .find(|existing| existing.channel == value.channel)
+        {
+            existing.value = value.value;
+        } else if target.len() >= MAX_BINDING_REFS {
+            return Err(ScaffoldContractError::TopologyCapacityExceeded);
+        } else {
+            target.push(value);
+        }
+    }
+    Ok(())
+}
+
+fn merge_action_observations(
+    target: &mut Vec<ActionObservationFact>,
+    values: impl Iterator<Item = ActionObservationFact>,
+) -> Result<(), ScaffoldContractError> {
+    for value in values {
+        value.validate_contract()?;
+        if let Some(existing) = target
+            .iter_mut()
+            .find(|existing| existing.action_id == value.action_id && existing.kind == value.kind)
+        {
+            existing.confidence =
+                Confidence::new(existing.confidence.raw().max(value.confidence.raw()))?;
+        } else if target.len() >= MAX_BINDING_REFS {
+            return Err(ScaffoldContractError::TopologyCapacityExceeded);
+        } else {
+            target.push(value);
+        }
+    }
+    Ok(())
+}
+
+fn merge_location_samples(
+    target: &mut Vec<Vec3f>,
+    values: impl Iterator<Item = Vec3f>,
+    tick: Tick,
+) -> Result<(), ScaffoldContractError> {
+    for value in values {
+        value.validate()?;
+        if target.contains(&value) {
+            continue;
+        }
+        if target.len() < MAX_BINDING_REFS {
+            target.push(value);
+        } else {
+            let index = (tick.raw() as usize) % MAX_BINDING_REFS;
+            target[index] = value;
         }
     }
     Ok(())

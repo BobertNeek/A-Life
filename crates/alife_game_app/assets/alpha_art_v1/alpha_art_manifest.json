@@ -1,0 +1,142 @@
+{
+  "schema": "alife.ca44a.alpha_art_manifest.v1",
+  "schema_version": 1,
+  "pack_id": "alpha-art-v1",
+  "entries": [
+    {
+      "id": "creature_idle",
+      "role": "creature-idle",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_idle.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 991
+    },
+    {
+      "id": "creature_hurt",
+      "role": "creature-hurt",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_hurt.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1530
+    },
+    {
+      "id": "selection_ring",
+      "role": "selection-ring",
+      "kind": "selection",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/selection_ring.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1074
+    },
+    {
+      "id": "food_sprout",
+      "role": "food",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/food_sprout.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 798
+    },
+    {
+      "id": "hazard_crystal",
+      "role": "hazard",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/hazard_crystal.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1213
+    },
+    {
+      "id": "rock_cluster",
+      "role": "rock-obstacle",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/rock_cluster.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1011
+    },
+    {
+      "id": "terrain_safe_grass",
+      "role": "terrain-safe-grass",
+      "kind": "terrain-tile",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_safe_grass.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1514
+    },
+    {
+      "id": "terrain_soil_path",
+      "role": "terrain-soil-path",
+      "kind": "terrain-tile",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_soil_path.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1588
+    },
+    {
+      "id": "terrain_resource_grove",
+      "role": "terrain-resource-grove",
+      "kind": "terrain-tile",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_resource_grove.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1761
+    },
+    {
+      "id": "terrain_hazard_pressure",
+      "role": "terrain-hazard-pressure",
+      "kind": "terrain-tile",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_hazard_pressure.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1594
+    },
+    {
+      "id": "terrain_stone_rough",
+      "role": "terrain-stone-rough",
+      "kind": "terrain-tile",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_stone_rough.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 1551
+    },
+    {
+      "id": "prop_grass_tuft",
+      "role": "prop-dressing",
+      "kind": "prop",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_grass_tuft.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 613
+    },
+    {
+      "id": "prop_pebble_cluster",
+      "role": "prop-dressing",
+      "kind": "prop",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_pebble_cluster.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 594
+    },
+    {
+      "id": "prop_warning_shard",
+      "role": "prop-dressing",
+      "kind": "prop",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_warning_shard.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 659
+    },
+    {
+      "id": "prop_leaf_patch",
+      "role": "prop-dressing",
+      "kind": "prop",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_leaf_patch.png",
+      "width": 64,
+      "height": 64,
+      "file_size_bytes": 748
+    }
+  ]
+}

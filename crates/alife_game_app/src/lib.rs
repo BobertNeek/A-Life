@@ -10,10 +10,10 @@ mod prelude {
     pub(crate) use alife_core::{
         cpu_reference_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId, ActionKind,
         ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput, BrainTickStatus,
-        ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence, CreatureMind,
-        DurationTicks, EdgeRelationKind, ExperiencePatch, GapResolutionStatus, GaussianClusterId,
-        GenomeId, HomeostaticParameters, HomeostaticSnapshot, Intensity, LineageId,
-        NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
+        ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence, ContractDiagnostic,
+        CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch, GapResolutionStatus,
+        GaussianClusterId, GenomeId, HomeostaticParameters, HomeostaticSnapshot, Intensity,
+        LineageId, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
         PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, ReferenceActionFailure,
         ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel, TeacherPerceptionChannel,
         Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
@@ -101,6 +101,12 @@ pub use runtime_prereq_diagnostics::*;
 
 mod tester_feedback_capture;
 pub use tester_feedback_capture::*;
+
+mod alpha_art_assets;
+pub use alpha_art_assets::*;
+
+mod alpha_tick_stability;
+pub use alpha_tick_stability::*;
 
 mod product_qa;
 pub use product_qa::*;
