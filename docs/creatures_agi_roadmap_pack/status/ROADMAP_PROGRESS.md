@@ -57,6 +57,7 @@ Initial state: pack imported, no CA plans complete.
 | CA41 | complete | `codex/CA41-windows-zip-packaging-and-run-script` | branch tip | Windows release-package builder, package-local graphical runner, package metadata, and artifact-safe ZIP discipline recorded in `status/CA41_WINDOWS_ZIP_PACKAGE.md`; next executable plan is CA42. |
 | CA42 | complete | `codex/CA42-runtime-prerequisite-gpu-diagnostics-launcher` | branch tip | Runtime prerequisite preflight, GPU/windowing diagnostics, explicit RequireGpu blocking, degraded CPU fallback labeling, and log paths recorded in `status/CA42_RUNTIME_PREREQ_DIAGNOSTICS.md`; next executable plan is CA43. |
 | CA43 | complete | `codex/CA43-crash-logs-and-tester-feedback-capture` | branch tip | Sanitized crash summaries, local feedback directory policy, tester feedback template, and launcher/package wiring recorded in `status/CA43_CRASH_LOGS_TESTER_FEEDBACK.md`; next executable plan is CA44. |
+| CA44 | blocked | `codex/CA44-external-alpha-beta-playtest-loop` | branch tip | USER_ACTION_REQUIRED: no independent human external tester submissions are available to triage. Matrix, intake template, severity policy, and beta criteria are recorded in `status/CA44_EXTERNAL_ALPHA_BETA_PLAYTEST_LOOP.md`; next executable plan remains CA44 after evidence is provided. |
 
 Post-CAR27 blocking migration: active local model runtime was migrated from
 Ollama to direct localhost-only llama.cpp / `llama-server` on
