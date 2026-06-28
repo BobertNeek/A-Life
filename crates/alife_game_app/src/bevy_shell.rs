@@ -303,6 +303,9 @@ pub struct GraphicalMemoryJournalOverlay;
 pub struct GraphicalNeuralActivityProfilerOverlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalOnboardingTutorialOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalTeacherCueMarker {
     pub stable_id: WorldEntityId,
 }
@@ -629,6 +632,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_lifecycle_overlay,
                 update_graphical_topology_overlay,
                 update_graphical_memory_journal_overlay,
+                update_graphical_onboarding_tutorial_overlay,
             ),
         )
         .add_systems(
@@ -1137,6 +1141,27 @@ fn spawn_graphical_playground_scene(
         },
         BackgroundColor(Color::srgba(0.018, 0.03, 0.024, 0.58)),
         FeedbackCueOverlay,
+    ));
+
+    app.world_mut().spawn((
+        Name::new("A-Life CA40 first-session tutorial panel"),
+        Text::new(crate::ca40_first_session_tutorial_placeholder_text()),
+        TextFont {
+            font_size: 9.5,
+            ..default()
+        },
+        TextColor(Color::srgb(0.88, 1.0, 0.82)),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(18.0),
+            left: Val::Px(500.0),
+            right: Val::Px(330.0),
+            max_width: Val::Px(390.0),
+            padding: bevy::ui::UiRect::all(Val::Px(7.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.018, 0.036, 0.02, 0.62)),
+        GraphicalOnboardingTutorialOverlay,
     ));
 
     app.world_mut().spawn((
@@ -2479,6 +2504,16 @@ fn update_graphical_neural_activity_profiler_overlay(
 ) {
     for mut text in &mut overlays {
         text.0 = runtime.panel.neural_profiler.panel_text();
+    }
+}
+
+fn update_graphical_onboarding_tutorial_overlay(
+    runtime: Res<GraphicalRuntimeControlsResource>,
+    gpu: Res<GraphicalGpuTelemetryResource>,
+    mut overlays: bevy::prelude::Query<&mut Text, With<GraphicalOnboardingTutorialOverlay>>,
+) {
+    for mut text in &mut overlays {
+        text.0 = crate::ca40_first_session_tutorial_panel_text(&runtime.panel, &gpu.telemetry);
     }
 }
 

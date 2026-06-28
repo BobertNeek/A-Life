@@ -21,17 +21,18 @@ use alife_game_app::{
     run_live_brain_loop_paused_smoke, run_live_brain_loop_smoke, run_longrun_balance_smoke,
     run_longrun_balance_with_config, run_memory_history_journal_smoke,
     run_motor_ring_arbitration_smoke, run_multi_hour_soak_isolation_smoke,
-    run_neural_activity_profiler_smoke, run_onboarding_help_smoke, run_platform_package_smoke,
-    run_playable_survival_loop_smoke, run_population_performance_lod_smoke,
-    run_population_social_loop_smoke, run_product_qa_hardening_smoke,
-    run_real_semantic_provider_smoke, run_realtime_wgsl_telemetry_smoke,
-    run_release_candidate_smoke, run_runtime_controls_smoke, run_sampled_gpu_runtime_smoke,
-    run_save_load_ux_smoke, run_school_mode_smoke, run_semantic_provider_smoke,
-    run_teacher_world_cues_smoke, run_topological_concept_overlay_smoke, run_world_art_style_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
-    validate_app_shell_config, write_behavior_comparison_lab_report, AppShellLaunchConfig,
-    AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus,
-    Ca13TickBuffer, Ca39DriveCueKind, Ca39RuntimeCueEvidence, CadenceTarget, CameraNavigationState,
+    run_neural_activity_profiler_smoke, run_onboarding_help_smoke, run_onboarding_tutorial_smoke,
+    run_platform_package_smoke, run_playable_survival_loop_smoke,
+    run_population_performance_lod_smoke, run_population_social_loop_smoke,
+    run_product_qa_hardening_smoke, run_real_semantic_provider_smoke,
+    run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_topological_concept_overlay_smoke, run_world_art_style_smoke, run_world_ecology_loop_smoke,
+    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
+    write_behavior_comparison_lab_report, AppShellLaunchConfig, AutosavePolicy,
+    BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer,
+    Ca39DriveCueKind, Ca39RuntimeCueEvidence, CadenceTarget, CameraNavigationState,
     ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
     CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
     FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
@@ -71,8 +72,10 @@ use alife_game_app::{
     CA37_WORLD_ART_STYLE_SCHEMA_VERSION, CA38_CREATURE_ANIMATION_SCHEMA,
     CA38_CREATURE_ANIMATION_SCHEMA_VERSION, CA38_REQUIRED_ANIMATION_STATES,
     CA39_DRIVE_AUDIO_VFX_SCHEMA, CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION,
-    CA39_REQUIRED_DRIVE_CUE_COUNT, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
-    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    CA39_REQUIRED_DRIVE_CUE_COUNT, CA40_ONBOARDING_TUTORIAL_SCHEMA,
+    CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION, CA40_REQUIRED_CHECKLIST_ITEMS,
+    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
+    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_semantic::{
     parse_slm_prior_json, project_embedding_to_i8, LlamaCppEmbeddingConfig,
@@ -3262,6 +3265,87 @@ fn tutorial_script_loads_food_hazard_sleep_inspection_flow() {
             && !step.command.contains("ALIFE_GPU_BACKEND")
             && !step.command.contains("bash scripts/check.sh")));
     script.validate().unwrap();
+}
+
+#[test]
+fn ca40_onboarding_tutorial_smoke_guides_first_gpu_alpha_session() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_onboarding_tutorial_smoke(&launch).unwrap();
+
+    assert_eq!(summary.schema, CA40_ONBOARDING_TUTORIAL_SCHEMA);
+    assert_eq!(
+        summary.schema_version,
+        CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION
+    );
+    assert!(summary.checklist.len() >= CA40_REQUIRED_CHECKLIST_ITEMS);
+    assert!(summary
+        .checklist
+        .iter()
+        .any(|item| item.id == "pause-run-step"));
+    assert!(summary
+        .checklist
+        .iter()
+        .any(|item| item.id == "read-food-hazard"));
+    assert!(summary
+        .checklist
+        .iter()
+        .any(|item| item.id == "read-gpu-fallback"));
+    assert!(summary.tutorial_panel_text.contains("First Steps"));
+    assert!(summary.tutorial_panel_text.contains("Space run/pause"));
+    assert!(summary.tutorial_panel_text.contains("N step"));
+    assert!(summary.tutorial_panel_text.contains("F follow"));
+    assert!(summary.tutorial_panel_text.contains("[+] food"));
+    assert!(summary.tutorial_panel_text.contains("[!] hazard"));
+    assert!(summary.tutorial_panel_text.contains("GPU"));
+    assert!(summary.tutorial_panel_text.contains("fallback"));
+    assert!(summary.tutorial_panel_text.contains("CPU shadow gate"));
+    assert!(summary.graphical_controls_verified);
+    assert!(summary.has_food_marker);
+    assert!(summary.has_hazard_marker);
+    assert!(summary.stable_ids_only);
+    assert!(summary.display_only);
+    assert!(summary.no_action_authority);
+    assert!(summary.no_weight_authority);
+    assert!(summary.no_full_action_authoritative_claim);
+    assert!(!summary.tutorial_panel_text.contains("Entity("));
+    assert!(!summary
+        .tutorial_panel_text
+        .contains("full action-authoritative"));
+    summary.validate().unwrap();
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca40_first_session_tutorial_panel_is_visible_and_bounded() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch)
+            .expect("CA40 graphical tutorial shell should build");
+    app.update();
+
+    let mut query = app.world_mut().query_filtered::<
+        &bevy::prelude::Text,
+        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalOnboardingTutorialOverlay>,
+    >();
+    let text = query
+        .iter(app.world())
+        .next()
+        .expect("CA40 tutorial panel should be spawned")
+        .0
+        .clone();
+    assert!(text.contains("First Steps"));
+    assert!(text.contains("Space run/pause"));
+    assert!(text.contains("N step"));
+    assert!(text.contains("F follow"));
+    assert!(text.contains("[+] food"));
+    assert!(text.contains("[!] hazard"));
+    assert!(text.contains("GPU"));
+    assert!(text.contains("fallback"));
+    assert!(text.contains("CPU shadow gate"));
+    assert!(text.contains("full_auth=false"));
+    assert!(!text.contains("Entity("));
+    assert!(!text.contains("full action-authoritative"));
 }
 
 #[test]

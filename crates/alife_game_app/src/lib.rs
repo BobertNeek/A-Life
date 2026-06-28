@@ -90,6 +90,9 @@ pub use longrun_balance::*;
 mod onboarding_help;
 pub use onboarding_help::*;
 
+mod onboarding_tutorial;
+pub use onboarding_tutorial::*;
+
 mod packaging_platform;
 pub use packaging_platform::*;
 
