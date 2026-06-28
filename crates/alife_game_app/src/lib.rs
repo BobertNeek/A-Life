@@ -135,6 +135,9 @@ pub use world_art_style::*;
 mod creature_animation_style;
 pub use creature_animation_style::*;
 
+mod drive_coupled_audio_vfx;
+pub use drive_coupled_audio_vfx::*;
+
 mod graphical_lifecycle;
 pub use graphical_lifecycle::*;
 

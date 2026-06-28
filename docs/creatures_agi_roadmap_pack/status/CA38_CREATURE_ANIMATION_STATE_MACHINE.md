@@ -141,7 +141,7 @@ renderer, windowing, model-runtime, or app dependencies to core.
 
 ## Main Status
 
-Pending merge and post-merge validation.
+Merged to `main`, post-merge validation passed, and `main` was pushed.
 
 ## Next Plan
 
