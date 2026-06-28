@@ -73,6 +73,7 @@ pub struct AppBundleIngestionSummary {
     pub placeholder_art_entries: usize,
     pub alpha_art_entries: usize,
     pub alpha_art_required_roles_present: bool,
+    pub production_alpha_art: bool,
     pub required_entries: usize,
     pub largest_file_bytes: u64,
     pub missing_required_rejected: bool,
@@ -95,6 +96,7 @@ impl AppBundleIngestionSummary {
             || self.placeholder_art_entries < 4
             || self.alpha_art_entries < CA44A_REQUIRED_ALPHA_ART_ROLES
             || !self.alpha_art_required_roles_present
+            || !self.production_alpha_art
             || self.required_entries == 0
             || self.largest_file_bytes > CA12_MAX_BUNDLE_FILE_BYTES
             || !self.missing_required_rejected
@@ -250,6 +252,11 @@ fn validate_app_bundle_manifest_inner(
         placeholder_art_entries: placeholder_art.entries.len(),
         alpha_art_entries: alpha_art.entry_count,
         alpha_art_required_roles_present: alpha_art.required_roles_present,
+        production_alpha_art: alpha_art.required_roles_present
+            && alpha_art.png_dimensions_validated
+            && alpha_art.largest_file_bytes <= CA44A_MAX_ALPHA_ART_ASSET_BYTES
+            && alpha_art.entry_count >= CA44A_REQUIRED_ALPHA_ART_ROLES
+            && alpha_art.pack_id == "alpha-art-v1",
         required_entries,
         largest_file_bytes,
         missing_required_rejected: false,
@@ -264,7 +271,7 @@ fn validate_app_bundle_manifest_inner(
         player_visible_status: vec![
             "App bundle manifest is versioned and validated.".to_string(),
             "WGSL shader assets are discovered from the committed shader directory.".to_string(),
-            "Alpha art v1 PNG sprites/tiles are versioned, tiny, and manifest-validated."
+            "Alpha art v1 PNG sprites/tiles are production-alpha, versioned, and manifest-validated."
                 .to_string(),
         ],
     })

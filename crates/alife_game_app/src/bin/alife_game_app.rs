@@ -2337,7 +2337,7 @@ fn format_app_bundle_summary(
     summary: &alife_game_app::AppBundleIngestionSummary,
 ) -> String {
     format!(
-        "{prefix} schema={} version={} bundle={} scenarios={} entries={} shaders={}/{} placeholder_art={} alpha_art={} alpha_roles={} required={} largest_bytes={} missing_required_rejected={} shader_discovery={} tiny_art={} large_binary_assets={} signature={}",
+        "{prefix} schema={} version={} bundle={} scenarios={} entries={} shaders={}/{} legacy_art_descriptors={} alpha_art={} alpha_roles={} production_alpha_art={} required={} largest_bytes={} missing_required_rejected={} shader_discovery={} legacy_descriptors_valid={} large_binary_assets={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.bundle_id,
@@ -2348,6 +2348,7 @@ fn format_app_bundle_summary(
         summary.placeholder_art_entries,
         summary.alpha_art_entries,
         summary.alpha_art_required_roles_present,
+        summary.production_alpha_art,
         summary.required_entries,
         summary.largest_file_bytes,
         summary.missing_required_rejected,
