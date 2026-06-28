@@ -30,11 +30,14 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "prop-dressing",
 ];
 
+pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v2";
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {
     pub schema: String,
     pub schema_version: u16,
     pub pack_id: String,
+    pub art_direction: String,
     pub entries: Vec<AlphaArtEntry>,
 }
 
@@ -135,6 +138,7 @@ pub(crate) fn validate_alpha_art_manifest_inner(
     if manifest.schema != CA44A_ALPHA_ART_MANIFEST_SCHEMA
         || manifest.schema_version != CA44A_ALPHA_ART_MANIFEST_SCHEMA_VERSION
         || manifest.pack_id.trim().is_empty()
+        || manifest.art_direction != CA44A_ALPHA_ART_DIRECTION
         || manifest.entries.is_empty()
         || manifest.entries.len() > CA12_MAX_BUNDLE_ENTRIES
     {
@@ -194,8 +198,8 @@ fn validate_alpha_art_entry(
     require_alpha_id(&entry.kind)?;
     validate_alpha_art_relative_path(&entry.relative_path)?;
     if !ids.insert(entry.id.clone())
-        || entry.width == 0
-        || entry.height == 0
+        || entry.width < CA44A_MIN_PRODUCTION_ART_DIMENSION
+        || entry.height < CA44A_MIN_PRODUCTION_ART_DIMENSION
         || entry.file_size_bytes == 0
         || entry.file_size_bytes > CA44A_MAX_ALPHA_ART_ASSET_BYTES
     {
@@ -254,7 +258,11 @@ pub fn validate_png_asset_file(path: &Path) -> Result<(u32, u32, u64), GameAppSh
     }
     let width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
     let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-    if width == 0 || height == 0 || width > 256 || height > 256 {
+    if width < CA44A_MIN_PRODUCTION_ART_DIMENSION
+        || height < CA44A_MIN_PRODUCTION_ART_DIMENSION
+        || width > 256
+        || height > 256
+    {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
     Ok((width, height, file_size))
@@ -295,7 +303,7 @@ mod tests {
     fn required_manifest(root: &Path) -> AlphaArtManifest {
         let path = root.join("alpha_art/sprite.png");
         std::fs::write(&path, valid_png_bytes()).unwrap();
-        let file_size_bytes = std::fs::metadata(&path).unwrap().len();
+        let (width, height, file_size_bytes) = validate_png_asset_file(&path).unwrap();
         let mut entries = Vec::new();
         for (index, role) in CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES.iter().enumerate() {
             entries.push(AlphaArtEntry {
@@ -307,8 +315,8 @@ mod tests {
                     "sprite".to_string()
                 },
                 relative_path: "alpha_art/sprite.png".to_string(),
-                width: 64,
-                height: 64,
+                width,
+                height,
                 file_size_bytes,
             });
         }
@@ -318,8 +326,8 @@ mod tests {
                 role: "prop-dressing".to_string(),
                 kind: "prop".to_string(),
                 relative_path: "alpha_art/sprite.png".to_string(),
-                width: 64,
-                height: 64,
+                width,
+                height,
                 file_size_bytes,
             });
         }
@@ -327,6 +335,7 @@ mod tests {
             schema: CA44A_ALPHA_ART_MANIFEST_SCHEMA.to_string(),
             schema_version: CA44A_ALPHA_ART_MANIFEST_SCHEMA_VERSION,
             pack_id: "unit-alpha-art".to_string(),
+            art_direction: CA44A_ALPHA_ART_DIRECTION.to_string(),
             entries,
         }
     }

@@ -173,6 +173,7 @@ pub const CA43_MAX_SANITIZED_TEXT_BYTES: usize = 4096;
 pub const CA44A_ALPHA_ART_MANIFEST_SCHEMA: &str = "alife.ca44a.alpha_art_manifest.v1";
 pub const CA44A_ALPHA_ART_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const CA44A_MAX_ALPHA_ART_ASSET_BYTES: u64 = 64 * 1024;
+pub const CA44A_MIN_PRODUCTION_ART_DIMENSION: u32 = 96;
 pub const CA44A_REQUIRED_ALPHA_ART_ROLES: usize = 12;
 pub const CA44A_STABILITY_SCHEMA: &str = "alife.ca44a.tick_stability.v1";
 pub const CA44A_STABILITY_SCHEMA_VERSION: u16 = 1;

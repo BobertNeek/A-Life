@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Generate the CA44A alpha art v1 PNG pack.
+"""Generate the committed A-Life alpha art v1 PNG pack.
 
-The script uses only the Python standard library and writes small original
-RGBA PNGs plus a strict manifest. It is deterministic so the committed assets
-can be regenerated and audited without third-party art or tool downloads.
+The pack is deterministic, original, and generated with Python's standard
+library. The direction is "production-alpha": small enough for the repo, but
+with layered silhouettes, soft shadows, and terrain detail that is closer to a
+real game art pass than programmer rectangles.
 """
 
 from __future__ import annotations
@@ -16,8 +17,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "crates" / "alife_game_app" / "assets" / "alpha_art_v1"
-SIZE = 64
-SCALE = 3
+SIZE = 128
+SCALE = 2
 CANVAS = SIZE * SCALE
 
 
@@ -110,6 +111,9 @@ class Image:
                 if dist <= width * 0.5:
                     self.set(x, y, color)
 
+    def shadow(self, cx: float, cy: float, rx: float, ry: float, alpha: int = 90) -> None:
+        self.ellipse(cx, cy, rx, ry, (0, 0, 0, alpha))
+
     def downsample(self) -> bytes:
         out = bytearray()
         for y in range(SIZE):
@@ -127,6 +131,7 @@ class Image:
 
     def save(self, path: Path) -> None:
         raw = self.downsample()
+
         def chunk(kind: bytes, data: bytes) -> bytes:
             return (
                 struct.pack(">I", len(data))
@@ -144,130 +149,188 @@ class Image:
         path.write_bytes(png)
 
 
-def deterministic_dot(img: Image, seed: int, palette: list[tuple[int, int, int, int]], count: int) -> None:
+def deterministic_dot(img: Image, seed: int, palette: list[tuple[int, int, int, int]], count: int, min_r: float = 1.0, max_r: float = 4.0) -> None:
     value = seed
     for _ in range(count):
         value = (value * 1103515245 + 12345) & 0x7FFFFFFF
-        x = 4 + (value % 56)
+        x = 4 + (value % (SIZE - 8))
         value = (value * 1103515245 + 12345) & 0x7FFFFFFF
-        y = 4 + (value % 56)
+        y = 4 + (value % (SIZE - 8))
         value = (value * 1103515245 + 12345) & 0x7FFFFFFF
-        r = 1.5 + (value % 5) * 0.35
-        img.ellipse(x, y, r, r * 0.75, palette[value % len(palette)])
+        r = min_r + (value % 100) / 100.0 * (max_r - min_r)
+        img.ellipse(x, y, r, r * (0.55 + ((value >> 8) % 30) / 100.0), palette[value % len(palette)])
+
+
+def leaf(img: Image, cx: float, cy: float, angle: float, length: float, width: float, color: str, alpha: int = 235) -> None:
+    dx = math.cos(angle) * length * 0.5
+    dy = math.sin(angle) * length * 0.5
+    px = -math.sin(angle) * width * 0.5
+    py = math.cos(angle) * width * 0.5
+    img.polygon(
+        [
+            (cx - dx, cy - dy),
+            (cx + px, cy + py),
+            (cx + dx, cy + dy),
+            (cx - px, cy - py),
+        ],
+        rgba(color, alpha),
+    )
+    img.line(cx - dx * 0.65, cy - dy * 0.65, cx + dx * 0.65, cy + dy * 0.65, 1.1, rgba("1d5b2b", 120))
+
+
+def creature_body(img: Image, base: str, shade: str, accent: str, hurt: bool = False) -> None:
+    img.shadow(64, 92, 31, 9, 95)
+    img.ellipse(62, 68, 31, 24, rgba(shade, 245))
+    img.ellipse(57, 62, 30, 23, rgba(base, 255))
+    img.ellipse(43, 57, 14, 13, rgba("a8f4ee" if not hurt else "f2aaa5", 230))
+    img.ellipse(74, 56, 13, 12, rgba(accent, 215))
+    for x, y in [(38, 86), (78, 88), (34, 77), (88, 76)]:
+        img.ellipse(x, y, 7, 5, rgba(shade, 235))
+    img.line(77, 42, 93, 26, 3.4, rgba(shade, 230))
+    img.line(45, 42, 33, 25, 3.2, rgba(shade, 230))
+    img.ellipse(95, 24, 4.5, 4.5, rgba("b4fbff", 235))
+    img.ellipse(31, 23, 4.2, 4.2, rgba("b4fbff", 235))
+    if hurt:
+        img.ellipse(58, 64, 34, 25, rgba("ef6657", 95))
+        for x in [45, 72]:
+            img.line(x - 5, 51, x + 5, 61, 2.4, rgba("fff2df", 255))
+            img.line(x + 5, 51, x - 5, 61, 2.4, rgba("fff2df", 255))
+        img.polygon([(92, 34), (101, 62), (83, 59)], rgba("ff3834", 220))
+    else:
+        for x in [45, 72]:
+            img.ellipse(x, 56, 5.0, 6.0, rgba("082b35", 255))
+            img.ellipse(x - 1.5, 53.5, 1.5, 1.9, rgba("f3fffb", 255))
+        img.line(53, 72, 64, 76, 1.7, rgba("11636c", 170))
+        img.line(64, 76, 72, 72, 1.7, rgba("11636c", 170))
+    img.ellipse(44, 42, 14, 6, rgba("d7fffb", 45))
 
 
 def creature_idle() -> Image:
     img = Image()
-    img.ellipse(31, 33, 19, 14, rgba("54cddc", 245))
-    img.ellipse(24, 28, 9, 8, rgba("7ce9df", 240))
-    img.ellipse(42, 30, 7, 6, rgba("42a8c8", 220))
-    img.ellipse(20, 43, 4, 3, rgba("2c8aa5", 240))
-    img.ellipse(39, 44, 4, 3, rgba("2c8aa5", 240))
-    img.ellipse(26, 28, 2.3, 2.8, rgba("062a38", 255))
-    img.ellipse(40, 28, 2.1, 2.6, rgba("062a38", 255))
-    img.ellipse(26, 27, 0.8, 0.9, rgba("f0fffb", 255))
-    img.ellipse(39, 27, 0.8, 0.9, rgba("f0fffb", 255))
-    img.line(47, 27, 55, 21, 2.3, rgba("3faabd", 220))
-    img.ellipse(56, 20, 2.5, 2.5, rgba("9cf4da", 230))
+    creature_body(img, "57d3e1", "2a98bb", "3db2ca", False)
     return img
 
 
 def creature_hurt() -> Image:
-    img = creature_idle()
-    img.ellipse(31, 35, 21, 15, rgba("ef6b5d", 92))
-    img.line(20, 24, 26, 30, 2.0, rgba("ffefe4", 255))
-    img.line(26, 24, 20, 30, 2.0, rgba("ffefe4", 255))
-    img.line(38, 24, 44, 30, 2.0, rgba("ffefe4", 255))
-    img.line(44, 24, 38, 30, 2.0, rgba("ffefe4", 255))
-    img.polygon([(47, 15), (52, 29), (43, 27)], rgba("ff4b45", 230))
+    img = Image()
+    creature_body(img, "95b8b8", "6f8d95", "a7c9c5", True)
     return img
 
 
 def selection_ring() -> Image:
     img = Image()
-    for radius, alpha in [(27, 120), (24, 190), (21, 80)]:
-        for a in range(0, 360, 4):
+    img.shadow(64, 74, 42, 10, 50)
+    for radius, alpha, width in [(45, 105, 2.0), (39, 210, 2.8), (33, 88, 1.6)]:
+        for a in range(0, 360, 3):
+            if a % 24 in (0, 3, 6):
+                continue
             rad = math.radians(a)
-            x = 32 + math.cos(rad) * radius
-            y = 32 + math.sin(rad) * radius * 0.62
-            img.ellipse(x, y, 1.8, 1.2, rgba("ffe66d", alpha))
-    for x, y in [(10, 32), (54, 32), (32, 15), (32, 49)]:
-        img.ellipse(x, y, 3.0, 2.0, rgba("fff6a9", 210))
+            x = 64 + math.cos(rad) * radius
+            y = 66 + math.sin(rad) * radius * 0.48
+            img.ellipse(x, y, width, width * 0.65, rgba("ffe86a", alpha))
+    for x, y in [(20, 66), (108, 66), (64, 43), (64, 88)]:
+        img.ellipse(x, y, 5, 3, rgba("fff8b0", 220))
     return img
 
 
 def food() -> Image:
     img = Image()
-    img.line(32, 49, 32, 26, 5, rgba("63d947", 255))
-    img.ellipse(24, 31, 12, 6, rgba("3fbf55", 245))
-    img.ellipse(40, 28, 12, 6, rgba("68ed62", 245))
-    img.ellipse(31, 20, 8, 8, rgba("d94b7f", 255))
-    img.ellipse(37, 18, 6, 6, rgba("ff6e8c", 255))
-    img.ellipse(26, 22, 5, 5, rgba("b73270", 255))
-    img.ellipse(31, 20, 2, 2, rgba("fff3ce", 210))
+    img.shadow(65, 94, 21, 7, 78)
+    img.line(64, 99, 64, 55, 7, rgba("5bc44b", 255))
+    for angle, color in [(-2.8, "367f3b"), (-0.55, "77e05a"), (2.8, "4db44b"), (0.35, "a0ef73")]:
+        leaf(img, 64, 70, angle, 42, 20, color, 245)
+    img.ellipse(60, 42, 13, 12, rgba("d44583", 255))
+    img.ellipse(71, 38, 10, 9, rgba("ff6d96", 255))
+    img.ellipse(52, 45, 8, 8, rgba("b12f70", 255))
+    img.ellipse(63, 40, 2.5, 2.5, rgba("fff3ce", 220))
     return img
 
 
 def hazard() -> Image:
     img = Image()
-    img.polygon([(32, 6), (48, 31), (36, 56), (20, 56), (16, 29)], rgba("fa2838", 245))
-    img.polygon([(32, 6), (39, 34), (29, 56), (20, 56), (16, 29)], rgba("9e102b", 240))
-    img.polygon([(44, 19), (58, 32), (45, 38)], rgba("ff613b", 230))
-    img.polygon([(18, 22), (6, 38), (22, 36)], rgba("ff503c", 230))
-    img.polygon([(31, 16), (38, 32), (31, 48), (25, 34)], rgba("ffd18a", 190))
-    img.ellipse(32, 58, 16, 3, rgba("42151b", 120))
+    img.shadow(66, 106, 30, 9, 110)
+    img.polygon([(64, 12), (93, 61), (70, 111), (42, 110), (31, 58)], rgba("ed1f39", 248))
+    img.polygon([(64, 12), (74, 64), (59, 110), (42, 110), (31, 58)], rgba("941029", 245))
+    img.polygon([(88, 31), (117, 59), (91, 73)], rgba("ff5b37", 228))
+    img.polygon([(34, 37), (9, 73), (42, 69)], rgba("ff433c", 228))
+    img.polygon([(64, 28), (77, 63), (63, 96), (51, 66)], rgba("ffd08e", 200))
+    for x, h in [(26, 21), (103, 28), (79, 18), (42, 16)]:
+        img.polygon([(x, 87), (x + 7, 113), (x - 9, 113)], rgba("cf2732", 215))
     return img
 
 
 def rock() -> Image:
     img = Image()
-    img.polygon([(13, 42), (20, 25), (35, 16), (52, 27), (55, 45), (42, 55), (22, 54)], rgba("7e8075", 255))
-    img.polygon([(20, 25), (35, 16), (32, 39), (13, 42)], rgba("a4a99a", 245))
-    img.polygon([(35, 16), (52, 27), (39, 37), (32, 39)], rgba("8f9285", 245))
-    img.polygon([(32, 39), (55, 45), (42, 55), (22, 54)], rgba("5d6258", 255))
-    img.line(31, 39, 43, 53, 2, rgba("3e443d", 160))
-    img.line(34, 17, 39, 37, 2, rgba("d8dcc9", 100))
+    img.shadow(65, 99, 39, 12, 105)
+    img.polygon([(22, 87), (34, 49), (61, 23), (96, 43), (105, 82), (80, 105), (42, 105)], rgba("7d8275", 255))
+    img.polygon([(34, 49), (61, 23), (57, 72), (22, 87)], rgba("a9ae9c", 245))
+    img.polygon([(61, 23), (96, 43), (76, 70), (57, 72)], rgba("8f9588", 245))
+    img.polygon([(57, 72), (105, 82), (80, 105), (42, 105)], rgba("565e54", 255))
+    for x, y, r in [(25, 99, 6), (96, 94, 7), (42, 109, 5), (83, 37, 3)]:
+        img.ellipse(x, y, r, r * 0.7, rgba("464d45", 150))
+    img.line(57, 72, 81, 104, 2.5, rgba("374038", 150))
+    img.line(62, 25, 76, 70, 2.0, rgba("d8dcc9", 95))
     return img
 
 
-def tile(base: str, accents: list[str], seed: int) -> Image:
+def tile(base: str, accents: list[str], seed: int, mood: str) -> Image:
     img = Image(False, rgba(base, 255))
-    deterministic_dot(img, seed, [rgba(c, 90) for c in accents], 60)
-    for i in range(5):
-        offset = (seed + i * 17) % 58
-        img.line(-8, offset, 72, offset + ((seed + i * 11) % 21) - 10, 1.2, rgba(accents[i % len(accents)], 68))
+    deterministic_dot(img, seed, [rgba(c, 90) for c in accents], 170, 0.8, 4.5)
+    for i in range(10):
+        offset = (seed + i * 17) % (SIZE + 18) - 9
+        img.line(-8, offset, SIZE + 8, offset + ((seed + i * 11) % 27) - 13, 1.0, rgba(accents[i % len(accents)], 62))
+    if mood == "grass":
+        for i in range(18):
+            x = 8 + ((seed * (i + 3) + i * 19) % 112)
+            y = 10 + ((seed * (i + 7) + i * 29) % 108)
+            leaf(img, x, y, (i % 7) * 0.7, 13 + i % 8, 5, accents[i % len(accents)], 120)
+    elif mood == "hazard":
+        for i in range(8):
+            x = 10 + ((seed * (i + 5) + i * 31) % 105)
+            y = 12 + ((seed * (i + 11) + i * 17) % 102)
+            img.polygon([(x, y - 8), (x + 6, y + 6), (x - 5, y + 8)], rgba("dd3b34", 95))
+    elif mood == "stone":
+        for i in range(12):
+            x = 8 + ((seed * (i + 13) + i * 23) % 110)
+            y = 8 + ((seed * (i + 17) + i * 21) % 110)
+            img.ellipse(x, y, 6 + (i % 5), 3 + (i % 3), rgba(accents[i % len(accents)], 86))
     return img
 
 
 def prop_grass() -> Image:
     img = Image()
-    for x in [20, 26, 32, 38, 44]:
-        img.line(x, 52, x + (32 - x) * 0.25, 25 + (x % 4) * 3, 3, rgba("6ddd50", 230))
-    img.ellipse(32, 54, 18, 4, rgba("174821", 140))
+    img.shadow(64, 104, 24, 6, 70)
+    for i, x in enumerate([35, 43, 52, 61, 70, 80, 90]):
+        img.line(x, 104, x + (64 - x) * 0.45, 43 + (i % 4) * 6, 5, rgba("72d956", 230))
+        img.line(x + 1, 100, x + (64 - x) * 0.25 + 6, 54 + (i % 3) * 4, 2, rgba("c9f68d", 120))
     return img
 
 
 def prop_pebble() -> Image:
     img = Image()
-    for x, y, r, c in [(25, 39, 8, "8c8f82"), (36, 34, 11, "aaa894"), (43, 43, 7, "6d7168")]:
+    img.shadow(64, 99, 25, 7, 75)
+    for x, y, r, c in [(44, 77, 13, "8c8f82"), (62, 69, 18, "aaa894"), (80, 82, 12, "6d7168"), (52, 91, 8, "5c6258")]:
         img.ellipse(x, y, r, r * 0.7, rgba(c, 235))
+        img.ellipse(x - r * 0.25, y - r * 0.35, r * 0.35, r * 0.18, rgba("d8dcc9", 80))
     return img
 
 
 def prop_warning() -> Image:
     img = Image()
-    img.polygon([(32, 12), (48, 51), (16, 51)], rgba("dc3e31", 220))
-    img.polygon([(32, 19), (42, 47), (22, 47)], rgba("ff9a3d", 205))
-    img.line(32, 27, 32, 40, 3, rgba("fff0c4", 240))
-    img.ellipse(32, 45, 2.3, 2.3, rgba("fff0c4", 240))
+    img.shadow(64, 101, 23, 7, 78)
+    img.polygon([(64, 24), (94, 99), (34, 99)], rgba("d93b31", 228))
+    img.polygon([(64, 36), (82, 91), (46, 91)], rgba("ff9a3d", 210))
+    img.line(64, 53, 64, 78, 5, rgba("fff0c4", 240))
+    img.ellipse(64, 88, 4.0, 4.0, rgba("fff0c4", 240))
     return img
 
 
 def prop_leaf() -> Image:
     img = Image()
-    img.ellipse(25, 34, 13, 7, rgba("3b9447", 210))
-    img.ellipse(39, 29, 15, 8, rgba("60bb55", 210))
-    img.line(18, 42, 49, 25, 2, rgba("1c642d", 190))
+    img.shadow(64, 95, 28, 7, 70)
+    for cx, cy, ang, col in [(45, 70, -0.35, "3b9447"), (67, 64, -0.7, "60bb55"), (82, 76, 0.2, "428f37"), (56, 85, 0.45, "7bcf5b")]:
+        leaf(img, cx, cy, ang, 38, 16, col, 220)
+    img.line(33, 91, 93, 60, 2.0, rgba("1c642d", 180))
     return img
 
 
@@ -278,11 +341,11 @@ ASSETS = [
     ("food_sprout", "food", "sprite", food),
     ("hazard_crystal", "hazard", "sprite", hazard),
     ("rock_cluster", "rock-obstacle", "sprite", rock),
-    ("terrain_safe_grass", "terrain-safe-grass", "terrain-tile", lambda: tile("255a2c", ["3d7839", "173d22", "6da448"], 11)),
-    ("terrain_soil_path", "terrain-soil-path", "terrain-tile", lambda: tile("6a4a2d", ["8a6237", "4d3625", "a57b49"], 23)),
-    ("terrain_resource_grove", "terrain-resource-grove", "terrain-tile", lambda: tile("2d7134", ["4ba64a", "1d4d29", "83d85f"], 37)),
-    ("terrain_hazard_pressure", "terrain-hazard-pressure", "terrain-tile", lambda: tile("64302b", ["8b392e", "2f2920", "c04b31"], 41)),
-    ("terrain_stone_rough", "terrain-stone-rough", "terrain-tile", lambda: tile("555a50", ["73776b", "343a34", "8e927f"], 53)),
+    ("terrain_safe_grass", "terrain-safe-grass", "terrain-tile", lambda: tile("275d2e", ["3d7839", "173d22", "6da448", "9dbe57"], 11, "grass")),
+    ("terrain_soil_path", "terrain-soil-path", "terrain-tile", lambda: tile("6a4a2d", ["8a6237", "4d3625", "a57b49", "c09a5a"], 23, "soil")),
+    ("terrain_resource_grove", "terrain-resource-grove", "terrain-tile", lambda: tile("2d7134", ["4ba64a", "1d4d29", "83d85f", "a6e66c"], 37, "grass")),
+    ("terrain_hazard_pressure", "terrain-hazard-pressure", "terrain-tile", lambda: tile("64302b", ["8b392e", "2f2920", "c04b31", "e75c45"], 41, "hazard")),
+    ("terrain_stone_rough", "terrain-stone-rough", "terrain-tile", lambda: tile("555a50", ["73776b", "343a34", "8e927f", "b2b19c"], 53, "stone")),
     ("prop_grass_tuft", "prop-dressing", "prop", prop_grass),
     ("prop_pebble_cluster", "prop-dressing", "prop", prop_pebble),
     ("prop_warning_shard", "prop-dressing", "prop", prop_warning),
@@ -312,9 +375,13 @@ def main() -> None:
         "schema": "alife.ca44a.alpha_art_manifest.v1",
         "schema_version": 1,
         "pack_id": "alpha-art-v1",
+        "art_direction": "production-alpha-organic-topdown-v2",
         "entries": entries,
     }
-    (OUT / "alpha_art_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (OUT / "alpha_art_manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":
