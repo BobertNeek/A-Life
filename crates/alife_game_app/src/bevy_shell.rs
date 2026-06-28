@@ -1,6 +1,9 @@
 //! Feature-gated Bevy playground shell split during R13 remediation.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use alife_bevy_adapter::{
     core_vec3_to_bevy, AffordanceTags, AlifeBevyAdapterPlugin, BevyEntityMap, CreatureBody,
@@ -10,12 +13,14 @@ use alife_core::{ActionKind, AffordanceBits, WorldEntityId};
 use alife_world::{TerrainZoneKind, WorldObjectKind};
 use bevy::{
     app::AppExit,
+    asset::{AssetPlugin, AssetServer, Handle},
+    image::Image,
     prelude::{
         default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Component,
         DefaultPlugins, Entity, GlobalTransform, KeyCode, MessageWriter, MinimalPlugins,
         MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Res, ResMut, Resource,
-        Sprite, Text, Text2d, TextColor, TextFont, Time, Timer, TimerMode, Transform, Update, Val,
-        Vec2, Vec3, Visibility, With, Without,
+        Sprite, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val, Vec2, Vec3,
+        Visibility, With, Without,
     },
     window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
 };
@@ -56,6 +61,79 @@ pub struct VisibleWorldObject {
 
 #[derive(Debug, Clone, PartialEq, Component)]
 pub struct VisibleWorldDebugLabel(pub String);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub struct GraphicalAlphaArtBackedSprite {
+    pub role: &'static str,
+    pub stable_id: Option<WorldEntityId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Component)]
+pub struct GraphicalAlphaArtFallbackSprite {
+    pub role: &'static str,
+    pub reason: &'static str,
+}
+
+#[derive(Debug, Clone, Resource)]
+pub struct GraphicalAlphaArtHandles {
+    pub creature_idle: Handle<Image>,
+    pub creature_hurt: Handle<Image>,
+    pub selection_ring: Handle<Image>,
+    pub food: Handle<Image>,
+    pub hazard: Handle<Image>,
+    pub rock_obstacle: Handle<Image>,
+    pub terrain_safe_grass: Handle<Image>,
+    pub terrain_soil_path: Handle<Image>,
+    pub terrain_resource_grove: Handle<Image>,
+    pub terrain_hazard_pressure: Handle<Image>,
+    pub terrain_stone_rough: Handle<Image>,
+    pub prop_grass_tuft: Handle<Image>,
+    pub prop_pebble_cluster: Handle<Image>,
+    pub prop_warning_shard: Handle<Image>,
+    pub prop_leaf_patch: Handle<Image>,
+}
+
+impl GraphicalAlphaArtHandles {
+    pub fn from_asset_server(asset_server: &AssetServer) -> Self {
+        Self {
+            creature_idle: asset_server.load("alpha_art_v1/creature_idle.png"),
+            creature_hurt: asset_server.load("alpha_art_v1/creature_hurt.png"),
+            selection_ring: asset_server.load("alpha_art_v1/selection_ring.png"),
+            food: asset_server.load("alpha_art_v1/food_sprout.png"),
+            hazard: asset_server.load("alpha_art_v1/hazard_crystal.png"),
+            rock_obstacle: asset_server.load("alpha_art_v1/rock_cluster.png"),
+            terrain_safe_grass: asset_server.load("alpha_art_v1/terrain_safe_grass.png"),
+            terrain_soil_path: asset_server.load("alpha_art_v1/terrain_soil_path.png"),
+            terrain_resource_grove: asset_server.load("alpha_art_v1/terrain_resource_grove.png"),
+            terrain_hazard_pressure: asset_server.load("alpha_art_v1/terrain_hazard_pressure.png"),
+            terrain_stone_rough: asset_server.load("alpha_art_v1/terrain_stone_rough.png"),
+            prop_grass_tuft: asset_server.load("alpha_art_v1/prop_grass_tuft.png"),
+            prop_pebble_cluster: asset_server.load("alpha_art_v1/prop_pebble_cluster.png"),
+            prop_warning_shard: asset_server.load("alpha_art_v1/prop_warning_shard.png"),
+            prop_leaf_patch: asset_server.load("alpha_art_v1/prop_leaf_patch.png"),
+        }
+    }
+
+    pub fn unloaded_for_validation() -> Self {
+        Self {
+            creature_idle: Handle::default(),
+            creature_hurt: Handle::default(),
+            selection_ring: Handle::default(),
+            food: Handle::default(),
+            hazard: Handle::default(),
+            rock_obstacle: Handle::default(),
+            terrain_safe_grass: Handle::default(),
+            terrain_soil_path: Handle::default(),
+            terrain_resource_grove: Handle::default(),
+            terrain_hazard_pressure: Handle::default(),
+            terrain_stone_rough: Handle::default(),
+            prop_grass_tuft: Handle::default(),
+            prop_pebble_cluster: Handle::default(),
+            prop_warning_shard: Handle::default(),
+            prop_leaf_patch: Handle::default(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct VisibleGroundPlane {
@@ -458,7 +536,10 @@ const CA37_TERRAIN_TILE_JITTER_PIXELS: f32 = 5.0;
 const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 1.75;
 
 #[derive(Debug, Resource)]
-struct GraphicalPlaygroundSmokeTimer(Timer);
+struct GraphicalPlaygroundSmokeTimer {
+    started: Instant,
+    duration: Duration,
+}
 
 pub fn build_minimal_bevy_app_shell(summary: AppStartupSummary) -> App {
     let mut app = App::new();
@@ -563,18 +644,25 @@ pub fn build_graphical_playground_app_shell(
     let school_summary = crate::run_graphical_school_mode_smoke()?;
 
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: launch.window_title.clone(),
-            name: Some("alife.graphical_playground".to_string()),
-            resolution: (1180, 760).into(),
-            present_mode: PresentMode::AutoVsync,
-            window_theme: Some(WindowTheme::Dark),
-            ..default()
-        }),
-        exit_condition: ExitCondition::OnPrimaryClosed,
-        ..default()
-    }))
+    app.add_plugins(
+        DefaultPlugins
+            .set(AssetPlugin {
+                file_path: "crates/alife_game_app/assets".to_string(),
+                ..default()
+            })
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: launch.window_title.clone(),
+                    name: Some("alife.graphical_playground".to_string()),
+                    resolution: (1180, 760).into(),
+                    present_mode: PresentMode::AutoVsync,
+                    window_theme: Some(WindowTheme::Dark),
+                    ..default()
+                }),
+                exit_condition: ExitCondition::OnPrimaryClosed,
+                ..default()
+            }),
+    )
     .add_plugins(AlifeBevyAdapterPlugin)
     .insert_resource(ClearColor(Color::srgb(0.045, 0.065, 0.055)))
     .insert_resource(GraphicalPlaygroundSceneResource {
@@ -685,10 +773,10 @@ pub fn build_graphical_playground_app_shell(
     });
 
     if let GraphicalPlaygroundMode::Smoke { seconds } = launch.mode {
-        app.insert_resource(GraphicalPlaygroundSmokeTimer(Timer::from_seconds(
-            seconds as f32,
-            TimerMode::Once,
-        )))
+        app.insert_resource(GraphicalPlaygroundSmokeTimer {
+            started: Instant::now(),
+            duration: Duration::from_secs(u64::from(seconds)),
+        })
         .add_systems(Update, close_after_graphical_smoke_timeout);
     }
 
@@ -722,6 +810,7 @@ pub fn build_graphical_playground_preview_app_shell(
     let animation_summary = crate::ca38_creature_animation_summary().ok();
     let school_summary = crate::run_graphical_school_mode_smoke().ok();
     let mut app = build_minimal_bevy_app_shell(startup);
+    app.insert_resource(GraphicalAlphaArtHandles::unloaded_for_validation());
     spawn_graphical_playground_scene(
         &mut app,
         &presentation,
@@ -730,6 +819,16 @@ pub fn build_graphical_playground_preview_app_shell(
         world_art_summary.as_ref(),
         school_summary.as_ref(),
     )?;
+    let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
+    let local_entity =
+        inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
+    app.insert_resource(SelectionResource {
+        stable_id: inspector.selection.stable_id,
+        local_entity,
+    })
+    .insert_resource(CreatureInspectorResource {
+        snapshot: inspector,
+    });
     if let Some(summary) = world_art_summary {
         app.insert_resource(GraphicalWorldArtStyleResource { summary });
     }
@@ -898,6 +997,20 @@ fn spawn_graphical_playground_scene(
     school: Option<&Ca23GraphicalSchoolSummary>,
 ) -> Result<(), GameAppShellError> {
     app.world_mut().spawn((Camera2d, GraphicalMainCamera));
+    let alpha_art = app
+        .world()
+        .get_resource::<GraphicalAlphaArtHandles>()
+        .cloned()
+        .or_else(|| {
+            app.world()
+                .get_resource::<AssetServer>()
+                .map(GraphicalAlphaArtHandles::from_asset_server)
+        });
+    if !app.world().contains_resource::<GraphicalAlphaArtHandles>() {
+        if let Some(handles) = alpha_art.clone() {
+            app.insert_resource(handles);
+        }
+    }
     app.world_mut().spawn((
         Name::new("A-Life S01 ground plane"),
         Sprite {
@@ -917,11 +1030,11 @@ fn spawn_graphical_playground_scene(
         spawn_ca19_terrain_zone_visuals(app, ecology);
     }
     if let Some(world_art) = world_art {
-        spawn_ca37_world_art_dressing(app, world_art);
+        spawn_ca37_world_art_dressing(app, world_art, alpha_art.as_ref(), summary.view_mode);
     }
 
     for object in &presentation.objects {
-        spawn_graphical_object(app, object, summary.view_mode)?;
+        spawn_graphical_object(app, object, summary.view_mode, alpha_art.as_ref())?;
     }
     if let Some(school) = school {
         spawn_ca23_school_teacher_markers(app, school, summary.view_mode);
@@ -1353,9 +1466,50 @@ fn ca19_terrain_zone_color(zone: &Ca19TerrainZoneVisual) -> Color {
     }
 }
 
-fn spawn_ca37_world_art_dressing(app: &mut App, summary: &Ca37WorldArtStyleSummary) {
-    spawn_ca37_world_art_terrain_canvas(app, summary);
+fn spawn_ca37_world_art_dressing(
+    app: &mut App,
+    summary: &Ca37WorldArtStyleSummary,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    view_mode: GraphicalPlaygroundViewMode,
+) {
+    spawn_ca37_world_art_terrain_canvas(app, summary, alpha_art, view_mode);
     for prop in &summary.dressing_props {
+        if view_mode == GraphicalPlaygroundViewMode::Player {
+            if let Some(handles) = alpha_art {
+                let (image, role) = ca44a_prop_art_for_material(handles, prop.material_id);
+                app.world_mut().spawn((
+                    Name::new(format!(
+                        "A-Life CA44A art prop {} {}",
+                        prop.material_id, prop.id
+                    )),
+                    Sprite {
+                        image,
+                        color: Color::WHITE,
+                        custom_size: Some(Vec2::new(
+                            prop.width * GRAPHICAL_WORLD_SCALE,
+                            prop.height * GRAPHICAL_WORLD_SCALE,
+                        )),
+                        ..default()
+                    },
+                    Transform::from_xyz(
+                        prop.x * GRAPHICAL_WORLD_SCALE,
+                        prop.z * GRAPHICAL_WORLD_SCALE,
+                        -0.40 + prop.visual_depth,
+                    ),
+                    GraphicalAlphaArtBackedSprite {
+                        role,
+                        stable_id: prop.anchored_stable_id,
+                    },
+                    GraphicalWorldArtProp {
+                        prop_id: prop.id,
+                        material_id: prop.material_id,
+                        anchored_stable_id: prop.anchored_stable_id,
+                        display_only: true,
+                    },
+                ));
+                continue;
+            }
+        }
         app.world_mut().spawn((
             Name::new(format!("A-Life CA37 {} {}", prop.material_id, prop.id)),
             Sprite {
@@ -1377,11 +1531,20 @@ fn spawn_ca37_world_art_dressing(app: &mut App, summary: &Ca37WorldArtStyleSumma
                 anchored_stable_id: prop.anchored_stable_id,
                 display_only: true,
             },
+            GraphicalAlphaArtFallbackSprite {
+                role: "prop-dressing",
+                reason: "alpha art handles unavailable",
+            },
         ));
     }
 }
 
-fn spawn_ca37_world_art_terrain_canvas(app: &mut App, summary: &Ca37WorldArtStyleSummary) {
+fn spawn_ca37_world_art_terrain_canvas(
+    app: &mut App,
+    summary: &Ca37WorldArtStyleSummary,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    view_mode: GraphicalPlaygroundViewMode,
+) {
     let half_width = (summary.visual_map_width_tiles as i32) / 2;
     let half_height = (summary.visual_map_height_tiles as i32) / 2;
     for ix in -half_width..=half_width {
@@ -1393,6 +1556,38 @@ fn spawn_ca37_world_art_terrain_canvas(app: &mut App, summary: &Ca37WorldArtStyl
                 (((hash / 7) % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0);
             let width = CA37_TERRAIN_TILE_PIXEL_SIZE * (0.98 + ((hash % 3) as f32) * 0.015);
             let height = CA37_TERRAIN_TILE_PIXEL_SIZE * (0.98 + (((hash / 3) % 3) as f32) * 0.015);
+            if view_mode == GraphicalPlaygroundViewMode::Player {
+                if let Some(handles) = alpha_art {
+                    let (image, role) = ca44a_terrain_art_for_material(handles, material_id);
+                    app.world_mut().spawn((
+                        Name::new(format!("A-Life CA44A terrain art {material_id} {ix}:{iz}")),
+                        Sprite {
+                            image,
+                            color: Color::srgba(1.0, 1.0, 1.0, 0.78),
+                            custom_size: Some(Vec2::new(width, height)),
+                            ..default()
+                        },
+                        Transform::from_xyz(
+                            ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x,
+                            iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y,
+                            -1.42,
+                        ),
+                        GraphicalAlphaArtBackedSprite {
+                            role,
+                            stable_id: None,
+                        },
+                        GraphicalWorldArtTerrainTile {
+                            tile_x: ix,
+                            tile_z: iz,
+                            material_id,
+                            tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
+                            viewport_slice: summary.local_viewport_is_smaller_than_map,
+                            display_only: true,
+                        },
+                    ));
+                    continue;
+                }
+            }
             app.world_mut().spawn((
                 Name::new(format!("A-Life CA37 terrain wash {material_id} {ix}:{iz}")),
                 Sprite {
@@ -1413,8 +1608,43 @@ fn spawn_ca37_world_art_terrain_canvas(app: &mut App, summary: &Ca37WorldArtStyl
                     viewport_slice: summary.local_viewport_is_smaller_than_map,
                     display_only: true,
                 },
+                GraphicalAlphaArtFallbackSprite {
+                    role: "terrain-fallback",
+                    reason: "alpha art handles unavailable",
+                },
             ));
         }
+    }
+}
+
+fn ca44a_terrain_art_for_material(
+    handles: &GraphicalAlphaArtHandles,
+    material_id: &str,
+) -> (Handle<Image>, &'static str) {
+    match material_id {
+        "neutral-soil" => (handles.terrain_soil_path.clone(), "terrain-soil-path"),
+        "resource-grove" => (
+            handles.terrain_resource_grove.clone(),
+            "terrain-resource-grove",
+        ),
+        "hazard-pressure" => (
+            handles.terrain_hazard_pressure.clone(),
+            "terrain-hazard-pressure",
+        ),
+        "stone-dressing" => (handles.terrain_stone_rough.clone(), "terrain-stone-rough"),
+        _ => (handles.terrain_safe_grass.clone(), "terrain-safe-grass"),
+    }
+}
+
+fn ca44a_prop_art_for_material(
+    handles: &GraphicalAlphaArtHandles,
+    material_id: &str,
+) -> (Handle<Image>, &'static str) {
+    match material_id {
+        "hazard-pressure" => (handles.prop_warning_shard.clone(), "prop-dressing"),
+        "stone-dressing" => (handles.prop_pebble_cluster.clone(), "prop-dressing"),
+        "resource-grove" => (handles.prop_leaf_patch.clone(), "prop-dressing"),
+        _ => (handles.prop_grass_tuft.clone(), "prop-dressing"),
     }
 }
 
@@ -1585,9 +1815,33 @@ fn spawn_graphical_object(
     app: &mut App,
     object: &VisibleWorldObjectPresentation,
     view_mode: GraphicalPlaygroundViewMode,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
 ) -> Result<(), GameAppShellError> {
     let material = object.material;
     let marker_position = graphical_position(object);
+    let alpha_art_role = ca44a_object_art_role(object.kind);
+    let sprite = if view_mode == GraphicalPlaygroundViewMode::Player {
+        if let Some(handles) = alpha_art {
+            Sprite {
+                image: ca44a_object_art_handle(handles, object.kind),
+                color: Color::WHITE,
+                custom_size: Some(graphical_size(object)),
+                ..default()
+            }
+        } else {
+            Sprite {
+                color: rgba_to_color(material.rgba()),
+                custom_size: Some(graphical_size(object)),
+                ..default()
+            }
+        }
+    } else {
+        Sprite {
+            color: rgba_to_color(material.rgba()),
+            custom_size: Some(graphical_size(object)),
+            ..default()
+        }
+    };
     let entity = app
         .world_mut()
         .spawn((
@@ -1597,11 +1851,7 @@ fn spawn_graphical_object(
                 object.stable_id.raw(),
                 object.label
             )),
-            Sprite {
-                color: rgba_to_color(material.rgba()),
-                custom_size: Some(graphical_size(object)),
-                ..default()
-            },
+            sprite,
             Transform::from_translation(marker_position),
             VisibleWorldObject {
                 stable_id: object.stable_id,
@@ -1617,6 +1867,23 @@ fn spawn_graphical_object(
             },
         ))
         .id();
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        if alpha_art.is_some() {
+            app.world_mut()
+                .entity_mut(entity)
+                .insert(GraphicalAlphaArtBackedSprite {
+                    role: alpha_art_role,
+                    stable_id: Some(object.stable_id),
+                });
+        } else {
+            app.world_mut()
+                .entity_mut(entity)
+                .insert(GraphicalAlphaArtFallbackSprite {
+                    role: alpha_art_role,
+                    reason: "alpha art handles unavailable",
+                });
+        }
+    }
     {
         let mut entity_mut = app.world_mut().entity_mut(entity);
         match object.kind {
@@ -1660,7 +1927,9 @@ fn spawn_graphical_object(
     app.world_mut()
         .resource_mut::<BevyEntityMap>()
         .bind(entity, object.stable_id)?;
-    spawn_graphical_object_glyphs(app, object, marker_position);
+    if view_mode != GraphicalPlaygroundViewMode::Player || alpha_art.is_none() {
+        spawn_graphical_object_glyphs(app, object, marker_position);
+    }
 
     app.world_mut().spawn((
         Name::new(format!("A-Life label stable:{}", object.stable_id.raw())),
@@ -1678,6 +1947,29 @@ fn spawn_graphical_object(
         },
     ));
     Ok(())
+}
+
+fn ca44a_object_art_role(kind: WorldObjectKind) -> &'static str {
+    match kind {
+        WorldObjectKind::Agent => "creature-idle",
+        WorldObjectKind::Food => "food",
+        WorldObjectKind::Hazard => "hazard",
+        WorldObjectKind::Obstacle => "rock-obstacle",
+        WorldObjectKind::Token => "prop-dressing",
+    }
+}
+
+fn ca44a_object_art_handle(
+    handles: &GraphicalAlphaArtHandles,
+    kind: WorldObjectKind,
+) -> Handle<Image> {
+    match kind {
+        WorldObjectKind::Agent => handles.creature_idle.clone(),
+        WorldObjectKind::Food => handles.food.clone(),
+        WorldObjectKind::Hazard => handles.hazard.clone(),
+        WorldObjectKind::Obstacle => handles.rock_obstacle.clone(),
+        WorldObjectKind::Token => handles.prop_warning_shard.clone(),
+    }
 }
 
 fn spawn_graphical_object_glyphs(
@@ -1883,14 +2175,38 @@ fn inspector_local_entity(
         app.world_mut()
             .entity_mut(entity)
             .insert(SelectedVisibleEntity { selection });
+        let selection_has_alpha_art = app.world().contains_resource::<GraphicalAlphaArtHandles>();
+        let sprite = app
+            .world()
+            .get_resource::<GraphicalAlphaArtHandles>()
+            .map_or(
+                Sprite {
+                    color: Color::srgba(1.0, 0.86, 0.25, 0.42),
+                    custom_size: Some(Vec2::new(104.0, 66.0)),
+                    ..default()
+                },
+                |handles| Sprite {
+                    image: handles.selection_ring.clone(),
+                    color: Color::WHITE,
+                    custom_size: Some(Vec2::new(112.0, 72.0)),
+                    ..default()
+                },
+            );
         app.world_mut().spawn((
             Name::new("A-Life S03 stable-ID selection ring"),
-            Sprite {
-                color: Color::srgba(1.0, 0.86, 0.25, 0.42),
-                custom_size: Some(Vec2::new(104.0, 66.0)),
-                ..default()
-            },
+            sprite,
             Transform::from_xyz(0.0, 0.0, 0.5),
+            if selection_has_alpha_art {
+                GraphicalAlphaArtBackedSprite {
+                    role: "selection-ring",
+                    stable_id: Some(stable_id),
+                }
+            } else {
+                GraphicalAlphaArtBackedSprite {
+                    role: "selection-ring-fallback-marker",
+                    stable_id: Some(stable_id),
+                }
+            },
             GraphicalSelectionRing,
         ));
     }
@@ -1920,12 +2236,10 @@ fn rgba_to_color(rgba: [f32; 4]) -> Color {
 }
 
 fn close_after_graphical_smoke_timeout(
-    time: Res<Time>,
-    mut timer: ResMut<GraphicalPlaygroundSmokeTimer>,
+    timer: Res<GraphicalPlaygroundSmokeTimer>,
     mut exits: MessageWriter<AppExit>,
 ) {
-    timer.0.tick(time.delta());
-    if timer.0.just_finished() {
+    if timer.started.elapsed() >= timer.duration {
         exits.write(AppExit::Success);
     }
 }
@@ -2511,11 +2825,13 @@ fn update_graphical_inspector_overlay(
 fn update_graphical_gpu_visual_cues(
     runtime: Res<GraphicalRuntimeControlsResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
+    alpha_art: Option<Res<GraphicalAlphaArtHandles>>,
     mut markers: bevy::prelude::Query<(
         &GraphicalPlaygroundMarker,
         &mut Sprite,
         &mut Transform,
         Option<&mut GraphicalCreatureAnimationPose>,
+        Option<&GraphicalAlphaArtBackedSprite>,
     )>,
 ) {
     let agent_color = if gpu.telemetry.fallback_reason.is_some() {
@@ -2528,11 +2844,29 @@ fn update_graphical_gpu_visual_cues(
         Color::srgb(1.0, 0.88, 0.35)
     };
     let target = runtime.panel.target_entity.map(WorldEntityId);
-    for (marker, mut sprite, mut transform, pose_component) in &mut markers {
+    for (marker, mut sprite, mut transform, pose_component, art_backed) in &mut markers {
+        let uses_alpha_art = art_backed.is_some();
         match marker.kind {
             WorldObjectKind::Agent => {
                 let pose = ca38_pose_from_runtime(&runtime.panel, &gpu.telemetry);
-                sprite.color = agent_color;
+                if uses_alpha_art {
+                    if let Some(handles) = alpha_art.as_deref() {
+                        sprite.image = if runtime.panel.terminal_recovery_cause.is_some()
+                            || runtime.panel.target_entity == Some(3)
+                        {
+                            handles.creature_hurt.clone()
+                        } else {
+                            handles.creature_idle.clone()
+                        };
+                    }
+                    sprite.color = if gpu.telemetry.fallback_reason.is_some() {
+                        Color::srgba(0.72, 0.72, 0.68, 1.0)
+                    } else {
+                        Color::WHITE
+                    };
+                } else {
+                    sprite.color = agent_color;
+                }
                 sprite.custom_size = Some(ca38_graphical_creature_size(pose));
                 transform.scale = Vec3::splat(ca38_graphical_creature_scale(pose, &gpu.telemetry));
                 transform.rotation =
@@ -2544,11 +2878,19 @@ fn update_graphical_gpu_visual_cues(
                 }
             }
             WorldObjectKind::Food if target == Some(marker.stable_id) => {
-                sprite.color = Color::srgb(1.0, 0.95, 0.28);
+                if uses_alpha_art {
+                    sprite.color = Color::WHITE;
+                } else {
+                    sprite.color = Color::srgb(1.0, 0.95, 0.28);
+                }
                 transform.scale = Vec3::splat(1.14);
             }
             WorldObjectKind::Hazard => {
-                sprite.color = Color::srgb(1.0, 0.16, 0.18);
+                if uses_alpha_art {
+                    sprite.color = Color::WHITE;
+                } else {
+                    sprite.color = Color::srgb(1.0, 0.16, 0.18);
+                }
                 transform.scale = Vec3::splat(1.06);
             }
             _ => {

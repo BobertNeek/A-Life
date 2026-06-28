@@ -23,6 +23,7 @@ pub struct AppBundleManifest {
     pub bundle_id: String,
     pub environment_manifest: String,
     pub placeholder_art_manifest: String,
+    pub alpha_art_manifest: String,
     pub entries: Vec<AppBundleEntry>,
     pub shader_assets: Vec<ShaderAssetEntry>,
 }
@@ -70,6 +71,8 @@ pub struct AppBundleIngestionSummary {
     pub shader_assets: usize,
     pub discovered_shader_assets: usize,
     pub placeholder_art_entries: usize,
+    pub alpha_art_entries: usize,
+    pub alpha_art_required_roles_present: bool,
     pub required_entries: usize,
     pub largest_file_bytes: u64,
     pub missing_required_rejected: bool,
@@ -90,6 +93,8 @@ impl AppBundleIngestionSummary {
             || self.discovered_shader_assets == 0
             || self.shader_assets != self.discovered_shader_assets
             || self.placeholder_art_entries < 4
+            || self.alpha_art_entries < CA44A_REQUIRED_ALPHA_ART_ROLES
+            || !self.alpha_art_required_roles_present
             || self.required_entries == 0
             || self.largest_file_bytes > CA12_MAX_BUNDLE_FILE_BYTES
             || !self.missing_required_rejected
@@ -112,7 +117,7 @@ impl AppBundleIngestionSummary {
             self.config_entries,
             self.shader_assets,
             self.discovered_shader_assets,
-            self.placeholder_art_entries,
+            self.alpha_art_entries,
             self.largest_file_bytes
         )
     }
@@ -183,6 +188,14 @@ fn validate_app_bundle_manifest_inner(
     let placeholder_path = resolve_workspace_path(root, &manifest.placeholder_art_manifest)?;
     let placeholder_art = validate_placeholder_art_manifest(&placeholder_path)?;
     largest_file_bytes = largest_file_bytes.max(tiny_file_size(&placeholder_path)?);
+    let alpha_art_path = resolve_workspace_path(root, &manifest.alpha_art_manifest)?;
+    let alpha_art = validate_alpha_art_manifest_inner(
+        root,
+        &alpha_art_path,
+        &read_json(&alpha_art_path)?,
+        true,
+    )?;
+    largest_file_bytes = largest_file_bytes.max(alpha_art.largest_file_bytes);
 
     let mut ids = BTreeSet::new();
     let mut required_entries = 0;
@@ -235,6 +248,8 @@ fn validate_app_bundle_manifest_inner(
         shader_assets: manifest.shader_assets.len(),
         discovered_shader_assets,
         placeholder_art_entries: placeholder_art.entries.len(),
+        alpha_art_entries: alpha_art.entry_count,
+        alpha_art_required_roles_present: alpha_art.required_roles_present,
         required_entries,
         largest_file_bytes,
         missing_required_rejected: false,
@@ -249,7 +264,7 @@ fn validate_app_bundle_manifest_inner(
         player_visible_status: vec![
             "App bundle manifest is versioned and validated.".to_string(),
             "WGSL shader assets are discovered from the committed shader directory.".to_string(),
-            "Placeholder art is textual metadata; no large binary art assets are committed."
+            "Alpha art v1 PNG sprites/tiles are versioned, tiny, and manifest-validated."
                 .to_string(),
         ],
     })

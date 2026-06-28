@@ -4,6 +4,7 @@
   "bundle_id": "ca12-app-runtime-bundle",
   "environment_manifest": "crates/alife_game_app/environment_manifest.json",
   "placeholder_art_manifest": "crates/alife_game_app/placeholder_art_manifest.json",
+  "alpha_art_manifest": "crates/alife_game_app/assets/alpha_art_v1/alpha_art_manifest.json",
   "entries": [
     {
       "id": "gpu-alpha-config",

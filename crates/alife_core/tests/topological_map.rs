@@ -399,6 +399,42 @@ fn bounded_map_behavior_rejects_growth_without_resizing() {
 }
 
 #[test]
+fn repeated_dynamic_observations_summarize_without_binding_capacity_failure() {
+    let mut map = TopologicalMap::new(TopologicalMapConfig::default()).unwrap();
+
+    for offset in 0..128 {
+        map.apply_patch(&patch(
+            200 + offset,
+            20 + offset,
+            WorldEntityId(2),
+            true,
+            0.25,
+            0.2,
+            false,
+        ))
+        .unwrap();
+    }
+
+    let target_concept = map
+        .concepts()
+        .iter()
+        .find(|concept| concept.bindings.objects.contains(&WorldEntityId(2)))
+        .expect("target object concept should be retained");
+    assert!(
+        target_concept.bindings.drives.len() <= 11,
+        "drive bindings should be summarized by channel"
+    );
+    assert!(
+        target_concept.bindings.locations.len() <= 32,
+        "location samples should stay bounded"
+    );
+    assert!(
+        target_concept.bindings.actions.len() <= 2,
+        "action bindings should be summarized by action identity"
+    );
+}
+
+#[test]
 fn id_allocation_is_deterministic_for_same_patch_sequence() {
     let mut first = map();
     let mut second = map();

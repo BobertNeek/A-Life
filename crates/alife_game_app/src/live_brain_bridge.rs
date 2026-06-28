@@ -72,6 +72,8 @@ pub struct LiveBrainTickSummary {
     pub memory_updates: u32,
     pub topology_updates: u32,
     pub learning_updates: u32,
+    pub invalid_or_rejected_action_count: u32,
+    pub last_diagnostic: Option<ContractDiagnostic>,
     pub causal_stages: Vec<LiveBrainCausalStage>,
 }
 
@@ -476,6 +478,8 @@ impl LiveBrainLoop {
             memory_updates: brain.diagnostics.memory_updates,
             topology_updates: brain.diagnostics.topology_updates,
             learning_updates: brain.diagnostics.learning_updates,
+            invalid_or_rejected_action_count: brain.diagnostics.invalid_or_rejected_action_count,
+            last_diagnostic: brain.diagnostics.last_diagnostic,
             causal_stages: vec![
                 LiveBrainCausalStage::GatherSensory,
                 LiveBrainCausalStage::CpuBrainTick,

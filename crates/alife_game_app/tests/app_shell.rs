@@ -2094,6 +2094,43 @@ fn ca42a_dev_overlay_and_full_debug_modes_remain_available() {
     assert!(GraphicalPlaygroundViewMode::parse("debug-dashboard").is_err());
 }
 
+#[test]
+fn ca44a_committed_alpha_art_manifest_validates_required_roles_and_pngs() {
+    let summary = alife_game_app::validate_alpha_art_manifest(
+        alife_game_app::default_alpha_art_manifest_path(),
+    )
+    .unwrap();
+    assert_eq!(
+        summary.schema,
+        alife_game_app::CA44A_ALPHA_ART_MANIFEST_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::CA44A_ALPHA_ART_MANIFEST_SCHEMA_VERSION
+    );
+    assert!(summary.required_roles_present);
+    assert!(summary.prop_variant_count >= 3);
+    assert!(summary.largest_file_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_ASSET_BYTES);
+    assert!(summary.png_dimensions_validated);
+    assert!(summary.forbidden_artifact_paths_rejected);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca44a_gpu_alpha_stability_regression_runs_past_tick_7() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = alife_game_app::run_ca44a_gpu_alpha_stability_smoke(&launch, 600).unwrap();
+    assert_eq!(summary.requested_ticks, 600);
+    assert_eq!(summary.completed_ticks, 600);
+    assert!(summary.first_invalid_tick.is_none());
+    assert_eq!(summary.terminal_invalid_count, 0);
+    assert_eq!(summary.sealed_patches, 600);
+    assert_eq!(summary.packed_records, 600);
+    assert_eq!(summary.topology_simplexes, 600);
+    assert!(summary.cpu_shadow_parity_preserved);
+    summary.validate().unwrap();
+}
+
 #[cfg(feature = "bevy-app")]
 #[test]
 fn ca42a_player_hud_is_compact_and_debug_spam_free() {
@@ -2144,7 +2181,7 @@ fn ca42a_player_hud_is_compact_and_debug_spam_free() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
-fn ca42a_player_view_uses_shape_glyphs_not_default_text_labels() {
+fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
     let (mut app, summary) =
@@ -2154,23 +2191,37 @@ fn ca42a_player_view_uses_shape_glyphs_not_default_text_labels() {
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
     assert!(!summary.stable_id_overlay_visible);
 
-    let mut glyph_query = app
+    let mut art_query = app
         .world_mut()
-        .query::<&alife_game_app::bevy_shell::GraphicalObjectGlyph>();
-    let glyphs = glyph_query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert!(glyphs.len() >= summary.object_count);
-    assert!(glyphs
-        .iter()
-        .any(|glyph| glyph.kind == WorldObjectKind::Agent));
-    assert!(glyphs
-        .iter()
-        .any(|glyph| glyph.kind == WorldObjectKind::Food));
-    assert!(glyphs
-        .iter()
-        .any(|glyph| glyph.kind == WorldObjectKind::Hazard));
-    assert!(glyphs
-        .iter()
-        .any(|glyph| glyph.kind == WorldObjectKind::Obstacle));
+        .query::<&alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite>();
+    let roles = art_query
+        .iter(app.world())
+        .map(|sprite| sprite.role)
+        .collect::<Vec<_>>();
+    for role in [
+        "creature-idle",
+        "food",
+        "hazard",
+        "rock-obstacle",
+        "selection-ring",
+        "terrain-safe-grass",
+        "terrain-soil-path",
+        "terrain-resource-grove",
+        "terrain-hazard-pressure",
+        "terrain-stone-rough",
+        "prop-dressing",
+    ] {
+        assert!(roles.contains(&role), "missing alpha art role {role}");
+    }
+
+    let mut fallback_query =
+        app.world_mut()
+            .query::<&alife_game_app::bevy_shell::GraphicalAlphaArtFallbackSprite>();
+    assert_eq!(
+        fallback_query.iter(app.world()).count(),
+        0,
+        "default Player View must not use rectangle fallback sprites"
+    );
 
     let mut badge_query = app.world_mut().query::<(
         &bevy::prelude::Visibility,
