@@ -83,6 +83,22 @@
       "max_size_bytes": 1024
     },
     {
+      "asset_id": "ca39-audio-learning-pulse",
+      "kind": "AudioCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
+      "asset_id": "ca39-vfx-learning-pulse",
+      "kind": "VfxCue",
+      "relative_path": null,
+      "optional": true,
+      "procedural_fallback": true,
+      "max_size_bytes": 1024
+    },
+    {
       "asset_id": "g17-animation-soft-pop",
       "kind": "AnimationCurve",
       "relative_path": null,

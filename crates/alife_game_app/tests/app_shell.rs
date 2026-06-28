@@ -3,14 +3,15 @@ use alife_core::{
     CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, Validate, WorldEntityId,
 };
 use alife_game_app::{
-    ca18_creature_selection_ids, ca18_cycle_selected_creature, compare_visible_world_to_headless,
-    g17_feedback_manifest_path, g17_workspace_root, load_visible_world_from_p34_save,
-    project_lod_without_behavior_change, run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke,
-    run_batched_gpu_runtime_smoke, run_behavior_comparison_lab_smoke,
-    run_behavior_tuning_metrics_smoke, run_behavior_tuning_metrics_with_config,
-    run_cognition_debug_timeline_smoke, run_content_authoring_smoke,
-    run_creature_animation_state_machine_smoke, run_creature_inspector_smoke,
-    run_creature_visual_smoke, run_curriculum_authoring_smoke, run_double_buffered_scheduler_smoke,
+    ca18_creature_selection_ids, ca18_cycle_selected_creature, ca39_drive_audio_vfx_summary,
+    compare_visible_world_to_headless, g17_feedback_manifest_path, g17_workspace_root,
+    load_visible_world_from_p34_save, project_lod_without_behavior_change,
+    run_advanced_gameplay_ux_smoke, run_affordance_loop_smoke, run_batched_gpu_runtime_smoke,
+    run_behavior_comparison_lab_smoke, run_behavior_tuning_metrics_smoke,
+    run_behavior_tuning_metrics_with_config, run_cognition_debug_timeline_smoke,
+    run_content_authoring_smoke, run_creature_animation_state_machine_smoke,
+    run_creature_inspector_smoke, run_creature_visual_smoke, run_curriculum_authoring_smoke,
+    run_double_buffered_scheduler_smoke, run_drive_coupled_audio_vfx_smoke,
     run_ecological_soak_smoke, run_ecological_soak_with_config, run_feedback_polish_smoke,
     run_full_gpu_runtime_smoke, run_gpu_graphics_performance_evidence_smoke, run_gpu_longrun_soak,
     run_gpu_product_hardening_smoke, run_gpu_sustained_learning_soak, run_graphical_controls_smoke,
@@ -30,13 +31,13 @@ use alife_game_app::{
     run_world_ecology_loop_smoke, run_world_editor_smoke, select_visible_world_entity,
     validate_app_shell_config, write_behavior_comparison_lab_report, AppShellLaunchConfig,
     AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus,
-    Ca13TickBuffer, CadenceTarget, CameraNavigationState, ConfigMenuState, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
-    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
-    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
-    GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest, LifecycleEventKind,
-    LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
+    Ca13TickBuffer, Ca39DriveCueKind, Ca39RuntimeCueEvidence, CadenceTarget, CameraNavigationState,
+    ConfigMenuState, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
+    CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
+    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
+    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, InspectorControlPanel, LessonManifest,
+    LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop,
     LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
     PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
@@ -68,8 +69,9 @@ use alife_game_app::{
     CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES, CA37_WORLD_ART_STYLE_SCHEMA,
     CA37_WORLD_ART_STYLE_SCHEMA_VERSION, CA38_CREATURE_ANIMATION_SCHEMA,
     CA38_CREATURE_ANIMATION_SCHEMA_VERSION, CA38_REQUIRED_ANIMATION_STATES,
-    G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
-    G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
+    CA39_DRIVE_AUDIO_VFX_SCHEMA, CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION,
+    CA39_REQUIRED_DRIVE_CUE_COUNT, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
+    G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
 use alife_semantic::{
     parse_slm_prior_json, project_embedding_to_i8, LlamaCppEmbeddingConfig,
@@ -349,6 +351,18 @@ fn feedback_polish_asset_manifest_validates_optional_fallbacks() {
         .entries
         .iter()
         .any(|entry| entry.kind == FeedbackAssetKind::NotificationStyle));
+    assert!(manifest
+        .entries
+        .iter()
+        .any(|entry| entry.asset_id == "ca39-audio-learning-pulse"
+            && entry.optional
+            && entry.procedural_fallback));
+    assert!(manifest
+        .entries
+        .iter()
+        .any(|entry| entry.asset_id == "ca39-vfx-learning-pulse"
+            && entry.optional
+            && entry.procedural_fallback));
 }
 
 #[test]
@@ -366,6 +380,76 @@ fn feedback_polish_rejects_missing_required_asset() {
         .validate_with_root(g17_workspace_root())
         .unwrap_err();
     assert!(err.to_string().contains("required feedback asset"));
+}
+
+#[test]
+fn ca39_drive_coupled_audio_vfx_maps_drive_milestones_without_authority() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
+    let feedback = run_feedback_polish_smoke(&launch).unwrap();
+    let evidence = Ca39RuntimeCueEvidence {
+        selected_backend: "GpuPlastic".to_string(),
+        fallback_reason: None,
+        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow".to_string(),
+        sealed_patches: 4,
+        h_shadow_applications: 3,
+        cpu_shadow_gate_preserved: true,
+        no_active_bulk_readback: true,
+        full_action_authoritative_claim: false,
+    };
+
+    let summary = ca39_drive_audio_vfx_summary(&feedback, &evidence).unwrap();
+
+    assert_eq!(summary.schema, CA39_DRIVE_AUDIO_VFX_SCHEMA);
+    assert_eq!(summary.schema_version, CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION);
+    assert_eq!(summary.cues.len(), CA39_REQUIRED_DRIVE_CUE_COUNT);
+    assert_eq!(summary.active_cue_count, CA39_REQUIRED_DRIVE_CUE_COUNT);
+    assert!(summary.no_action_authority);
+    assert!(summary.no_weight_authority);
+    assert!(summary.no_cognition_mutation);
+    assert!(summary.no_large_assets_added);
+    assert!(summary.cpu_shadow_gate_preserved);
+    assert!(!summary.full_action_authoritative_claim);
+    assert!(summary
+        .cues
+        .iter()
+        .any(|cue| cue.kind == Ca39DriveCueKind::HungerSatisfaction
+            && cue.audio_asset_id.as_deref() == Some("g17-audio-food-chime")));
+    assert!(summary
+        .cues
+        .iter()
+        .any(|cue| cue.kind == Ca39DriveCueKind::HazardPain
+            && cue.vfx_asset_id.as_deref() == Some("g17-vfx-hazard-flash")));
+    assert!(summary
+        .cues
+        .iter()
+        .any(|cue| cue.kind == Ca39DriveCueKind::SleepRest
+            && cue.audio_asset_id.as_deref() == Some("g17-audio-sleep-soft")));
+    assert!(summary
+        .cues
+        .iter()
+        .any(|cue| cue.kind == Ca39DriveCueKind::LearningPulse
+            && cue.active
+            && cue.vfx_asset_id.as_deref() == Some("ca39-vfx-learning-pulse")));
+    assert!(!summary.compact_overlay_text().contains("Entity("));
+}
+
+#[test]
+fn ca39_drive_coupled_audio_vfx_smoke_runs_with_honest_runtime_claim() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let summary = run_drive_coupled_audio_vfx_smoke(&launch).unwrap();
+
+    assert_eq!(summary.schema, CA39_DRIVE_AUDIO_VFX_SCHEMA);
+    assert_eq!(summary.cues.len(), CA39_REQUIRED_DRIVE_CUE_COUNT);
+    assert!(summary.sealed_feedback_sources >= 4);
+    assert!(summary.no_action_authority);
+    assert!(summary.no_weight_authority);
+    assert!(summary.no_cognition_mutation);
+    assert!(summary.no_active_bulk_readback);
+    assert!(summary.cpu_shadow_gate_preserved);
+    assert!(!summary.full_action_authoritative_claim);
+    assert!(!summary
+        .product_runtime_claim
+        .contains("FullActionAuthoritative"));
 }
 
 #[test]
@@ -5365,6 +5449,47 @@ fn bevy_feature_ca08_sensory_feedback_cues_are_display_only_and_readable() {
     assert!(legend.contains("reward=green"));
     assert!(legend.contains("learning=teal"));
     assert!(legend.contains("Audio stubs"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn bevy_feature_ca39_drive_cue_panel_is_player_readable_and_display_only() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+    let feedback = run_feedback_polish_smoke(&launch).unwrap();
+    let gpu = GraphicalGpuRuntimeTelemetry {
+        requested_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        selected_backend: "GpuPlastic".to_string(),
+        fallback_reason: None,
+        hardware_identifier: Some("local-test".to_string()),
+        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow".to_string(),
+        gpu_static_dispatched_ticks: 3,
+        gpu_scores_used_for_proposals: true,
+        cpu_shadow_parity: true,
+        parity_failures: 0,
+        sealed_patches: 3,
+        h_shadow_applications: 2,
+        last_h_shadow_delta: 0.0125,
+        compact_readback_bytes: 64,
+        post_seal_readback_bytes: 64,
+        total_gpu_runtime_ms: 1.25,
+        wgsl: test_wgsl_telemetry(),
+        no_active_bulk_readback: true,
+        full_action_authoritative_claim: false,
+    };
+
+    let panel =
+        alife_game_app::ca39_drive_audio_vfx_panel_text_from_graphical(&feedback, &gpu).unwrap();
+
+    assert!(panel.contains("Drive Audio/VFX"));
+    assert!(panel.contains("Food chime:on"));
+    assert!(panel.contains("Hazard pulse:on"));
+    assert!(panel.contains("Rest bloom:on"));
+    assert!(panel.contains("Learning pulse:on"));
+    assert!(panel.contains("H_shadow apps=2"));
+    assert!(panel.contains("CPU shadow gate"));
+    assert!(panel.contains("no actions/weights"));
+    assert!(!panel.contains("full action-authoritative"));
+    assert!(!panel.contains("Entity("));
 }
 
 #[cfg(feature = "bevy-app")]

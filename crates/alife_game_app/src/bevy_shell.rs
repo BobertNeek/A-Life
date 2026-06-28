@@ -2622,16 +2622,22 @@ fn intent_line_color(action_kind: ActionKind, target_entity: Option<u64>) -> Col
 
 fn update_graphical_feedback_overlay(
     runtime: Res<GraphicalRuntimeControlsResource>,
-    _feedback: Res<GraphicalFeedbackCueResource>,
+    feedback: Res<GraphicalFeedbackCueResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
     mut overlays: bevy::prelude::Query<&mut Text, With<FeedbackCueOverlay>>,
 ) {
     for mut text in &mut overlays {
-        text.0 = format!(
-            "{}\nCues: reward/pain/sleep/learn display-only | H_shadow apps={}",
-            runtime.panel.event_feed_panel_text(),
-            gpu.telemetry.h_shadow_applications
-        );
+        let cue_panel = crate::ca39_drive_audio_vfx_panel_text_from_graphical(
+            &feedback.summary,
+            &gpu.telemetry,
+        )
+        .unwrap_or_else(|_| {
+            format!(
+                "Drive Audio/VFX\nCues unavailable; H_shadow apps={}\nBoundary: display-only",
+                gpu.telemetry.h_shadow_applications
+            )
+        });
+        text.0 = format!("{}\n{}", runtime.panel.event_feed_panel_text(), cue_panel);
     }
 }
 
@@ -2924,9 +2930,22 @@ pub fn feedback_cue_overlay_text(
     inspector: &CreatureInspectorResource,
 ) -> String {
     let snapshot = &inspector.snapshot;
+    let evidence = crate::Ca39RuntimeCueEvidence {
+        selected_backend: "CpuReference".to_string(),
+        fallback_reason: None,
+        product_runtime_claim: "None".to_string(),
+        sealed_patches: feedback.sealed_outcome_event_count,
+        h_shadow_applications: 0,
+        cpu_shadow_gate_preserved: true,
+        no_active_bulk_readback: true,
+        full_action_authoritative_claim: false,
+    };
+    let drive_panel = crate::ca39_drive_audio_vfx_panel_text(feedback, &evidence)
+        .unwrap_or_else(|_| "Drive Audio/VFX unavailable".to_string());
     format!(
         concat!(
             "Play Feedback (display-only)\n",
+            "{}\n",
             "{}\n",
             "Cues: {}\n",
             "Food={} hazard={} sleep={} failure={}\n",
@@ -2937,6 +2956,7 @@ pub fn feedback_cue_overlay_text(
             feedback,
             &GraphicalGpuRuntimeTelemetry::cpu_reference(GraphicalGpuRuntimeMode::CpuReference, 0),
         ),
+        drive_panel,
         feedback.event_labels().join(">"),
         feedback
             .event_labels()
