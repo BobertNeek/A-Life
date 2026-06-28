@@ -326,6 +326,8 @@ pub struct GraphicalWorldArtTerrainTile {
     pub tile_x: i32,
     pub tile_z: i32,
     pub material_id: &'static str,
+    pub tile_size_pixels: f32,
+    pub viewport_slice: bool,
     pub display_only: bool,
 }
 
@@ -437,6 +439,9 @@ pub struct GraphicalAdvancedGameplayResource {
 }
 
 const GRAPHICAL_WORLD_SCALE: f32 = 125.0;
+const CA37_TERRAIN_TILE_PIXEL_SIZE: f32 = GRAPHICAL_WORLD_SCALE;
+const CA37_TERRAIN_TILE_JITTER_PIXELS: f32 = 5.0;
+const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 1.75;
 
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer(Timer);
@@ -576,6 +581,7 @@ pub fn build_graphical_playground_app_shell(
     let local_entity =
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
     let (controls, live_loop, gpu_telemetry) = graphical_runtime_resources(launch)?;
+    let camera_state = ca37_graphical_default_camera_state(&inspector, world_art_summary.as_ref())?;
     app.insert_resource(controls)
         .insert_resource(gpu_telemetry)
         .insert_non_send_resource(live_loop)
@@ -588,7 +594,7 @@ pub fn build_graphical_playground_app_shell(
                 .unwrap_or_else(|| crate::ca38_creature_animation_summary().unwrap()),
         })
         .insert_resource(CameraNavigationResource {
-            state: inspector.camera,
+            state: camera_state,
         })
         .insert_resource(SelectionResource {
             stable_id: inspector.selection.stable_id,
@@ -669,6 +675,21 @@ pub fn build_graphical_playground_app_shell(
     }
 
     Ok((app, summary))
+}
+
+fn ca37_graphical_default_camera_state(
+    inspector: &CreatureInspectorSnapshot,
+    world_art: Option<&Ca37WorldArtStyleSummary>,
+) -> Result<CameraNavigationState, GameAppShellError> {
+    let mut state = inspector.camera;
+    if world_art
+        .map(|summary| summary.local_viewport_is_smaller_than_map)
+        .unwrap_or(false)
+    {
+        state.zoom = state.zoom.max(CA37_EXPLORATION_CAMERA_ZOOM);
+    }
+    state.validate()?;
+    Ok(state)
 }
 
 pub fn build_graphical_playground_preview_app_shell(
@@ -1304,10 +1325,11 @@ fn spawn_ca37_world_art_terrain_canvas(app: &mut App, summary: &Ca37WorldArtStyl
         for iz in -half_height..=half_height {
             let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
             let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
-            let jitter_x = ((hash % 13) as f32 - 6.0) * 3.2;
-            let jitter_y = (((hash / 13) % 13) as f32 - 6.0) * 2.8;
-            let width = 84.0 + ((hash % 5) as f32) * 6.0;
-            let height = 76.0 + (((hash / 5) % 5) as f32) * 5.5;
+            let jitter_x = ((hash % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0);
+            let jitter_y =
+                (((hash / 7) % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0);
+            let width = CA37_TERRAIN_TILE_PIXEL_SIZE * (0.98 + ((hash % 3) as f32) * 0.015);
+            let height = CA37_TERRAIN_TILE_PIXEL_SIZE * (0.98 + (((hash / 3) % 3) as f32) * 0.015);
             app.world_mut().spawn((
                 Name::new(format!("A-Life CA37 terrain wash {material_id} {ix}:{iz}")),
                 Sprite {
@@ -1316,14 +1338,16 @@ fn spawn_ca37_world_art_terrain_canvas(app: &mut App, summary: &Ca37WorldArtStyl
                     ..default()
                 },
                 Transform::from_xyz(
-                    ix as f32 * 78.0 + jitter_x,
-                    iz as f32 * 76.0 + jitter_y,
+                    ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x,
+                    iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y,
                     -1.45,
                 ),
                 GraphicalWorldArtTerrainTile {
                     tile_x: ix,
                     tile_z: iz,
                     material_id,
+                    tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
+                    viewport_slice: summary.local_viewport_is_smaller_than_map,
                     display_only: true,
                 },
             ));
@@ -2867,7 +2891,8 @@ fn ca07_compact_technical_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String 
 pub fn readability_legend_overlay_text() -> String {
     [
         "Visual Guide: [@] creature | [+] food | [!] hazard | [#] obstacle/rock | [T] cue",
-        "GPU alpha map: seeded large terrain with distributed stable-ID food, hazards, and obstacles.",
+        "Viewport: local camera slice of a larger seeded terrain map; pan/follow to explore.",
+        "GPU alpha map: off-screen stable-ID food, hazards, obstacles, and social cues exist.",
         "World art: procedural terrain, soil paths, groves, hazard pressure, stone props.",
         "Cues: reward=green pain=red sleep=blue learning=teal. Audio stubs are display-only.",
         "Terrain guides placement; world/core arbitration still owns actions. Stable IDs stay portable.",
