@@ -50,6 +50,7 @@ Initial state: pack imported, no CA plans complete.
 | CA36 | complete | `codex/CA36-multi-hour-soak-isolation` | branch tip | Manual 10k+/multi-hour soak protocol, untracked target report path, memory/process monitoring, and precision/drift counters recorded in `status/CA36_MULTI_HOUR_SOAK_ISOLATION.md`; next executable plan is CAR36 hard-stop review. |
 | CAR36 | complete | `codex/CAR36-performance-parity-review` | branch tip | Performance/parity review recorded in `reviews/CAR36_REVIEW_REPORT.md` with verdict `PASS_WITH_NOTES`; next executable plan is CA37 after user/ChatGPT consultation. |
 | CA37 | complete | `codex/CA37-terrain-props-world-art-style-pass` | branch tip | Display-only terrain/material palette, prop dressing, placeholder-art manifest descriptors, and focused CA37 smoke evidence recorded in `status/CA37_TERRAIN_PROPS_WORLD_ART_STYLE.md`; next executable plan is CA38. |
+| CA38 | complete | `codex/CA38-creature-animation-state-machine` | branch tip | Creature animation pose state machine plus user-requested large seeded GPU alpha terrain correction recorded in `status/CA38_CREATURE_ANIMATION_STATE_MACHINE.md`; next executable plan is CA39. |
 
 Post-CAR27 blocking migration: active local model runtime was migrated from
 Ollama to direct localhost-only llama.cpp / `llama-server` on

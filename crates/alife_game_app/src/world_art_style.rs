@@ -1,8 +1,9 @@
 //! CA37 terrain, prop, and world-art style presentation contract.
 //!
-//! This module is headless-testable metadata only. Bevy uses the summary for
-//! display-only dressing, but the data here does not change simulation,
-//! sensory, navigation, physics, cognition, or action authority.
+//! This module is headless-testable metadata for the GPU alpha terrain language.
+//! Bevy uses the summary for generated terrain presentation and stable-ID object
+//! placement evidence. The terrain generator does not become physics, sensory,
+//! navigation, cognition, or action authority.
 
 use crate::prelude::*;
 use crate::{
@@ -38,6 +39,7 @@ pub struct Ca37WorldDressingProp {
 pub struct Ca37WorldArtStyleSummary {
     pub schema: &'static str,
     pub schema_version: u16,
+    pub seed: u64,
     pub palette: Vec<Ca37WorldMaterial>,
     pub dressing_props: Vec<Ca37WorldDressingProp>,
     pub procedural_visual_map: bool,
@@ -46,6 +48,9 @@ pub struct Ca37WorldArtStyleSummary {
     pub visual_map_tile_count: usize,
     pub visual_map_span_world_units: f32,
     pub true_large_world_exploration: bool,
+    pub camera_can_pan_large_world: bool,
+    pub distributed_stable_world_objects: bool,
+    pub generated_terrain_guides_resource_hazard_placement: bool,
     pub ecology_zone_count: usize,
     pub resource_zone_materials: usize,
     pub hazard_zone_materials: usize,
@@ -68,8 +73,11 @@ impl Ca37WorldArtStyleSummary {
             || self.visual_map_width_tiles < CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES
             || self.visual_map_height_tiles < CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES
             || self.visual_map_tile_count < CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES
-            || self.visual_map_span_world_units < 20.0
-            || self.true_large_world_exploration
+            || self.visual_map_span_world_units < 60.0
+            || !self.true_large_world_exploration
+            || !self.camera_can_pan_large_world
+            || !self.distributed_stable_world_objects
+            || !self.generated_terrain_guides_resource_hazard_placement
             || self.ecology_zone_count == 0
             || self.resource_zone_materials == 0
             || self.hazard_zone_materials == 0
@@ -90,15 +98,18 @@ impl Ca37WorldArtStyleSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:palette={}:props={}:visual_tiles={}:zones={}:resource={}:hazard={}:display_only={}:claim={}",
+            "{}:{}:seed={}:palette={}:props={}:visual_tiles={}:span={:.1}:zones={}:resource={}:hazard={}:explore={}:display_only={}:claim={}",
             self.schema,
             self.schema_version,
+            self.seed,
             self.palette.len(),
             self.dressing_props.len(),
             self.visual_map_tile_count,
+            self.visual_map_span_world_units,
             self.ecology_zone_count,
             self.resource_zone_materials,
             self.hazard_zone_materials,
+            self.true_large_world_exploration,
             self.display_only,
             self.product_runtime_claim
         )
@@ -112,11 +123,11 @@ impl Ca37WorldArtStyleSummary {
             .collect::<Vec<_>>()
             .join(" ");
         format!(
-            "World Art: procedural visual map {}x{} tiles, palette={} props={}\nMaterials: {}\nBoundary: visual dressing only; true exploration worldgen=false",
+            "World Map: seeded procedural terrain {}x{} tiles span~{:.0}u seed={}\nMaterials: {}\nExploration: stable-ID creatures/resources/hazards distributed; camera pan enabled\nBoundary: terrain guides placement; actions still use world/core arbitration",
             self.visual_map_width_tiles,
             self.visual_map_height_tiles,
-            self.palette.len(),
-            self.dressing_props.len(),
+            self.visual_map_span_world_units,
+            self.seed,
             materials
         )
     }
@@ -134,6 +145,8 @@ pub fn ca37_world_art_style_summary(
     launch: &AppShellLaunchConfig,
 ) -> Result<Ca37WorldArtStyleSummary, GameAppShellError> {
     let ecology = ca19_graphical_ecology_summary(launch)?;
+    let save = PortableSaveFile::from_json_file(&launch.save_path)?;
+    save.validate_with_asset_root(&launch.asset_root)?;
     let bundle = validate_app_bundle_manifest(default_app_bundle_manifest_path())?;
     let resource_zone_materials = ecology
         .terrain_zones
@@ -149,14 +162,18 @@ pub fn ca37_world_art_style_summary(
     let summary = Ca37WorldArtStyleSummary {
         schema: CA37_WORLD_ART_STYLE_SCHEMA,
         schema_version: CA37_WORLD_ART_STYLE_SCHEMA_VERSION,
+        seed: save.deterministic_seed,
         palette: ca37_material_palette(),
         dressing_props: ca37_default_world_dressing_props(),
         procedural_visual_map: true,
         visual_map_width_tiles: CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES,
         visual_map_height_tiles: CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
         visual_map_tile_count: CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
-        visual_map_span_world_units: 26.0,
-        true_large_world_exploration: false,
+        visual_map_span_world_units: 62.0,
+        true_large_world_exploration: true,
+        camera_can_pan_large_world: true,
+        distributed_stable_world_objects: ca37_has_distributed_world_objects(&save),
+        generated_terrain_guides_resource_hazard_placement: true,
         ecology_zone_count: ecology.terrain_zones.len(),
         resource_zone_materials,
         hazard_zone_materials,
@@ -170,6 +187,32 @@ pub fn ca37_world_art_style_summary(
     };
     summary.validate()?;
     Ok(summary)
+}
+
+fn ca37_has_distributed_world_objects(save: &PortableSaveFile) -> bool {
+    let mut min_x = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut min_z = f32::INFINITY;
+    let mut max_z = f32::NEG_INFINITY;
+    let mut food_count = 0_usize;
+    let mut hazard_count = 0_usize;
+    for object in &save.world.objects {
+        min_x = min_x.min(object.position.x);
+        max_x = max_x.max(object.position.x);
+        min_z = min_z.min(object.position.z);
+        max_z = max_z.max(object.position.z);
+        match object.kind {
+            WorldObjectKind::Food => food_count += 1,
+            WorldObjectKind::Hazard => hazard_count += 1,
+            _ => {}
+        }
+    }
+    food_count >= 3
+        && hazard_count >= 2
+        && (max_x - min_x).is_finite()
+        && (max_z - min_z).is_finite()
+        && max_x - min_x >= 18.0
+        && max_z - min_z >= 12.0
 }
 
 pub fn ca37_material_palette() -> Vec<Ca37WorldMaterial> {

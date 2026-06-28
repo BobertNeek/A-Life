@@ -64,7 +64,7 @@
   "world": {
     "seed": 4242,
     "tick": 2,
-    "next_entity_id": 7,
+    "next_entity_id": 13,
     "objects": [
       {
         "id": 1,
@@ -155,6 +155,96 @@
         "teacher_channel": null,
         "consumed": false,
         "carried_by": null
+      },
+      {
+        "id": 7,
+        "label": "north-berry",
+        "kind": "Food",
+        "organism_id": null,
+        "position": { "x": -12.0, "y": 0.0, "z": 8.5 },
+        "radius": 0.70,
+        "nutrition": 0.55,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 8,
+        "label": "east-sprout",
+        "kind": "Food",
+        "organism_id": null,
+        "position": { "x": 14.0, "y": 0.0, "z": -6.0 },
+        "radius": 0.70,
+        "nutrition": 0.45,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 9,
+        "label": "red-thorn",
+        "kind": "Hazard",
+        "organism_id": null,
+        "position": { "x": 11.0, "y": 0.0, "z": 10.0 },
+        "radius": 0.80,
+        "nutrition": 0.0,
+        "hazard_pain": 0.70,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 10,
+        "label": "ash-pit",
+        "kind": "Hazard",
+        "organism_id": null,
+        "position": { "x": -14.0, "y": 0.0, "z": -8.0 },
+        "radius": 0.85,
+        "nutrition": 0.0,
+        "hazard_pain": 0.50,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 11,
+        "label": "granite-ridge",
+        "kind": "Obstacle",
+        "organism_id": null,
+        "position": { "x": -18.0, "y": 0.0, "z": 2.0 },
+        "radius": 0.90,
+        "nutrition": 0.0,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
+      },
+      {
+        "id": 12,
+        "label": "fallen-log",
+        "kind": "Obstacle",
+        "organism_id": null,
+        "position": { "x": 18.0, "y": 0.0, "z": -1.5 },
+        "radius": 0.95,
+        "nutrition": 0.0,
+        "hazard_pain": 0.0,
+        "token_id": null,
+        "social_affinity": 0.0,
+        "teacher_channel": null,
+        "consumed": false,
+        "carried_by": null
       }
     ],
     "last_touched_entities": [],
@@ -186,6 +276,24 @@
           "radius": 1.45,
           "resource_bias": 0.10,
           "hazard_pressure": 0.65
+        },
+        {
+          "id": 3,
+          "label": "north-grove",
+          "kind": "Grove",
+          "center": { "x": -12.0, "y": 0.0, "z": 8.5 },
+          "radius": 4.25,
+          "resource_bias": 0.80,
+          "hazard_pressure": 0.05
+        },
+        {
+          "id": 4,
+          "label": "ash-field",
+          "kind": "HazardField",
+          "center": { "x": 11.0, "y": 0.0, "z": 10.0 },
+          "radius": 4.0,
+          "resource_bias": 0.05,
+          "hazard_pressure": 0.70
         }
       ],
       "resources": [
@@ -198,14 +306,34 @@
           "consumed_at_tick": null,
           "last_regrown_tick": null,
           "low_salience_marker": false
+        },
+        {
+          "object_id": 7,
+          "home_zone": 3,
+          "base_nutrition": 0.55,
+          "regrow_after_ticks": 10,
+          "decay_after_ticks": 8,
+          "consumed_at_tick": null,
+          "last_regrown_tick": null,
+          "low_salience_marker": false
+        },
+        {
+          "object_id": 8,
+          "home_zone": 1,
+          "base_nutrition": 0.45,
+          "regrow_after_ticks": 8,
+          "decay_after_ticks": 7,
+          "consumed_at_tick": null,
+          "last_regrown_tick": null,
+          "low_salience_marker": false
         }
       ],
       "spawn_policies": [],
       "metrics": {
-        "active_resources": 1,
+        "active_resources": 3,
         "consumed_resources": 0,
-        "active_hazards": 1,
-        "zones": 2,
+        "active_hazards": 3,
+        "zones": 4,
         "resources_regrown": 0,
         "resources_spawned": 0,
         "resources_decayed": 0,

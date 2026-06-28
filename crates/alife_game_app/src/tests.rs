@@ -49,11 +49,11 @@ fn ca10_environment_manifest_validates_and_selects_default_gpu_alpha() {
         "crates/alife_world/tests/fixtures/gpu_alpha"
     ));
     assert_eq!(summary.seed, 4242);
-    assert_eq!(summary.object_count, 6);
+    assert_eq!(summary.object_count, 12);
     assert_eq!(summary.creature_count, 3);
-    assert_eq!(summary.food_count, 1);
-    assert_eq!(summary.hazard_count, 1);
-    assert_eq!(summary.obstacle_count, 1);
+    assert_eq!(summary.food_count, 3);
+    assert_eq!(summary.hazard_count, 3);
+    assert_eq!(summary.obstacle_count, 3);
     assert!(summary
         .player_visible_error_sample
         .contains("Unknown scenario"));
@@ -95,7 +95,7 @@ fn ca11_player_sandbox_editor_edits_default_manifest_scenario() {
         CA11_PLAYER_SANDBOX_EDITOR_SCHEMA_VERSION
     );
     assert_eq!(summary.scenario_id, "gpu-alpha");
-    assert_eq!(summary.initial_object_count, 6);
+    assert_eq!(summary.initial_object_count, 12);
     assert!(summary.final_object_count > summary.initial_object_count);
     assert!(summary.placed_food && summary.removed_food);
     assert!(summary.placed_hazard && summary.removed_hazard);
