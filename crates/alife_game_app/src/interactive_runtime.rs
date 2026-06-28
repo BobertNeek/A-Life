@@ -316,9 +316,10 @@ impl RuntimeControlPanel {
                 "{}\n",
                 "{}\n",
                 "{}\n",
+                "Tech: {}\n",
                 "{}\n",
-                "{}\n",
-                "{}"
+                "Status: {}\n",
+                "Boundary: CPU shadow gate"
             ),
             self.playback.label(),
             self.run_speed_ticks,

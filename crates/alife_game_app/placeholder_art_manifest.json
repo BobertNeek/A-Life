@@ -30,6 +30,48 @@
       "shape": "block",
       "color": "yellow",
       "description": "Obstacle marker placeholder"
+    },
+    {
+      "id": "ca37-safe-grass-material",
+      "kind": "terrain-safe",
+      "shape": "ground-patch",
+      "color": "moss-green",
+      "description": "CA37 visual-only safe grass terrain material descriptor"
+    },
+    {
+      "id": "ca37-neutral-soil-material",
+      "kind": "terrain-neutral",
+      "shape": "path-patch",
+      "color": "warm-umber",
+      "description": "CA37 visual-only neutral soil path descriptor"
+    },
+    {
+      "id": "ca37-resource-grove-material",
+      "kind": "terrain-resource",
+      "shape": "leaf-patch",
+      "color": "bright-leaf-green",
+      "description": "CA37 visual-only resource-friendly grove descriptor"
+    },
+    {
+      "id": "ca37-hazard-pressure-material",
+      "kind": "terrain-hazard",
+      "shape": "warning-shard",
+      "color": "warning-red",
+      "description": "CA37 visual-only hazard-pressure descriptor"
+    },
+    {
+      "id": "ca37-stone-dressing-material",
+      "kind": "prop-stone",
+      "shape": "stone-chip",
+      "color": "cool-grey",
+      "description": "CA37 visual-only stone dressing descriptor"
+    },
+    {
+      "id": "ca37-school-accent-material",
+      "kind": "prop-school-accent",
+      "shape": "cue-accent",
+      "color": "violet",
+      "description": "CA37 visual-only teacher/school cue accent descriptor"
     }
   ]
 }
