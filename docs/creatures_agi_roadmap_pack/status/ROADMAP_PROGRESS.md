@@ -53,6 +53,8 @@ Initial state: pack imported, no CA plans complete.
 | CA38 | complete | `codex/CA38-creature-animation-state-machine` | branch tip | Creature animation pose state machine plus user-requested large seeded GPU alpha terrain correction recorded in `status/CA38_CREATURE_ANIMATION_STATE_MACHINE.md`; next executable plan is CA39. |
 | CA39 | complete | `codex/CA39-drive-coupled-audio-vfx` | branch tip | Drive-coupled hunger satisfaction, hazard pain, sleep/rest, and H_shadow learning cue mapping recorded in `status/CA39_DRIVE_COUPLED_AUDIO_VFX.md`; next executable plan is CA40. |
 | CA40 | complete | `codex/CA40-onboarding-tutorial-first-session` | branch tip | First-session tutorial panel, checklist smoke, pause/step/follow guidance, food/hazard explanation, and GPU/fallback boundary evidence recorded in `status/CA40_ONBOARDING_TUTORIAL_FIRST_SESSION.md`; next executable plan is CAR40 hard-stop review. |
+| CAR40 | complete | `codex/CAR40-polish-and-tutorial-review` | branch tip | Polish/tutorial review recorded in `reviews/CAR40_REVIEW_REPORT.md` with verdict `PASS_WITH_NOTES`; next executable plan is CA41 after user/ChatGPT consultation. |
+| CA41 | complete | `codex/CA41-windows-zip-packaging-and-run-script` | branch tip | Windows release-package builder, package-local graphical runner, package metadata, and artifact-safe ZIP discipline recorded in `status/CA41_WINDOWS_ZIP_PACKAGE.md`; next executable plan is CA42. |
 
 Post-CAR27 blocking migration: active local model runtime was migrated from
 Ollama to direct localhost-only llama.cpp / `llama-server` on
