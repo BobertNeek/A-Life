@@ -96,6 +96,9 @@ pub use onboarding_tutorial::*;
 mod packaging_platform;
 pub use packaging_platform::*;
 
+mod runtime_prereq_diagnostics;
+pub use runtime_prereq_diagnostics::*;
+
 mod product_qa;
 pub use product_qa::*;
 

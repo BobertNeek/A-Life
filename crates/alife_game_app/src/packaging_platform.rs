@@ -359,6 +359,19 @@ pub fn platform_package_commands() -> Vec<PlatformPackageCommand> {
             requires_graphics: true,
             requires_gpu: false,
         },
+        PlatformPackageCommand {
+            id: "ca42-runtime-prereq-smoke".to_string(),
+            kind: PackageSmokeKind::Validation,
+            windows_command:
+                "cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- runtime-prereq-smoke --gpu-mode static-plastic-cpu-shadow-guarded"
+                    .to_string(),
+            non_windows_command:
+                "cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- runtime-prereq-smoke --gpu-mode static-plastic-cpu-shadow-guarded"
+                    .to_string(),
+            manual: false,
+            requires_graphics: false,
+            requires_gpu: false,
+        },
     ]
 }
 

@@ -50,7 +50,8 @@ pub use routing_masks::{
     P27_SUPERTILE_MASK_WORDS, P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
 };
 pub use runtime::{
-    probe_local_wgpu_runtime, required_storage_buffers, GpuPerformanceTargetStatus,
+    probe_local_wgpu_runtime, probe_local_wgpu_runtime_for_graphics_backend,
+    probe_local_wgpu_runtime_with_backends, required_storage_buffers, GpuPerformanceTargetStatus,
     GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuRuntimeBackendStatus, GpuRuntimeBoundary,
     GpuRuntimeCapabilityManifest, GpuRuntimeDiagnosticExport, GpuRuntimeFallbackReason,
     GpuRuntimeHardwareProbe, GpuRuntimeReadbackGuard, GpuRuntimeThrottleDecision,

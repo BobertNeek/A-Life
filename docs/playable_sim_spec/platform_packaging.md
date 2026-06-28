@@ -90,6 +90,37 @@ The package defaults to GPU-first
 safety/degraded mode, preserves CPU shadow parity, and does not claim full
 action-authoritative GPU runtime.
 
+## CA42 Runtime Prerequisite Preflight
+
+The repository and package launchers run a runtime prerequisite preflight before
+opening the graphical app. The preflight checks the requested GPU mode, probes
+the local wgpu adapter when the `gpu-runtime` feature is enabled, records the
+selected backend, reports fallback reason, and writes a diagnostic log path.
+
+Run it directly from the repository root:
+
+```powershell
+cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- runtime-prereq-smoke --gpu-mode static-plastic-cpu-shadow-guarded --graphics-backend dx12 --log target/artifacts/ca42_runtime_prereq/runtime_prereq.log
+```
+
+Runtime preflight log path for the repository launcher:
+
+```text
+target/artifacts/ca42_runtime_prereq/runtime_prereq.log
+```
+
+Runtime preflight log path for the package-local runner:
+
+```text
+diagnostics/runtime_prereq.log
+```
+
+Use `-RequireGpu` only when deliberately testing GPU hardware. With
+`-RequireGpu`, a CPU fallback becomes a clear GPU-unavailable failure instead of
+a silent launch. Without `-RequireGpu`, CPU fallback remains available but is
+reported as degraded mode. Neither path claims full action-authoritative GPU
+runtime, and CPU shadow parity remains the correctness gate.
+
 ## Required Validation Wrappers
 
 On Windows, use the wrapper scripts for repository validation:

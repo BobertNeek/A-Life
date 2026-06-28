@@ -23,14 +23,14 @@ use alife_game_app::{
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_product_qa_hardening_smoke, run_real_semantic_provider_smoke,
     run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_runtime_prereq_diagnostics, run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
     run_topological_concept_overlay_smoke, run_world_art_style_smoke, run_world_ecology_loop_smoke,
     run_world_editor_smoke, validate_app_bundle_manifest, validate_app_shell_config,
     write_behavior_comparison_lab_report, write_ca36_soak_isolation_report, AppShellLaunchConfig,
     BatchedGpuRuntimeOptions, EnvironmentManifest, FullGpuRuntimeSmokeMode,
     FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    SampledGpuRuntimeOptions,
+    RuntimePrereqDiagnosticsOptions, SampledGpuRuntimeOptions,
 };
 
 fn main() -> ExitCode {
@@ -81,6 +81,9 @@ fn run() -> Result<String, String> {
         [command, fixture_root] if command == "bevy-smoke" => run_bevy_smoke(fixture_root),
         [command, rest @ ..] if command == "graphical-playground" => {
             run_graphical_playground_cli(rest)
+        }
+        [command, rest @ ..] if command == "runtime-prereq-smoke" => {
+            run_runtime_prereq_cli(rest)
         }
         [command, flag, seconds, fixture_root]
             if command == "graphical-playground-smoke" && flag == "--seconds" =>
@@ -2611,6 +2614,34 @@ fn format_platform_package_summary(
     )
 }
 
+fn format_runtime_prereq_summary(
+    prefix: &str,
+    summary: &alife_game_app::RuntimePrereqDiagnosticsSummary,
+) -> String {
+    format!(
+        "{prefix} schema={} version={} gpu_mode={} requested={} selected={} fallback={:?} require_gpu={} block={} probe={} adapter={} device={} hardware=\"{}\" graphics_backend={} cpu_fallback_available={} degraded_visible={} log={} guidance=\"{}\" cpu_shadow_gate={} full_action_authoritative=false signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.requested_gpu_mode.label(),
+        summary.requested_backend,
+        summary.selected_backend,
+        summary.fallback_reason,
+        summary.require_gpu,
+        summary.would_block_launch,
+        summary.gpu_probe_attempted,
+        summary.adapter_available,
+        summary.device_request_succeeded,
+        summary.hardware_line(),
+        summary.graphics_backend,
+        summary.cpu_fallback_available,
+        summary.cpu_fallback_degraded_visible,
+        summary.log_path.display(),
+        summary.missing_driver_guidance,
+        summary.cpu_shadow_gate_preserved,
+        summary.signature_line()
+    )
+}
+
 fn format_product_qa_summary(prefix: &str, summary: &alife_game_app::ProductQaSummary) -> String {
     format!(
         "{prefix} schema={} version={} checklist={} findings={} blockers={} limitations={} p36={} no_p37={} artifacts_clean={} signature={}",
@@ -2660,6 +2691,85 @@ fn run_bevy_smoke(fixture_root: &str) -> Result<String, String> {
 #[cfg(not(feature = "bevy-app"))]
 fn run_bevy_smoke(_fixture_root: &str) -> Result<String, String> {
     Err("bevy-smoke requires feature `bevy-app`; run `cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- bevy-smoke crates/alife_world/tests/fixtures/p34`".to_string())
+}
+
+fn run_runtime_prereq_cli(args: &[String]) -> Result<String, String> {
+    let mut gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded;
+    let mut require_gpu = false;
+    let mut graphics_backend = "dx12".to_string();
+    let mut log_path = PathBuf::from("target/artifacts/ca42_runtime_prereq/runtime_prereq.log");
+    let mut index = 0_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--gpu-mode" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--gpu-mode requires a value".to_string())?;
+                gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::parse(value)
+                    .map_err(|err| err.to_string())?;
+                index += 2;
+            }
+            "--graphics-backend" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--graphics-backend requires a value".to_string())?;
+                graphics_backend = value.clone();
+                index += 2;
+            }
+            "--log" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--log requires a path".to_string())?;
+                log_path = PathBuf::from(value);
+                index += 2;
+            }
+            "--require-gpu" => {
+                require_gpu = true;
+                index += 1;
+            }
+            unknown => return Err(format!("unknown runtime-prereq-smoke option: {unknown}")),
+        }
+    }
+
+    let effective_graphics_backend = match graphics_backend.as_str() {
+        "auto" if cfg!(windows) => "dx12".to_string(),
+        "auto" => "auto".to_string(),
+        "existing" => "existing".to_string(),
+        "dx12" | "vulkan" => graphics_backend,
+        other => {
+            return Err(format!(
+                "unknown runtime-prereq-smoke --graphics-backend value: {other}"
+            ));
+        }
+    };
+    if matches!(effective_graphics_backend.as_str(), "dx12" | "vulkan") {
+        env::set_var("WGPU_BACKEND", &effective_graphics_backend);
+    }
+
+    let options = RuntimePrereqDiagnosticsOptions::new(
+        gpu_mode,
+        require_gpu,
+        effective_graphics_backend,
+        log_path,
+    );
+    let summary = run_runtime_prereq_diagnostics(&options).map_err(|err| err.to_string())?;
+    let formatted = format_runtime_prereq_summary("CA42 runtime prerequisite", &summary);
+
+    if let Some(parent) = summary.log_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+        }
+    }
+    std::fs::write(&summary.log_path, format!("{formatted}\n")).map_err(|err| err.to_string())?;
+
+    if summary.would_block_launch {
+        return Err(format!(
+            "{formatted}\nGPU is required for this launch, but the preflight selected fallback. {}",
+            summary.missing_driver_guidance
+        ));
+    }
+
+    Ok(formatted)
 }
 
 #[cfg(feature = "bevy-app")]

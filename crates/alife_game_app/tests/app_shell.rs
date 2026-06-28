@@ -26,8 +26,8 @@ use alife_game_app::{
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_product_qa_hardening_smoke, run_real_semantic_provider_smoke,
     run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_runtime_prereq_diagnostics, run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
     run_topological_concept_overlay_smoke, run_world_art_style_smoke, run_world_ecology_loop_smoke,
     run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
     write_behavior_comparison_lab_report, AppShellLaunchConfig, AutosavePolicy,
@@ -44,36 +44,37 @@ use alife_game_app::{
     PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
     RealtimeWgslTelemetrySummary, ReleaseCandidateArea, ReleaseCandidateGateStatus,
     RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState,
-    S08EvidenceStatus, SampledGpuRuntimeOptions, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
-    SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape, WorldEditCommand,
-    WorldEditorConfig, WorldEditorMode, WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA,
-    CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION, CA18_MAX_GRAPHICAL_CREATURES,
-    CA19_GRAPHICAL_ECOLOGY_SCHEMA, CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION,
-    CA20_GRAPHICAL_LIFECYCLE_SCHEMA, CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION,
-    CA21_BEHAVIOR_TUNING_SCHEMA, CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT,
-    CA21_SCENARIO_SWEEP_COUNT, CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION,
-    CA22_FAST_HEADLESS_TICKS, CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA,
-    CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION, CA25_CURRICULUM_AUTHORING_SCHEMA,
-    CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA,
-    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION, CA27_INTERNAL_SLM_PRIOR_SCHEMA,
-    CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA,
-    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA,
-    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA,
-    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA,
-    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION, CA31_MAX_REPORT_BYTES,
-    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
-    CA33_BATCHED_GPU_RUNTIME_SCHEMA, CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION,
-    CA34_SAMPLED_GPU_RUNTIME_SCHEMA, CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
-    CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA, CA36_SOAK_ISOLATION_SCHEMA_VERSION,
-    CA37_MIN_PALETTE_MATERIALS, CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
-    CA37_MIN_WORLD_DRESSING_PROPS, CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES,
-    CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES, CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
-    CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES, CA37_WORLD_ART_STYLE_SCHEMA,
-    CA37_WORLD_ART_STYLE_SCHEMA_VERSION, CA38_CREATURE_ANIMATION_SCHEMA,
-    CA38_CREATURE_ANIMATION_SCHEMA_VERSION, CA38_REQUIRED_ANIMATION_STATES,
-    CA39_DRIVE_AUDIO_VFX_SCHEMA, CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION,
-    CA39_REQUIRED_DRIVE_CUE_COUNT, CA40_ONBOARDING_TUTORIAL_SCHEMA,
-    CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION, CA40_REQUIRED_CHECKLIST_ITEMS,
+    RuntimePrereqDiagnosticsOptions, S08EvidenceStatus, SampledGpuRuntimeOptions,
+    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
+    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
+    CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
+    CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
+    CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
+    CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
+    CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION,
+    CA25_CURRICULUM_AUTHORING_SCHEMA, CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
+    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION,
+    CA27_INTERNAL_SLM_PRIOR_SCHEMA, CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION,
+    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
+    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION,
+    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION,
+    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION,
+    CA31_MAX_REPORT_BYTES, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA,
+    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION, CA33_BATCHED_GPU_RUNTIME_SCHEMA,
+    CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION, CA34_SAMPLED_GPU_RUNTIME_SCHEMA,
+    CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION, CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA,
+    CA36_SOAK_ISOLATION_SCHEMA_VERSION, CA37_MIN_PALETTE_MATERIALS,
+    CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES, CA37_MIN_WORLD_DRESSING_PROPS,
+    CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES, CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES,
+    CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES, CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES,
+    CA37_WORLD_ART_STYLE_SCHEMA, CA37_WORLD_ART_STYLE_SCHEMA_VERSION,
+    CA38_CREATURE_ANIMATION_SCHEMA, CA38_CREATURE_ANIMATION_SCHEMA_VERSION,
+    CA38_REQUIRED_ANIMATION_STATES, CA39_DRIVE_AUDIO_VFX_SCHEMA,
+    CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION, CA39_REQUIRED_DRIVE_CUE_COUNT,
+    CA40_ONBOARDING_TUTORIAL_SCHEMA, CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION,
+    CA40_REQUIRED_CHECKLIST_ITEMS, CA42_RUNTIME_PREREQ_SCHEMA, CA42_RUNTIME_PREREQ_SCHEMA_VERSION,
     G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION, G21_PLATFORM_PACKAGE_SCHEMA,
     G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -3438,6 +3439,112 @@ fn ca41_windows_alpha_package_scripts_are_cargo_free_for_testers_and_artifact_sa
     assert!(status_doc.contains("No release tag"));
     assert!(status_doc.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
     assert!(status_doc.contains("not full action-authoritative"));
+}
+
+#[test]
+fn ca42_runtime_prereq_reports_cpu_mode_without_blocking() {
+    let options = RuntimePrereqDiagnosticsOptions::new(
+        GraphicalGpuRuntimeMode::CpuReference,
+        false,
+        "dx12",
+        "target/artifacts/ca42_runtime_prereq/test_cpu.log",
+    );
+    let summary = run_runtime_prereq_diagnostics(&options).unwrap();
+
+    assert_eq!(summary.schema, CA42_RUNTIME_PREREQ_SCHEMA);
+    assert_eq!(summary.schema_version, CA42_RUNTIME_PREREQ_SCHEMA_VERSION);
+    assert_eq!(
+        summary.requested_gpu_mode,
+        GraphicalGpuRuntimeMode::CpuReference
+    );
+    assert_eq!(summary.requested_backend, "CpuReference");
+    assert_eq!(summary.selected_backend, "CpuReference");
+    assert!(summary.fallback_reason.is_none());
+    assert!(!summary.would_block_launch);
+    assert!(summary.cpu_fallback_available);
+    assert!(summary.missing_driver_guidance.contains("DirectX 12"));
+    assert!(summary.missing_driver_guidance.contains("Vulkan"));
+    assert!(summary.no_full_action_authoritative_claim);
+    assert!(summary.cpu_shadow_gate_preserved);
+    summary.validate().unwrap();
+}
+
+#[test]
+fn ca42_runtime_prereq_forced_gpu_unavailable_is_clear_and_require_gpu_blocks() {
+    let _guard = gpu_plasticity_env_lock();
+    std::env::set_var("ALIFE_GPU_RUNTIME_AVAILABLE", "0");
+    let options = RuntimePrereqDiagnosticsOptions::new(
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        false,
+        "dx12",
+        "target/artifacts/ca42_runtime_prereq/test_forced_fallback.log",
+    );
+    let summary = run_runtime_prereq_diagnostics(&options).unwrap();
+    std::env::remove_var("ALIFE_GPU_RUNTIME_AVAILABLE");
+
+    assert_eq!(
+        summary.requested_gpu_mode,
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
+    );
+    assert_eq!(summary.selected_backend, "CpuReference");
+    assert!(summary.fallback_reason.is_some());
+    assert!(!summary.would_block_launch);
+    assert!(summary.cpu_fallback_degraded_visible);
+    assert!(summary.cpu_shadow_gate_preserved);
+    assert!(summary.no_full_action_authoritative_claim);
+    summary.validate().unwrap();
+
+    std::env::set_var("ALIFE_GPU_RUNTIME_AVAILABLE", "0");
+    let require_options = RuntimePrereqDiagnosticsOptions::new(
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+        true,
+        "dx12",
+        "target/artifacts/ca42_runtime_prereq/test_require_gpu.log",
+    );
+    let require_summary = run_runtime_prereq_diagnostics(&require_options).unwrap();
+    std::env::remove_var("ALIFE_GPU_RUNTIME_AVAILABLE");
+
+    assert!(require_summary.would_block_launch);
+    assert!(require_summary.fallback_reason.is_some());
+    assert!(require_summary
+        .missing_driver_guidance
+        .contains("-RequireGpu"));
+    require_summary.validate().unwrap();
+}
+
+#[test]
+fn ca42_launcher_scripts_run_preflight_and_keep_artifacts_untracked() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let repo_script =
+        std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
+    let package_runner =
+        std::fs::read_to_string(root.join("scripts/run_windows_alpha_package.ps1")).unwrap();
+    let platform_docs =
+        std::fs::read_to_string(root.join("docs/playable_sim_spec/platform_packaging.md")).unwrap();
+
+    for text in [&repo_script, &package_runner] {
+        assert!(text.contains("runtime-prereq-smoke"));
+        assert!(text.contains("--graphics-backend"));
+        assert!(text.contains("--log"));
+        assert!(text.contains("Runtime preflight log"));
+        assert!(text.contains("PreflightExitCode"));
+        assert!(text.contains("-RequireGpu") || text.contains("$RequireGpu"));
+        assert!(!text.contains("bash scripts/check.sh"));
+        assert!(!text.contains("Tee-Object -FilePath $PreflightLog"));
+    }
+
+    assert!(repo_script.contains("target/artifacts/ca42_runtime_prereq"));
+    assert!(package_runner.contains("diagnostics/runtime_prereq.log"));
+    assert!(platform_docs.contains("runtime-prereq-smoke"));
+    assert!(platform_docs.contains("Runtime preflight log"));
+
+    let summary = run_platform_package_smoke().unwrap();
+    assert!(summary
+        .commands
+        .iter()
+        .any(|command| command.id == "ca42-runtime-prereq-smoke"
+            && command.windows_command.contains("runtime-prereq-smoke")));
+    assert!(!summary.generated_artifacts_tracked);
 }
 
 #[test]
