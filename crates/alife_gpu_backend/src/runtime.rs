@@ -274,11 +274,32 @@ impl GpuRuntimeBackendConfig {
 pub fn probe_local_wgpu_runtime(
     requested_backend: GpuRuntimeBackendKind,
 ) -> GpuRuntimeHardwareProbe {
-    pollster::block_on(probe_local_wgpu_runtime_async(requested_backend))
+    probe_local_wgpu_runtime_with_backends(requested_backend, None)
+}
+
+pub fn probe_local_wgpu_runtime_for_graphics_backend(
+    requested_backend: GpuRuntimeBackendKind,
+    graphics_backend: &str,
+) -> GpuRuntimeHardwareProbe {
+    let backends = match graphics_backend.trim().to_ascii_lowercase().as_str() {
+        "dx12" | "d3d12" => Some(wgpu::Backends::DX12),
+        "vulkan" | "vk" => Some(wgpu::Backends::VULKAN),
+        "auto" | "existing" | "" => None,
+        _ => None,
+    };
+    probe_local_wgpu_runtime_with_backends(requested_backend, backends)
+}
+
+pub fn probe_local_wgpu_runtime_with_backends(
+    requested_backend: GpuRuntimeBackendKind,
+    backends: Option<wgpu::Backends>,
+) -> GpuRuntimeHardwareProbe {
+    pollster::block_on(probe_local_wgpu_runtime_async(requested_backend, backends))
 }
 
 async fn probe_local_wgpu_runtime_async(
     requested_backend: GpuRuntimeBackendKind,
+    backends: Option<wgpu::Backends>,
 ) -> GpuRuntimeHardwareProbe {
     if requested_backend == GpuRuntimeBackendKind::CpuReference {
         return GpuRuntimeHardwareProbe {
@@ -299,7 +320,13 @@ async fn probe_local_wgpu_runtime_async(
         };
     }
 
-    let instance = wgpu::Instance::default();
+    let instance = if let Some(backends) = backends {
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+        descriptor.backends = backends;
+        wgpu::Instance::new(descriptor)
+    } else {
+        wgpu::Instance::default()
+    };
     let adapter = match instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,

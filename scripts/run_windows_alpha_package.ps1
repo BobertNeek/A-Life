@@ -15,6 +15,8 @@ $ErrorActionPreference = "Stop"
 $PackageRoot = Split-Path -Parent $PSCommandPath
 $Exe = Join-Path $PackageRoot "alife_game_app.exe"
 $Manifest = Join-Path $PackageRoot "crates/alife_game_app/environment_manifest.json"
+$EffectiveGraphicsBackend = $GraphicsBackend
+$PreflightLog = Join-Path $PackageRoot "diagnostics/runtime_prereq.log"
 
 $Args = @(
     "graphical-playground",
@@ -66,6 +68,22 @@ if ($IsWindowsHost) {
     }
 }
 
+$PreflightArgs = @(
+    "runtime-prereq-smoke",
+    "--gpu-mode",
+    $GpuMode,
+    "--graphics-backend",
+    $EffectiveGraphicsBackend,
+    "--log",
+    $PreflightLog
+)
+if ($RequireGpu) {
+    $PreflightArgs += "--require-gpu"
+}
+Write-Host "Runtime preflight log: $PreflightLog"
+Write-Host "Runtime preflight command:"
+Write-Host ((@($Exe) + $PreflightArgs) -join " ")
+
 $DisplayCommand = @($Exe) + $Args
 Write-Host "Package command:"
 Write-Host ($DisplayCommand -join " ")
@@ -85,6 +103,14 @@ if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) {
 }
 if (-not (Test-Path -LiteralPath $Manifest -PathType Leaf)) {
     throw "A-Life package environment manifest is missing: $Manifest"
+}
+
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $PreflightLog) | Out-Null
+& $Exe @PreflightArgs
+$PreflightExitCode = $LASTEXITCODE
+if ($PreflightExitCode -ne 0) {
+    Write-Error "A-Life runtime preflight failed. See $PreflightLog"
+    exit $PreflightExitCode
 }
 
 & $Exe @Args

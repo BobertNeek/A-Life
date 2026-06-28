@@ -14,6 +14,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+$EffectiveGraphicsBackend = $GraphicsBackend
 
 if ($SmokeSeconds -gt 0) {
     $ModeArgs = @("graphical-playground")
@@ -34,6 +35,7 @@ if ($RequireGpu) {
 }
 
 $FeatureList = if ($GpuMode -eq "cpu-reference") { "bevy-app" } else { "bevy-app gpu-runtime" }
+$PreflightLog = Join-Path $Root "target/artifacts/ca42_runtime_prereq/runtime_prereq.log"
 
 function Format-CommandArgument {
     param([string]$Value)
@@ -126,12 +128,47 @@ if ($IsWindowsHost -and [string]::IsNullOrWhiteSpace($env:ALIFE_SHOW_VULKAN_LOAD
     Write-Host "Log filter: hiding non-fatal Vulkan loader layer noise from injected overlays. Set ALIFE_SHOW_VULKAN_LOADER_LOGS=1 for diagnostics."
 }
 
+$PreflightCommand = @(
+    "cargo",
+    "run",
+    "-p",
+    "alife_game_app",
+    "--features",
+    $FeatureList,
+    "--bin",
+    "alife_game_app",
+    "--",
+    "runtime-prereq-smoke",
+    "--gpu-mode",
+    $GpuMode,
+    "--graphics-backend",
+    $EffectiveGraphicsBackend,
+    "--log",
+    $PreflightLog
+)
+if ($RequireGpu) {
+    $PreflightCommand += "--require-gpu"
+}
+
+Write-Host "Runtime preflight log: $PreflightLog"
+Write-Host "Runtime preflight command:"
+Write-Host (($PreflightCommand | ForEach-Object { Format-CommandArgument $_ }) -join " ")
+
 if ($DryRun) {
     exit 0
 }
 
 Push-Location $Root
 try {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $PreflightLog) | Out-Null
+    $PreflightArgs = $PreflightCommand[1..($PreflightCommand.Length - 1)]
+    & $PreflightCommand[0] @PreflightArgs
+    $PreflightExitCode = $LASTEXITCODE
+    if ($PreflightExitCode -ne 0) {
+        Write-Error "A-Life runtime preflight failed. See $PreflightLog"
+        exit $PreflightExitCode
+    }
+
     $Args = $Command[1..($Command.Length - 1)]
     & $Command[0] @Args
     exit $LASTEXITCODE
