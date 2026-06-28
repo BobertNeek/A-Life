@@ -10,6 +10,7 @@ use crate::{
     ca19_graphical_ecology_summary, default_app_bundle_manifest_path, validate_app_bundle_manifest,
     AppShellLaunchConfig, GameAppShellError, CA37_MIN_PALETTE_MATERIALS,
     CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES, CA37_MIN_WORLD_DRESSING_PROPS,
+    CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES, CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES,
     CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES, CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES,
     CA37_WORLD_ART_STYLE_SCHEMA, CA37_WORLD_ART_STYLE_SCHEMA_VERSION,
 };
@@ -47,6 +48,12 @@ pub struct Ca37WorldArtStyleSummary {
     pub visual_map_height_tiles: usize,
     pub visual_map_tile_count: usize,
     pub visual_map_span_world_units: f32,
+    pub viewport_width_tiles: usize,
+    pub viewport_height_tiles: usize,
+    pub viewport_tile_count: usize,
+    pub map_to_viewport_tile_ratio: f32,
+    pub local_viewport_is_smaller_than_map: bool,
+    pub offscreen_stable_world_object_count: usize,
     pub true_large_world_exploration: bool,
     pub camera_can_pan_large_world: bool,
     pub distributed_stable_world_objects: bool,
@@ -74,6 +81,13 @@ impl Ca37WorldArtStyleSummary {
             || self.visual_map_height_tiles < CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES
             || self.visual_map_tile_count < CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES
             || self.visual_map_span_world_units < 60.0
+            || self.viewport_width_tiles != CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES
+            || self.viewport_height_tiles != CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES
+            || self.viewport_tile_count
+                != CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES * CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES
+            || self.map_to_viewport_tile_ratio < 20.0
+            || !self.local_viewport_is_smaller_than_map
+            || self.offscreen_stable_world_object_count < 4
             || !self.true_large_world_exploration
             || !self.camera_can_pan_large_world
             || !self.distributed_stable_world_objects
@@ -98,13 +112,16 @@ impl Ca37WorldArtStyleSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:seed={}:palette={}:props={}:visual_tiles={}:span={:.1}:zones={}:resource={}:hazard={}:explore={}:display_only={}:claim={}",
+            "{}:{}:seed={}:palette={}:props={}:visual_tiles={}:viewport={}:ratio={:.1}:offscreen={}:span={:.1}:zones={}:resource={}:hazard={}:explore={}:display_only={}:claim={}",
             self.schema,
             self.schema_version,
             self.seed,
             self.palette.len(),
             self.dressing_props.len(),
             self.visual_map_tile_count,
+            self.viewport_tile_count,
+            self.map_to_viewport_tile_ratio,
+            self.offscreen_stable_world_object_count,
             self.visual_map_span_world_units,
             self.ecology_zone_count,
             self.resource_zone_materials,
@@ -123,11 +140,15 @@ impl Ca37WorldArtStyleSummary {
             .collect::<Vec<_>>()
             .join(" ");
         format!(
-            "World Map: seeded procedural terrain {}x{} tiles span~{:.0}u seed={}\nMaterials: {}\nExploration: stable-ID creatures/resources/hazards distributed; camera pan enabled\nBoundary: terrain guides placement; actions still use world/core arbitration",
+            "World Map: seeded procedural terrain {}x{} tiles span~{:.0}u seed={}\nViewport: local camera slice {}x{} tiles, ratio {:.1}:1, off-screen stable objects={}\nMaterials: {}\nExploration: pan/follow to leave this slice; stable-ID creatures/resources/hazards distributed\nBoundary: terrain guides placement; actions still use world/core arbitration",
             self.visual_map_width_tiles,
             self.visual_map_height_tiles,
             self.visual_map_span_world_units,
             self.seed,
+            self.viewport_width_tiles,
+            self.viewport_height_tiles,
+            self.map_to_viewport_tile_ratio,
+            self.offscreen_stable_world_object_count,
             materials
         )
     }
@@ -169,7 +190,15 @@ pub fn ca37_world_art_style_summary(
         visual_map_width_tiles: CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES,
         visual_map_height_tiles: CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
         visual_map_tile_count: CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
-        visual_map_span_world_units: 62.0,
+        visual_map_span_world_units: 96.0,
+        viewport_width_tiles: CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES,
+        viewport_height_tiles: CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES,
+        viewport_tile_count: CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES
+            * CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES,
+        map_to_viewport_tile_ratio: CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES as f32
+            / (CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES * CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES) as f32,
+        local_viewport_is_smaller_than_map: true,
+        offscreen_stable_world_object_count: ca37_offscreen_stable_world_object_count(&save),
         true_large_world_exploration: true,
         camera_can_pan_large_world: true,
         distributed_stable_world_objects: ca37_has_distributed_world_objects(&save),
@@ -187,6 +216,18 @@ pub fn ca37_world_art_style_summary(
     };
     summary.validate()?;
     Ok(summary)
+}
+
+fn ca37_offscreen_stable_world_object_count(save: &PortableSaveFile) -> usize {
+    let half_viewport_x = CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES as f32 * 0.5;
+    let half_viewport_z = CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES as f32 * 0.5;
+    save.world
+        .objects
+        .iter()
+        .filter(|object| {
+            object.position.x.abs() > half_viewport_x || object.position.z.abs() > half_viewport_z
+        })
+        .count()
 }
 
 fn ca37_has_distributed_world_objects(save: &PortableSaveFile) -> bool {

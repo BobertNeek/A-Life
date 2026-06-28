@@ -273,13 +273,17 @@ fn run() -> Result<String, String> {
             let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
             let summary = run_world_art_style_smoke(&launch).map_err(|err| err.to_string())?;
             Ok(format!(
-                "CA37 world art schema={} version={} seed={} palette={} props={} tiles={} span_world_units={:.1} large_world_exploration={} distributed_objects={} zones={} resource_materials={} hazard_materials={} manifest_validated={} placeholder_art_entries={} display_only={} claim={} signature={}",
+                "CA37 world art schema={} version={} seed={} palette={} props={} tiles={} viewport={}x{} ratio={:.1} offscreen_objects={} span_world_units={:.1} large_world_exploration={} distributed_objects={} zones={} resource_materials={} hazard_materials={} manifest_validated={} placeholder_art_entries={} display_only={} claim={} signature={}",
                 summary.schema,
                 summary.schema_version,
                 summary.seed,
                 summary.palette.len(),
                 summary.dressing_props.len(),
                 summary.visual_map_tile_count,
+                summary.viewport_width_tiles,
+                summary.viewport_height_tiles,
+                summary.map_to_viewport_tile_ratio,
+                summary.offscreen_stable_world_object_count,
                 summary.visual_map_span_world_units,
                 summary.true_large_world_exploration,
                 summary.distributed_stable_world_objects,

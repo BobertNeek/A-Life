@@ -65,7 +65,8 @@ use alife_game_app::{
     CA34_SAMPLED_GPU_RUNTIME_SCHEMA, CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
     CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA, CA36_SOAK_ISOLATION_SCHEMA_VERSION,
     CA37_MIN_PALETTE_MATERIALS, CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
-    CA37_MIN_WORLD_DRESSING_PROPS, CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
+    CA37_MIN_WORLD_DRESSING_PROPS, CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES,
+    CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES, CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
     CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES, CA37_WORLD_ART_STYLE_SCHEMA,
     CA37_WORLD_ART_STYLE_SCHEMA_VERSION, CA38_CREATURE_ANIMATION_SCHEMA,
     CA38_CREATURE_ANIMATION_SCHEMA_VERSION, CA38_REQUIRED_ANIMATION_STATES,
@@ -662,6 +663,21 @@ fn ca37_world_art_style_smoke_validates_palette_props_and_manifest() {
         CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES
     );
     assert!(summary.visual_map_span_world_units >= 60.0);
+    assert_eq!(
+        summary.viewport_width_tiles,
+        CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES
+    );
+    assert_eq!(
+        summary.viewport_height_tiles,
+        CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES
+    );
+    assert_eq!(
+        summary.viewport_tile_count,
+        CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES * CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES
+    );
+    assert!(summary.map_to_viewport_tile_ratio > 20.0);
+    assert!(summary.local_viewport_is_smaller_than_map);
+    assert!(summary.offscreen_stable_world_object_count >= 4);
     assert!(summary.true_large_world_exploration);
     assert!(summary.camera_can_pan_large_world);
     assert!(summary.distributed_stable_world_objects);
@@ -694,7 +710,10 @@ fn ca37_world_art_style_smoke_validates_palette_props_and_manifest() {
 
     let overlay = summary.compact_overlay_text();
     assert!(overlay.contains("World Map: seeded procedural terrain"));
-    assert!(overlay.contains("Exploration: stable-ID creatures/resources/hazards distributed"));
+    assert!(overlay.contains("Viewport: local camera slice"));
+    assert!(overlay.contains("off-screen stable objects"));
+    assert!(overlay.contains("Exploration: pan/follow to leave this slice"));
+    assert!(overlay.contains("stable-ID creatures/resources/hazards distributed"));
     assert!(!overlay.contains("Entity("));
     assert!(!overlay.contains("full action-authoritative"));
     summary.validate().unwrap();
@@ -761,6 +780,9 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(art_summary.display_only);
     assert!(art_summary.stable_ids_only);
     assert!(art_summary.no_physics_or_sensory_changes);
+    assert!(art_summary.local_viewport_is_smaller_than_map);
+    assert!(art_summary.map_to_viewport_tile_ratio > 20.0);
+    assert!(art_summary.offscreen_stable_world_object_count >= 4);
 
     let mut query = app
         .world_mut()
@@ -783,6 +805,8 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     let tiles = tile_query.iter(app.world()).copied().collect::<Vec<_>>();
     assert_eq!(tiles.len(), CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES);
     assert!(tiles.iter().all(|tile| tile.display_only));
+    assert!(tiles.iter().all(|tile| tile.viewport_slice));
+    assert!(tiles.iter().all(|tile| tile.tile_size_pixels >= 100.0));
     assert!(tiles.iter().any(|tile| tile.tile_x <= -20));
     assert!(tiles.iter().any(|tile| tile.tile_x >= 20));
     assert!(tiles.iter().any(|tile| tile.tile_z <= -15));
@@ -825,8 +849,11 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     };
     let player_hud = alife_game_app::bevy_shell::graphical_player_status_overlay_text(&panel, &gpu);
     assert!(overlay.contains("World Map: seeded procedural terrain"));
+    assert!(overlay.contains("Viewport: local camera slice"));
+    assert!(overlay.contains("off-screen stable objects"));
     assert!(overlay.contains("stable-ID creatures/resources/hazards distributed"));
-    assert!(legend.contains("seeded large terrain"));
+    assert!(legend.contains("Viewport: local camera slice"));
+    assert!(legend.contains("off-screen stable-ID food"));
     assert!(legend.contains("Terrain guides placement"));
     assert!(controls.contains("Controls: click"));
     assert!(controls.contains("[!] hazard"));
@@ -5550,8 +5577,8 @@ fn bevy_feature_s04_readability_feedback_is_display_only() {
     assert!(legend.contains("[+] food"));
     assert!(legend.contains("[!] hazard"));
     assert!(legend.contains("[#] obstacle/rock"));
-    assert!(legend.contains("seeded large terrain"));
-    assert!(legend.contains("distributed stable-ID food, hazards, and obstacles"));
+    assert!(legend.contains("Viewport: local camera slice"));
+    assert!(legend.contains("off-screen stable-ID food, hazards, obstacles"));
     assert!(legend.contains("world/core arbitration still owns actions"));
 
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();
