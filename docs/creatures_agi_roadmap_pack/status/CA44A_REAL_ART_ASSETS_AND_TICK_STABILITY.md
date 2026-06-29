@@ -111,10 +111,13 @@ Default Player View now uses asset-backed sprites for required visual roles:
 Rectangle fallback remains available only for degraded diagnostics or non-player debug paths. Player View tests assert that required roles are backed by alpha art components and fallback rectangle components are absent.
 
 The Player View terrain renderer now keeps the deterministic `97x73` seeded
-terrain field virtual while the default player presentation uses the painted
-1280x720 backdrop for the visible terrain plate. Procedural terrain/content
-still exists in the field ledger and remains display/context substrate, but the
-default view no longer exposes visible debug-grid tiles over the art. The
+terrain field virtual while the current default player presentation uses the
+1280x720 painted procedural viewport as the primary game-map surface. Active
+local chunk samples are still materialized and mirrored as very low-opacity
+alpha-art terrain masks with chunk provenance, avoiding the rejected
+translucent-card tile stack. Procedural terrain/content exists in the field
+ledger and as the rendered local slice, but offscreen terrain remains data-only
+until creature anchors or the camera require materialization. The
 terrain/content layers remain display-only; they are not physics, navigation,
 sensory, cognition, ecology, neural, or action authority.
 
@@ -211,16 +214,17 @@ Result: PASS. These tests verify asset-backed terrain, opacity below
 debug-block levels, chunk provenance, and virtual-map materialization near
 active view/creature anchors.
 
-Painted Player View / target-match focused tests:
+Procedural Player View / target-match focused tests:
 
 ```powershell
 cargo test -p alife_game_app --features bevy-app production_player_view_default_camera_is_world_establishing -- --nocapture
-cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_starts_with_wide_painted_map_camera -- --nocapture
+cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_starts_with_rendered_procedural_chunk_window -- --nocapture
 cargo test -p alife_game_app --features bevy-app --test app_shell procedural_world_content_uses_alpha_art_and_no_action_authority -- --nocapture
 ```
 
-Result: PASS. These tests verify the wide default camera, painted map presence,
-and generated content visual layer without action authority.
+Result: PASS. These tests verify the wide default camera, rendered procedural
+terrain chunk window, and generated content visual layer without action
+authority.
 
 Manual screenshot comparison used untracked local evidence:
 
@@ -326,8 +330,10 @@ or code failure.
 
 - The art pack is a small alpha pack, not a final production art direction.
 - PNG sprites are intentionally small and stylized.
-- Player View uses asset-backed sprites and a painted backdrop, but future CA
-  work may still improve animation, camera polish, and larger-world exploration.
+- Player View uses asset-backed sprites and a painted procedural viewport with
+  low-opacity chunk masks. Future CA work still needs camera paging polish,
+  long-lived offscreen region policy, and richer creature exploration across
+  many chunks.
 - Procedural terrain currently improves graphical presentation and active-chunk
   rendering. It is not yet an authoritative Minecraft-like biome/chunk substrate
   for creature sensory, navigation, resource spawning, learning, or offscreen
