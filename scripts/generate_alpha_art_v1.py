@@ -217,6 +217,67 @@ def creature_hurt() -> Image:
     return img
 
 
+def creature_moving() -> Image:
+    img = Image()
+    img.shadow(68, 94, 35, 8, 88)
+    img.ellipse(66, 68, 32, 21, rgba("55d7e3", 255))
+    img.ellipse(53, 61, 24, 18, rgba("8af5ef", 230))
+    img.ellipse(82, 60, 12, 11, rgba("43b7d0", 230))
+    for x, y in [(37, 86), (73, 89), (90, 78)]:
+        img.ellipse(x, y, 8, 4, rgba("237b95", 210))
+    img.line(43, 43, 30, 25, 3.0, rgba("237b95", 230))
+    img.line(83, 42, 102, 31, 3.2, rgba("237b95", 230))
+    img.ellipse(28, 24, 4.0, 4.0, rgba("d7fffb", 230))
+    img.ellipse(104, 30, 4.2, 4.2, rgba("d7fffb", 230))
+    img.ellipse(47, 55, 4.6, 5.4, rgba("092d35", 255))
+    img.ellipse(72, 55, 4.4, 5.2, rgba("092d35", 255))
+    for y, alpha in [(50, 70), (62, 55), (75, 42)]:
+        img.line(19, y, 5, y + 4, 2.1, rgba("b8fff8", alpha))
+    return img
+
+
+def creature_eat() -> Image:
+    img = Image()
+    creature_body(img, "58d6dd", "2d9ab8", "71dacb", False)
+    img.ellipse(83, 66, 10, 7, rgba("0b3b3f", 210))
+    img.line(87, 69, 107, 76, 3.0, rgba("44ae52", 230))
+    leaf(img, 111, 73, -0.2, 22, 10, "8de45f", 245)
+    img.ellipse(102, 65, 5, 4, rgba("ff6d96", 235))
+    img.ellipse(70, 84, 12, 4, rgba("3bcf7d", 125))
+    return img
+
+
+def creature_sleep() -> Image:
+    img = Image()
+    img.shadow(64, 92, 34, 9, 85)
+    img.ellipse(64, 72, 34, 21, rgba("58cbd5", 255))
+    img.ellipse(52, 69, 20, 15, rgba("a8f4ee", 225))
+    img.ellipse(82, 74, 18, 14, rgba("2d98b6", 230))
+    img.ellipse(50, 67, 4, 1.6, rgba("0b3740", 230))
+    img.ellipse(73, 66, 4, 1.6, rgba("0b3740", 230))
+    img.line(41, 50, 28, 40, 2.5, rgba("2d98b6", 190))
+    img.line(86, 52, 99, 42, 2.5, rgba("2d98b6", 190))
+    for i, (x, y) in enumerate([(95, 31), (106, 22), (113, 13)]):
+        img.line(x - 6, y, x + 5, y, 2.0, rgba("eaffff", 155 + i * 25))
+        img.line(x + 5, y, x - 5, y + 7, 2.0, rgba("eaffff", 155 + i * 25))
+        img.line(x - 5, y + 7, x + 6, y + 7, 2.0, rgba("eaffff", 155 + i * 25))
+    return img
+
+
+def creature_signal() -> Image:
+    img = Image()
+    creature_body(img, "5dd9dd", "2c96b0", "70decf", False)
+    for radius, alpha in [(24, 72), (36, 45), (49, 28)]:
+        for a in range(205, 336, 9):
+            rad = math.radians(a)
+            x = 65 + math.cos(rad) * radius
+            y = 52 + math.sin(rad) * radius * 0.62
+            img.ellipse(x, y, 1.8, 1.4, rgba("fbf2b8", alpha))
+    img.polygon([(88, 30), (115, 27), (108, 45), (93, 44)], rgba("fff0b2", 190))
+    img.line(93, 44, 85, 53, 2.0, rgba("fff0b2", 160))
+    return img
+
+
 def selection_ring() -> Image:
     img = Image()
     img.shadow(64, 74, 42, 10, 50)
@@ -233,6 +294,19 @@ def selection_ring() -> Image:
     return img
 
 
+def selection_pulse() -> Image:
+    img = Image()
+    for radius, alpha, width in [(50, 60, 3.2), (42, 120, 2.6), (34, 92, 1.8)]:
+        for a in range(0, 360, 4):
+            rad = math.radians(a)
+            x = 64 + math.cos(rad) * radius
+            y = 66 + math.sin(rad) * radius * 0.50
+            img.ellipse(x, y, width, width * 0.58, rgba("7fffd8", alpha))
+    for x, y in [(30, 50), (98, 50), (42, 83), (86, 83)]:
+        img.ellipse(x, y, 4.2, 2.2, rgba("fff7a2", 170))
+    return img
+
+
 def food() -> Image:
     img = Image()
     img.shadow(65, 94, 21, 7, 78)
@@ -246,6 +320,15 @@ def food() -> Image:
     return img
 
 
+def food_bloom() -> Image:
+    img = food()
+    for angle in [0.0, 1.25, 2.45, 3.75, 5.0]:
+        leaf(img, 64 + math.cos(angle) * 9, 43 + math.sin(angle) * 5, angle, 20, 9, "f8d36b", 215)
+    img.ellipse(64, 43, 8, 7, rgba("ff7aa7", 245))
+    img.ellipse(61, 40, 2, 2, rgba("fff3ce", 240))
+    return img
+
+
 def hazard() -> Image:
     img = Image()
     img.shadow(66, 106, 30, 9, 110)
@@ -256,6 +339,20 @@ def hazard() -> Image:
     img.polygon([(64, 28), (77, 63), (63, 96), (51, 66)], rgba("ffd08e", 200))
     for x, h in [(26, 21), (103, 28), (79, 18), (42, 16)]:
         img.polygon([(x, 87), (x + 7, 113), (x - 9, 113)], rgba("cf2732", 215))
+    return img
+
+
+def hazard_glow() -> Image:
+    img = Image()
+    for r, alpha in [(48, 35), (38, 50), (27, 65)]:
+        img.ellipse(64, 70, r, r * 0.72, rgba("ff3136", alpha))
+    base = hazard()
+    for y in range(CANVAS):
+        for x in range(CANVAS):
+            src = base.pixels[y][x]
+            if src[3] > 0:
+                img.set(x, y, src)
+    img.polygon([(65, 18), (76, 62), (63, 91), (53, 63)], rgba("fff2b0", 235))
     return img
 
 
@@ -337,9 +434,16 @@ def prop_leaf() -> Image:
 ASSETS = [
     ("creature_idle", "creature-idle", "sprite", creature_idle),
     ("creature_hurt", "creature-hurt", "sprite", creature_hurt),
+    ("creature_moving", "creature-moving", "sprite", creature_moving),
+    ("creature_eat", "creature-eat", "sprite", creature_eat),
+    ("creature_sleep", "creature-sleep", "sprite", creature_sleep),
+    ("creature_signal", "creature-signal", "sprite", creature_signal),
     ("selection_ring", "selection-ring", "selection", selection_ring),
+    ("selection_pulse", "selection-pulse", "selection", selection_pulse),
     ("food_sprout", "food", "sprite", food),
+    ("food_bloom", "food-variant", "sprite", food_bloom),
     ("hazard_crystal", "hazard", "sprite", hazard),
+    ("hazard_glow", "hazard-active", "sprite", hazard_glow),
     ("rock_cluster", "rock-obstacle", "sprite", rock),
     ("terrain_safe_grass", "terrain-safe-grass", "terrain-tile", lambda: tile("275d2e", ["3d7839", "173d22", "6da448", "9dbe57"], 11, "grass")),
     ("terrain_soil_path", "terrain-soil-path", "terrain-tile", lambda: tile("6a4a2d", ["8a6237", "4d3625", "a57b49", "c09a5a"], 23, "soil")),
@@ -375,7 +479,7 @@ def main() -> None:
         "schema": "alife.ca44a.alpha_art_manifest.v1",
         "schema_version": 1,
         "pack_id": "alpha-art-v1",
-        "art_direction": "production-alpha-organic-topdown-v2",
+        "art_direction": "production-alpha-organic-topdown-v3",
         "entries": entries,
     }
     (OUT / "alpha_art_manifest.json").write_text(

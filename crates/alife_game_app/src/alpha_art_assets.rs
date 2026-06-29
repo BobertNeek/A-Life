@@ -18,9 +18,16 @@ pub const CA44A_ALPHA_ART_MANIFEST_RELATIVE_PATH: &str =
 pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_ROLES] = [
     "creature-idle",
     "creature-hurt",
+    "creature-moving",
+    "creature-eat",
+    "creature-sleep",
+    "creature-signal",
     "selection-ring",
+    "selection-pulse",
     "food",
+    "food-variant",
     "hazard",
+    "hazard-active",
     "rock-obstacle",
     "terrain-safe-grass",
     "terrain-soil-path",
@@ -30,7 +37,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "prop-dressing",
 ];
 
-pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v2";
+pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v3";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {

@@ -2108,6 +2108,7 @@ fn ca44a_committed_alpha_art_manifest_validates_required_roles_and_pngs() {
         summary.schema_version,
         alife_game_app::CA44A_ALPHA_ART_MANIFEST_SCHEMA_VERSION
     );
+    assert!(summary.entry_count >= 22);
     assert!(summary.required_roles_present);
     assert!(summary.prop_variant_count >= 3);
     assert!(summary.largest_file_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_ASSET_BYTES);
@@ -2204,6 +2205,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "hazard",
         "rock-obstacle",
         "selection-ring",
+        "selection-pulse",
         "terrain-safe-grass",
         "terrain-soil-path",
         "terrain-resource-grove",
@@ -2230,6 +2232,56 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
     assert!(badge_query
         .iter(app.world())
         .all(|(visibility, _)| *visibility == bevy::prelude::Visibility::Hidden));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn production_alpha_art_pose_mapping_uses_committed_animation_frames() {
+    let cases = [
+        (
+            CreatureAnimationState::Idle,
+            CreatureExpressionState::Neutral,
+            "creature-idle",
+        ),
+        (
+            CreatureAnimationState::Moving,
+            CreatureExpressionState::Energized,
+            "creature-moving",
+        ),
+        (
+            CreatureAnimationState::Interacting,
+            CreatureExpressionState::Hungry,
+            "creature-eat",
+        ),
+        (
+            CreatureAnimationState::Sleeping,
+            CreatureExpressionState::Tired,
+            "creature-sleep",
+        ),
+        (
+            CreatureAnimationState::Signaling,
+            CreatureExpressionState::Curious,
+            "creature-signal",
+        ),
+        (
+            CreatureAnimationState::Inspecting,
+            CreatureExpressionState::Curious,
+            "creature-signal",
+        ),
+        (
+            CreatureAnimationState::Hurt,
+            CreatureExpressionState::Pained,
+            "creature-hurt",
+        ),
+    ];
+
+    for (animation, expression, expected_role) in cases {
+        let pose = alife_game_app::ca38_creature_pose_for_state(animation, expression);
+        assert_eq!(
+            alife_game_app::bevy_shell::ca44a_creature_art_role_for_pose(pose),
+            expected_role
+        );
+    }
 }
 
 #[test]
