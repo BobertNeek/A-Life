@@ -78,9 +78,16 @@ pub struct GraphicalAlphaArtFallbackSprite {
 pub struct GraphicalAlphaArtHandles {
     pub creature_idle: Handle<Image>,
     pub creature_hurt: Handle<Image>,
+    pub creature_moving: Handle<Image>,
+    pub creature_eat: Handle<Image>,
+    pub creature_sleep: Handle<Image>,
+    pub creature_signal: Handle<Image>,
     pub selection_ring: Handle<Image>,
+    pub selection_pulse: Handle<Image>,
     pub food: Handle<Image>,
+    pub food_bloom: Handle<Image>,
     pub hazard: Handle<Image>,
+    pub hazard_glow: Handle<Image>,
     pub rock_obstacle: Handle<Image>,
     pub terrain_safe_grass: Handle<Image>,
     pub terrain_soil_path: Handle<Image>,
@@ -98,9 +105,16 @@ impl GraphicalAlphaArtHandles {
         Self {
             creature_idle: asset_server.load("alpha_art_v1/creature_idle.png"),
             creature_hurt: asset_server.load("alpha_art_v1/creature_hurt.png"),
+            creature_moving: asset_server.load("alpha_art_v1/creature_moving.png"),
+            creature_eat: asset_server.load("alpha_art_v1/creature_eat.png"),
+            creature_sleep: asset_server.load("alpha_art_v1/creature_sleep.png"),
+            creature_signal: asset_server.load("alpha_art_v1/creature_signal.png"),
             selection_ring: asset_server.load("alpha_art_v1/selection_ring.png"),
+            selection_pulse: asset_server.load("alpha_art_v1/selection_pulse.png"),
             food: asset_server.load("alpha_art_v1/food_sprout.png"),
+            food_bloom: asset_server.load("alpha_art_v1/food_bloom.png"),
             hazard: asset_server.load("alpha_art_v1/hazard_crystal.png"),
+            hazard_glow: asset_server.load("alpha_art_v1/hazard_glow.png"),
             rock_obstacle: asset_server.load("alpha_art_v1/rock_cluster.png"),
             terrain_safe_grass: asset_server.load("alpha_art_v1/terrain_safe_grass.png"),
             terrain_soil_path: asset_server.load("alpha_art_v1/terrain_soil_path.png"),
@@ -118,9 +132,16 @@ impl GraphicalAlphaArtHandles {
         Self {
             creature_idle: Handle::default(),
             creature_hurt: Handle::default(),
+            creature_moving: Handle::default(),
+            creature_eat: Handle::default(),
+            creature_sleep: Handle::default(),
+            creature_signal: Handle::default(),
             selection_ring: Handle::default(),
+            selection_pulse: Handle::default(),
             food: Handle::default(),
+            food_bloom: Handle::default(),
             hazard: Handle::default(),
+            hazard_glow: Handle::default(),
             rock_obstacle: Handle::default(),
             terrain_safe_grass: Handle::default(),
             terrain_soil_path: Handle::default(),
@@ -1959,6 +1980,17 @@ fn ca44a_object_art_role(kind: WorldObjectKind) -> &'static str {
     }
 }
 
+pub fn ca44a_creature_art_role_for_pose(pose: crate::Ca38CreaturePose) -> &'static str {
+    match pose.pose_id {
+        "pain-flinch" | "flee-alert" => "creature-hurt",
+        "move-lean" => "creature-moving",
+        "eat-reach" => "creature-eat",
+        "sleep-curl" | "rest-low" => "creature-sleep",
+        "social-signal" | "inspect-focus" | "curious-tilt" => "creature-signal",
+        _ => "creature-idle",
+    }
+}
+
 fn ca44a_object_art_handle(
     handles: &GraphicalAlphaArtHandles,
     kind: WorldObjectKind,
@@ -1969,6 +2001,20 @@ fn ca44a_object_art_handle(
         WorldObjectKind::Hazard => handles.hazard.clone(),
         WorldObjectKind::Obstacle => handles.rock_obstacle.clone(),
         WorldObjectKind::Token => handles.prop_warning_shard.clone(),
+    }
+}
+
+fn ca44a_creature_art_handle_for_pose(
+    handles: &GraphicalAlphaArtHandles,
+    pose: crate::Ca38CreaturePose,
+) -> Handle<Image> {
+    match ca44a_creature_art_role_for_pose(pose) {
+        "creature-hurt" => handles.creature_hurt.clone(),
+        "creature-moving" => handles.creature_moving.clone(),
+        "creature-eat" => handles.creature_eat.clone(),
+        "creature-sleep" => handles.creature_sleep.clone(),
+        "creature-signal" => handles.creature_signal.clone(),
+        _ => handles.creature_idle.clone(),
     }
 }
 
@@ -2209,6 +2255,27 @@ fn inspector_local_entity(
             },
             GraphicalSelectionRing,
         ));
+        let selection_pulse = app
+            .world()
+            .get_resource::<GraphicalAlphaArtHandles>()
+            .map(|handles| handles.selection_pulse.clone());
+        if let Some(selection_pulse) = selection_pulse {
+            app.world_mut().spawn((
+                Name::new("A-Life CA44A selected creature pulse"),
+                Sprite {
+                    image: selection_pulse,
+                    color: Color::WHITE,
+                    custom_size: Some(Vec2::new(124.0, 80.0)),
+                    ..default()
+                },
+                Transform::from_xyz(0.0, 0.0, 0.46),
+                GraphicalAlphaArtBackedSprite {
+                    role: "selection-pulse",
+                    stable_id: Some(stable_id),
+                },
+                GraphicalSelectionRing,
+            ));
+        }
     }
     Ok(local_entity)
 }
@@ -2851,13 +2918,7 @@ fn update_graphical_gpu_visual_cues(
                 let pose = ca38_pose_from_runtime(&runtime.panel, &gpu.telemetry);
                 if uses_alpha_art {
                     if let Some(handles) = alpha_art.as_deref() {
-                        sprite.image = if runtime.panel.terminal_recovery_cause.is_some()
-                            || runtime.panel.target_entity == Some(3)
-                        {
-                            handles.creature_hurt.clone()
-                        } else {
-                            handles.creature_idle.clone()
-                        };
+                        sprite.image = ca44a_creature_art_handle_for_pose(handles, pose);
                     }
                     sprite.color = if gpu.telemetry.fallback_reason.is_some() {
                         Color::srgba(0.72, 0.72, 0.68, 1.0)
@@ -2879,14 +2940,31 @@ fn update_graphical_gpu_visual_cues(
             }
             WorldObjectKind::Food if target == Some(marker.stable_id) => {
                 if uses_alpha_art {
+                    if let Some(handles) = alpha_art.as_deref() {
+                        sprite.image = handles.food_bloom.clone();
+                    }
                     sprite.color = Color::WHITE;
                 } else {
                     sprite.color = Color::srgb(1.0, 0.95, 0.28);
                 }
                 transform.scale = Vec3::splat(1.14);
             }
+            WorldObjectKind::Food => {
+                if uses_alpha_art {
+                    if let Some(handles) = alpha_art.as_deref() {
+                        sprite.image = handles.food.clone();
+                    }
+                    sprite.color = Color::WHITE;
+                } else {
+                    sprite.color = Color::srgb(0.62, 1.0, 0.42);
+                }
+                transform.scale = Vec3::splat(1.0);
+            }
             WorldObjectKind::Hazard => {
                 if uses_alpha_art {
+                    if let Some(handles) = alpha_art.as_deref() {
+                        sprite.image = handles.hazard_glow.clone();
+                    }
                     sprite.color = Color::WHITE;
                 } else {
                     sprite.color = Color::srgb(1.0, 0.16, 0.18);

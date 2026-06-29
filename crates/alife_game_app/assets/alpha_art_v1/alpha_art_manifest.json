@@ -2,7 +2,7 @@
   "schema": "alife.ca44a.alpha_art_manifest.v1",
   "schema_version": 1,
   "pack_id": "alpha-art-v1",
-  "art_direction": "production-alpha-organic-topdown-v2",
+  "art_direction": "production-alpha-organic-topdown-v3",
   "entries": [
     {
       "id": "creature_idle",
@@ -23,6 +23,42 @@
       "file_size_bytes": 2671
     },
     {
+      "id": "creature_moving",
+      "role": "creature-moving",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_moving.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 1784
+    },
+    {
+      "id": "creature_eat",
+      "role": "creature-eat",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_eat.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 2833
+    },
+    {
+      "id": "creature_sleep",
+      "role": "creature-sleep",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_sleep.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 1486
+    },
+    {
+      "id": "creature_signal",
+      "role": "creature-signal",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_signal.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 3188
+    },
+    {
       "id": "selection_ring",
       "role": "selection-ring",
       "kind": "selection",
@@ -30,6 +66,15 @@
       "width": 128,
       "height": 128,
       "file_size_bytes": 2928
+    },
+    {
+      "id": "selection_pulse",
+      "role": "selection-pulse",
+      "kind": "selection",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/selection_pulse.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 2049
     },
     {
       "id": "food_sprout",
@@ -41,6 +86,15 @@
       "file_size_bytes": 1415
     },
     {
+      "id": "food_bloom",
+      "role": "food-variant",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/food_bloom.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 2052
+    },
+    {
       "id": "hazard_crystal",
       "role": "hazard",
       "kind": "sprite",
@@ -48,6 +102,15 @@
       "width": 128,
       "height": 128,
       "file_size_bytes": 2387
+    },
+    {
+      "id": "hazard_glow",
+      "role": "hazard-active",
+      "kind": "sprite",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/hazard_glow.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 3504
     },
     {
       "id": "rock_cluster",
