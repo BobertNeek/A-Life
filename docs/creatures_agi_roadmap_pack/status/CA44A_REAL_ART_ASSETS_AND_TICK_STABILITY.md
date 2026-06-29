@@ -132,6 +132,13 @@ highlands, red hazard pressure, small rocks/flowers/crystals/creature hints,
 and no baked giant foreground actors. The Rust validation constant and manifest
 now both require v15.
 
+The post-feedback player-view correction keeps that v15 painted map as the
+dominant visible surface. The fix changed only presentation composition:
+default camera framing now starts with a world-establishing view, terrain masks
+are subtle live-context overlays, and foreground creatures/props/selection
+pulses are small map-scale sprites instead of giant close-up elements. Simulation
+semantics, GPU/CPU correctness rules, and action authority are unchanged.
+
 ## Tests Added/Changed
 
 - Core topology regression for repeated dynamic observations.
@@ -230,6 +237,7 @@ Manual screenshot comparison used untracked local evidence:
 
 ```text
 target/playtest_evidence/visual_fix/player_view_v15_actual_settled.png
+target/playtest_evidence/visual_fix/fresh_window_capture.png
 ```
 
 Result: the actual Bevy window now renders the target-style painted map plate
