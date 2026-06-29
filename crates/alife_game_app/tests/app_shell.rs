@@ -827,25 +827,38 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(field.creature_anchor_count >= 1);
     assert!(!field.active_world_chunks.is_empty());
     assert!(
-        tiles.is_empty(),
-        "default Player View should use the painted world backdrop, not debug terrain tile sprites"
+        tiles.len() >= 17 * 11,
+        "default Player View should render the local procedural chunk window with asset-backed terrain tiles"
     );
+    assert!(tiles.iter().all(|tile| {
+        tile.display_only
+            && tile.viewport_slice
+            && (0.004..=0.015).contains(&tile.opacity)
+            && tile.tile_size_pixels > 0.0
+            && tile.material_id != "debug"
+    }));
     assert!(
         field.materialized_only_near_active_views,
         "large terrain map should remain virtual until active view/creature anchors need chunks"
     );
     assert!(
         field.materialized_tiles.len() >= 17 * 11,
-        "procedural terrain should still be generated in the field ledger even when Player View uses the painted backdrop"
+        "procedural terrain should be generated in the field ledger while Player View renders the active chunk slice"
     );
     let mut chunk_query =
         app.world_mut()
             .query::<&alife_game_app::bevy_shell::GraphicalProceduralTerrainChunkTile>();
     let chunks = chunk_query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert!(
-        chunks.is_empty(),
-        "Player View should not layer terrain chunk tile components over the painted map"
+    assert_eq!(
+        chunks.len(),
+        tiles.len(),
+        "Player View terrain tiles should carry chunk provenance for the rendered active slice"
     );
+    assert!(chunks.iter().all(|chunk| {
+        chunk.creature_authoritative_chunk
+            && !chunk.rendering_required_for_generation
+            && chunk.materialized_only_near_active_views
+    }));
     assert!(field.virtual_map_width_tiles >= 97);
     assert!(field.virtual_map_height_tiles >= 73);
     assert!(
@@ -2295,7 +2308,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "feedback-pain",
         "feedback-sleep",
         "feedback-learning",
-        "world-backdrop",
+        "world-painted-viewport",
         "prop-dressing",
     ] {
         assert!(roles.contains(&role), "missing alpha art role {role}");
@@ -2327,7 +2340,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View feedback pulses should be bounded sprites");
         assert!(
-            size.x <= 42.0 && size.y <= 42.0,
+            size.x <= 18.0 && size.y <= 18.0,
             "Player View feedback pulses must be small pings, not debug slabs: {size:?}"
         );
     }
@@ -2341,7 +2354,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View selection rings should be bounded sprites");
         assert!(
-            size.x <= 50.0 && size.y <= 38.0,
+            size.x <= 34.0 && size.y <= 26.0,
             "selected creature rings must frame the sprite without covering the map: {size:?}"
         );
     }
@@ -2364,7 +2377,7 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         .clone();
     assert!(
         field.materialized_tiles.len() >= 17 * 11,
-        "expected procedural terrain ledger evidence behind the painted Player View"
+        "expected procedural terrain ledger evidence behind the rendered Player View chunk slice"
     );
     assert!(field.materialized_only_near_active_views);
     assert!(field.virtual_map_width_tiles >= 97);
@@ -2382,10 +2395,10 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
     let mut terrain_query = app
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
-    assert_eq!(
-        terrain_query.iter(app.world()).count(),
-        0,
-        "default Player View must not render terrain chunk tile sprites over the painted map"
+    let visible_terrain_count = terrain_query.iter(app.world()).count();
+    assert!(
+        visible_terrain_count >= 17 * 11,
+        "default Player View must render an active procedural terrain chunk slice, not only a painted plate"
     );
 
     let mut layer_query = app
@@ -2397,8 +2410,10 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         "world-art blend layers must not become simulation authority"
     );
     assert!(
-        layers.iter().any(|layer| layer.role == "world-backdrop"),
-        "Player View should include the painted world backdrop behind entities"
+        layers
+            .iter()
+            .any(|layer| layer.role == "world-painted-viewport"),
+        "Player View should use the painted procedural viewport as the primary map surface"
     );
 
     let mut chunk_query =
@@ -2406,8 +2421,8 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
             .query::<&alife_game_app::bevy_shell::GraphicalProceduralTerrainChunkTile>();
     assert_eq!(
         chunk_query.iter(app.world()).count(),
-        0,
-        "default Player View keeps terrain chunk provenance in the resource ledger, not as visible tile entities"
+        visible_terrain_count,
+        "visible terrain entities should be the active chunk materialization, not unrelated debug blocks"
     );
 
     let mut zone_query = app
@@ -2422,7 +2437,7 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
-fn production_player_view_starts_with_wide_painted_map_camera() {
+fn production_player_view_starts_with_rendered_procedural_chunk_window() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
     let (mut app, summary) =
@@ -2431,19 +2446,23 @@ fn production_player_view_starts_with_wide_painted_map_camera() {
 
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
 
-    let mut backdrop_query = app.world_mut().query_filtered::<
-        &bevy::prelude::Sprite,
-        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalProductionArtLayer>,
-    >();
-    let backdrop_sizes = backdrop_query
-        .iter(app.world())
-        .filter_map(|sprite| sprite.custom_size)
-        .filter(|size| size.x >= 1_160.0 && size.y >= 650.0 && size.x <= 1_280.0)
-        .collect::<Vec<_>>();
+    let mut terrain_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
+    let terrain_tiles = terrain_query.iter(app.world()).copied().collect::<Vec<_>>();
     assert!(
-        !backdrop_sizes.is_empty(),
-        "default Player View must fit the high-resolution painted map into the player viewport"
+        terrain_tiles.len() >= 17 * 11,
+        "default Player View must show an active procedural chunk window"
     );
+    assert!(terrain_tiles
+        .iter()
+        .any(|tile| tile.material_id == "resource-grove"));
+    assert!(terrain_tiles
+        .iter()
+        .any(|tile| tile.material_id == "hazard-pressure"));
+    assert!(terrain_tiles
+        .iter()
+        .any(|tile| tile.material_id == "stone-dressing"));
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2541,9 +2560,13 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         .iter()
         .filter(|layer| layer.role == "entity-shadow")
         .count();
-    let backdrop_count = layers
+    let painted_viewport_count = layers
         .iter()
-        .filter(|layer| layer.role == "world-backdrop")
+        .filter(|layer| layer.role == "world-painted-viewport")
+        .count();
+    let terrain_blend_count = layers
+        .iter()
+        .filter(|layer| layer.role == "terrain-edge-blend")
         .count();
 
     assert!(
@@ -2551,8 +2574,12 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         "expected asset-backed entity shadows for visible objects"
     );
     assert!(
-        backdrop_count >= 1,
-        "expected the painted world backdrop to replace visible terrain tile seams"
+        painted_viewport_count >= 1,
+        "expected the painted procedural viewport to be the primary game-map layer"
+    );
+    assert!(
+        terrain_blend_count >= 8,
+        "expected organic blend layers to soften the visible procedural chunk tiles"
     );
 }
 

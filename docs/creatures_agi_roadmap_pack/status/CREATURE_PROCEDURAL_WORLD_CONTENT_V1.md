@@ -40,14 +40,13 @@ committed alpha art pack. Generated content has its own
 not bound as Bevy-authoritative game state, and not allowed to bypass action
 arbitration.
 
-The default Player View now uses the committed
-`world_backdrop_gpu_alpha.png` 1280x720 v15 painted map plate as the visible
-terrain composition, while the procedural terrain/content substrate remains
-available as engine-neutral generation and Bevy display metadata. This fixes
-the earlier flat-green fallback view and replaces the noisy v12 backdrop with a
-target-style top-down alpha map composition: green playable center, narrow dirt
-paths, gray rough terrain, red hazard pressure, dense groves, rocks, food, and
-small creatures.
+The default Player View now treats the committed
+`world_backdrop_gpu_alpha.png` as the primary painted procedural viewport while
+the engine-neutral `alife_world` terrain chunk samples remain the generated
+large-world ledger behind it. Player View mirrors those samples as
+near-invisible material masks rather than high-opacity square cards. This keeps
+the large world virtual outside active creature/camera areas and renders a
+cohesive player-visible slice instead of a debug tile stack.
 
 ## Assets Used
 
@@ -58,7 +57,10 @@ Generated procedural content uses the existing committed alpha art roles:
 - obstacle: `rock_cluster.png` / rock-obstacle role;
 - dressing prop: grass tuft, pebble, warning shard, leaf patch, or mushroom
   variants selected deterministically from material and label.
-- backdrop: `world_backdrop_gpu_alpha.png` / world-backdrop role.
+- painted procedural viewport: `world_backdrop_gpu_alpha.png` /
+  world-painted-viewport runtime role.
+- active terrain chunk masks: terrain safe grass, soil path, resource grove,
+  hazard pressure, stone rough, and edge-blend roles at low player-view opacity.
 
 No new screenshots, generated captures, model files, caches, logs, or target
 artifacts are tracked.
@@ -89,19 +91,17 @@ cargo test -p alife_game_app --features bevy-app --test app_shell production_wor
 
 Result: PASS.
 
-Painted Player View / v15 backdrop regression:
+Procedural Player View / rendered chunk-window regression:
 
 ```powershell
-cargo test -p alife_game_app --features bevy-app production_player_view_default_camera_is_world_establishing -- --nocapture
-cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_starts_with_wide_painted_map_camera -- --nocapture
+cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_starts_with_rendered_procedural_chunk_window -- --nocapture
 cargo run -p alife_game_app --bin alife_game_app -- app-bundle-smoke --manifest crates/alife_game_app/app_bundle_manifest.json
 cargo run -p alife_game_app --bin alife_game_app -- world-art-style-smoke crates/alife_world/tests/fixtures/gpu_alpha
 ```
 
-Result: PASS. The v15 alpha-art manifest and app bundle now validate, so the
-painted backdrop is present in the actual graphical app instead of falling back
-to the flat green ground plane, stale noisy v12 composition, or sparse/washed
-v13 composition.
+Result: PASS. The active Player View now validates that a local procedural
+terrain chunk window is generated and mirrored as low-opacity alpha-art masks,
+with chunk provenance retained and generation still independent of rendering.
 
 Graphical focused smokes:
 
@@ -122,9 +122,10 @@ selected `CpuReference` with degraded mode explicit.
   all saved resources, navigation, sensory ray queries, or offscreen ecology.
 - Bevy mirrors generated candidates with art sprites. Bevy remains
   presentation, not authority.
-- The painted backdrop is a target-style alpha map plate, not yet a streamed
-  authoritative terrain renderer. The procedural chunk/content substrate remains
-  the non-rendering generation layer behind the visible composition.
+- The visible local terrain window is still a bounded player-view slice over a
+  painted procedural viewport. Future work still needs camera paging, creature
+  movement across many chunks, and persistence/aging policies for long-lived
+  generated regions.
 - Generated content IDs intentionally use a high stable-ID range to avoid
   colliding with fixture objects, but future persistence work should formalize
   generated-ID namespaces before saving long-lived worlds.

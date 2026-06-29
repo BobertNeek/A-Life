@@ -90,7 +90,7 @@ The default Player View smoke summary reported:
 - `full_debug_hidden=true`;
 - `event_feed_collapsed=true`;
 - `stable_labels_hidden=true`;
-- `terrain_alpha_max=0.16`;
+- `terrain_alpha_max=0.015`;
 - `internal_spam_hidden=true`;
 - `topology_lines_hidden=true`;
 - `teacher_debug_hidden=true`.
