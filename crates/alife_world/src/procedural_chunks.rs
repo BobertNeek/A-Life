@@ -13,6 +13,8 @@ use crate::WorldObjectKind;
 
 pub const PROCEDURAL_WORLD_CHUNKS_SCHEMA: &str = "alife.ca44a.procedural_world_chunks.v1";
 pub const PROCEDURAL_WORLD_CHUNKS_SCHEMA_VERSION: u16 = 1;
+pub const PROCEDURAL_WORLD_SCALE_SCHEMA: &str = "alife.ca44a.procedural_world_scale.v1";
+pub const PROCEDURAL_WORLD_SCALE_SCHEMA_VERSION: u16 = 1;
 
 pub const DEFAULT_CHUNK_TILE_SIZE: i32 = 16;
 pub const DEFAULT_ACTIVATION_RADIUS_CHUNKS: i32 = 2;
@@ -425,6 +427,64 @@ impl ProceduralChunkActivationReport {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ProceduralWorldScaleReport {
+    pub schema: String,
+    pub schema_version: u16,
+    pub seed: u64,
+    pub virtual_half_extent_chunks: i32,
+    pub virtual_width_chunks: usize,
+    pub virtual_height_chunks: usize,
+    pub virtual_width_tiles: usize,
+    pub virtual_height_tiles: usize,
+    pub virtual_tile_count: u64,
+    pub potential_chunk_count: u64,
+    pub creature_anchor_count: usize,
+    pub active_chunk_count: usize,
+    pub materialized_chunk_count: usize,
+    pub active_fraction_of_virtual_world: f32,
+    pub generated_without_rendering: bool,
+    pub rendering_required: bool,
+    pub chunks_exist_without_creature_anchors: bool,
+    pub bounded_active_chunk_window: bool,
+    pub materialized_only_near_creature_anchors: bool,
+    pub bounded_for_creature_context: bool,
+    pub can_emit_actions: bool,
+    pub can_rewrite_weights: bool,
+}
+
+impl ProceduralWorldScaleReport {
+    pub fn validate(&self, config: ProceduralWorldConfig) -> Result<(), ScaffoldContractError> {
+        config.validate()?;
+        if self.schema != PROCEDURAL_WORLD_SCALE_SCHEMA
+            || self.schema_version != PROCEDURAL_WORLD_SCALE_SCHEMA_VERSION
+            || self.seed != config.seed
+            || self.virtual_half_extent_chunks != config.virtual_half_extent_chunks
+            || self.virtual_width_tiles != config.virtual_width_tiles()
+            || self.virtual_height_tiles != config.virtual_height_tiles()
+            || self.potential_chunk_count == 0
+            || self.active_chunk_count > config.max_active_chunks
+            || self.materialized_chunk_count > self.active_chunk_count
+            || !self.active_fraction_of_virtual_world.is_finite()
+            || !(0.0..=0.05).contains(&self.active_fraction_of_virtual_world)
+            || !self.generated_without_rendering
+            || self.rendering_required
+            || self.chunks_exist_without_creature_anchors
+            || !self.bounded_active_chunk_window
+            || !self.materialized_only_near_creature_anchors
+            || !self.bounded_for_creature_context
+            || self.can_emit_actions
+            || self.can_rewrite_weights
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        if self.creature_anchor_count == 0 && self.active_chunk_count != 0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ProceduralTerrainSample {
     pub tile: ProceduralTileCoord,
@@ -562,6 +622,54 @@ pub fn activate_procedural_chunks_around_creatures(
         skipped_due_to_cap,
         generated_without_rendering: true,
         rendering_required: false,
+    };
+    report.validate(config)?;
+    Ok(report)
+}
+
+pub fn procedural_world_scale_report(
+    config: ProceduralWorldConfig,
+    activation: &ProceduralChunkActivationReport,
+    materialized_chunk_count: usize,
+) -> Result<ProceduralWorldScaleReport, ScaffoldContractError> {
+    let config = config.validate()?;
+    activation.validate(config)?;
+    let virtual_width_chunks = (config.virtual_half_extent_chunks * 2 + 1) as usize;
+    let virtual_height_chunks = virtual_width_chunks;
+    let virtual_width_tiles = config.virtual_width_tiles();
+    let virtual_height_tiles = config.virtual_height_tiles();
+    let potential_chunk_count = (virtual_width_chunks as u64) * (virtual_height_chunks as u64);
+    let virtual_tile_count = (virtual_width_tiles as u64) * (virtual_height_tiles as u64);
+    let active_fraction_of_virtual_world = if potential_chunk_count == 0 {
+        0.0
+    } else {
+        activation.active_chunks.len() as f32 / potential_chunk_count as f32
+    };
+    let report = ProceduralWorldScaleReport {
+        schema: PROCEDURAL_WORLD_SCALE_SCHEMA.to_string(),
+        schema_version: PROCEDURAL_WORLD_SCALE_SCHEMA_VERSION,
+        seed: config.seed,
+        virtual_half_extent_chunks: config.virtual_half_extent_chunks,
+        virtual_width_chunks,
+        virtual_height_chunks,
+        virtual_width_tiles,
+        virtual_height_tiles,
+        virtual_tile_count,
+        potential_chunk_count,
+        creature_anchor_count: activation.creature_anchor_count,
+        active_chunk_count: activation.active_chunks.len(),
+        materialized_chunk_count,
+        active_fraction_of_virtual_world,
+        generated_without_rendering: activation.generated_without_rendering,
+        rendering_required: activation.rendering_required,
+        chunks_exist_without_creature_anchors: activation.creature_anchor_count == 0
+            && !activation.active_chunks.is_empty(),
+        bounded_active_chunk_window: activation.active_chunks.len() <= config.max_active_chunks,
+        materialized_only_near_creature_anchors: materialized_chunk_count
+            <= activation.active_chunks.len(),
+        bounded_for_creature_context: true,
+        can_emit_actions: false,
+        can_rewrite_weights: false,
     };
     report.validate(config)?;
     Ok(report)
