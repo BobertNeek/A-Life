@@ -3,8 +3,9 @@
 
 The pack is deterministic, original, and generated with Python's standard
 library. The direction is "production-alpha": small enough for the repo, but
-with layered silhouettes, soft shadows, and terrain detail that is closer to a
-real game art pass than programmer rectangles.
+with layered silhouettes, soft shadows, organic terrain alpha, and readable
+entity shapes that are closer to a real game art pass than programmer
+rectangles.
 """
 
 from __future__ import annotations
@@ -30,6 +31,10 @@ def rgba(hex_color: str, alpha: int = 255) -> tuple[int, int, int, int]:
         int(hex_color[4:6], 16),
         alpha,
     )
+
+
+def clamp_byte(value: float) -> int:
+    return max(0, min(255, round(value)))
 
 
 def blend(dst: tuple[int, int, int, int], src: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
@@ -113,6 +118,69 @@ class Image:
 
     def shadow(self, cx: float, cy: float, rx: float, ry: float, alpha: int = 90) -> None:
         self.ellipse(cx, cy, rx, ry, (0, 0, 0, alpha))
+
+    def multiply_alpha_mask(
+        self,
+        cx: float = 64.0,
+        cy: float = 64.0,
+        rx: float = 58.0,
+        ry: float = 54.0,
+        softness: float = 0.25,
+        wobble_seed: int = 0,
+    ) -> None:
+        """Fade tile edges into organic patches instead of square cards."""
+
+        seed_phase = wobble_seed * 0.137
+        for y in range(CANVAS):
+            py = y / SCALE
+            for x in range(CANVAS):
+                r, g, b, a = self.pixels[y][x]
+                if a == 0:
+                    continue
+                px = x / SCALE
+                nx = (px - cx) / max(rx, 1.0)
+                ny = (py - cy) / max(ry, 1.0)
+                angle = math.atan2(ny, nx)
+                wobble = (
+                    1.0
+                    + math.sin(angle * 3.0 + seed_phase) * 0.075
+                    + math.sin(angle * 7.0 + seed_phase * 0.41) * 0.045
+                )
+                dist = math.sqrt(nx * nx + ny * ny) / max(wobble, 0.7)
+                if dist >= 1.0:
+                    alpha = 0.0
+                elif dist > 1.0 - softness:
+                    alpha = (1.0 - dist) / max(softness, 0.01)
+                    alpha = alpha * alpha * (3.0 - 2.0 * alpha)
+                else:
+                    alpha = 1.0
+                if alpha <= 0.0:
+                    self.pixels[y][x] = (r, g, b, 0)
+                elif alpha < 1.0:
+                    self.pixels[y][x] = (r, g, b, clamp_byte(a * alpha))
+
+    def apply_texture_noise(self, seed: int, color_strength: float = 5.0, alpha_strength: float = 0.04) -> None:
+        """Subtle deterministic noise keeps large terrain patches painterly."""
+
+        for y in range(CANVAS):
+            for x in range(CANVAS):
+                r, g, b, a = self.pixels[y][x]
+                if a == 0:
+                    continue
+                value = (
+                    (x * 73856093)
+                    ^ (y * 19349663)
+                    ^ (seed * 83492791)
+                    ^ ((x + y) * 2654435761)
+                ) & 0xFF
+                delta = (value - 128) / 128.0
+                alpha_delta = 1.0 + delta * alpha_strength
+                self.pixels[y][x] = (
+                    clamp_byte(r + delta * color_strength),
+                    clamp_byte(g + delta * color_strength),
+                    clamp_byte(b + delta * color_strength),
+                    clamp_byte(a * alpha_delta),
+                )
 
     def downsample(self) -> bytes:
         out = bytearray()
@@ -415,54 +483,65 @@ def tile(base: str, accents: list[str], seed: int, mood: str) -> Image:
     """
 
     img = Image()
-    base_rgba = rgba(base, 215)
-    shadow_rgba = rgba("071208", 42)
-    img.ellipse(64, 66, 61, 55, base_rgba)
+    base_rgba = rgba(base, 158)
+    shadow_rgba = rgba("071208", 26)
+    img.ellipse(64, 66, 55, 49, base_rgba)
     for i, (ox, oy, rx, ry) in enumerate(
         [
-            (-26, -18, 27, 22),
-            (29, -15, 31, 24),
-            (-31, 18, 29, 24),
-            (28, 22, 35, 27),
-            (2, -35, 34, 20),
-            (2, 35, 38, 22),
+            (-26, -18, 24, 18),
+            (28, -15, 28, 19),
+            (-30, 18, 24, 19),
+            (27, 22, 29, 22),
+            (2, -34, 29, 15),
+            (2, 35, 32, 16),
+            (-6, 2, 42, 24),
         ]
     ):
-        img.ellipse(64 + ox, 64 + oy, rx, ry, rgba(accents[i % len(accents)], 145))
-    img.ellipse(65, 72, 58, 19, shadow_rgba)
-    deterministic_dot(img, seed, [rgba(c, 92) for c in accents], 125, 0.8, 3.7)
-    for i in range(12):
-        offset = (seed + i * 17) % (SIZE + 20) - 10
+        img.ellipse(64 + ox, 64 + oy, rx, ry, rgba(accents[i % len(accents)], 86 + (i % 3) * 14))
+    img.ellipse(65, 72, 48, 15, shadow_rgba)
+    deterministic_dot(img, seed, [rgba(c, 54) for c in accents], 150, 0.55, 2.45)
+    for i in range(14):
+        cx = 13 + ((seed * (i + 19) + i * 31) % 101)
+        cy = 13 + ((seed * (i + 11) + i * 41) % 101)
+        angle = ((seed + i * 7) % 360) * math.pi / 180.0
+        length = 18 + ((seed + i * 13) % 32)
+        dx = math.cos(angle) * length * 0.5
+        dy = math.sin(angle) * length * 0.5
         img.line(
-            -6,
-            offset,
-            SIZE + 6,
-            offset + ((seed + i * 11) % 25) - 12,
-            0.9,
-            rgba(accents[i % len(accents)], 58),
+            cx - dx,
+            cy - dy,
+            cx + dx,
+            cy + dy,
+            0.75,
+            rgba(accents[i % len(accents)], 34 + (i % 4) * 8),
         )
     if mood == "grass":
-        for i in range(22):
+        for i in range(34):
             x = 9 + ((seed * (i + 3) + i * 19) % 110)
             y = 10 + ((seed * (i + 7) + i * 29) % 108)
-            leaf(img, x, y, (i % 9) * 0.55, 11 + i % 9, 4.5, accents[i % len(accents)], 135)
+            leaf(img, x, y, (i % 11) * 0.43, 8 + i % 8, 3.2, accents[i % len(accents)], 92)
+            if i % 7 == 0:
+                img.ellipse(x + 4, y - 3, 1.9, 1.5, rgba("f4e77d", 118))
     elif mood == "hazard":
-        for i in range(11):
+        img.ellipse(66, 65, 45, 34, rgba("5d181d", 58))
+        for i in range(18):
             x = 10 + ((seed * (i + 5) + i * 31) % 105)
             y = 12 + ((seed * (i + 11) + i * 17) % 102)
-            img.polygon([(x, y - 8), (x + 6, y + 7), (x - 5, y + 8)], rgba("dd3b34", 118))
-            img.ellipse(x + 2, y + 3, 9, 3, rgba("ff7844", 36))
+            img.polygon([(x, y - 7), (x + 5, y + 7), (x - 5, y + 8)], rgba("dd3b34", 94))
+            img.ellipse(x + 2, y + 3, 8, 3, rgba("ff7844", 28))
     elif mood == "stone":
-        for i in range(16):
+        for i in range(24):
             x = 8 + ((seed * (i + 13) + i * 23) % 110)
             y = 8 + ((seed * (i + 17) + i * 21) % 110)
-            img.ellipse(x, y, 6 + (i % 5), 3 + (i % 3), rgba(accents[i % len(accents)], 102))
-            img.line(x - 5, y - 1, x + 5, y + 1, 0.8, rgba("d6dcc9", 52))
+            img.ellipse(x, y, 5 + (i % 5), 2.4 + (i % 3), rgba(accents[i % len(accents)], 72))
+            img.line(x - 5, y - 1, x + 5, y + 1, 0.65, rgba("d6dcc9", 36))
     elif mood == "soil":
-        for i in range(16):
+        for i in range(22):
             x = 6 + ((seed * (i + 23) + i * 13) % 112)
             y = 8 + ((seed * (i + 19) + i * 27) % 108)
-            img.line(x - 7, y, x + 8, y + ((i % 5) - 2), 1.4, rgba(accents[i % len(accents)], 78))
+            img.line(x - 8, y, x + 9, y + ((i % 5) - 2), 1.05, rgba(accents[i % len(accents)], 56))
+    img.multiply_alpha_mask(rx=54.0, ry=50.0, softness=0.34, wobble_seed=seed)
+    img.apply_texture_noise(seed, color_strength=4.5, alpha_strength=0.035)
     return img
 
 
@@ -689,7 +768,7 @@ def main() -> None:
         "schema": "alife.ca44a.alpha_art_manifest.v1",
         "schema_version": 1,
         "pack_id": "alpha-art-v1",
-        "art_direction": "production-alpha-organic-topdown-v6",
+        "art_direction": "production-alpha-organic-topdown-v7",
         "entries": entries,
     }
     (OUT / "alpha_art_manifest.json").write_text(

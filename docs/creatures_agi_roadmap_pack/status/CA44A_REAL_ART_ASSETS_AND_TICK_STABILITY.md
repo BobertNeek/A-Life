@@ -57,7 +57,24 @@ Assets:
 - `prop_leaf_patch.png`
 - `alpha_art_manifest.json`
 
-Each PNG is 64x64 and below the 64 KB per-file cap. Assets are original project-generated sprites/tiles, not third-party downloads.
+The active manifest art direction is
+`production-alpha-organic-topdown-v7`. Each PNG is 128x128 and below the 64 KB
+per-file cap. Assets are original project-generated sprites/tiles, not
+third-party downloads.
+
+The v7 terrain refresh regenerated the committed terrain PNGs with organic
+alpha masks, deterministic texture noise, softer edges, and stronger biome
+color language:
+
+- `terrain_safe_grass.png` is 22,846 bytes
+- `terrain_soil_path.png` is 21,942 bytes
+- `terrain_resource_grove.png` is 23,522 bytes
+- `terrain_hazard_pressure.png` is 24,557 bytes
+- `terrain_stone_rough.png` is 22,236 bytes
+
+The manifest now contains 32 small versioned art entries including creature
+poses, selection assets, food/hazard/rock sprites, five terrain roles, prop
+dressing, ambient layers, and HUD skin assets.
 
 ## Manifest Changes
 
@@ -88,6 +105,13 @@ Default Player View now uses asset-backed sprites for required visual roles:
 
 Rectangle fallback remains available only for degraded diagnostics or non-player debug paths. Player View tests assert that required roles are backed by alpha art components and fallback rectangle components are absent.
 
+The Player View terrain renderer now keeps the deterministic `97x73` seeded
+terrain field virtual and materializes only active display chunks near the
+camera/creature anchors. This makes the graphical world read as a larger
+procedural field without rendering the whole virtual map as one giant
+single-screen board. The chunks remain display-only; they are not physics,
+navigation, sensory, cognition, ecology, neural, or action authority.
+
 ## Tests Added/Changed
 
 - Core topology regression for repeated dynamic observations.
@@ -101,6 +125,7 @@ Rectangle fallback remains available only for degraded diagnostics or non-player
   - committed alpha art manifest validation
   - 600-tick `gpu_alpha` stability regression
   - Bevy Player View alpha-art backed rendering
+  - chunked virtual terrain materialization rather than full-map board rendering
   - Dev Overlay / Full Debug preservation through existing view-mode tests
 
 ## Focused Evidence
@@ -146,7 +171,7 @@ cargo run -p alife_game_app --bin alife_game_app -- gpu-alpha-stability-smoke cr
 Result:
 
 ```text
-requested=600 completed=600 first_invalid_tick=None diagnostic=None sealed=600 packed=600 topology=5/3/600/1 terminal_invalid=0 parity=true avg_ms_per_tick=1.293 ticks_per_second=773.14
+requested=600 completed=600 first_invalid_tick=None diagnostic=None sealed=600 packed=600 topology=5/3/600/1 terminal_invalid=0 parity=true avg_ms_per_tick=2.508 ticks_per_second=398.71
 ```
 
 App bundle smoke:
@@ -155,7 +180,18 @@ App bundle smoke:
 cargo run -p alife_game_app --bin alife_game_app -- app-bundle-smoke --manifest crates/alife_game_app/app_bundle_manifest.json
 ```
 
-Result: PASS, `alpha_art=15`, `alpha_roles=true`, largest file evidence 15135 bytes.
+Result: PASS, `alpha_art=32`, `alpha_roles=true`, `production_alpha_art=true`, largest file evidence 24,557 bytes.
+
+Production art / chunked terrain tests:
+
+```powershell
+cargo test -p alife_game_app --features bevy-app --test app_shell production_world_art_atlas_v3_breaks_up_debug_checkerboard -- --nocapture
+cargo test -p alife_game_app --all-features --test app_shell bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe -- --nocapture
+```
+
+Result: PASS. These tests verify asset-backed terrain, opacity below
+debug-block levels, chunk provenance, and virtual-map materialization near
+active view/creature anchors.
 
 Default graphical Player View smoke:
 
@@ -242,6 +278,10 @@ Focused validation passed. Full validation passed:
 - The art pack is a small alpha pack, not a final production art direction.
 - PNG sprites are intentionally small and stylized.
 - Player View uses asset-backed sprites, but future CA work may still improve animation, composition, and larger-world exploration.
+- Procedural terrain currently improves graphical presentation and active-chunk
+  rendering. It is not yet an authoritative Minecraft-like biome/chunk substrate
+  for creature sensory, navigation, resource spawning, learning, or offscreen
+  ecology.
 - Package artifacts and diagnostics are generated under `target/artifacts/` and must remain untracked.
 
 ## Invariant Checks
