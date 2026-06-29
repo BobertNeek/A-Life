@@ -2,6 +2,7 @@
 
 Plan: CA44A
 Branch: codex/CA44A-real-art-assets-and-tick-stability
+Follow-up visual correction branch: codex/procedural-biome-world-scale-slice
 Status: implemented on branch; validation passed
 Next plan: CA44
 
@@ -110,15 +111,16 @@ Default Player View now uses asset-backed sprites for required visual roles:
 
 Rectangle fallback remains available only for degraded diagnostics or non-player debug paths. Player View tests assert that required roles are backed by alpha art components and fallback rectangle components are absent.
 
-The Player View terrain renderer now keeps the deterministic `97x73` seeded
-terrain field virtual while the default player presentation is driven by
-materialized procedural chunk tiles and chunk-generated content. The earlier
-`1280x720` painted viewport was rejected as screenshot-like and is no longer
-used in default Player View. Active local chunk samples are materialized as
-asset-backed terrain sprites with chunk provenance, while offscreen terrain
-remains data-only until creature anchors or the camera require materialization.
-The terrain/content layers remain display-only; they are not physics,
-navigation, sensory, cognition, ecology, neural, or action authority.
+The Player View terrain renderer now keeps the deterministic seeded terrain
+field virtual while the default player presentation is driven by a generated
+painted map surface, a runtime procedural biome texture, materialized
+procedural chunk evidence, and chunk-generated content. Active local chunk
+samples still carry asset-backed terrain sprites and chunk provenance, but
+those tile sprites are intentionally near-transparent so they do not read as
+square debug slabs. Offscreen terrain remains data-only until creature anchors
+or the camera require materialization. The terrain/content layers remain
+display-only; they are not physics, navigation, sensory, cognition, ecology,
+neural, or action authority.
 
 The v15 correction replaces the rejected v12/v13 compositions. The bad v12
 plate had giant baked creatures, high-contrast blob fields, and black gaps. The
@@ -138,14 +140,17 @@ are subtle live-context overlays, and foreground creatures/props/selection
 pulses are small map-scale sprites instead of giant close-up elements. Simulation
 semantics, GPU/CPU correctness rules, and action authority are unchanged.
 
-The follow-up stream-first correction removes that v15 painted map from default
-Player View and makes generated chunk tiles the readable map layer. The default
-Player View now asserts `streamed-procedural-terrain` production layers for
-active tiles and rejects both `world-painted-viewport` and
-`world-atmospheric-underlay` baked plates. It also zooms the starting camera out
-so the player sees a chunked world context rather than oversized local tokens.
-This is still a graphical/presentation step toward the active goal, not a claim
-that procedural terrain is authoritative ecology or sensory state.
+The final post-feedback correction makes that generated painted map fill the
+default Player View instead of appearing as a small plate inside a flat field.
+The runtime procedural biome map is still generated from the seeded sampler and
+validated for paths, resource detail, hazard detail, stone detail, and zero
+black-gap pixels, but it sits behind the painted surface as procedural evidence
+rather than becoming the visible blocky terrain layer. The default Player View
+now asserts one `world-painted-viewport` layer, one
+`runtime-procedural-biome-map` layer, and many `streamed-procedural-terrain`
+tiles with opacity capped at debug-invisible levels. This is still a
+graphical/presentation step toward the active goal, not a claim that procedural
+terrain is authoritative ecology or sensory state.
 
 ## Tests Added/Changed
 
@@ -234,11 +239,13 @@ Procedural Player View / target-match focused tests:
 ```powershell
 cargo test -p alife_game_app --features bevy-app production_player_view_default_camera_is_world_establishing -- --nocapture
 cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_starts_with_rendered_procedural_chunk_window -- --nocapture
+cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_composition_layers_are_asset_backed_and_display_only -- --nocapture
 cargo test -p alife_game_app --features bevy-app --test app_shell procedural_world_content_uses_alpha_art_and_no_action_authority -- --nocapture
 ```
 
-Result: PASS. These tests verify the wide default camera, rendered procedural
-terrain chunk window, and generated content visual layer without action
+Result: PASS. These tests verify the wide default camera, generated painted map
+surface, runtime procedural biome texture, rendered procedural terrain chunk
+window, generated content visual layer, display-only composition, and no action
 authority.
 
 Manual screenshot comparison used untracked local evidence:
@@ -246,14 +253,16 @@ Manual screenshot comparison used untracked local evidence:
 ```text
 target/playtest_evidence/visual_fix/player_view_v15_actual_settled.png
 target/playtest_evidence/visual_fix/fresh_window_capture.png
+target/playtest_evidence/visual_fix/current_player_view_scaled_painted_surface.png
 ```
 
 Result: the actual Bevy window now renders the target-style painted map plate
-with small creatures, food, rocks, narrow paths, dense resource greenery, gray
-rough terrain, and visible red hazard pressure region. The prior flat-green
-fallback capture was traced to the v11/v12 manifest mismatch; the later noisy
-v12 composition and sparse/washed v13 composition were replaced by the v15
-painted map.
+as a full Player View surface with small creatures, food, rocks, narrow paths,
+dense resource greenery, gray rough terrain, and visible red hazard pressure
+region. The prior flat-green fallback capture was traced to the v11/v12
+manifest mismatch; the later noisy v12 composition, sparse/washed v13
+composition, and blocky runtime-only terrain view were replaced by the scaled
+v15 painted map plus procedural runtime evidence.
 
 Default graphical Player View smoke:
 

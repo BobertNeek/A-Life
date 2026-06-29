@@ -2315,12 +2315,13 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "terrain-resource-grove",
         "terrain-hazard-pressure",
         "terrain-stone-rough",
+        "world-painted-viewport",
     ] {
         assert!(roles.contains(&role), "missing alpha art role {role}");
     }
     assert!(
-        !roles.contains(&"world-painted-viewport") && !roles.contains(&"world-atmospheric-underlay"),
-        "default Player View must not use a baked screenshot-like backdrop; streamed chunk tiles are the map"
+        !roles.contains(&"world-atmospheric-underlay"),
+        "default Player View may use the generated painted map surface, but must not restore the old atmospheric debug underlay"
     );
 
     let mut fallback_query =
@@ -2429,8 +2430,16 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         .filter(|layer| layer.role == "streamed-procedural-terrain")
         .count();
     assert_eq!(
-        baked_backdrop_count, 0,
-        "Player View should not rely on a single baked backdrop plate"
+        baked_backdrop_count, 1,
+        "Player View should use one generated painted art surface plus live procedural chunk evidence"
+    );
+    let runtime_biome_map_count = layers
+        .iter()
+        .filter(|layer| layer.role == "runtime-procedural-biome-map")
+        .count();
+    assert_eq!(
+        runtime_biome_map_count, 1,
+        "Player View should have one live generated biome-map surface behind streamed chunks"
     );
     assert!(
         streamed_terrain_count >= visible_terrain_count,
@@ -2467,6 +2476,55 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
 
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
 
+    let mut biome_map_query =
+        app.world_mut()
+            .query::<&alife_game_app::bevy_shell::GraphicalRuntimeProceduralBiomeMap>();
+    let biome_maps = biome_map_query
+        .iter(app.world())
+        .copied()
+        .collect::<Vec<_>>();
+    assert_eq!(
+        biome_maps.len(),
+        1,
+        "default Player View should render one generated biome-map underlay, not a blank ground plane"
+    );
+    let biome_map = biome_maps[0];
+    assert!(biome_map.generated_from_procedural_sampler);
+    assert!(biome_map.display_only);
+    assert!(biome_map.width_tiles >= 96);
+    assert!(biome_map.height_tiles >= 64);
+    assert_eq!(biome_map.pixels_per_tile, 12);
+    assert_eq!(
+        biome_map.texture_width_px,
+        biome_map.width_tiles as u32 * biome_map.pixels_per_tile
+    );
+    assert_eq!(
+        biome_map.texture_height_px,
+        biome_map.height_tiles as u32 * biome_map.pixels_per_tile
+    );
+    assert!(biome_map.virtual_map_width_tiles > biome_map.width_tiles as usize);
+    assert!(biome_map.virtual_map_height_tiles > biome_map.height_tiles as usize);
+    assert!(
+        biome_map.path_pixels > 10_000,
+        "generated map should contain visible path networks like the target mockup"
+    );
+    assert!(
+        biome_map.resource_detail_pixels > 500,
+        "generated map should contain small resource/grove detail pixels"
+    );
+    assert!(
+        biome_map.hazard_detail_pixels > 200,
+        "generated map should contain hazard pressure detail pixels"
+    );
+    assert!(
+        biome_map.stone_detail_pixels > 500,
+        "generated map should contain stone/rough ground detail pixels"
+    );
+    assert_eq!(
+        biome_map.dark_gap_pixels, 0,
+        "generated map must not have black void gaps in the default player view"
+    );
+
     let mut terrain_query = app
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
@@ -2477,9 +2535,9 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
     );
     assert!(
         terrain_tiles.iter().all(|tile| {
-            tile.opacity >= 0.90 && tile.opacity <= CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA
+            tile.opacity >= 0.003 && tile.opacity <= 0.008
         }),
-        "terrain tiles must be the visible chunk map, not faint overlays"
+        "streamed terrain tiles should dress the generated biome map, not cover it with opaque slabs"
     );
     assert!(
         terrain_tiles
@@ -2603,6 +2661,10 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         .iter()
         .filter(|layer| layer.role == "streamed-procedural-terrain")
         .count();
+    let runtime_biome_map_count = layers
+        .iter()
+        .filter(|layer| layer.role == "runtime-procedural-biome-map")
+        .count();
     let terrain_blend_count = layers
         .iter()
         .filter(|layer| layer.role == "terrain-edge-blend")
@@ -2612,9 +2674,13 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         shadow_count >= 4,
         "expected asset-backed entity shadows for visible objects"
     );
-    assert!(
-        baked_backdrop_count == 0,
-        "default Player View should not use a baked viewport layer"
+    assert_eq!(
+        baked_backdrop_count, 1,
+        "default Player View should use one generated painted art surface, not multiple baked/debug backdrops"
+    );
+    assert_eq!(
+        runtime_biome_map_count, 1,
+        "default Player View should use a runtime-generated biome map as the continuous world surface"
     );
     assert!(
         streamed_terrain_count >= 29 * 21,

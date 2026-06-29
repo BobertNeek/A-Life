@@ -29,6 +29,7 @@ use bevy::{
         ResMut, Resource, Sprite, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val,
         Vec2, Vec3, Visibility, With, Without,
     },
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
 };
 
@@ -686,6 +687,24 @@ pub struct GraphicalProductionArtLayer {
     pub display_only: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub struct GraphicalRuntimeProceduralBiomeMap {
+    pub width_tiles: i32,
+    pub height_tiles: i32,
+    pub texture_width_px: u32,
+    pub texture_height_px: u32,
+    pub pixels_per_tile: u32,
+    pub virtual_map_width_tiles: usize,
+    pub virtual_map_height_tiles: usize,
+    pub path_pixels: u32,
+    pub resource_detail_pixels: u32,
+    pub hazard_detail_pixels: u32,
+    pub stone_detail_pixels: u32,
+    pub dark_gap_pixels: u32,
+    pub generated_from_procedural_sampler: bool,
+    pub display_only: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalProductionHudSkinLayer {
     pub role: &'static str,
@@ -810,6 +829,9 @@ const GRAPHICAL_WORLD_SCALE: f32 = 36.0;
 const CA37_TERRAIN_TILE_PIXEL_SIZE: f32 = GRAPHICAL_WORLD_SCALE;
 const CA37_TERRAIN_TILE_JITTER_PIXELS: f32 = 2.0;
 pub(crate) const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 0.48;
+const CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES: i32 = 128;
+const CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES: i32 = 72;
+const CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE: u32 = 12;
 
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer {
@@ -2037,7 +2059,10 @@ fn spawn_ca37_world_art_terrain_canvas(
     view_mode: GraphicalPlaygroundViewMode,
     presentation: &VisibleWorldPresentation,
 ) {
-    if matches!(view_mode, GraphicalPlaygroundViewMode::FullDebug) {
+    if matches!(
+        view_mode,
+        GraphicalPlaygroundViewMode::Player | GraphicalPlaygroundViewMode::FullDebug
+    ) {
         if let Some(handles) = alpha_art {
             ca44a_spawn_world_backdrop_app(app, handles, view_mode);
         }
@@ -2047,6 +2072,9 @@ fn spawn_ca37_world_art_terrain_canvas(
     let activation = activate_procedural_chunks_around_creatures(config, &anchors)
         .expect("graphical procedural world activation should validate");
     let mut field = GraphicalProceduralTerrainFieldResource::new(summary, &activation);
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        ca44a_spawn_runtime_procedural_biome_map_app(app, summary, &field);
+    }
     for (center_x, center_z, anchor) in ca44a_initial_procedural_terrain_centers(&activation) {
         ca44a_materialize_terrain_chunk_app(
             app, summary, &mut field, alpha_art, view_mode, center_x, center_z, anchor,
@@ -2062,19 +2090,28 @@ fn spawn_ca37_world_art_terrain_canvas(
 fn ca44a_spawn_world_backdrop_app(
     app: &mut App,
     handles: &GraphicalAlphaArtHandles,
-    _view_mode: GraphicalPlaygroundViewMode,
+    view_mode: GraphicalPlaygroundViewMode,
 ) {
-    let alpha = 0.35;
+    let alpha = if view_mode == GraphicalPlaygroundViewMode::Player {
+        0.94
+    } else {
+        0.35
+    };
+    let custom_size = if view_mode == GraphicalPlaygroundViewMode::Player {
+        Vec2::new(2_540.0, 1_430.0)
+    } else {
+        Vec2::new(1_280.0, 720.0)
+    };
     let layer_role = "world-painted-viewport";
     app.world_mut().spawn((
         Name::new("A-Life alpha procedural painted viewport"),
         Sprite {
             image: handles.world_backdrop.clone(),
             color: Color::srgba(1.0, 1.0, 1.0, alpha),
-            custom_size: Some(Vec2::new(1_280.0, 720.0)),
+            custom_size: Some(custom_size),
             ..default()
         },
-        Transform::from_xyz(0.0, 0.0, -1.94),
+        Transform::from_xyz(0.0, 0.0, -1.90),
         GraphicalAlphaArtBackedSprite {
             role: layer_role,
             stable_id: None,
@@ -2084,6 +2121,361 @@ fn ca44a_spawn_world_backdrop_app(
             display_only: true,
         },
     ));
+}
+
+fn ca44a_spawn_runtime_procedural_biome_map_app(
+    app: &mut App,
+    summary: &Ca37WorldArtStyleSummary,
+    field: &GraphicalProceduralTerrainFieldResource,
+) {
+    if !app.world().contains_resource::<Assets<Image>>() {
+        app.init_resource::<Assets<Image>>();
+    }
+    let (image, metrics) = ca44a_generate_runtime_procedural_biome_map(summary.seed);
+    let texture_width_px = image.texture_descriptor.size.width;
+    let texture_height_px = image.texture_descriptor.size.height;
+    let handle = app.world_mut().resource_mut::<Assets<Image>>().add(image);
+    app.world_mut().spawn((
+        Name::new("A-Life runtime procedural biome map"),
+        Sprite {
+            image: handle,
+            color: Color::srgba(1.0, 1.0, 1.0, 0.12),
+            custom_size: Some(Vec2::new(
+                CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as f32 * GRAPHICAL_WORLD_SCALE,
+                CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as f32 * GRAPHICAL_WORLD_SCALE,
+            )),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 0.0, -1.96),
+        GraphicalRuntimeProceduralBiomeMap {
+            width_tiles: CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES,
+            height_tiles: CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES,
+            texture_width_px,
+            texture_height_px,
+            pixels_per_tile: CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE,
+            virtual_map_width_tiles: field.virtual_map_width_tiles,
+            virtual_map_height_tiles: field.virtual_map_height_tiles,
+            path_pixels: metrics.path_pixels,
+            resource_detail_pixels: metrics.resource_detail_pixels,
+            hazard_detail_pixels: metrics.hazard_detail_pixels,
+            stone_detail_pixels: metrics.stone_detail_pixels,
+            dark_gap_pixels: metrics.dark_gap_pixels,
+            generated_from_procedural_sampler: true,
+            display_only: true,
+        },
+        GraphicalProductionArtLayer {
+            role: "runtime-procedural-biome-map",
+            display_only: true,
+        },
+    ));
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct RuntimeProceduralBiomeMapMetrics {
+    path_pixels: u32,
+    resource_detail_pixels: u32,
+    hazard_detail_pixels: u32,
+    stone_detail_pixels: u32,
+    dark_gap_pixels: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RuntimeBiomePixel {
+    rgb: [u8; 3],
+    is_path: bool,
+    is_resource_detail: bool,
+    is_hazard_detail: bool,
+    is_stone_detail: bool,
+}
+
+fn ca44a_generate_runtime_procedural_biome_map(
+    seed: u64,
+) -> (Image, RuntimeProceduralBiomeMapMetrics) {
+    let width_px =
+        (CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as u32) * CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE;
+    let height_px =
+        (CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as u32) * CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE;
+    let mut data = Vec::with_capacity((width_px * height_px * 4) as usize);
+    let mut metrics = RuntimeProceduralBiomeMapMetrics::default();
+    let half_width_tiles = CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES / 2;
+    let half_height_tiles = CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES / 2;
+    for y in 0..height_px {
+        let tile_z = (height_px.saturating_sub(1) - y) as i32
+            / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as i32
+            - half_height_tiles;
+        let local_y = y % CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE;
+        for x in 0..width_px {
+            let tile_x =
+                x as i32 / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as i32 - half_width_tiles;
+            let local_x = x % CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE;
+            let sample = ca44a_procedural_terrain_sample(seed, tile_x, tile_z);
+            let pixel = ca44a_runtime_biome_pixel(
+                seed,
+                sample.material.material_id(),
+                tile_x,
+                tile_z,
+                local_x,
+                local_y,
+            );
+            if pixel.is_path {
+                metrics.path_pixels += 1;
+            }
+            if pixel.is_resource_detail {
+                metrics.resource_detail_pixels += 1;
+            }
+            if pixel.is_hazard_detail {
+                metrics.hazard_detail_pixels += 1;
+            }
+            if pixel.is_stone_detail {
+                metrics.stone_detail_pixels += 1;
+            }
+            let [r, g, b] = pixel.rgb;
+            if u16::from(r) + u16::from(g) + u16::from(b) < 92 {
+                metrics.dark_gap_pixels += 1;
+            }
+            data.extend_from_slice(&[r, g, b, 255]);
+        }
+    }
+    let mut image = Image::new(
+        Extent3d {
+            width: width_px,
+            height: height_px,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    );
+    image.sampler = ImageSampler::linear();
+    (image, metrics)
+}
+
+fn ca44a_runtime_biome_pixel(
+    seed: u64,
+    material_id: &str,
+    tile_x: i32,
+    tile_z: i32,
+    local_x: u32,
+    local_y: u32,
+) -> RuntimeBiomePixel {
+    let fine_hash = ca44a_runtime_pixel_hash(seed, tile_x, tile_z, local_x, local_y);
+    let tile_hash = ca44a_runtime_pixel_hash(seed ^ 0x51A7_0001, tile_x, tile_z, 0, 0);
+    let coarse_hash = ca44a_runtime_pixel_hash(seed ^ 0xBAD5_EED5, tile_x / 3, tile_z / 3, 0, 0);
+    let local_progress_x = local_x as f32 / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as f32;
+    let local_progress_y = local_y as f32 / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as f32;
+    let world_x = tile_x as f32 + local_progress_x - 0.5;
+    let world_z = tile_z as f32 + local_progress_y - 0.5;
+    let resource_weight = ca44a_runtime_resource_weight(world_x, world_z);
+    let hazard_weight = ca44a_runtime_hazard_weight(world_x, world_z);
+    let stone_weight = ca44a_runtime_stone_weight(world_x, world_z);
+    let [base_r, base_g, base_b] = ca44a_runtime_continuous_material_base_rgb(
+        material_id,
+        resource_weight,
+        hazard_weight,
+        stone_weight,
+    );
+    let noise = (fine_hash % 17) as i16 - 8;
+    let broad = (coarse_hash % 13) as i16 - 6;
+    let mut r = base_r as i16 + noise + broad;
+    let mut g = base_g as i16 + noise + broad;
+    let mut b = base_b as i16 + noise / 2 + broad;
+
+    let primary_path =
+        (world_z - (world_x * 0.22 + (world_x * 0.085 + seed as f32 * 0.0007).sin() * 5.8)).abs();
+    let branch_path =
+        (world_z * 0.82 + world_x * 0.34 - ((world_x * 0.055 + 2.1).cos() * 4.6)).abs();
+    let is_path = primary_path < 1.05 || branch_path < 0.82;
+    if is_path {
+        let weight = if primary_path.min(branch_path) < 0.45 {
+            0.72
+        } else {
+            0.46
+        };
+        [r, g, b] = ca44a_blend_rgb_i16([r, g, b], [139, 96, 52], weight);
+    }
+
+    let local_cx = (tile_hash % CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE) as i32;
+    let local_cy = ((tile_hash / 17) % CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE) as i32;
+    let dx = local_x as i32 - local_cx;
+    let dy = local_y as i32 - local_cy;
+    let radial = dx * dx + dy * dy;
+    let mut is_resource_detail = false;
+    let mut is_hazard_detail = false;
+    let mut is_stone_detail = false;
+    let leaf_detail = radial <= 3 && tile_hash % 7 == 0;
+    let flower_detail = radial <= 2 && tile_hash % 29 == 0;
+    let hazard_spike = radial <= 4
+        && (dy.abs() <= 1 || (dx.abs() + dy.abs()) <= 3)
+        && (material_id == "hazard-pressure" || hazard_weight > 0.38 || tile_hash % 47 == 0);
+    let stone_detail = radial <= 5
+        && (material_id == "stone-dressing" || stone_weight > 0.42 || tile_hash % 41 == 0);
+
+    if (material_id == "resource-grove" || resource_weight > 0.34) && (leaf_detail || flower_detail)
+    {
+        is_resource_detail = true;
+        [r, g, b] = ca44a_blend_rgb_i16(
+            [r, g, b],
+            if flower_detail {
+                [234, 190, 96]
+            } else {
+                [92, 184, 72]
+            },
+            0.62,
+        );
+    } else if (material_id == "hazard-pressure" || hazard_weight > 0.30) && hazard_spike {
+        is_hazard_detail = true;
+        [r, g, b] = ca44a_blend_rgb_i16([r, g, b], [224, 64, 42], 0.70);
+    } else if stone_detail {
+        is_stone_detail = true;
+        [r, g, b] = ca44a_blend_rgb_i16([r, g, b], [145, 145, 132], 0.58);
+    } else if material_id == "safe-grass" && leaf_detail {
+        is_resource_detail = true;
+        [r, g, b] = ca44a_blend_rgb_i16([r, g, b], [116, 172, 72], 0.44);
+    }
+
+    RuntimeBiomePixel {
+        rgb: [
+            r.clamp(22, 235) as u8,
+            g.clamp(32, 235) as u8,
+            b.clamp(24, 225) as u8,
+        ],
+        is_path,
+        is_resource_detail,
+        is_hazard_detail,
+        is_stone_detail,
+    }
+}
+
+fn ca44a_runtime_continuous_material_base_rgb(
+    material_id: &str,
+    resource_weight: f32,
+    hazard_weight: f32,
+    stone_weight: f32,
+) -> [u8; 3] {
+    let mut rgb = ca44a_runtime_material_base_rgb("safe-grass").map(f32::from);
+    let sampler_bias = match material_id {
+        "neutral-soil" => 0.18,
+        "resource-grove" => 0.26,
+        "hazard-pressure" => 0.30,
+        "stone-dressing" => 0.24,
+        _ => 0.0,
+    };
+    if material_id != "safe-grass" {
+        rgb = ca44a_blend_rgb_f32(
+            rgb,
+            ca44a_runtime_material_base_rgb(material_id).map(f32::from),
+            sampler_bias,
+        );
+    }
+    if resource_weight > 0.05 {
+        rgb = ca44a_blend_rgb_f32(
+            rgb,
+            ca44a_runtime_material_base_rgb("resource-grove").map(f32::from),
+            (resource_weight * 0.68).clamp(0.0, 0.68),
+        );
+    }
+    if stone_weight > 0.05 {
+        rgb = ca44a_blend_rgb_f32(
+            rgb,
+            ca44a_runtime_material_base_rgb("stone-dressing").map(f32::from),
+            (stone_weight * 0.76).clamp(0.0, 0.76),
+        );
+    }
+    if hazard_weight > 0.05 {
+        rgb = ca44a_blend_rgb_f32(
+            rgb,
+            ca44a_runtime_material_base_rgb("hazard-pressure").map(f32::from),
+            (hazard_weight * 0.82).clamp(0.0, 0.82),
+        );
+    }
+    [
+        rgb[0].round().clamp(0.0, 255.0) as u8,
+        rgb[1].round().clamp(0.0, 255.0) as u8,
+        rgb[2].round().clamp(0.0, 255.0) as u8,
+    ]
+}
+
+fn ca44a_runtime_material_base_rgb(material_id: &str) -> [u8; 3] {
+    match material_id {
+        "neutral-soil" => [118, 88, 50],
+        "resource-grove" => [64, 135, 58],
+        "hazard-pressure" => [142, 63, 45],
+        "stone-dressing" => [103, 110, 99],
+        _ => [91, 145, 57],
+    }
+}
+
+fn ca44a_runtime_resource_weight(world_x: f32, world_z: f32) -> f32 {
+    (ca44a_smooth_blob(world_x, world_z, -19.0, -5.0, 22.0, 16.0)
+        + ca44a_smooth_blob(world_x, world_z, 8.0, 12.0, 25.0, 18.0) * 0.95
+        + ca44a_smooth_blob(world_x, world_z, 35.0, -17.0, 17.0, 12.0) * 0.74)
+        .clamp(0.0, 1.0)
+}
+
+fn ca44a_runtime_hazard_weight(world_x: f32, world_z: f32) -> f32 {
+    (ca44a_smooth_blob(world_x, world_z, 45.0, 3.0, 29.0, 22.0)
+        + ca44a_smooth_blob(world_x, world_z, -48.0, -23.0, 19.0, 14.0) * 0.88
+        + ca44a_smooth_blob(world_x, world_z, 18.0, 24.0, 13.0, 8.0) * 0.42)
+        .clamp(0.0, 1.0)
+}
+
+fn ca44a_runtime_stone_weight(world_x: f32, world_z: f32) -> f32 {
+    (ca44a_smooth_blob(world_x, world_z, -28.0, 22.0, 33.0, 19.0)
+        + ca44a_smooth_blob(world_x, world_z, 10.0, 26.0, 24.0, 12.0) * 0.54
+        + ca44a_smooth_blob(world_x, world_z, 52.0, -29.0, 14.0, 8.0) * 0.34)
+        .clamp(0.0, 1.0)
+}
+
+fn ca44a_smooth_blob(
+    world_x: f32,
+    world_z: f32,
+    center_x: f32,
+    center_z: f32,
+    radius_x: f32,
+    radius_z: f32,
+) -> f32 {
+    let dx = (world_x - center_x) / radius_x.max(0.001);
+    let dz = (world_z - center_z) / radius_z.max(0.001);
+    let distance = (dx * dx + dz * dz).sqrt();
+    (1.0 - distance).clamp(0.0, 1.0)
+}
+
+fn ca44a_blend_rgb_f32(base: [f32; 3], overlay: [f32; 3], weight: f32) -> [f32; 3] {
+    let weight = weight.clamp(0.0, 1.0);
+    let inverse = 1.0 - weight;
+    [
+        base[0] * inverse + overlay[0] * weight,
+        base[1] * inverse + overlay[1] * weight,
+        base[2] * inverse + overlay[2] * weight,
+    ]
+}
+
+fn ca44a_blend_rgb_i16(base: [i16; 3], overlay: [i16; 3], weight: f32) -> [i16; 3] {
+    let inverse = 1.0 - weight;
+    [
+        (base[0] as f32 * inverse + overlay[0] as f32 * weight).round() as i16,
+        (base[1] as f32 * inverse + overlay[1] as f32 * weight).round() as i16,
+        (base[2] as f32 * inverse + overlay[2] as f32 * weight).round() as i16,
+    ]
+}
+
+fn ca44a_runtime_pixel_hash(
+    seed: u64,
+    tile_x: i32,
+    tile_z: i32,
+    local_x: u32,
+    local_y: u32,
+) -> u32 {
+    let mut value = seed
+        .wrapping_add((tile_x as i64 as u64).wrapping_mul(0x9E37_79B1))
+        .wrapping_add((tile_z as i64 as u64).wrapping_mul(0x85EB_CA77))
+        .wrapping_add((local_x as u64).wrapping_mul(0xC2B2_AE3D))
+        .wrapping_add((local_y as u64).wrapping_mul(0x27D4_EB2F));
+    value ^= value >> 33;
+    value = value.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    value ^= value >> 33;
+    value as u32
 }
 
 impl GraphicalProceduralTerrainFieldResource {
@@ -2489,11 +2881,11 @@ fn ca44a_terrain_rotation_degrees(hash: i32) -> f32 {
 
 fn ca44a_alpha_terrain_opacity(material_id: &str) -> f32 {
     match material_id {
-        "hazard-pressure" => 0.97,
-        "resource-grove" => 0.96,
-        "stone-dressing" => 0.93,
-        "neutral-soil" => 0.92,
-        _ => 0.95,
+        "hazard-pressure" => 0.007,
+        "resource-grove" => 0.006,
+        "stone-dressing" => 0.005,
+        "neutral-soil" => 0.004,
+        _ => 0.004,
     }
 }
 
