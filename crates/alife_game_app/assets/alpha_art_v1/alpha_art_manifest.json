@@ -2,7 +2,7 @@
   "schema": "alife.ca44a.alpha_art_manifest.v1",
   "schema_version": 1,
   "pack_id": "alpha-art-v1",
-  "art_direction": "production-alpha-organic-topdown-v5",
+  "art_direction": "production-alpha-organic-topdown-v6",
   "entries": [
     {
       "id": "creature_idle",
@@ -155,7 +155,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_safe_grass.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 5470
+      "file_size_bytes": 9388
     },
     {
       "id": "terrain_soil_path",
@@ -164,7 +164,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_soil_path.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 3887
+      "file_size_bytes": 8145
     },
     {
       "id": "terrain_resource_grove",
@@ -173,7 +173,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_resource_grove.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 5719
+      "file_size_bytes": 9775
     },
     {
       "id": "terrain_hazard_pressure",
@@ -182,7 +182,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_hazard_pressure.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 4646
+      "file_size_bytes": 9173
     },
     {
       "id": "terrain_stone_rough",
@@ -191,7 +191,16 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_stone_rough.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 4659
+      "file_size_bytes": 9062
+    },
+    {
+      "id": "terrain_edge_blend",
+      "role": "terrain-edge-blend",
+      "kind": "overlay",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_edge_blend.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 2763
     },
     {
       "id": "prop_grass_tuft",
@@ -228,6 +237,15 @@
       "width": 128,
       "height": 128,
       "file_size_bytes": 1446
+    },
+    {
+      "id": "prop_mushroom_cluster",
+      "role": "prop-dressing",
+      "kind": "prop",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_mushroom_cluster.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 1929
     },
     {
       "id": "ui_panel_frame",

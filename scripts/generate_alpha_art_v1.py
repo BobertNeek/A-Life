@@ -407,26 +407,79 @@ def rock() -> Image:
 
 
 def tile(base: str, accents: list[str], seed: int, mood: str) -> Image:
-    img = Image(False, rgba(base, 255))
-    deterministic_dot(img, seed, [rgba(c, 90) for c in accents], 170, 0.8, 4.5)
-    for i in range(10):
-        offset = (seed + i * 17) % (SIZE + 18) - 9
-        img.line(-8, offset, SIZE + 8, offset + ((seed + i * 11) % 27) - 13, 1.0, rgba(accents[i % len(accents)], 62))
+    """Organic terrain patch, not an opaque square tile.
+
+    The Bevy player view rotates and overlaps these committed PNGs. Keeping the
+    edges transparent avoids the visual checkerboard that made the map read as a
+    debug board instead of terrain.
+    """
+
+    img = Image()
+    base_rgba = rgba(base, 215)
+    shadow_rgba = rgba("071208", 42)
+    img.ellipse(64, 66, 61, 55, base_rgba)
+    for i, (ox, oy, rx, ry) in enumerate(
+        [
+            (-26, -18, 27, 22),
+            (29, -15, 31, 24),
+            (-31, 18, 29, 24),
+            (28, 22, 35, 27),
+            (2, -35, 34, 20),
+            (2, 35, 38, 22),
+        ]
+    ):
+        img.ellipse(64 + ox, 64 + oy, rx, ry, rgba(accents[i % len(accents)], 145))
+    img.ellipse(65, 72, 58, 19, shadow_rgba)
+    deterministic_dot(img, seed, [rgba(c, 92) for c in accents], 125, 0.8, 3.7)
+    for i in range(12):
+        offset = (seed + i * 17) % (SIZE + 20) - 10
+        img.line(
+            -6,
+            offset,
+            SIZE + 6,
+            offset + ((seed + i * 11) % 25) - 12,
+            0.9,
+            rgba(accents[i % len(accents)], 58),
+        )
     if mood == "grass":
-        for i in range(18):
-            x = 8 + ((seed * (i + 3) + i * 19) % 112)
+        for i in range(22):
+            x = 9 + ((seed * (i + 3) + i * 19) % 110)
             y = 10 + ((seed * (i + 7) + i * 29) % 108)
-            leaf(img, x, y, (i % 7) * 0.7, 13 + i % 8, 5, accents[i % len(accents)], 120)
+            leaf(img, x, y, (i % 9) * 0.55, 11 + i % 9, 4.5, accents[i % len(accents)], 135)
     elif mood == "hazard":
-        for i in range(8):
+        for i in range(11):
             x = 10 + ((seed * (i + 5) + i * 31) % 105)
             y = 12 + ((seed * (i + 11) + i * 17) % 102)
-            img.polygon([(x, y - 8), (x + 6, y + 6), (x - 5, y + 8)], rgba("dd3b34", 95))
+            img.polygon([(x, y - 8), (x + 6, y + 7), (x - 5, y + 8)], rgba("dd3b34", 118))
+            img.ellipse(x + 2, y + 3, 9, 3, rgba("ff7844", 36))
     elif mood == "stone":
-        for i in range(12):
+        for i in range(16):
             x = 8 + ((seed * (i + 13) + i * 23) % 110)
             y = 8 + ((seed * (i + 17) + i * 21) % 110)
-            img.ellipse(x, y, 6 + (i % 5), 3 + (i % 3), rgba(accents[i % len(accents)], 86))
+            img.ellipse(x, y, 6 + (i % 5), 3 + (i % 3), rgba(accents[i % len(accents)], 102))
+            img.line(x - 5, y - 1, x + 5, y + 1, 0.8, rgba("d6dcc9", 52))
+    elif mood == "soil":
+        for i in range(16):
+            x = 6 + ((seed * (i + 23) + i * 13) % 112)
+            y = 8 + ((seed * (i + 19) + i * 27) % 108)
+            img.line(x - 7, y, x + 8, y + ((i % 5) - 2), 1.4, rgba(accents[i % len(accents)], 78))
+    return img
+
+
+def terrain_edge_blend() -> Image:
+    img = Image()
+    for x, y, rx, ry, col, alpha in [
+        (22, 47, 28, 10, "1f3f20", 54),
+        (54, 38, 39, 12, "9c7c43", 48),
+        (87, 63, 36, 13, "384f2a", 55),
+        (54, 90, 45, 12, "16341d", 44),
+        (101, 93, 22, 8, "6b4e2f", 42),
+    ]:
+        img.ellipse(x, y, rx, ry, rgba(col, alpha))
+    for i in range(24):
+        x = 9 + ((i * 37) % 111)
+        y = 15 + ((i * 53) % 96)
+        leaf(img, x, y, (i % 8) * 0.62, 9 + (i % 6), 3.5, "82bd56", 36 + (i % 4) * 8)
     return img
 
 
@@ -464,6 +517,52 @@ def prop_leaf() -> Image:
     for cx, cy, ang, col in [(45, 70, -0.35, "3b9447"), (67, 64, -0.7, "60bb55"), (82, 76, 0.2, "428f37"), (56, 85, 0.45, "7bcf5b")]:
         leaf(img, cx, cy, ang, 38, 16, col, 220)
     img.line(33, 91, 93, 60, 2.0, rgba("1c642d", 180))
+    return img
+
+
+def prop_mushroom() -> Image:
+    img = Image()
+    img.shadow(64, 101, 30, 8, 75)
+    for x, y, s, cap in [
+        (45, 79, 1.0, "e55f78"),
+        (66, 72, 1.25, "f0b95b"),
+        (86, 84, 0.82, "d5536e"),
+    ]:
+        img.line(x, y + 4, x, y + 23 * s, 5.0 * s, rgba("f2dfb6", 235))
+        img.ellipse(x, y, 18 * s, 10 * s, rgba(cap, 245))
+        img.ellipse(x - 5 * s, y - 2 * s, 5 * s, 2.3 * s, rgba("fff1bd", 150))
+        img.ellipse(x + 7 * s, y + 1 * s, 3.4 * s, 1.8 * s, rgba("fff1bd", 140))
+    for i in range(5):
+        leaf(img, 35 + i * 13, 101 - (i % 2) * 3, -0.45 + i * 0.18, 21, 7, "65ba55", 155)
+    return img
+
+
+def prop_glow_spore() -> Image:
+    img = Image()
+    img.shadow(64, 104, 24, 6, 56)
+    for r, alpha in [(38, 28), (26, 48), (15, 70)]:
+        img.ellipse(64, 70, r, r * 0.58, rgba("8affd0", alpha))
+    for angle in [0.0, 0.9, 1.7, 2.9, 4.2, 5.1]:
+        x = 64 + math.cos(angle) * 24
+        y = 72 + math.sin(angle) * 16
+        img.line(64, 96, x, y, 2.2, rgba("4cbf7d", 160))
+        img.ellipse(x, y, 6, 5, rgba("9bffca", 230))
+        img.ellipse(x - 1, y - 1, 2, 1.8, rgba("f3ffe9", 230))
+    img.ellipse(64, 96, 12, 5, rgba("368c55", 185))
+    return img
+
+
+def prop_thorn_scrub() -> Image:
+    img = Image()
+    img.shadow(64, 101, 31, 8, 82)
+    for angle in [-1.2, -0.82, -0.45, 0.0, 0.42, 0.83, 1.25]:
+        base_x = 64 + math.sin(angle) * 14
+        img.line(base_x, 102, 64 + math.sin(angle) * 30, 45 + abs(angle) * 11, 4.4, rgba("5a322a", 220))
+        tip_x = 64 + math.sin(angle) * 30
+        tip_y = 45 + abs(angle) * 11
+        img.polygon([(tip_x, tip_y - 9), (tip_x + 5, tip_y + 7), (tip_x - 5, tip_y + 6)], rgba("e64a39", 180))
+    for x in [40, 52, 74, 88]:
+        img.ellipse(x, 92 + (x % 3), 9, 4, rgba("8d4a2e", 130))
     return img
 
 
@@ -554,10 +653,12 @@ ASSETS = [
     ("terrain_resource_grove", "terrain-resource-grove", "terrain-tile", lambda: tile("2d7134", ["4ba64a", "1d4d29", "83d85f", "a6e66c"], 37, "grass")),
     ("terrain_hazard_pressure", "terrain-hazard-pressure", "terrain-tile", lambda: tile("64302b", ["8b392e", "2f2920", "c04b31", "e75c45"], 41, "hazard")),
     ("terrain_stone_rough", "terrain-stone-rough", "terrain-tile", lambda: tile("555a50", ["73776b", "343a34", "8e927f", "b2b19c"], 53, "stone")),
+    ("terrain_edge_blend", "terrain-edge-blend", "overlay", terrain_edge_blend),
     ("prop_grass_tuft", "prop-dressing", "prop", prop_grass),
     ("prop_pebble_cluster", "prop-dressing", "prop", prop_pebble),
     ("prop_warning_shard", "prop-dressing", "prop", prop_warning),
     ("prop_leaf_patch", "prop-dressing", "prop", prop_leaf),
+    ("prop_mushroom_cluster", "prop-dressing", "prop", prop_mushroom),
     ("ui_panel_frame", "ui-panel-frame", "ui-skin", ui_panel_frame),
     ("ui_inspector_frame", "ui-inspector-frame", "ui-skin", ui_inspector_frame),
     ("ui_status_chip", "ui-status-chip", "ui-skin", ui_status_chip),
@@ -588,7 +689,7 @@ def main() -> None:
         "schema": "alife.ca44a.alpha_art_manifest.v1",
         "schema_version": 1,
         "pack_id": "alpha-art-v1",
-        "art_direction": "production-alpha-organic-topdown-v5",
+        "art_direction": "production-alpha-organic-topdown-v6",
         "entries": entries,
     }
     (OUT / "alpha_art_manifest.json").write_text(

@@ -37,6 +37,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "terrain-resource-grove",
     "terrain-hazard-pressure",
     "terrain-stone-rough",
+    "terrain-edge-blend",
     "prop-dressing",
     "ui-panel-frame",
     "ui-inspector-frame",
@@ -45,7 +46,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "ui-control-keycap",
 ];
 
-pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v5";
+pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v6";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {
