@@ -808,8 +808,8 @@ pub struct GraphicalAdvancedGameplayResource {
 
 const GRAPHICAL_WORLD_SCALE: f32 = 36.0;
 const CA37_TERRAIN_TILE_PIXEL_SIZE: f32 = GRAPHICAL_WORLD_SCALE;
-const CA37_TERRAIN_TILE_JITTER_PIXELS: f32 = 6.0;
-pub(crate) const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 1.0;
+const CA37_TERRAIN_TILE_JITTER_PIXELS: f32 = 2.0;
+pub(crate) const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 0.48;
 
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer {
@@ -2037,10 +2037,7 @@ fn spawn_ca37_world_art_terrain_canvas(
     view_mode: GraphicalPlaygroundViewMode,
     presentation: &VisibleWorldPresentation,
 ) {
-    if matches!(
-        view_mode,
-        GraphicalPlaygroundViewMode::Player | GraphicalPlaygroundViewMode::FullDebug
-    ) {
+    if matches!(view_mode, GraphicalPlaygroundViewMode::FullDebug) {
         if let Some(handles) = alpha_art {
             ca44a_spawn_world_backdrop_app(app, handles, view_mode);
         }
@@ -2065,13 +2062,10 @@ fn spawn_ca37_world_art_terrain_canvas(
 fn ca44a_spawn_world_backdrop_app(
     app: &mut App,
     handles: &GraphicalAlphaArtHandles,
-    view_mode: GraphicalPlaygroundViewMode,
+    _view_mode: GraphicalPlaygroundViewMode,
 ) {
-    let alpha = if view_mode == GraphicalPlaygroundViewMode::Player {
-        1.0
-    } else {
-        0.35
-    };
+    let alpha = 0.35;
+    let layer_role = "world-painted-viewport";
     app.world_mut().spawn((
         Name::new("A-Life alpha procedural painted viewport"),
         Sprite {
@@ -2082,11 +2076,11 @@ fn ca44a_spawn_world_backdrop_app(
         },
         Transform::from_xyz(0.0, 0.0, -1.94),
         GraphicalAlphaArtBackedSprite {
-            role: "world-painted-viewport",
+            role: layer_role,
             stable_id: None,
         },
         GraphicalProductionArtLayer {
-            role: "world-painted-viewport",
+            role: layer_role,
             display_only: true,
         },
     ));
@@ -2376,6 +2370,10 @@ fn ca44a_spawn_alpha_terrain_tile_app(
             rendering_required_for_generation: false,
             materialized_only_near_active_views: field.materialized_only_near_active_views,
         },
+        GraphicalProductionArtLayer {
+            role: "streamed-procedural-terrain",
+            display_only: true,
+        },
     ));
     if hash % 7 == 0 {
         let edge_rotation = (rotation_degrees + 38.0).to_radians();
@@ -2477,12 +2475,12 @@ fn ca44a_terrain_jitter_y(hash: i32) -> f32 {
 
 fn ca44a_terrain_tile_width(hash: i32) -> f32 {
     let variant = ((hash & 0x7) as f32) / 7.0;
-    CA37_TERRAIN_TILE_PIXEL_SIZE * (0.78 + variant * 0.08)
+    CA37_TERRAIN_TILE_PIXEL_SIZE * (1.12 + variant * 0.06)
 }
 
 fn ca44a_terrain_tile_height(hash: i32) -> f32 {
     let variant = (((hash >> 4) & 0x7) as f32) / 7.0;
-    CA37_TERRAIN_TILE_PIXEL_SIZE * (0.72 + variant * 0.08)
+    CA37_TERRAIN_TILE_PIXEL_SIZE * (1.08 + variant * 0.06)
 }
 
 fn ca44a_terrain_rotation_degrees(hash: i32) -> f32 {
@@ -2491,11 +2489,11 @@ fn ca44a_terrain_rotation_degrees(hash: i32) -> f32 {
 
 fn ca44a_alpha_terrain_opacity(material_id: &str) -> f32 {
     match material_id {
-        "hazard-pressure" => 0.034,
-        "resource-grove" => 0.026,
-        "stone-dressing" => 0.020,
-        "neutral-soil" => 0.018,
-        _ => 0.014,
+        "hazard-pressure" => 0.97,
+        "resource-grove" => 0.96,
+        "stone-dressing" => 0.93,
+        "neutral-soil" => 0.92,
+        _ => 0.95,
     }
 }
 
@@ -2666,6 +2664,10 @@ fn ca44a_spawn_alpha_terrain_tile_commands(
             creature_authoritative_chunk: anchor.is_some(),
             rendering_required_for_generation: false,
             materialized_only_near_active_views: field.materialized_only_near_active_views,
+        },
+        GraphicalProductionArtLayer {
+            role: "streamed-procedural-terrain",
+            display_only: true,
         },
     ));
     if hash % 7 == 0 {
@@ -2877,11 +2879,11 @@ fn ca44a_prop_art_for_material(
 }
 
 fn ca44a_player_dressing_prop_width(width_world: f32) -> f32 {
-    (width_world * GRAPHICAL_WORLD_SCALE * 0.22).clamp(4.0, 12.0)
+    (width_world * GRAPHICAL_WORLD_SCALE * 0.42).clamp(9.0, 22.0)
 }
 
 fn ca44a_player_dressing_prop_height(height_world: f32) -> f32 {
-    (height_world * GRAPHICAL_WORLD_SCALE * 0.22).clamp(4.0, 11.0)
+    (height_world * GRAPHICAL_WORLD_SCALE * 0.42).clamp(8.0, 20.0)
 }
 
 fn ca44a_procedural_content_art_handle(
@@ -2900,10 +2902,10 @@ fn ca44a_procedural_content_art_handle(
 
 fn ca44a_procedural_content_sprite_size(kind: ProceduralWorldContentKind) -> Vec2 {
     match kind {
-        ProceduralWorldContentKind::Food => Vec2::splat(4.2),
-        ProceduralWorldContentKind::Hazard => Vec2::splat(6.8),
-        ProceduralWorldContentKind::Obstacle => Vec2::splat(6.4),
-        ProceduralWorldContentKind::DressingProp => Vec2::splat(3.2),
+        ProceduralWorldContentKind::Food => Vec2::splat(11.0),
+        ProceduralWorldContentKind::Hazard => Vec2::splat(16.0),
+        ProceduralWorldContentKind::Obstacle => Vec2::splat(16.0),
+        ProceduralWorldContentKind::DressingProp => Vec2::splat(8.0),
     }
 }
 
@@ -3333,11 +3335,11 @@ fn ca44a_entity_shadow_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
 
 fn ca44a_player_sprite_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
     match object.kind {
-        WorldObjectKind::Agent => Vec2::new(7.5, 6.8),
-        WorldObjectKind::Food => Vec2::splat(4.5),
-        WorldObjectKind::Hazard => Vec2::splat(7.0),
-        WorldObjectKind::Obstacle => Vec2::splat(6.5),
-        WorldObjectKind::Token => Vec2::new(4.5, 3.8),
+        WorldObjectKind::Agent => Vec2::new(21.0, 19.0),
+        WorldObjectKind::Food => Vec2::splat(12.0),
+        WorldObjectKind::Hazard => Vec2::splat(19.0),
+        WorldObjectKind::Obstacle => Vec2::splat(18.0),
+        WorldObjectKind::Token => Vec2::new(11.0, 9.0),
     }
 }
 
@@ -4395,7 +4397,7 @@ fn ca38_pose_from_runtime(
 }
 
 fn ca38_graphical_creature_size(pose: crate::Ca38CreaturePose) -> Vec2 {
-    Vec2::new(7.5 * pose.scale_x, 6.8 * pose.scale_y)
+    Vec2::new(21.0 * pose.scale_x, 19.0 * pose.scale_y)
 }
 
 fn ca38_graphical_creature_scale(
