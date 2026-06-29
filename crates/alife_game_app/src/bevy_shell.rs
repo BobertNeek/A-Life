@@ -18,9 +18,9 @@ use bevy::{
     prelude::{
         default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Component,
         DefaultPlugins, Entity, GlobalTransform, ImageNode, KeyCode, MessageWriter, MinimalPlugins,
-        MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Res, ResMut, Resource,
-        Sprite, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val, Vec2, Vec3,
-        Visibility, With, Without,
+        MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Quat, Res, ResMut,
+        Resource, Sprite, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val, Vec2,
+        Vec3, Visibility, With, Without,
     },
     window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
 };
@@ -97,10 +97,12 @@ pub struct GraphicalAlphaArtHandles {
     pub terrain_resource_grove: Handle<Image>,
     pub terrain_hazard_pressure: Handle<Image>,
     pub terrain_stone_rough: Handle<Image>,
+    pub terrain_edge_blend: Handle<Image>,
     pub prop_grass_tuft: Handle<Image>,
     pub prop_pebble_cluster: Handle<Image>,
     pub prop_warning_shard: Handle<Image>,
     pub prop_leaf_patch: Handle<Image>,
+    pub prop_mushroom_cluster: Handle<Image>,
     pub ui_panel_frame: Handle<Image>,
     pub ui_inspector_frame: Handle<Image>,
     pub ui_status_chip: Handle<Image>,
@@ -132,10 +134,12 @@ impl GraphicalAlphaArtHandles {
             terrain_resource_grove: asset_server.load("alpha_art_v1/terrain_resource_grove.png"),
             terrain_hazard_pressure: asset_server.load("alpha_art_v1/terrain_hazard_pressure.png"),
             terrain_stone_rough: asset_server.load("alpha_art_v1/terrain_stone_rough.png"),
+            terrain_edge_blend: asset_server.load("alpha_art_v1/terrain_edge_blend.png"),
             prop_grass_tuft: asset_server.load("alpha_art_v1/prop_grass_tuft.png"),
             prop_pebble_cluster: asset_server.load("alpha_art_v1/prop_pebble_cluster.png"),
             prop_warning_shard: asset_server.load("alpha_art_v1/prop_warning_shard.png"),
             prop_leaf_patch: asset_server.load("alpha_art_v1/prop_leaf_patch.png"),
+            prop_mushroom_cluster: asset_server.load("alpha_art_v1/prop_mushroom_cluster.png"),
             ui_panel_frame: asset_server.load("alpha_art_v1/ui_panel_frame.png"),
             ui_inspector_frame: asset_server.load("alpha_art_v1/ui_inspector_frame.png"),
             ui_status_chip: asset_server.load("alpha_art_v1/ui_status_chip.png"),
@@ -167,10 +171,12 @@ impl GraphicalAlphaArtHandles {
             terrain_resource_grove: Handle::default(),
             terrain_hazard_pressure: Handle::default(),
             terrain_stone_rough: Handle::default(),
+            terrain_edge_blend: Handle::default(),
             prop_grass_tuft: Handle::default(),
             prop_pebble_cluster: Handle::default(),
             prop_warning_shard: Handle::default(),
             prop_leaf_patch: Handle::default(),
+            prop_mushroom_cluster: Handle::default(),
             ui_panel_frame: Handle::default(),
             ui_inspector_frame: Handle::default(),
             ui_status_chip: Handle::default(),
@@ -458,6 +464,8 @@ pub struct GraphicalWorldArtTerrainTile {
     pub tile_z: i32,
     pub material_id: &'static str,
     pub tile_size_pixels: f32,
+    pub organic_rotation_degrees: f32,
+    pub opacity: f32,
     pub viewport_slice: bool,
     pub display_only: bool,
 }
@@ -1725,7 +1733,7 @@ fn spawn_ca37_world_art_dressing(
     for prop in &summary.dressing_props {
         if view_mode == GraphicalPlaygroundViewMode::Player {
             if let Some(handles) = alpha_art {
-                let (image, role) = ca44a_prop_art_for_material(handles, prop.material_id);
+                let (image, role) = ca44a_prop_art_for_material(handles, prop.material_id, prop.id);
                 app.world_mut().spawn((
                     Name::new(format!(
                         "A-Life CA44A art prop {} {}",
@@ -1877,8 +1885,16 @@ fn spawn_ca37_world_art_terrain_canvas(
             let jitter_x = ((hash % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0);
             let jitter_y =
                 (((hash / 7) % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0);
-            let width = CA37_TERRAIN_TILE_PIXEL_SIZE * (0.98 + ((hash % 3) as f32) * 0.015);
-            let height = CA37_TERRAIN_TILE_PIXEL_SIZE * (0.98 + (((hash / 3) % 3) as f32) * 0.015);
+            let width = CA37_TERRAIN_TILE_PIXEL_SIZE * (1.08 + ((hash % 5) as f32) * 0.035);
+            let height = CA37_TERRAIN_TILE_PIXEL_SIZE * (1.04 + (((hash / 5) % 5) as f32) * 0.032);
+            let rotation_degrees = ((hash % 16) as f32 - 7.5) * 3.0;
+            let opacity = match material_id {
+                "hazard-pressure" => 0.82,
+                "resource-grove" => 0.78,
+                "stone-dressing" => 0.70,
+                "neutral-soil" => 0.66,
+                _ => 0.62,
+            };
             if view_mode == GraphicalPlaygroundViewMode::Player {
                 if let Some(handles) = alpha_art {
                     let (image, role) = ca44a_terrain_art_for_material(handles, material_id);
@@ -1886,7 +1902,7 @@ fn spawn_ca37_world_art_terrain_canvas(
                         Name::new(format!("A-Life CA44A terrain art {material_id} {ix}:{iz}")),
                         Sprite {
                             image,
-                            color: Color::srgba(1.0, 1.0, 1.0, 0.78),
+                            color: Color::srgba(1.0, 1.0, 1.0, opacity),
                             custom_size: Some(Vec2::new(width, height)),
                             ..default()
                         },
@@ -1894,7 +1910,8 @@ fn spawn_ca37_world_art_terrain_canvas(
                             ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x,
                             iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y,
                             -1.42,
-                        ),
+                        )
+                        .with_rotation(Quat::from_rotation_z(rotation_degrees.to_radians())),
                         GraphicalAlphaArtBackedSprite {
                             role,
                             stable_id: None,
@@ -1904,10 +1921,43 @@ fn spawn_ca37_world_art_terrain_canvas(
                             tile_z: iz,
                             material_id,
                             tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
+                            organic_rotation_degrees: rotation_degrees,
+                            opacity,
                             viewport_slice: summary.local_viewport_is_smaller_than_map,
                             display_only: true,
                         },
                     ));
+                    if hash % 7 == 0 {
+                        let edge_rotation = (rotation_degrees + 38.0).to_radians();
+                        app.world_mut().spawn((
+                            Name::new(format!(
+                                "A-Life production terrain edge blend {material_id} {ix}:{iz}"
+                            )),
+                            Sprite {
+                                image: handles.terrain_edge_blend.clone(),
+                                color: Color::srgba(1.0, 1.0, 1.0, 0.34),
+                                custom_size: Some(Vec2::new(
+                                    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.65,
+                                    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.18,
+                                )),
+                                ..default()
+                            },
+                            Transform::from_xyz(
+                                ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x * 0.6,
+                                iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y * 0.6,
+                                -1.32,
+                            )
+                            .with_rotation(Quat::from_rotation_z(edge_rotation)),
+                            GraphicalAlphaArtBackedSprite {
+                                role: "terrain-edge-blend",
+                                stable_id: None,
+                            },
+                            GraphicalProductionArtLayer {
+                                role: "terrain-edge-blend",
+                                display_only: true,
+                            },
+                        ));
+                    }
                     continue;
                 }
             }
@@ -1928,6 +1978,8 @@ fn spawn_ca37_world_art_terrain_canvas(
                     tile_z: iz,
                     material_id,
                     tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
+                    organic_rotation_degrees: 0.0,
+                    opacity: ca37_terrain_tile_alpha(material_id),
                     viewport_slice: summary.local_viewport_is_smaller_than_map,
                     display_only: true,
                 },
@@ -1962,13 +2014,31 @@ fn ca44a_terrain_art_for_material(
 fn ca44a_prop_art_for_material(
     handles: &GraphicalAlphaArtHandles,
     material_id: &str,
+    prop_id: &str,
 ) -> (Handle<Image>, &'static str) {
+    let variant = ca37_seeded_prop_variant(prop_id);
     match material_id {
         "hazard-pressure" => (handles.prop_warning_shard.clone(), "prop-dressing"),
         "stone-dressing" => (handles.prop_pebble_cluster.clone(), "prop-dressing"),
-        "resource-grove" => (handles.prop_leaf_patch.clone(), "prop-dressing"),
-        _ => (handles.prop_grass_tuft.clone(), "prop-dressing"),
+        "resource-grove" => match variant % 3 {
+            0 => (handles.prop_leaf_patch.clone(), "prop-dressing"),
+            1 => (handles.prop_mushroom_cluster.clone(), "prop-dressing"),
+            _ => (handles.prop_grass_tuft.clone(), "prop-dressing"),
+        },
+        _ => {
+            if variant % 5 == 0 {
+                (handles.prop_mushroom_cluster.clone(), "prop-dressing")
+            } else {
+                (handles.prop_grass_tuft.clone(), "prop-dressing")
+            }
+        }
     }
+}
+
+fn ca37_seeded_prop_variant(prop_id: &str) -> u32 {
+    prop_id.bytes().fold(0_u32, |acc, value| {
+        acc.wrapping_mul(33).wrapping_add(value as u32)
+    })
 }
 
 fn ca37_terrain_tile_material(seed: u64, ix: i32, iz: i32) -> &'static str {
@@ -2013,11 +2083,46 @@ fn ca37_seeded_terrain_hash(seed: u64, ix: i32, iz: i32) -> i32 {
 fn ca37_terrain_tile_color(seed: u64, material_id: &str, ix: i32, iz: i32) -> Color {
     let shade = ((ca37_seeded_terrain_hash(seed, ix, iz) % 7) as f32) * 0.008;
     match material_id {
-        "neutral-soil" => Color::srgba(0.39 + shade, 0.29 + shade, 0.17, 0.13),
-        "resource-grove" => Color::srgba(0.14 + shade, 0.48 + shade, 0.18, 0.15),
-        "hazard-pressure" => Color::srgba(0.58 + shade, 0.20, 0.15, 0.16),
-        "stone-dressing" => Color::srgba(0.31 + shade, 0.34 + shade, 0.27, 0.12),
-        _ => Color::srgba(0.17 + shade, 0.39 + shade, 0.18, 0.12),
+        "neutral-soil" => Color::srgba(
+            0.39 + shade,
+            0.29 + shade,
+            0.17,
+            ca37_terrain_tile_alpha(material_id),
+        ),
+        "resource-grove" => Color::srgba(
+            0.14 + shade,
+            0.48 + shade,
+            0.18,
+            ca37_terrain_tile_alpha(material_id),
+        ),
+        "hazard-pressure" => Color::srgba(
+            0.58 + shade,
+            0.20,
+            0.15,
+            ca37_terrain_tile_alpha(material_id),
+        ),
+        "stone-dressing" => Color::srgba(
+            0.31 + shade,
+            0.34 + shade,
+            0.27,
+            ca37_terrain_tile_alpha(material_id),
+        ),
+        _ => Color::srgba(
+            0.17 + shade,
+            0.39 + shade,
+            0.18,
+            ca37_terrain_tile_alpha(material_id),
+        ),
+    }
+}
+
+fn ca37_terrain_tile_alpha(material_id: &str) -> f32 {
+    match material_id {
+        "hazard-pressure" => 0.12,
+        "resource-grove" => 0.11,
+        "stone-dressing" => 0.10,
+        "neutral-soil" => 0.10,
+        _ => 0.09,
     }
 }
 

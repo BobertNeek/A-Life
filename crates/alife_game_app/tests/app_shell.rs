@@ -2108,9 +2108,9 @@ fn ca44a_committed_alpha_art_manifest_validates_required_roles_and_pngs() {
         summary.schema_version,
         alife_game_app::CA44A_ALPHA_ART_MANIFEST_SCHEMA_VERSION
     );
-    assert!(summary.entry_count >= 30);
+    assert!(summary.entry_count >= 32);
     assert!(summary.required_roles_present);
-    assert!(summary.prop_variant_count >= 3);
+    assert!(summary.prop_variant_count >= 5);
     assert!(summary.largest_file_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_ASSET_BYTES);
     assert!(summary.png_dimensions_validated);
     assert!(summary.forbidden_artifact_paths_rejected);
@@ -2214,6 +2214,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "terrain-resource-grove",
         "terrain-hazard-pressure",
         "terrain-stone-rough",
+        "terrain-edge-blend",
         "prop-dressing",
     ] {
         assert!(roles.contains(&role), "missing alpha art role {role}");
@@ -2235,6 +2236,64 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
     assert!(badge_query
         .iter(app.world())
         .all(|(visibility, _)| *visibility == bevy::prelude::Visibility::Hidden));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn production_world_art_atlas_v2_breaks_up_debug_checkerboard() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch).unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let mut terrain_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
+    let tiles = terrain_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert!(
+        tiles.len() >= 100,
+        "expected a visible map slice, not one screen tile"
+    );
+    assert!(
+        tiles.iter().all(|tile| tile.display_only),
+        "terrain art must remain presentation-only"
+    );
+    assert!(
+        tiles
+            .iter()
+            .any(|tile| tile.organic_rotation_degrees.abs() > 2.0),
+        "Player View terrain should rotate organic patch art instead of a rigid grid"
+    );
+    assert!(
+        tiles.iter().any(|tile| tile.opacity < 0.75),
+        "Player View terrain should use translucent art patches instead of opaque blocks"
+    );
+    assert!(
+        tiles
+            .iter()
+            .all(|tile| (0.0..=0.85).contains(&tile.opacity)),
+        "terrain opacity should stay below debug-block levels"
+    );
+
+    let mut layer_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalProductionArtLayer>();
+    let layers = layer_query.iter(app.world()).copied().collect::<Vec<_>>();
+    let edge_blend_count = layers
+        .iter()
+        .filter(|layer| layer.role == "terrain-edge-blend")
+        .count();
+    assert!(
+        edge_blend_count >= 8,
+        "expected asset-backed terrain edge blends to soften the tile grid"
+    );
+    assert!(
+        layers.iter().all(|layer| layer.display_only),
+        "world-art blend layers must not become simulation authority"
+    );
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2269,12 +2328,20 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         .iter()
         .filter(|layer| layer.role == "entity-shadow")
         .count();
+    let edge_blend_count = layers
+        .iter()
+        .filter(|layer| layer.role == "terrain-edge-blend")
+        .count();
 
     assert!(canopy_count >= 5, "expected multiple canopy shadow layers");
     assert!(light_pool_count >= 3, "expected multiple light-pool layers");
     assert!(
         shadow_count >= 4,
         "expected asset-backed entity shadows for visible objects"
+    );
+    assert!(
+        edge_blend_count >= 8,
+        "expected terrain edge-blend layers to soften tile seams"
     );
 }
 
