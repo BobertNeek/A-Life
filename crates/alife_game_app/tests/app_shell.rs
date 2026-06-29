@@ -814,14 +814,44 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
     let tiles = tile_query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert_eq!(tiles.len(), CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES);
+    let field = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>();
+    assert_eq!(
+        field.virtual_map_width_tiles * field.virtual_map_height_tiles,
+        CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
+        "CA37 virtual terrain should keep its full seeded map size"
+    );
+    assert!(
+        tiles.len() < CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES / 4,
+        "Player View should materialize only active procedural chunks, not render the full virtual map"
+    );
+    assert!(
+        field.materialized_only_near_active_views,
+        "large terrain map should remain virtual until active view/creature anchors need chunks"
+    );
+    assert_eq!(
+        field.materialized_tiles.len(),
+        tiles.len(),
+        "rendered terrain tiles should match the materialized virtual chunk ledger"
+    );
     assert!(tiles.iter().all(|tile| tile.display_only));
     assert!(tiles.iter().all(|tile| tile.viewport_slice));
     assert!(tiles.iter().all(|tile| tile.tile_size_pixels >= 100.0));
-    assert!(tiles.iter().any(|tile| tile.tile_x <= -20));
-    assert!(tiles.iter().any(|tile| tile.tile_x >= 20));
-    assert!(tiles.iter().any(|tile| tile.tile_z <= -15));
-    assert!(tiles.iter().any(|tile| tile.tile_z >= 15));
+    assert!(field.virtual_map_width_tiles >= 97);
+    assert!(field.virtual_map_height_tiles >= 73);
+    assert!(
+        field.chunk_radius_x < (field.virtual_map_width_tiles as i32 / 2)
+            && field.chunk_radius_z < (field.virtual_map_height_tiles as i32 / 2),
+        "active terrain chunks should be smaller than the full virtual map"
+    );
+    assert!(
+        tiles.iter().any(|tile| tile.tile_x < 0)
+            && tiles.iter().any(|tile| tile.tile_x > 0)
+            && tiles.iter().any(|tile| tile.tile_z < 0)
+            && tiles.iter().any(|tile| tile.tile_z > 0),
+        "initial active chunk slice should cover the local world around the selected creature"
+    );
     assert!(tiles.iter().any(|tile| tile.material_id == "safe-grass"));
     assert!(tiles
         .iter()
@@ -2240,7 +2270,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
-fn production_world_art_atlas_v2_breaks_up_debug_checkerboard() {
+fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
     let (mut app, summary) =
@@ -2253,9 +2283,23 @@ fn production_world_art_atlas_v2_breaks_up_debug_checkerboard() {
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
     let tiles = terrain_query.iter(app.world()).copied().collect::<Vec<_>>();
+    let field = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>();
     assert!(
         tiles.len() >= 100,
         "expected a visible map slice, not one screen tile"
+    );
+    assert!(
+        tiles.len() < field.virtual_map_width_tiles * field.virtual_map_height_tiles / 4,
+        "Player View should materialize terrain chunks, not the full virtual world as a board"
+    );
+    assert!(field.materialized_only_near_active_views);
+    assert!(field.virtual_map_width_tiles >= 97);
+    assert!(field.virtual_map_height_tiles >= 73);
+    assert!(
+        field.materialized_tiles.len() >= 17 * 11,
+        "at least one local viewport chunk should be generated"
     );
     assert!(
         tiles.iter().all(|tile| tile.display_only),
@@ -2268,13 +2312,13 @@ fn production_world_art_atlas_v2_breaks_up_debug_checkerboard() {
         "Player View terrain should rotate organic patch art instead of a rigid grid"
     );
     assert!(
-        tiles.iter().any(|tile| tile.opacity < 0.75),
+        tiles.iter().any(|tile| tile.opacity < 0.40),
         "Player View terrain should use translucent art patches instead of opaque blocks"
     );
     assert!(
         tiles
             .iter()
-            .all(|tile| (0.0..=0.85).contains(&tile.opacity)),
+            .all(|tile| (0.0..=0.50).contains(&tile.opacity)),
         "terrain opacity should stay below debug-block levels"
     );
 
@@ -2293,6 +2337,26 @@ fn production_world_art_atlas_v2_breaks_up_debug_checkerboard() {
     assert!(
         layers.iter().all(|layer| layer.display_only),
         "world-art blend layers must not become simulation authority"
+    );
+
+    let mut chunk_query =
+        app.world_mut()
+            .query::<&alife_game_app::bevy_shell::GraphicalProceduralTerrainChunkTile>();
+    let chunks = chunk_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(
+        chunks.len(),
+        tiles.len(),
+        "each rendered terrain tile should record its virtual chunk provenance"
+    );
+    assert!(
+        chunks
+            .iter()
+            .all(|chunk| chunk.materialized_only_near_active_views),
+        "procedural terrain should exist only near active view/creature anchors"
+    );
+    assert!(
+        chunks.iter().any(|chunk| chunk.anchor_stable_id.is_some()),
+        "initial terrain should include creature-anchored chunks"
     );
 }
 

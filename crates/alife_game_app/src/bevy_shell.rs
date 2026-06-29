@@ -1,6 +1,7 @@
 //! Feature-gated Bevy playground shell split during R13 remediation.
 
 use std::{
+    collections::BTreeSet,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -16,11 +17,11 @@ use bevy::{
     asset::{AssetPlugin, AssetServer, Handle},
     image::Image,
     prelude::{
-        default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Component,
-        DefaultPlugins, Entity, GlobalTransform, ImageNode, KeyCode, MessageWriter, MinimalPlugins,
-        MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Quat, Res, ResMut,
-        Resource, Sprite, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val, Vec2,
-        Vec3, Visibility, With, Without,
+        default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Commands,
+        Component, DefaultPlugins, Entity, GlobalTransform, ImageNode, KeyCode, MessageWriter,
+        MinimalPlugins, MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Quat, Res,
+        ResMut, Resource, Sprite, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val,
+        Vec2, Vec3, Visibility, With, Without,
     },
     window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
 };
@@ -471,6 +472,28 @@ pub struct GraphicalWorldArtTerrainTile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalProceduralTerrainChunkTile {
+    pub anchor_stable_id: Option<WorldEntityId>,
+    pub chunk_center_tile_x: i32,
+    pub chunk_center_tile_z: i32,
+    pub virtual_map_width_tiles: usize,
+    pub virtual_map_height_tiles: usize,
+    pub materialized_only_near_active_views: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalProceduralTerrainFieldResource {
+    pub seed: u64,
+    pub virtual_map_width_tiles: usize,
+    pub virtual_map_height_tiles: usize,
+    pub chunk_radius_x: i32,
+    pub chunk_radius_z: i32,
+    pub materialized_tiles: BTreeSet<(i32, i32)>,
+    pub materialized_chunk_count: usize,
+    pub materialized_only_near_active_views: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalProductionArtLayer {
     pub role: &'static str,
     pub display_only: bool,
@@ -794,6 +817,7 @@ pub fn build_graphical_playground_app_shell(
                 update_graphical_gpu_visual_cues,
                 update_graphical_feedback_pulses,
                 update_graphical_intent_feedback,
+                update_graphical_procedural_terrain_field,
                 update_graphical_feedback_overlay,
                 update_graphical_population_overlay,
                 update_graphical_ecology_overlay,
@@ -1096,7 +1120,13 @@ fn spawn_graphical_playground_scene(
         spawn_ca19_terrain_zone_visuals(app, ecology);
     }
     if let Some(world_art) = world_art {
-        spawn_ca37_world_art_dressing(app, world_art, alpha_art.as_ref(), summary.view_mode);
+        spawn_ca37_world_art_dressing(
+            app,
+            world_art,
+            alpha_art.as_ref(),
+            summary.view_mode,
+            presentation,
+        );
     }
 
     for object in &presentation.objects {
@@ -1727,8 +1757,9 @@ fn spawn_ca37_world_art_dressing(
     summary: &Ca37WorldArtStyleSummary,
     alpha_art: Option<&GraphicalAlphaArtHandles>,
     view_mode: GraphicalPlaygroundViewMode,
+    presentation: &VisibleWorldPresentation,
 ) {
-    spawn_ca37_world_art_terrain_canvas(app, summary, alpha_art, view_mode);
+    spawn_ca37_world_art_terrain_canvas(app, summary, alpha_art, view_mode, presentation);
     spawn_production_player_view_ambient_layers(app, summary, alpha_art, view_mode);
     for prop in &summary.dressing_props {
         if view_mode == GraphicalPlaygroundViewMode::Player {
@@ -1875,121 +1906,492 @@ fn spawn_ca37_world_art_terrain_canvas(
     summary: &Ca37WorldArtStyleSummary,
     alpha_art: Option<&GraphicalAlphaArtHandles>,
     view_mode: GraphicalPlaygroundViewMode,
+    presentation: &VisibleWorldPresentation,
 ) {
-    let half_width = (summary.visual_map_width_tiles as i32) / 2;
-    let half_height = (summary.visual_map_height_tiles as i32) / 2;
-    for ix in -half_width..=half_width {
-        for iz in -half_height..=half_height {
-            let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
-            let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
-            let jitter_x = ((hash % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0);
-            let jitter_y =
-                (((hash / 7) % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0);
-            let width = CA37_TERRAIN_TILE_PIXEL_SIZE * (1.08 + ((hash % 5) as f32) * 0.035);
-            let height = CA37_TERRAIN_TILE_PIXEL_SIZE * (1.04 + (((hash / 5) % 5) as f32) * 0.032);
-            let rotation_degrees = ((hash % 16) as f32 - 7.5) * 3.0;
-            let opacity = match material_id {
-                "hazard-pressure" => 0.82,
-                "resource-grove" => 0.78,
-                "stone-dressing" => 0.70,
-                "neutral-soil" => 0.66,
-                _ => 0.62,
-            };
-            if view_mode == GraphicalPlaygroundViewMode::Player {
-                if let Some(handles) = alpha_art {
-                    let (image, role) = ca44a_terrain_art_for_material(handles, material_id);
-                    app.world_mut().spawn((
-                        Name::new(format!("A-Life CA44A terrain art {material_id} {ix}:{iz}")),
-                        Sprite {
-                            image,
-                            color: Color::srgba(1.0, 1.0, 1.0, opacity),
-                            custom_size: Some(Vec2::new(width, height)),
-                            ..default()
-                        },
-                        Transform::from_xyz(
-                            ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x,
-                            iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y,
-                            -1.42,
-                        )
-                        .with_rotation(Quat::from_rotation_z(rotation_degrees.to_radians())),
-                        GraphicalAlphaArtBackedSprite {
-                            role,
-                            stable_id: None,
-                        },
-                        GraphicalWorldArtTerrainTile {
-                            tile_x: ix,
-                            tile_z: iz,
-                            material_id,
-                            tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
-                            organic_rotation_degrees: rotation_degrees,
-                            opacity,
-                            viewport_slice: summary.local_viewport_is_smaller_than_map,
-                            display_only: true,
-                        },
-                    ));
-                    if hash % 7 == 0 {
-                        let edge_rotation = (rotation_degrees + 38.0).to_radians();
-                        app.world_mut().spawn((
-                            Name::new(format!(
-                                "A-Life production terrain edge blend {material_id} {ix}:{iz}"
-                            )),
-                            Sprite {
-                                image: handles.terrain_edge_blend.clone(),
-                                color: Color::srgba(1.0, 1.0, 1.0, 0.34),
-                                custom_size: Some(Vec2::new(
-                                    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.65,
-                                    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.18,
-                                )),
-                                ..default()
-                            },
-                            Transform::from_xyz(
-                                ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x * 0.6,
-                                iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y * 0.6,
-                                -1.32,
-                            )
-                            .with_rotation(Quat::from_rotation_z(edge_rotation)),
-                            GraphicalAlphaArtBackedSprite {
-                                role: "terrain-edge-blend",
-                                stable_id: None,
-                            },
-                            GraphicalProductionArtLayer {
-                                role: "terrain-edge-blend",
-                                display_only: true,
-                            },
-                        ));
-                    }
-                    continue;
-                }
-            }
-            app.world_mut().spawn((
-                Name::new(format!("A-Life CA37 terrain wash {material_id} {ix}:{iz}")),
-                Sprite {
-                    color: ca37_terrain_tile_color(summary.seed, material_id, ix, iz),
-                    custom_size: Some(Vec2::new(width, height)),
-                    ..default()
-                },
-                Transform::from_xyz(
-                    ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x,
-                    iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y,
-                    -1.45,
-                ),
-                GraphicalWorldArtTerrainTile {
-                    tile_x: ix,
-                    tile_z: iz,
-                    material_id,
-                    tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
-                    organic_rotation_degrees: 0.0,
-                    opacity: ca37_terrain_tile_alpha(material_id),
-                    viewport_slice: summary.local_viewport_is_smaller_than_map,
-                    display_only: true,
-                },
-                GraphicalAlphaArtFallbackSprite {
-                    role: "terrain-fallback",
-                    reason: "alpha art handles unavailable",
-                },
+    let mut field = GraphicalProceduralTerrainFieldResource::new(summary);
+    for (center_x, center_z, anchor) in
+        ca44a_initial_procedural_terrain_centers(summary, presentation)
+    {
+        ca44a_materialize_terrain_chunk_app(
+            app, summary, &mut field, alpha_art, view_mode, center_x, center_z, anchor,
+        );
+    }
+    app.insert_resource(field);
+}
+
+impl GraphicalProceduralTerrainFieldResource {
+    fn new(summary: &Ca37WorldArtStyleSummary) -> Self {
+        Self {
+            seed: summary.seed,
+            virtual_map_width_tiles: summary.visual_map_width_tiles,
+            virtual_map_height_tiles: summary.visual_map_height_tiles,
+            chunk_radius_x: (summary.viewport_width_tiles as i32 / 2).max(4),
+            chunk_radius_z: (summary.viewport_height_tiles as i32 / 2).max(3),
+            materialized_tiles: BTreeSet::new(),
+            materialized_chunk_count: 0,
+            materialized_only_near_active_views: true,
+        }
+    }
+}
+
+fn ca44a_initial_procedural_terrain_centers(
+    summary: &Ca37WorldArtStyleSummary,
+    presentation: &VisibleWorldPresentation,
+) -> Vec<(i32, i32, Option<WorldEntityId>)> {
+    let mut centers = Vec::new();
+    for object in &presentation.objects {
+        if object.kind == WorldObjectKind::Agent {
+            centers.push((
+                ca44a_world_coord_to_tile(object.position.x),
+                ca44a_world_coord_to_tile(object.position.z),
+                Some(object.stable_id),
             ));
         }
     }
+    if centers.is_empty() {
+        centers.push((0, 0, None));
+    }
+    let half_x = summary.visual_map_width_tiles as i32 / 2;
+    let half_z = summary.visual_map_height_tiles as i32 / 2;
+    centers
+        .into_iter()
+        .map(|(x, z, anchor)| (x.clamp(-half_x, half_x), z.clamp(-half_z, half_z), anchor))
+        .collect()
+}
+
+fn ca44a_world_coord_to_tile(value: f32) -> i32 {
+    value.round() as i32
+}
+
+fn ca44a_materialize_terrain_chunk_app(
+    app: &mut App,
+    summary: &Ca37WorldArtStyleSummary,
+    field: &mut GraphicalProceduralTerrainFieldResource,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    view_mode: GraphicalPlaygroundViewMode,
+    center_x: i32,
+    center_z: i32,
+    anchor: Option<WorldEntityId>,
+) {
+    field.materialized_chunk_count = field.materialized_chunk_count.saturating_add(1);
+    for ix in center_x - field.chunk_radius_x..=center_x + field.chunk_radius_x {
+        for iz in center_z - field.chunk_radius_z..=center_z + field.chunk_radius_z {
+            if !ca44a_virtual_tile_in_bounds(field, ix, iz)
+                || !field.materialized_tiles.insert((ix, iz))
+            {
+                continue;
+            }
+            ca44a_spawn_terrain_tile_app(
+                app, summary, field, alpha_art, view_mode, ix, iz, center_x, center_z, anchor,
+            );
+        }
+    }
+}
+
+fn ca44a_virtual_tile_in_bounds(
+    field: &GraphicalProceduralTerrainFieldResource,
+    ix: i32,
+    iz: i32,
+) -> bool {
+    let half_x = field.virtual_map_width_tiles as i32 / 2;
+    let half_z = field.virtual_map_height_tiles as i32 / 2;
+    (-half_x..=half_x).contains(&ix) && (-half_z..=half_z).contains(&iz)
+}
+
+fn ca44a_spawn_terrain_tile_app(
+    app: &mut App,
+    summary: &Ca37WorldArtStyleSummary,
+    field: &GraphicalProceduralTerrainFieldResource,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    view_mode: GraphicalPlaygroundViewMode,
+    ix: i32,
+    iz: i32,
+    center_x: i32,
+    center_z: i32,
+    anchor: Option<WorldEntityId>,
+) {
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        if let Some(handles) = alpha_art {
+            ca44a_spawn_alpha_terrain_tile_app(
+                app, summary, field, handles, ix, iz, center_x, center_z, anchor,
+            );
+            return;
+        }
+    }
+    ca44a_spawn_fallback_terrain_tile_app(app, summary, field, ix, iz, center_x, center_z, anchor);
+}
+
+fn ca44a_spawn_alpha_terrain_tile_app(
+    app: &mut App,
+    summary: &Ca37WorldArtStyleSummary,
+    field: &GraphicalProceduralTerrainFieldResource,
+    handles: &GraphicalAlphaArtHandles,
+    ix: i32,
+    iz: i32,
+    center_x: i32,
+    center_z: i32,
+    anchor: Option<WorldEntityId>,
+) {
+    let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+    let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
+    let jitter_x = ca44a_terrain_jitter_x(hash);
+    let jitter_y = ca44a_terrain_jitter_y(hash);
+    let width = ca44a_terrain_tile_width(hash);
+    let height = ca44a_terrain_tile_height(hash);
+    let rotation_degrees = ca44a_terrain_rotation_degrees(hash);
+    let opacity = ca44a_alpha_terrain_opacity(material_id);
+    let (image, role) = ca44a_terrain_art_for_material(handles, material_id);
+    app.world_mut().spawn((
+        Name::new(format!(
+            "A-Life procedural terrain chunk art {material_id} {ix}:{iz}"
+        )),
+        Sprite {
+            image,
+            color: Color::srgba(1.0, 1.0, 1.0, opacity),
+            custom_size: Some(Vec2::new(width, height)),
+            ..default()
+        },
+        Transform::from_xyz(
+            ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x,
+            iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y,
+            -1.42,
+        )
+        .with_rotation(Quat::from_rotation_z(rotation_degrees.to_radians())),
+        GraphicalAlphaArtBackedSprite {
+            role,
+            stable_id: None,
+        },
+        GraphicalWorldArtTerrainTile {
+            tile_x: ix,
+            tile_z: iz,
+            material_id,
+            tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
+            organic_rotation_degrees: rotation_degrees,
+            opacity,
+            viewport_slice: summary.local_viewport_is_smaller_than_map,
+            display_only: true,
+        },
+        GraphicalProceduralTerrainChunkTile {
+            anchor_stable_id: anchor,
+            chunk_center_tile_x: center_x,
+            chunk_center_tile_z: center_z,
+            virtual_map_width_tiles: field.virtual_map_width_tiles,
+            virtual_map_height_tiles: field.virtual_map_height_tiles,
+            materialized_only_near_active_views: field.materialized_only_near_active_views,
+        },
+    ));
+    if hash % 7 == 0 {
+        let edge_rotation = (rotation_degrees + 38.0).to_radians();
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life production terrain edge blend {material_id} {ix}:{iz}"
+            )),
+            Sprite {
+                image: handles.terrain_edge_blend.clone(),
+                color: Color::srgba(1.0, 1.0, 1.0, 0.22),
+                custom_size: Some(Vec2::new(
+                    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.55,
+                    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.08,
+                )),
+                ..default()
+            },
+            Transform::from_xyz(
+                ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_x * 0.6,
+                iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + jitter_y * 0.6,
+                -1.32,
+            )
+            .with_rotation(Quat::from_rotation_z(edge_rotation)),
+            GraphicalAlphaArtBackedSprite {
+                role: "terrain-edge-blend",
+                stable_id: None,
+            },
+            GraphicalProductionArtLayer {
+                role: "terrain-edge-blend",
+                display_only: true,
+            },
+        ));
+    }
+}
+
+fn ca44a_spawn_fallback_terrain_tile_app(
+    app: &mut App,
+    summary: &Ca37WorldArtStyleSummary,
+    field: &GraphicalProceduralTerrainFieldResource,
+    ix: i32,
+    iz: i32,
+    center_x: i32,
+    center_z: i32,
+    anchor: Option<WorldEntityId>,
+) {
+    let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+    let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
+    app.world_mut().spawn((
+        Name::new(format!("A-Life CA37 terrain wash {material_id} {ix}:{iz}")),
+        Sprite {
+            color: ca37_terrain_tile_color(summary.seed, material_id, ix, iz),
+            custom_size: Some(Vec2::new(
+                ca44a_terrain_tile_width(hash),
+                ca44a_terrain_tile_height(hash),
+            )),
+            ..default()
+        },
+        Transform::from_xyz(
+            ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + ca44a_terrain_jitter_x(hash),
+            iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + ca44a_terrain_jitter_y(hash),
+            -1.45,
+        ),
+        GraphicalWorldArtTerrainTile {
+            tile_x: ix,
+            tile_z: iz,
+            material_id,
+            tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
+            organic_rotation_degrees: 0.0,
+            opacity: ca37_terrain_tile_alpha(material_id),
+            viewport_slice: summary.local_viewport_is_smaller_than_map,
+            display_only: true,
+        },
+        GraphicalProceduralTerrainChunkTile {
+            anchor_stable_id: anchor,
+            chunk_center_tile_x: center_x,
+            chunk_center_tile_z: center_z,
+            virtual_map_width_tiles: field.virtual_map_width_tiles,
+            virtual_map_height_tiles: field.virtual_map_height_tiles,
+            materialized_only_near_active_views: field.materialized_only_near_active_views,
+        },
+        GraphicalAlphaArtFallbackSprite {
+            role: "terrain-fallback",
+            reason: "alpha art handles unavailable",
+        },
+    ));
+}
+
+fn ca44a_terrain_jitter_x(hash: i32) -> f32 {
+    ((hash % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0)
+}
+
+fn ca44a_terrain_jitter_y(hash: i32) -> f32 {
+    (((hash / 7) % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0)
+}
+
+fn ca44a_terrain_tile_width(hash: i32) -> f32 {
+    CA37_TERRAIN_TILE_PIXEL_SIZE * (1.04 + ((hash % 5) as f32) * 0.026)
+}
+
+fn ca44a_terrain_tile_height(hash: i32) -> f32 {
+    CA37_TERRAIN_TILE_PIXEL_SIZE * (1.02 + (((hash / 5) % 5) as f32) * 0.024)
+}
+
+fn ca44a_terrain_rotation_degrees(hash: i32) -> f32 {
+    ((hash % 16) as f32 - 7.5) * 3.0
+}
+
+fn ca44a_alpha_terrain_opacity(material_id: &str) -> f32 {
+    match material_id {
+        "hazard-pressure" => 0.48,
+        "resource-grove" => 0.44,
+        "stone-dressing" => 0.40,
+        "neutral-soil" => 0.38,
+        _ => 0.36,
+    }
+}
+
+fn update_graphical_procedural_terrain_field(
+    mut commands: Commands,
+    view_mode: Res<GraphicalViewModeResource>,
+    camera: Option<Res<CameraNavigationResource>>,
+    world_art: Option<Res<GraphicalWorldArtStyleResource>>,
+    alpha_art: Option<Res<GraphicalAlphaArtHandles>>,
+    field: Option<ResMut<GraphicalProceduralTerrainFieldResource>>,
+    markers: bevy::prelude::Query<(&GraphicalPlaygroundMarker, &Transform)>,
+) {
+    if view_mode.mode != GraphicalPlaygroundViewMode::Player {
+        return;
+    }
+    let Some(world_art) = world_art else {
+        return;
+    };
+    let Some(mut field) = field else {
+        return;
+    };
+
+    let mut centers: Vec<(i32, i32, Option<WorldEntityId>)> = Vec::new();
+    if let Some(camera) = camera {
+        centers.push((
+            ca44a_world_coord_to_tile(camera.state.focus.x),
+            ca44a_world_coord_to_tile(camera.state.focus.z),
+            None,
+        ));
+    }
+    for (marker, transform) in &markers {
+        if marker.kind == WorldObjectKind::Agent {
+            centers.push((
+                ca44a_world_coord_to_tile(transform.translation.x / GRAPHICAL_WORLD_SCALE),
+                ca44a_world_coord_to_tile(transform.translation.y / GRAPHICAL_WORLD_SCALE),
+                Some(marker.stable_id),
+            ));
+        }
+    }
+    if centers.is_empty() {
+        centers.push((0, 0, None));
+    }
+
+    let half_x = field.virtual_map_width_tiles as i32 / 2;
+    let half_z = field.virtual_map_height_tiles as i32 / 2;
+    for (center_x, center_z, anchor) in centers {
+        ca44a_materialize_terrain_chunk_commands(
+            &mut commands,
+            &world_art.summary,
+            field.as_mut(),
+            center_x.clamp(-half_x, half_x),
+            center_z.clamp(-half_z, half_z),
+            anchor,
+            alpha_art.as_deref(),
+        );
+    }
+}
+
+fn ca44a_materialize_terrain_chunk_commands(
+    commands: &mut Commands,
+    summary: &Ca37WorldArtStyleSummary,
+    field: &mut GraphicalProceduralTerrainFieldResource,
+    center_x: i32,
+    center_z: i32,
+    anchor: Option<WorldEntityId>,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+) {
+    field.materialized_chunk_count = field.materialized_chunk_count.saturating_add(1);
+    for ix in center_x - field.chunk_radius_x..=center_x + field.chunk_radius_x {
+        for iz in center_z - field.chunk_radius_z..=center_z + field.chunk_radius_z {
+            if !ca44a_virtual_tile_in_bounds(field, ix, iz)
+                || !field.materialized_tiles.insert((ix, iz))
+            {
+                continue;
+            }
+            if let Some(handles) = alpha_art {
+                ca44a_spawn_alpha_terrain_tile_commands(
+                    commands, summary, field, handles, ix, iz, center_x, center_z, anchor,
+                );
+            } else {
+                ca44a_spawn_fallback_terrain_tile_commands(
+                    commands, summary, field, ix, iz, center_x, center_z, anchor,
+                );
+            }
+        }
+    }
+}
+
+fn ca44a_spawn_alpha_terrain_tile_commands(
+    commands: &mut Commands,
+    summary: &Ca37WorldArtStyleSummary,
+    field: &GraphicalProceduralTerrainFieldResource,
+    handles: &GraphicalAlphaArtHandles,
+    ix: i32,
+    iz: i32,
+    center_x: i32,
+    center_z: i32,
+    anchor: Option<WorldEntityId>,
+) {
+    let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+    let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
+    let (image, role) = ca44a_terrain_art_for_material(handles, material_id);
+    commands.spawn((
+        Name::new(format!(
+            "A-Life procedural streamed terrain {material_id} {ix}:{iz}"
+        )),
+        Sprite {
+            image,
+            color: Color::srgba(1.0, 1.0, 1.0, ca44a_alpha_terrain_opacity(material_id)),
+            custom_size: Some(Vec2::new(
+                ca44a_terrain_tile_width(hash),
+                ca44a_terrain_tile_height(hash),
+            )),
+            ..default()
+        },
+        Transform::from_xyz(
+            ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + ca44a_terrain_jitter_x(hash),
+            iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + ca44a_terrain_jitter_y(hash),
+            -1.42,
+        )
+        .with_rotation(Quat::from_rotation_z(
+            ca44a_terrain_rotation_degrees(hash).to_radians(),
+        )),
+        GraphicalAlphaArtBackedSprite {
+            role,
+            stable_id: None,
+        },
+        GraphicalWorldArtTerrainTile {
+            tile_x: ix,
+            tile_z: iz,
+            material_id,
+            tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
+            organic_rotation_degrees: ca44a_terrain_rotation_degrees(hash),
+            opacity: ca44a_alpha_terrain_opacity(material_id),
+            viewport_slice: summary.local_viewport_is_smaller_than_map,
+            display_only: true,
+        },
+        GraphicalProceduralTerrainChunkTile {
+            anchor_stable_id: anchor,
+            chunk_center_tile_x: center_x,
+            chunk_center_tile_z: center_z,
+            virtual_map_width_tiles: field.virtual_map_width_tiles,
+            virtual_map_height_tiles: field.virtual_map_height_tiles,
+            materialized_only_near_active_views: field.materialized_only_near_active_views,
+        },
+    ));
+}
+
+fn ca44a_spawn_fallback_terrain_tile_commands(
+    commands: &mut Commands,
+    summary: &Ca37WorldArtStyleSummary,
+    field: &GraphicalProceduralTerrainFieldResource,
+    ix: i32,
+    iz: i32,
+    center_x: i32,
+    center_z: i32,
+    anchor: Option<WorldEntityId>,
+) {
+    let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+    let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
+    commands.spawn((
+        Name::new(format!(
+            "A-Life fallback streamed terrain {material_id} {ix}:{iz}"
+        )),
+        Sprite {
+            color: ca37_terrain_tile_color(summary.seed, material_id, ix, iz),
+            custom_size: Some(Vec2::new(
+                ca44a_terrain_tile_width(hash),
+                ca44a_terrain_tile_height(hash),
+            )),
+            ..default()
+        },
+        Transform::from_xyz(
+            ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + ca44a_terrain_jitter_x(hash),
+            iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + ca44a_terrain_jitter_y(hash),
+            -1.45,
+        ),
+        GraphicalWorldArtTerrainTile {
+            tile_x: ix,
+            tile_z: iz,
+            material_id,
+            tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
+            organic_rotation_degrees: 0.0,
+            opacity: ca37_terrain_tile_alpha(material_id),
+            viewport_slice: summary.local_viewport_is_smaller_than_map,
+            display_only: true,
+        },
+        GraphicalProceduralTerrainChunkTile {
+            anchor_stable_id: anchor,
+            chunk_center_tile_x: center_x,
+            chunk_center_tile_z: center_z,
+            virtual_map_width_tiles: field.virtual_map_width_tiles,
+            virtual_map_height_tiles: field.virtual_map_height_tiles,
+            materialized_only_near_active_views: field.materialized_only_near_active_views,
+        },
+        GraphicalAlphaArtFallbackSprite {
+            role: "terrain-fallback",
+            reason: "alpha art handles unavailable",
+        },
+    ));
 }
 
 fn ca44a_terrain_art_for_material(
@@ -2043,6 +2445,12 @@ fn ca37_seeded_prop_variant(prop_id: &str) -> u32 {
 
 fn ca37_terrain_tile_material(seed: u64, ix: i32, iz: i32) -> &'static str {
     let hash = ca37_seeded_terrain_hash(seed, ix, iz);
+    let local_resource_dx = ix - 2;
+    let local_resource_dz = iz;
+    let local_hazard_dx = ix;
+    let local_hazard_dz = iz - 1;
+    let local_stone_dx = ix + 1;
+    let local_stone_dz = iz - 1;
     let resource_dx = ix - 27;
     let resource_dz = iz + 19;
     let north_resource_dx = ix + 30;
@@ -2054,19 +2462,22 @@ fn ca37_terrain_tile_material(seed: u64, ix: i32, iz: i32) -> &'static str {
     let west_stone_dx = ix + 28;
     let west_stone_dz = iz - 2;
     let soil_path = (iz - (ix / 3)).abs() <= 1 || (iz + (ix / 4)).abs() <= 1;
-    if resource_dx * resource_dx + resource_dz * resource_dz < 130
-        || north_resource_dx * north_resource_dx + north_resource_dz * north_resource_dz < 96
-        || hash % 41 == 3
-    {
-        "resource-grove"
-    } else if hazard_dx * hazard_dx + hazard_dz * hazard_dz < 118
+    if local_hazard_dx * local_hazard_dx + local_hazard_dz * local_hazard_dz < 9
+        || hazard_dx * hazard_dx + hazard_dz * hazard_dz < 118
         || east_hazard_dx * east_hazard_dx + east_hazard_dz * east_hazard_dz < 102
         || (ix > 6 && iz > 4 && hash % 9 < 3)
     {
         "hazard-pressure"
+    } else if local_resource_dx * local_resource_dx + local_resource_dz * local_resource_dz < 12
+        || resource_dx * resource_dx + resource_dz * resource_dz < 130
+        || north_resource_dx * north_resource_dx + north_resource_dz * north_resource_dz < 96
+        || hash % 41 == 3
+    {
+        "resource-grove"
     } else if soil_path {
         "neutral-soil"
-    } else if west_stone_dx * west_stone_dx + west_stone_dz * west_stone_dz < 86
+    } else if local_stone_dx * local_stone_dx + local_stone_dz * local_stone_dz < 8
+        || west_stone_dx * west_stone_dx + west_stone_dz * west_stone_dz < 86
         || (ix < -22 && hash % 11 < 4)
     {
         "stone-dressing"
@@ -2278,7 +2689,7 @@ fn spawn_graphical_object(
             Sprite {
                 image: ca44a_object_art_handle(handles, object.kind),
                 color: Color::WHITE,
-                custom_size: Some(graphical_size(object)),
+                custom_size: Some(ca44a_player_sprite_size(object)),
                 ..default()
             }
         } else {
@@ -2403,13 +2814,23 @@ fn spawn_graphical_object(
 }
 
 fn ca44a_entity_shadow_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
-    let base = graphical_size(object);
+    let base = ca44a_player_sprite_size(object);
     match object.kind {
         WorldObjectKind::Agent => Vec2::new(base.x * 0.88, base.y * 0.36),
         WorldObjectKind::Food => Vec2::new(base.x * 0.72, base.y * 0.28),
         WorldObjectKind::Hazard => Vec2::new(base.x * 0.92, base.y * 0.34),
         WorldObjectKind::Obstacle => Vec2::new(base.x * 0.96, base.y * 0.34),
         WorldObjectKind::Token => Vec2::new(base.x * 0.74, base.y * 0.28),
+    }
+}
+
+fn ca44a_player_sprite_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
+    match object.kind {
+        WorldObjectKind::Agent => Vec2::new(78.0, 72.0),
+        WorldObjectKind::Food => Vec2::splat(48.0),
+        WorldObjectKind::Hazard => Vec2::splat(62.0),
+        WorldObjectKind::Obstacle => Vec2::splat(72.0),
+        WorldObjectKind::Token => Vec2::new(56.0, 50.0),
     }
 }
 
@@ -3467,7 +3888,7 @@ fn ca38_pose_from_runtime(
 }
 
 fn ca38_graphical_creature_size(pose: crate::Ca38CreaturePose) -> Vec2 {
-    Vec2::new(78.0 * pose.scale_x, 46.0 * pose.scale_y)
+    Vec2::new(78.0 * pose.scale_x, 72.0 * pose.scale_y)
 }
 
 fn ca38_graphical_creature_scale(
