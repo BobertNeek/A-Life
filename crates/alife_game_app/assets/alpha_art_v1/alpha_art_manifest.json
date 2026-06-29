@@ -2,7 +2,7 @@
   "schema": "alife.ca44a.alpha_art_manifest.v1",
   "schema_version": 1,
   "pack_id": "alpha-art-v1",
-  "art_direction": "production-alpha-organic-topdown-v3",
+  "art_direction": "production-alpha-organic-topdown-v4",
   "entries": [
     {
       "id": "creature_idle",
@@ -111,6 +111,33 @@
       "width": 128,
       "height": 128,
       "file_size_bytes": 3504
+    },
+    {
+      "id": "ambient_canopy_shadow",
+      "role": "ambient-canopy-shadow",
+      "kind": "overlay",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/ambient_canopy_shadow.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 4609
+    },
+    {
+      "id": "ambient_light_pool",
+      "role": "ambient-light-pool",
+      "kind": "overlay",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/ambient_light_pool.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 1555
+    },
+    {
+      "id": "entity_shadow",
+      "role": "entity-shadow",
+      "kind": "overlay",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/entity_shadow.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 494
     },
     {
       "id": "rock_cluster",

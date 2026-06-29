@@ -88,6 +88,9 @@ pub struct GraphicalAlphaArtHandles {
     pub food_bloom: Handle<Image>,
     pub hazard: Handle<Image>,
     pub hazard_glow: Handle<Image>,
+    pub ambient_canopy_shadow: Handle<Image>,
+    pub ambient_light_pool: Handle<Image>,
+    pub entity_shadow: Handle<Image>,
     pub rock_obstacle: Handle<Image>,
     pub terrain_safe_grass: Handle<Image>,
     pub terrain_soil_path: Handle<Image>,
@@ -115,6 +118,9 @@ impl GraphicalAlphaArtHandles {
             food_bloom: asset_server.load("alpha_art_v1/food_bloom.png"),
             hazard: asset_server.load("alpha_art_v1/hazard_crystal.png"),
             hazard_glow: asset_server.load("alpha_art_v1/hazard_glow.png"),
+            ambient_canopy_shadow: asset_server.load("alpha_art_v1/ambient_canopy_shadow.png"),
+            ambient_light_pool: asset_server.load("alpha_art_v1/ambient_light_pool.png"),
+            entity_shadow: asset_server.load("alpha_art_v1/entity_shadow.png"),
             rock_obstacle: asset_server.load("alpha_art_v1/rock_cluster.png"),
             terrain_safe_grass: asset_server.load("alpha_art_v1/terrain_safe_grass.png"),
             terrain_soil_path: asset_server.load("alpha_art_v1/terrain_soil_path.png"),
@@ -142,6 +148,9 @@ impl GraphicalAlphaArtHandles {
             food_bloom: Handle::default(),
             hazard: Handle::default(),
             hazard_glow: Handle::default(),
+            ambient_canopy_shadow: Handle::default(),
+            ambient_light_pool: Handle::default(),
+            entity_shadow: Handle::default(),
             rock_obstacle: Handle::default(),
             terrain_safe_grass: Handle::default(),
             terrain_soil_path: Handle::default(),
@@ -435,6 +444,12 @@ pub struct GraphicalWorldArtTerrainTile {
     pub material_id: &'static str,
     pub tile_size_pixels: f32,
     pub viewport_slice: bool,
+    pub display_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalProductionArtLayer {
+    pub role: &'static str,
     pub display_only: bool,
 }
 
@@ -1494,6 +1509,7 @@ fn spawn_ca37_world_art_dressing(
     view_mode: GraphicalPlaygroundViewMode,
 ) {
     spawn_ca37_world_art_terrain_canvas(app, summary, alpha_art, view_mode);
+    spawn_production_player_view_ambient_layers(app, summary, alpha_art, view_mode);
     for prop in &summary.dressing_props {
         if view_mode == GraphicalPlaygroundViewMode::Player {
             if let Some(handles) = alpha_art {
@@ -1555,6 +1571,80 @@ fn spawn_ca37_world_art_dressing(
             GraphicalAlphaArtFallbackSprite {
                 role: "prop-dressing",
                 reason: "alpha art handles unavailable",
+            },
+        ));
+    }
+}
+
+fn spawn_production_player_view_ambient_layers(
+    app: &mut App,
+    summary: &Ca37WorldArtStyleSummary,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    view_mode: GraphicalPlaygroundViewMode,
+) {
+    if view_mode != GraphicalPlaygroundViewMode::Player {
+        return;
+    }
+    let Some(handles) = alpha_art else {
+        return;
+    };
+
+    let map_half_w = summary.visual_map_width_tiles as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE * 0.5;
+    let map_half_h = summary.visual_map_height_tiles as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE * 0.5;
+    for (index, (x_factor, z_factor, scale, alpha)) in [
+        (-0.62, -0.44, 7.2, 0.22),
+        (-0.16, 0.28, 5.8, 0.18),
+        (0.36, -0.08, 6.4, 0.20),
+        (0.68, 0.42, 7.6, 0.16),
+        (0.04, -0.66, 5.2, 0.15),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        app.world_mut().spawn((
+            Name::new(format!("A-Life production canopy shadow {index}")),
+            Sprite {
+                image: handles.ambient_canopy_shadow.clone(),
+                color: Color::srgba(1.0, 1.0, 1.0, alpha),
+                custom_size: Some(Vec2::splat(CA37_TERRAIN_TILE_PIXEL_SIZE * scale)),
+                ..default()
+            },
+            Transform::from_xyz(map_half_w * x_factor, map_half_h * z_factor, -1.08),
+            GraphicalAlphaArtBackedSprite {
+                role: "ambient-canopy-shadow",
+                stable_id: None,
+            },
+            GraphicalProductionArtLayer {
+                role: "ambient-canopy-shadow",
+                display_only: true,
+            },
+        ));
+    }
+
+    for (index, (x_factor, z_factor, scale, alpha)) in [
+        (0.30, -0.30, 4.2, 0.30),
+        (-0.28, 0.16, 3.5, 0.22),
+        (0.02, 0.52, 4.8, 0.18),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        app.world_mut().spawn((
+            Name::new(format!("A-Life production light pool {index}")),
+            Sprite {
+                image: handles.ambient_light_pool.clone(),
+                color: Color::srgba(1.0, 1.0, 1.0, alpha),
+                custom_size: Some(Vec2::splat(CA37_TERRAIN_TILE_PIXEL_SIZE * scale)),
+                ..default()
+            },
+            Transform::from_xyz(map_half_w * x_factor, map_half_h * z_factor, -1.04),
+            GraphicalAlphaArtBackedSprite {
+                role: "ambient-light-pool",
+                stable_id: None,
+            },
+            GraphicalProductionArtLayer {
+                role: "ambient-light-pool",
+                display_only: true,
             },
         ));
     }
@@ -1841,6 +1931,31 @@ fn spawn_graphical_object(
     let material = object.material;
     let marker_position = graphical_position(object);
     let alpha_art_role = ca44a_object_art_role(object.kind);
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        if let Some(handles) = alpha_art {
+            app.world_mut().spawn((
+                Name::new(format!(
+                    "A-Life production entity shadow stable:{}",
+                    object.stable_id.raw()
+                )),
+                Sprite {
+                    image: handles.entity_shadow.clone(),
+                    color: Color::srgba(1.0, 1.0, 1.0, ca44a_entity_shadow_alpha(object.kind)),
+                    custom_size: Some(ca44a_entity_shadow_size(object)),
+                    ..default()
+                },
+                Transform::from_translation(marker_position + Vec3::new(0.0, -10.0, -0.08)),
+                GraphicalAlphaArtBackedSprite {
+                    role: "entity-shadow",
+                    stable_id: Some(object.stable_id),
+                },
+                GraphicalProductionArtLayer {
+                    role: "entity-shadow",
+                    display_only: true,
+                },
+            ));
+        }
+    }
     let sprite = if view_mode == GraphicalPlaygroundViewMode::Player {
         if let Some(handles) = alpha_art {
             Sprite {
@@ -1968,6 +2083,25 @@ fn spawn_graphical_object(
         },
     ));
     Ok(())
+}
+
+fn ca44a_entity_shadow_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
+    let base = graphical_size(object);
+    match object.kind {
+        WorldObjectKind::Agent => Vec2::new(base.x * 0.88, base.y * 0.36),
+        WorldObjectKind::Food => Vec2::new(base.x * 0.72, base.y * 0.28),
+        WorldObjectKind::Hazard => Vec2::new(base.x * 0.92, base.y * 0.34),
+        WorldObjectKind::Obstacle => Vec2::new(base.x * 0.96, base.y * 0.34),
+        WorldObjectKind::Token => Vec2::new(base.x * 0.74, base.y * 0.28),
+    }
+}
+
+fn ca44a_entity_shadow_alpha(kind: WorldObjectKind) -> f32 {
+    match kind {
+        WorldObjectKind::Agent => 0.46,
+        WorldObjectKind::Hazard | WorldObjectKind::Obstacle => 0.38,
+        WorldObjectKind::Food | WorldObjectKind::Token => 0.28,
+    }
 }
 
 fn ca44a_object_art_role(kind: WorldObjectKind) -> &'static str {
