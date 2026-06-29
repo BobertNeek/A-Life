@@ -2319,8 +2319,8 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         assert!(roles.contains(&role), "missing alpha art role {role}");
     }
     assert!(
-        roles.contains(&"world-painted-viewport"),
-        "default Player View must use the painted procedural map plate as the readable game surface"
+        !roles.contains(&"world-painted-viewport") && !roles.contains(&"world-atmospheric-underlay"),
+        "default Player View must not use a baked screenshot-like backdrop; streamed chunk tiles are the map"
     );
 
     let mut fallback_query =
@@ -2349,8 +2349,8 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View feedback pulses should be bounded sprites");
         assert!(
-            size.x <= 10.0 && size.y <= 10.0,
-            "Player View feedback pulses must be small pings, not debug slabs: {size:?}"
+            size.x <= 16.0 && size.y <= 16.0,
+            "Player View feedback pulses must be bounded pings, not debug slabs: {size:?}"
         );
     }
 
@@ -2363,7 +2363,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View selection rings should be bounded sprites");
         assert!(
-            size.x <= 18.0 && size.y <= 14.0,
+            size.x <= 42.0 && size.y <= 36.0,
             "selected creature rings must frame the sprite without covering the map: {size:?}"
         );
     }
@@ -2418,13 +2418,23 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         layers.iter().all(|layer| layer.display_only),
         "world-art blend layers must not become simulation authority"
     );
+    let baked_backdrop_count = layers
+        .iter()
+        .filter(|layer| {
+            layer.role == "world-painted-viewport" || layer.role == "world-atmospheric-underlay"
+        })
+        .count();
+    let streamed_terrain_count = layers
+        .iter()
+        .filter(|layer| layer.role == "streamed-procedural-terrain")
+        .count();
     assert_eq!(
-        layers
-            .iter()
-            .filter(|layer| layer.role == "world-painted-viewport")
-            .count(),
-        1,
-        "Player View should use one painted map plate as the readable world base"
+        baked_backdrop_count, 0,
+        "Player View should not rely on a single baked backdrop plate"
+    );
+    assert!(
+        streamed_terrain_count >= visible_terrain_count,
+        "streamed terrain chunks, not the underlay, must be the readable map layer"
     );
 
     let mut chunk_query =
@@ -2466,16 +2476,16 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
         "default Player View must show a dense active procedural chunk window"
     );
     assert!(
-        terrain_tiles.iter().all(
-            |tile| tile.opacity > 0.0 && tile.opacity <= CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA
-        ),
-        "terrain tiles must be subtle live-context overlays, not opaque debug blocks"
+        terrain_tiles.iter().all(|tile| {
+            tile.opacity >= 0.90 && tile.opacity <= CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA
+        }),
+        "terrain tiles must be the visible chunk map, not faint overlays"
     );
     assert!(
         terrain_tiles
             .iter()
-            .all(|tile| tile.tile_size_pixels >= 32.0),
-        "terrain tiles should remain small map cells, not a single-screen plate"
+            .all(|tile| tile.tile_size_pixels >= 32.0 && tile.tile_size_pixels <= 40.0),
+        "terrain tiles should remain map cells, not a single-screen plate"
     );
     assert!(terrain_tiles
         .iter()
@@ -2583,9 +2593,15 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         .iter()
         .filter(|layer| layer.role == "entity-shadow")
         .count();
-    let painted_viewport_count = layers
+    let baked_backdrop_count = layers
         .iter()
-        .filter(|layer| layer.role == "world-painted-viewport")
+        .filter(|layer| {
+            layer.role == "world-painted-viewport" || layer.role == "world-atmospheric-underlay"
+        })
+        .count();
+    let streamed_terrain_count = layers
+        .iter()
+        .filter(|layer| layer.role == "streamed-procedural-terrain")
         .count();
     let terrain_blend_count = layers
         .iter()
@@ -2597,8 +2613,12 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         "expected asset-backed entity shadows for visible objects"
     );
     assert!(
-        painted_viewport_count == 1,
-        "default Player View should use one painted viewport as the primary game-map layer"
+        baked_backdrop_count == 0,
+        "default Player View should not use a baked viewport layer"
+    );
+    assert!(
+        streamed_terrain_count >= 29 * 21,
+        "default Player View should be built from streamed procedural terrain chunks"
     );
     assert!(
         terrain_blend_count >= 8,

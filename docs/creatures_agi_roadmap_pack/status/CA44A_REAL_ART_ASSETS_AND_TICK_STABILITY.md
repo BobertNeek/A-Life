@@ -111,15 +111,14 @@ Default Player View now uses asset-backed sprites for required visual roles:
 Rectangle fallback remains available only for degraded diagnostics or non-player debug paths. Player View tests assert that required roles are backed by alpha art components and fallback rectangle components are absent.
 
 The Player View terrain renderer now keeps the deterministic `97x73` seeded
-terrain field virtual while the current default player presentation uses the
-1280x720 painted procedural viewport as the primary game-map surface. Active
-local chunk samples are still materialized and mirrored as very low-opacity
-alpha-art terrain masks with chunk provenance, avoiding the rejected
-translucent-card tile stack. Procedural terrain/content exists in the field
-ledger and as the rendered local slice, but offscreen terrain remains data-only
-until creature anchors or the camera require materialization. The
-terrain/content layers remain display-only; they are not physics, navigation,
-sensory, cognition, ecology, neural, or action authority.
+terrain field virtual while the default player presentation is driven by
+materialized procedural chunk tiles and chunk-generated content. The earlier
+`1280x720` painted viewport was rejected as screenshot-like and is no longer
+used in default Player View. Active local chunk samples are materialized as
+asset-backed terrain sprites with chunk provenance, while offscreen terrain
+remains data-only until creature anchors or the camera require materialization.
+The terrain/content layers remain display-only; they are not physics,
+navigation, sensory, cognition, ecology, neural, or action authority.
 
 The v15 correction replaces the rejected v12/v13 compositions. The bad v12
 plate had giant baked creatures, high-contrast blob fields, and black gaps. The
@@ -138,6 +137,15 @@ default camera framing now starts with a world-establishing view, terrain masks
 are subtle live-context overlays, and foreground creatures/props/selection
 pulses are small map-scale sprites instead of giant close-up elements. Simulation
 semantics, GPU/CPU correctness rules, and action authority are unchanged.
+
+The follow-up stream-first correction removes that v15 painted map from default
+Player View and makes generated chunk tiles the readable map layer. The default
+Player View now asserts `streamed-procedural-terrain` production layers for
+active tiles and rejects both `world-painted-viewport` and
+`world-atmospheric-underlay` baked plates. It also zooms the starting camera out
+so the player sees a chunked world context rather than oversized local tokens.
+This is still a graphical/presentation step toward the active goal, not a claim
+that procedural terrain is authoritative ecology or sensory state.
 
 ## Tests Added/Changed
 
