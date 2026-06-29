@@ -827,34 +827,25 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(field.creature_anchor_count >= 1);
     assert!(!field.active_world_chunks.is_empty());
     assert!(
-        tiles.len() < CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES / 4,
-        "Player View should materialize only active procedural chunks, not render the full virtual map"
+        tiles.is_empty(),
+        "default Player View should use the painted world backdrop, not debug terrain tile sprites"
     );
     assert!(
         field.materialized_only_near_active_views,
         "large terrain map should remain virtual until active view/creature anchors need chunks"
     );
-    assert_eq!(
-        field.materialized_tiles.len(),
-        tiles.len(),
-        "rendered terrain tiles should match the materialized virtual chunk ledger"
+    assert!(
+        field.materialized_tiles.len() >= 17 * 11,
+        "procedural terrain should still be generated in the field ledger even when Player View uses the painted backdrop"
     );
-    assert!(tiles.iter().all(|tile| tile.display_only));
-    assert!(tiles.iter().all(|tile| tile.viewport_slice));
-    assert!(tiles.iter().all(|tile| tile.tile_size_pixels >= 100.0));
     let mut chunk_query =
         app.world_mut()
             .query::<&alife_game_app::bevy_shell::GraphicalProceduralTerrainChunkTile>();
     let chunks = chunk_query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert!(chunks
-        .iter()
-        .all(|chunk| chunk.creature_authoritative_chunk));
-    assert!(chunks
-        .iter()
-        .all(|chunk| !chunk.rendering_required_for_generation));
-    assert!(chunks.iter().all(|chunk| field
-        .active_world_chunks
-        .contains(&(chunk.world_chunk_x, chunk.world_chunk_z))));
+    assert!(
+        chunks.is_empty(),
+        "Player View should not layer terrain chunk tile components over the painted map"
+    );
     assert!(field.virtual_map_width_tiles >= 97);
     assert!(field.virtual_map_height_tiles >= 73);
     assert!(
@@ -863,19 +854,36 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
         "active terrain chunks should be smaller than the full virtual map"
     );
     assert!(
-        tiles.iter().any(|tile| tile.tile_x < 0)
-            && tiles.iter().any(|tile| tile.tile_x > 0)
-            && tiles.iter().any(|tile| tile.tile_z < 0)
-            && tiles.iter().any(|tile| tile.tile_z > 0),
-        "initial active chunk slice should cover the local world around the selected creature"
+        field
+            .materialized_tiles
+            .iter()
+            .any(|(tile_x, _)| *tile_x < 0)
+            && field
+                .materialized_tiles
+                .iter()
+                .any(|(tile_x, _)| *tile_x > 0)
+            && field
+                .materialized_tiles
+                .iter()
+                .any(|(_, tile_z)| *tile_z < 0)
+            && field
+                .materialized_tiles
+                .iter()
+                .any(|(_, tile_z)| *tile_z > 0),
+        "initial procedural ledger should cover the local world around the selected creature"
     );
-    assert!(tiles.iter().any(|tile| tile.material_id == "safe-grass"));
-    assert!(tiles
+    assert!(art_summary
+        .palette
         .iter()
-        .any(|tile| tile.material_id == "resource-grove"));
-    assert!(tiles
+        .any(|material| material.id == "safe-grass"));
+    assert!(art_summary
+        .palette
         .iter()
-        .any(|tile| tile.material_id == "hazard-pressure"));
+        .any(|material| material.id == "resource-grove"));
+    assert!(art_summary
+        .palette
+        .iter()
+        .any(|material| material.id == "hazard-pressure"));
 
     let overlay = alife_game_app::bevy_shell::ca37_world_art_overlay_text(&art_summary);
     let legend = alife_game_app::bevy_shell::readability_legend_overlay_text();
@@ -916,9 +924,9 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(controls.contains("Controls: click"));
     assert!(controls.contains("[!] hazard"));
     assert!(player_hud.contains("A-Life GPU Alpha"));
-    assert!(player_hud.contains("GPU: ON"));
-    assert!(player_hud.contains("Learning: H_shadow 2"));
-    assert!(player_hud.lines().count() <= 10);
+    assert!(player_hud.contains("GPU ON"));
+    assert!(player_hud.contains("L2"));
+    assert!(player_hud.lines().count() <= 4);
     assert!(!player_hud.contains("stable:"));
     assert!(!player_hud.contains("Patch:"));
     assert!(!player_hud.contains("Concepts:"));
@@ -2158,10 +2166,36 @@ fn ca44a_committed_alpha_art_manifest_validates_required_roles_and_pngs() {
     assert!(summary.entry_count >= 32);
     assert!(summary.required_roles_present);
     assert!(summary.prop_variant_count >= 5);
-    assert!(summary.largest_file_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_ASSET_BYTES);
+    assert!(summary.largest_file_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_BACKDROP_BYTES);
     assert!(summary.png_dimensions_validated);
     assert!(summary.forbidden_artifact_paths_rejected);
     summary.validate().unwrap();
+
+    let manifest_text =
+        std::fs::read_to_string(alife_game_app::default_alpha_art_manifest_path()).unwrap();
+    let manifest: alife_game_app::AlphaArtManifest = serde_json::from_str(&manifest_text).unwrap();
+    let backdrop = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.role == "world-backdrop")
+        .expect("world backdrop manifest entry");
+    assert!(backdrop.file_size_bytes > alife_game_app::CA44A_MAX_ALPHA_ART_ASSET_BYTES);
+    assert!(backdrop.file_size_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_BACKDROP_BYTES);
+    assert!(backdrop.width <= alife_game_app::CA44A_MAX_PRODUCTION_BACKDROP_DIMENSION);
+    assert!(backdrop.height <= alife_game_app::CA44A_MAX_PRODUCTION_BACKDROP_DIMENSION);
+    for entry in manifest
+        .entries
+        .iter()
+        .filter(|entry| entry.role != "world-backdrop")
+    {
+        assert!(
+            entry.file_size_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_ASSET_BYTES,
+            "{} exceeded ordinary alpha-art asset cap",
+            entry.id
+        );
+        assert!(entry.width <= alife_game_app::CA44A_MAX_PRODUCTION_ART_DIMENSION);
+        assert!(entry.height <= alife_game_app::CA44A_MAX_PRODUCTION_ART_DIMENSION);
+    }
 }
 
 #[test]
@@ -2214,9 +2248,12 @@ fn ca42a_player_hud_is_compact_and_debug_spam_free() {
         alife_game_app::bevy_shell::graphical_full_debug_status_overlay_text(&panel, &gpu);
 
     assert!(player_hud.contains("A-Life GPU Alpha"));
-    assert!(player_hud.contains("GPU: ON"));
-    assert!(player_hud.contains("Controls: Space | N | R | Esc"));
-    assert!(player_hud.lines().count() <= 7);
+    assert!(player_hud.contains("GPU ON"));
+    assert!(alife_game_app::bevy_shell::ca42a_player_controls_bar_text().contains("Space"));
+    assert!(alife_game_app::bevy_shell::ca42a_player_controls_bar_text().contains("N"));
+    assert!(alife_game_app::bevy_shell::ca42a_player_controls_bar_text().contains("R"));
+    assert!(alife_game_app::bevy_shell::ca42a_player_controls_bar_text().contains("Esc"));
+    assert!(player_hud.lines().count() <= 4);
     assert!(!player_hud.contains("stable:"));
     assert!(!player_hud.contains("Patch:"));
     assert!(!player_hud.contains("sealed="));
@@ -2250,18 +2287,15 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "creature-idle",
         "food",
         "hazard",
-        "ambient-canopy-shadow",
-        "ambient-light-pool",
         "entity-shadow",
         "rock-obstacle",
         "selection-ring",
         "selection-pulse",
-        "terrain-safe-grass",
-        "terrain-soil-path",
-        "terrain-resource-grove",
-        "terrain-hazard-pressure",
-        "terrain-stone-rough",
-        "terrain-edge-blend",
+        "feedback-reward",
+        "feedback-pain",
+        "feedback-sleep",
+        "feedback-learning",
+        "world-backdrop",
         "prop-dressing",
     ] {
         assert!(roles.contains(&role), "missing alpha art role {role}");
@@ -2283,6 +2317,34 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
     assert!(badge_query
         .iter(app.world())
         .all(|(visibility, _)| *visibility == bevy::prelude::Visibility::Hidden));
+
+    let mut pulse_query = app.world_mut().query_filtered::<
+        &bevy::prelude::Sprite,
+        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalSensoryCuePulse>,
+    >();
+    for pulse in pulse_query.iter(app.world()) {
+        let size = pulse
+            .custom_size
+            .expect("Player View feedback pulses should be bounded sprites");
+        assert!(
+            size.x <= 42.0 && size.y <= 42.0,
+            "Player View feedback pulses must be small pings, not debug slabs: {size:?}"
+        );
+    }
+
+    let mut selection_query = app.world_mut().query_filtered::<
+        &bevy::prelude::Sprite,
+        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalSelectionRing>,
+    >();
+    for ring in selection_query.iter(app.world()) {
+        let size = ring
+            .custom_size
+            .expect("Player View selection rings should be bounded sprites");
+        assert!(
+            size.x <= 50.0 && size.y <= 38.0,
+            "selected creature rings must frame the sprite without covering the map: {size:?}"
+        );
+    }
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2296,21 +2358,13 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
 
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
 
-    let mut terrain_query = app
-        .world_mut()
-        .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
-    let tiles = terrain_query.iter(app.world()).copied().collect::<Vec<_>>();
     let field = app
         .world()
         .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>()
         .clone();
     assert!(
-        tiles.len() >= 100,
-        "expected a visible map slice, not one screen tile"
-    );
-    assert!(
-        tiles.len() < field.virtual_map_width_tiles * field.virtual_map_height_tiles / 4,
-        "Player View should materialize terrain chunks, not the full virtual world as a board"
+        field.materialized_tiles.len() >= 17 * 11,
+        "expected procedural terrain ledger evidence behind the painted Player View"
     );
     assert!(field.materialized_only_near_active_views);
     assert!(field.virtual_map_width_tiles >= 97);
@@ -2325,80 +2379,141 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         field.materialized_tiles.len() >= 17 * 11,
         "at least one local viewport chunk should be generated"
     );
-    assert!(
-        tiles.iter().all(|tile| tile.display_only),
-        "terrain art must remain presentation-only"
-    );
-    assert!(
-        tiles
-            .iter()
-            .any(|tile| tile.organic_rotation_degrees.abs() > 2.0),
-        "Player View terrain should rotate organic patch art instead of a rigid grid"
-    );
-    assert!(
-        tiles.iter().any(|tile| tile.opacity < 0.40),
-        "Player View terrain should use translucent art patches instead of opaque blocks"
-    );
-    assert!(
-        tiles
-            .iter()
-            .all(|tile| (0.0..=0.50).contains(&tile.opacity)),
-        "terrain opacity should stay below debug-block levels"
+    let mut terrain_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
+    assert_eq!(
+        terrain_query.iter(app.world()).count(),
+        0,
+        "default Player View must not render terrain chunk tile sprites over the painted map"
     );
 
     let mut layer_query = app
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalProductionArtLayer>();
     let layers = layer_query.iter(app.world()).copied().collect::<Vec<_>>();
-    let edge_blend_count = layers
-        .iter()
-        .filter(|layer| layer.role == "terrain-edge-blend")
-        .count();
-    assert!(
-        edge_blend_count >= 8,
-        "expected asset-backed terrain edge blends to soften the tile grid"
-    );
     assert!(
         layers.iter().all(|layer| layer.display_only),
         "world-art blend layers must not become simulation authority"
+    );
+    assert!(
+        layers.iter().any(|layer| layer.role == "world-backdrop"),
+        "Player View should include the painted world backdrop behind entities"
     );
 
     let mut chunk_query =
         app.world_mut()
             .query::<&alife_game_app::bevy_shell::GraphicalProceduralTerrainChunkTile>();
-    let chunks = chunk_query.iter(app.world()).copied().collect::<Vec<_>>();
     assert_eq!(
-        chunks.len(),
-        tiles.len(),
-        "each rendered terrain tile should record its virtual chunk provenance"
+        chunk_query.iter(app.world()).count(),
+        0,
+        "default Player View keeps terrain chunk provenance in the resource ledger, not as visible tile entities"
     );
-    assert!(
-        chunks
-            .iter()
-            .all(|chunk| chunk.materialized_only_near_active_views),
-        "procedural terrain should exist only near active view/creature anchors"
+
+    let mut zone_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalTerrainZoneMarker>();
+    assert_eq!(
+        zone_query.iter(app.world()).count(),
+        0,
+        "default Player View should not be dominated by CA19 debug zone blocks"
     );
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn production_player_view_starts_with_wide_painted_map_camera() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch).unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let mut backdrop_query = app.world_mut().query_filtered::<
+        &bevy::prelude::Sprite,
+        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalProductionArtLayer>,
+    >();
+    let backdrop_sizes = backdrop_query
+        .iter(app.world())
+        .filter_map(|sprite| sprite.custom_size)
+        .filter(|size| size.x >= 1_160.0 && size.y >= 650.0 && size.x <= 1_280.0)
+        .collect::<Vec<_>>();
     assert!(
-        chunks
-            .iter()
-            .all(|chunk| chunk.creature_authoritative_chunk),
-        "default Player View terrain should come from creature-anchored world chunks"
+        !backdrop_sizes.is_empty(),
+        "default Player View must fit the high-resolution painted map into the player viewport"
     );
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn procedural_world_content_uses_alpha_art_and_no_action_authority() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch).unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let field = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>()
+        .clone();
     assert!(
-        chunks
-            .iter()
-            .all(|chunk| !chunk.rendering_required_for_generation),
-        "world chunk generation should not require a camera/render pass"
+        field.active_content_count >= 160,
+        "default Player View should show a dense creature-anchored ecology layer, not sparse fixture objects"
     );
+    assert!(field.procedural_content_generated_without_rendering);
+    assert!(!field.procedural_content_rendering_required);
+
+    let mut marker_query =
+        app.world_mut()
+            .query::<&alife_game_app::bevy_shell::GraphicalProceduralWorldContentMarker>();
+    let markers = marker_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(markers.len(), field.active_content_count);
+    assert!(markers.iter().all(|marker| {
+        marker.generated_without_rendering
+            && !marker.rendering_required
+            && marker.creature_context_candidate
+            && !marker.can_emit_actions
+            && !marker.can_rewrite_weights
+    }));
+    for kind in [
+        alife_world::ProceduralWorldContentKind::Food,
+        alife_world::ProceduralWorldContentKind::Hazard,
+        alife_world::ProceduralWorldContentKind::Obstacle,
+        alife_world::ProceduralWorldContentKind::DressingProp,
+    ] {
+        assert!(
+            markers.iter().any(|marker| marker.kind == kind),
+            "missing generated procedural content kind {kind:?}"
+        );
+    }
+
+    let mut art_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite>();
+    let generated_art_roles = art_query
+        .iter(app.world())
+        .filter(|sprite| {
+            sprite
+                .stable_id
+                .map(|id| id.raw() >= alife_world::PROCEDURAL_CONTENT_ID_BASE)
+                .unwrap_or(false)
+        })
+        .map(|sprite| sprite.role)
+        .collect::<Vec<_>>();
+    for role in ["food", "hazard", "rock-obstacle", "prop-dressing"] {
+        assert!(
+            generated_art_roles.contains(&role),
+            "generated content should use alpha-art role {role}"
+        );
+    }
     assert!(
-        chunks.iter().all(|chunk| field
-            .active_world_chunks
-            .contains(&(chunk.world_chunk_x, chunk.world_chunk_z))),
-        "rendered tiles should reference an active creature-world chunk"
-    );
-    assert!(
-        chunks.iter().any(|chunk| chunk.anchor_stable_id.is_some()),
-        "initial terrain should include creature-anchored chunks"
+        generated_art_roles.len() >= 160,
+        "target-style player view needs many small asset-backed world objects"
     );
 }
 
@@ -2422,32 +2537,22 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         "production composition layers must remain presentation-only"
     );
 
-    let canopy_count = layers
-        .iter()
-        .filter(|layer| layer.role == "ambient-canopy-shadow")
-        .count();
-    let light_pool_count = layers
-        .iter()
-        .filter(|layer| layer.role == "ambient-light-pool")
-        .count();
     let shadow_count = layers
         .iter()
         .filter(|layer| layer.role == "entity-shadow")
         .count();
-    let edge_blend_count = layers
+    let backdrop_count = layers
         .iter()
-        .filter(|layer| layer.role == "terrain-edge-blend")
+        .filter(|layer| layer.role == "world-backdrop")
         .count();
 
-    assert!(canopy_count >= 5, "expected multiple canopy shadow layers");
-    assert!(light_pool_count >= 3, "expected multiple light-pool layers");
     assert!(
         shadow_count >= 4,
         "expected asset-backed entity shadows for visible objects"
     );
     assert!(
-        edge_blend_count >= 8,
-        "expected terrain edge-blend layers to soften tile seams"
+        backdrop_count >= 1,
+        "expected the painted world backdrop to replace visible terrain tile seams"
     );
 }
 
@@ -2475,26 +2580,26 @@ fn production_hud_skin_uses_committed_ui_assets_in_player_view() {
         skins.iter().all(|skin| skin.display_only),
         "HUD skin layers must be display-only"
     );
-    for role in [
-        "ui-panel-frame",
-        "ui-inspector-frame",
-        "ui-status-chip",
-        "ui-meter-bar",
-        "ui-control-keycap",
-    ] {
+    for role in ["ui-status-chip", "ui-meter-bar"] {
         assert!(
             skins.iter().any(|skin| skin.role == role),
             "missing production HUD skin role {role}"
         );
     }
 
-    let panel_count = skins
+    let chip_count = skins
         .iter()
-        .filter(|skin| skin.role == "ui-panel-frame")
+        .filter(|skin| skin.role == "ui-status-chip")
         .count();
     assert!(
-        panel_count >= 3,
-        "status, controls, and event feed should use committed panel art"
+        chip_count >= 4,
+        "default HUD should use compact status chips instead of large debug frames"
+    );
+    assert!(
+        skins
+            .iter()
+            .all(|skin| skin.role != "ui-panel-frame" && skin.role != "ui-inspector-frame"),
+        "default Player View must not use large ornate debug HUD frames"
     );
 }
 

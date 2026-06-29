@@ -38,6 +38,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "terrain-hazard-pressure",
     "terrain-stone-rough",
     "terrain-edge-blend",
+    "world-backdrop",
     "prop-dressing",
     "ui-panel-frame",
     "ui-inspector-frame",
@@ -46,7 +47,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "ui-control-keycap",
 ];
 
-pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v7";
+pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-generated-map-v15";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {
@@ -91,7 +92,7 @@ impl AlphaArtValidationSummary {
             || self.entry_count < CA44A_REQUIRED_ALPHA_ART_ROLES + 2
             || !self.required_roles_present
             || self.prop_variant_count < 3
-            || self.largest_file_bytes > CA44A_MAX_ALPHA_ART_ASSET_BYTES
+            || self.largest_file_bytes > CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
             || self.total_file_bytes == 0
             || !self.png_dimensions_validated
             || !self.forbidden_artifact_paths_rejected
@@ -156,7 +157,7 @@ pub(crate) fn validate_alpha_art_manifest_inner(
         || manifest.pack_id.trim().is_empty()
         || manifest.art_direction != CA44A_ALPHA_ART_DIRECTION
         || manifest.entries.is_empty()
-        || manifest.entries.len() > CA12_MAX_BUNDLE_ENTRIES
+        || manifest.entries.len() > CA44A_MAX_ALPHA_ART_ENTRIES
     {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
@@ -217,7 +218,9 @@ fn validate_alpha_art_entry(
         || entry.width < CA44A_MIN_PRODUCTION_ART_DIMENSION
         || entry.height < CA44A_MIN_PRODUCTION_ART_DIMENSION
         || entry.file_size_bytes == 0
-        || entry.file_size_bytes > CA44A_MAX_ALPHA_ART_ASSET_BYTES
+        || entry.file_size_bytes > ca44a_max_bytes_for_role(&entry.role)
+        || entry.width > ca44a_max_dimension_for_role(&entry.role)
+        || entry.height > ca44a_max_dimension_for_role(&entry.role)
     {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
@@ -265,7 +268,7 @@ fn validate_alpha_art_relative_path(relative: &str) -> Result<(), GameAppShellEr
 pub fn validate_png_asset_file(path: &Path) -> Result<(u32, u32, u64), GameAppShellError> {
     let bytes = std::fs::read(path)?;
     let file_size = bytes.len() as u64;
-    if file_size == 0 || file_size > CA44A_MAX_ALPHA_ART_ASSET_BYTES {
+    if file_size == 0 || file_size > CA44A_MAX_ALPHA_ART_BACKDROP_BYTES {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
     const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
@@ -276,12 +279,28 @@ pub fn validate_png_asset_file(path: &Path) -> Result<(u32, u32, u64), GameAppSh
     let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
     if width < CA44A_MIN_PRODUCTION_ART_DIMENSION
         || height < CA44A_MIN_PRODUCTION_ART_DIMENSION
-        || width > 256
-        || height > 256
+        || width > CA44A_MAX_PRODUCTION_BACKDROP_DIMENSION
+        || height > CA44A_MAX_PRODUCTION_BACKDROP_DIMENSION
     {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
     Ok((width, height, file_size))
+}
+
+fn ca44a_max_bytes_for_role(role: &str) -> u64 {
+    if role == "world-backdrop" {
+        CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
+    } else {
+        CA44A_MAX_ALPHA_ART_ASSET_BYTES
+    }
+}
+
+fn ca44a_max_dimension_for_role(role: &str) -> u32 {
+    if role == "world-backdrop" {
+        CA44A_MAX_PRODUCTION_BACKDROP_DIMENSION
+    } else {
+        CA44A_MAX_PRODUCTION_ART_DIMENSION
+    }
 }
 
 fn require_alpha_id(value: &str) -> Result<(), GameAppShellError> {
@@ -365,8 +384,22 @@ mod tests {
                 .unwrap();
         assert!(summary.required_roles_present);
         assert_eq!(summary.prop_variant_count, 3);
-        assert!(summary.largest_file_bytes <= CA44A_MAX_ALPHA_ART_ASSET_BYTES);
+        assert!(summary.largest_file_bytes <= CA44A_MAX_ALPHA_ART_BACKDROP_BYTES);
         assert!(summary.png_dimensions_validated);
+    }
+
+    #[test]
+    fn alpha_art_inner_validator_rejects_non_backdrop_asset_over_sprite_cap() {
+        let root = temp_root("oversize_non_backdrop");
+        let mut manifest = required_manifest(&root);
+        manifest.entries[0].file_size_bytes = CA44A_MAX_ALPHA_ART_ASSET_BYTES + 1;
+        assert!(validate_alpha_art_manifest_inner(
+            &root,
+            &root.join("manifest.json"),
+            &manifest,
+            true,
+        )
+        .is_err());
     }
 
     #[test]

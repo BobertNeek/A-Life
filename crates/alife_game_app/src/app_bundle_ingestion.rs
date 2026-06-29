@@ -98,7 +98,7 @@ impl AppBundleIngestionSummary {
             || !self.alpha_art_required_roles_present
             || !self.production_alpha_art
             || self.required_entries == 0
-            || self.largest_file_bytes > CA12_MAX_BUNDLE_FILE_BYTES
+            || self.largest_file_bytes > CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
             || !self.missing_required_rejected
             || !self.shader_discovery_complete
             || !self.tiny_placeholder_art
@@ -254,7 +254,7 @@ fn validate_app_bundle_manifest_inner(
         alpha_art_required_roles_present: alpha_art.required_roles_present,
         production_alpha_art: alpha_art.required_roles_present
             && alpha_art.png_dimensions_validated
-            && alpha_art.largest_file_bytes <= CA44A_MAX_ALPHA_ART_ASSET_BYTES
+            && alpha_art.largest_file_bytes <= CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
             && alpha_art.entry_count >= CA44A_REQUIRED_ALPHA_ART_ROLES
             && alpha_art.pack_id == "alpha-art-v1",
         required_entries,

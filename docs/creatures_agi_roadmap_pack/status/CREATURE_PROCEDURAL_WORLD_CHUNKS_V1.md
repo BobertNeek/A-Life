@@ -89,11 +89,15 @@ C:\Users\PC\.local\bin\graphify.exe update .
 
 ## Known Limitations
 
-- The new chunk substrate is deterministic and creature-anchored, but it is not
-  yet fully integrated as the only source for all resource spawning,
+- The new chunk substrate is deterministic and creature-anchored. Follow-up
+  branch `codex/procedural-world-content-v1` adds deterministic food, hazard,
+  obstacle, and prop candidates around those chunks, but the substrate is still
+  not yet fully integrated as the only source for all saved resource spawning,
   navigation, sensory ray queries, evolution pressure, or offscreen ecology.
-- Graphical Player View renders active chunks from the substrate, but rendering
-  still only materializes visible tiles for efficiency.
+- Graphical Player View now uses the painted world backdrop as the default
+  terrain presentation, while active chunks remain in the procedural field
+  ledger and in dev/debug rendering paths. Rendering no longer layers visible
+  debug terrain tiles over the player-facing map by default.
 - The current local alpha fixture remains small. The procedural substrate has a
   larger virtual extent and can be sampled beyond the visible camera slice, but
   later roadmap work is still needed to turn that into complete Minecraft-like

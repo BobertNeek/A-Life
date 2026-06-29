@@ -148,7 +148,7 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
     assert_eq!(summary.shader_assets, 5);
     assert_eq!(summary.discovered_shader_assets, 5);
     assert_eq!(summary.placeholder_art_entries, 10);
-    assert_eq!(summary.alpha_art_entries, 32);
+    assert_eq!(summary.alpha_art_entries, 33);
     assert!(summary.alpha_art_required_roles_present);
     assert!(summary.production_alpha_art);
     assert!(summary.shader_discovery_complete);
@@ -327,6 +327,15 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     assert!(script.contains("-GraphicsBackend vulkan"));
     assert!(!script.contains("\"visible-world-smoke\""));
     assert!(!script.contains("$ModeArgs += \"crates/alife_world/tests/fixtures/gpu_alpha\""));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn production_player_view_default_camera_is_world_establishing() {
+    assert!(
+        crate::bevy_shell::CA37_EXPLORATION_CAMERA_ZOOM <= 1.05,
+        "default Player View should open as a wide world view, not a close-up debug crop"
+    );
 }
 
 #[test]
