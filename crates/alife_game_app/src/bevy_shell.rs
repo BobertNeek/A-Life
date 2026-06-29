@@ -12,15 +12,16 @@ use alife_bevy_adapter::{
 };
 use alife_core::{ActionKind, AffordanceBits, Vec3f, WorldEntityId};
 use alife_world::{
-    activate_procedural_chunks_around_creatures, sample_procedural_terrain_tile,
-    CreatureWorldAnchor, ProceduralChunkActivationReport, ProceduralChunkCoord,
-    ProceduralTerrainSample, ProceduralTileCoord, ProceduralWorldConfig, TerrainZoneKind,
-    WorldObjectKind,
+    activate_procedural_chunks_around_creatures, generate_procedural_world_content,
+    sample_procedural_terrain_tile, CreatureWorldAnchor, ProceduralChunkActivationReport,
+    ProceduralChunkCoord, ProceduralTerrainSample, ProceduralTileCoord, ProceduralWorldConfig,
+    ProceduralWorldContentCandidate, ProceduralWorldContentKind, ProceduralWorldContentReport,
+    TerrainZoneKind, WorldObjectKind,
 };
 use bevy::{
     app::AppExit,
-    asset::{AssetPlugin, AssetServer, Handle},
-    image::Image,
+    asset::{AssetPlugin, Assets, Handle, RenderAssetUsages},
+    image::{CompressedImageFormats, Image, ImageSampler, ImageType},
     prelude::{
         default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Commands,
         Component, DefaultPlugins, Entity, GlobalTransform, ImageNode, KeyCode, MessageWriter,
@@ -104,6 +105,7 @@ pub struct GraphicalAlphaArtHandles {
     pub terrain_hazard_pressure: Handle<Image>,
     pub terrain_stone_rough: Handle<Image>,
     pub terrain_edge_blend: Handle<Image>,
+    pub world_backdrop: Handle<Image>,
     pub prop_grass_tuft: Handle<Image>,
     pub prop_pebble_cluster: Handle<Image>,
     pub prop_warning_shard: Handle<Image>,
@@ -117,41 +119,174 @@ pub struct GraphicalAlphaArtHandles {
 }
 
 impl GraphicalAlphaArtHandles {
-    pub fn from_asset_server(asset_server: &AssetServer) -> Self {
-        Self {
-            creature_idle: asset_server.load("alpha_art_v1/creature_idle.png"),
-            creature_hurt: asset_server.load("alpha_art_v1/creature_hurt.png"),
-            creature_moving: asset_server.load("alpha_art_v1/creature_moving.png"),
-            creature_eat: asset_server.load("alpha_art_v1/creature_eat.png"),
-            creature_sleep: asset_server.load("alpha_art_v1/creature_sleep.png"),
-            creature_signal: asset_server.load("alpha_art_v1/creature_signal.png"),
-            selection_ring: asset_server.load("alpha_art_v1/selection_ring.png"),
-            selection_pulse: asset_server.load("alpha_art_v1/selection_pulse.png"),
-            food: asset_server.load("alpha_art_v1/food_sprout.png"),
-            food_bloom: asset_server.load("alpha_art_v1/food_bloom.png"),
-            hazard: asset_server.load("alpha_art_v1/hazard_crystal.png"),
-            hazard_glow: asset_server.load("alpha_art_v1/hazard_glow.png"),
-            ambient_canopy_shadow: asset_server.load("alpha_art_v1/ambient_canopy_shadow.png"),
-            ambient_light_pool: asset_server.load("alpha_art_v1/ambient_light_pool.png"),
-            entity_shadow: asset_server.load("alpha_art_v1/entity_shadow.png"),
-            rock_obstacle: asset_server.load("alpha_art_v1/rock_cluster.png"),
-            terrain_safe_grass: asset_server.load("alpha_art_v1/terrain_safe_grass.png"),
-            terrain_soil_path: asset_server.load("alpha_art_v1/terrain_soil_path.png"),
-            terrain_resource_grove: asset_server.load("alpha_art_v1/terrain_resource_grove.png"),
-            terrain_hazard_pressure: asset_server.load("alpha_art_v1/terrain_hazard_pressure.png"),
-            terrain_stone_rough: asset_server.load("alpha_art_v1/terrain_stone_rough.png"),
-            terrain_edge_blend: asset_server.load("alpha_art_v1/terrain_edge_blend.png"),
-            prop_grass_tuft: asset_server.load("alpha_art_v1/prop_grass_tuft.png"),
-            prop_pebble_cluster: asset_server.load("alpha_art_v1/prop_pebble_cluster.png"),
-            prop_warning_shard: asset_server.load("alpha_art_v1/prop_warning_shard.png"),
-            prop_leaf_patch: asset_server.load("alpha_art_v1/prop_leaf_patch.png"),
-            prop_mushroom_cluster: asset_server.load("alpha_art_v1/prop_mushroom_cluster.png"),
-            ui_panel_frame: asset_server.load("alpha_art_v1/ui_panel_frame.png"),
-            ui_inspector_frame: asset_server.load("alpha_art_v1/ui_inspector_frame.png"),
-            ui_status_chip: asset_server.load("alpha_art_v1/ui_status_chip.png"),
-            ui_meter_bar: asset_server.load("alpha_art_v1/ui_meter_bar.png"),
-            ui_control_keycap: asset_server.load("alpha_art_v1/ui_control_keycap.png"),
-        }
+    pub fn from_embedded_assets(images: &mut Assets<Image>) -> Result<Self, GameAppShellError> {
+        Ok(Self {
+            creature_idle: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/creature_idle.png"),
+                "creature_idle.png",
+            )?,
+            creature_hurt: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/creature_hurt.png"),
+                "creature_hurt.png",
+            )?,
+            creature_moving: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/creature_moving.png"),
+                "creature_moving.png",
+            )?,
+            creature_eat: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/creature_eat.png"),
+                "creature_eat.png",
+            )?,
+            creature_sleep: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/creature_sleep.png"),
+                "creature_sleep.png",
+            )?,
+            creature_signal: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/creature_signal.png"),
+                "creature_signal.png",
+            )?,
+            selection_ring: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/selection_ring.png"),
+                "selection_ring.png",
+            )?,
+            selection_pulse: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/selection_pulse.png"),
+                "selection_pulse.png",
+            )?,
+            food: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/food_sprout.png"),
+                "food_sprout.png",
+            )?,
+            food_bloom: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/food_bloom.png"),
+                "food_bloom.png",
+            )?,
+            hazard: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/hazard_crystal.png"),
+                "hazard_crystal.png",
+            )?,
+            hazard_glow: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/hazard_glow.png"),
+                "hazard_glow.png",
+            )?,
+            ambient_canopy_shadow: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/ambient_canopy_shadow.png"),
+                "ambient_canopy_shadow.png",
+            )?,
+            ambient_light_pool: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/ambient_light_pool.png"),
+                "ambient_light_pool.png",
+            )?,
+            entity_shadow: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/entity_shadow.png"),
+                "entity_shadow.png",
+            )?,
+            rock_obstacle: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/rock_cluster.png"),
+                "rock_cluster.png",
+            )?,
+            terrain_safe_grass: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/terrain_safe_grass.png"),
+                "terrain_safe_grass.png",
+            )?,
+            terrain_soil_path: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/terrain_soil_path.png"),
+                "terrain_soil_path.png",
+            )?,
+            terrain_resource_grove: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/terrain_resource_grove.png"),
+                "terrain_resource_grove.png",
+            )?,
+            terrain_hazard_pressure: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/terrain_hazard_pressure.png"),
+                "terrain_hazard_pressure.png",
+            )?,
+            terrain_stone_rough: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/terrain_stone_rough.png"),
+                "terrain_stone_rough.png",
+            )?,
+            terrain_edge_blend: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/terrain_edge_blend.png"),
+                "terrain_edge_blend.png",
+            )?,
+            world_backdrop: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/world_backdrop_gpu_alpha.png"),
+                "world_backdrop_gpu_alpha.png",
+            )?,
+            prop_grass_tuft: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/prop_grass_tuft.png"),
+                "prop_grass_tuft.png",
+            )?,
+            prop_pebble_cluster: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/prop_pebble_cluster.png"),
+                "prop_pebble_cluster.png",
+            )?,
+            prop_warning_shard: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/prop_warning_shard.png"),
+                "prop_warning_shard.png",
+            )?,
+            prop_leaf_patch: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/prop_leaf_patch.png"),
+                "prop_leaf_patch.png",
+            )?,
+            prop_mushroom_cluster: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/prop_mushroom_cluster.png"),
+                "prop_mushroom_cluster.png",
+            )?,
+            ui_panel_frame: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/ui_panel_frame.png"),
+                "ui_panel_frame.png",
+            )?,
+            ui_inspector_frame: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/ui_inspector_frame.png"),
+                "ui_inspector_frame.png",
+            )?,
+            ui_status_chip: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/ui_status_chip.png"),
+                "ui_status_chip.png",
+            )?,
+            ui_meter_bar: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/ui_meter_bar.png"),
+                "ui_meter_bar.png",
+            )?,
+            ui_control_keycap: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/ui_control_keycap.png"),
+                "ui_control_keycap.png",
+            )?,
+        })
     }
 
     pub fn unloaded_for_validation() -> Self {
@@ -178,6 +313,7 @@ impl GraphicalAlphaArtHandles {
             terrain_hazard_pressure: Handle::default(),
             terrain_stone_rough: Handle::default(),
             terrain_edge_blend: Handle::default(),
+            world_backdrop: Handle::default(),
             prop_grass_tuft: Handle::default(),
             prop_pebble_cluster: Handle::default(),
             prop_warning_shard: Handle::default(),
@@ -190,6 +326,25 @@ impl GraphicalAlphaArtHandles {
             ui_control_keycap: Handle::default(),
         }
     }
+}
+
+fn ca44a_register_embedded_alpha_art(
+    images: &mut Assets<Image>,
+    bytes: &[u8],
+    _name: &'static str,
+) -> Result<Handle<Image>, GameAppShellError> {
+    let image = Image::from_buffer(
+        bytes,
+        ImageType::Extension("png"),
+        CompressedImageFormats::NONE,
+        true,
+        ImageSampler::linear(),
+        RenderAssetUsages::default(),
+    )
+    .map_err(|_| GameAppShellError::VisibleWorldMismatch {
+        message: "failed to decode embedded alpha art PNG",
+    })?;
+    Ok(images.add(image))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -490,6 +645,22 @@ pub struct GraphicalProceduralTerrainChunkTile {
     pub materialized_only_near_active_views: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalProceduralWorldContentMarker {
+    pub stable_id: WorldEntityId,
+    pub kind: ProceduralWorldContentKind,
+    pub anchor_stable_id: WorldEntityId,
+    pub world_chunk_x: i32,
+    pub world_chunk_z: i32,
+    pub tile_x: i32,
+    pub tile_z: i32,
+    pub generated_without_rendering: bool,
+    pub rendering_required: bool,
+    pub creature_context_candidate: bool,
+    pub can_emit_actions: bool,
+    pub can_rewrite_weights: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalProceduralTerrainFieldResource {
     pub seed: u64,
@@ -501,7 +672,11 @@ pub struct GraphicalProceduralTerrainFieldResource {
     pub creature_anchor_count: usize,
     pub generated_without_rendering: bool,
     pub materialized_tiles: BTreeSet<(i32, i32)>,
+    pub materialized_content_stable_ids: BTreeSet<u64>,
     pub materialized_chunk_count: usize,
+    pub active_content_count: usize,
+    pub procedural_content_generated_without_rendering: bool,
+    pub procedural_content_rendering_required: bool,
     pub materialized_only_near_active_views: bool,
 }
 
@@ -631,10 +806,10 @@ pub struct GraphicalAdvancedGameplayResource {
     pub summary: AdvancedGameplayUxSummary,
 }
 
-const GRAPHICAL_WORLD_SCALE: f32 = 125.0;
+const GRAPHICAL_WORLD_SCALE: f32 = 36.0;
 const CA37_TERRAIN_TILE_PIXEL_SIZE: f32 = GRAPHICAL_WORLD_SCALE;
-const CA37_TERRAIN_TILE_JITTER_PIXELS: f32 = 5.0;
-const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 1.75;
+const CA37_TERRAIN_TILE_JITTER_PIXELS: f32 = 0.0;
+pub(crate) const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 1.0;
 
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer {
@@ -755,7 +930,7 @@ pub fn build_graphical_playground_app_shell(
                 primary_window: Some(Window {
                     title: launch.window_title.clone(),
                     name: Some("alife.graphical_playground".to_string()),
-                    resolution: (1180, 760).into(),
+                    resolution: (1280, 720).into(),
                     present_mode: PresentMode::AutoVsync,
                     window_theme: Some(WindowTheme::Dark),
                     ..default()
@@ -765,7 +940,7 @@ pub fn build_graphical_playground_app_shell(
             }),
     )
     .add_plugins(AlifeBevyAdapterPlugin)
-    .insert_resource(ClearColor(Color::srgb(0.045, 0.065, 0.055)))
+    .insert_resource(ClearColor(Color::srgb(0.39, 0.49, 0.25)))
     .insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     })
@@ -1099,25 +1274,38 @@ fn spawn_graphical_playground_scene(
     school: Option<&Ca23GraphicalSchoolSummary>,
 ) -> Result<(), GameAppShellError> {
     app.world_mut().spawn((Camera2d, GraphicalMainCamera));
-    let alpha_art = app
-        .world()
-        .get_resource::<GraphicalAlphaArtHandles>()
-        .cloned()
-        .or_else(|| {
-            app.world()
-                .get_resource::<AssetServer>()
-                .map(GraphicalAlphaArtHandles::from_asset_server)
-        });
-    if !app.world().contains_resource::<GraphicalAlphaArtHandles>() {
-        if let Some(handles) = alpha_art.clone() {
-            app.insert_resource(handles);
+    let alpha_art = if let Some(handles) = app.world().get_resource::<GraphicalAlphaArtHandles>() {
+        Some(handles.clone())
+    } else {
+        if !app.world().contains_resource::<Assets<Image>>() {
+            app.init_resource::<Assets<Image>>();
         }
-    }
+        let handles = {
+            let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+            GraphicalAlphaArtHandles::from_embedded_assets(&mut images)?
+        };
+        app.insert_resource(handles.clone());
+        Some(handles)
+    };
+    let (ground_color, ground_size, ground_label) =
+        if summary.view_mode == GraphicalPlaygroundViewMode::Player {
+            (
+                Color::srgb(0.45, 0.56, 0.25),
+                Vec2::new(5_600.0, 5_600.0),
+                "ground:production-player-backdrop",
+            )
+        } else {
+            (
+                rgba_to_color(presentation.ground_material.rgba()),
+                Vec2::new(860.0, 460.0),
+                "ground:p34-fixture",
+            )
+        };
     app.world_mut().spawn((
         Name::new("A-Life S01 ground plane"),
         Sprite {
-            color: rgba_to_color(presentation.ground_material.rgba()),
-            custom_size: Some(Vec2::new(860.0, 460.0)),
+            color: ground_color,
+            custom_size: Some(ground_size),
             ..default()
         },
         Transform::from_xyz(0.0, 0.0, -10.0),
@@ -1126,10 +1314,10 @@ fn spawn_graphical_playground_scene(
             material: presentation.ground_material,
             rgba: presentation.ground_material.rgba(),
         },
-        VisibleWorldDebugLabel("ground:p34-fixture".to_string()),
+        VisibleWorldDebugLabel(ground_label.to_string()),
     ));
     if let Some(ecology) = ecology {
-        spawn_ca19_terrain_zone_visuals(app, ecology);
+        spawn_ca19_terrain_zone_visuals(app, ecology, summary.view_mode);
     }
     if let Some(world_art) = world_art {
         spawn_ca37_world_art_dressing(
@@ -1148,7 +1336,7 @@ fn spawn_graphical_playground_scene(
         spawn_ca23_school_teacher_markers(app, school, summary.view_mode);
     }
     spawn_graphical_intent_feedback(app, summary.view_mode);
-    spawn_ca08_feedback_pulses(app, presentation);
+    spawn_ca08_feedback_pulses(app, presentation, summary.view_mode, alpha_art.as_ref());
     spawn_ca18_social_proximity_cues(app, presentation, summary.view_mode);
     spawn_production_player_view_hud_skin(app, alpha_art.as_ref(), summary.view_mode);
 
@@ -1164,27 +1352,23 @@ fn spawn_graphical_playground_scene(
     app.world_mut().spawn((
         Name::new("A-Life S02 runtime controls overlay"),
         Text::new(format!(
-            "A-Life GPU Alpha\nState: launch  Speed: 1x\nGPU: {}\nCreature: selected\nControls: Space | N | R | Esc\nseed={}",
+            "A-Life GPU Alpha\nlaunching | GPU {}\nSpace/N/R/Esc",
             summary.requested_gpu_mode.label(),
-            summary.seed,
         )),
         TextFont {
-            font_size: 11.0,
+            font_size: 8.0,
             ..default()
         },
         TextColor(Color::srgb(0.88, 0.95, 0.88)),
         Node {
             position_type: PositionType::Absolute,
-            top: Val::Px(12.0),
-            left: Val::Px(12.0),
-            max_width: Val::Px(320.0),
-            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            top: Val::Px(10.0),
+            left: Val::Px(10.0),
+            max_width: Val::Px(116.0),
+            padding: bevy::ui::UiRect::all(Val::Px(4.0)),
             ..default()
         },
-        player_hud_text_background(
-            summary.view_mode,
-            Color::srgba(0.02, 0.03, 0.025, 0.58),
-        ),
+        player_hud_text_background(summary.view_mode, Color::srgba(0.02, 0.03, 0.025, 0.58)),
         RuntimeStatusOverlay,
     ));
 
@@ -1355,16 +1539,16 @@ fn spawn_graphical_playground_scene(
             },
         ),
         TextFont {
-            font_size: 10.0,
+            font_size: 6.6,
             ..default()
         },
-        TextColor(Color::srgb(0.95, 0.94, 0.86)),
+        TextColor(Color::srgba(0.95, 0.94, 0.86, 0.86)),
         Node {
             position_type: PositionType::Absolute,
-            bottom: Val::Px(18.0),
-            left: Val::Px(12.0),
-            max_width: Val::Px(470.0),
-            padding: bevy::ui::UiRect::all(Val::Px(7.0)),
+            bottom: Val::Px(14.0),
+            left: Val::Px(10.0),
+            max_width: Val::Px(265.0),
+            padding: bevy::ui::UiRect::all(Val::Px(4.0)),
             ..default()
         },
         player_hud_text_background(summary.view_mode, Color::srgba(0.025, 0.025, 0.02, 0.46)),
@@ -1375,16 +1559,16 @@ fn spawn_graphical_playground_scene(
         Name::new("A-Life CA05 event feed panel"),
         Text::new("Events: waiting for first tick"),
         TextFont {
-            font_size: 9.0,
+            font_size: 6.4,
             ..default()
         },
-        TextColor(Color::srgb(0.94, 0.98, 0.94)),
+        TextColor(Color::srgba(0.94, 0.98, 0.94, 0.82)),
         Node {
             position_type: PositionType::Absolute,
-            bottom: Val::Px(18.0),
-            right: Val::Px(12.0),
-            max_width: Val::Px(270.0),
-            padding: bevy::ui::UiRect::all(Val::Px(7.0)),
+            bottom: Val::Px(14.0),
+            right: Val::Px(10.0),
+            max_width: Val::Px(170.0),
+            padding: bevy::ui::UiRect::all(Val::Px(4.0)),
             ..default()
         },
         player_hud_text_background(summary.view_mode, Color::srgba(0.018, 0.03, 0.024, 0.44)),
@@ -1417,16 +1601,16 @@ fn spawn_graphical_playground_scene(
         Name::new("A-Life S03 read-only creature inspector overlay"),
         Text::new("Inspector loading..."),
         TextFont {
-            font_size: 11.0,
+            font_size: 6.8,
             ..default()
         },
         TextColor(Color::srgb(0.92, 0.96, 1.0)),
         Node {
             position_type: PositionType::Absolute,
-            top: Val::Px(12.0),
-            right: Val::Px(12.0),
-            max_width: Val::Px(330.0),
-            padding: bevy::ui::UiRect::all(Val::Px(8.0)),
+            top: Val::Px(10.0),
+            right: Val::Px(10.0),
+            max_width: Val::Px(140.0),
+            padding: bevy::ui::UiRect::all(Val::Px(4.0)),
             ..default()
         },
         player_hud_text_background(summary.view_mode, Color::srgba(0.02, 0.025, 0.035, 0.74)),
@@ -1494,14 +1678,14 @@ fn spawn_production_player_view_hud_skin(
     spawn_hud_skin_layer(
         app,
         "status-panel",
-        "ui-panel-frame",
-        handles.ui_panel_frame.clone(),
+        "ui-status-chip",
+        handles.ui_status_chip.clone(),
         HudSkinPlacement {
             top: Some(8.0),
             left: Some(8.0),
-            width: 356.0,
-            height: 186.0,
-            alpha: 0.86,
+            width: 116.0,
+            height: 29.0,
+            alpha: 0.72,
             ..default()
         },
     );
@@ -1511,25 +1695,25 @@ fn spawn_production_player_view_hud_skin(
         "ui-status-chip",
         handles.ui_status_chip.clone(),
         HudSkinPlacement {
-            top: Some(102.0),
-            left: Some(20.0),
-            width: 154.0,
-            height: 42.0,
-            alpha: 0.92,
+            top: Some(45.0),
+            left: Some(14.0),
+            width: 56.0,
+            height: 17.0,
+            alpha: 0.52,
             ..default()
         },
     );
     spawn_hud_skin_layer(
         app,
         "creature-inspector",
-        "ui-inspector-frame",
-        handles.ui_inspector_frame.clone(),
+        "ui-status-chip",
+        handles.ui_status_chip.clone(),
         HudSkinPlacement {
             top: Some(8.0),
             right: Some(8.0),
-            width: 344.0,
-            height: 286.0,
-            alpha: 0.88,
+            width: 132.0,
+            height: 29.0,
+            alpha: 0.68,
             ..default()
         },
     );
@@ -1539,53 +1723,39 @@ fn spawn_production_player_view_hud_skin(
         "ui-meter-bar",
         handles.ui_meter_bar.clone(),
         HudSkinPlacement {
-            top: Some(74.0),
-            right: Some(124.0),
-            width: 132.0,
-            height: 28.0,
-            alpha: 0.74,
+            top: Some(45.0),
+            right: Some(74.0),
+            width: 50.0,
+            height: 8.0,
+            alpha: 0.46,
             ..default()
         },
     );
     spawn_hud_skin_layer(
         app,
         "controls-panel",
-        "ui-panel-frame",
-        handles.ui_panel_frame.clone(),
+        "ui-status-chip",
+        handles.ui_status_chip.clone(),
         HudSkinPlacement {
-            bottom: Some(12.0),
+            bottom: Some(10.0),
             left: Some(8.0),
-            width: 480.0,
-            height: 106.0,
-            alpha: 0.76,
-            ..default()
-        },
-    );
-    spawn_hud_skin_layer(
-        app,
-        "controls-keycap",
-        "ui-control-keycap",
-        handles.ui_control_keycap.clone(),
-        HudSkinPlacement {
-            bottom: Some(62.0),
-            left: Some(22.0),
-            width: 70.0,
-            height: 44.0,
-            alpha: 0.86,
+            width: 248.0,
+            height: 23.0,
+            alpha: 0.54,
             ..default()
         },
     );
     spawn_hud_skin_layer(
         app,
         "event-feed-panel",
-        "ui-panel-frame",
-        handles.ui_panel_frame.clone(),
+        "ui-status-chip",
+        handles.ui_status_chip.clone(),
         HudSkinPlacement {
-            bottom: Some(12.0),
+            bottom: Some(10.0),
             right: Some(8.0),
-            width: 292.0,
-            height: 104.0,
-            alpha: 0.70,
+            width: 150.0,
+            height: 23.0,
+            alpha: 0.50,
             ..default()
         },
     );
@@ -1659,7 +1829,7 @@ fn player_hud_text_background(
     debug_background: Color,
 ) -> BackgroundColor {
     if view_mode == GraphicalPlaygroundViewMode::Player {
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.06))
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0))
     } else {
         BackgroundColor(debug_background)
     }
@@ -1726,7 +1896,14 @@ fn view_mode_visibility(visible: bool) -> Visibility {
     }
 }
 
-fn spawn_ca19_terrain_zone_visuals(app: &mut App, ecology: &Ca19GraphicalEcologySummary) {
+fn spawn_ca19_terrain_zone_visuals(
+    app: &mut App,
+    ecology: &Ca19GraphicalEcologySummary,
+    view_mode: GraphicalPlaygroundViewMode,
+) {
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        return;
+    }
     for zone in &ecology.terrain_zones {
         app.world_mut().spawn((
             Name::new(format!(
@@ -1786,8 +1963,8 @@ fn spawn_ca37_world_art_dressing(
                         image,
                         color: Color::WHITE,
                         custom_size: Some(Vec2::new(
-                            prop.width * GRAPHICAL_WORLD_SCALE,
-                            prop.height * GRAPHICAL_WORLD_SCALE,
+                            ca44a_player_dressing_prop_width(prop.width),
+                            ca44a_player_dressing_prop_height(prop.height),
                         )),
                         ..default()
                     },
@@ -1840,76 +2017,13 @@ fn spawn_ca37_world_art_dressing(
 }
 
 fn spawn_production_player_view_ambient_layers(
-    app: &mut App,
-    summary: &Ca37WorldArtStyleSummary,
-    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    _app: &mut App,
+    _summary: &Ca37WorldArtStyleSummary,
+    _alpha_art: Option<&GraphicalAlphaArtHandles>,
     view_mode: GraphicalPlaygroundViewMode,
 ) {
     if view_mode != GraphicalPlaygroundViewMode::Player {
         return;
-    }
-    let Some(handles) = alpha_art else {
-        return;
-    };
-
-    let map_half_w = summary.visual_map_width_tiles as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE * 0.5;
-    let map_half_h = summary.visual_map_height_tiles as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE * 0.5;
-    for (index, (x_factor, z_factor, scale, alpha)) in [
-        (-0.62, -0.44, 7.2, 0.22),
-        (-0.16, 0.28, 5.8, 0.18),
-        (0.36, -0.08, 6.4, 0.20),
-        (0.68, 0.42, 7.6, 0.16),
-        (0.04, -0.66, 5.2, 0.15),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        app.world_mut().spawn((
-            Name::new(format!("A-Life production canopy shadow {index}")),
-            Sprite {
-                image: handles.ambient_canopy_shadow.clone(),
-                color: Color::srgba(1.0, 1.0, 1.0, alpha),
-                custom_size: Some(Vec2::splat(CA37_TERRAIN_TILE_PIXEL_SIZE * scale)),
-                ..default()
-            },
-            Transform::from_xyz(map_half_w * x_factor, map_half_h * z_factor, -1.08),
-            GraphicalAlphaArtBackedSprite {
-                role: "ambient-canopy-shadow",
-                stable_id: None,
-            },
-            GraphicalProductionArtLayer {
-                role: "ambient-canopy-shadow",
-                display_only: true,
-            },
-        ));
-    }
-
-    for (index, (x_factor, z_factor, scale, alpha)) in [
-        (0.30, -0.30, 4.2, 0.30),
-        (-0.28, 0.16, 3.5, 0.22),
-        (0.02, 0.52, 4.8, 0.18),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        app.world_mut().spawn((
-            Name::new(format!("A-Life production light pool {index}")),
-            Sprite {
-                image: handles.ambient_light_pool.clone(),
-                color: Color::srgba(1.0, 1.0, 1.0, alpha),
-                custom_size: Some(Vec2::splat(CA37_TERRAIN_TILE_PIXEL_SIZE * scale)),
-                ..default()
-            },
-            Transform::from_xyz(map_half_w * x_factor, map_half_h * z_factor, -1.04),
-            GraphicalAlphaArtBackedSprite {
-                role: "ambient-light-pool",
-                stable_id: None,
-            },
-            GraphicalProductionArtLayer {
-                role: "ambient-light-pool",
-                display_only: true,
-            },
-        ));
     }
 }
 
@@ -1920,6 +2034,11 @@ fn spawn_ca37_world_art_terrain_canvas(
     view_mode: GraphicalPlaygroundViewMode,
     presentation: &VisibleWorldPresentation,
 ) {
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        if let Some(handles) = alpha_art {
+            ca44a_spawn_world_backdrop_app(app, handles);
+        }
+    }
     let config = ca44a_procedural_world_config(summary);
     let anchors = ca44a_procedural_world_anchors_from_presentation(presentation);
     let activation = activate_procedural_chunks_around_creatures(config, &anchors)
@@ -1930,7 +2049,32 @@ fn spawn_ca37_world_art_terrain_canvas(
             app, summary, &mut field, alpha_art, view_mode, center_x, center_z, anchor,
         );
     }
+    if let Ok(content) = generate_procedural_world_content(config, &activation) {
+        field.record_content_report(&content);
+        ca44a_spawn_procedural_world_content_app(app, &mut field, alpha_art, view_mode, &content);
+    }
     app.insert_resource(field);
+}
+
+fn ca44a_spawn_world_backdrop_app(app: &mut App, handles: &GraphicalAlphaArtHandles) {
+    app.world_mut().spawn((
+        Name::new("A-Life alpha world painted backdrop"),
+        Sprite {
+            image: handles.world_backdrop.clone(),
+            color: Color::WHITE,
+            custom_size: Some(Vec2::new(1_280.0, 720.0)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 0.0, -1.86),
+        GraphicalAlphaArtBackedSprite {
+            role: "world-backdrop",
+            stable_id: None,
+        },
+        GraphicalProductionArtLayer {
+            role: "world-backdrop",
+            display_only: true,
+        },
+    ));
 }
 
 impl GraphicalProceduralTerrainFieldResource {
@@ -1943,8 +2087,8 @@ impl GraphicalProceduralTerrainFieldResource {
             seed: summary.seed,
             virtual_map_width_tiles: config.virtual_width_tiles(),
             virtual_map_height_tiles: config.virtual_height_tiles(),
-            chunk_radius_x: (summary.viewport_width_tiles as i32 / 2).max(4),
-            chunk_radius_z: (summary.viewport_height_tiles as i32 / 2).max(3),
+            chunk_radius_x: (summary.viewport_width_tiles as i32).max(14),
+            chunk_radius_z: (summary.viewport_height_tiles as i32).max(10),
             active_world_chunks: activation
                 .active_chunks
                 .iter()
@@ -1953,9 +2097,19 @@ impl GraphicalProceduralTerrainFieldResource {
             creature_anchor_count: activation.creature_anchor_count,
             generated_without_rendering: activation.generated_without_rendering,
             materialized_tiles: BTreeSet::new(),
+            materialized_content_stable_ids: BTreeSet::new(),
             materialized_chunk_count: 0,
+            active_content_count: 0,
+            procedural_content_generated_without_rendering: true,
+            procedural_content_rendering_required: false,
             materialized_only_near_active_views: true,
         }
+    }
+
+    fn record_content_report(&mut self, content: &ProceduralWorldContentReport) {
+        self.active_content_count = content.candidate_count;
+        self.procedural_content_generated_without_rendering = content.generated_without_rendering;
+        self.procedural_content_rendering_required = content.rendering_required;
     }
 }
 
@@ -2009,10 +2163,108 @@ fn ca44a_materialize_terrain_chunk_app(
             {
                 continue;
             }
+            if view_mode == GraphicalPlaygroundViewMode::Player && alpha_art.is_some() {
+                continue;
+            }
             ca44a_spawn_terrain_tile_app(
                 app, summary, field, alpha_art, view_mode, ix, iz, center_x, center_z, anchor,
             );
         }
+    }
+}
+
+fn ca44a_spawn_procedural_world_content_app(
+    app: &mut App,
+    field: &mut GraphicalProceduralTerrainFieldResource,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    view_mode: GraphicalPlaygroundViewMode,
+    content: &ProceduralWorldContentReport,
+) {
+    for candidate in &content.candidates {
+        if !field
+            .materialized_content_stable_ids
+            .insert(candidate.stable_id.raw())
+        {
+            continue;
+        }
+        ca44a_spawn_procedural_content_candidate_app(app, alpha_art, view_mode, candidate);
+    }
+}
+
+fn ca44a_spawn_procedural_content_candidate_app(
+    app: &mut App,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    view_mode: GraphicalPlaygroundViewMode,
+    candidate: &ProceduralWorldContentCandidate,
+) {
+    let position = Vec3::new(
+        candidate.position.x * GRAPHICAL_WORLD_SCALE,
+        candidate.position.z * GRAPHICAL_WORLD_SCALE,
+        ca44a_procedural_content_z(candidate.kind),
+    );
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        if let Some(handles) = alpha_art {
+            let (image, role) = ca44a_procedural_content_art_handle(handles, candidate);
+            app.world_mut().spawn((
+                Name::new(format!(
+                    "A-Life procedural world content {role} stable:{}",
+                    candidate.stable_id.raw()
+                )),
+                Sprite {
+                    image,
+                    color: Color::WHITE,
+                    custom_size: Some(ca44a_procedural_content_sprite_size(candidate.kind)),
+                    ..default()
+                },
+                Transform::from_translation(position),
+                GraphicalAlphaArtBackedSprite {
+                    role,
+                    stable_id: Some(candidate.stable_id),
+                },
+                GraphicalProductionArtLayer {
+                    role: "procedural-world-content",
+                    display_only: true,
+                },
+                ca44a_procedural_content_marker(candidate),
+            ));
+            return;
+        }
+    }
+    app.world_mut().spawn((
+        Name::new(format!(
+            "A-Life procedural content fallback stable:{}",
+            candidate.stable_id.raw()
+        )),
+        Sprite {
+            color: ca44a_procedural_content_fallback_color(candidate.kind),
+            custom_size: Some(ca44a_procedural_content_sprite_size(candidate.kind) * 0.72),
+            ..default()
+        },
+        Transform::from_translation(position),
+        GraphicalAlphaArtFallbackSprite {
+            role: candidate.kind.alpha_art_role(),
+            reason: "alpha art handles unavailable or dev/full debug view",
+        },
+        ca44a_procedural_content_marker(candidate),
+    ));
+}
+
+fn ca44a_procedural_content_marker(
+    candidate: &ProceduralWorldContentCandidate,
+) -> GraphicalProceduralWorldContentMarker {
+    GraphicalProceduralWorldContentMarker {
+        stable_id: candidate.stable_id,
+        kind: candidate.kind,
+        anchor_stable_id: candidate.anchor_stable_id,
+        world_chunk_x: candidate.chunk.x,
+        world_chunk_z: candidate.chunk.z,
+        tile_x: candidate.tile.x,
+        tile_z: candidate.tile.z,
+        generated_without_rendering: candidate.generated_without_rendering,
+        rendering_required: candidate.rendering_required,
+        creature_context_candidate: candidate.bounded_for_creature_context,
+        can_emit_actions: candidate.can_emit_actions,
+        can_rewrite_weights: candidate.can_rewrite_weights,
     }
 }
 
@@ -2212,25 +2464,23 @@ fn ca44a_terrain_jitter_y(hash: i32) -> f32 {
 }
 
 fn ca44a_terrain_tile_width(hash: i32) -> f32 {
-    CA37_TERRAIN_TILE_PIXEL_SIZE * (1.04 + ((hash % 5) as f32) * 0.026)
+    let _ = hash;
+    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.015
 }
 
 fn ca44a_terrain_tile_height(hash: i32) -> f32 {
-    CA37_TERRAIN_TILE_PIXEL_SIZE * (1.02 + (((hash / 5) % 5) as f32) * 0.024)
+    let _ = hash;
+    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.015
 }
 
 fn ca44a_terrain_rotation_degrees(hash: i32) -> f32 {
-    ((hash % 16) as f32 - 7.5) * 3.0
+    let _ = hash;
+    0.0
 }
 
 fn ca44a_alpha_terrain_opacity(material_id: &str) -> f32 {
-    match material_id {
-        "hazard-pressure" => 0.48,
-        "resource-grove" => 0.44,
-        "stone-dressing" => 0.40,
-        "neutral-soil" => 0.38,
-        _ => 0.36,
-    }
+    let _ = material_id;
+    0.0
 }
 
 fn update_graphical_procedural_terrain_field(
@@ -2269,6 +2519,7 @@ fn update_graphical_procedural_terrain_field(
     let Ok(activation) = activate_procedural_chunks_around_creatures(config, &anchors) else {
         return;
     };
+    let content = generate_procedural_world_content(config, &activation).ok();
     field.active_world_chunks = activation
         .active_chunks
         .iter()
@@ -2276,6 +2527,9 @@ fn update_graphical_procedural_terrain_field(
         .collect();
     field.creature_anchor_count = activation.creature_anchor_count;
     field.generated_without_rendering = activation.generated_without_rendering;
+    if let Some(content) = &content {
+        field.record_content_report(content);
+    }
     let centers = ca44a_initial_procedural_terrain_centers(&activation);
     if centers.is_empty() {
         return;
@@ -2292,6 +2546,14 @@ fn update_graphical_procedural_terrain_field(
             center_z.clamp(-half_z, half_z),
             anchor,
             alpha_art.as_deref(),
+        );
+    }
+    if let Some(content) = &content {
+        ca44a_spawn_procedural_world_content_commands(
+            &mut commands,
+            field.as_mut(),
+            alpha_art.as_deref(),
+            content,
         );
     }
 }
@@ -2313,82 +2575,86 @@ fn ca44a_materialize_terrain_chunk_commands(
             {
                 continue;
             }
-            if let Some(handles) = alpha_art {
-                ca44a_spawn_alpha_terrain_tile_commands(
-                    commands, summary, field, handles, ix, iz, center_x, center_z, anchor,
-                );
-            } else {
-                ca44a_spawn_fallback_terrain_tile_commands(
-                    commands, summary, field, ix, iz, center_x, center_z, anchor,
-                );
+            if alpha_art.is_some() {
+                continue;
             }
+            ca44a_spawn_fallback_terrain_tile_commands(
+                commands, summary, field, ix, iz, center_x, center_z, anchor,
+            );
         }
     }
 }
 
-fn ca44a_spawn_alpha_terrain_tile_commands(
+fn ca44a_spawn_procedural_world_content_commands(
     commands: &mut Commands,
-    summary: &Ca37WorldArtStyleSummary,
-    field: &GraphicalProceduralTerrainFieldResource,
-    handles: &GraphicalAlphaArtHandles,
-    ix: i32,
-    iz: i32,
-    center_x: i32,
-    center_z: i32,
-    anchor: Option<WorldEntityId>,
+    field: &mut GraphicalProceduralTerrainFieldResource,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    content: &ProceduralWorldContentReport,
 ) {
-    let sample = ca44a_procedural_terrain_sample(summary.seed, ix, iz);
-    let material_id = sample.material.material_id();
-    let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
-    let (image, role) = ca44a_terrain_art_for_material(handles, material_id);
-    commands.spawn((
-        Name::new(format!(
-            "A-Life procedural streamed terrain {material_id} {ix}:{iz}"
-        )),
-        Sprite {
-            image,
-            color: Color::srgba(1.0, 1.0, 1.0, ca44a_alpha_terrain_opacity(material_id)),
-            custom_size: Some(Vec2::new(
-                ca44a_terrain_tile_width(hash),
-                ca44a_terrain_tile_height(hash),
+    for candidate in &content.candidates {
+        if !field
+            .materialized_content_stable_ids
+            .insert(candidate.stable_id.raw())
+        {
+            continue;
+        }
+        ca44a_spawn_procedural_content_candidate_commands(commands, alpha_art, candidate);
+    }
+}
+
+fn ca44a_spawn_procedural_content_candidate_commands(
+    commands: &mut Commands,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    candidate: &ProceduralWorldContentCandidate,
+) {
+    let position = Vec3::new(
+        candidate.position.x * GRAPHICAL_WORLD_SCALE,
+        candidate.position.z * GRAPHICAL_WORLD_SCALE,
+        ca44a_procedural_content_z(candidate.kind),
+    );
+    if let Some(handles) = alpha_art {
+        let (image, role) = ca44a_procedural_content_art_handle(handles, candidate);
+        commands.spawn((
+            Name::new(format!(
+                "A-Life streamed procedural content {role} stable:{}",
+                candidate.stable_id.raw()
             )),
-            ..default()
-        },
-        Transform::from_xyz(
-            ix as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + ca44a_terrain_jitter_x(hash),
-            iz as f32 * CA37_TERRAIN_TILE_PIXEL_SIZE + ca44a_terrain_jitter_y(hash),
-            -1.42,
-        )
-        .with_rotation(Quat::from_rotation_z(
-            ca44a_terrain_rotation_degrees(hash).to_radians(),
-        )),
-        GraphicalAlphaArtBackedSprite {
-            role,
-            stable_id: None,
-        },
-        GraphicalWorldArtTerrainTile {
-            tile_x: ix,
-            tile_z: iz,
-            material_id,
-            tile_size_pixels: CA37_TERRAIN_TILE_PIXEL_SIZE,
-            organic_rotation_degrees: ca44a_terrain_rotation_degrees(hash),
-            opacity: ca44a_alpha_terrain_opacity(material_id),
-            viewport_slice: summary.local_viewport_is_smaller_than_map,
-            display_only: true,
-        },
-        GraphicalProceduralTerrainChunkTile {
-            anchor_stable_id: anchor,
-            world_chunk_x: sample.chunk.x,
-            world_chunk_z: sample.chunk.z,
-            chunk_center_tile_x: center_x,
-            chunk_center_tile_z: center_z,
-            virtual_map_width_tiles: field.virtual_map_width_tiles,
-            virtual_map_height_tiles: field.virtual_map_height_tiles,
-            creature_authoritative_chunk: anchor.is_some(),
-            rendering_required_for_generation: false,
-            materialized_only_near_active_views: field.materialized_only_near_active_views,
-        },
-    ));
+            Sprite {
+                image,
+                color: Color::WHITE,
+                custom_size: Some(ca44a_procedural_content_sprite_size(candidate.kind)),
+                ..default()
+            },
+            Transform::from_translation(position),
+            GraphicalAlphaArtBackedSprite {
+                role,
+                stable_id: Some(candidate.stable_id),
+            },
+            GraphicalProductionArtLayer {
+                role: "procedural-world-content",
+                display_only: true,
+            },
+            ca44a_procedural_content_marker(candidate),
+        ));
+    } else {
+        commands.spawn((
+            Name::new(format!(
+                "A-Life streamed procedural content fallback stable:{}",
+                candidate.stable_id.raw()
+            )),
+            Sprite {
+                color: ca44a_procedural_content_fallback_color(candidate.kind),
+                custom_size: Some(ca44a_procedural_content_sprite_size(candidate.kind) * 0.72),
+                ..default()
+            },
+            Transform::from_translation(position),
+            GraphicalAlphaArtFallbackSprite {
+                role: candidate.kind.alpha_art_role(),
+                reason: "alpha art handles unavailable",
+            },
+            ca44a_procedural_content_marker(candidate),
+        ));
+    }
 }
 
 fn ca44a_spawn_fallback_terrain_tile_commands(
@@ -2490,6 +2756,55 @@ fn ca44a_prop_art_for_material(
                 (handles.prop_grass_tuft.clone(), "prop-dressing")
             }
         }
+    }
+}
+
+fn ca44a_player_dressing_prop_width(width_world: f32) -> f32 {
+    (width_world * GRAPHICAL_WORLD_SCALE * 0.42).clamp(8.0, 24.0)
+}
+
+fn ca44a_player_dressing_prop_height(height_world: f32) -> f32 {
+    (height_world * GRAPHICAL_WORLD_SCALE * 0.42).clamp(8.0, 22.0)
+}
+
+fn ca44a_procedural_content_art_handle(
+    handles: &GraphicalAlphaArtHandles,
+    candidate: &ProceduralWorldContentCandidate,
+) -> (Handle<Image>, &'static str) {
+    match candidate.kind {
+        ProceduralWorldContentKind::Food => (handles.food_bloom.clone(), "food"),
+        ProceduralWorldContentKind::Hazard => (handles.hazard.clone(), "hazard"),
+        ProceduralWorldContentKind::Obstacle => (handles.rock_obstacle.clone(), "rock-obstacle"),
+        ProceduralWorldContentKind::DressingProp => {
+            ca44a_prop_art_for_material(handles, candidate.material.material_id(), &candidate.label)
+        }
+    }
+}
+
+fn ca44a_procedural_content_sprite_size(kind: ProceduralWorldContentKind) -> Vec2 {
+    match kind {
+        ProceduralWorldContentKind::Food => Vec2::splat(2.9),
+        ProceduralWorldContentKind::Hazard => Vec2::splat(3.6),
+        ProceduralWorldContentKind::Obstacle => Vec2::splat(4.0),
+        ProceduralWorldContentKind::DressingProp => Vec2::splat(2.1),
+    }
+}
+
+fn ca44a_procedural_content_z(kind: ProceduralWorldContentKind) -> f32 {
+    match kind {
+        ProceduralWorldContentKind::DressingProp => -0.18,
+        ProceduralWorldContentKind::Food => 0.06,
+        ProceduralWorldContentKind::Hazard => 0.08,
+        ProceduralWorldContentKind::Obstacle => 0.04,
+    }
+}
+
+fn ca44a_procedural_content_fallback_color(kind: ProceduralWorldContentKind) -> Color {
+    match kind {
+        ProceduralWorldContentKind::Food => Color::srgba(0.25, 0.96, 0.30, 0.70),
+        ProceduralWorldContentKind::Hazard => Color::srgba(1.0, 0.14, 0.12, 0.76),
+        ProceduralWorldContentKind::Obstacle => Color::srgba(0.60, 0.56, 0.50, 0.74),
+        ProceduralWorldContentKind::DressingProp => Color::srgba(0.48, 0.78, 0.28, 0.50),
     }
 }
 
@@ -2609,7 +2924,12 @@ fn spawn_graphical_intent_feedback(app: &mut App, view_mode: GraphicalPlayground
     ));
 }
 
-fn spawn_ca08_feedback_pulses(app: &mut App, presentation: &VisibleWorldPresentation) {
+fn spawn_ca08_feedback_pulses(
+    app: &mut App,
+    presentation: &VisibleWorldPresentation,
+    view_mode: GraphicalPlaygroundViewMode,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+) {
     for pulse in ca08_pulse_targets_for_presentation(presentation) {
         let Some(target_id) = pulse.target_stable_id else {
             continue;
@@ -2621,20 +2941,41 @@ fn spawn_ca08_feedback_pulses(app: &mut App, presentation: &VisibleWorldPresenta
         else {
             continue;
         };
-        app.world_mut().spawn((
+        let mut sprite = Sprite {
+            color: ca08_pulse_color(pulse.kind, false),
+            custom_size: Some(ca08_pulse_size(pulse.kind, view_mode)),
+            ..default()
+        };
+        let mut role = None;
+        if view_mode == GraphicalPlaygroundViewMode::Player {
+            if let Some(handles) = alpha_art {
+                let (image, art_role) = ca08_pulse_art_handle(handles, pulse.kind);
+                sprite.image = image;
+                role = Some(art_role);
+            }
+        }
+        let mut entity = app.world_mut().spawn((
             Name::new(format!(
                 "A-Life CA08 {} pulse stable:{}",
                 pulse.kind.label(),
                 target.stable_id.raw()
             )),
-            Sprite {
-                color: ca08_pulse_color(pulse.kind, false),
-                custom_size: Some(ca08_pulse_size(pulse.kind)),
-                ..default()
-            },
+            sprite,
             Transform::from_translation(graphical_position(target) + Vec3::new(0.0, 0.0, 0.28)),
             pulse,
         ));
+        if let Some(role) = role {
+            entity.insert((
+                GraphicalAlphaArtBackedSprite {
+                    role,
+                    stable_id: Some(target.stable_id),
+                },
+                GraphicalProductionArtLayer {
+                    role: "feedback-pulse",
+                    display_only: true,
+                },
+            ));
+        }
     }
 }
 
@@ -2670,12 +3011,32 @@ pub fn ca08_pulse_targets_for_presentation(
     .collect()
 }
 
-fn ca08_pulse_size(kind: Ca08SensoryCueKind) -> Vec2 {
+fn ca08_pulse_size(kind: Ca08SensoryCueKind, view_mode: GraphicalPlaygroundViewMode) -> Vec2 {
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        return match kind {
+            Ca08SensoryCueKind::Reward => Vec2::splat(12.0),
+            Ca08SensoryCueKind::Pain => Vec2::splat(14.0),
+            Ca08SensoryCueKind::Sleep => Vec2::new(15.0, 10.0),
+            Ca08SensoryCueKind::Learning => Vec2::splat(18.0),
+        };
+    }
     match kind {
         Ca08SensoryCueKind::Reward => Vec2::new(74.0, 74.0),
         Ca08SensoryCueKind::Pain => Vec2::new(86.0, 86.0),
         Ca08SensoryCueKind::Sleep => Vec2::new(102.0, 64.0),
         Ca08SensoryCueKind::Learning => Vec2::new(118.0, 74.0),
+    }
+}
+
+fn ca08_pulse_art_handle(
+    handles: &GraphicalAlphaArtHandles,
+    kind: Ca08SensoryCueKind,
+) -> (Handle<Image>, &'static str) {
+    match kind {
+        Ca08SensoryCueKind::Reward => (handles.ambient_light_pool.clone(), "feedback-reward"),
+        Ca08SensoryCueKind::Pain => (handles.hazard_glow.clone(), "feedback-pain"),
+        Ca08SensoryCueKind::Sleep => (handles.ambient_canopy_shadow.clone(), "feedback-sleep"),
+        Ca08SensoryCueKind::Learning => (handles.selection_pulse.clone(), "feedback-learning"),
     }
 }
 
@@ -2855,11 +3216,11 @@ fn ca44a_entity_shadow_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
 
 fn ca44a_player_sprite_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
     match object.kind {
-        WorldObjectKind::Agent => Vec2::new(78.0, 72.0),
-        WorldObjectKind::Food => Vec2::splat(48.0),
-        WorldObjectKind::Hazard => Vec2::splat(62.0),
-        WorldObjectKind::Obstacle => Vec2::splat(72.0),
-        WorldObjectKind::Token => Vec2::new(56.0, 50.0),
+        WorldObjectKind::Agent => Vec2::new(4.8, 4.4),
+        WorldObjectKind::Food => Vec2::splat(3.1),
+        WorldObjectKind::Hazard => Vec2::splat(3.9),
+        WorldObjectKind::Obstacle => Vec2::splat(4.4),
+        WorldObjectKind::Token => Vec2::new(2.8, 2.5),
     }
 }
 
@@ -3129,13 +3490,13 @@ fn inspector_local_entity(
             .map_or(
                 Sprite {
                     color: Color::srgba(1.0, 0.86, 0.25, 0.42),
-                    custom_size: Some(Vec2::new(104.0, 66.0)),
+                    custom_size: Some(Vec2::new(10.0, 8.5)),
                     ..default()
                 },
                 |handles| Sprite {
                     image: handles.selection_ring.clone(),
                     color: Color::WHITE,
-                    custom_size: Some(Vec2::new(112.0, 72.0)),
+                    custom_size: Some(Vec2::new(9.2, 7.6)),
                     ..default()
                 },
             );
@@ -3165,8 +3526,8 @@ fn inspector_local_entity(
                 Name::new("A-Life CA44A selected creature pulse"),
                 Sprite {
                     image: selection_pulse,
-                    color: Color::WHITE,
-                    custom_size: Some(Vec2::new(124.0, 80.0)),
+                    color: Color::srgba(1.0, 1.0, 1.0, 0.34),
+                    custom_size: Some(Vec2::new(10.5, 8.8)),
                     ..default()
                 },
                 Transform::from_xyz(0.0, 0.0, 0.46),
@@ -3917,7 +4278,7 @@ fn ca38_pose_from_runtime(
 }
 
 fn ca38_graphical_creature_size(pose: crate::Ca38CreaturePose) -> Vec2 {
-    Vec2::new(78.0 * pose.scale_x, 72.0 * pose.scale_y)
+    Vec2::new(4.9 * pose.scale_x, 4.5 * pose.scale_y)
 }
 
 fn ca38_graphical_creature_scale(
@@ -3925,11 +4286,11 @@ fn ca38_graphical_creature_scale(
     gpu: &GraphicalGpuRuntimeTelemetry,
 ) -> f32 {
     let learning = if gpu.h_shadow_applications > 0 {
-        1.08
+        1.045
     } else {
         1.0
     };
-    1.0 + pose.pulse * 0.08 * learning
+    1.0 + pose.pulse * 0.020 * learning
 }
 
 fn update_graphical_feedback_pulses(
@@ -4085,7 +4446,7 @@ fn ca08_pulse_active(
 }
 
 fn ca08_pulse_color(kind: Ca08SensoryCueKind, active: bool) -> Color {
-    let alpha = if active { 0.54 } else { 0.20 };
+    let alpha = if active { 0.30 } else { 0.070 };
     match kind {
         Ca08SensoryCueKind::Reward => Color::srgba(0.34, 1.0, 0.46, alpha),
         Ca08SensoryCueKind::Pain => Color::srgba(1.0, 0.20, 0.18, alpha),
@@ -4320,30 +4681,20 @@ pub fn graphical_player_status_overlay_text(
     panel: &RuntimeControlPanel,
     gpu: &GraphicalGpuRuntimeTelemetry,
 ) -> String {
-    let action = panel.selected_action_kind.map_or("Idle", |kind| {
-        crate::action_badge_label_for_target(kind, panel.target_entity)
-    });
-    let goal = graphical_goal_label(panel.selected_action_kind, panel.target_entity);
     let status = panel.terminal_recovery_cause.as_ref().map_or_else(
-        || panel.playback.label().to_string(),
-        |_| "stopped - reset".to_string(),
+        || match panel.playback {
+            RuntimePlaybackState::Running => "RUN".to_string(),
+            RuntimePlaybackState::Paused => "PAUSE".to_string(),
+            RuntimePlaybackState::ShutdownRequested => "EXIT".to_string(),
+        },
+        |_| "STOP".to_string(),
     );
     format!(
-        concat!(
-            "A-Life GPU Alpha\n",
-            "{}  speed={}x  tick={}\n",
-            "GPU: {}\n",
-            "Creature: selected  Goal: {}\n",
-            "Action: {}\n",
-            "Learning: H_shadow {}\n",
-            "Controls: Space | N | R | Esc"
-        ),
+        concat!("A-Life GPU Alpha\n", "{}  {}x  t{}\n", "GPU {}  L{}"),
         status,
         panel.run_speed_ticks,
         panel.mind_tick,
         ca42a_gpu_status_chip(gpu),
-        goal,
-        action,
         gpu.h_shadow_applications,
     )
 }
@@ -4409,11 +4760,6 @@ pub fn graphical_player_inspector_overlay_text(
     gpu: &GraphicalGpuTelemetryResource,
 ) -> String {
     let snapshot = &inspector.snapshot;
-    let bars = ca07_creature_state_bars(snapshot)
-        .into_iter()
-        .take(3)
-        .collect::<Vec<_>>()
-        .join("\n");
     let action = snapshot
         .visual
         .selected_action_kind
@@ -4424,27 +4770,25 @@ pub fn graphical_player_inspector_overlay_text(
             )
         })
         .unwrap_or("IDLE");
-    let target = snapshot
-        .visual
-        .target_entity
-        .map_or_else(|| "none".to_string(), |id| format!("stable:{}", id.raw()));
+    let cues = snapshot.visual.cues;
     format!(
         concat!(
             "Creature\n",
-            "Selected stable:{}\n",
-            "State: {} {}/{}\n",
-            "{}\n",
-            "Action: {}  Target: {}\n",
-            "GPU: {}\n",
-            "Gate: CPU shadow"
+            "{}  {}\n",
+            "E{:02} H{:02} Hu{:02}\n",
+            "Act {}\n",
+            "GPU {}"
         ),
-        selection.stable_id.raw(),
-        ca07_awake_sleep_status(snapshot),
+        if selection.stable_id == snapshot.visual.stable_id {
+            "active"
+        } else {
+            "creature"
+        },
         snapshot.visual.animation.label(),
-        snapshot.visual.expression.label(),
-        bars,
+        (cues.energy.value * 100.0).round() as i32,
+        (ca07_health_value(cues.pain.value, cues.fear.value) * 100.0).round() as i32,
+        (cues.hunger.value * 100.0).round() as i32,
         action,
-        target,
         ca42a_gpu_status_chip(&gpu.telemetry),
     )
 }
@@ -4604,10 +4948,7 @@ pub fn ca05_controls_bar_text() -> &'static str {
 }
 
 pub fn ca42a_player_controls_bar_text() -> &'static str {
-    concat!(
-        "Controls: click select | Space run/pause | N step | R reset | Esc quit\n",
-        "Camera: WASD/arrows pan | +/- zoom | F follow | Dev: launch -ViewMode dev-overlay"
-    )
+    "Click select | Space | N | R | Esc | WASD | +/-"
 }
 
 pub fn alpha_controls_help_text() -> &'static str {

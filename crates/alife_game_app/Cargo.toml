@@ -31,5 +31,6 @@ bevy-app = [
     "bevy/bevy_text",
     "bevy/bevy_ui",
     "bevy/bevy_ui_render",
+    "bevy/png",
 ]
 gpu-runtime = ["dep:alife_gpu_backend"]

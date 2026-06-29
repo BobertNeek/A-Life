@@ -2,7 +2,7 @@
   "schema": "alife.ca44a.alpha_art_manifest.v1",
   "schema_version": 1,
   "pack_id": "alpha-art-v1",
-  "art_direction": "production-alpha-organic-topdown-v7",
+  "art_direction": "production-alpha-generated-map-v15",
   "entries": [
     {
       "id": "creature_idle",
@@ -155,7 +155,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_safe_grass.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 22846
+      "file_size_bytes": 18691
     },
     {
       "id": "terrain_soil_path",
@@ -164,7 +164,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_soil_path.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 21942
+      "file_size_bytes": 17668
     },
     {
       "id": "terrain_resource_grove",
@@ -173,7 +173,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_resource_grove.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 23522
+      "file_size_bytes": 19152
     },
     {
       "id": "terrain_hazard_pressure",
@@ -182,7 +182,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_hazard_pressure.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 24557
+      "file_size_bytes": 19152
     },
     {
       "id": "terrain_stone_rough",
@@ -191,7 +191,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_stone_rough.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 22236
+      "file_size_bytes": 17824
     },
     {
       "id": "terrain_edge_blend",
@@ -201,6 +201,15 @@
       "width": 128,
       "height": 128,
       "file_size_bytes": 2763
+    },
+    {
+      "id": "world_backdrop_gpu_alpha",
+      "role": "world-backdrop",
+      "kind": "backdrop",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/world_backdrop_gpu_alpha.png",
+      "width": 1280,
+      "height": 720,
+      "file_size_bytes": 236817
     },
     {
       "id": "prop_grass_tuft",

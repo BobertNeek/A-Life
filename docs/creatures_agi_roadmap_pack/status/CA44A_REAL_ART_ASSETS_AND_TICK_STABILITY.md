@@ -51,6 +51,7 @@ Assets:
 - `terrain_resource_grove.png`
 - `terrain_hazard_pressure.png`
 - `terrain_stone_rough.png`
+- `world_backdrop_gpu_alpha.png`
 - `prop_grass_tuft.png`
 - `prop_pebble_cluster.png`
 - `prop_warning_shard.png`
@@ -58,9 +59,11 @@ Assets:
 - `alpha_art_manifest.json`
 
 The active manifest art direction is
-`production-alpha-organic-topdown-v7`. Each PNG is 128x128 and below the 64 KB
-per-file cap. Assets are original project-generated sprites/tiles, not
-third-party downloads.
+`production-alpha-generated-map-v15`. Ordinary sprite/tile PNGs remain 128x128
+and below the 64 KB per-file cap. `world_backdrop_gpu_alpha.png` is a
+role-specific 1280x720 painted Player View map plate, capped by the stricter
+world-backdrop exception (`<= 768 KB`). Assets are original project-generated
+sprites/tiles/backdrops, not third-party downloads.
 
 The v7 terrain refresh regenerated the committed terrain PNGs with organic
 alpha masks, deterministic texture noise, softer edges, and stronger biome
@@ -72,9 +75,9 @@ color language:
 - `terrain_hazard_pressure.png` is 24,557 bytes
 - `terrain_stone_rough.png` is 22,236 bytes
 
-The manifest now contains 32 small versioned art entries including creature
-poses, selection assets, food/hazard/rock sprites, five terrain roles, prop
-dressing, ambient layers, and HUD skin assets.
+The manifest now contains 33 versioned art entries including creature poses,
+selection assets, food/hazard/rock sprites, five terrain roles, prop dressing,
+ambient layers, HUD skin assets, and the painted Player View world backdrop.
 
 ## Manifest Changes
 
@@ -86,6 +89,7 @@ Added strict alpha art manifest validation:
 - PNG dimensions checked
 - manifest dimensions/file sizes checked against disk
 - per-file size cap enforced
+- world-backdrop role uses its own manifest-validated size/dimension cap
 - at least three prop/dressing variants required
 - forbidden artifact paths rejected
 
@@ -101,16 +105,29 @@ Default Player View now uses asset-backed sprites for required visual roles:
 - hazard
 - rock/obstacle
 - primary terrain/material tiles
+- painted world backdrop
 - prop dressing
 
 Rectangle fallback remains available only for degraded diagnostics or non-player debug paths. Player View tests assert that required roles are backed by alpha art components and fallback rectangle components are absent.
 
 The Player View terrain renderer now keeps the deterministic `97x73` seeded
-terrain field virtual and materializes only active display chunks near the
-camera/creature anchors. This makes the graphical world read as a larger
-procedural field without rendering the whole virtual map as one giant
-single-screen board. The chunks remain display-only; they are not physics,
-navigation, sensory, cognition, ecology, neural, or action authority.
+terrain field virtual while the default player presentation uses the painted
+1280x720 backdrop for the visible terrain plate. Procedural terrain/content
+still exists in the field ledger and remains display/context substrate, but the
+default view no longer exposes visible debug-grid tiles over the art. The
+terrain/content layers remain display-only; they are not physics, navigation,
+sensory, cognition, ecology, neural, or action authority.
+
+The v15 correction replaces the rejected v12/v13 compositions. The bad v12
+plate had giant baked creatures, high-contrast blob fields, and black gaps. The
+v13.1 plate fixed the square-placeholder problem but still read too sparse and
+washed out compared with the target top-down game-world mockup. The generator
+now always regenerates the committed backdrop instead of preserving an existing
+stale file. The new v15 backdrop is a dense 1280x720 painted map plate with
+small-scale terrain texture, narrow dirt trails, green resource groves, gray
+highlands, red hazard pressure, small rocks/flowers/crystals/creature hints,
+and no baked giant foreground actors. The Rust validation constant and manifest
+now both require v15.
 
 ## Tests Added/Changed
 
@@ -125,7 +142,8 @@ navigation, sensory, cognition, ecology, neural, or action authority.
   - committed alpha art manifest validation
   - 600-tick `gpu_alpha` stability regression
   - Bevy Player View alpha-art backed rendering
-  - chunked virtual terrain materialization rather than full-map board rendering
+  - high-resolution painted Player View map fit
+  - procedural terrain/content ledger evidence without visible debug terrain tiles
   - Dev Overlay / Full Debug preservation through existing view-mode tests
 
 ## Focused Evidence
@@ -144,7 +162,7 @@ Alpha art validator tests:
 cargo test -p alife_game_app alpha_art_inner_validator -- --nocapture
 ```
 
-Result: PASS, 5 tests.
+Result: PASS, 6 tests.
 
 CA44A app tests:
 
@@ -180,7 +198,7 @@ App bundle smoke:
 cargo run -p alife_game_app --bin alife_game_app -- app-bundle-smoke --manifest crates/alife_game_app/app_bundle_manifest.json
 ```
 
-Result: PASS, `alpha_art=32`, `alpha_roles=true`, `production_alpha_art=true`, largest file evidence 24,557 bytes.
+Result: PASS, `alpha_art=33`, `alpha_roles=true`, `production_alpha_art=true`, largest file evidence 236,817 bytes.
 
 Production art / chunked terrain tests:
 
@@ -192,6 +210,30 @@ cargo test -p alife_game_app --all-features --test app_shell bevy_feature_ca37_w
 Result: PASS. These tests verify asset-backed terrain, opacity below
 debug-block levels, chunk provenance, and virtual-map materialization near
 active view/creature anchors.
+
+Painted Player View / target-match focused tests:
+
+```powershell
+cargo test -p alife_game_app --features bevy-app production_player_view_default_camera_is_world_establishing -- --nocapture
+cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_starts_with_wide_painted_map_camera -- --nocapture
+cargo test -p alife_game_app --features bevy-app --test app_shell procedural_world_content_uses_alpha_art_and_no_action_authority -- --nocapture
+```
+
+Result: PASS. These tests verify the wide default camera, painted map presence,
+and generated content visual layer without action authority.
+
+Manual screenshot comparison used untracked local evidence:
+
+```text
+target/playtest_evidence/visual_fix/player_view_v15_actual_settled.png
+```
+
+Result: the actual Bevy window now renders the target-style painted map plate
+with small creatures, food, rocks, narrow paths, dense resource greenery, gray
+rough terrain, and visible red hazard pressure region. The prior flat-green
+fallback capture was traced to the v11/v12 manifest mismatch; the later noisy
+v12 composition and sparse/washed v13 composition were replaced by the v15
+painted map.
 
 Default graphical Player View smoke:
 
@@ -255,7 +297,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundarie
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
 cargo tree -p alife_core
 cargo check --workspace --all-features --all-targets
-cargo test --workspace --all-features --all-targets
+cargo test --workspace --all-features --all-targets --jobs 1
 ```
 
 ## Validation Results
@@ -271,13 +313,21 @@ Focused validation passed. Full validation passed:
 - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1`
 - `cargo tree -p alife_core`
 - `cargo check --workspace --all-features --all-targets`
-- `cargo test --workspace --all-features --all-targets`
+- `cargo test --workspace --all-features --all-targets --jobs 1`
+
+The first all-features test attempt without `--jobs 1` hit a local Windows
+resource failure (`C:` free space reached 0 bytes and the linker reported
+paging/PDB allocation errors). After deleting generated `target/` build
+artifacts with `cargo clean`, the same all-features target set passed with
+`--jobs 1`. This was an environment resource workaround, not a test weakening
+or code failure.
 
 ## Known Limitations
 
 - The art pack is a small alpha pack, not a final production art direction.
 - PNG sprites are intentionally small and stylized.
-- Player View uses asset-backed sprites, but future CA work may still improve animation, composition, and larger-world exploration.
+- Player View uses asset-backed sprites and a painted backdrop, but future CA
+  work may still improve animation, camera polish, and larger-world exploration.
 - Procedural terrain currently improves graphical presentation and active-chunk
   rendering. It is not yet an authoritative Minecraft-like biome/chunk substrate
   for creature sensory, navigation, resource spawning, learning, or offscreen

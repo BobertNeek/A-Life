@@ -199,22 +199,99 @@ class Image:
 
     def save(self, path: Path) -> None:
         raw = self.downsample()
+        write_rgba_png(path, SIZE, SIZE, raw)
 
-        def chunk(kind: bytes, data: bytes) -> bytes:
-            return (
-                struct.pack(">I", len(data))
-                + kind
-                + data
-                + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
-            )
 
-        png = (
-            b"\x89PNG\r\n\x1a\n"
-            + chunk(b"IHDR", struct.pack(">IIBBBBB", SIZE, SIZE, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw, 9))
-            + chunk(b"IEND", b"")
+def write_rgba_png(path: Path, width: int, height: int, raw_scanlines: bytes) -> None:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
         )
-        path.write_bytes(png)
+
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw_scanlines, 9))
+        + chunk(b"IEND", b"")
+    )
+    path.write_bytes(png)
+
+
+def read_png_dimensions(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path} is not a valid PNG")
+    return (
+        struct.unpack(">I", data[16:20])[0],
+        struct.unpack(">I", data[20:24])[0],
+    )
+
+
+class WideImage:
+    def __init__(self, width: int, height: int, bg: tuple[int, int, int, int]):
+        self.width = width
+        self.height = height
+        self.pixels = [[bg for _ in range(width)] for _ in range(height)]
+
+    def set(self, x: int, y: int, color: tuple[int, int, int, int]) -> None:
+        if 0 <= x < self.width and 0 <= y < self.height:
+            self.pixels[y][x] = blend(self.pixels[y][x], color)
+
+    def ellipse(self, cx: float, cy: float, rx: float, ry: float, color: tuple[int, int, int, int]) -> None:
+        for y in range(max(0, int(cy - ry - 2)), min(self.height, int(cy + ry + 3))):
+            for x in range(max(0, int(cx - rx - 2)), min(self.width, int(cx + rx + 3))):
+                dx = (x + 0.5 - cx) / max(rx, 1.0)
+                dy = (y + 0.5 - cy) / max(ry, 1.0)
+                if dx * dx + dy * dy <= 1.0:
+                    self.set(x, y, color)
+
+    def polygon(self, points: list[tuple[float, float]], color: tuple[int, int, int, int]) -> None:
+        min_x = max(0, int(min(x for x, _ in points)) - 2)
+        max_x = min(self.width, int(max(x for x, _ in points)) + 3)
+        min_y = max(0, int(min(y for _, y in points)) - 2)
+        max_y = min(self.height, int(max(y for _, y in points)) + 3)
+        for y in range(min_y, max_y):
+            for x in range(min_x, max_x):
+                inside = False
+                j = len(points) - 1
+                for i in range(len(points)):
+                    xi, yi = points[i]
+                    xj, yj = points[j]
+                    if ((yi > y) != (yj > y)) and (
+                        x < (xj - xi) * (y - yi) / ((yj - yi) or 1.0) + xi
+                    ):
+                        inside = not inside
+                    j = i
+                if inside:
+                    self.set(x, y, color)
+
+    def line(self, x1: float, y1: float, x2: float, y2: float, width: float, color: tuple[int, int, int, int]) -> None:
+        dx = x2 - x1
+        dy = y2 - y1
+        length_sq = dx * dx + dy * dy
+        pad = width + 2
+        for y in range(max(0, int(min(y1, y2) - pad)), min(self.height, int(max(y1, y2) + pad))):
+            for x in range(max(0, int(min(x1, x2) - pad)), min(self.width, int(max(x1, x2) + pad))):
+                if length_sq == 0:
+                    dist = math.hypot(x - x1, y - y1)
+                else:
+                    t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / length_sq))
+                    px = x1 + t * dx
+                    py = y1 + t * dy
+                    dist = math.hypot(x - px, y - py)
+                if dist <= width * 0.5:
+                    self.set(x, y, color)
+
+    def save(self, path: Path) -> None:
+        raw = bytearray()
+        for row in self.pixels:
+            raw.append(0)
+            for pixel in row:
+                raw.extend(pixel)
+        write_rgba_png(path, self.width, self.height, bytes(raw))
 
 
 def deterministic_dot(img: Image, seed: int, palette: list[tuple[int, int, int, int]], count: int, min_r: float = 1.0, max_r: float = 4.0) -> None:
@@ -475,36 +552,35 @@ def rock() -> Image:
 
 
 def tile(base: str, accents: list[str], seed: int, mood: str) -> Image:
-    """Organic terrain patch, not an opaque square tile.
+    """Seam-friendly painterly terrain tile.
 
-    The Bevy player view rotates and overlaps these committed PNGs. Keeping the
-    edges transparent avoids the visual checkerboard that made the map read as a
-    debug board instead of terrain.
+    Earlier CA44A tiles were circular alpha brush stamps, which looked like
+    obvious repeated blobs once the Player View zoomed out. These tiles fill
+    the whole cell with subtle painted variation so the procedural map reads as
+    a coherent game surface instead of a debug overlay.
     """
 
-    img = Image()
-    base_rgba = rgba(base, 158)
-    shadow_rgba = rgba("071208", 26)
-    img.ellipse(64, 66, 55, 49, base_rgba)
-    for i, (ox, oy, rx, ry) in enumerate(
+    img = Image(bg=rgba(base, 255))
+    for i, (cx, cy, rx, ry) in enumerate(
         [
-            (-26, -18, 24, 18),
-            (28, -15, 28, 19),
-            (-30, 18, 24, 19),
-            (27, 22, 29, 22),
-            (2, -34, 29, 15),
-            (2, 35, 32, 16),
-            (-6, 2, 42, 24),
+            (18, 18, 24, 17),
+            (48, 22, 32, 15),
+            (88, 20, 31, 18),
+            (112, 44, 24, 22),
+            (24, 72, 35, 20),
+            (68, 66, 42, 23),
+            (106, 88, 33, 24),
+            (42, 112, 38, 16),
+            (92, 118, 43, 18),
         ]
     ):
-        img.ellipse(64 + ox, 64 + oy, rx, ry, rgba(accents[i % len(accents)], 86 + (i % 3) * 14))
-    img.ellipse(65, 72, 48, 15, shadow_rgba)
-    deterministic_dot(img, seed, [rgba(c, 54) for c in accents], 150, 0.55, 2.45)
+        img.ellipse(cx, cy, rx, ry, rgba(accents[i % len(accents)], 42 + (i % 3) * 9))
+    deterministic_dot(img, seed, [rgba(c, 52) for c in accents], 95, 0.35, 1.45)
     for i in range(14):
-        cx = 13 + ((seed * (i + 19) + i * 31) % 101)
-        cy = 13 + ((seed * (i + 11) + i * 41) % 101)
-        angle = ((seed + i * 7) % 360) * math.pi / 180.0
-        length = 18 + ((seed + i * 13) % 32)
+        cx = 7 + ((seed * (i + 19) + i * 31) % 116)
+        cy = 8 + ((seed * (i + 11) + i * 41) % 112)
+        angle = ((seed + i * 31) % 360) * math.pi / 180.0
+        length = 8 + ((seed + i * 13) % 23)
         dx = math.cos(angle) * length * 0.5
         dy = math.sin(angle) * length * 0.5
         img.line(
@@ -512,36 +588,35 @@ def tile(base: str, accents: list[str], seed: int, mood: str) -> Image:
             cy - dy,
             cx + dx,
             cy + dy,
-            0.75,
-            rgba(accents[i % len(accents)], 34 + (i % 4) * 8),
+            0.48,
+            rgba(accents[i % len(accents)], 30 + (i % 4) * 7),
         )
     if mood == "grass":
-        for i in range(34):
+        for i in range(16):
             x = 9 + ((seed * (i + 3) + i * 19) % 110)
             y = 10 + ((seed * (i + 7) + i * 29) % 108)
-            leaf(img, x, y, (i % 11) * 0.43, 8 + i % 8, 3.2, accents[i % len(accents)], 92)
+            leaf(img, x, y, (i % 11) * 0.43, 6 + i % 6, 2.4, accents[i % len(accents)], 86)
             if i % 7 == 0:
-                img.ellipse(x + 4, y - 3, 1.9, 1.5, rgba("f4e77d", 118))
+                img.ellipse(x + 4, y - 3, 1.8, 1.4, rgba("f4e77d", 118))
     elif mood == "hazard":
-        img.ellipse(66, 65, 45, 34, rgba("5d181d", 58))
-        for i in range(18):
+        img.ellipse(66, 65, 45, 34, rgba("9d3d2c", 30))
+        for i in range(4):
             x = 10 + ((seed * (i + 5) + i * 31) % 105)
             y = 12 + ((seed * (i + 11) + i * 17) % 102)
-            img.polygon([(x, y - 7), (x + 5, y + 7), (x - 5, y + 8)], rgba("dd3b34", 94))
-            img.ellipse(x + 2, y + 3, 8, 3, rgba("ff7844", 28))
+            img.polygon([(x, y - 5), (x + 4, y + 6), (x - 4, y + 6)], rgba("dd3b34", 58))
+            img.ellipse(x + 2, y + 3, 7, 3, rgba("ff7844", 24))
     elif mood == "stone":
-        for i in range(24):
+        for i in range(12):
             x = 8 + ((seed * (i + 13) + i * 23) % 110)
             y = 8 + ((seed * (i + 17) + i * 21) % 110)
-            img.ellipse(x, y, 5 + (i % 5), 2.4 + (i % 3), rgba(accents[i % len(accents)], 72))
-            img.line(x - 5, y - 1, x + 5, y + 1, 0.65, rgba("d6dcc9", 36))
+            img.ellipse(x, y, 4 + (i % 5), 2.0 + (i % 3), rgba(accents[i % len(accents)], 68))
+            img.line(x - 5, y - 1, x + 5, y + 1, 0.55, rgba("d6dcc9", 36))
     elif mood == "soil":
-        for i in range(22):
+        for i in range(9):
             x = 6 + ((seed * (i + 23) + i * 13) % 112)
             y = 8 + ((seed * (i + 19) + i * 27) % 108)
-            img.line(x - 8, y, x + 9, y + ((i % 5) - 2), 1.05, rgba(accents[i % len(accents)], 56))
-    img.multiply_alpha_mask(rx=54.0, ry=50.0, softness=0.34, wobble_seed=seed)
-    img.apply_texture_noise(seed, color_strength=4.5, alpha_strength=0.035)
+            img.line(x - 8, y, x + 9, y + ((i % 5) - 2), 0.85, rgba(accents[i % len(accents)], 58))
+    img.apply_texture_noise(seed, color_strength=3.0, alpha_strength=0.02)
     return img
 
 
@@ -710,6 +785,619 @@ def ui_control_keycap() -> Image:
     return img
 
 
+def world_backdrop_gpu_alpha() -> WideImage:
+    """Compact painted alpha map used as the default Player View backdrop."""
+
+    width = 640
+    height = 360
+    img = WideImage(width, height, rgba("7fb045", 255))
+
+    def rnd(seed: int) -> int:
+        return (seed * 1664525 + 1013904223) & 0xFFFFFFFF
+
+    def paint_cluster(cx: float, cy: float, rx: float, ry: float, color: str, alpha: int, seed: int, count: int) -> None:
+        img.ellipse(cx, cy, rx, ry, rgba(color, alpha))
+        value = seed
+        for _ in range(count):
+            value = rnd(value)
+            x = cx + ((value % 2000) / 1000.0 - 1.0) * rx
+            value = rnd(value)
+            y = cy + ((value % 2000) / 1000.0 - 1.0) * ry
+            if ((x - cx) / max(rx, 1.0)) ** 2 + ((y - cy) / max(ry, 1.0)) ** 2 > 1.08:
+                continue
+            value = rnd(value)
+            rr = 2.0 + (value % 42) / 8.0
+            img.ellipse(x, y, rr, rr * (0.46 + ((value >> 7) % 28) / 100.0), rgba(color, max(22, alpha // 3)))
+
+    # Broad target-like biome plate: safe green center, ochre left, gray
+    # highlands, red hazard right, and water/fog edges.
+    for args in [
+        (160, 120, 190, 110, "a2c85b", 170, 101, 90),
+        (320, 188, 250, 130, "83b84e", 190, 102, 130),
+        (458, 115, 170, 96, "727c68", 170, 103, 95),
+        (520, 210, 154, 92, "b64e38", 230, 104, 115),
+        (108, 245, 170, 86, "b69948", 165, 105, 86),
+        (62, 300, 118, 58, "578d82", 115, 106, 48),
+        (570, 306, 100, 54, "4b8183", 115, 107, 52),
+        (404, 288, 128, 56, "4f9641", 150, 108, 70),
+    ]:
+        paint_cluster(*args)
+
+    # Curving dirt paths, thin and layered like the mockup rather than giant
+    # slabs. These are visual-only brush strokes.
+    paths = [
+        [(8, 248), (86, 223), (172, 194), (260, 173), (365, 148), (504, 116), (632, 83)],
+        [(190, 354), (228, 292), (272, 226), (318, 164), (354, 93), (372, 6)],
+        [(78, 116), (154, 133), (230, 156), (316, 183), (424, 205), (594, 226)],
+    ]
+    for path in paths:
+        for width_px, alpha, color in [(20, 44, "593c24"), (13, 70, "8f6539"), (6, 108, "bd8a4a"), (2, 76, "e1bd70")]:
+            for (x1, y1), (x2, y2) in zip(path, path[1:]):
+                img.line(x1, y1, x2, y2, width_px, rgba(color, alpha))
+
+    # Dense painterly terrain speckle.
+    value = 424242
+    palettes = [
+        ("b7d668", 54),
+        ("6ea13f", 50),
+        ("3e7133", 42),
+        ("d0ae58", 46),
+        ("8b7d55", 42),
+        ("b44a38", 42),
+        ("52615d", 36),
+    ]
+    for _ in range(3150):
+        value = rnd(value)
+        x = value % width
+        value = rnd(value)
+        y = value % height
+        color, alpha = palettes[(value >> 8) % len(palettes)]
+        r = 0.35 + ((value >> 18) % 20) / 13.0
+        img.ellipse(x, y, r, r * (0.42 + ((value >> 4) % 34) / 100.0), rgba(color, alpha))
+
+    # Fine grass, scratches, and contour strokes.
+    value = 99331
+    for _ in range(650):
+        value = rnd(value)
+        x = 6 + (value % (width - 12))
+        value = rnd(value)
+        y = 6 + (value % (height - 12))
+        value = rnd(value)
+        angle = (value % 628) / 100.0
+        length = 3.0 + ((value >> 9) % 13)
+        dx = math.cos(angle) * length * 0.5
+        dy = math.sin(angle) * length * 0.5
+        color, alpha = palettes[(value >> 17) % len(palettes)]
+        img.line(x - dx, y - dy, x + dx, y + dy, 0.75, rgba(color, min(105, alpha + 22)))
+
+    # Small forests/groves.
+    for cx, cy, seed, count in [(300, 82, 7001, 85), (350, 94, 7002, 70), (258, 270, 7003, 58), (112, 170, 7004, 52)]:
+        value = seed
+        for _ in range(count):
+            value = rnd(value)
+            x = cx + ((value % 1000) / 500.0 - 1.0) * 46
+            value = rnd(value)
+            y = cy + ((value % 1000) / 500.0 - 1.0) * 31
+            img.ellipse(x, y + 2, 4.5, 2.4, rgba("14391f", 72))
+            img.ellipse(x, y, 3.4, 3.1, rgba("2f7a32", 150))
+            img.ellipse(x - 1.0, y - 1.0, 1.4, 1.1, rgba("9bd768", 96))
+            if value % 7 == 0:
+                img.ellipse(x + 1.8, y - 1.2, 1.2, 1.0, rgba("d34b44", 145))
+
+    # Rock fields and red crystal field are baked small so the foreground
+    # selectable sprites do not need to become giant labels.
+    for x, y, s in [
+        (34, 62, 1.0), (58, 83, 0.75), (108, 68, 0.9), (468, 50, 1.15), (510, 66, 0.85),
+        (536, 92, 1.0), (392, 52, 0.8), (425, 72, 0.7), (590, 160, 0.82), (214, 96, 0.78),
+        (332, 245, 0.86), (374, 262, 0.75), (116, 290, 0.88), (152, 274, 0.7),
+    ]:
+        img.ellipse(x, y + 5 * s, 8 * s, 4 * s, rgba("30352e", 58))
+        img.ellipse(x, y, 7 * s, 5 * s, rgba("757d72", 205))
+        img.ellipse(x - 2 * s, y - 2 * s, 2.8 * s, 1.6 * s, rgba("d7dbc9", 95))
+        img.ellipse(x + 4 * s, y + 1 * s, 3.2 * s, 2.1 * s, rgba("4b534b", 130))
+    for x, y, s in [
+        (458, 184, 1.1), (492, 168, 0.92), (540, 212, 1.25), (574, 194, 0.9),
+        (516, 250, 1.0), (604, 235, 0.86), (438, 234, 0.75), (486, 278, 0.7),
+    ]:
+        img.line(x, y + 8 * s, x - 5 * s, y - 8 * s, 3.2 * s, rgba("c73735", 205))
+        img.line(x, y + 8 * s, x + 5 * s, y - 6 * s, 3.2 * s, rgba("ff7250", 158))
+        img.ellipse(x, y + 9 * s, 5 * s, 2 * s, rgba("51211f", 85))
+
+    # Food/flower/grove hints at much smaller scale than the selectable object
+    # sprites.
+    for x, y, col in [
+        (178, 70, "f6d95b"), (232, 78, "e96868"), (286, 136, "ffdf6e"), (126, 224, "f29654"),
+        (402, 138, "f7dd72"), (352, 206, "ea6375"), (224, 232, "e6cc4d"), (84, 260, "f2de76"),
+        (418, 284, "f39c6b"), (572, 102, "e86264"), (60, 150, "ffdf72"),
+    ]:
+        img.ellipse(x, y, 2.0, 1.2, rgba(col, 170))
+        img.line(x, y + 4, x, y - 3, 1.0, rgba("4faa38", 150))
+        img.ellipse(x - 2, y + 2, 2, 1.2, rgba("72c84d", 112))
+        img.ellipse(x + 2, y + 2, 2, 1.2, rgba("72c84d", 112))
+
+    # Cloud/fog edges, deliberately subtle and not gameplay-significant.
+    for cx, cy, rx, ry, alpha in [
+        (20, 334, 55, 17, 74), (82, 350, 70, 14, 62), (602, 326, 76, 18, 72),
+        (633, 288, 42, 22, 50), (8, 24, 36, 15, 38), (622, 18, 46, 14, 36),
+    ]:
+        img.ellipse(cx, cy, rx, ry, rgba("e9eddf", alpha))
+
+    return img
+
+
+def world_backdrop_gpu_alpha_v13() -> WideImage:
+    """Painted top-down alpha map that matches the target game-world mockup.
+
+    The previous preserved v12 image had giant baked creatures and high-contrast
+    blob fields. This version keeps the art as one coherent terrain plate:
+    green center, traversable dirt paths, resource groves, gray highlands, red
+    hazard pressure, and tiny world dressing. Foreground creatures remain small
+    Bevy sprites instead of being baked into the backdrop.
+    """
+
+    width = 1280
+    height = 720
+    img = WideImage(width, height, rgba("8fb34f", 255))
+
+    def rnd(seed: int) -> int:
+        return (seed * 1664525 + 1013904223) & 0xFFFFFFFF
+
+    def patch(cx: float, cy: float, rx: float, ry: float, color: str, alpha: int, seed: int) -> None:
+        value = seed
+        for _ in range(72):
+            value = rnd(value)
+            x = cx + ((value % 2000) / 1000.0 - 1.0) * rx * 0.95
+            value = rnd(value)
+            y = cy + ((value % 2000) / 1000.0 - 1.0) * ry * 0.95
+            if ((x - cx) / max(rx, 1.0)) ** 2 + ((y - cy) / max(ry, 1.0)) ** 2 > 1.0:
+                continue
+            value = rnd(value)
+            local_rx = 18 + (value % 74)
+            local_ry = 9 + ((value >> 7) % 42)
+            img.ellipse(x, y, local_rx, local_ry, rgba(color, max(28, alpha // 4)))
+
+    def path_line(points: list[tuple[float, float]]) -> None:
+        for width_px, alpha, color in [
+            (34, 38, "4a341f"),
+            (24, 70, "7b5632"),
+            (15, 120, "a97843"),
+            (7, 126, "d4ad63"),
+        ]:
+            for (x1, y1), (x2, y2) in zip(points, points[1:]):
+                img.line(x1, y1, x2, y2, width_px, rgba(color, alpha))
+
+    # Broad hand-authored composition, closer to the target mockup than a noisy
+    # tiled field. Keep every region connected; no black voids or giant cards.
+    for args in [
+        (260, 160, 330, 170, "aac65a", 118, 1001),
+        (530, 260, 430, 215, "8cb34d", 140, 1002),
+        (470, 138, 190, 95, "5f9b39", 100, 1003),
+        (760, 170, 250, 120, "6f866e", 122, 1004),
+        (950, 150, 255, 120, "69736f", 136, 1005),
+        (1032, 322, 260, 150, "b84e3b", 178, 1006),
+        (1008, 520, 305, 152, "b35a3e", 118, 1007),
+        (185, 398, 250, 140, "b69547", 118, 1008),
+        (350, 600, 330, 95, "698f48", 102, 1009),
+        (710, 570, 300, 120, "4d963f", 100, 1010),
+        (70, 554, 160, 108, "6fa19a", 78, 1011),
+        (1202, 570, 125, 112, "527f83", 80, 1012),
+    ]:
+        patch(*args)
+
+    # A few low-alpha irregular washes establish large biomes without the
+    # obvious circular overlays that made v13.0 read like a debug heatmap.
+    for points, color, alpha in [
+        ([(746, 54), (1114, 42), (1238, 142), (1180, 250), (956, 236), (792, 178)], "566262", 58),
+        ([(820, 246), (1192, 210), (1278, 388), (1174, 612), (880, 548), (756, 384)], "b54835", 70),
+        ([(78, 254), (318, 292), (448, 434), (334, 584), (68, 590), (0, 476)], "b79a47", 50),
+        ([(432, 430), (730, 378), (894, 476), (776, 660), (466, 664), (306, 552)], "4d943e", 48),
+        ([(378, 66), (650, 58), (782, 146), (648, 230), (418, 210), (280, 142)], "4f9438", 42),
+    ]:
+        img.polygon(points, rgba(color, alpha))
+
+    path_line([(20, 500), (160, 455), (292, 390), (450, 335), (620, 282), (805, 250), (1025, 232), (1260, 190)])
+    path_line([(180, 704), (255, 606), (338, 520), (438, 440), (544, 350), (606, 228), (642, 24)])
+    path_line([(44, 194), (196, 220), (360, 254), (520, 298), (704, 352), (930, 412), (1225, 448)])
+    path_line([(422, 690), (512, 608), (622, 520), (730, 444), (840, 356), (936, 288)])
+
+    value = 204771
+    palette = [
+        ("c6d96d", 35),
+        ("7aa346", 42),
+        ("3d7433", 36),
+        ("d5b55f", 38),
+        ("855a35", 34),
+        ("a24336", 34),
+        ("626d67", 34),
+    ]
+    for _ in range(1850):
+        value = rnd(value)
+        x = value % width
+        value = rnd(value)
+        y = value % height
+        color, alpha = palette[(value >> 9) % len(palette)]
+        r = 1.0 + ((value >> 19) % 10) / 5.0
+        img.ellipse(x, y, r, r * (0.45 + ((value >> 5) % 26) / 100.0), rgba(color, alpha))
+
+    for _ in range(680):
+        value = rnd(value)
+        x = 12 + value % (width - 24)
+        value = rnd(value)
+        y = 14 + value % (height - 28)
+        value = rnd(value)
+        angle = (value % 628) / 100.0
+        length = 4.0 + ((value >> 8) % 11)
+        dx = math.cos(angle) * length * 0.5
+        dy = math.sin(angle) * length * 0.5
+        color = ["477735", "a6c764", "6e9a46", "c8ad5a"][(value >> 18) % 4]
+        img.line(x - dx, y - dy, x + dx, y + dy, 0.9, rgba(color, 92))
+
+    def tiny_tree(x: float, y: float, s: float = 1.0, berry: bool = False) -> None:
+        img.ellipse(x, y + 7 * s, 10 * s, 4 * s, rgba("13230f", 62))
+        for dx, dy, r, col in [
+            (-7, 2, 8, "326f30"),
+            (4, -3, 10, "43853a"),
+            (10, 4, 7, "2d662b"),
+            (-1, -10, 8, "5f9b44"),
+        ]:
+            img.ellipse(x + dx * s, y + dy * s, r * s, r * 0.72 * s, rgba(col, 210))
+        if berry:
+            img.ellipse(x + 5 * s, y - 7 * s, 2.0 * s, 1.7 * s, rgba("df4f49", 190))
+            img.ellipse(x - 5 * s, y + 1 * s, 1.7 * s, 1.4 * s, rgba("ef6f59", 180))
+
+    def tiny_rock(x: float, y: float, s: float = 1.0) -> None:
+        img.ellipse(x, y + 5 * s, 12 * s, 4 * s, rgba("263028", 60))
+        img.ellipse(x - 4 * s, y, 7 * s, 5 * s, rgba("8b9183", 220))
+        img.ellipse(x + 5 * s, y + 1 * s, 8 * s, 5 * s, rgba("666f66", 210))
+        img.ellipse(x - 6 * s, y - 2 * s, 2.8 * s, 1.5 * s, rgba("d7ddc8", 100))
+
+    def tiny_crystal(x: float, y: float, s: float = 1.0) -> None:
+        img.line(x, y + 13 * s, x - 7 * s, y - 12 * s, 5.2 * s, rgba("be2833", 230))
+        img.line(x, y + 13 * s, x + 6 * s, y - 10 * s, 4.4 * s, rgba("ff7250", 190))
+        img.line(x + 12 * s, y + 10 * s, x + 18 * s, y - 5 * s, 3.7 * s, rgba("e7443f", 185))
+        img.ellipse(x + 2 * s, y + 13 * s, 10 * s, 3 * s, rgba("411d1b", 70))
+
+    def tiny_flower(x: float, y: float, color: str = "f56c86") -> None:
+        img.line(x, y + 9, x, y - 4, 1.4, rgba("459a35", 180))
+        img.ellipse(x, y - 4, 3.0, 2.2, rgba(color, 220))
+        img.ellipse(x - 3, y - 1, 3.0, 1.9, rgba("ffd86c", 160))
+        img.ellipse(x + 3, y - 1, 3.0, 1.9, rgba("ffe27d", 160))
+
+    def tiny_creature(x: float, y: float, color: str = "54d1e2") -> None:
+        img.ellipse(x, y + 6, 9, 3.5, rgba("112820", 55))
+        img.ellipse(x, y, 8, 6, rgba(color, 228))
+        img.ellipse(x - 4, y - 5, 2, 2, rgba("ecffff", 220))
+        img.ellipse(x + 4, y - 5, 2, 2, rgba("ecffff", 220))
+        img.line(x - 4, y - 8, x - 9, y - 14, 1.3, rgba(color, 190))
+        img.line(x + 4, y - 8, x + 9, y - 13, 1.3, rgba(color, 190))
+
+    for x, y, s in [
+        (66, 88, 1.2), (105, 122, 0.9), (174, 96, 1.0), (760, 74, 1.1), (814, 112, 0.92),
+        (886, 86, 1.0), (948, 136, 1.3), (640, 414, 0.95), (698, 454, 0.85), (262, 528, 1.15),
+        (334, 566, 0.86), (430, 184, 0.9), (520, 126, 0.8), (1188, 276, 0.92), (1132, 386, 0.75),
+    ]:
+        tiny_rock(x, y, s)
+
+    for x, y, s in [
+        (914, 256, 1.1), (996, 280, 1.3), (1088, 314, 1.05), (1158, 252, 0.9),
+        (1048, 420, 1.0), (1186, 454, 0.78), (940, 456, 0.85), (1114, 544, 0.75),
+    ]:
+        tiny_crystal(x, y, s)
+
+    for x, y, s, berry in [
+        (458, 110, 1.1, True), (504, 95, 0.95, True), (538, 136, 1.0, False),
+        (610, 116, 0.9, False), (706, 592, 1.05, False), (748, 562, 0.9, True),
+        (378, 474, 1.0, False), (318, 436, 0.82, False), (176, 320, 0.95, False),
+        (246, 300, 0.78, True), (552, 494, 0.72, False), (592, 520, 0.86, False),
+    ]:
+        tiny_tree(x, y, s, berry)
+
+    for x, y, c in [
+        (236, 120, "f4d65e"), (350, 150, "e85764"), (428, 248, "ffe06e"), (548, 228, "f7b84f"),
+        (658, 316, "df6e85"), (302, 408, "f4d55a"), (186, 584, "f28c62"), (780, 352, "f1db6b"),
+        (836, 524, "ef6d7d"), (1130, 168, "f1d964"), (1034, 604, "f09c58"), (91, 238, "ead763"),
+    ]:
+        tiny_flower(x, y, c)
+
+    for x, y, c in [(530, 332, "56d7e5"), (742, 286, "48bdd1"), (842, 396, "58d1e0"), (392, 338, "54cde3")]:
+        tiny_creature(x, y, c)
+
+    # Soft edge atmosphere like the target image, without hiding gameplay.
+    for cx, cy, rx, ry, alpha in [
+        (46, 675, 120, 32, 50),
+        (158, 704, 160, 28, 38),
+        (1170, 672, 150, 36, 48),
+        (1255, 92, 75, 30, 26),
+        (22, 24, 70, 22, 24),
+        (628, 712, 165, 22, 24),
+    ]:
+        img.ellipse(cx, cy, rx, ry, rgba("edf1df", alpha))
+
+    # Gentle vignette keeps the HUD readable but avoids the black checkerboard
+    # appearance of the rejected backdrop.
+    for cx, cy, rx, ry, alpha in [
+        (0, 360, 80, 360, 14),
+        (1280, 360, 90, 360, 16),
+        (640, -20, 600, 70, 12),
+        (640, 740, 560, 75, 14),
+    ]:
+        img.ellipse(cx, cy, rx, ry, rgba("0b1b10", alpha))
+
+    return img
+
+
+def world_backdrop_gpu_alpha_v15() -> WideImage:
+    """Dense painted top-down alpha map matching the game-world mockup.
+
+    v15 keeps the dense terrain plate but removes the last rail-like path
+    strokes from v14. The map now uses broken, irregular dirt footpaths with
+    small readable dressing: grass clearings, rock fields, resource groves,
+    red hazard crystals, tiny creatures, and edge atmosphere. It remains a
+    visual backdrop only; foreground gameplay objects are still rendered as
+    normal sprites.
+    """
+
+    width = 1280
+    height = 720
+    img = WideImage(width, height, rgba("6f983b", 255))
+
+    def rnd(seed: int) -> int:
+        return (seed * 1664525 + 1013904223) & 0xFFFFFFFF
+
+    def jitter(seed: int, scale: float) -> tuple[float, float, int]:
+        seed = rnd(seed)
+        x = ((seed & 0xFFFF) / 32767.5 - 1.0) * scale
+        seed = rnd(seed)
+        y = ((seed & 0xFFFF) / 32767.5 - 1.0) * scale
+        return x, y, seed
+
+    def organic_poly(cx: float, cy: float, rx: float, ry: float, sides: int, seed: int) -> list[tuple[float, float]]:
+        points: list[tuple[float, float]] = []
+        value = seed
+        for i in range(sides):
+            angle = (math.tau * i / sides) + 0.10 * math.sin(i * 1.7)
+            value = rnd(value)
+            r = 0.78 + ((value >> 8) % 48) / 100.0
+            points.append((cx + math.cos(angle) * rx * r, cy + math.sin(angle) * ry * r))
+        return points
+
+    def wash(cx: float, cy: float, rx: float, ry: float, color: str, alpha: int, seed: int, sides: int = 12) -> None:
+        img.polygon(organic_poly(cx, cy, rx, ry, sides, seed), rgba(color, alpha))
+
+    def daub_cluster(cx: float, cy: float, rx: float, ry: float, color: str, alpha: int, seed: int, count: int) -> None:
+        value = seed
+        for _ in range(count):
+            dx, dy, value = jitter(value, 1.0)
+            x = cx + dx * rx
+            y = cy + dy * ry
+            if ((x - cx) / max(rx, 1.0)) ** 2 + ((y - cy) / max(ry, 1.0)) ** 2 > 1.05:
+                continue
+            value = rnd(value)
+            local_rx = 8 + (value % 34)
+            local_ry = 5 + ((value >> 7) % 20)
+            img.ellipse(x, y, local_rx, local_ry, rgba(color, alpha))
+
+    def trail(points: list[tuple[float, float]], seed: int) -> None:
+        # Broken organic footpaths, not roads. A jittered centerline and many
+        # short low-alpha strokes create a dirt-track read without the straight
+        # rail impression that made v14 feel unlike the target mockup.
+        samples: list[tuple[float, float]] = []
+        value = seed
+        for segment_index, ((x1, y1), (x2, y2)) in enumerate(zip(points, points[1:])):
+            steps = 12
+            dx = x2 - x1
+            dy = y2 - y1
+            length = max(math.hypot(dx, dy), 1.0)
+            nx = -dy / length
+            ny = dx / length
+            for step in range(steps):
+                t = step / steps
+                value = rnd(value + segment_index * 97 + step * 13)
+                wobble = math.sin((segment_index + t) * 3.8) * 7.0 + (((value >> 8) % 100) - 50) * 0.06
+                samples.append((x1 + dx * t + nx * wobble, y1 + dy * t + ny * wobble))
+        samples.append(points[-1])
+
+        for width_px, alpha, color in [
+            (9, 46, "3b2819"),
+            (6, 86, "7f5730"),
+            (3, 126, "be8646"),
+        ]:
+            for (x1, y1), (x2, y2) in zip(samples, samples[1:]):
+                img.line(x1, y1, x2, y2, width_px, rgba(color, alpha))
+
+        value = seed ^ 0x56A33
+        for i, (x, y) in enumerate(samples[::3]):
+            value = rnd(value + i * 31)
+            if value % 5 == 0:
+                continue
+            rx = 5.0 + ((value >> 9) % 9)
+            ry = 2.2 + ((value >> 15) % 5)
+            img.ellipse(x, y, rx, ry, rgba("d4ad65", 58 + (value % 45)))
+
+    def small_tree(x: float, y: float, s: float, berry: bool = False) -> None:
+        img.ellipse(x, y + 7 * s, 12 * s, 4.0 * s, rgba("152712", 70))
+        for dx, dy, r, col in [
+            (-7, 2, 8, "1f5c2a"),
+            (2, -5, 10, "347d34"),
+            (9, 2, 7, "285f2c"),
+            (-2, -10, 7, "609d3f"),
+        ]:
+            img.ellipse(x + dx * s, y + dy * s, r * s, r * 0.75 * s, rgba(col, 225))
+        if berry:
+            img.ellipse(x + 4 * s, y - 8 * s, 1.8 * s, 1.5 * s, rgba("d84043", 210))
+            img.ellipse(x - 5 * s, y + 1 * s, 1.6 * s, 1.3 * s, rgba("ef7060", 190))
+
+    def small_rock(x: float, y: float, s: float) -> None:
+        img.ellipse(x, y + 6 * s, 14 * s, 4.5 * s, rgba("213126", 66))
+        img.ellipse(x - 6 * s, y + 1 * s, 7 * s, 5 * s, rgba("7b8375", 225))
+        img.ellipse(x + 3 * s, y - 2 * s, 10 * s, 7 * s, rgba("9a9f8f", 225))
+        img.ellipse(x + 10 * s, y + 2 * s, 6 * s, 4.5 * s, rgba("59665d", 215))
+        img.ellipse(x - 8 * s, y - 2 * s, 2.5 * s, 1.4 * s, rgba("dce1c9", 120))
+
+    def small_crystal(x: float, y: float, s: float) -> None:
+        img.line(x - 2 * s, y + 14 * s, x - 8 * s, y - 12 * s, 4.5 * s, rgba("b72033", 235))
+        img.line(x + 2 * s, y + 14 * s, x + 6 * s, y - 15 * s, 4.0 * s, rgba("ff604c", 220))
+        img.line(x + 12 * s, y + 12 * s, x + 18 * s, y - 5 * s, 3.0 * s, rgba("dc3b39", 200))
+        img.ellipse(x + 2 * s, y + 14 * s, 10 * s, 2.8 * s, rgba("421918", 85))
+
+    def small_flower(x: float, y: float, color: str) -> None:
+        img.line(x, y + 9, x, y - 4, 1.1, rgba("3d8e31", 175))
+        img.ellipse(x, y - 4, 2.3, 1.7, rgba(color, 225))
+        img.ellipse(x - 2.4, y - 1, 2.3, 1.5, rgba("ffe16b", 178))
+        img.ellipse(x + 2.4, y - 1, 2.3, 1.5, rgba("fff08b", 150))
+
+    def small_creature(x: float, y: float, color: str) -> None:
+        img.ellipse(x, y + 7, 9, 3.2, rgba("0b251f", 70))
+        img.ellipse(x, y, 8, 6, rgba(color, 230))
+        img.ellipse(x - 3, y - 4, 2.0, 1.9, rgba("eefcff", 230))
+        img.ellipse(x + 4, y - 4, 2.0, 1.9, rgba("eefcff", 230))
+        img.line(x - 4, y - 7, x - 9, y - 13, 1.2, rgba(color, 190))
+        img.line(x + 4, y - 7, x + 9, y - 12, 1.2, rgba(color, 190))
+
+    # Biomes: target-style lush center, ochre left, gray highlands, red hazard
+    # right, and damp edge color. These are irregular and low enough alpha that
+    # the world reads as terrain instead of UI overlays.
+    for args in [
+        (314, 160, 340, 150, "a7c85a", 108, 1101, 14),
+        (565, 285, 380, 210, "79ad43", 118, 1102, 16),
+        (310, 452, 300, 170, "af9145", 78, 1103, 14),
+        (835, 130, 285, 120, "69766e", 92, 1104, 14),
+        (1020, 220, 250, 136, "5f6a68", 74, 1105, 13),
+        (1044, 390, 290, 186, "ad4639", 112, 1106, 15),
+        (1085, 560, 285, 125, "a34a35", 74, 1107, 12),
+        (92, 572, 190, 112, "578f83", 54, 1108, 12),
+        (1216, 610, 150, 88, "4e8387", 60, 1109, 11),
+    ]:
+        wash(*args)
+
+    # Painterly but compact micro-daubs, more like dense ground texture than
+    # soft giant circles.
+    for args in [
+        (430, 184, 430, 170, "bcd36c", 38, 2101, 220),
+        (540, 330, 420, 220, "578e37", 42, 2102, 260),
+        (255, 466, 320, 165, "b79248", 40, 2103, 180),
+        (868, 126, 300, 138, "717c76", 42, 2104, 175),
+        (1038, 390, 310, 190, "b94d3e", 46, 2105, 205),
+        (736, 560, 290, 120, "3f8738", 38, 2106, 165),
+    ]:
+        daub_cluster(*args)
+
+    trail([(35, 500), (148, 462), (286, 402), (422, 344), (574, 302), (748, 262), (954, 236), (1230, 188)], 9011)
+    trail([(158, 700), (224, 608), (322, 522), (420, 452), (520, 372), (580, 270), (618, 150), (646, 32)], 9012)
+    trail([(64, 220), (214, 230), (360, 262), (530, 312), (704, 356), (904, 414), (1168, 450)], 9013)
+    trail([(492, 680), (584, 602), (690, 514), (800, 424), (918, 326)], 9014)
+
+    value = 320711
+    palette = [
+        ("d2df75", 58),
+        ("89b84c", 56),
+        ("456f31", 48),
+        ("d0ad55", 46),
+        ("72502e", 38),
+        ("c44b3f", 42),
+        ("667067", 42),
+        ("f1dc86", 34),
+    ]
+    for _ in range(4200):
+        value = rnd(value)
+        x = value % width
+        value = rnd(value)
+        y = value % height
+        color, alpha = palette[(value >> 9) % len(palette)]
+        r = 0.75 + ((value >> 19) % 13) / 5.5
+        img.ellipse(x, y, r, r * (0.38 + ((value >> 4) % 28) / 100.0), rgba(color, alpha))
+
+    # Grass blades and scratches break up any remaining smoothness.
+    for _ in range(1300):
+        value = rnd(value)
+        x = 8 + value % (width - 16)
+        value = rnd(value)
+        y = 8 + value % (height - 16)
+        value = rnd(value)
+        angle = (value % 628) / 100.0
+        length = 3.0 + ((value >> 8) % 13)
+        dx = math.cos(angle) * length * 0.5
+        dy = math.sin(angle) * length * 0.5
+        color = ["405f2b", "7fac43", "bace65", "a98041", "59665a"][(value >> 18) % 5]
+        img.line(x - dx, y - dy, x + dx, y + dy, 0.75, rgba(color, 108))
+
+    # Dense object dressing, with higher concentration around the areas the
+    # player sees first. These silhouettes are small enough to feel like world
+    # art instead of debug labels.
+    for x, y, s in [
+        (70, 92, 1.2), (108, 132, 0.85), (168, 82, 1.0), (236, 132, 0.75),
+        (750, 70, 1.1), (802, 116, 0.95), (872, 84, 1.15), (930, 138, 1.3),
+        (1002, 86, 0.9), (1102, 154, 0.85), (656, 410, 1.0), (710, 462, 0.86),
+        (276, 540, 1.12), (348, 576, 0.92), (430, 184, 0.9), (520, 124, 0.82),
+        (1188, 278, 0.92), (1132, 388, 0.75), (980, 548, 0.8), (842, 572, 0.75),
+    ]:
+        small_rock(x, y, s)
+
+    for x, y, s in [
+        (912, 254, 1.05), (992, 282, 1.25), (1086, 314, 1.02), (1158, 250, 0.92),
+        (1048, 420, 1.05), (1184, 456, 0.86), (938, 456, 0.82), (1114, 544, 0.78),
+        (1038, 604, 0.66), (1246, 356, 0.70),
+    ]:
+        small_crystal(x, y, s)
+
+    grove_specs = [
+        (420, 120, 180, 70, 3001, 52, True),
+        (548, 136, 150, 74, 3002, 48, False),
+        (676, 600, 180, 82, 3003, 46, True),
+        (330, 464, 160, 88, 3004, 42, False),
+        (188, 330, 120, 78, 3005, 34, True),
+        (604, 500, 120, 62, 3006, 28, False),
+    ]
+    for cx, cy, rx, ry, seed, count, berries in grove_specs:
+        local = seed
+        for _ in range(count):
+            dx, dy, local = jitter(local, 1.0)
+            if dx * dx + dy * dy > 1.0:
+                continue
+            local = rnd(local)
+            small_tree(cx + dx * rx, cy + dy * ry, 0.55 + ((local >> 7) % 50) / 100.0, berries and local % 5 == 0)
+
+    flower_colors = ["f05f7b", "f4d85f", "f7a15a", "e95d5f", "f1df78"]
+    for i, (x, y) in enumerate([
+        (236, 120), (350, 150), (428, 248), (548, 228), (658, 316), (302, 408),
+        (186, 584), (780, 352), (836, 524), (1130, 168), (1034, 604), (91, 238),
+        (472, 402), (612, 206), (726, 174), (254, 300), (410, 606), (696, 442),
+    ]):
+        small_flower(x, y, flower_colors[i % len(flower_colors)])
+
+    for x, y, c in [
+        (530, 332, "56d7e5"),
+        (744, 286, "48bdd1"),
+        (842, 396, "58d1e0"),
+        (392, 338, "54cde3"),
+        (680, 188, "65dce8"),
+        (610, 458, "49bfd8"),
+    ]:
+        small_creature(x, y, c)
+
+    # Target-like edge fog and UI-friendly atmosphere without covering the map.
+    for cx, cy, rx, ry, alpha in [
+        (34, 680, 136, 36, 58),
+        (176, 710, 172, 28, 44),
+        (1170, 674, 158, 36, 54),
+        (1260, 96, 70, 28, 30),
+        (18, 24, 74, 20, 28),
+        (640, 712, 190, 22, 28),
+        (36, 344, 42, 170, 20),
+    ]:
+        img.ellipse(cx, cy, rx, ry, rgba("edf1df", alpha))
+
+    for cx, cy, rx, ry, alpha in [
+        (0, 360, 74, 350, 16),
+        (1280, 360, 80, 350, 18),
+        (640, -20, 620, 64, 10),
+        (640, 738, 590, 70, 13),
+    ]:
+        img.ellipse(cx, cy, rx, ry, rgba("07150d", alpha))
+
+    return img
+
+
 ASSETS = [
     ("creature_idle", "creature-idle", "sprite", creature_idle),
     ("creature_hurt", "creature-hurt", "sprite", creature_hurt),
@@ -727,12 +1415,13 @@ ASSETS = [
     ("ambient_light_pool", "ambient-light-pool", "overlay", ambient_light_pool),
     ("entity_shadow", "entity-shadow", "overlay", entity_shadow),
     ("rock_cluster", "rock-obstacle", "sprite", rock),
-    ("terrain_safe_grass", "terrain-safe-grass", "terrain-tile", lambda: tile("275d2e", ["3d7839", "173d22", "6da448", "9dbe57"], 11, "grass")),
-    ("terrain_soil_path", "terrain-soil-path", "terrain-tile", lambda: tile("6a4a2d", ["8a6237", "4d3625", "a57b49", "c09a5a"], 23, "soil")),
-    ("terrain_resource_grove", "terrain-resource-grove", "terrain-tile", lambda: tile("2d7134", ["4ba64a", "1d4d29", "83d85f", "a6e66c"], 37, "grass")),
-    ("terrain_hazard_pressure", "terrain-hazard-pressure", "terrain-tile", lambda: tile("64302b", ["8b392e", "2f2920", "c04b31", "e75c45"], 41, "hazard")),
-    ("terrain_stone_rough", "terrain-stone-rough", "terrain-tile", lambda: tile("555a50", ["73776b", "343a34", "8e927f", "b2b19c"], 53, "stone")),
+    ("terrain_safe_grass", "terrain-safe-grass", "terrain-tile", lambda: tile("6d963b", ["88b84f", "4f7a34", "9dca64", "c6d56b"], 11, "grass")),
+    ("terrain_soil_path", "terrain-soil-path", "terrain-tile", lambda: tile("8a5d33", ["b17c45", "6b472b", "c6924f", "d0a861"], 23, "soil")),
+    ("terrain_resource_grove", "terrain-resource-grove", "terrain-tile", lambda: tile("5ca83f", ["79c953", "3f7f32", "9bdd64", "c4ee7a"], 37, "grass")),
+    ("terrain_hazard_pressure", "terrain-hazard-pressure", "terrain-tile", lambda: tile("b24d38", ["ce6043", "783b31", "e4734c", "f28b5e"], 41, "hazard")),
+    ("terrain_stone_rough", "terrain-stone-rough", "terrain-tile", lambda: tile("7c8170", ["a1a68e", "5d665a", "b9bea2", "d0cfb4"], 53, "stone")),
     ("terrain_edge_blend", "terrain-edge-blend", "overlay", terrain_edge_blend),
+    ("world_backdrop_gpu_alpha", "world-backdrop", "backdrop", world_backdrop_gpu_alpha_v15),
     ("prop_grass_tuft", "prop-dressing", "prop", prop_grass),
     ("prop_pebble_cluster", "prop-dressing", "prop", prop_pebble),
     ("prop_warning_shard", "prop-dressing", "prop", prop_warning),
@@ -751,7 +1440,10 @@ def main() -> None:
     entries = []
     for asset_id, role, kind, factory in ASSETS:
         path = OUT / f"{asset_id}.png"
-        factory().save(path)
+        image = factory()
+        image.save(path)
+        width = getattr(image, "width", SIZE)
+        height = getattr(image, "height", SIZE)
         size = path.stat().st_size
         entries.append(
             {
@@ -759,8 +1451,8 @@ def main() -> None:
                 "role": role,
                 "kind": kind,
                 "relative_path": str(path.relative_to(ROOT)).replace("\\", "/"),
-                "width": SIZE,
-                "height": SIZE,
+                "width": width,
+                "height": height,
                 "file_size_bytes": size,
             }
         )
@@ -768,7 +1460,7 @@ def main() -> None:
         "schema": "alife.ca44a.alpha_art_manifest.v1",
         "schema_version": 1,
         "pack_id": "alpha-art-v1",
-        "art_direction": "production-alpha-organic-topdown-v7",
+        "art_direction": "production-alpha-generated-map-v15",
         "entries": entries,
     }
     (OUT / "alpha_art_manifest.json").write_text(
