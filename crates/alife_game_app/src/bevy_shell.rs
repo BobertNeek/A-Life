@@ -1064,13 +1064,16 @@ fn ca37_graphical_default_camera_state(
     inspector: &CreatureInspectorSnapshot,
     world_art: Option<&Ca37WorldArtStyleSummary>,
 ) -> Result<CameraNavigationState, GameAppShellError> {
-    let mut state = inspector.camera;
     if world_art
         .map(|summary| summary.local_viewport_is_smaller_than_map)
         .unwrap_or(false)
     {
-        state.zoom = state.zoom.max(CA37_EXPLORATION_CAMERA_ZOOM);
+        let mut state = CameraNavigationState::top_down_default();
+        state.zoom = CA37_EXPLORATION_CAMERA_ZOOM;
+        state.validate()?;
+        return Ok(state);
     }
+    let state = inspector.camera;
     state.validate()?;
     Ok(state)
 }
@@ -2034,9 +2037,12 @@ fn spawn_ca37_world_art_terrain_canvas(
     view_mode: GraphicalPlaygroundViewMode,
     presentation: &VisibleWorldPresentation,
 ) {
-    if view_mode == GraphicalPlaygroundViewMode::Player {
+    if matches!(
+        view_mode,
+        GraphicalPlaygroundViewMode::Player | GraphicalPlaygroundViewMode::FullDebug
+    ) {
         if let Some(handles) = alpha_art {
-            ca44a_spawn_world_backdrop_app(app, handles);
+            ca44a_spawn_world_backdrop_app(app, handles, view_mode);
         }
     }
     let config = ca44a_procedural_world_config(summary);
@@ -2056,12 +2062,21 @@ fn spawn_ca37_world_art_terrain_canvas(
     app.insert_resource(field);
 }
 
-fn ca44a_spawn_world_backdrop_app(app: &mut App, handles: &GraphicalAlphaArtHandles) {
+fn ca44a_spawn_world_backdrop_app(
+    app: &mut App,
+    handles: &GraphicalAlphaArtHandles,
+    view_mode: GraphicalPlaygroundViewMode,
+) {
+    let alpha = if view_mode == GraphicalPlaygroundViewMode::Player {
+        1.0
+    } else {
+        0.35
+    };
     app.world_mut().spawn((
         Name::new("A-Life alpha procedural painted viewport"),
         Sprite {
             image: handles.world_backdrop.clone(),
-            color: Color::srgba(1.0, 1.0, 1.0, 0.98),
+            color: Color::srgba(1.0, 1.0, 1.0, alpha),
             custom_size: Some(Vec2::new(1_280.0, 720.0)),
             ..default()
         },
@@ -2370,10 +2385,10 @@ fn ca44a_spawn_alpha_terrain_tile_app(
             )),
             Sprite {
                 image: handles.terrain_edge_blend.clone(),
-                color: Color::srgba(1.0, 1.0, 1.0, 0.006),
+                color: Color::srgba(1.0, 1.0, 1.0, 0.025),
                 custom_size: Some(Vec2::new(
-                    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.02,
-                    CA37_TERRAIN_TILE_PIXEL_SIZE * 0.76,
+                    CA37_TERRAIN_TILE_PIXEL_SIZE * 0.88,
+                    CA37_TERRAIN_TILE_PIXEL_SIZE * 0.54,
                 )),
                 ..default()
             },
@@ -2462,12 +2477,12 @@ fn ca44a_terrain_jitter_y(hash: i32) -> f32 {
 
 fn ca44a_terrain_tile_width(hash: i32) -> f32 {
     let variant = ((hash & 0x7) as f32) / 7.0;
-    CA37_TERRAIN_TILE_PIXEL_SIZE * (0.96 + variant * 0.06)
+    CA37_TERRAIN_TILE_PIXEL_SIZE * (0.78 + variant * 0.08)
 }
 
 fn ca44a_terrain_tile_height(hash: i32) -> f32 {
     let variant = (((hash >> 4) & 0x7) as f32) / 7.0;
-    CA37_TERRAIN_TILE_PIXEL_SIZE * (0.94 + variant * 0.06)
+    CA37_TERRAIN_TILE_PIXEL_SIZE * (0.72 + variant * 0.08)
 }
 
 fn ca44a_terrain_rotation_degrees(hash: i32) -> f32 {
@@ -2476,11 +2491,11 @@ fn ca44a_terrain_rotation_degrees(hash: i32) -> f32 {
 
 fn ca44a_alpha_terrain_opacity(material_id: &str) -> f32 {
     match material_id {
-        "hazard-pressure" => 0.012,
-        "resource-grove" => 0.009,
-        "stone-dressing" => 0.007,
-        "neutral-soil" => 0.008,
-        _ => 0.006,
+        "hazard-pressure" => 0.034,
+        "resource-grove" => 0.026,
+        "stone-dressing" => 0.020,
+        "neutral-soil" => 0.018,
+        _ => 0.014,
     }
 }
 
@@ -2660,10 +2675,10 @@ fn ca44a_spawn_alpha_terrain_tile_commands(
             )),
             Sprite {
                 image: handles.terrain_edge_blend.clone(),
-                color: Color::srgba(1.0, 1.0, 1.0, 0.005),
+                color: Color::srgba(1.0, 1.0, 1.0, 0.025),
                 custom_size: Some(Vec2::new(
-                    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.00,
-                    CA37_TERRAIN_TILE_PIXEL_SIZE * 0.74,
+                    CA37_TERRAIN_TILE_PIXEL_SIZE * 0.88,
+                    CA37_TERRAIN_TILE_PIXEL_SIZE * 0.54,
                 )),
                 ..default()
             },
@@ -2885,10 +2900,10 @@ fn ca44a_procedural_content_art_handle(
 
 fn ca44a_procedural_content_sprite_size(kind: ProceduralWorldContentKind) -> Vec2 {
     match kind {
-        ProceduralWorldContentKind::Food => Vec2::splat(7.0),
-        ProceduralWorldContentKind::Hazard => Vec2::splat(11.0),
-        ProceduralWorldContentKind::Obstacle => Vec2::splat(10.0),
-        ProceduralWorldContentKind::DressingProp => Vec2::splat(4.5),
+        ProceduralWorldContentKind::Food => Vec2::splat(4.2),
+        ProceduralWorldContentKind::Hazard => Vec2::splat(6.8),
+        ProceduralWorldContentKind::Obstacle => Vec2::splat(6.4),
+        ProceduralWorldContentKind::DressingProp => Vec2::splat(3.2),
     }
 }
 
@@ -3116,10 +3131,10 @@ pub fn ca08_pulse_targets_for_presentation(
 fn ca08_pulse_size(kind: Ca08SensoryCueKind, view_mode: GraphicalPlaygroundViewMode) -> Vec2 {
     if view_mode == GraphicalPlaygroundViewMode::Player {
         return match kind {
-            Ca08SensoryCueKind::Reward => Vec2::splat(7.0),
-            Ca08SensoryCueKind::Pain => Vec2::splat(8.0),
-            Ca08SensoryCueKind::Sleep => Vec2::new(9.0, 6.0),
-            Ca08SensoryCueKind::Learning => Vec2::splat(12.0),
+            Ca08SensoryCueKind::Reward => Vec2::splat(3.5),
+            Ca08SensoryCueKind::Pain => Vec2::splat(4.5),
+            Ca08SensoryCueKind::Sleep => Vec2::new(5.0, 3.4),
+            Ca08SensoryCueKind::Learning => Vec2::splat(5.5),
         };
     }
     match kind {
@@ -3164,7 +3179,7 @@ fn spawn_graphical_object(
                     custom_size: Some(ca44a_entity_shadow_size(object)),
                     ..default()
                 },
-                Transform::from_translation(marker_position + Vec3::new(0.0, -10.0, -0.08)),
+                Transform::from_translation(marker_position + Vec3::new(0.0, -2.0, -0.08)),
                 GraphicalAlphaArtBackedSprite {
                     role: "entity-shadow",
                     stable_id: Some(object.stable_id),
@@ -3318,19 +3333,19 @@ fn ca44a_entity_shadow_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
 
 fn ca44a_player_sprite_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
     match object.kind {
-        WorldObjectKind::Agent => Vec2::new(18.0, 16.0),
-        WorldObjectKind::Food => Vec2::splat(10.0),
-        WorldObjectKind::Hazard => Vec2::splat(15.0),
-        WorldObjectKind::Obstacle => Vec2::splat(14.0),
-        WorldObjectKind::Token => Vec2::new(9.0, 8.0),
+        WorldObjectKind::Agent => Vec2::new(7.5, 6.8),
+        WorldObjectKind::Food => Vec2::splat(4.5),
+        WorldObjectKind::Hazard => Vec2::splat(7.0),
+        WorldObjectKind::Obstacle => Vec2::splat(6.5),
+        WorldObjectKind::Token => Vec2::new(4.5, 3.8),
     }
 }
 
 fn ca44a_entity_shadow_alpha(kind: WorldObjectKind) -> f32 {
     match kind {
-        WorldObjectKind::Agent => 0.46,
-        WorldObjectKind::Hazard | WorldObjectKind::Obstacle => 0.38,
-        WorldObjectKind::Food | WorldObjectKind::Token => 0.28,
+        WorldObjectKind::Agent => 0.24,
+        WorldObjectKind::Hazard | WorldObjectKind::Obstacle => 0.22,
+        WorldObjectKind::Food | WorldObjectKind::Token => 0.16,
     }
 }
 
@@ -3598,7 +3613,7 @@ fn inspector_local_entity(
                 |handles| Sprite {
                     image: handles.selection_ring.clone(),
                     color: Color::WHITE,
-                    custom_size: Some(Vec2::new(25.0, 19.0)),
+                    custom_size: Some(Vec2::new(12.5, 10.0)),
                     ..default()
                 },
             );
@@ -3628,8 +3643,8 @@ fn inspector_local_entity(
                 Name::new("A-Life CA44A selected creature pulse"),
                 Sprite {
                     image: selection_pulse,
-                    color: Color::srgba(1.0, 1.0, 1.0, 0.28),
-                    custom_size: Some(Vec2::new(31.0, 23.0)),
+                    color: Color::srgba(1.0, 1.0, 1.0, 0.18),
+                    custom_size: Some(Vec2::new(15.0, 12.0)),
                     ..default()
                 },
                 Transform::from_xyz(0.0, 0.0, 0.46),
@@ -4380,7 +4395,7 @@ fn ca38_pose_from_runtime(
 }
 
 fn ca38_graphical_creature_size(pose: crate::Ca38CreaturePose) -> Vec2 {
-    Vec2::new(18.0 * pose.scale_x, 16.0 * pose.scale_y)
+    Vec2::new(7.5 * pose.scale_x, 6.8 * pose.scale_y)
 }
 
 fn ca38_graphical_creature_scale(

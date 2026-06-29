@@ -117,7 +117,7 @@ impl GraphicalPlaygroundViewMode {
     }
 }
 
-pub const CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA: f32 = 0.015;
+pub const CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA: f32 = 0.04;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GraphicalPlayerViewAcceptanceSummary {

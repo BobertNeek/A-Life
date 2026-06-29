@@ -833,7 +833,8 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(tiles.iter().all(|tile| {
         tile.display_only
             && tile.viewport_slice
-            && (0.004..=0.015).contains(&tile.opacity)
+            && tile.opacity > 0.0
+            && tile.opacity <= CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA
             && tile.tile_size_pixels > 0.0
             && tile.material_id != "debug"
     }));
@@ -2308,11 +2309,19 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "feedback-pain",
         "feedback-sleep",
         "feedback-learning",
-        "world-painted-viewport",
         "prop-dressing",
+        "terrain-safe-grass",
+        "terrain-soil-path",
+        "terrain-resource-grove",
+        "terrain-hazard-pressure",
+        "terrain-stone-rough",
     ] {
         assert!(roles.contains(&role), "missing alpha art role {role}");
     }
+    assert!(
+        roles.contains(&"world-painted-viewport"),
+        "default Player View must use the painted procedural map plate as the readable game surface"
+    );
 
     let mut fallback_query =
         app.world_mut()
@@ -2340,7 +2349,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View feedback pulses should be bounded sprites");
         assert!(
-            size.x <= 18.0 && size.y <= 18.0,
+            size.x <= 10.0 && size.y <= 10.0,
             "Player View feedback pulses must be small pings, not debug slabs: {size:?}"
         );
     }
@@ -2354,7 +2363,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View selection rings should be bounded sprites");
         assert!(
-            size.x <= 34.0 && size.y <= 26.0,
+            size.x <= 18.0 && size.y <= 14.0,
             "selected creature rings must frame the sprite without covering the map: {size:?}"
         );
     }
@@ -2409,11 +2418,13 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         layers.iter().all(|layer| layer.display_only),
         "world-art blend layers must not become simulation authority"
     );
-    assert!(
+    assert_eq!(
         layers
             .iter()
-            .any(|layer| layer.role == "world-painted-viewport"),
-        "Player View should use the painted procedural viewport as the primary map surface"
+            .filter(|layer| layer.role == "world-painted-viewport")
+            .count(),
+        1,
+        "Player View should use one painted map plate as the readable world base"
     );
 
     let mut chunk_query =
@@ -2451,8 +2462,20 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
         .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
     let terrain_tiles = terrain_query.iter(app.world()).copied().collect::<Vec<_>>();
     assert!(
-        terrain_tiles.len() >= 17 * 11,
-        "default Player View must show an active procedural chunk window"
+        terrain_tiles.len() >= 29 * 21,
+        "default Player View must show a dense active procedural chunk window"
+    );
+    assert!(
+        terrain_tiles.iter().all(
+            |tile| tile.opacity > 0.0 && tile.opacity <= CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA
+        ),
+        "terrain tiles must be subtle live-context overlays, not opaque debug blocks"
+    );
+    assert!(
+        terrain_tiles
+            .iter()
+            .all(|tile| tile.tile_size_pixels >= 32.0),
+        "terrain tiles should remain small map cells, not a single-screen plate"
     );
     assert!(terrain_tiles
         .iter()
@@ -2574,8 +2597,8 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         "expected asset-backed entity shadows for visible objects"
     );
     assert!(
-        painted_viewport_count >= 1,
-        "expected the painted procedural viewport to be the primary game-map layer"
+        painted_viewport_count == 1,
+        "default Player View should use one painted viewport as the primary game-map layer"
     );
     assert!(
         terrain_blend_count >= 8,
