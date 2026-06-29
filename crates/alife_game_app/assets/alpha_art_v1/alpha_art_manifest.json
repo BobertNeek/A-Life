@@ -2,7 +2,7 @@
   "schema": "alife.ca44a.alpha_art_manifest.v1",
   "schema_version": 1,
   "pack_id": "alpha-art-v1",
-  "art_direction": "production-alpha-organic-topdown-v4",
+  "art_direction": "production-alpha-organic-topdown-v5",
   "entries": [
     {
       "id": "creature_idle",
@@ -228,6 +228,51 @@
       "width": 128,
       "height": 128,
       "file_size_bytes": 1446
+    },
+    {
+      "id": "ui_panel_frame",
+      "role": "ui-panel-frame",
+      "kind": "ui-skin",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/ui_panel_frame.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 3513
+    },
+    {
+      "id": "ui_inspector_frame",
+      "role": "ui-inspector-frame",
+      "kind": "ui-skin",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/ui_inspector_frame.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 2943
+    },
+    {
+      "id": "ui_status_chip",
+      "role": "ui-status-chip",
+      "kind": "ui-skin",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/ui_status_chip.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 1148
+    },
+    {
+      "id": "ui_meter_bar",
+      "role": "ui-meter-bar",
+      "kind": "ui-skin",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/ui_meter_bar.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 860
+    },
+    {
+      "id": "ui_control_keycap",
+      "role": "ui-control-keycap",
+      "kind": "ui-skin",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/ui_control_keycap.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 780
     }
   ]
 }

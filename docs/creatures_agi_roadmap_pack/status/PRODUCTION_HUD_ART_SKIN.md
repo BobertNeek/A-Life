@@ -1,55 +1,64 @@
-# Production Player View Composition Polish
+# Production HUD Art Skin
 
-Goal: improve the default A-Life Player View composition with asset-backed
-lighting/shadow dressing so the graphical alpha reads less like flat placed
-sprites on a tile board, without changing simulation authority.
+Goal: move the default A-Life Player View HUD and inspector away from raw
+developer text panels by adding committed, versioned alpha-art UI skin assets
+that sit behind the existing read-only overlays.
 
-Branch: `codex/production-player-view-composition-polish`
+Branch: `codex/production-hud-art-skin`
 
 ## Scope
 
-This is a bounded production-art continuation after CA44A and the production
-art animation pass. It is not roadmap continuation and does not start CA45.
+This is a bounded production-art continuation after CA44A, production art
+animation, and Player View composition polish. It is not roadmap continuation
+and does not start CA45.
 
 ## Assets Added
 
 New committed PNG assets under
 `crates/alife_game_app/assets/alpha_art_v1/`:
 
-- `ambient_canopy_shadow.png`
-- `ambient_light_pool.png`
-- `entity_shadow.png`
+- `ui_panel_frame.png`
+- `ui_inspector_frame.png`
+- `ui_status_chip.png`
+- `ui_meter_bar.png`
+- `ui_control_keycap.png`
 
 The alpha art manifest now records `art_direction` as:
 
 ```text
-production-alpha-organic-topdown-v4
+production-alpha-organic-topdown-v5
 ```
 
-The pack contains 25 PNG entries. The new files are original deterministic
-project-generated assets, 128x128, listed in
-`alpha_art_manifest.json`, and below the 64 KB per-file cap.
+The pack contains 30 PNG entries. The new files are original deterministic
+project-generated assets, 128x128, listed in `alpha_art_manifest.json`, and
+below the 64 KB per-file cap.
 
 ## Rendering Changes
 
-Default Player View now adds asset-backed composition layers:
+Default Player View now spawns asset-backed Bevy UI image layers for:
 
-- wide transparent canopy-shadow overlays across the generated map;
-- soft light-pool overlays to break up the flat board composition;
-- per-object entity shadows for creatures, food, hazards, and obstacles.
+- status panel frame;
+- GPU status chip;
+- creature inspector frame;
+- inspector meter accent;
+- controls panel frame;
+- controls keycap accent;
+- event-feed panel frame.
 
-These layers are tagged as display-only production art. They do not emit
-actions, alter sensory input, change navigation/physics, mutate cognition, or
-make Bevy authoritative over the world model.
+These layers are tagged as `GraphicalProductionHudSkinLayer` and
+`display_only=true`. The existing HUD text remains read-only and still exposes
+the CPU shadow gate and no-full-action-authoritative boundary. Text panel
+background opacity is reduced in Player View so the committed UI art carries
+the surface instead of solid debug rectangles.
+
+Dev Overlay and Full Debug still keep their diagnostic panels and text.
 
 ## Tests Added Or Changed
 
-- App bundle validation now expects 25 alpha-art entries.
-- CA44A manifest validation expects the expanded committed art pack.
-- Default Player View asset-backed rendering checks include ambient and
-  entity-shadow roles.
-- A Bevy feature-gated composition-layer test verifies the new layers are
-  present and display-only.
+- App bundle validation now expects 30 alpha-art entries.
+- Alpha-art manifest required roles now include five UI skin roles.
+- A Bevy feature-gated Player View test verifies the HUD skin layers are
+  asset-backed Bevy UI image nodes and display-only.
 
 ## Focused Evidence
 
@@ -57,10 +66,11 @@ Commands run:
 
 ```powershell
 python scripts/generate_alpha_art_v1.py
-cargo fmt --all -- --check
+cargo fmt --all
 cargo test -p alife_game_app alpha_art_inner_validator -- --nocapture
 cargo test -p alife_game_app --test app_shell ca44a_committed_alpha_art_manifest_validates_required_roles_and_pngs -- --nocapture
 cargo test -p alife_game_app ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art -- --nocapture
+cargo test -p alife_game_app --features bevy-app --test app_shell production_hud_skin_uses_committed_ui_assets_in_player_view -- --nocapture
 cargo test -p alife_game_app --features bevy-app --test app_shell ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles -- --nocapture
 cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_composition_layers_are_asset_backed_and_display_only -- --nocapture
 cargo run -p alife_game_app --bin alife_game_app -- app-bundle-smoke --manifest crates/alife_game_app/app_bundle_manifest.json
@@ -68,21 +78,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run_graphical_playgr
 $env:ALIFE_GPU_RUNTIME_AVAILABLE='0'; powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run_graphical_playground.ps1 -SmokeSeconds 10 -GpuMode static-plastic-cpu-shadow-guarded; Remove-Item Env:\ALIFE_GPU_RUNTIME_AVAILABLE -ErrorAction SilentlyContinue
 ```
 
-Results: PASS.
+Results: PASS. The first Bevy HUD-skin test invocation timed out while the
+feature build was in progress, then passed on immediate rerun with a longer
+timeout. The graphical GPU smoke selected `GpuPlastic`, kept CPU shadow parity,
+reported Player View acceptance true, and exited cleanly. The forced fallback
+smoke selected `CpuReference`, reported `HardwareUnavailable`, exposed degraded
+fallback state, and exited cleanly.
 
-Notes:
+## Validation Results
 
-- The first Bevy-focused Player View test invocation timed out while waiting on
-  the build directory lock, then passed on immediate rerun with a longer
-  timeout.
-- The graphical GPU smoke selected `GpuPlastic`, kept CPU shadow parity, and
-  exited cleanly.
-- The forced fallback smoke selected `CpuReference`, reported
-  `HardwareUnavailable`, exposed degraded fallback state, and exited cleanly.
-
-## Full Validation
-
-Commands run:
+Full validation commands run:
 
 ```powershell
 cargo fmt --all -- --check
@@ -114,11 +119,12 @@ Results: PASS.
 
 ## Known Limitations
 
-- This is still an alpha art pack, not a finished commercial-grade art set.
-- The pass improves lighting/depth composition but does not add full VFX,
-  biome sets, animated tile transitions, or artist-authored UI skinning.
-- Computer Use screenshot capture was unavailable in this turn, so visual
-  comparison relies on generated asset inspection and graphical smoke output.
+- This is still an alpha HUD skin, not a finished commercial UI system.
+- The pass adds art-backed UI frames and chips but does not implement full UI
+  layout redesign, animated menu transitions, accessibility scaling, or a
+  complete interaction tutorial.
+- Computer Use screenshot comparison is not recorded in this status document;
+  graphical smoke output remains the required local evidence.
 
 ## Artifacts
 
@@ -130,7 +136,8 @@ temporary generator output, and generated reference images.
 
 ## Main Status
 
-Merged to `main` at `c8c66fc` and pushed after post-merge validation.
+Feature branch validation passed before merge. Final main merge/push status is
+captured in the run receipt.
 
 ## Next Work
 

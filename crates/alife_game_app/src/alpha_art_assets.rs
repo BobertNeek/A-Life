@@ -38,9 +38,14 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "terrain-hazard-pressure",
     "terrain-stone-rough",
     "prop-dressing",
+    "ui-panel-frame",
+    "ui-inspector-frame",
+    "ui-status-chip",
+    "ui-meter-bar",
+    "ui-control-keycap",
 ];
 
-pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v4";
+pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v5";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {

@@ -17,7 +17,7 @@ use bevy::{
     image::Image,
     prelude::{
         default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Component,
-        DefaultPlugins, Entity, GlobalTransform, KeyCode, MessageWriter, MinimalPlugins,
+        DefaultPlugins, Entity, GlobalTransform, ImageNode, KeyCode, MessageWriter, MinimalPlugins,
         MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Res, ResMut, Resource,
         Sprite, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val, Vec2, Vec3,
         Visibility, With, Without,
@@ -101,6 +101,11 @@ pub struct GraphicalAlphaArtHandles {
     pub prop_pebble_cluster: Handle<Image>,
     pub prop_warning_shard: Handle<Image>,
     pub prop_leaf_patch: Handle<Image>,
+    pub ui_panel_frame: Handle<Image>,
+    pub ui_inspector_frame: Handle<Image>,
+    pub ui_status_chip: Handle<Image>,
+    pub ui_meter_bar: Handle<Image>,
+    pub ui_control_keycap: Handle<Image>,
 }
 
 impl GraphicalAlphaArtHandles {
@@ -131,6 +136,11 @@ impl GraphicalAlphaArtHandles {
             prop_pebble_cluster: asset_server.load("alpha_art_v1/prop_pebble_cluster.png"),
             prop_warning_shard: asset_server.load("alpha_art_v1/prop_warning_shard.png"),
             prop_leaf_patch: asset_server.load("alpha_art_v1/prop_leaf_patch.png"),
+            ui_panel_frame: asset_server.load("alpha_art_v1/ui_panel_frame.png"),
+            ui_inspector_frame: asset_server.load("alpha_art_v1/ui_inspector_frame.png"),
+            ui_status_chip: asset_server.load("alpha_art_v1/ui_status_chip.png"),
+            ui_meter_bar: asset_server.load("alpha_art_v1/ui_meter_bar.png"),
+            ui_control_keycap: asset_server.load("alpha_art_v1/ui_control_keycap.png"),
         }
     }
 
@@ -161,6 +171,11 @@ impl GraphicalAlphaArtHandles {
             prop_pebble_cluster: Handle::default(),
             prop_warning_shard: Handle::default(),
             prop_leaf_patch: Handle::default(),
+            ui_panel_frame: Handle::default(),
+            ui_inspector_frame: Handle::default(),
+            ui_status_chip: Handle::default(),
+            ui_meter_bar: Handle::default(),
+            ui_control_keycap: Handle::default(),
         }
     }
 }
@@ -450,6 +465,13 @@ pub struct GraphicalWorldArtTerrainTile {
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalProductionArtLayer {
     pub role: &'static str,
+    pub display_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalProductionHudSkinLayer {
+    pub role: &'static str,
+    pub panel_id: &'static str,
     pub display_only: bool,
 }
 
@@ -1078,6 +1100,7 @@ fn spawn_graphical_playground_scene(
     spawn_graphical_intent_feedback(app, summary.view_mode);
     spawn_ca08_feedback_pulses(app, presentation);
     spawn_ca18_social_proximity_cues(app, presentation, summary.view_mode);
+    spawn_production_player_view_hud_skin(app, alpha_art.as_ref(), summary.view_mode);
 
     app.insert_resource(VisibleWorldSceneResource {
         schema: presentation.schema,
@@ -1108,7 +1131,10 @@ fn spawn_graphical_playground_scene(
             padding: bevy::ui::UiRect::all(Val::Px(8.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.02, 0.03, 0.025, 0.58)),
+        player_hud_text_background(
+            summary.view_mode,
+            Color::srgba(0.02, 0.03, 0.025, 0.58),
+        ),
         RuntimeStatusOverlay,
     ));
 
@@ -1291,7 +1317,7 @@ fn spawn_graphical_playground_scene(
             padding: bevy::ui::UiRect::all(Val::Px(7.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.025, 0.025, 0.02, 0.46)),
+        player_hud_text_background(summary.view_mode, Color::srgba(0.025, 0.025, 0.02, 0.46)),
         ReadabilityLegendOverlay,
     ));
 
@@ -1311,7 +1337,7 @@ fn spawn_graphical_playground_scene(
             padding: bevy::ui::UiRect::all(Val::Px(7.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.018, 0.03, 0.024, 0.44)),
+        player_hud_text_background(summary.view_mode, Color::srgba(0.018, 0.03, 0.024, 0.44)),
         FeedbackCueOverlay,
     ));
 
@@ -1353,7 +1379,7 @@ fn spawn_graphical_playground_scene(
             padding: bevy::ui::UiRect::all(Val::Px(8.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.02, 0.025, 0.035, 0.74)),
+        player_hud_text_background(summary.view_mode, Color::srgba(0.02, 0.025, 0.035, 0.74)),
         InspectorStatusOverlay,
     ));
 
@@ -1401,6 +1427,192 @@ fn spawn_graphical_playground_scene(
     ));
 
     Ok(())
+}
+
+fn spawn_production_player_view_hud_skin(
+    app: &mut App,
+    alpha_art: Option<&GraphicalAlphaArtHandles>,
+    view_mode: GraphicalPlaygroundViewMode,
+) {
+    if view_mode != GraphicalPlaygroundViewMode::Player {
+        return;
+    }
+    let Some(handles) = alpha_art else {
+        return;
+    };
+
+    spawn_hud_skin_layer(
+        app,
+        "status-panel",
+        "ui-panel-frame",
+        handles.ui_panel_frame.clone(),
+        HudSkinPlacement {
+            top: Some(8.0),
+            left: Some(8.0),
+            width: 356.0,
+            height: 186.0,
+            alpha: 0.86,
+            ..default()
+        },
+    );
+    spawn_hud_skin_layer(
+        app,
+        "gpu-status-chip",
+        "ui-status-chip",
+        handles.ui_status_chip.clone(),
+        HudSkinPlacement {
+            top: Some(102.0),
+            left: Some(20.0),
+            width: 154.0,
+            height: 42.0,
+            alpha: 0.92,
+            ..default()
+        },
+    );
+    spawn_hud_skin_layer(
+        app,
+        "creature-inspector",
+        "ui-inspector-frame",
+        handles.ui_inspector_frame.clone(),
+        HudSkinPlacement {
+            top: Some(8.0),
+            right: Some(8.0),
+            width: 344.0,
+            height: 286.0,
+            alpha: 0.88,
+            ..default()
+        },
+    );
+    spawn_hud_skin_layer(
+        app,
+        "inspector-meter",
+        "ui-meter-bar",
+        handles.ui_meter_bar.clone(),
+        HudSkinPlacement {
+            top: Some(74.0),
+            right: Some(124.0),
+            width: 132.0,
+            height: 28.0,
+            alpha: 0.74,
+            ..default()
+        },
+    );
+    spawn_hud_skin_layer(
+        app,
+        "controls-panel",
+        "ui-panel-frame",
+        handles.ui_panel_frame.clone(),
+        HudSkinPlacement {
+            bottom: Some(12.0),
+            left: Some(8.0),
+            width: 480.0,
+            height: 106.0,
+            alpha: 0.76,
+            ..default()
+        },
+    );
+    spawn_hud_skin_layer(
+        app,
+        "controls-keycap",
+        "ui-control-keycap",
+        handles.ui_control_keycap.clone(),
+        HudSkinPlacement {
+            bottom: Some(62.0),
+            left: Some(22.0),
+            width: 70.0,
+            height: 44.0,
+            alpha: 0.86,
+            ..default()
+        },
+    );
+    spawn_hud_skin_layer(
+        app,
+        "event-feed-panel",
+        "ui-panel-frame",
+        handles.ui_panel_frame.clone(),
+        HudSkinPlacement {
+            bottom: Some(12.0),
+            right: Some(8.0),
+            width: 292.0,
+            height: 104.0,
+            alpha: 0.70,
+            ..default()
+        },
+    );
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HudSkinPlacement {
+    top: Option<f32>,
+    bottom: Option<f32>,
+    left: Option<f32>,
+    right: Option<f32>,
+    width: f32,
+    height: f32,
+    alpha: f32,
+}
+
+impl Default for HudSkinPlacement {
+    fn default() -> Self {
+        Self {
+            top: None,
+            bottom: None,
+            left: None,
+            right: None,
+            width: 128.0,
+            height: 128.0,
+            alpha: 1.0,
+        }
+    }
+}
+
+fn spawn_hud_skin_layer(
+    app: &mut App,
+    panel_id: &'static str,
+    role: &'static str,
+    image: Handle<Image>,
+    placement: HudSkinPlacement,
+) {
+    let mut node = Node {
+        position_type: PositionType::Absolute,
+        width: Val::Px(placement.width),
+        height: Val::Px(placement.height),
+        ..default()
+    };
+    if let Some(top) = placement.top {
+        node.top = Val::Px(top);
+    }
+    if let Some(bottom) = placement.bottom {
+        node.bottom = Val::Px(bottom);
+    }
+    if let Some(left) = placement.left {
+        node.left = Val::Px(left);
+    }
+    if let Some(right) = placement.right {
+        node.right = Val::Px(right);
+    }
+
+    app.world_mut().spawn((
+        Name::new(format!("A-Life production HUD skin {panel_id}")),
+        ImageNode::new(image).with_color(Color::srgba(1.0, 1.0, 1.0, placement.alpha)),
+        node,
+        GraphicalProductionHudSkinLayer {
+            role,
+            panel_id,
+            display_only: true,
+        },
+    ));
+}
+
+fn player_hud_text_background(
+    view_mode: GraphicalPlaygroundViewMode,
+    debug_background: Color,
+) -> BackgroundColor {
+    if view_mode == GraphicalPlaygroundViewMode::Player {
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.06))
+    } else {
+        BackgroundColor(debug_background)
+    }
 }
 
 fn spawn_ca18_social_proximity_cues(
