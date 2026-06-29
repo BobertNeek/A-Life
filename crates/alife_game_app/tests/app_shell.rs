@@ -674,6 +674,9 @@ fn ca37_world_art_style_smoke_validates_palette_props_and_manifest() {
         CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES
     );
     assert!(summary.visual_map_span_world_units >= 60.0);
+    assert!(summary.visual_map_width_tiles >= 4096);
+    assert!(summary.visual_map_height_tiles >= 4096);
+    assert!(summary.visual_map_span_world_units >= 4096.0);
     assert_eq!(
         summary.viewport_width_tiles,
         CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES
@@ -686,7 +689,7 @@ fn ca37_world_art_style_smoke_validates_palette_props_and_manifest() {
         summary.viewport_tile_count,
         CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES * CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES
     );
-    assert!(summary.map_to_viewport_tile_ratio > 20.0);
+    assert!(summary.map_to_viewport_tile_ratio > 10_000.0);
     assert!(summary.local_viewport_is_smaller_than_map);
     assert!(summary.offscreen_stable_world_object_count >= 4);
     assert!(summary.true_large_world_exploration);
@@ -2364,10 +2367,94 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View selection rings should be bounded sprites");
         assert!(
-            size.x <= 42.0 && size.y <= 36.0,
+            size.x <= 10.5 && size.y <= 8.5,
             "selected creature rings must frame the sprite without covering the map: {size:?}"
         );
     }
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn production_player_view_uses_full_map_scale_backdrop_and_tiny_foreground_sprites() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch).unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let mut art_query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite,
+        &bevy::prelude::Sprite,
+    )>();
+    let art_sprites = art_query.iter(app.world()).collect::<Vec<_>>();
+
+    let (_, backdrop) = art_sprites
+        .iter()
+        .find(|(marker, _)| marker.role == "world-painted-viewport")
+        .expect("Player View should include the painted full-map surface");
+    let backdrop_size = backdrop
+        .custom_size
+        .expect("painted map surface should have an explicit viewport size");
+    assert!(
+        (3830.0..=3850.0).contains(&backdrop_size.x)
+            && (2150.0..=2170.0).contains(&backdrop_size.y),
+        "painted map should cover the zoomed-out player camera view instead of appearing as a small centered plate: {backdrop_size:?}"
+    );
+
+    let live_creature_max = art_sprites
+        .iter()
+        .filter(|(marker, _)| {
+            matches!(
+                marker.role,
+                "creature-idle"
+                    | "creature-hurt"
+                    | "creature-moving"
+                    | "creature-eat"
+                    | "creature-sleep"
+                    | "creature-signal"
+            )
+        })
+        .filter_map(|(_, sprite)| sprite.custom_size)
+        .map(|size| size.x.max(size.y))
+        .fold(0.0_f32, f32::max);
+    assert!(
+        live_creature_max > 0.0 && live_creature_max <= 10.5,
+        "live creatures should read as small map-scale agents, not giant foreground sprites: {live_creature_max}"
+    );
+
+    let required_world_role_max = art_sprites
+        .iter()
+        .filter(|(marker, _)| {
+            matches!(
+                marker.role,
+                "food" | "hazard" | "rock-obstacle" | "prop-dressing"
+            )
+        })
+        .filter_map(|(_, sprite)| sprite.custom_size)
+        .map(|size| size.x.max(size.y))
+        .fold(0.0_f32, f32::max);
+    assert!(
+        required_world_role_max > 0.0 && required_world_role_max <= 9.5,
+        "food, hazard, rock, and prop sprites must stay map-scale: {required_world_role_max}"
+    );
+
+    let generated_content_max = art_sprites
+        .iter()
+        .filter(|(marker, _)| {
+            marker
+                .stable_id
+                .map(|stable_id| stable_id.raw() >= alife_world::PROCEDURAL_CONTENT_ID_BASE)
+                .unwrap_or(false)
+        })
+        .filter_map(|(_, sprite)| sprite.custom_size)
+        .map(|size| size.x.max(size.y))
+        .fold(0.0_f32, f32::max);
+    assert!(
+        generated_content_max > 0.0 && generated_content_max <= 8.5,
+        "generated procedural content should be dense small-world dressing, not large overlays: {generated_content_max}"
+    );
 }
 
 #[cfg(feature = "bevy-app")]

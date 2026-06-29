@@ -1,9 +1,10 @@
 use alife_core::{Vec3f, WorldEntityId};
 use alife_world::{
     activate_procedural_chunks_around_creatures, generate_procedural_world_content,
-    procedural_chunk_summary, sample_creature_procedural_content_neighborhood,
-    sample_creature_procedural_neighborhood, sample_procedural_terrain_tile, CreatureWorldAnchor,
-    ProceduralChunkCoord, ProceduralTerrainMaterial, ProceduralTileCoord, ProceduralWorldConfig,
+    procedural_chunk_summary, procedural_world_scale_report,
+    sample_creature_procedural_content_neighborhood, sample_creature_procedural_neighborhood,
+    sample_procedural_terrain_tile, CreatureWorldAnchor, ProceduralChunkCoord,
+    ProceduralTerrainMaterial, ProceduralTileCoord, ProceduralWorldConfig,
     ProceduralWorldContentKind, DEFAULT_ACTIVATION_RADIUS_CHUNKS, PROCEDURAL_CONTENT_ID_BASE,
     PROCEDURAL_WORLD_CHUNKS_SCHEMA, PROCEDURAL_WORLD_CONTENT_SCHEMA,
 };
@@ -54,11 +55,49 @@ fn procedural_chunks_do_not_exist_without_creature_anchors() {
     let config = ProceduralWorldConfig::with_seed(4242);
 
     let report = activate_procedural_chunks_around_creatures(config, &[]).unwrap();
+    let scale = procedural_world_scale_report(config, &report, 0).unwrap();
 
     assert_eq!(report.creature_anchor_count, 0);
     assert!(report.active_chunks.is_empty());
     assert_eq!(report.skipped_due_to_cap, 0);
     assert!(report.generated_without_rendering);
+    assert_eq!(scale.creature_anchor_count, 0);
+    assert_eq!(scale.active_chunk_count, 0);
+    assert_eq!(scale.materialized_chunk_count, 0);
+    assert!(!scale.chunks_exist_without_creature_anchors);
+    assert!(scale.generated_without_rendering);
+    assert!(!scale.rendering_required);
+    assert!(!scale.can_emit_actions);
+    assert!(!scale.can_rewrite_weights);
+    scale.validate(config).unwrap();
+}
+
+#[test]
+fn procedural_world_scale_is_large_virtual_and_creature_anchored() {
+    let config = ProceduralWorldConfig::with_seed(4242);
+    let anchors = [anchor(1, 0.0, 0.0), anchor(6, 34.0, -18.0)];
+    let activation = activate_procedural_chunks_around_creatures(config, &anchors).unwrap();
+
+    let report = procedural_world_scale_report(config, &activation, anchors.len()).unwrap();
+
+    report.validate(config).unwrap();
+    assert!(report.virtual_width_tiles >= 4096);
+    assert!(report.virtual_height_tiles >= 4096);
+    assert!(report.virtual_tile_count > 16_000_000);
+    assert!(report.potential_chunk_count > 60_000);
+    assert_eq!(report.creature_anchor_count, anchors.len());
+    assert!(report.active_chunk_count > 0);
+    assert!(report.active_chunk_count <= config.max_active_chunks);
+    assert!(report.materialized_chunk_count <= report.active_chunk_count);
+    assert!(report.active_fraction_of_virtual_world < 0.001);
+    assert!(report.generated_without_rendering);
+    assert!(!report.rendering_required);
+    assert!(!report.chunks_exist_without_creature_anchors);
+    assert!(report.bounded_active_chunk_window);
+    assert!(report.materialized_only_near_creature_anchors);
+    assert!(report.bounded_for_creature_context);
+    assert!(!report.can_emit_actions);
+    assert!(!report.can_rewrite_weights);
 }
 
 #[test]

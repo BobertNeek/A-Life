@@ -190,7 +190,7 @@ pub fn ca37_world_art_style_summary(
         visual_map_width_tiles: CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES,
         visual_map_height_tiles: CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
         visual_map_tile_count: CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
-        visual_map_span_world_units: 96.0,
+        visual_map_span_world_units: CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES as f32,
         viewport_width_tiles: CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES,
         viewport_height_tiles: CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES,
         viewport_tile_count: CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES
