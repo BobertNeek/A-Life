@@ -467,6 +467,71 @@ def prop_leaf() -> Image:
     return img
 
 
+def ui_panel_frame() -> Image:
+    img = Image()
+    img.ellipse(64, 70, 60, 45, rgba("06130c", 205))
+    img.ellipse(64, 67, 55, 39, rgba("12271a", 228))
+    img.ellipse(64, 64, 49, 33, rgba("1b3a25", 190))
+    for x, y, rx, ry, col in [
+        (23, 32, 18, 9, "6f8f47"),
+        (107, 35, 16, 8, "8aa34c"),
+        (25, 101, 18, 8, "425d33"),
+        (104, 99, 19, 9, "7c8443"),
+    ]:
+        img.ellipse(x, y, rx, ry, rgba(col, 150))
+    for x1, y1, x2, y2 in [(16, 38, 112, 36), (17, 91, 111, 92), (23, 27, 21, 101), (106, 27, 108, 101)]:
+        img.line(x1, y1, x2, y2, 3.0, rgba("d3c783", 115))
+        img.line(x1, y1 + 2, x2, y2 + 2, 1.0, rgba("fff2b0", 55))
+    return img
+
+
+def ui_inspector_frame() -> Image:
+    img = Image()
+    img.ellipse(64, 68, 58, 43, rgba("06101a", 210))
+    img.ellipse(64, 64, 51, 36, rgba("0f2630", 226))
+    img.ellipse(64, 62, 44, 29, rgba("173845", 168))
+    for angle in [0.2, 1.0, 2.1, 3.3, 4.4, 5.3]:
+        leaf(img, 64 + math.cos(angle) * 48, 64 + math.sin(angle) * 31, angle + 1.2, 24, 8, "56b6a5", 115)
+    for x1, y1, x2, y2 in [(19, 35, 109, 35), (19, 92, 109, 92), (27, 25, 25, 103), (101, 25, 103, 103)]:
+        img.line(x1, y1, x2, y2, 2.4, rgba("86e0cf", 92))
+    return img
+
+
+def ui_status_chip() -> Image:
+    img = Image()
+    img.shadow(64, 75, 45, 10, 70)
+    img.ellipse(64, 64, 50, 22, rgba("0a2a1a", 230))
+    img.ellipse(64, 61, 44, 16, rgba("1f6939", 188))
+    img.ellipse(31, 59, 9, 9, rgba("7dffa0", 210))
+    img.ellipse(32, 59, 4, 4, rgba("e8ffcf", 230))
+    img.line(43, 55, 98, 55, 2.0, rgba("c9ffd2", 105))
+    img.line(42, 68, 92, 68, 1.5, rgba("08150e", 120))
+    return img
+
+
+def ui_meter_bar() -> Image:
+    img = Image()
+    img.shadow(64, 78, 48, 8, 55)
+    img.polygon([(17, 52), (27, 42), (104, 42), (114, 52), (105, 82), (25, 82)], rgba("08140d", 220))
+    img.polygon([(25, 55), (32, 50), (99, 50), (104, 56), (98, 72), (30, 72)], rgba("20331d", 235))
+    for i, col in enumerate(["5ee06d", "d7e16d", "e97654"]):
+        img.ellipse(40 + i * 18, 61, 10, 5, rgba(col, 120))
+    img.line(25, 48, 104, 48, 2.0, rgba("e6d98b", 110))
+    return img
+
+
+def ui_control_keycap() -> Image:
+    img = Image()
+    img.shadow(64, 84, 35, 8, 62)
+    img.polygon([(27, 49), (41, 36), (92, 36), (104, 50), (97, 82), (35, 84)], rgba("10251a", 232))
+    img.polygon([(38, 48), (47, 42), (86, 42), (94, 51), (89, 70), (43, 72)], rgba("375137", 224))
+    img.line(45, 47, 87, 47, 2.0, rgba("f2e7a2", 130))
+    img.line(45, 65, 88, 65, 1.8, rgba("07100b", 115))
+    for x in [49, 64, 79]:
+        img.ellipse(x, 58, 3, 3, rgba("d4ffc3", 150))
+    return img
+
+
 ASSETS = [
     ("creature_idle", "creature-idle", "sprite", creature_idle),
     ("creature_hurt", "creature-hurt", "sprite", creature_hurt),
@@ -493,6 +558,11 @@ ASSETS = [
     ("prop_pebble_cluster", "prop-dressing", "prop", prop_pebble),
     ("prop_warning_shard", "prop-dressing", "prop", prop_warning),
     ("prop_leaf_patch", "prop-dressing", "prop", prop_leaf),
+    ("ui_panel_frame", "ui-panel-frame", "ui-skin", ui_panel_frame),
+    ("ui_inspector_frame", "ui-inspector-frame", "ui-skin", ui_inspector_frame),
+    ("ui_status_chip", "ui-status-chip", "ui-skin", ui_status_chip),
+    ("ui_meter_bar", "ui-meter-bar", "ui-skin", ui_meter_bar),
+    ("ui_control_keycap", "ui-control-keycap", "ui-skin", ui_control_keycap),
 ]
 
 
@@ -518,7 +588,7 @@ def main() -> None:
         "schema": "alife.ca44a.alpha_art_manifest.v1",
         "schema_version": 1,
         "pack_id": "alpha-art-v1",
-        "art_direction": "production-alpha-organic-topdown-v4",
+        "art_direction": "production-alpha-organic-topdown-v5",
         "entries": entries,
     }
     (OUT / "alpha_art_manifest.json").write_text(

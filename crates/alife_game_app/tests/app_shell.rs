@@ -2108,7 +2108,7 @@ fn ca44a_committed_alpha_art_manifest_validates_required_roles_and_pngs() {
         summary.schema_version,
         alife_game_app::CA44A_ALPHA_ART_MANIFEST_SCHEMA_VERSION
     );
-    assert!(summary.entry_count >= 25);
+    assert!(summary.entry_count >= 30);
     assert!(summary.required_roles_present);
     assert!(summary.prop_variant_count >= 3);
     assert!(summary.largest_file_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_ASSET_BYTES);
@@ -2275,6 +2275,53 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
     assert!(
         shadow_count >= 4,
         "expected asset-backed entity shadows for visible objects"
+    );
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn production_hud_skin_uses_committed_ui_assets_in_player_view() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch).unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let mut skin_query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalProductionHudSkinLayer,
+        &bevy::prelude::ImageNode,
+    )>();
+    let skins = skin_query
+        .iter(app.world())
+        .map(|(skin, _)| *skin)
+        .collect::<Vec<_>>();
+
+    assert!(
+        skins.iter().all(|skin| skin.display_only),
+        "HUD skin layers must be display-only"
+    );
+    for role in [
+        "ui-panel-frame",
+        "ui-inspector-frame",
+        "ui-status-chip",
+        "ui-meter-bar",
+        "ui-control-keycap",
+    ] {
+        assert!(
+            skins.iter().any(|skin| skin.role == role),
+            "missing production HUD skin role {role}"
+        );
+    }
+
+    let panel_count = skins
+        .iter()
+        .filter(|skin| skin.role == "ui-panel-frame")
+        .count();
+    assert!(
+        panel_count >= 3,
+        "status, controls, and event feed should use committed panel art"
     );
 }
 
