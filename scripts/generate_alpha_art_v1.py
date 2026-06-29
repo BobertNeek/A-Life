@@ -356,6 +356,42 @@ def hazard_glow() -> Image:
     return img
 
 
+def ambient_canopy_shadow() -> Image:
+    img = Image()
+    for x, y, rx, ry, alpha in [
+        (20, 20, 22, 15, 38),
+        (48, 12, 25, 18, 31),
+        (91, 22, 27, 16, 34),
+        (18, 76, 31, 20, 28),
+        (66, 68, 42, 25, 42),
+        (103, 92, 29, 20, 31),
+        (49, 109, 35, 17, 24),
+    ]:
+        img.ellipse(x, y, rx, ry, rgba("0a2213", alpha))
+    for i in range(34):
+        x = 8 + ((i * 29) % 114)
+        y = 5 + ((i * 47) % 118)
+        angle = (i % 9) * 0.42
+        leaf(img, x, y, angle, 13 + (i % 5), 5 + (i % 3), "102a19", 32 + (i % 4) * 9)
+    return img
+
+
+def ambient_light_pool() -> Image:
+    img = Image()
+    for r, alpha in [(58, 18), (44, 26), (30, 34), (16, 25)]:
+        img.ellipse(64, 65, r, r * 0.62, rgba("ffe7a7", alpha))
+    for angle in [0.2, 1.4, 2.7, 4.0, 5.1]:
+        leaf(img, 64 + math.cos(angle) * 22, 65 + math.sin(angle) * 12, angle, 18, 7, "f7f1b8", 32)
+    return img
+
+
+def entity_shadow() -> Image:
+    img = Image()
+    for rx, ry, alpha in [(44, 17, 50), (34, 12, 44), (22, 7, 32)]:
+        img.ellipse(64, 75, rx, ry, rgba("031006", alpha))
+    return img
+
+
 def rock() -> Image:
     img = Image()
     img.shadow(65, 99, 39, 12, 105)
@@ -444,6 +480,9 @@ ASSETS = [
     ("food_bloom", "food-variant", "sprite", food_bloom),
     ("hazard_crystal", "hazard", "sprite", hazard),
     ("hazard_glow", "hazard-active", "sprite", hazard_glow),
+    ("ambient_canopy_shadow", "ambient-canopy-shadow", "overlay", ambient_canopy_shadow),
+    ("ambient_light_pool", "ambient-light-pool", "overlay", ambient_light_pool),
+    ("entity_shadow", "entity-shadow", "overlay", entity_shadow),
     ("rock_cluster", "rock-obstacle", "sprite", rock),
     ("terrain_safe_grass", "terrain-safe-grass", "terrain-tile", lambda: tile("275d2e", ["3d7839", "173d22", "6da448", "9dbe57"], 11, "grass")),
     ("terrain_soil_path", "terrain-soil-path", "terrain-tile", lambda: tile("6a4a2d", ["8a6237", "4d3625", "a57b49", "c09a5a"], 23, "soil")),
@@ -479,7 +518,7 @@ def main() -> None:
         "schema": "alife.ca44a.alpha_art_manifest.v1",
         "schema_version": 1,
         "pack_id": "alpha-art-v1",
-        "art_direction": "production-alpha-organic-topdown-v3",
+        "art_direction": "production-alpha-organic-topdown-v4",
         "entries": entries,
     }
     (OUT / "alpha_art_manifest.json").write_text(

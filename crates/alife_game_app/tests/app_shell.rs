@@ -2108,7 +2108,7 @@ fn ca44a_committed_alpha_art_manifest_validates_required_roles_and_pngs() {
         summary.schema_version,
         alife_game_app::CA44A_ALPHA_ART_MANIFEST_SCHEMA_VERSION
     );
-    assert!(summary.entry_count >= 22);
+    assert!(summary.entry_count >= 25);
     assert!(summary.required_roles_present);
     assert!(summary.prop_variant_count >= 3);
     assert!(summary.largest_file_bytes <= alife_game_app::CA44A_MAX_ALPHA_ART_ASSET_BYTES);
@@ -2203,6 +2203,9 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "creature-idle",
         "food",
         "hazard",
+        "ambient-canopy-shadow",
+        "ambient-light-pool",
+        "entity-shadow",
         "rock-obstacle",
         "selection-ring",
         "selection-pulse",
@@ -2232,6 +2235,47 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
     assert!(badge_query
         .iter(app.world())
         .all(|(visibility, _)| *visibility == bevy::prelude::Visibility::Hidden));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn production_player_view_composition_layers_are_asset_backed_and_display_only() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch).unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let mut layer_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalProductionArtLayer>();
+    let layers = layer_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert!(
+        layers.iter().all(|layer| layer.display_only),
+        "production composition layers must remain presentation-only"
+    );
+
+    let canopy_count = layers
+        .iter()
+        .filter(|layer| layer.role == "ambient-canopy-shadow")
+        .count();
+    let light_pool_count = layers
+        .iter()
+        .filter(|layer| layer.role == "ambient-light-pool")
+        .count();
+    let shadow_count = layers
+        .iter()
+        .filter(|layer| layer.role == "entity-shadow")
+        .count();
+
+    assert!(canopy_count >= 5, "expected multiple canopy shadow layers");
+    assert!(light_pool_count >= 3, "expected multiple light-pool layers");
+    assert!(
+        shadow_count >= 4,
+        "expected asset-backed entity shadows for visible objects"
+    );
 }
 
 #[cfg(feature = "bevy-app")]

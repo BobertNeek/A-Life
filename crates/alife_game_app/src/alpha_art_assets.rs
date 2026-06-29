@@ -28,6 +28,9 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "food-variant",
     "hazard",
     "hazard-active",
+    "ambient-canopy-shadow",
+    "ambient-light-pool",
+    "entity-shadow",
     "rock-obstacle",
     "terrain-safe-grass",
     "terrain-soil-path",
@@ -37,7 +40,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "prop-dressing",
 ];
 
-pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v3";
+pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-organic-topdown-v4";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {
