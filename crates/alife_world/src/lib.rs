@@ -5,11 +5,13 @@ use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
 pub mod ecology;
 pub mod headless;
 pub mod persistence;
+pub mod procedural_chunks;
 pub mod scenario;
 
 pub use ecology::*;
 pub use headless::*;
 pub use persistence::*;
+pub use procedural_chunks::*;
 pub use scenario::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

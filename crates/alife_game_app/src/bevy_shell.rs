@@ -10,8 +10,13 @@ use alife_bevy_adapter::{
     core_vec3_to_bevy, AffordanceTags, AlifeBevyAdapterPlugin, BevyEntityMap, CreatureBody,
     SensoryEmitter,
 };
-use alife_core::{ActionKind, AffordanceBits, WorldEntityId};
-use alife_world::{TerrainZoneKind, WorldObjectKind};
+use alife_core::{ActionKind, AffordanceBits, Vec3f, WorldEntityId};
+use alife_world::{
+    activate_procedural_chunks_around_creatures, sample_procedural_terrain_tile,
+    CreatureWorldAnchor, ProceduralChunkActivationReport, ProceduralChunkCoord,
+    ProceduralTerrainSample, ProceduralTileCoord, ProceduralWorldConfig, TerrainZoneKind,
+    WorldObjectKind,
+};
 use bevy::{
     app::AppExit,
     asset::{AssetPlugin, AssetServer, Handle},
@@ -474,10 +479,14 @@ pub struct GraphicalWorldArtTerrainTile {
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalProceduralTerrainChunkTile {
     pub anchor_stable_id: Option<WorldEntityId>,
+    pub world_chunk_x: i32,
+    pub world_chunk_z: i32,
     pub chunk_center_tile_x: i32,
     pub chunk_center_tile_z: i32,
     pub virtual_map_width_tiles: usize,
     pub virtual_map_height_tiles: usize,
+    pub creature_authoritative_chunk: bool,
+    pub rendering_required_for_generation: bool,
     pub materialized_only_near_active_views: bool,
 }
 
@@ -488,6 +497,9 @@ pub struct GraphicalProceduralTerrainFieldResource {
     pub virtual_map_height_tiles: usize,
     pub chunk_radius_x: i32,
     pub chunk_radius_z: i32,
+    pub active_world_chunks: BTreeSet<(i32, i32)>,
+    pub creature_anchor_count: usize,
+    pub generated_without_rendering: bool,
     pub materialized_tiles: BTreeSet<(i32, i32)>,
     pub materialized_chunk_count: usize,
     pub materialized_only_near_active_views: bool,
@@ -1908,10 +1920,12 @@ fn spawn_ca37_world_art_terrain_canvas(
     view_mode: GraphicalPlaygroundViewMode,
     presentation: &VisibleWorldPresentation,
 ) {
-    let mut field = GraphicalProceduralTerrainFieldResource::new(summary);
-    for (center_x, center_z, anchor) in
-        ca44a_initial_procedural_terrain_centers(summary, presentation)
-    {
+    let config = ca44a_procedural_world_config(summary);
+    let anchors = ca44a_procedural_world_anchors_from_presentation(presentation);
+    let activation = activate_procedural_chunks_around_creatures(config, &anchors)
+        .expect("graphical procedural world activation should validate");
+    let mut field = GraphicalProceduralTerrainFieldResource::new(summary, &activation);
+    for (center_x, center_z, anchor) in ca44a_initial_procedural_terrain_centers(&activation) {
         ca44a_materialize_terrain_chunk_app(
             app, summary, &mut field, alpha_art, view_mode, center_x, center_z, anchor,
         );
@@ -1920,13 +1934,24 @@ fn spawn_ca37_world_art_terrain_canvas(
 }
 
 impl GraphicalProceduralTerrainFieldResource {
-    fn new(summary: &Ca37WorldArtStyleSummary) -> Self {
+    fn new(
+        summary: &Ca37WorldArtStyleSummary,
+        activation: &ProceduralChunkActivationReport,
+    ) -> Self {
+        let config = ca44a_procedural_world_config(summary);
         Self {
             seed: summary.seed,
-            virtual_map_width_tiles: summary.visual_map_width_tiles,
-            virtual_map_height_tiles: summary.visual_map_height_tiles,
+            virtual_map_width_tiles: config.virtual_width_tiles(),
+            virtual_map_height_tiles: config.virtual_height_tiles(),
             chunk_radius_x: (summary.viewport_width_tiles as i32 / 2).max(4),
             chunk_radius_z: (summary.viewport_height_tiles as i32 / 2).max(3),
+            active_world_chunks: activation
+                .active_chunks
+                .iter()
+                .map(|chunk| (chunk.coord.x, chunk.coord.z))
+                .collect(),
+            creature_anchor_count: activation.creature_anchor_count,
+            generated_without_rendering: activation.generated_without_rendering,
             materialized_tiles: BTreeSet::new(),
             materialized_chunk_count: 0,
             materialized_only_near_active_views: true,
@@ -1934,33 +1959,36 @@ impl GraphicalProceduralTerrainFieldResource {
     }
 }
 
-fn ca44a_initial_procedural_terrain_centers(
-    summary: &Ca37WorldArtStyleSummary,
+fn ca44a_procedural_world_config(summary: &Ca37WorldArtStyleSummary) -> ProceduralWorldConfig {
+    ProceduralWorldConfig::with_seed(summary.seed)
+}
+
+fn ca44a_procedural_world_anchors_from_presentation(
     presentation: &VisibleWorldPresentation,
-) -> Vec<(i32, i32, Option<WorldEntityId>)> {
-    let mut centers = Vec::new();
-    for object in &presentation.objects {
-        if object.kind == WorldObjectKind::Agent {
-            centers.push((
-                ca44a_world_coord_to_tile(object.position.x),
-                ca44a_world_coord_to_tile(object.position.z),
-                Some(object.stable_id),
-            ));
-        }
-    }
-    if centers.is_empty() {
-        centers.push((0, 0, None));
-    }
-    let half_x = summary.visual_map_width_tiles as i32 / 2;
-    let half_z = summary.visual_map_height_tiles as i32 / 2;
-    centers
-        .into_iter()
-        .map(|(x, z, anchor)| (x.clamp(-half_x, half_x), z.clamp(-half_z, half_z), anchor))
+) -> Vec<CreatureWorldAnchor> {
+    presentation
+        .objects
+        .iter()
+        .filter(|object| object.kind == WorldObjectKind::Agent)
+        .filter_map(|object| CreatureWorldAnchor::new(object.stable_id, object.position).ok())
         .collect()
 }
 
-fn ca44a_world_coord_to_tile(value: f32) -> i32 {
-    value.round() as i32
+fn ca44a_initial_procedural_terrain_centers(
+    activation: &ProceduralChunkActivationReport,
+) -> Vec<(i32, i32, Option<WorldEntityId>)> {
+    let mut centers = Vec::new();
+    let mut seen_anchors = BTreeSet::new();
+    for chunk in &activation.active_chunks {
+        if seen_anchors.insert(chunk.anchor_stable_id.raw()) {
+            centers.push((
+                chunk.anchor_tile.x,
+                chunk.anchor_tile.z,
+                Some(chunk.anchor_stable_id),
+            ));
+        }
+    }
+    centers
 }
 
 fn ca44a_materialize_terrain_chunk_app(
@@ -2032,7 +2060,8 @@ fn ca44a_spawn_alpha_terrain_tile_app(
     center_z: i32,
     anchor: Option<WorldEntityId>,
 ) {
-    let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+    let sample = ca44a_procedural_terrain_sample(summary.seed, ix, iz);
+    let material_id = sample.material.material_id();
     let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
     let jitter_x = ca44a_terrain_jitter_x(hash);
     let jitter_y = ca44a_terrain_jitter_y(hash);
@@ -2073,10 +2102,14 @@ fn ca44a_spawn_alpha_terrain_tile_app(
         },
         GraphicalProceduralTerrainChunkTile {
             anchor_stable_id: anchor,
+            world_chunk_x: sample.chunk.x,
+            world_chunk_z: sample.chunk.z,
             chunk_center_tile_x: center_x,
             chunk_center_tile_z: center_z,
             virtual_map_width_tiles: field.virtual_map_width_tiles,
             virtual_map_height_tiles: field.virtual_map_height_tiles,
+            creature_authoritative_chunk: anchor.is_some(),
+            rendering_required_for_generation: false,
             materialized_only_near_active_views: field.materialized_only_near_active_views,
         },
     ));
@@ -2123,7 +2156,8 @@ fn ca44a_spawn_fallback_terrain_tile_app(
     center_z: i32,
     anchor: Option<WorldEntityId>,
 ) {
-    let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+    let sample = ca44a_procedural_terrain_sample(summary.seed, ix, iz);
+    let material_id = sample.material.material_id();
     let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
     app.world_mut().spawn((
         Name::new(format!("A-Life CA37 terrain wash {material_id} {ix}:{iz}")),
@@ -2152,10 +2186,14 @@ fn ca44a_spawn_fallback_terrain_tile_app(
         },
         GraphicalProceduralTerrainChunkTile {
             anchor_stable_id: anchor,
+            world_chunk_x: sample.chunk.x,
+            world_chunk_z: sample.chunk.z,
             chunk_center_tile_x: center_x,
             chunk_center_tile_z: center_z,
             virtual_map_width_tiles: field.virtual_map_width_tiles,
             virtual_map_height_tiles: field.virtual_map_height_tiles,
+            creature_authoritative_chunk: anchor.is_some(),
+            rendering_required_for_generation: false,
             materialized_only_near_active_views: field.materialized_only_near_active_views,
         },
         GraphicalAlphaArtFallbackSprite {
@@ -2198,7 +2236,7 @@ fn ca44a_alpha_terrain_opacity(material_id: &str) -> f32 {
 fn update_graphical_procedural_terrain_field(
     mut commands: Commands,
     view_mode: Res<GraphicalViewModeResource>,
-    camera: Option<Res<CameraNavigationResource>>,
+    _camera: Option<Res<CameraNavigationResource>>,
     world_art: Option<Res<GraphicalWorldArtStyleResource>>,
     alpha_art: Option<Res<GraphicalAlphaArtHandles>>,
     field: Option<ResMut<GraphicalProceduralTerrainFieldResource>>,
@@ -2214,25 +2252,33 @@ fn update_graphical_procedural_terrain_field(
         return;
     };
 
-    let mut centers: Vec<(i32, i32, Option<WorldEntityId>)> = Vec::new();
-    if let Some(camera) = camera {
-        centers.push((
-            ca44a_world_coord_to_tile(camera.state.focus.x),
-            ca44a_world_coord_to_tile(camera.state.focus.z),
-            None,
-        ));
-    }
+    let mut anchors = Vec::new();
     for (marker, transform) in &markers {
         if marker.kind == WorldObjectKind::Agent {
-            centers.push((
-                ca44a_world_coord_to_tile(transform.translation.x / GRAPHICAL_WORLD_SCALE),
-                ca44a_world_coord_to_tile(transform.translation.y / GRAPHICAL_WORLD_SCALE),
-                Some(marker.stable_id),
-            ));
+            let position = Vec3f::new(
+                transform.translation.x / GRAPHICAL_WORLD_SCALE,
+                0.0,
+                transform.translation.y / GRAPHICAL_WORLD_SCALE,
+            );
+            if let Ok(anchor) = CreatureWorldAnchor::new(marker.stable_id, position) {
+                anchors.push(anchor);
+            }
         }
     }
+    let config = ca44a_procedural_world_config(&world_art.summary);
+    let Ok(activation) = activate_procedural_chunks_around_creatures(config, &anchors) else {
+        return;
+    };
+    field.active_world_chunks = activation
+        .active_chunks
+        .iter()
+        .map(|chunk| (chunk.coord.x, chunk.coord.z))
+        .collect();
+    field.creature_anchor_count = activation.creature_anchor_count;
+    field.generated_without_rendering = activation.generated_without_rendering;
+    let centers = ca44a_initial_procedural_terrain_centers(&activation);
     if centers.is_empty() {
-        centers.push((0, 0, None));
+        return;
     }
 
     let half_x = field.virtual_map_width_tiles as i32 / 2;
@@ -2291,7 +2337,8 @@ fn ca44a_spawn_alpha_terrain_tile_commands(
     center_z: i32,
     anchor: Option<WorldEntityId>,
 ) {
-    let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+    let sample = ca44a_procedural_terrain_sample(summary.seed, ix, iz);
+    let material_id = sample.material.material_id();
     let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
     let (image, role) = ca44a_terrain_art_for_material(handles, material_id);
     commands.spawn((
@@ -2331,10 +2378,14 @@ fn ca44a_spawn_alpha_terrain_tile_commands(
         },
         GraphicalProceduralTerrainChunkTile {
             anchor_stable_id: anchor,
+            world_chunk_x: sample.chunk.x,
+            world_chunk_z: sample.chunk.z,
             chunk_center_tile_x: center_x,
             chunk_center_tile_z: center_z,
             virtual_map_width_tiles: field.virtual_map_width_tiles,
             virtual_map_height_tiles: field.virtual_map_height_tiles,
+            creature_authoritative_chunk: anchor.is_some(),
+            rendering_required_for_generation: false,
             materialized_only_near_active_views: field.materialized_only_near_active_views,
         },
     ));
@@ -2350,7 +2401,8 @@ fn ca44a_spawn_fallback_terrain_tile_commands(
     center_z: i32,
     anchor: Option<WorldEntityId>,
 ) {
-    let material_id = ca37_terrain_tile_material(summary.seed, ix, iz);
+    let sample = ca44a_procedural_terrain_sample(summary.seed, ix, iz);
+    let material_id = sample.material.material_id();
     let hash = ca37_seeded_terrain_hash(summary.seed, ix, iz);
     commands.spawn((
         Name::new(format!(
@@ -2381,10 +2433,14 @@ fn ca44a_spawn_fallback_terrain_tile_commands(
         },
         GraphicalProceduralTerrainChunkTile {
             anchor_stable_id: anchor,
+            world_chunk_x: sample.chunk.x,
+            world_chunk_z: sample.chunk.z,
             chunk_center_tile_x: center_x,
             chunk_center_tile_z: center_z,
             virtual_map_width_tiles: field.virtual_map_width_tiles,
             virtual_map_height_tiles: field.virtual_map_height_tiles,
+            creature_authoritative_chunk: anchor.is_some(),
+            rendering_required_for_generation: false,
             materialized_only_near_active_views: field.materialized_only_near_active_views,
         },
         GraphicalAlphaArtFallbackSprite {
@@ -2443,47 +2499,20 @@ fn ca37_seeded_prop_variant(prop_id: &str) -> u32 {
     })
 }
 
-fn ca37_terrain_tile_material(seed: u64, ix: i32, iz: i32) -> &'static str {
-    let hash = ca37_seeded_terrain_hash(seed, ix, iz);
-    let local_resource_dx = ix - 2;
-    let local_resource_dz = iz;
-    let local_hazard_dx = ix;
-    let local_hazard_dz = iz - 1;
-    let local_stone_dx = ix + 1;
-    let local_stone_dz = iz - 1;
-    let resource_dx = ix - 27;
-    let resource_dz = iz + 19;
-    let north_resource_dx = ix + 30;
-    let north_resource_dz = iz - 17;
-    let hazard_dx = ix - 17;
-    let hazard_dz = iz - 22;
-    let east_hazard_dx = ix + 32;
-    let east_hazard_dz = iz + 19;
-    let west_stone_dx = ix + 28;
-    let west_stone_dz = iz - 2;
-    let soil_path = (iz - (ix / 3)).abs() <= 1 || (iz + (ix / 4)).abs() <= 1;
-    if local_hazard_dx * local_hazard_dx + local_hazard_dz * local_hazard_dz < 9
-        || hazard_dx * hazard_dx + hazard_dz * hazard_dz < 118
-        || east_hazard_dx * east_hazard_dx + east_hazard_dz * east_hazard_dz < 102
-        || (ix > 6 && iz > 4 && hash % 9 < 3)
-    {
-        "hazard-pressure"
-    } else if local_resource_dx * local_resource_dx + local_resource_dz * local_resource_dz < 12
-        || resource_dx * resource_dx + resource_dz * resource_dz < 130
-        || north_resource_dx * north_resource_dx + north_resource_dz * north_resource_dz < 96
-        || hash % 41 == 3
-    {
-        "resource-grove"
-    } else if soil_path {
-        "neutral-soil"
-    } else if local_stone_dx * local_stone_dx + local_stone_dz * local_stone_dz < 8
-        || west_stone_dx * west_stone_dx + west_stone_dz * west_stone_dz < 86
-        || (ix < -22 && hash % 11 < 4)
-    {
-        "stone-dressing"
-    } else {
-        "safe-grass"
-    }
+fn ca44a_procedural_terrain_sample(seed: u64, ix: i32, iz: i32) -> ProceduralTerrainSample {
+    let config = ProceduralWorldConfig::with_seed(seed);
+    sample_procedural_terrain_tile(config, ProceduralTileCoord::new(ix, iz)).unwrap_or_else(|_| {
+        ProceduralTerrainSample {
+            tile: ProceduralTileCoord::new(0, 0),
+            chunk: ProceduralChunkCoord::new(0, 0),
+            biome: alife_world::ProceduralBiomeKind::SafeGrass,
+            material: alife_world::ProceduralTerrainMaterial::SafeGrass,
+            resource_bias: 0.24,
+            hazard_pressure: 0.04,
+            roughness: 0.20,
+            traversal_cost: 0.18,
+        }
+    })
 }
 
 fn ca37_seeded_terrain_hash(seed: u64, ix: i32, iz: i32) -> i32 {

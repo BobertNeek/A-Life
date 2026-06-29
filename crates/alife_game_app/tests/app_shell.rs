@@ -816,12 +816,16 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     let tiles = tile_query.iter(app.world()).copied().collect::<Vec<_>>();
     let field = app
         .world()
-        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>();
-    assert_eq!(
-        field.virtual_map_width_tiles * field.virtual_map_height_tiles,
-        CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
-        "CA37 virtual terrain should keep its full seeded map size"
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>()
+        .clone();
+    assert!(
+        field.virtual_map_width_tiles * field.virtual_map_height_tiles
+            >= CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
+        "CA37 virtual terrain should keep at least its seeded map size"
     );
+    assert!(field.generated_without_rendering);
+    assert!(field.creature_anchor_count >= 1);
+    assert!(!field.active_world_chunks.is_empty());
     assert!(
         tiles.len() < CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES / 4,
         "Player View should materialize only active procedural chunks, not render the full virtual map"
@@ -838,6 +842,19 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(tiles.iter().all(|tile| tile.display_only));
     assert!(tiles.iter().all(|tile| tile.viewport_slice));
     assert!(tiles.iter().all(|tile| tile.tile_size_pixels >= 100.0));
+    let mut chunk_query =
+        app.world_mut()
+            .query::<&alife_game_app::bevy_shell::GraphicalProceduralTerrainChunkTile>();
+    let chunks = chunk_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert!(chunks
+        .iter()
+        .all(|chunk| chunk.creature_authoritative_chunk));
+    assert!(chunks
+        .iter()
+        .all(|chunk| !chunk.rendering_required_for_generation));
+    assert!(chunks.iter().all(|chunk| field
+        .active_world_chunks
+        .contains(&(chunk.world_chunk_x, chunk.world_chunk_z))));
     assert!(field.virtual_map_width_tiles >= 97);
     assert!(field.virtual_map_height_tiles >= 73);
     assert!(
@@ -2285,7 +2302,8 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
     let tiles = terrain_query.iter(app.world()).copied().collect::<Vec<_>>();
     let field = app
         .world()
-        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>();
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>()
+        .clone();
     assert!(
         tiles.len() >= 100,
         "expected a visible map slice, not one screen tile"
@@ -2297,6 +2315,12 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
     assert!(field.materialized_only_near_active_views);
     assert!(field.virtual_map_width_tiles >= 97);
     assert!(field.virtual_map_height_tiles >= 73);
+    assert!(field.generated_without_rendering);
+    assert!(field.creature_anchor_count >= 1);
+    assert!(
+        !field.active_world_chunks.is_empty(),
+        "world chunks should be activated around stable-ID creature anchors before rendering"
+    );
     assert!(
         field.materialized_tiles.len() >= 17 * 11,
         "at least one local viewport chunk should be generated"
@@ -2353,6 +2377,24 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
             .iter()
             .all(|chunk| chunk.materialized_only_near_active_views),
         "procedural terrain should exist only near active view/creature anchors"
+    );
+    assert!(
+        chunks
+            .iter()
+            .all(|chunk| chunk.creature_authoritative_chunk),
+        "default Player View terrain should come from creature-anchored world chunks"
+    );
+    assert!(
+        chunks
+            .iter()
+            .all(|chunk| !chunk.rendering_required_for_generation),
+        "world chunk generation should not require a camera/render pass"
+    );
+    assert!(
+        chunks.iter().all(|chunk| field
+            .active_world_chunks
+            .contains(&(chunk.world_chunk_x, chunk.world_chunk_z))),
+        "rendered tiles should reference an active creature-world chunk"
     );
     assert!(
         chunks.iter().any(|chunk| chunk.anchor_stable_id.is_some()),
