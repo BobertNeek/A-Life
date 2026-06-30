@@ -6,12 +6,12 @@ Branch: `codex/procedural-chunk-rendered-world-v1`
 ## Objective
 
 Move the graphical alpha away from debug rectangles and toward a large
-creature-anchored procedural world with a player-facing painted map surface.
-The visible Player View now uses a high-opacity painted procedural viewport as
-the primary terrain surface, while deterministic `alife_world` procedural chunk
-samples remain generated, tracked, and lightly mirrored as near-invisible
-material masks. Offscreen terrain remains virtual data until a creature anchor
-or camera slice requires it.
+creature-anchored procedural world. This document initially described a
+painted-map primary surface, but that approach was superseded after user
+feedback that the world must be generated from a seed rather than presented as
+a single screen. Current default Player View uses a runtime-generated seeded
+biome map with active creature chunk windows and fog of war. The painted
+viewport is retained only for Full Debug/style-reference presentation.
 
 This does not start CA45, does not alter the roadmap manifest, and does not
 change simulation action authority.
@@ -21,9 +21,9 @@ change simulation action authority.
 - Player View terrain chunk materialization now records and spawns alpha-art
   backed material masks instead of suppressing chunk evidence whenever art
   handles exist.
-- The 1280x720 map plate is the high-opacity `world-painted-viewport` player
-  surface. It is the visual map the player sees first, matching the generated
-  target mockup more closely than the rejected translucent tile stack.
+- The earlier 1280x720 `world-painted-viewport` player surface is no longer the
+  default. Player View now uses the runtime `runtime-procedural-biome-map`
+  layer as its primary terrain surface.
 - Terrain masks use deterministic material samples from `alife_world`, chunk
   provenance components, organic jitter, size variation, rotation, and
   alpha-art terrain/edge-blend sprites, but their opacity is capped below
@@ -49,10 +49,12 @@ cargo test -p alife_game_app --features bevy-app --test app_shell production_wor
 cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_starts_with_rendered_procedural_chunk_window -- --nocapture
 ```
 
-Result: PASS. The tests prove that default Player View uses asset-backed
-rendering, has no fallback rectangles, uses the painted procedural viewport as
-the primary game-map layer, retains active chunk provenance, keeps generation
-independent of rendering, and keeps the world-art layers display-only.
+Result: PASS at the time for the painted-surface implementation. Current
+follow-up tests now prove that default Player View uses asset-backed rendering,
+has no fallback rectangles, uses a seeded runtime procedural biome map as the
+primary game-map layer, applies fog outside active creature chunks, retains
+active chunk provenance, keeps generation independent of rendering, and keeps
+the world-art layers display-only.
 
 ## Known Limitations
 

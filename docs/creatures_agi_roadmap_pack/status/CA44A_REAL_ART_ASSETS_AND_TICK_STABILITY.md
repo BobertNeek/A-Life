@@ -6,6 +6,14 @@ Follow-up visual correction branch: codex/procedural-biome-world-scale-slice
 Status: implemented on branch; validation passed
 Next plan: CA44
 
+## Current Follow-up Status
+
+The later procedural seeded Player View correction supersedes the final
+post-feedback composition note below. Default Player View now uses a
+runtime-generated seeded biome map with active creature chunk windows and fog of
+war. `world-painted-viewport` is retained only for Full Debug/style-reference
+presentation and must not be restored as the default player terrain surface.
+
 ## Reproduction Summary
 
 The default `gpu_alpha` player path previously stopped almost immediately with `TerminalInvalidState`.
@@ -140,15 +148,12 @@ are subtle live-context overlays, and foreground creatures/props/selection
 pulses are small map-scale sprites instead of giant close-up elements. Simulation
 semantics, GPU/CPU correctness rules, and action authority are unchanged.
 
-The final post-feedback correction makes that generated painted map fill the
-default Player View instead of appearing as a small plate inside a flat field.
-The runtime procedural biome map is still generated from the seeded sampler and
-validated for paths, resource detail, hazard detail, stone detail, and zero
-black-gap pixels, but it sits behind the painted surface as procedural evidence
-rather than becoming the visible blocky terrain layer. The default Player View
-now asserts one `world-painted-viewport` layer, one
-`runtime-procedural-biome-map` layer, and many `streamed-procedural-terrain`
-tiles with opacity capped at debug-invisible levels. This is still a
+The final post-feedback correction previously made that generated painted map
+fill the default Player View instead of appearing as a small plate inside a flat
+field. That presentation was superseded by the seeded procedural Player View
+follow-up: the default Player View now asserts zero `world-painted-viewport`
+layers and one primary `runtime-procedural-biome-map` layer. The painted
+viewport remains a Full Debug/style reference only. This is still a
 graphical/presentation step toward the active goal, not a claim that procedural
 terrain is authoritative ecology or sensory state.
 

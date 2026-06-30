@@ -2318,13 +2318,16 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "terrain-resource-grove",
         "terrain-hazard-pressure",
         "terrain-stone-rough",
-        "world-painted-viewport",
     ] {
         assert!(roles.contains(&role), "missing alpha art role {role}");
     }
     assert!(
+        !roles.contains(&"world-painted-viewport"),
+        "default Player View must use the live procedural biome map, not the baked painted viewport"
+    );
+    assert!(
         !roles.contains(&"world-atmospheric-underlay"),
-        "default Player View may use the generated painted map surface, but must not restore the old atmospheric debug underlay"
+        "default Player View must not restore the old atmospheric debug underlay"
     );
 
     let mut fallback_query =
@@ -2367,7 +2370,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View selection rings should be bounded sprites");
         assert!(
-            size.x <= 10.5 && size.y <= 8.5,
+            size.x <= 40.5 && size.y <= 32.5,
             "selected creature rings must frame the sprite without covering the map: {size:?}"
         );
     }
@@ -2375,7 +2378,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
-fn production_player_view_uses_full_map_scale_backdrop_and_tiny_foreground_sprites() {
+fn production_player_view_uses_runtime_map_and_tiny_foreground_sprites() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
     let (mut app, summary) =
@@ -2384,23 +2387,35 @@ fn production_player_view_uses_full_map_scale_backdrop_and_tiny_foreground_sprit
 
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
 
+    let mut biome_map_query =
+        app.world_mut()
+            .query::<&alife_game_app::bevy_shell::GraphicalRuntimeProceduralBiomeMap>();
+    let biome_maps = biome_map_query
+        .iter(app.world())
+        .copied()
+        .collect::<Vec<_>>();
+    assert_eq!(biome_maps.len(), 1);
+    assert!(
+        biome_maps[0].primary_player_surface,
+        "runtime-generated biome map should be the primary Player View terrain surface"
+    );
+    assert!(biome_maps[0].seed > 0);
+    assert!(biome_maps[0].active_chunk_count > 0);
+    assert!(
+        biome_maps[0].fog_of_war_applied && biome_maps[0].fogged_pixels > 0,
+        "runtime-generated biome map should apply fog outside active creature chunk windows"
+    );
+
     let mut art_query = app.world_mut().query::<(
         &alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite,
         &bevy::prelude::Sprite,
     )>();
     let art_sprites = art_query.iter(app.world()).collect::<Vec<_>>();
-
-    let (_, backdrop) = art_sprites
-        .iter()
-        .find(|(marker, _)| marker.role == "world-painted-viewport")
-        .expect("Player View should include the painted full-map surface");
-    let backdrop_size = backdrop
-        .custom_size
-        .expect("painted map surface should have an explicit viewport size");
     assert!(
-        (3830.0..=3850.0).contains(&backdrop_size.x)
-            && (2150.0..=2170.0).contains(&backdrop_size.y),
-        "painted map should cover the zoomed-out player camera view instead of appearing as a small centered plate: {backdrop_size:?}"
+        art_sprites
+            .iter()
+            .all(|(marker, _)| marker.role != "world-painted-viewport"),
+        "Player View should not depend on the baked painted viewport"
     );
 
     let live_creature_max = art_sprites
@@ -2420,7 +2435,7 @@ fn production_player_view_uses_full_map_scale_backdrop_and_tiny_foreground_sprit
         .map(|size| size.x.max(size.y))
         .fold(0.0_f32, f32::max);
     assert!(
-        live_creature_max > 0.0 && live_creature_max <= 10.5,
+        live_creature_max > 0.0 && live_creature_max <= 25.5,
         "live creatures should read as small map-scale agents, not giant foreground sprites: {live_creature_max}"
     );
 
@@ -2436,7 +2451,7 @@ fn production_player_view_uses_full_map_scale_backdrop_and_tiny_foreground_sprit
         .map(|size| size.x.max(size.y))
         .fold(0.0_f32, f32::max);
     assert!(
-        required_world_role_max > 0.0 && required_world_role_max <= 9.5,
+        required_world_role_max > 0.0 && required_world_role_max <= 24.5,
         "food, hazard, rock, and prop sprites must stay map-scale: {required_world_role_max}"
     );
 
@@ -2452,7 +2467,7 @@ fn production_player_view_uses_full_map_scale_backdrop_and_tiny_foreground_sprit
         .map(|size| size.x.max(size.y))
         .fold(0.0_f32, f32::max);
     assert!(
-        generated_content_max > 0.0 && generated_content_max <= 8.5,
+        generated_content_max > 0.0 && generated_content_max <= 24.5,
         "generated procedural content should be dense small-world dressing, not large overlays: {generated_content_max}"
     );
 }
@@ -2517,8 +2532,8 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         .filter(|layer| layer.role == "streamed-procedural-terrain")
         .count();
     assert_eq!(
-        baked_backdrop_count, 1,
-        "Player View should use one generated painted art surface plus live procedural chunk evidence"
+        baked_backdrop_count, 0,
+        "Player View should use the live runtime procedural map, not a baked painted plate"
     );
     let runtime_biome_map_count = layers
         .iter()
@@ -2526,7 +2541,7 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         .count();
     assert_eq!(
         runtime_biome_map_count, 1,
-        "Player View should have one live generated biome-map surface behind streamed chunks"
+        "Player View should have one live generated biome-map surface as the primary world surface"
     );
     assert!(
         streamed_terrain_count >= visible_terrain_count,
@@ -2577,10 +2592,17 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
     );
     let biome_map = biome_maps[0];
     assert!(biome_map.generated_from_procedural_sampler);
+    assert!(biome_map.primary_player_surface);
     assert!(biome_map.display_only);
+    assert_eq!(biome_map.seed, summary.seed);
+    assert!(biome_map.active_chunk_count > 0);
+    assert!(
+        biome_map.fog_of_war_applied && biome_map.fogged_pixels > 0,
+        "seeded Player View map should fog regions with no active creature/chunk presence"
+    );
     assert!(biome_map.width_tiles >= 96);
     assert!(biome_map.height_tiles >= 64);
-    assert_eq!(biome_map.pixels_per_tile, 12);
+    assert_eq!(biome_map.pixels_per_tile, 20);
     assert_eq!(
         biome_map.texture_width_px,
         biome_map.width_tiles as u32 * biome_map.pixels_per_tile
@@ -2622,9 +2644,9 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
     );
     assert!(
         terrain_tiles.iter().all(|tile| {
-            tile.opacity >= 0.003 && tile.opacity <= 0.008
+            tile.opacity >= 0.0005 && tile.opacity <= 0.0010
         }),
-        "streamed terrain tiles should dress the generated biome map, not cover it with opaque slabs"
+        "streamed terrain tiles should read as subtle active-chunk dressing without becoming opaque slabs"
     );
     assert!(
         terrain_tiles
@@ -2762,8 +2784,8 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         "expected asset-backed entity shadows for visible objects"
     );
     assert_eq!(
-        baked_backdrop_count, 1,
-        "default Player View should use one generated painted art surface, not multiple baked/debug backdrops"
+        baked_backdrop_count, 0,
+        "default Player View should not use a baked/debug backdrop"
     );
     assert_eq!(
         runtime_biome_map_count, 1,
