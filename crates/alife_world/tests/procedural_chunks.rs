@@ -3,10 +3,11 @@ use alife_world::{
     activate_procedural_chunks_around_creatures, generate_procedural_world_content,
     procedural_chunk_summary, procedural_world_scale_report,
     sample_creature_procedural_content_neighborhood, sample_creature_procedural_neighborhood,
-    sample_procedural_terrain_tile, CreatureWorldAnchor, ProceduralChunkCoord,
-    ProceduralTerrainMaterial, ProceduralTileCoord, ProceduralWorldConfig,
+    sample_procedural_terrain_tile, simulate_procedural_world_travel, CreatureWorldAnchor,
+    ProceduralChunkCoord, ProceduralTerrainMaterial, ProceduralTileCoord, ProceduralWorldConfig,
     ProceduralWorldContentKind, DEFAULT_ACTIVATION_RADIUS_CHUNKS, PROCEDURAL_CONTENT_ID_BASE,
     PROCEDURAL_WORLD_CHUNKS_SCHEMA, PROCEDURAL_WORLD_CONTENT_SCHEMA,
+    PROCEDURAL_WORLD_TRAVEL_SCHEMA,
 };
 
 fn anchor(id: u64, x: f32, z: f32) -> CreatureWorldAnchor {
@@ -83,6 +84,83 @@ fn procedural_chunks_follow_creature_travel_from_same_seed() {
     }));
     origin_report.validate(config).unwrap();
     traveled_report.validate(config).unwrap();
+}
+
+#[test]
+fn procedural_world_travel_streams_chunks_without_rendering() {
+    let config = ProceduralWorldConfig::with_seed(4242);
+    let route = [
+        ProceduralTileCoord::new(0, 0),
+        ProceduralTileCoord::new(48, 0),
+        ProceduralTileCoord::new(96, -64),
+        ProceduralTileCoord::new(144, 32),
+        ProceduralTileCoord::new(192, -96),
+        ProceduralTileCoord::new(240, -16),
+    ];
+
+    let report = simulate_procedural_world_travel(config, WorldEntityId(1), &route).unwrap();
+
+    report.validate(config).unwrap();
+    assert_eq!(report.schema, PROCEDURAL_WORLD_TRAVEL_SCHEMA);
+    assert_eq!(report.seed, config.seed);
+    assert_eq!(report.stable_id, WorldEntityId(1));
+    assert_eq!(report.requested_step_count, route.len());
+    assert!(
+        report.total_unique_materialized_chunks > report.max_active_chunk_count,
+        "travel should materialize more deterministic chunks over time than one active window"
+    );
+    assert!(report.total_content_candidates_seen > 0);
+    assert!(report.generated_without_rendering);
+    assert!(!report.rendering_required);
+    assert!(!report.chunks_exist_without_creature_presence);
+    assert!(report.materialized_only_near_creature_anchors);
+    assert!(report.bounded_for_creature_context);
+    assert!(!report.can_emit_actions);
+    assert!(!report.can_rewrite_weights);
+    assert!(report
+        .steps
+        .iter()
+        .skip(1)
+        .any(|step| { step.newly_materialized_chunk_count > 0 && step.retired_chunk_count > 0 }));
+    assert!(report.steps.iter().all(|step| {
+        step.generated_without_rendering
+            && !step.rendering_required
+            && !step.can_emit_actions
+            && !step.can_rewrite_weights
+            && step.active_chunk_count <= config.max_active_chunks
+            && step.content_candidate_count <= config.max_active_content_candidates
+    }));
+}
+
+#[test]
+fn procedural_world_travel_report_is_deterministic_for_same_seed_route() {
+    let config = ProceduralWorldConfig::with_seed(987_654);
+    let route = [
+        ProceduralTileCoord::new(-16, 8),
+        ProceduralTileCoord::new(32, 24),
+        ProceduralTileCoord::new(80, 48),
+        ProceduralTileCoord::new(128, 96),
+    ];
+
+    let first = simulate_procedural_world_travel(config, WorldEntityId(6), &route).unwrap();
+    let second = simulate_procedural_world_travel(config, WorldEntityId(6), &route).unwrap();
+
+    assert_eq!(first, second);
+    assert!(first.total_unique_materialized_chunks > first.max_active_chunk_count);
+    assert!(first.steps.iter().any(|step| {
+        step.dominant_material == ProceduralTerrainMaterial::HazardPressure
+            || step.dominant_material == ProceduralTerrainMaterial::ResourceGrove
+            || step.dominant_material == ProceduralTerrainMaterial::StoneRough
+    }));
+}
+
+#[test]
+fn procedural_world_travel_rejects_empty_route() {
+    let config = ProceduralWorldConfig::with_seed(4242);
+
+    let err = simulate_procedural_world_travel(config, WorldEntityId(1), &[]).unwrap_err();
+
+    assert_eq!(err, alife_core::ScaffoldContractError::ScalarOutOfRange);
 }
 
 #[test]

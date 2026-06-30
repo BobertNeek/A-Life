@@ -25,60 +25,60 @@ use alife_game_app::{
     run_neural_activity_profiler_smoke, run_onboarding_help_smoke, run_onboarding_tutorial_smoke,
     run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
-    run_product_qa_hardening_smoke, run_real_semantic_provider_smoke,
-    run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_runtime_prereq_diagnostics, run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
-    run_tester_feedback_capture_smoke, run_topological_concept_overlay_smoke,
-    run_world_art_style_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    select_visible_world_entity, validate_app_shell_config, write_behavior_comparison_lab_report,
-    AppShellLaunchConfig, AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig,
-    BehaviorTuningFindingStatus, Ca13TickBuffer, Ca39DriveCueKind, Ca39RuntimeCueEvidence,
-    Ca43LogDirectoryPolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
-    CrashSummaryInput, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
-    CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
-    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundViewMode,
-    InspectorControlPanel, LessonManifest, LifecycleEventKind, LifecycleLiveLoop,
-    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
-    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
-    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
-    ProductQaStatus, RealtimeWgslTelemetrySummary, ReleaseCandidateArea,
-    ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel,
-    RuntimePlaybackState, RuntimePrereqDiagnosticsOptions, S08EvidenceStatus,
-    SampledGpuRuntimeOptions, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
-    SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape, WorldEditCommand,
-    WorldEditorConfig, WorldEditorMode, WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA,
-    CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION, CA18_MAX_GRAPHICAL_CREATURES,
-    CA19_GRAPHICAL_ECOLOGY_SCHEMA, CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION,
-    CA20_GRAPHICAL_LIFECYCLE_SCHEMA, CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION,
-    CA21_BEHAVIOR_TUNING_SCHEMA, CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT,
-    CA21_SCENARIO_SWEEP_COUNT, CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION,
-    CA22_FAST_HEADLESS_TICKS, CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA,
-    CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION, CA25_CURRICULUM_AUTHORING_SCHEMA,
-    CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA,
-    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION, CA27_INTERNAL_SLM_PRIOR_SCHEMA,
-    CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA,
-    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA,
-    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA,
-    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA,
-    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION, CA31_MAX_REPORT_BYTES,
-    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
-    CA33_BATCHED_GPU_RUNTIME_SCHEMA, CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION,
-    CA34_SAMPLED_GPU_RUNTIME_SCHEMA, CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
-    CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA, CA36_SOAK_ISOLATION_SCHEMA_VERSION,
-    CA37_MIN_PALETTE_MATERIALS, CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
-    CA37_MIN_WORLD_DRESSING_PROPS, CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES,
-    CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES, CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
-    CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES, CA37_WORLD_ART_STYLE_SCHEMA,
-    CA37_WORLD_ART_STYLE_SCHEMA_VERSION, CA38_CREATURE_ANIMATION_SCHEMA,
-    CA38_CREATURE_ANIMATION_SCHEMA_VERSION, CA38_REQUIRED_ANIMATION_STATES,
-    CA39_DRIVE_AUDIO_VFX_SCHEMA, CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION,
-    CA39_REQUIRED_DRIVE_CUE_COUNT, CA40_ONBOARDING_TUTORIAL_SCHEMA,
-    CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION, CA40_REQUIRED_CHECKLIST_ITEMS,
-    CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA, CA42_RUNTIME_PREREQ_SCHEMA,
-    CA42_RUNTIME_PREREQ_SCHEMA_VERSION, CA43_TESTER_FEEDBACK_SCHEMA,
+    run_procedural_world_travel_smoke, run_product_qa_hardening_smoke,
+    run_real_semantic_provider_smoke, run_realtime_wgsl_telemetry_smoke,
+    run_release_candidate_smoke, run_runtime_controls_smoke, run_runtime_prereq_diagnostics,
+    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_teacher_world_cues_smoke, run_tester_feedback_capture_smoke,
+    run_topological_concept_overlay_smoke, run_world_art_style_smoke, run_world_ecology_loop_smoke,
+    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
+    write_behavior_comparison_lab_report, AppShellLaunchConfig, AutosavePolicy,
+    BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer,
+    Ca39DriveCueKind, Ca39RuntimeCueEvidence, Ca43LogDirectoryPolicy, CadenceTarget,
+    CameraNavigationState, ConfigMenuState, CrashSummaryInput, CreatureAnimationState,
+    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
+    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
+    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
+    GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundViewMode, InspectorControlPanel,
+    LessonManifest, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState,
+    LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
+    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
+    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
+    RealtimeWgslTelemetrySummary, ReleaseCandidateArea, ReleaseCandidateGateStatus,
+    RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState,
+    RuntimePrereqDiagnosticsOptions, S08EvidenceStatus, SampledGpuRuntimeOptions,
+    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
+    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
+    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
+    CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
+    CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
+    CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
+    CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
+    CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
+    CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION,
+    CA25_CURRICULUM_AUTHORING_SCHEMA, CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
+    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION,
+    CA27_INTERNAL_SLM_PRIOR_SCHEMA, CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION,
+    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
+    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION,
+    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION,
+    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION,
+    CA31_MAX_REPORT_BYTES, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA,
+    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION, CA33_BATCHED_GPU_RUNTIME_SCHEMA,
+    CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION, CA34_SAMPLED_GPU_RUNTIME_SCHEMA,
+    CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION, CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA,
+    CA36_SOAK_ISOLATION_SCHEMA_VERSION, CA37_MIN_PALETTE_MATERIALS,
+    CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES, CA37_MIN_WORLD_DRESSING_PROPS,
+    CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES, CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES,
+    CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES, CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES,
+    CA37_WORLD_ART_STYLE_SCHEMA, CA37_WORLD_ART_STYLE_SCHEMA_VERSION,
+    CA38_CREATURE_ANIMATION_SCHEMA, CA38_CREATURE_ANIMATION_SCHEMA_VERSION,
+    CA38_REQUIRED_ANIMATION_STATES, CA39_DRIVE_AUDIO_VFX_SCHEMA,
+    CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION, CA39_REQUIRED_DRIVE_CUE_COUNT,
+    CA40_ONBOARDING_TUTORIAL_SCHEMA, CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION,
+    CA40_REQUIRED_CHECKLIST_ITEMS, CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA,
+    CA42_RUNTIME_PREREQ_SCHEMA, CA42_RUNTIME_PREREQ_SCHEMA_VERSION, CA43_TESTER_FEEDBACK_SCHEMA,
     CA43_TESTER_FEEDBACK_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
     G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -731,6 +731,43 @@ fn ca37_world_art_style_smoke_validates_palette_props_and_manifest() {
     assert!(!overlay.contains("Entity("));
     assert!(!overlay.contains("full action-authoritative"));
     summary.validate().unwrap();
+}
+
+#[test]
+fn ca44a_procedural_world_travel_smoke_streams_seeded_chunks_without_rendering() {
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(gpu_alpha_fixture_root());
+
+    let summary = run_procedural_world_travel_smoke(&launch).unwrap();
+
+    summary.validate().unwrap();
+    assert_eq!(summary.seed, 4242);
+    assert_eq!(summary.stable_id, WorldEntityId(1));
+    assert!(summary.route_steps >= 6);
+    assert!(
+        summary.total_unique_materialized_chunks > summary.max_active_chunk_count,
+        "creature travel should materialize more chunks than one active camera window"
+    );
+    assert!(summary.total_content_candidates_seen > 0);
+    assert!(summary.generated_without_rendering);
+    assert!(!summary.rendering_required);
+    assert!(!summary.chunks_exist_without_creature_presence);
+    assert!(summary.materialized_only_near_creature_anchors);
+    assert!(summary.bounded_for_creature_context);
+    assert!(!summary.can_emit_actions);
+    assert!(!summary.can_rewrite_weights);
+    assert_eq!(
+        summary.world_generation_claim,
+        "SeededCreatureAnchoredNoRenderChunks"
+    );
+    assert!(
+        summary
+            .travel_report
+            .steps
+            .iter()
+            .skip(1)
+            .any(|step| step.newly_materialized_chunk_count > 0 && step.retired_chunk_count > 0),
+        "travel route should stream active chunks as the creature leaves one area"
+    );
 }
 
 #[test]

@@ -147,6 +147,9 @@ pub use graphical_ecology::*;
 mod world_art_style;
 pub use world_art_style::*;
 
+mod procedural_world_streaming;
+pub use procedural_world_streaming::*;
+
 mod creature_animation_style;
 pub use creature_animation_style::*;
 

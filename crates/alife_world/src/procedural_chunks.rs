@@ -15,6 +15,8 @@ pub const PROCEDURAL_WORLD_CHUNKS_SCHEMA: &str = "alife.ca44a.procedural_world_c
 pub const PROCEDURAL_WORLD_CHUNKS_SCHEMA_VERSION: u16 = 1;
 pub const PROCEDURAL_WORLD_SCALE_SCHEMA: &str = "alife.ca44a.procedural_world_scale.v1";
 pub const PROCEDURAL_WORLD_SCALE_SCHEMA_VERSION: u16 = 1;
+pub const PROCEDURAL_WORLD_TRAVEL_SCHEMA: &str = "alife.ca44a.procedural_world_travel.v1";
+pub const PROCEDURAL_WORLD_TRAVEL_SCHEMA_VERSION: u16 = 1;
 
 pub const DEFAULT_CHUNK_TILE_SIZE: i32 = 16;
 pub const DEFAULT_ACTIVATION_RADIUS_CHUNKS: i32 = 2;
@@ -23,6 +25,7 @@ pub const DEFAULT_MAX_ACTIVE_CONTENT_CANDIDATES: usize = 512;
 pub const DEFAULT_MAX_CONTENT_CANDIDATES_PER_CHUNK: usize = 48;
 pub const DEFAULT_NEIGHBORHOOD_RADIUS_TILES: i32 = 6;
 pub const DEFAULT_MAX_NEIGHBORHOOD_SAMPLES: usize = 96;
+pub const DEFAULT_MAX_PROCEDURAL_TRAVEL_STEPS: usize = 256;
 pub const DEFAULT_VIRTUAL_HALF_EXTENT_CHUNKS: i32 = 128;
 pub const PROCEDURAL_WORLD_CONTENT_SCHEMA: &str = "alife.ca44a.procedural_world_content.v1";
 pub const PROCEDURAL_WORLD_CONTENT_SCHEMA_VERSION: u16 = 1;
@@ -482,6 +485,145 @@ impl ProceduralWorldScaleReport {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ProceduralWorldTravelStepReport {
+    pub step_index: usize,
+    pub stable_id: WorldEntityId,
+    pub tile: ProceduralTileCoord,
+    pub center_chunk: ProceduralChunkCoord,
+    pub active_chunk_count: usize,
+    pub newly_materialized_chunk_count: usize,
+    pub retired_chunk_count: usize,
+    pub unique_materialized_chunk_count: usize,
+    pub content_candidate_count: usize,
+    pub content_neighborhood_count: usize,
+    pub terrain_neighborhood_samples: usize,
+    pub dominant_material: ProceduralTerrainMaterial,
+    pub average_resource_bias: f32,
+    pub average_hazard_pressure: f32,
+    pub generated_without_rendering: bool,
+    pub rendering_required: bool,
+    pub bounded_for_creature_context: bool,
+    pub can_emit_actions: bool,
+    pub can_rewrite_weights: bool,
+}
+
+impl ProceduralWorldTravelStepReport {
+    pub fn validate(&self, config: ProceduralWorldConfig) -> Result<(), ScaffoldContractError> {
+        config.validate()?;
+        self.stable_id.validate()?;
+        if self.active_chunk_count == 0
+            || self.active_chunk_count > config.max_active_chunks
+            || self.newly_materialized_chunk_count > self.active_chunk_count
+            || self.retired_chunk_count > config.max_active_chunks
+            || self.unique_materialized_chunk_count < self.active_chunk_count
+            || self.content_candidate_count > config.max_active_content_candidates
+            || self.content_neighborhood_count > config.max_neighborhood_samples
+            || self.terrain_neighborhood_samples == 0
+            || self.terrain_neighborhood_samples > config.max_neighborhood_samples
+            || !self.generated_without_rendering
+            || self.rendering_required
+            || !self.bounded_for_creature_context
+            || self.can_emit_actions
+            || self.can_rewrite_weights
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        NormalizedScalar::new(self.average_resource_bias)?;
+        NormalizedScalar::new(self.average_hazard_pressure)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ProceduralWorldTravelReport {
+    pub schema: String,
+    pub schema_version: u16,
+    pub seed: u64,
+    pub stable_id: WorldEntityId,
+    pub requested_step_count: usize,
+    pub steps: Vec<ProceduralWorldTravelStepReport>,
+    pub total_unique_materialized_chunks: usize,
+    pub max_active_chunk_count: usize,
+    pub total_content_candidates_seen: usize,
+    pub generated_without_rendering: bool,
+    pub rendering_required: bool,
+    pub chunks_exist_without_creature_presence: bool,
+    pub materialized_only_near_creature_anchors: bool,
+    pub bounded_for_creature_context: bool,
+    pub can_emit_actions: bool,
+    pub can_rewrite_weights: bool,
+}
+
+impl ProceduralWorldTravelReport {
+    pub fn validate(&self, config: ProceduralWorldConfig) -> Result<(), ScaffoldContractError> {
+        config.validate()?;
+        self.stable_id.validate()?;
+        if self.schema != PROCEDURAL_WORLD_TRAVEL_SCHEMA
+            || self.schema_version != PROCEDURAL_WORLD_TRAVEL_SCHEMA_VERSION
+            || self.seed != config.seed
+            || self.requested_step_count == 0
+            || self.requested_step_count != self.steps.len()
+            || self.requested_step_count > DEFAULT_MAX_PROCEDURAL_TRAVEL_STEPS
+            || self.max_active_chunk_count == 0
+            || self.max_active_chunk_count > config.max_active_chunks
+            || self.total_unique_materialized_chunks < self.max_active_chunk_count
+            || self.total_content_candidates_seen
+                > config
+                    .max_active_content_candidates
+                    .saturating_mul(self.requested_step_count)
+            || !self.generated_without_rendering
+            || self.rendering_required
+            || self.chunks_exist_without_creature_presence
+            || !self.materialized_only_near_creature_anchors
+            || !self.bounded_for_creature_context
+            || self.can_emit_actions
+            || self.can_rewrite_weights
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        let mut previous_unique = 0_usize;
+        for (index, step) in self.steps.iter().enumerate() {
+            if step.step_index != index || step.stable_id != self.stable_id {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+            step.validate(config)?;
+            if step.unique_materialized_chunk_count < previous_unique {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+            previous_unique = step.unique_materialized_chunk_count;
+        }
+        if self
+            .steps
+            .last()
+            .map(|step| step.unique_materialized_chunk_count)
+            != Some(self.total_unique_materialized_chunks)
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(())
+    }
+
+    pub fn signature_line(&self) -> String {
+        format!(
+            "{}:{}:seed={}:stable={}:steps={}:unique_chunks={}:max_active={}:content_seen={}:no_render={}:rendering_required={}:anchor_only={}:action_authority={}:weight_authority={}",
+            self.schema,
+            self.schema_version,
+            self.seed,
+            self.stable_id.raw(),
+            self.requested_step_count,
+            self.total_unique_materialized_chunks,
+            self.max_active_chunk_count,
+            self.total_content_candidates_seen,
+            self.generated_without_rendering,
+            self.rendering_required,
+            self.materialized_only_near_creature_anchors,
+            self.can_emit_actions,
+            self.can_rewrite_weights
+        )
     }
 }
 
@@ -998,6 +1140,98 @@ pub fn sample_creature_procedural_content_neighborhood(
     };
     neighborhood.validate(config)?;
     Ok(neighborhood)
+}
+
+pub fn simulate_procedural_world_travel(
+    config: ProceduralWorldConfig,
+    stable_id: WorldEntityId,
+    route: &[ProceduralTileCoord],
+) -> Result<ProceduralWorldTravelReport, ScaffoldContractError> {
+    let config = config.validate()?;
+    stable_id.validate()?;
+    if route.is_empty() || route.len() > DEFAULT_MAX_PROCEDURAL_TRAVEL_STEPS {
+        return Err(ScaffoldContractError::ScalarOutOfRange);
+    }
+
+    let empty_activation = activate_procedural_chunks_around_creatures(config, &[])?;
+    let chunks_exist_without_creature_presence = !empty_activation.active_chunks.is_empty();
+    let mut previous_active_chunks = BTreeSet::new();
+    let mut unique_materialized_chunks = BTreeSet::new();
+    let mut max_active_chunk_count = 0_usize;
+    let mut total_content_candidates_seen = 0_usize;
+    let mut steps = Vec::new();
+
+    for (step_index, tile) in route.iter().copied().enumerate() {
+        let anchor =
+            CreatureWorldAnchor::new(stable_id, Vec3f::new(tile.x as f32, 0.0, tile.z as f32))?;
+        let activation = activate_procedural_chunks_around_creatures(config, &[anchor])?;
+        let active_chunks = activation
+            .active_chunks
+            .iter()
+            .map(|chunk| chunk.coord)
+            .collect::<BTreeSet<_>>();
+        let newly_materialized_chunk_count = active_chunks
+            .difference(&unique_materialized_chunks)
+            .count();
+        let retired_chunk_count = previous_active_chunks.difference(&active_chunks).count();
+        for coord in &active_chunks {
+            unique_materialized_chunks.insert(*coord);
+        }
+        previous_active_chunks = active_chunks;
+        max_active_chunk_count = max_active_chunk_count.max(activation.active_chunks.len());
+
+        let content = generate_procedural_world_content(config, &activation)?;
+        total_content_candidates_seen =
+            total_content_candidates_seen.saturating_add(content.candidate_count);
+        let terrain_neighborhood = sample_creature_procedural_neighborhood(config, anchor)?;
+        let content_neighborhood =
+            sample_creature_procedural_content_neighborhood(config, anchor, &content)?;
+        let center_chunk = chunk_coord_for_tile(config, tile)?;
+        let step = ProceduralWorldTravelStepReport {
+            step_index,
+            stable_id,
+            tile,
+            center_chunk,
+            active_chunk_count: activation.active_chunks.len(),
+            newly_materialized_chunk_count,
+            retired_chunk_count,
+            unique_materialized_chunk_count: unique_materialized_chunks.len(),
+            content_candidate_count: content.candidate_count,
+            content_neighborhood_count: content_neighborhood.candidate_count,
+            terrain_neighborhood_samples: terrain_neighborhood.sample_count,
+            dominant_material: terrain_neighborhood.dominant_material,
+            average_resource_bias: terrain_neighborhood.average_resource_bias,
+            average_hazard_pressure: terrain_neighborhood.average_hazard_pressure,
+            generated_without_rendering: true,
+            rendering_required: false,
+            bounded_for_creature_context: true,
+            can_emit_actions: false,
+            can_rewrite_weights: false,
+        };
+        step.validate(config)?;
+        steps.push(step);
+    }
+
+    let report = ProceduralWorldTravelReport {
+        schema: PROCEDURAL_WORLD_TRAVEL_SCHEMA.to_string(),
+        schema_version: PROCEDURAL_WORLD_TRAVEL_SCHEMA_VERSION,
+        seed: config.seed,
+        stable_id,
+        requested_step_count: route.len(),
+        steps,
+        total_unique_materialized_chunks: unique_materialized_chunks.len(),
+        max_active_chunk_count,
+        total_content_candidates_seen,
+        generated_without_rendering: true,
+        rendering_required: false,
+        chunks_exist_without_creature_presence,
+        materialized_only_near_creature_anchors: true,
+        bounded_for_creature_context: true,
+        can_emit_actions: false,
+        can_rewrite_weights: false,
+    };
+    report.validate(config)?;
+    Ok(report)
 }
 
 pub fn chunk_coord_for_tile(
