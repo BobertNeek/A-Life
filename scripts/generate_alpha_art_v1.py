@@ -21,6 +21,7 @@ OUT = ROOT / "crates" / "alife_game_app" / "assets" / "alpha_art_v1"
 SIZE = 128
 SCALE = 2
 CANVAS = SIZE * SCALE
+ART_DIRECTION = "production-alpha-generated-world-atlas-v22-opaque-ground-tiles"
 
 
 def rgba(hex_color: str, alpha: int = 255) -> tuple[int, int, int, int]:
@@ -552,71 +553,89 @@ def rock() -> Image:
 
 
 def tile(base: str, accents: list[str], seed: int, mood: str) -> Image:
-    """Seam-friendly painterly terrain tile.
+    """Seam-friendly production alpha terrain tile.
 
-    Earlier CA44A tiles were circular alpha brush stamps, which looked like
-    obvious repeated blobs once the Player View zoomed out. These tiles fill
-    the whole cell with subtle painted variation so the procedural map reads as
-    a coherent game surface instead of a debug overlay.
+    Ground needs to be actual tile material, not transparent daubs. Every
+    terrain tile is fully opaque and has edge-to-edge texture so generated
+    chunks can be stitched into a continuous world surface.
     """
 
     img = Image(bg=rgba(base, 255))
-    for i, (cx, cy, rx, ry) in enumerate(
-        [
-            (18, 18, 24, 17),
-            (48, 22, 32, 15),
-            (88, 20, 31, 18),
-            (112, 44, 24, 22),
-            (24, 72, 35, 20),
-            (68, 66, 42, 23),
-            (106, 88, 33, 24),
-            (42, 112, 38, 16),
-            (92, 118, 43, 18),
-        ]
-    ):
-        img.ellipse(cx, cy, rx, ry, rgba(accents[i % len(accents)], 42 + (i % 3) * 9))
-    deterministic_dot(img, seed, [rgba(c, 52) for c in accents], 95, 0.35, 1.45)
-    for i in range(14):
-        cx = 7 + ((seed * (i + 19) + i * 31) % 116)
-        cy = 8 + ((seed * (i + 11) + i * 41) % 112)
+    # Low-frequency material washes. These are clipped by the full tile, so
+    # they do not create the black holes that made earlier alpha-mask terrain
+    # look broken.
+    for i in range(18):
+        value = (seed * 1103515245 + i * 2654435761 + 12345) & 0x7FFFFFFF
+        cx = -12 + (value % 152)
+        cy = -12 + ((value >> 8) % 152)
+        rx = 14 + ((value >> 16) % 26)
+        ry = 8 + ((value >> 22) % 22)
+        alpha = 24 + ((value >> 5) % 36)
+        img.ellipse(cx, cy, rx, ry, rgba(accents[(value >> 12) % len(accents)], alpha))
+
+    deterministic_dot(img, seed, [rgba(c, 72) for c in accents], 220, 0.35, 1.95)
+
+    # Fine scratches and grass/stone grain align loosely across tile borders.
+    for i in range(34):
+        cx = (seed * (i + 19) + i * 31) % 128
+        cy = (seed * (i + 11) + i * 41) % 128
         angle = ((seed + i * 31) % 360) * math.pi / 180.0
-        length = 8 + ((seed + i * 13) % 23)
+        length = 5 + ((seed + i * 13) % 21)
         dx = math.cos(angle) * length * 0.5
         dy = math.sin(angle) * length * 0.5
-        img.line(
-            cx - dx,
-            cy - dy,
-            cx + dx,
-            cy + dy,
-            0.48,
-            rgba(accents[i % len(accents)], 30 + (i % 4) * 7),
-        )
+        img.line(cx - dx, cy - dy, cx + dx, cy + dy, 0.55, rgba(accents[i % len(accents)], 34))
     if mood == "grass":
-        for i in range(16):
+        for i in range(34):
             x = 9 + ((seed * (i + 3) + i * 19) % 110)
             y = 10 + ((seed * (i + 7) + i * 29) % 108)
             leaf(img, x, y, (i % 11) * 0.43, 6 + i % 6, 2.4, accents[i % len(accents)], 86)
             if i % 7 == 0:
                 img.ellipse(x + 4, y - 3, 1.8, 1.4, rgba("f4e77d", 118))
+    elif mood == "resource":
+        for i in range(30):
+            x = 8 + ((seed * (i + 5) + i * 23) % 112)
+            y = 8 + ((seed * (i + 9) + i * 31) % 112)
+            leaf(img, x, y, (i % 13) * 0.39, 7 + (i % 8), 3.4, accents[i % len(accents)], 112)
+            if i % 5 == 0:
+                img.ellipse(x - 3, y - 4, 2.0, 1.5, rgba("df5e5a", 128))
     elif mood == "hazard":
-        img.ellipse(66, 65, 45, 34, rgba("9d3d2c", 30))
-        for i in range(4):
+        for i in range(7):
             x = 10 + ((seed * (i + 5) + i * 31) % 105)
             y = 12 + ((seed * (i + 11) + i * 17) % 102)
-            img.polygon([(x, y - 5), (x + 4, y + 6), (x - 4, y + 6)], rgba("dd3b34", 58))
-            img.ellipse(x + 2, y + 3, 7, 3, rgba("ff7844", 24))
+            img.polygon([(x, y - 7), (x + 6, y + 8), (x - 6, y + 8)], rgba("dd3b34", 88))
+            img.ellipse(x + 2, y + 3, 9, 4, rgba("ff7844", 34))
+        for i in range(9):
+            x = 3 + ((seed * (i + 17) + i * 37) % 122)
+            y = 5 + ((seed * (i + 23) + i * 29) % 118)
+            img.line(x - 8, y + 4, x + 10, y - 5, 1.2, rgba("5f231f", 72))
     elif mood == "stone":
-        for i in range(12):
+        for i in range(24):
             x = 8 + ((seed * (i + 13) + i * 23) % 110)
             y = 8 + ((seed * (i + 17) + i * 21) % 110)
-            img.ellipse(x, y, 4 + (i % 5), 2.0 + (i % 3), rgba(accents[i % len(accents)], 68))
-            img.line(x - 5, y - 1, x + 5, y + 1, 0.55, rgba("d6dcc9", 36))
+            img.ellipse(x, y, 5 + (i % 7), 2.0 + (i % 4), rgba(accents[i % len(accents)], 78))
+            img.line(x - 6, y - 1, x + 7, y + 1, 0.6, rgba("d6dcc9", 42))
     elif mood == "soil":
-        for i in range(9):
+        for i in range(24):
             x = 6 + ((seed * (i + 23) + i * 13) % 112)
             y = 8 + ((seed * (i + 19) + i * 27) % 108)
             img.line(x - 8, y, x + 9, y + ((i % 5) - 2), 0.85, rgba(accents[i % len(accents)], 58))
-    img.apply_texture_noise(seed, color_strength=3.0, alpha_strength=0.02)
+    elif mood == "water":
+        for i in range(18):
+            y = 8 + ((seed * (i + 13) + i * 17) % 112)
+            phase = ((seed + i * 19) % 29) - 14
+            img.line(0, y, 40 + phase, y + 3, 0.9, rgba("a7efff", 52))
+            img.line(42 + phase, y + 4, 92 + phase, y - 1, 0.9, rgba("6fd3ef", 48))
+            img.line(94 + phase, y, 128, y + 4, 0.9, rgba("e0fbff", 36))
+        img.ellipse(42, 38, 18, 7, rgba("d9fbff", 30))
+        img.ellipse(90, 92, 22, 8, rgba("b7efff", 26))
+    elif mood == "sand":
+        for i in range(20):
+            x = -8 + ((seed * (i + 31) + i * 17) % 144)
+            y = 6 + ((seed * (i + 29) + i * 21) % 116)
+            img.line(x - 16, y, x + 20, y + ((i % 7) - 3), 0.75, rgba("f2d98c", 54))
+            if i % 4 == 0:
+                img.ellipse(x + 8, y + 4, 2.4, 1.3, rgba("b99045", 52))
+    img.apply_texture_noise(seed, color_strength=8.0, alpha_strength=0.0)
     return img
 
 
@@ -1415,11 +1434,13 @@ ASSETS = [
     ("ambient_light_pool", "ambient-light-pool", "overlay", ambient_light_pool),
     ("entity_shadow", "entity-shadow", "overlay", entity_shadow),
     ("rock_cluster", "rock-obstacle", "sprite", rock),
-    ("terrain_safe_grass", "terrain-safe-grass", "terrain-tile", lambda: tile("6d963b", ["88b84f", "4f7a34", "9dca64", "c6d56b"], 11, "grass")),
-    ("terrain_soil_path", "terrain-soil-path", "terrain-tile", lambda: tile("8a5d33", ["b17c45", "6b472b", "c6924f", "d0a861"], 23, "soil")),
-    ("terrain_resource_grove", "terrain-resource-grove", "terrain-tile", lambda: tile("5ca83f", ["79c953", "3f7f32", "9bdd64", "c4ee7a"], 37, "grass")),
-    ("terrain_hazard_pressure", "terrain-hazard-pressure", "terrain-tile", lambda: tile("b24d38", ["ce6043", "783b31", "e4734c", "f28b5e"], 41, "hazard")),
-    ("terrain_stone_rough", "terrain-stone-rough", "terrain-tile", lambda: tile("7c8170", ["a1a68e", "5d665a", "b9bea2", "d0cfb4"], 53, "stone")),
+    ("terrain_safe_grass", "terrain-safe-grass", "terrain-tile", lambda: tile("6f9a42", ["94bf58", "4f7e35", "b7d76e", "d4df7a"], 11, "grass")),
+    ("terrain_soil_path", "terrain-soil-path", "terrain-tile", lambda: tile("8f6336", ["bc8649", "6d492c", "d2a25a", "e0bb76"], 23, "soil")),
+    ("terrain_resource_grove", "terrain-resource-grove", "terrain-tile", lambda: tile("5aa33f", ["78cb51", "347832", "a3de68", "d0f185"], 37, "resource")),
+    ("terrain_hazard_pressure", "terrain-hazard-pressure", "terrain-tile", lambda: tile("b24d38", ["d26244", "73352f", "ef7752", "f29b65"], 41, "hazard")),
+    ("terrain_stone_rough", "terrain-stone-rough", "terrain-tile", lambda: tile("777e72", ["9fa68f", "556158", "c0c5a9", "d5d1b7"], 53, "stone")),
+    ("terrain_water", "terrain-water", "terrain-tile", lambda: tile("277b91", ["49aac0", "1f5f78", "72d4e8", "b1eff8"], 59, "water")),
+    ("terrain_sand", "terrain-sand", "terrain-tile", lambda: tile("c9a75b", ["efcc77", "a58042", "f5df99", "dcb665"], 61, "sand")),
     ("terrain_edge_blend", "terrain-edge-blend", "overlay", terrain_edge_blend),
     ("world_backdrop_gpu_alpha", "world-backdrop", "backdrop", world_backdrop_gpu_alpha_v15),
     ("prop_grass_tuft", "prop-dressing", "prop", prop_grass),
@@ -1460,7 +1481,7 @@ def main() -> None:
         "schema": "alife.ca44a.alpha_art_manifest.v1",
         "schema_version": 1,
         "pack_id": "alpha-art-v1",
-        "art_direction": "production-alpha-generated-map-v15",
+        "art_direction": ART_DIRECTION,
         "entries": entries,
     }
     (OUT / "alpha_art_manifest.json").write_text(

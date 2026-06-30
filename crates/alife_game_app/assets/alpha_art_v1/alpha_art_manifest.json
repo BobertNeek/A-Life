@@ -2,7 +2,7 @@
   "schema": "alife.ca44a.alpha_art_manifest.v1",
   "schema_version": 1,
   "pack_id": "alpha-art-v1",
-  "art_direction": "production-alpha-generated-world-atlas-v21-distinct-biome-tiles",
+  "art_direction": "production-alpha-generated-world-atlas-v22-opaque-ground-tiles",
   "entries": [
     {
       "id": "creature_idle",
@@ -11,7 +11,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_idle.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 18599
+      "file_size_bytes": 2224
     },
     {
       "id": "creature_hurt",
@@ -20,7 +20,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_hurt.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 16023
+      "file_size_bytes": 2671
     },
     {
       "id": "creature_moving",
@@ -29,7 +29,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_moving.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 18624
+      "file_size_bytes": 1784
     },
     {
       "id": "creature_eat",
@@ -38,7 +38,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_eat.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 18588
+      "file_size_bytes": 2833
     },
     {
       "id": "creature_sleep",
@@ -47,7 +47,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_sleep.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 18105
+      "file_size_bytes": 1486
     },
     {
       "id": "creature_signal",
@@ -56,7 +56,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/creature_signal.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 11770
+      "file_size_bytes": 3188
     },
     {
       "id": "selection_ring",
@@ -65,7 +65,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/selection_ring.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 12165
+      "file_size_bytes": 2928
     },
     {
       "id": "selection_pulse",
@@ -74,7 +74,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/selection_pulse.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 11955
+      "file_size_bytes": 2049
     },
     {
       "id": "food_sprout",
@@ -83,7 +83,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/food_sprout.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 19020
+      "file_size_bytes": 1415
     },
     {
       "id": "food_bloom",
@@ -92,7 +92,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/food_bloom.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 18977
+      "file_size_bytes": 2052
     },
     {
       "id": "hazard_crystal",
@@ -101,7 +101,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/hazard_crystal.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 21112
+      "file_size_bytes": 2387
     },
     {
       "id": "hazard_glow",
@@ -110,7 +110,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/hazard_glow.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 19064
+      "file_size_bytes": 3504
     },
     {
       "id": "ambient_canopy_shadow",
@@ -137,7 +137,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/entity_shadow.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 1475
+      "file_size_bytes": 494
     },
     {
       "id": "rock_cluster",
@@ -146,7 +146,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/rock_cluster.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 20856
+      "file_size_bytes": 1790
     },
     {
       "id": "terrain_safe_grass",
@@ -155,7 +155,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_safe_grass.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 35484
+      "file_size_bytes": 24058
     },
     {
       "id": "terrain_soil_path",
@@ -164,7 +164,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_soil_path.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 35348
+      "file_size_bytes": 22872
     },
     {
       "id": "terrain_resource_grove",
@@ -173,7 +173,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_resource_grove.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 37300
+      "file_size_bytes": 24737
     },
     {
       "id": "terrain_hazard_pressure",
@@ -182,7 +182,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_hazard_pressure.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 34576
+      "file_size_bytes": 23862
     },
     {
       "id": "terrain_stone_rough",
@@ -191,7 +191,25 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_stone_rough.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 36768
+      "file_size_bytes": 21929
+    },
+    {
+      "id": "terrain_water",
+      "role": "terrain-water",
+      "kind": "terrain-tile",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_water.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 24166
+    },
+    {
+      "id": "terrain_sand",
+      "role": "terrain-sand",
+      "kind": "terrain-tile",
+      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_sand.png",
+      "width": 128,
+      "height": 128,
+      "file_size_bytes": 20542
     },
     {
       "id": "terrain_edge_blend",
@@ -218,7 +236,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_grass_tuft.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 17592
+      "file_size_bytes": 2004
     },
     {
       "id": "prop_pebble_cluster",
@@ -227,7 +245,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_pebble_cluster.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 12551
+      "file_size_bytes": 1116
     },
     {
       "id": "prop_warning_shard",
@@ -236,7 +254,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_warning_shard.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 11711
+      "file_size_bytes": 1089
     },
     {
       "id": "prop_leaf_patch",
@@ -245,7 +263,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_leaf_patch.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 17282
+      "file_size_bytes": 1446
     },
     {
       "id": "prop_mushroom_cluster",
@@ -254,7 +272,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/prop_mushroom_cluster.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 22456
+      "file_size_bytes": 1929
     },
     {
       "id": "ui_panel_frame",
@@ -300,24 +318,6 @@
       "width": 128,
       "height": 128,
       "file_size_bytes": 780
-    },
-    {
-      "id": "terrain_water",
-      "role": "terrain-water",
-      "kind": "terrain-tile",
-      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_water.png",
-      "width": 128,
-      "height": 128,
-      "file_size_bytes": 34852
-    },
-    {
-      "id": "terrain_sand",
-      "role": "terrain-sand",
-      "kind": "terrain-tile",
-      "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_sand.png",
-      "width": 128,
-      "height": 128,
-      "file_size_bytes": 31882
     }
   ]
 }
