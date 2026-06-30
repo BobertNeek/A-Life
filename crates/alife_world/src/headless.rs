@@ -322,6 +322,10 @@ impl HeadlessWorld {
             .collect()
     }
 
+    pub fn object_snapshots(&self) -> Vec<WorldObject> {
+        self.objects.values().cloned().collect()
+    }
+
     pub fn organism_entity_ids(&self) -> Vec<(OrganismId, WorldEntityId)> {
         self.objects
             .values()

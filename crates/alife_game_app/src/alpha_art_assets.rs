@@ -37,6 +37,8 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "terrain-resource-grove",
     "terrain-hazard-pressure",
     "terrain-stone-rough",
+    "terrain-water",
+    "terrain-sand",
     "terrain-edge-blend",
     "world-backdrop",
     "prop-dressing",
@@ -47,7 +49,8 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "ui-control-keycap",
 ];
 
-pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-generated-map-v15";
+pub const CA44A_ALPHA_ART_DIRECTION: &str =
+    "production-alpha-generated-world-atlas-v21-distinct-biome-tiles";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {

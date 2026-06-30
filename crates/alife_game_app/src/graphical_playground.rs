@@ -149,7 +149,7 @@ impl GraphicalPlayerViewAcceptanceSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "view_mode={} dev_overlay_hidden={} full_debug_hidden={} event_feed_collapsed={} stable_labels_hidden={} terrain_alpha_max={:.3} internal_spam_hidden={} topology_lines_hidden={} teacher_debug_hidden={}",
+            "view_mode={} dev_overlay_hidden={} full_debug_hidden={} event_feed_collapsed={} stable_labels_hidden={} debug_overlay_alpha_max={:.3} internal_spam_hidden={} topology_lines_hidden={} teacher_debug_hidden={}",
             self.view_mode.label(),
             self.dev_overlay_hidden,
             self.full_debug_hidden,
