@@ -49,8 +49,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "ui-control-keycap",
 ];
 
-pub const CA44A_ALPHA_ART_DIRECTION: &str =
-    "production-alpha-generated-world-atlas-v22-opaque-ground-tiles";
+pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-imagegen-ground-tiles-v33";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {

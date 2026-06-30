@@ -2,7 +2,7 @@
 
 Plan: CA44A
 Branch: codex/CA44A-real-art-assets-and-tick-stability
-Follow-up visual correction branch: codex/procedural-biome-world-scale-slice
+Follow-up visual correction branch: codex/production-procedural-world-visual-fix
 Status: implemented on branch; validation passed
 Next plan: CA44
 
@@ -14,12 +14,20 @@ runtime-generated seeded biome map with active creature chunk windows and fog of
 war. `world-painted-viewport` is retained only for Full Debug/style-reference
 presentation and must not be restored as the default player terrain surface.
 
-The latest visual correction replaces the rejected dark/noisy swatches with a
-new generated v21 terrain/object atlas. The committed Player View assets now
-come from sliced generated PNGs for grass, path, grove, hazard, stone, water,
-sand, creatures, selection, food, hazard crystals, rocks, and props. The runtime
-biome compositor now chooses a dominant alpha-art terrain material per pixel and
-uses procedural region/trail/dressing passes only as subtle presentation detail.
+The latest visual correction replaces the rejected dark/noisy swatches, the
+muddy v25/v30 attempts, the still-insufficient v31 single-atlas attempt, and the
+v32 stamped-blob runtime result with new image-generated v33 ground tiles and
+sprites. The committed Player View assets now come from sliced generated PNGs
+for grass, path, grove ground, hazard-pressure ground, stone, water, sand,
+creatures, selection, food, hazard crystals, rocks, and props. The importer is
+tracked at `scripts/import_alpha_art_imagegen_atlas.py` so the split terrain and
+sprite sheets can be re-sliced repeatably, including terrain-only refreshes.
+The runtime biome compositor now samples generated tiles as fine material
+texture over a continuous seeded biome field, uses biome regions/trails for
+large-scale composition, smooths fog-of-war reveal radially around active
+creature chunks, avoids hard square chunk masks in default Player View, and
+uses readable map-scale creature/object sprites instead of close-up stickers or
+debug-map specks.
 
 ## Reproduction Summary
 
