@@ -66,6 +66,8 @@ pub enum ProceduralBiomeKind {
     ResourceGrove,
     HazardPressure,
     StoneRough,
+    WaterLowland,
+    SandBank,
 }
 
 impl ProceduralBiomeKind {
@@ -76,6 +78,8 @@ impl ProceduralBiomeKind {
             Self::ResourceGrove => "resource-grove",
             Self::HazardPressure => "hazard-pressure",
             Self::StoneRough => "stone-rough",
+            Self::WaterLowland => "water-lowland",
+            Self::SandBank => "sand-bank",
         }
     }
 }
@@ -89,6 +93,8 @@ pub enum ProceduralTerrainMaterial {
     ResourceGrove,
     HazardPressure,
     StoneRough,
+    Water,
+    Sand,
 }
 
 impl ProceduralTerrainMaterial {
@@ -99,6 +105,8 @@ impl ProceduralTerrainMaterial {
             Self::ResourceGrove => "resource-grove",
             Self::HazardPressure => "hazard-pressure",
             Self::StoneRough => "stone-dressing",
+            Self::Water => "water",
+            Self::Sand => "sand",
         }
     }
 }
@@ -850,10 +858,19 @@ pub fn sample_procedural_terrain_tile(
         let dz = tile.z - 4;
         dx * dx + dz * dz <= 7 * 7 || ((-15..=-6).contains(&tile.x) && (0..=10).contains(&tile.z))
     };
+    let water_channel_metric = tile.z + floor_div(tile.x, 5) + 18;
+    let local_water_lowland = water_channel_metric.abs() <= 2
+        || ((-34..=-18).contains(&tile.x) && (-27..=-16).contains(&tile.z));
+    let local_sand_bank = water_channel_metric.abs() <= 4
+        || ((-38..=-14).contains(&tile.x) && (-30..=-12).contains(&tile.z));
     let hazard_basin = (18..=34).contains(&tile.x) && (4..=22).contains(&tile.z);
     let resource_glade = (8..=28).contains(&tile.x) && (-24..=-7).contains(&tile.z);
     let stone_ridge = (-28..=-10).contains(&tile.x) && (6..=24).contains(&tile.z);
-    let biome = if local_hazard_pressure || hazard_basin {
+    let biome = if local_water_lowland {
+        ProceduralBiomeKind::WaterLowland
+    } else if local_sand_bank {
+        ProceduralBiomeKind::SandBank
+    } else if local_hazard_pressure || hazard_basin {
         ProceduralBiomeKind::HazardPressure
     } else if local_resource_grove || resource_glade {
         ProceduralBiomeKind::ResourceGrove
@@ -863,40 +880,39 @@ pub fn sample_procedural_terrain_tile(
         ProceduralBiomeKind::SafeGrass
     } else {
         match chunk_hash % 100 {
-            0..=8 => ProceduralBiomeKind::HazardPressure,
-            9..=24 => ProceduralBiomeKind::ResourceGrove,
-            25..=35 => ProceduralBiomeKind::StoneRough,
-            36..=52 => ProceduralBiomeKind::SoilPath,
+            0..=5 => ProceduralBiomeKind::WaterLowland,
+            6..=13 => ProceduralBiomeKind::SandBank,
+            14..=21 => ProceduralBiomeKind::HazardPressure,
+            22..=36 => ProceduralBiomeKind::ResourceGrove,
+            37..=48 => ProceduralBiomeKind::StoneRough,
+            49..=63 => ProceduralBiomeKind::SoilPath,
             _ => ProceduralBiomeKind::SafeGrass,
         }
     };
-    let safe_clearing = local_hash.is_multiple_of(17);
-    let material = if local_hazard_pressure && local_hash % 100 < 54 {
+    let material = if local_water_lowland && local_hash % 100 < 82 {
+        ProceduralTerrainMaterial::Water
+    } else if local_sand_bank && local_hash % 100 < 72 {
+        ProceduralTerrainMaterial::Sand
+    } else if local_hazard_pressure {
         ProceduralTerrainMaterial::HazardPressure
-    } else if local_resource_grove && local_hash % 100 < 76 {
+    } else if local_resource_grove {
         ProceduralTerrainMaterial::ResourceGrove
-    } else if local_stone_rough && local_hash % 100 < 72 {
+    } else if local_stone_rough {
         ProceduralTerrainMaterial::StoneRough
-    } else if hazard_basin && local_hash % 100 < 50 {
+    } else if hazard_basin {
         ProceduralTerrainMaterial::HazardPressure
-    } else if resource_glade && local_hash % 100 < 72 {
+    } else if resource_glade {
         ProceduralTerrainMaterial::ResourceGrove
-    } else if stone_ridge && local_hash % 100 < 68 {
+    } else if stone_ridge {
         ProceduralTerrainMaterial::StoneRough
     } else if origin_nursery && path_band {
         ProceduralTerrainMaterial::NeutralSoil
-    } else if origin_nursery && local_hash % 37 < 3 {
-        ProceduralTerrainMaterial::ResourceGrove
-    } else if origin_nursery || safe_clearing {
+    } else if origin_nursery {
         ProceduralTerrainMaterial::SafeGrass
     } else if path_band && biome != ProceduralBiomeKind::HazardPressure {
         ProceduralTerrainMaterial::NeutralSoil
-    } else if biome == ProceduralBiomeKind::HazardPressure || local_hash % 157 < 3 {
-        ProceduralTerrainMaterial::HazardPressure
-    } else if biome == ProceduralBiomeKind::ResourceGrove || local_hash % 101 < 5 {
-        ProceduralTerrainMaterial::ResourceGrove
-    } else if biome == ProceduralBiomeKind::StoneRough || local_hash % 113 < 4 {
-        ProceduralTerrainMaterial::StoneRough
+    } else if let Some(blob_material) = procedural_blob_material(config, tile) {
+        blob_material
     } else if biome == ProceduralBiomeKind::SoilPath || path_band {
         ProceduralTerrainMaterial::NeutralSoil
     } else {
@@ -908,6 +924,8 @@ pub fn sample_procedural_terrain_tile(
         ProceduralTerrainMaterial::ResourceGrove => (0.82, 0.05, 0.34, 0.26),
         ProceduralTerrainMaterial::HazardPressure => (0.08, 0.86, 0.60, 0.52),
         ProceduralTerrainMaterial::StoneRough => (0.14, 0.16, 0.78, 0.64),
+        ProceduralTerrainMaterial::Water => (0.12, 0.10, 0.24, 0.44),
+        ProceduralTerrainMaterial::Sand => (0.22, 0.07, 0.38, 0.30),
     };
     ProceduralTerrainSample {
         tile,
@@ -920,6 +938,46 @@ pub fn sample_procedural_terrain_tile(
         traversal_cost,
     }
     .validate()
+}
+
+fn procedural_blob_material(
+    config: ProceduralWorldConfig,
+    tile: ProceduralTileCoord,
+) -> Option<ProceduralTerrainMaterial> {
+    let cell_size = 18;
+    let cell_x = floor_div(tile.x, cell_size);
+    let cell_z = floor_div(tile.z, cell_size);
+    let mut best: Option<(i32, ProceduralTerrainMaterial)> = None;
+
+    for cx in cell_x - 1..=cell_x + 1 {
+        for cz in cell_z - 1..=cell_z + 1 {
+            let hash = seeded_hash(config.seed ^ 0x71E5_AA55_5EED_CAFE, cx, cz);
+            let material = match hash % 100 {
+                0..=7 => ProceduralTerrainMaterial::HazardPressure,
+                8..=19 => ProceduralTerrainMaterial::ResourceGrove,
+                20..=30 => ProceduralTerrainMaterial::StoneRough,
+                31..=37 => ProceduralTerrainMaterial::NeutralSoil,
+                38..=41 => ProceduralTerrainMaterial::Sand,
+                _ => continue,
+            };
+            let offset_x = 3 + ((hash >> 8) % 12) as i32;
+            let offset_z = 3 + ((hash >> 16) % 12) as i32;
+            let center_x = cx * cell_size + offset_x;
+            let center_z = cz * cell_size + offset_z;
+            let radius = 4 + ((hash >> 24) % 5) as i32;
+            let dx = tile.x - center_x;
+            let dz = tile.z - center_z;
+            let distance_sq = dx * dx + dz * dz;
+            if distance_sq <= radius * radius {
+                match best {
+                    Some((best_distance, _)) if best_distance <= distance_sq => {}
+                    _ => best = Some((distance_sq, material)),
+                }
+            }
+        }
+    }
+
+    best.map(|(_, material)| material)
 }
 
 pub fn procedural_chunk_summary(
@@ -1272,6 +1330,12 @@ fn procedural_content_kind_for_sample(
             Some(ProceduralWorldContentKind::Obstacle)
         }
         ProceduralTerrainMaterial::StoneRough if hash.is_multiple_of(2) => {
+            Some(ProceduralWorldContentKind::DressingProp)
+        }
+        ProceduralTerrainMaterial::Water if hash.is_multiple_of(7) => {
+            Some(ProceduralWorldContentKind::DressingProp)
+        }
+        ProceduralTerrainMaterial::Sand if hash.is_multiple_of(3) => {
             Some(ProceduralWorldContentKind::DressingProp)
         }
         ProceduralTerrainMaterial::SafeGrass | ProceduralTerrainMaterial::NeutralSoil

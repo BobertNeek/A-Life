@@ -233,6 +233,10 @@ impl LiveBrainLoop {
         self.harness.world().stable_signature()
     }
 
+    pub fn world_object_snapshots(&self) -> Vec<alife_world::WorldObject> {
+        self.harness.world().object_snapshots()
+    }
+
     pub fn ecology_metrics(&self) -> EcologyMetrics {
         self.harness.world().ecology_metrics()
     }

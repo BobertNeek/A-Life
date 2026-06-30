@@ -1,7 +1,7 @@
 //! Feature-gated Bevy playground shell split during R13 remediation.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -21,13 +21,14 @@ use alife_world::{
 use bevy::{
     app::AppExit,
     asset::{AssetPlugin, Assets, Handle, RenderAssetUsages},
+    ecs::schedule::IntoScheduleConfigs,
     image::{CompressedImageFormats, Image, ImageSampler, ImageType},
     prelude::{
         default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Commands,
         Component, DefaultPlugins, Entity, GlobalTransform, ImageNode, KeyCode, MessageWriter,
-        MinimalPlugins, MouseButton, Name, Node, NonSendMut, PluginGroup, PositionType, Quat, Res,
-        ResMut, Resource, Sprite, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val,
-        Vec2, Vec3, Visibility, With, Without,
+        MinimalPlugins, MouseButton, Name, Node, NonSend, NonSendMut, PluginGroup, PositionType,
+        Projection, Quat, Res, ResMut, Resource, Sprite, Text, Text2d, TextColor, TextFont, Time,
+        Transform, Update, Val, Vec2, Vec3, Visibility, With, Without,
     },
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
@@ -105,6 +106,8 @@ pub struct GraphicalAlphaArtHandles {
     pub terrain_resource_grove: Handle<Image>,
     pub terrain_hazard_pressure: Handle<Image>,
     pub terrain_stone_rough: Handle<Image>,
+    pub terrain_water: Handle<Image>,
+    pub terrain_sand: Handle<Image>,
     pub terrain_edge_blend: Handle<Image>,
     pub world_backdrop: Handle<Image>,
     pub prop_grass_tuft: Handle<Image>,
@@ -227,6 +230,16 @@ impl GraphicalAlphaArtHandles {
                 include_bytes!("../assets/alpha_art_v1/terrain_stone_rough.png"),
                 "terrain_stone_rough.png",
             )?,
+            terrain_water: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/terrain_water.png"),
+                "terrain_water.png",
+            )?,
+            terrain_sand: ca44a_register_embedded_alpha_art(
+                images,
+                include_bytes!("../assets/alpha_art_v1/terrain_sand.png"),
+                "terrain_sand.png",
+            )?,
             terrain_edge_blend: ca44a_register_embedded_alpha_art(
                 images,
                 include_bytes!("../assets/alpha_art_v1/terrain_edge_blend.png"),
@@ -313,6 +326,8 @@ impl GraphicalAlphaArtHandles {
             terrain_resource_grove: Handle::default(),
             terrain_hazard_pressure: Handle::default(),
             terrain_stone_rough: Handle::default(),
+            terrain_water: Handle::default(),
+            terrain_sand: Handle::default(),
             terrain_edge_blend: Handle::default(),
             world_backdrop: Handle::default(),
             prop_grass_tuft: Handle::default(),
@@ -706,9 +721,15 @@ pub struct GraphicalRuntimeProceduralBiomeMap {
     pub active_chunk_count: usize,
     pub dark_gap_pixels: u32,
     pub generated_from_procedural_sampler: bool,
+    pub generated_from_alpha_art_tiles: bool,
+    pub terrain_tile_source_count: u32,
     pub fog_of_war_applied: bool,
     pub primary_player_surface: bool,
     pub display_only: bool,
+    pub active_chunk_signature: u64,
+    pub refresh_count: u64,
+    pub last_creature_anchor_count: usize,
+    pub last_materialized_tile_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -833,8 +854,7 @@ pub struct GraphicalAdvancedGameplayResource {
 
 const GRAPHICAL_WORLD_SCALE: f32 = 36.0;
 const CA37_TERRAIN_TILE_PIXEL_SIZE: f32 = GRAPHICAL_WORLD_SCALE;
-const CA37_TERRAIN_TILE_JITTER_PIXELS: f32 = 2.0;
-pub(crate) const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 0.34;
+pub(crate) const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 0.82;
 const CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES: i32 = 128;
 const CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES: i32 = 72;
 const CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE: u32 = 20;
@@ -1020,48 +1040,8 @@ pub fn build_graphical_playground_app_shell(
         .insert_resource(GraphicalSaveLoadMenuResource { session: save_load })
         .insert_resource(GraphicalAdvancedGameplayResource {
             summary: advanced.clone(),
-        })
-        .add_systems(
-            Update,
-            (
-                handle_graphical_runtime_input,
-                handle_graphical_camera_selection_input,
-                handle_graphical_population_cycle_input,
-                handle_graphical_mouse_selection,
-                advance_graphical_runtime_loop,
-                update_graphical_camera_transform,
-                update_graphical_selection_ring,
-                update_graphical_runtime_overlay,
-                update_graphical_inspector_overlay,
-                update_graphical_gpu_visual_cues,
-                update_graphical_feedback_pulses,
-                update_graphical_intent_feedback,
-                update_graphical_procedural_terrain_field,
-                update_graphical_feedback_overlay,
-                update_graphical_population_overlay,
-                update_graphical_ecology_overlay,
-                update_graphical_lifecycle_overlay,
-                update_graphical_topology_overlay,
-                update_graphical_memory_journal_overlay,
-                update_graphical_onboarding_tutorial_overlay,
-            ),
-        )
-        .add_systems(
-            Update,
-            (
-                update_graphical_neural_activity_profiler_overlay,
-                update_graphical_boundary_footer_overlay,
-                update_graphical_save_load_menu_overlay,
-            ),
-        )
-        .add_systems(Update, update_graphical_advanced_gameplay_overlay)
-        .add_systems(
-            Update,
-            (
-                handle_graphical_school_toggle_input,
-                update_graphical_school_overlay,
-            ),
-        );
+        });
+    add_graphical_runtime_update_systems(&mut app);
     if let Some(summary) = population_summary {
         app.insert_resource(GraphicalPopulationResource { summary });
     }
@@ -1092,6 +1072,74 @@ pub fn build_graphical_playground_app_shell(
     Ok((app, summary))
 }
 
+fn add_graphical_runtime_update_systems(app: &mut App) {
+    app.add_systems(
+        Update,
+        (
+            handle_graphical_runtime_input,
+            handle_graphical_camera_selection_input,
+            handle_graphical_population_cycle_input,
+            handle_graphical_mouse_selection,
+            advance_graphical_runtime_loop,
+            update_graphical_procedural_terrain_field,
+            update_graphical_runtime_procedural_biome_map,
+            update_graphical_camera_transform,
+            update_graphical_selection_ring,
+            update_graphical_gpu_visual_cues,
+            update_graphical_feedback_pulses,
+            update_graphical_intent_feedback,
+        )
+            .chain(),
+    )
+    .add_systems(
+        Update,
+        (
+            update_graphical_runtime_overlay,
+            update_graphical_inspector_overlay,
+            update_graphical_feedback_overlay,
+            update_graphical_population_overlay,
+            update_graphical_ecology_overlay,
+            update_graphical_lifecycle_overlay,
+            update_graphical_topology_overlay,
+            update_graphical_memory_journal_overlay,
+            update_graphical_onboarding_tutorial_overlay,
+        ),
+    )
+    .add_systems(
+        Update,
+        (
+            update_graphical_neural_activity_profiler_overlay,
+            update_graphical_boundary_footer_overlay,
+            update_graphical_save_load_menu_overlay,
+        ),
+    )
+    .add_systems(Update, update_graphical_advanced_gameplay_overlay)
+    .add_systems(
+        Update,
+        (
+            handle_graphical_school_toggle_input,
+            update_graphical_school_overlay,
+        ),
+    );
+}
+
+fn add_graphical_runtime_core_update_systems(app: &mut App) {
+    app.add_systems(
+        Update,
+        (
+            advance_graphical_runtime_loop,
+            update_graphical_procedural_terrain_field,
+            update_graphical_runtime_procedural_biome_map,
+            update_graphical_camera_transform,
+            update_graphical_selection_ring,
+            update_graphical_gpu_visual_cues,
+            update_graphical_feedback_pulses,
+            update_graphical_intent_feedback,
+        )
+            .chain(),
+    );
+}
+
 fn ca37_graphical_default_camera_state(
     inspector: &CreatureInspectorSnapshot,
     world_art: Option<&Ca37WorldArtStyleSummary>,
@@ -1100,7 +1148,7 @@ fn ca37_graphical_default_camera_state(
         .map(|summary| summary.local_viewport_is_smaller_than_map)
         .unwrap_or(false)
     {
-        let mut state = CameraNavigationState::top_down_default();
+        let mut state = inspector.camera;
         state.zoom = CA37_EXPLORATION_CAMERA_ZOOM;
         state.validate()?;
         return Ok(state);
@@ -1147,6 +1195,91 @@ pub fn build_graphical_playground_preview_app_shell(
     if let Some(summary) = animation_summary {
         app.insert_resource(GraphicalCreatureAnimationResource { summary });
     }
+    Ok((app, summary))
+}
+
+pub fn build_graphical_playground_runtime_preview_app_shell(
+    launch: &GraphicalPlaygroundLaunchConfig,
+) -> Result<(App, GraphicalPlaygroundLaunchSummary), GameAppShellError> {
+    let startup = run_headless_app_shell_smoke(&launch.app_launch)?;
+    let summary = crate::validate_graphical_playground_launch(launch)?;
+    let presentation = load_visible_world_from_p34_save(&launch.app_launch)?;
+    crate::compare_visible_world_to_headless(&presentation)?;
+    let population_summary = ca18_graphical_population_summary(&presentation).ok();
+    let ecology_summary = ca19_graphical_ecology_summary(&launch.app_launch).ok();
+    let world_art_summary = ca37_world_art_style_summary(&launch.app_launch).ok();
+    let animation_summary = crate::ca38_creature_animation_summary().ok();
+    let lifecycle_summary = ca20_graphical_lifecycle_summary().ok();
+    let school_summary = crate::run_graphical_school_mode_smoke()?;
+    let mut app = build_minimal_bevy_app_shell(startup);
+    app.insert_resource(GraphicalAlphaArtHandles::unloaded_for_validation());
+    app.insert_resource(GraphicalPlaygroundSceneResource {
+        summary: summary.clone(),
+    });
+    app.insert_resource(GraphicalViewModeResource {
+        mode: summary.view_mode,
+    });
+    spawn_graphical_playground_scene(
+        &mut app,
+        &presentation,
+        &summary,
+        ecology_summary.as_ref(),
+        world_art_summary.as_ref(),
+        Some(&school_summary),
+    )?;
+    let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
+    let feedback = crate::run_feedback_polish_smoke(&launch.app_launch)?;
+    let save_load = crate::GraphicalSaveLoadMenuSession::from_launch(&launch.app_launch)?;
+    let advanced = run_advanced_gameplay_ux_smoke()?;
+    let local_entity =
+        inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
+    let (controls, live_loop, gpu_telemetry) = graphical_runtime_resources(launch)?;
+    let camera_state = ca37_graphical_default_camera_state(&inspector, world_art_summary.as_ref())?;
+    app.insert_resource(controls)
+        .insert_resource(gpu_telemetry)
+        .insert_non_send_resource(live_loop)
+        .insert_resource(GraphicalVisibleWorldPresentationResource {
+            presentation: presentation.clone(),
+        })
+        .insert_resource(GraphicalCreatureAnimationResource {
+            summary: animation_summary
+                .clone()
+                .unwrap_or_else(|| crate::ca38_creature_animation_summary().unwrap()),
+        })
+        .insert_resource(CameraNavigationResource {
+            state: camera_state,
+        })
+        .insert_resource(SelectionResource {
+            stable_id: inspector.selection.stable_id,
+            local_entity,
+        })
+        .insert_resource(CreatureInspectorResource {
+            snapshot: inspector,
+        })
+        .insert_resource(GraphicalFeedbackCueResource { summary: feedback })
+        .insert_resource(GraphicalSaveLoadMenuResource { session: save_load })
+        .insert_resource(GraphicalAdvancedGameplayResource {
+            summary: advanced.clone(),
+        });
+    if let Some(summary) = population_summary {
+        app.insert_resource(GraphicalPopulationResource { summary });
+    }
+    if let Some(summary) = ecology_summary {
+        app.insert_resource(GraphicalEcologyResource { summary });
+    }
+    if let Some(summary) = world_art_summary {
+        app.insert_resource(GraphicalWorldArtStyleResource { summary });
+    }
+    if let Some(summary) = animation_summary {
+        app.insert_resource(GraphicalCreatureAnimationResource { summary });
+    }
+    if let Some(summary) = lifecycle_summary {
+        app.insert_resource(GraphicalLifecycleResource { summary });
+    }
+    app.insert_resource(GraphicalSchoolResource {
+        summary: school_summary,
+    });
+    add_graphical_runtime_core_update_systems(&mut app);
     Ok((app, summary))
 }
 
@@ -2082,7 +2215,9 @@ fn spawn_ca37_world_art_terrain_canvas(
     if view_mode == GraphicalPlaygroundViewMode::Player {
         ca44a_spawn_runtime_procedural_biome_map_app(app, summary, &field);
     }
-    for (center_x, center_z, anchor) in ca44a_initial_procedural_terrain_centers(&activation) {
+    for (center_x, center_z, anchor) in
+        ca44a_initial_procedural_terrain_centers(&activation, field.chunk_tile_size)
+    {
         ca44a_materialize_terrain_chunk_app(
             app, summary, &mut field, alpha_art, view_mode, center_x, center_z, anchor,
         );
@@ -2149,7 +2284,7 @@ fn ca44a_spawn_runtime_procedural_biome_map_app(
         Name::new("A-Life runtime procedural biome map"),
         Sprite {
             image: handle,
-            color: Color::srgba(1.0, 1.0, 1.0, 1.0),
+            color: Color::WHITE,
             custom_size: Some(Vec2::new(
                 CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as f32 * GRAPHICAL_WORLD_SCALE,
                 CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as f32 * GRAPHICAL_WORLD_SCALE,
@@ -2174,15 +2309,75 @@ fn ca44a_spawn_runtime_procedural_biome_map_app(
             active_chunk_count: field.active_world_chunks.len(),
             dark_gap_pixels: metrics.dark_gap_pixels,
             generated_from_procedural_sampler: true,
+            generated_from_alpha_art_tiles: metrics.alpha_art_tile_pixels > 0,
+            terrain_tile_source_count: metrics.terrain_tile_source_count,
             fog_of_war_applied: metrics.fogged_pixels > 0,
             primary_player_surface: true,
             display_only: true,
+            active_chunk_signature: ca44a_active_chunk_signature(field),
+            refresh_count: 0,
+            last_creature_anchor_count: field.creature_anchor_count,
+            last_materialized_tile_count: field.materialized_tiles.len(),
         },
         GraphicalProductionArtLayer {
             role: "runtime-procedural-biome-map",
             display_only: true,
         },
     ));
+}
+
+fn ca44a_active_chunk_signature(field: &GraphicalProceduralTerrainFieldResource) -> u64 {
+    let mut hash = field.seed.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        ^ (field.creature_anchor_count as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    for (chunk_x, chunk_z) in &field.active_world_chunks {
+        let x = (*chunk_x as i64 as u64).wrapping_mul(0x94D0_49BB_1331_11EB);
+        let z = (*chunk_z as i64 as u64).wrapping_mul(0xD6E8_FEB8_6659_FD93);
+        hash ^= x.rotate_left(13) ^ z.rotate_right(7);
+        hash = hash.rotate_left(17).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    }
+    hash
+}
+
+fn update_graphical_runtime_procedural_biome_map(
+    field: Option<Res<GraphicalProceduralTerrainFieldResource>>,
+    mut images: ResMut<Assets<Image>>,
+    mut biome_maps: bevy::prelude::Query<(&mut GraphicalRuntimeProceduralBiomeMap, &Sprite)>,
+) {
+    let Some(field) = field else {
+        return;
+    };
+    let signature = ca44a_active_chunk_signature(&field);
+    for (mut biome_map, sprite) in &mut biome_maps {
+        if biome_map.active_chunk_signature == signature
+            && biome_map.last_creature_anchor_count == field.creature_anchor_count
+        {
+            continue;
+        }
+        let (image, metrics) = ca44a_generate_runtime_procedural_biome_map(field.seed, &field);
+        let texture_width_px = image.texture_descriptor.size.width;
+        let texture_height_px = image.texture_descriptor.size.height;
+        if let Some(existing) = images.get_mut(&sprite.image) {
+            *existing = image;
+        } else {
+            continue;
+        }
+        biome_map.texture_width_px = texture_width_px;
+        biome_map.texture_height_px = texture_height_px;
+        biome_map.path_pixels = metrics.path_pixels;
+        biome_map.resource_detail_pixels = metrics.resource_detail_pixels;
+        biome_map.hazard_detail_pixels = metrics.hazard_detail_pixels;
+        biome_map.stone_detail_pixels = metrics.stone_detail_pixels;
+        biome_map.fogged_pixels = metrics.fogged_pixels;
+        biome_map.active_chunk_count = field.active_world_chunks.len();
+        biome_map.dark_gap_pixels = metrics.dark_gap_pixels;
+        biome_map.generated_from_alpha_art_tiles = metrics.alpha_art_tile_pixels > 0;
+        biome_map.terrain_tile_source_count = metrics.terrain_tile_source_count;
+        biome_map.fog_of_war_applied = metrics.fogged_pixels > 0;
+        biome_map.active_chunk_signature = signature;
+        biome_map.refresh_count = biome_map.refresh_count.saturating_add(1);
+        biome_map.last_creature_anchor_count = field.creature_anchor_count;
+        biome_map.last_materialized_tile_count = field.materialized_tiles.len();
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -2193,12 +2388,111 @@ struct RuntimeProceduralBiomeMapMetrics {
     stone_detail_pixels: u32,
     fogged_pixels: u32,
     dark_gap_pixels: u32,
+    alpha_art_tile_pixels: u32,
+    terrain_tile_source_count: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
 struct RuntimeBiomeBasePixel {
     rgb: [u8; 3],
     is_path: bool,
+}
+
+#[derive(Debug, Clone)]
+struct RuntimeBiomeTileImage {
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Debug, Clone)]
+struct RuntimeBiomeTileSet {
+    safe_grass: RuntimeBiomeTileImage,
+    soil_path: RuntimeBiomeTileImage,
+    resource_grove: RuntimeBiomeTileImage,
+    hazard_pressure: RuntimeBiomeTileImage,
+    stone_rough: RuntimeBiomeTileImage,
+    water: RuntimeBiomeTileImage,
+    sand: RuntimeBiomeTileImage,
+}
+
+impl RuntimeBiomeTileSet {
+    fn source_count(&self) -> u32 {
+        7
+    }
+
+    fn for_material(&self, material_id: &str) -> &RuntimeBiomeTileImage {
+        match material_id {
+            "neutral-soil" => &self.soil_path,
+            "resource-grove" => &self.resource_grove,
+            "hazard-pressure" => &self.hazard_pressure,
+            "stone-dressing" => &self.stone_rough,
+            "water" => &self.water,
+            "sand" => &self.sand,
+            _ => &self.safe_grass,
+        }
+    }
+}
+
+fn ca44a_runtime_biome_tile_set() -> RuntimeBiomeTileSet {
+    RuntimeBiomeTileSet {
+        safe_grass: ca44a_decode_runtime_biome_tile(
+            include_bytes!("../assets/alpha_art_v1/terrain_safe_grass.png"),
+            "terrain_safe_grass.png",
+        ),
+        soil_path: ca44a_decode_runtime_biome_tile(
+            include_bytes!("../assets/alpha_art_v1/terrain_soil_path.png"),
+            "terrain_soil_path.png",
+        ),
+        resource_grove: ca44a_decode_runtime_biome_tile(
+            include_bytes!("../assets/alpha_art_v1/terrain_resource_grove.png"),
+            "terrain_resource_grove.png",
+        ),
+        hazard_pressure: ca44a_decode_runtime_biome_tile(
+            include_bytes!("../assets/alpha_art_v1/terrain_hazard_pressure.png"),
+            "terrain_hazard_pressure.png",
+        ),
+        stone_rough: ca44a_decode_runtime_biome_tile(
+            include_bytes!("../assets/alpha_art_v1/terrain_stone_rough.png"),
+            "terrain_stone_rough.png",
+        ),
+        water: ca44a_decode_runtime_biome_tile(
+            include_bytes!("../assets/alpha_art_v1/terrain_water.png"),
+            "terrain_water.png",
+        ),
+        sand: ca44a_decode_runtime_biome_tile(
+            include_bytes!("../assets/alpha_art_v1/terrain_sand.png"),
+            "terrain_sand.png",
+        ),
+    }
+}
+
+fn ca44a_decode_runtime_biome_tile(bytes: &[u8], name: &'static str) -> RuntimeBiomeTileImage {
+    let mut image = Image::from_buffer(
+        bytes,
+        ImageType::Extension("png"),
+        CompressedImageFormats::NONE,
+        true,
+        ImageSampler::linear(),
+        RenderAssetUsages::default(),
+    )
+    .unwrap_or_else(|_| panic!("failed to decode committed alpha terrain tile {name}"));
+    let size = image.texture_descriptor.size;
+    let data = image
+        .data
+        .take()
+        .unwrap_or_else(|| panic!("decoded alpha terrain tile {name} had no pixel data"));
+    let expected = size.width as usize * size.height as usize * 4;
+    assert!(
+        data.len() >= expected,
+        "decoded alpha terrain tile {name} has {} bytes, expected at least {expected}",
+        data.len()
+    );
+    RuntimeBiomeTileImage {
+        data,
+        width: size.width,
+        height: size.height,
+    }
 }
 
 fn ca44a_generate_runtime_procedural_biome_map(
@@ -2211,6 +2505,8 @@ fn ca44a_generate_runtime_procedural_biome_map(
         (CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as u32) * CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE;
     let mut data = Vec::with_capacity((width_px * height_px * 4) as usize);
     let mut metrics = RuntimeProceduralBiomeMapMetrics::default();
+    let terrain_tiles = ca44a_runtime_biome_tile_set();
+    metrics.terrain_tile_source_count = terrain_tiles.source_count();
     let half_width_tiles = CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES / 2;
     let half_height_tiles = CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES / 2;
     for y in 0..height_px {
@@ -2226,9 +2522,14 @@ fn ca44a_generate_runtime_procedural_biome_map(
                 / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as f32;
             let world_x = tile_x as f32 + local_x - 0.5;
             let world_z = tile_z as f32 + (1.0 - local_y) - 0.5;
-            let mut pixel = ca44a_runtime_biome_base_pixel(seed, world_x, world_z, x, y);
+            let mut pixel =
+                ca44a_runtime_biome_tile_pixel(seed, &terrain_tiles, world_x, world_z, x, y);
+            metrics.alpha_art_tile_pixels += 1;
             if ca44a_apply_runtime_fog_of_war(field, world_x, world_z, &mut pixel) {
                 metrics.fogged_pixels += 1;
+            }
+            if u16::from(pixel.rgb[0]) + u16::from(pixel.rgb[1]) + u16::from(pixel.rgb[2]) < 92 {
+                pixel.rgb = ca44a_blend_rgb_u8(pixel.rgb, [78, 86, 68], 0.68);
             }
             if pixel.is_path {
                 metrics.path_pixels += 1;
@@ -2240,6 +2541,7 @@ fn ca44a_generate_runtime_procedural_biome_map(
             data.extend_from_slice(&[r, g, b, 255]);
         }
     }
+    ca44a_paint_runtime_biome_regions(seed, field, width_px, height_px, &mut data);
     ca44a_paint_runtime_biome_trails(seed, field, width_px, height_px, &mut data, &mut metrics);
     ca44a_paint_runtime_biome_dressing(seed, field, width_px, height_px, &mut data, &mut metrics);
     let mut image = Image::new(
@@ -2257,6 +2559,106 @@ fn ca44a_generate_runtime_procedural_biome_map(
     (image, metrics)
 }
 
+fn ca44a_runtime_biome_tile_pixel(
+    seed: u64,
+    terrain_tiles: &RuntimeBiomeTileSet,
+    world_x: f32,
+    world_z: f32,
+    pixel_x: u32,
+    pixel_y: u32,
+) -> RuntimeBiomeBasePixel {
+    let tile_x = world_x.floor() as i32;
+    let tile_z = world_z.floor() as i32;
+    let local_x = (world_x - tile_x as f32).rem_euclid(1.0);
+    let local_y = (world_z - tile_z as f32).rem_euclid(1.0);
+
+    let soil = ca44a_runtime_soil_weight(world_x, world_z);
+    let resource = ca44a_runtime_resource_weight(world_x, world_z);
+    let hazard = ca44a_runtime_hazard_weight(world_x, world_z);
+    let stone = ca44a_runtime_stone_weight(world_x, world_z);
+    let water = ca44a_runtime_water_weight(world_x, world_z);
+    let sand = ca44a_runtime_sand_weight(world_x, world_z);
+    let pressure = soil
+        .max(resource)
+        .max(hazard)
+        .max(stone)
+        .max(water)
+        .max(sand);
+    let hazard_gate = (1.0 - hazard * 1.65).clamp(0.0, 1.0);
+    let stone_gate = (1.0 - stone * 1.18).clamp(0.0, 1.0);
+    let water_gate = (1.0 - water * 1.25).clamp(0.0, 1.0);
+    let safe = ((0.48 - pressure * 0.38) * hazard_gate * stone_gate * water_gate).clamp(0.0, 0.52);
+
+    let sources = [
+        ("safe-grass", safe),
+        ("neutral-soil", soil * 1.35 * hazard_gate * water_gate),
+        ("resource-grove", resource * 1.52 * hazard_gate * stone_gate),
+        ("hazard-pressure", hazard * (2.15 + hazard * 0.75)),
+        ("stone-dressing", stone * 1.65 * water_gate),
+        ("water", water * 1.72),
+        ("sand", sand * 1.28 * (1.0 - hazard * 0.45).clamp(0.25, 1.0)),
+    ];
+    let (dominant_material_id, dominant_weight) = sources
+        .iter()
+        .copied()
+        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+        .unwrap_or(("safe-grass", 0.0));
+    let dominant_material_id = if dominant_weight > 0.01 {
+        dominant_material_id
+    } else {
+        "safe-grass"
+    };
+    let tile_rgb = ca44a_sample_runtime_tile_rgb(
+        dominant_material_id,
+        terrain_tiles.for_material(dominant_material_id),
+        seed,
+        tile_x,
+        tile_z,
+        pixel_x,
+        pixel_y,
+        local_x,
+        local_y,
+    );
+    let base_pixel = ca44a_runtime_biome_base_pixel(seed, world_x, world_z, pixel_x, pixel_y);
+    let mut rgb = ca44a_blend_rgb_u8(base_pixel.rgb, tile_rgb, 0.94);
+    let micro_noise =
+        (ca44a_runtime_pixel_hash(seed ^ 0xA117_71E5, tile_x, tile_z, pixel_x, pixel_y) % 9) as i16
+            - 4;
+    for channel in &mut rgb {
+        *channel = ((*channel as i16) + micro_noise).clamp(24, 238) as u8;
+    }
+    RuntimeBiomeBasePixel {
+        rgb,
+        is_path: dominant_material_id == "neutral-soil" || soil > 0.46,
+    }
+}
+
+fn ca44a_sample_runtime_tile_rgb(
+    material_id: &str,
+    tile: &RuntimeBiomeTileImage,
+    seed: u64,
+    tile_x: i32,
+    tile_z: i32,
+    pixel_x: u32,
+    pixel_y: u32,
+    local_x: f32,
+    local_y: f32,
+) -> [u8; 3] {
+    let fine_hash = ca44a_runtime_pixel_hash(seed, tile_x, tile_z, pixel_x, pixel_y);
+    let offset_x = fine_hash % tile.width.max(1);
+    let offset_y = fine_hash.rotate_right(11) % tile.height.max(1);
+    let sample_x = (((local_x * tile.width as f32) as u32) + offset_x) % tile.width.max(1);
+    let sample_y = (((1.0 - local_y) * tile.height as f32) as u32 + offset_y) % tile.height.max(1);
+    let index = ((sample_y * tile.width + sample_x) * 4) as usize;
+    let alpha = tile.data.get(index + 3).copied().unwrap_or(255) as f32 / 255.0;
+    let source = [
+        tile.data.get(index).copied().unwrap_or(0),
+        tile.data.get(index + 1).copied().unwrap_or(0),
+        tile.data.get(index + 2).copied().unwrap_or(0),
+    ];
+    ca44a_blend_rgb_u8(ca44a_runtime_material_base_rgb(material_id), source, alpha)
+}
+
 fn ca44a_runtime_biome_base_pixel(
     seed: u64,
     world_x: f32,
@@ -2267,24 +2669,52 @@ fn ca44a_runtime_biome_base_pixel(
     let tile_x = world_x.floor() as i32;
     let tile_z = world_z.floor() as i32;
     let fine_hash = ca44a_runtime_pixel_hash(seed, tile_x, tile_z, pixel_x, pixel_y);
-    let soil_weight = ca44a_runtime_soil_weight(world_x, world_z);
-    let resource_weight = ca44a_runtime_resource_weight(world_x, world_z);
-    let hazard_weight = ca44a_runtime_hazard_weight(world_x, world_z);
-    let stone_weight = ca44a_runtime_stone_weight(world_x, world_z);
-    let [base_r, base_g, base_b] = ca44a_runtime_continuous_material_base_rgb(
-        soil_weight,
-        resource_weight,
-        hazard_weight,
-        stone_weight,
+    let sampled_material = sample_procedural_terrain_tile(
+        ProceduralWorldConfig::with_seed(seed),
+        ProceduralTileCoord::new(tile_x, tile_z),
+    )
+    .map(|sample| sample.material)
+    .unwrap_or(alife_world::ProceduralTerrainMaterial::SafeGrass);
+    let material_id = sampled_material.material_id();
+    let sampled_rgb = ca44a_runtime_material_base_rgb(material_id);
+    let continuous_rgb = ca44a_runtime_continuous_material_base_rgb(
+        ca44a_runtime_soil_weight(world_x, world_z),
+        ca44a_runtime_resource_weight(world_x, world_z),
+        ca44a_runtime_hazard_weight(world_x, world_z),
+        ca44a_runtime_stone_weight(world_x, world_z),
+        ca44a_runtime_water_weight(world_x, world_z),
+        ca44a_runtime_sand_weight(world_x, world_z),
     );
-    let noise = (fine_hash % 17) as i16 - 8;
-    let wave_noise = ((world_x * 0.21).sin() * 4.0
-        + (world_z * 0.18).cos() * 3.0
-        + ((world_x + world_z) * 0.055).sin() * 5.0)
+    let continuous_weight = match material_id {
+        "water" => 0.62,
+        "sand" => 0.58,
+        "hazard-pressure" => 0.82,
+        "stone-dressing" => 0.78,
+        "resource-grove" => 0.72,
+        "neutral-soil" => 0.70,
+        _ => 0.78,
+    };
+    let [base_r, base_g, base_b] =
+        ca44a_blend_rgb_u8(sampled_rgb, continuous_rgb, continuous_weight);
+    let local_x = world_x - tile_x as f32;
+    let local_y = world_z - tile_z as f32;
+    let noise = (fine_hash % 13) as i16 - 6;
+    let organic_noise = ((world_x * 0.29).sin() * 3.0
+        + (world_z * 0.31).cos() * 3.0
+        + ((local_x - 0.5).abs() * -3.0)
+        + ((local_y - 0.5).abs() * -3.0))
         .round() as i16;
-    let r = base_r as i16 + noise;
-    let g = base_g as i16 + noise + wave_noise;
-    let b = base_b as i16 + noise / 2;
+    let material_lift = match material_id {
+        "water" => (((world_x + world_z) * 1.4).sin() * 11.0).round() as i16,
+        "sand" => ((fine_hash % 7) as i16) - 3,
+        "hazard-pressure" => ((fine_hash % 19) as i16) - 4,
+        "stone-dressing" => -2 + ((fine_hash % 9) as i16),
+        "resource-grove" => ((fine_hash % 11) as i16) - 4,
+        _ => ((fine_hash % 9) as i16) - 4,
+    };
+    let r = base_r as i16 + noise + organic_noise + material_lift / 2;
+    let g = base_g as i16 + noise + organic_noise + material_lift;
+    let b = base_b as i16 + noise / 2 + material_lift;
 
     RuntimeBiomeBasePixel {
         rgb: [
@@ -2292,7 +2722,7 @@ fn ca44a_runtime_biome_base_pixel(
             g.clamp(48, 226) as u8,
             b.clamp(34, 212) as u8,
         ],
-        is_path: false,
+        is_path: material_id == "neutral-soil",
     }
 }
 
@@ -2303,7 +2733,7 @@ fn ca44a_apply_runtime_fog_of_war(
     pixel: &mut RuntimeBiomeBasePixel,
 ) -> bool {
     if field.creature_anchor_count == 0 || field.active_world_chunks.is_empty() {
-        pixel.rgb = ca44a_blend_rgb_u8(pixel.rgb, [38, 53, 39], 0.62);
+        pixel.rgb = ca44a_blend_rgb_u8(pixel.rgb, [25, 31, 28], 0.55);
         return true;
     }
     let chunk_x = ca44a_floor_div_i32(world_x.floor() as i32, field.chunk_tile_size);
@@ -2311,16 +2741,95 @@ fn ca44a_apply_runtime_fog_of_war(
     if field.active_world_chunks.contains(&(chunk_x, chunk_z)) {
         return false;
     }
-    let near_active = (-1..=1).any(|dx| {
-        (-1..=1).any(|dz| {
+    let near_active = (-2..=2).any(|dx| {
+        (-2..=2).any(|dz| {
             field
                 .active_world_chunks
                 .contains(&(chunk_x + dx, chunk_z + dz))
         })
     });
-    let alpha = if near_active { 0.20 } else { 0.42 };
-    pixel.rgb = ca44a_blend_rgb_u8(pixel.rgb, [45, 68, 48], alpha);
+    let alpha = if near_active { 0.06 } else { 0.18 };
+    pixel.rgb = ca44a_blend_rgb_u8(pixel.rgb, [28, 35, 31], alpha);
     true
+}
+
+fn ca44a_paint_runtime_biome_regions(
+    seed: u64,
+    field: &GraphicalProceduralTerrainFieldResource,
+    width_px: u32,
+    height_px: u32,
+    data: &mut [u8],
+) -> u32 {
+    let regions = [
+        (-31.0, -21.0, 29.0, 13.0, [43, 139, 166], 0.66, 0xE9u32),
+        (-25.0, -17.0, 35.0, 15.0, [214, 170, 84], 0.54, 0x23u32),
+        (-39.0, 20.0, 43.0, 21.0, [112, 123, 116], 0.92, 0x51u32),
+        (12.0, 15.0, 32.0, 19.0, [28, 132, 47], 0.62, 0xC3u32),
+        (36.0, 1.0, 36.0, 25.0, [195, 47, 30], 0.90, 0xA7u32),
+        (50.0, -25.0, 22.0, 12.0, [142, 138, 118], 0.58, 0x77u32),
+    ];
+    regions
+        .iter()
+        .map(|(cx, cz, rx, rz, color, alpha, salt)| {
+            ca44a_paint_runtime_biome_region(
+                seed, field, width_px, height_px, data, *cx, *cz, *rx, *rz, *color, *alpha, *salt,
+            )
+        })
+        .sum()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn ca44a_paint_runtime_biome_region(
+    seed: u64,
+    field: &GraphicalProceduralTerrainFieldResource,
+    width_px: u32,
+    height_px: u32,
+    data: &mut [u8],
+    center_x: f32,
+    center_z: f32,
+    radius_x: f32,
+    radius_z: f32,
+    color: [u8; 3],
+    max_alpha: f32,
+    salt: u32,
+) -> u32 {
+    let (center_px, center_py) =
+        ca44a_world_to_biome_pixel(center_x, center_z, width_px, height_px);
+    let rx_px =
+        (radius_x / CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as f32 * width_px as f32).round() as i32;
+    let ry_px =
+        (radius_z / CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as f32 * height_px as f32).round() as i32;
+    let mut painted = 0;
+    for y in (center_py - ry_px).max(0)..=(center_py + ry_px).min(height_px as i32 - 1) {
+        for x in (center_px - rx_px).max(0)..=(center_px + rx_px).min(width_px as i32 - 1) {
+            let world_x = (x as f32 / width_px as f32) * CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as f32
+                - CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as f32 * 0.5;
+            let world_z = CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as f32 * 0.5
+                - (y as f32 / height_px as f32) * CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as f32;
+            if !ca44a_world_point_in_active_fog_window(field, world_x, world_z) {
+                continue;
+            }
+            let dx = (world_x - center_x) / radius_x.max(0.001);
+            let dz = (world_z - center_z) / radius_z.max(0.001);
+            let distance = (dx * dx + dz * dz).sqrt();
+            if distance > 1.0 {
+                continue;
+            }
+            let hash = ca44a_runtime_pixel_hash(seed ^ u64::from(salt), x, y, salt as u32, 0);
+            let edge = (1.0 - distance).clamp(0.0, 1.0).powf(0.62);
+            let texture_breakup = ((world_x * 0.31 + salt as f32).sin()
+                * (world_z * 0.27 - salt as f32).cos()
+                * 0.07)
+                + ((hash % 97) as f32 / 96.0 - 0.5) * 0.06;
+            let alpha = (max_alpha * (0.24 + edge * 0.76 + texture_breakup)).clamp(0.0, max_alpha);
+            if alpha <= 0.01 {
+                continue;
+            }
+            ca44a_alpha_blend_pixel(data, width_px, x as u32, y as u32, color, alpha);
+            painted += 1;
+        }
+    }
+    painted
 }
 
 fn ca44a_floor_div_i32(value: i32, divisor: i32) -> i32 {
@@ -2471,14 +2980,14 @@ fn ca44a_paint_runtime_biome_dressing(
     data: &mut [u8],
     metrics: &mut RuntimeProceduralBiomeMapMetrics,
 ) {
-    for index in 0..320 {
+    for index in 0..96 {
         let (world_x, world_z) = ca44a_runtime_resource_grove_point(seed, index);
         let resource_weight = ca44a_runtime_resource_weight(world_x, world_z);
         let hazard_weight = ca44a_runtime_hazard_weight(world_x, world_z);
         let stone_weight = ca44a_runtime_stone_weight(world_x, world_z);
-        if resource_weight > 0.24
-            && hazard_weight < 0.38
-            && stone_weight < 0.76
+        if resource_weight > 0.44
+            && hazard_weight < 0.22
+            && stone_weight < 0.58
             && ca44a_world_point_in_active_fog_window(field, world_x, world_z)
         {
             metrics.resource_detail_pixels +=
@@ -2505,11 +3014,11 @@ fn ca44a_paint_runtime_biome_dressing(
             );
         }
     }
-    for index in 0..170 {
+    for index in 0..70 {
         let (world_x, world_z) = ca44a_runtime_random_world_point(seed, index, 0xF10A_0E51);
         let resource_weight = ca44a_runtime_resource_weight(world_x, world_z);
-        if resource_weight > 0.16
-            && ca44a_runtime_hazard_weight(world_x, world_z) < 0.30
+        if resource_weight > 0.42
+            && ca44a_runtime_hazard_weight(world_x, world_z) < 0.18
             && ca44a_world_point_in_active_fog_window(field, world_x, world_z)
         {
             metrics.resource_detail_pixels +=
@@ -2525,8 +3034,8 @@ fn ca44a_world_point_in_active_fog_window(
 ) -> bool {
     let chunk_x = ca44a_floor_div_i32(world_x.floor() as i32, field.chunk_tile_size);
     let chunk_z = ca44a_floor_div_i32(world_z.floor() as i32, field.chunk_tile_size);
-    (-1..=1).any(|dx| {
-        (-1..=1).any(|dz| {
+    (-2..=2).any(|dx| {
+        (-2..=2).any(|dz| {
             field
                 .active_world_chunks
                 .contains(&(chunk_x + dx, chunk_z + dz))
@@ -2623,7 +3132,7 @@ fn ca44a_paint_tree_cluster(
 ) -> u32 {
     let (cx, cy) = ca44a_world_to_biome_pixel(world_x, world_z, width_px, height_px);
     let hash = ca44a_runtime_pixel_hash(seed, index, 31, 0, 0);
-    let scale = 1.05 + (hash % 7) as f32 * 0.10;
+    let scale = 0.70 + (hash % 7) as f32 * 0.06;
     let mut painted = 0;
     painted += ca44a_paint_ellipse_rgba(
         data,
@@ -2631,16 +3140,16 @@ fn ca44a_paint_tree_cluster(
         height_px,
         cx + 1,
         cy + 5,
-        (16.0 * scale) as i32,
         (8.0 * scale) as i32,
+        (4.0 * scale) as i32,
         [48, 78, 37],
-        0.22,
+        0.08,
     );
     for lobe in 0..4 {
         let offset_hash = ca44a_runtime_pixel_hash(seed ^ 0xBEE5, index, lobe, 0, 0);
         let ox = (offset_hash % 13) as i32 - 6;
         let oy = ((offset_hash / 17) % 11) as i32 - 5;
-        let radius = (8 + (offset_hash % 6) as i32).max(7);
+        let radius = (4 + (offset_hash % 4) as i32).max(4);
         painted += ca44a_paint_ellipse_rgba(
             data,
             width_px,
@@ -2654,7 +3163,7 @@ fn ca44a_paint_tree_cluster(
             } else {
                 [67, 139, 48]
             },
-            0.94,
+            0.30,
         );
     }
     if hash % 3 == 0 {
@@ -2976,6 +3485,8 @@ fn ca44a_runtime_continuous_material_base_rgb(
     resource_weight: f32,
     hazard_weight: f32,
     stone_weight: f32,
+    water_weight: f32,
+    sand_weight: f32,
 ) -> [u8; 3] {
     let mut rgb = ca44a_runtime_material_base_rgb("safe-grass").map(f32::from);
     if soil_weight > 0.05 {
@@ -2999,6 +3510,20 @@ fn ca44a_runtime_continuous_material_base_rgb(
             (stone_weight * 0.78).clamp(0.0, 0.78),
         );
     }
+    if sand_weight > 0.05 {
+        rgb = ca44a_blend_rgb_f32(
+            rgb,
+            ca44a_runtime_material_base_rgb("sand").map(f32::from),
+            (sand_weight * 0.78).clamp(0.0, 0.78),
+        );
+    }
+    if water_weight > 0.05 {
+        rgb = ca44a_blend_rgb_f32(
+            rgb,
+            ca44a_runtime_material_base_rgb("water").map(f32::from),
+            (water_weight * 0.86).clamp(0.0, 0.86),
+        );
+    }
     if hazard_weight > 0.05 {
         rgb = ca44a_blend_rgb_f32(
             rgb,
@@ -3019,6 +3544,8 @@ fn ca44a_runtime_material_base_rgb(material_id: &str) -> [u8; 3] {
         "resource-grove" => [61, 130, 50],
         "hazard-pressure" => [147, 69, 43],
         "stone-dressing" => [109, 121, 101],
+        "water" => [45, 117, 148],
+        "sand" => [191, 162, 92],
         _ => [116, 151, 67],
     }
 }
@@ -3052,6 +3579,21 @@ fn ca44a_runtime_stone_weight(world_x: f32, world_z: f32) -> f32 {
         + ca44a_smooth_blob(world_x, world_z, 12.0, 26.0, 28.0, 13.0) * 0.82
         + ca44a_smooth_blob(world_x, world_z, 46.0, 24.0, 24.0, 12.0) * 0.66
         + ca44a_smooth_blob(world_x, world_z, 52.0, -29.0, 16.0, 9.0) * 0.42)
+        .clamp(0.0, 1.0)
+}
+
+fn ca44a_runtime_water_weight(world_x: f32, world_z: f32) -> f32 {
+    let channel = world_z + world_x / 5.0 + 18.0;
+    ((1.0 - channel.abs() / 4.0).clamp(0.0, 1.0)
+        + ca44a_smooth_blob(world_x, world_z, -30.0, -22.0, 18.0, 8.0) * 0.92
+        + ca44a_smooth_blob(world_x, world_z, -18.0, -34.0, 28.0, 9.0) * 0.46)
+        .clamp(0.0, 1.0)
+}
+
+fn ca44a_runtime_sand_weight(world_x: f32, world_z: f32) -> f32 {
+    let channel = world_z + world_x / 5.0 + 18.0;
+    ((1.0 - channel.abs() / 7.0).clamp(0.0, 1.0) * 0.72
+        + ca44a_smooth_blob(world_x, world_z, -34.0, -18.0, 23.0, 11.0) * 0.55)
         .clamp(0.0, 1.0)
 }
 
@@ -3164,14 +3706,15 @@ fn ca44a_procedural_world_anchors_from_presentation(
 
 fn ca44a_initial_procedural_terrain_centers(
     activation: &ProceduralChunkActivationReport,
+    chunk_tile_size: i32,
 ) -> Vec<(i32, i32, Option<WorldEntityId>)> {
     let mut centers = Vec::new();
-    let mut seen_anchors = BTreeSet::new();
+    let mut seen_chunks = BTreeSet::new();
     for chunk in &activation.active_chunks {
-        if seen_anchors.insert(chunk.anchor_stable_id.raw()) {
+        if seen_chunks.insert((chunk.coord.x, chunk.coord.z)) {
             centers.push((
-                chunk.anchor_tile.x,
-                chunk.anchor_tile.z,
+                chunk.coord.x * chunk_tile_size + chunk_tile_size / 2,
+                chunk.coord.z * chunk_tile_size + chunk_tile_size / 2,
                 Some(chunk.anchor_stable_id),
             ));
         }
@@ -3491,45 +4034,135 @@ fn ca44a_spawn_fallback_terrain_tile_app(
 }
 
 fn ca44a_terrain_jitter_x(hash: i32) -> f32 {
-    ((hash % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0)
+    let _ = hash;
+    0.0
 }
 
 fn ca44a_terrain_jitter_y(hash: i32) -> f32 {
-    (((hash / 7) % 7) as f32 - 3.0) * (CA37_TERRAIN_TILE_JITTER_PIXELS / 3.0)
+    let _ = hash;
+    0.0
 }
 
 fn ca44a_terrain_tile_width(hash: i32) -> f32 {
-    let variant = ((hash & 0x7) as f32) / 7.0;
-    CA37_TERRAIN_TILE_PIXEL_SIZE * (1.12 + variant * 0.06)
+    let _ = hash;
+    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.02
 }
 
 fn ca44a_terrain_tile_height(hash: i32) -> f32 {
-    let variant = (((hash >> 4) & 0x7) as f32) / 7.0;
-    CA37_TERRAIN_TILE_PIXEL_SIZE * (1.08 + variant * 0.06)
+    let _ = hash;
+    CA37_TERRAIN_TILE_PIXEL_SIZE * 1.02
 }
 
 fn ca44a_terrain_rotation_degrees(hash: i32) -> f32 {
-    (((hash % 17) as f32) - 8.0) * 1.2
+    let _ = hash;
+    0.0
 }
 
 fn ca44a_alpha_terrain_opacity(material_id: &str) -> f32 {
-    match material_id {
-        "hazard-pressure" => 0.0009,
-        "resource-grove" => 0.0008,
-        "stone-dressing" => 0.0008,
-        "neutral-soil" => 0.0007,
-        _ => 0.0006,
+    let _ = material_id;
+    0.0
+}
+
+fn ca44a_sync_graphical_markers_from_live_world(
+    snapshots: &[alife_world::WorldObject],
+    markers: &mut bevy::prelude::Query<(&GraphicalPlaygroundMarker, &mut Transform)>,
+    badges: &mut bevy::prelude::Query<
+        (&GraphicalObjectBadge, &mut Transform),
+        Without<GraphicalPlaygroundMarker>,
+    >,
+    art_layers: &mut bevy::prelude::Query<
+        (&GraphicalAlphaArtBackedSprite, &mut Transform),
+        (
+            Without<GraphicalPlaygroundMarker>,
+            Without<GraphicalObjectBadge>,
+        ),
+    >,
+    selection: Option<&SelectionResource>,
+    inspector: Option<&mut CreatureInspectorResource>,
+    camera: Option<&mut CameraNavigationResource>,
+) {
+    let by_id = snapshots
+        .iter()
+        .map(|object| (object.id.raw(), object))
+        .collect::<BTreeMap<_, _>>();
+
+    for (marker, mut transform) in markers.iter_mut() {
+        if let Some(object) = by_id.get(&marker.stable_id.raw()) {
+            let mut next = ca44a_world_object_graphical_position(object);
+            next.z = transform.translation.z;
+            transform.translation = next;
+        }
     }
+
+    for (badge, mut transform) in badges.iter_mut() {
+        if let Some(object) = by_id.get(&badge.stable_id.raw()) {
+            transform.translation =
+                ca44a_world_object_graphical_position(object) + graphical_badge_offset(badge.kind);
+        }
+    }
+
+    for (sprite, mut transform) in art_layers.iter_mut() {
+        let Some(stable_id) = sprite.stable_id else {
+            continue;
+        };
+        let Some(object) = by_id.get(&stable_id.raw()) else {
+            continue;
+        };
+        if sprite.role == "entity-shadow" {
+            transform.translation =
+                ca44a_world_object_graphical_position(object) + Vec3::new(0.0, -2.0, -0.08);
+        }
+    }
+
+    let selected = selection.map(|selection| selection.stable_id);
+    if let (Some(selected), Some(inspector)) = (selected, inspector) {
+        if let Some(object) = by_id.get(&selected.raw()) {
+            inspector.snapshot.selection.position = object.position;
+            inspector.snapshot.visual.position = object.position;
+        }
+    }
+
+    if let Some(camera) = camera {
+        if let Some(target) = camera.state.follow_target {
+            if let Some(object) = by_id.get(&target.raw()) {
+                if let Ok(next) = camera.state.focus_on(object.position) {
+                    camera.state = next;
+                }
+            }
+        }
+    }
+}
+
+fn ca44a_world_object_graphical_position(object: &alife_world::WorldObject) -> Vec3 {
+    Vec3::new(
+        object.position.x * GRAPHICAL_WORLD_SCALE,
+        object.position.z * GRAPHICAL_WORLD_SCALE,
+        0.0,
+    )
 }
 
 fn update_graphical_procedural_terrain_field(
     mut commands: Commands,
     view_mode: Res<GraphicalViewModeResource>,
-    _camera: Option<Res<CameraNavigationResource>>,
+    live_loop: Option<NonSend<GraphicalRuntimeLoopResource>>,
+    mut camera: Option<ResMut<CameraNavigationResource>>,
+    selection: Option<Res<SelectionResource>>,
+    mut inspector: Option<ResMut<CreatureInspectorResource>>,
     world_art: Option<Res<GraphicalWorldArtStyleResource>>,
     alpha_art: Option<Res<GraphicalAlphaArtHandles>>,
     field: Option<ResMut<GraphicalProceduralTerrainFieldResource>>,
-    markers: bevy::prelude::Query<(&GraphicalPlaygroundMarker, &Transform)>,
+    mut markers: bevy::prelude::Query<(&GraphicalPlaygroundMarker, &mut Transform)>,
+    mut badges: bevy::prelude::Query<
+        (&GraphicalObjectBadge, &mut Transform),
+        Without<GraphicalPlaygroundMarker>,
+    >,
+    mut art_layers: bevy::prelude::Query<
+        (&GraphicalAlphaArtBackedSprite, &mut Transform),
+        (
+            Without<GraphicalPlaygroundMarker>,
+            Without<GraphicalObjectBadge>,
+        ),
+    >,
 ) {
     if view_mode.mode != GraphicalPlaygroundViewMode::Player {
         return;
@@ -3541,8 +4174,21 @@ fn update_graphical_procedural_terrain_field(
         return;
     };
 
+    if let Some(live_loop) = live_loop.as_ref() {
+        let snapshots = live_loop.live.world_object_snapshots();
+        ca44a_sync_graphical_markers_from_live_world(
+            &snapshots,
+            &mut markers,
+            &mut badges,
+            &mut art_layers,
+            selection.as_deref(),
+            inspector.as_deref_mut(),
+            camera.as_deref_mut(),
+        );
+    }
+
     let mut anchors = Vec::new();
-    for (marker, transform) in &markers {
+    for (marker, transform) in &mut markers {
         if marker.kind == WorldObjectKind::Agent {
             let position = Vec3f::new(
                 transform.translation.x / GRAPHICAL_WORLD_SCALE,
@@ -3569,7 +4215,7 @@ fn update_graphical_procedural_terrain_field(
     if let Some(content) = &content {
         field.record_content_report(content);
     }
-    let centers = ca44a_initial_procedural_terrain_centers(&activation);
+    let centers = ca44a_initial_procedural_terrain_centers(&activation, field.chunk_tile_size);
     if centers.is_empty() {
         return;
     }
@@ -3875,6 +4521,8 @@ fn ca44a_terrain_art_for_material(
             "terrain-hazard-pressure",
         ),
         "stone-dressing" => (handles.terrain_stone_rough.clone(), "terrain-stone-rough"),
+        "water" => (handles.terrain_water.clone(), "terrain-water"),
+        "sand" => (handles.terrain_sand.clone(), "terrain-sand"),
         _ => (handles.terrain_safe_grass.clone(), "terrain-safe-grass"),
     }
 }
@@ -3888,6 +4536,8 @@ fn ca44a_prop_art_for_material(
     match material_id {
         "hazard-pressure" => (handles.prop_warning_shard.clone(), "prop-dressing"),
         "stone-dressing" => (handles.prop_pebble_cluster.clone(), "prop-dressing"),
+        "water" => (handles.prop_leaf_patch.clone(), "prop-dressing"),
+        "sand" => (handles.prop_pebble_cluster.clone(), "prop-dressing"),
         "resource-grove" => match variant % 3 {
             0 => (handles.prop_leaf_patch.clone(), "prop-dressing"),
             1 => (handles.prop_mushroom_cluster.clone(), "prop-dressing"),
@@ -4006,6 +4656,18 @@ fn ca37_terrain_tile_color(seed: u64, material_id: &str, ix: i32, iz: i32) -> Co
             0.27,
             ca37_terrain_tile_alpha(material_id),
         ),
+        "water" => Color::srgba(
+            0.22 + shade,
+            0.54 + shade,
+            0.70,
+            ca37_terrain_tile_alpha(material_id),
+        ),
+        "sand" => Color::srgba(
+            0.74 + shade,
+            0.62 + shade,
+            0.35,
+            ca37_terrain_tile_alpha(material_id),
+        ),
         _ => Color::srgba(
             0.17 + shade,
             0.39 + shade,
@@ -4021,6 +4683,8 @@ fn ca37_terrain_tile_alpha(material_id: &str) -> f32 {
         "resource-grove" => 0.11,
         "stone-dressing" => 0.10,
         "neutral-soil" => 0.10,
+        "water" => 0.12,
+        "sand" => 0.11,
         _ => 0.09,
     }
 }
@@ -4360,11 +5024,11 @@ fn ca44a_entity_shadow_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
 
 fn ca44a_player_sprite_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
     match object.kind {
-        WorldObjectKind::Agent => Vec2::new(22.0, 18.0),
-        WorldObjectKind::Food => Vec2::splat(16.0),
-        WorldObjectKind::Hazard => Vec2::splat(20.0),
-        WorldObjectKind::Obstacle => Vec2::splat(22.0),
-        WorldObjectKind::Token => Vec2::new(14.0, 11.0),
+        WorldObjectKind::Agent => Vec2::new(58.0, 48.0),
+        WorldObjectKind::Food => Vec2::splat(38.0),
+        WorldObjectKind::Hazard => Vec2::splat(44.0),
+        WorldObjectKind::Obstacle => Vec2::splat(50.0),
+        WorldObjectKind::Token => Vec2::new(32.0, 24.0),
     }
 }
 
@@ -4640,7 +5304,7 @@ fn inspector_local_entity(
                 |handles| Sprite {
                     image: handles.selection_ring.clone(),
                     color: Color::WHITE,
-                    custom_size: Some(Vec2::new(30.0, 24.0)),
+                    custom_size: Some(Vec2::new(64.0, 50.0)),
                     ..default()
                 },
             );
@@ -4670,8 +5334,8 @@ fn inspector_local_entity(
                 Name::new("A-Life CA44A selected creature pulse"),
                 Sprite {
                     image: selection_pulse,
-                    color: Color::srgba(1.0, 1.0, 1.0, 0.18),
-                    custom_size: Some(Vec2::new(38.0, 30.0)),
+                    color: Color::srgba(1.0, 1.0, 1.0, 0.28),
+                    custom_size: Some(Vec2::new(76.0, 60.0)),
                     ..default()
                 },
                 Transform::from_xyz(0.0, 0.0, 0.46),
@@ -5235,30 +5899,43 @@ fn reset_graphical_runtime(
 
 fn update_graphical_camera_transform(
     camera: Res<CameraNavigationResource>,
-    mut cameras: bevy::prelude::Query<&mut Transform, With<GraphicalMainCamera>>,
+    mut cameras: bevy::prelude::Query<(&mut Transform, &mut Projection), With<GraphicalMainCamera>>,
 ) {
-    for mut transform in &mut cameras {
+    for (mut transform, mut projection) in &mut cameras {
         transform.translation.x = camera.state.focus.x * GRAPHICAL_WORLD_SCALE;
         transform.translation.y = camera.state.focus.z * GRAPHICAL_WORLD_SCALE;
         transform.rotation =
             bevy::prelude::Quat::from_rotation_z(camera.state.yaw_degrees.to_radians());
-        let zoom_scale = (1.0 / camera.state.zoom).clamp(0.125, 4.0);
-        transform.scale = Vec3::splat(zoom_scale);
+        transform.scale = Vec3::ONE;
+        if let Projection::Orthographic(ref mut orthographic) = *projection {
+            orthographic.scale = (1.0 / camera.state.zoom).clamp(0.36, 3.2);
+        }
     }
 }
 
 fn update_graphical_selection_ring(
     inspector: Res<CreatureInspectorResource>,
+    selection: Res<SelectionResource>,
+    markers: bevy::prelude::Query<
+        (&GraphicalPlaygroundMarker, &Transform),
+        Without<GraphicalSelectionRing>,
+    >,
     mut ring_query: bevy::prelude::Query<&mut Transform, With<GraphicalSelectionRing>>,
 ) {
-    let selected_position = inspector.snapshot.selection.position;
-    let ring_position = Vec3::new(
-        selected_position.x * GRAPHICAL_WORLD_SCALE,
-        selected_position.z * GRAPHICAL_WORLD_SCALE,
-        0.2,
-    );
+    let marker_position = markers
+        .iter()
+        .find(|(marker, _)| marker.stable_id == selection.stable_id)
+        .map(|(_, transform)| transform.translation);
+    let ring_position = marker_position.unwrap_or_else(|| {
+        let selected_position = inspector.snapshot.selection.position;
+        Vec3::new(
+            selected_position.x * GRAPHICAL_WORLD_SCALE,
+            selected_position.z * GRAPHICAL_WORLD_SCALE,
+            0.2,
+        )
+    });
     for mut ring in &mut ring_query {
-        ring.translation = ring_position;
+        ring.translation = Vec3::new(ring_position.x, ring_position.y, ring.translation.z);
     }
 }
 

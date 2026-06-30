@@ -873,8 +873,8 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     assert!(tiles.iter().all(|tile| {
         tile.display_only
             && tile.viewport_slice
-            && tile.opacity > 0.0
-            && tile.opacity <= CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA
+            && tile.opacity >= 0.0
+            && tile.opacity <= 0.02
             && tile.tile_size_pixels > 0.0
             && tile.material_id != "debug"
     }));
@@ -2355,6 +2355,8 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "terrain-resource-grove",
         "terrain-hazard-pressure",
         "terrain-stone-rough",
+        "terrain-water",
+        "terrain-sand",
     ] {
         assert!(roles.contains(&role), "missing alpha art role {role}");
     }
@@ -2407,7 +2409,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View selection rings should be bounded sprites");
         assert!(
-            size.x <= 40.5 && size.y <= 32.5,
+            size.x <= 80.0 && size.y <= 64.0,
             "selected creature rings must frame the sprite without covering the map: {size:?}"
         );
     }
@@ -2434,7 +2436,15 @@ fn production_player_view_uses_runtime_map_and_tiny_foreground_sprites() {
     assert_eq!(biome_maps.len(), 1);
     assert!(
         biome_maps[0].primary_player_surface,
-        "runtime-generated biome map should be the primary Player View terrain surface"
+        "runtime-generated seeded biome map should be the continuous Player View surface; committed terrain tiles blend in as asset-backed detail"
+    );
+    assert!(
+        biome_maps[0].generated_from_alpha_art_tiles,
+        "runtime biome surface must stamp committed generated terrain PNGs, not only paint flat procedural colors"
+    );
+    assert_eq!(
+        biome_maps[0].terrain_tile_source_count, 7,
+        "runtime biome surface should use the complete grass/soil/grove/hazard/stone/water/sand tile set"
     );
     assert!(biome_maps[0].seed > 0);
     assert!(biome_maps[0].active_chunk_count > 0);
@@ -2472,8 +2482,8 @@ fn production_player_view_uses_runtime_map_and_tiny_foreground_sprites() {
         .map(|size| size.x.max(size.y))
         .fold(0.0_f32, f32::max);
     assert!(
-        live_creature_max > 0.0 && live_creature_max <= 25.5,
-        "live creatures should read as small map-scale agents, not giant foreground sprites: {live_creature_max}"
+        live_creature_max >= 48.0 && live_creature_max <= 64.0,
+        "live creatures should be readable map-scale sprites without becoming giant foreground sprites: {live_creature_max}"
     );
 
     let required_world_role_max = art_sprites
@@ -2488,8 +2498,8 @@ fn production_player_view_uses_runtime_map_and_tiny_foreground_sprites() {
         .map(|size| size.x.max(size.y))
         .fold(0.0_f32, f32::max);
     assert!(
-        required_world_role_max > 0.0 && required_world_role_max <= 24.5,
-        "food, hazard, rock, and prop sprites must stay map-scale: {required_world_role_max}"
+        required_world_role_max >= 38.0 && required_world_role_max <= 54.0,
+        "food, hazard, rock, and prop sprites must be readable but bounded map-scale sprites: {required_world_role_max}"
     );
 
     let generated_content_max = art_sprites
@@ -2578,7 +2588,7 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         .count();
     assert_eq!(
         runtime_biome_map_count, 1,
-        "Player View should have one live generated biome-map surface as the primary world surface"
+        "Player View should keep one live generated biome-map surface for fog/context support"
     );
     assert!(
         streamed_terrain_count >= visible_terrain_count,
@@ -2629,6 +2639,8 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
     );
     let biome_map = biome_maps[0];
     assert!(biome_map.generated_from_procedural_sampler);
+    assert!(biome_map.generated_from_alpha_art_tiles);
+    assert_eq!(biome_map.terrain_tile_source_count, 7);
     assert!(biome_map.primary_player_surface);
     assert!(biome_map.display_only);
     assert_eq!(biome_map.seed, summary.seed);
@@ -2681,15 +2693,15 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
     );
     assert!(
         terrain_tiles.iter().all(|tile| {
-            tile.opacity >= 0.0005 && tile.opacity <= 0.0010
+            tile.opacity >= 0.0 && tile.opacity <= 0.02
         }),
-        "streamed terrain tiles should read as subtle active-chunk dressing without becoming opaque slabs"
+        "streamed terrain tiles should not read as square slabs; the generated alpha-art biome texture is the visible terrain surface"
     );
     assert!(
         terrain_tiles
             .iter()
-            .all(|tile| tile.tile_size_pixels >= 32.0 && tile.tile_size_pixels <= 40.0),
-        "terrain tiles should remain map cells, not a single-screen plate"
+            .all(|tile| tile.tile_size_pixels >= 34.0 && tile.tile_size_pixels <= 38.0),
+        "terrain tiles should remain aligned map cells, not a single-screen plate"
     );
     assert!(terrain_tiles
         .iter()
@@ -2700,6 +2712,163 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
     assert!(terrain_tiles
         .iter()
         .any(|tile| tile.material_id == "stone-dressing"));
+    assert!(terrain_tiles.iter().any(|tile| tile.material_id == "water"));
+    assert!(terrain_tiles.iter().any(|tile| tile.material_id == "sand"));
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn player_view_streaming_keeps_live_creature_anchors_synced() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 12);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_runtime_preview_app_shell(&launch)
+            .unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let initial_field = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>()
+        .clone();
+
+    for _ in 0..180 {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        app.update();
+        let smoke_ticks_done = app
+            .world()
+            .resource::<alife_game_app::bevy_shell::GraphicalRuntimeControlsResource>()
+            .smoke_ticks_done;
+        if smoke_ticks_done >= 12 {
+            break;
+        }
+    }
+
+    let controls = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalRuntimeControlsResource>();
+    assert!(
+        controls.smoke_ticks_done >= 2,
+        "smoke should advance enough live ticks for the graphical map to follow creature travel"
+    );
+    let selected_marker_position = marker_translation(&mut app, WorldEntityId(1));
+
+    let field = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>()
+        .clone();
+    assert!(field.generated_without_rendering);
+    assert!(field.materialized_only_near_active_views);
+    assert_eq!(
+        field.creature_anchor_count,
+        initial_field.creature_anchor_count
+    );
+    assert!(
+        !field.active_world_chunks.is_empty(),
+        "procedural chunks should remain anchored around live creature positions"
+    );
+    assert!(
+        field.materialized_tiles.len() >= initial_field.materialized_tiles.len(),
+        "live creature motion should keep a materialized procedural chunk window available"
+    );
+
+    let inspector = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::CreatureInspectorResource>();
+    assert_eq!(inspector.snapshot.selection.stable_id, WorldEntityId(1));
+    assert!(
+        (inspector.snapshot.visual.position.x * 36.0 - selected_marker_position.x).abs() <= 0.1
+            && (inspector.snapshot.visual.position.z * 36.0 - selected_marker_position.y).abs()
+                <= 0.1,
+        "read-only inspector should reflect the selected live-world stable-ID marker position"
+    );
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn runtime_biome_map_refreshes_when_active_chunk_window_changes() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_runtime_preview_app_shell(&launch)
+            .unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let before = runtime_biome_map(&mut app);
+    assert_eq!(before.refresh_count, 0);
+    assert!(before.active_chunk_signature > 0);
+
+    app.world_mut()
+        .resource_mut::<alife_game_app::bevy_shell::GraphicalViewModeResource>()
+        .mode = GraphicalPlaygroundViewMode::DevOverlay;
+    {
+        let mut field = app
+            .world_mut()
+            .resource_mut::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>(
+        );
+        let chunk_tile_size = field.chunk_tile_size;
+        field.active_world_chunks.clear();
+        field
+            .active_world_chunks
+            .extend([(20, -12), (21, -12), (20, -11)]);
+        field.creature_anchor_count = field.creature_anchor_count.saturating_add(1);
+        field
+            .materialized_tiles
+            .insert((20 * chunk_tile_size, -12 * chunk_tile_size));
+    }
+
+    app.update();
+
+    let after = runtime_biome_map(&mut app);
+    assert_eq!(after.refresh_count, before.refresh_count + 1);
+    assert_ne!(
+        after.active_chunk_signature, before.active_chunk_signature,
+        "runtime biome surface must regenerate when creature-anchored active chunks change"
+    );
+    assert_eq!(after.active_chunk_count, 3);
+    assert_eq!(
+        after.last_creature_anchor_count,
+        before.last_creature_anchor_count + 1
+    );
+    assert!(after.fog_of_war_applied);
+    assert!(
+        after.last_materialized_tile_count >= before.last_materialized_tile_count,
+        "refresh metadata should retain materialized procedural terrain evidence"
+    );
+    assert!(after.display_only);
+    assert!(after.primary_player_surface);
+}
+
+#[cfg(feature = "bevy-app")]
+fn marker_translation(
+    app: &mut bevy::prelude::App,
+    stable_id: WorldEntityId,
+) -> bevy::prelude::Vec3 {
+    let mut query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalPlaygroundMarker,
+        &bevy::prelude::Transform,
+    )>();
+    query
+        .iter(app.world())
+        .find_map(|(marker, transform)| {
+            (marker.stable_id == stable_id).then_some(transform.translation)
+        })
+        .unwrap_or_else(|| panic!("missing marker for stable ID {}", stable_id.raw()))
+}
+
+#[cfg(feature = "bevy-app")]
+fn runtime_biome_map(
+    app: &mut bevy::prelude::App,
+) -> alife_game_app::bevy_shell::GraphicalRuntimeProceduralBiomeMap {
+    let mut query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalRuntimeProceduralBiomeMap>();
+    let maps = query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(maps.len(), 1);
+    maps[0]
 }
 
 #[cfg(feature = "bevy-app")]

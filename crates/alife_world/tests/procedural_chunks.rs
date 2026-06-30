@@ -281,6 +281,8 @@ fn procedural_material_ids_match_alpha_art_roles() {
         ProceduralTerrainMaterial::StoneRough.material_id(),
         "stone-dressing"
     );
+    assert_eq!(ProceduralTerrainMaterial::Water.material_id(), "water");
+    assert_eq!(ProceduralTerrainMaterial::Sand.material_id(), "sand");
 }
 
 #[test]

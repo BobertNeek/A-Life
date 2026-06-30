@@ -14,6 +14,13 @@ runtime-generated seeded biome map with active creature chunk windows and fog of
 war. `world-painted-viewport` is retained only for Full Debug/style-reference
 presentation and must not be restored as the default player terrain surface.
 
+The latest visual correction replaces the rejected dark/noisy swatches with a
+new generated v21 terrain/object atlas. The committed Player View assets now
+come from sliced generated PNGs for grass, path, grove, hazard, stone, water,
+sand, creatures, selection, food, hazard crystals, rocks, and props. The runtime
+biome compositor now chooses a dominant alpha-art terrain material per pixel and
+uses procedural region/trail/dressing passes only as subtle presentation detail.
+
 ## Reproduction Summary
 
 The default `gpu_alpha` player path previously stopped almost immediately with `TerminalInvalidState`.
@@ -67,12 +74,25 @@ Assets:
 - `prop_leaf_patch.png`
 - `alpha_art_manifest.json`
 
-The active manifest art direction is
-`production-alpha-generated-map-v15`. Ordinary sprite/tile PNGs remain 128x128
-and below the 64 KB per-file cap. `world_backdrop_gpu_alpha.png` is a
-role-specific 1280x720 painted Player View map plate, capped by the stricter
-world-backdrop exception (`<= 768 KB`). Assets are original project-generated
-sprites/tiles/backdrops, not third-party downloads.
+The active manifest art direction is now
+`production-alpha-generated-world-atlas-v21-distinct-biome-tiles`. Ordinary
+sprite/tile PNGs remain 128x128 and below the 64 KB per-file cap.
+`world_backdrop_gpu_alpha.png` is retained as a Full Debug/style-reference map
+plate, capped by the stricter world-backdrop exception (`<= 768 KB`). Assets are
+original project-generated sprites/tiles/backdrops, not third-party downloads.
+
+The v21 refresh regenerated the committed terrain and object PNGs from two new
+generated atlases:
+
+- terrain atlas: grass, dirt path, resource grove, red hazard pressure, gray
+  stone, teal water, and sand;
+- object atlas: blue-green creature idle/hurt poses, selection ring, food
+  sprout, red crystal hazard, rock cluster, and prop variants.
+
+The live Player View capture at
+`target/playtest_evidence/terrain_tiles/generated_v21_preview/player_view_v21_clean_dressing_capture.png`
+confirmed that the default window uses the generated terrain/sprites instead of
+rectangle placeholders. That evidence path remains local and untracked.
 
 The v7 terrain refresh regenerated the committed terrain PNGs with organic
 alpha masks, deterministic texture noise, softer edges, and stronger biome
@@ -84,7 +104,7 @@ color language:
 - `terrain_hazard_pressure.png` is 24,557 bytes
 - `terrain_stone_rough.png` is 22,236 bytes
 
-The manifest now contains 33 versioned art entries including creature poses,
+The manifest now contains 35 versioned art entries including creature poses,
 selection assets, food/hazard/rock sprites, five terrain roles, prop dressing,
 ambient layers, HUD skin assets, and the painted Player View world backdrop.
 
@@ -226,7 +246,7 @@ App bundle smoke:
 cargo run -p alife_game_app --bin alife_game_app -- app-bundle-smoke --manifest crates/alife_game_app/app_bundle_manifest.json
 ```
 
-Result: PASS, `alpha_art=33`, `alpha_roles=true`, `production_alpha_art=true`, largest file evidence 236,817 bytes.
+Result: PASS, `alpha_art=35`, `alpha_roles=true`, `production_alpha_art=true`, largest file evidence 236,817 bytes.
 
 Production art / chunked terrain tests:
 
