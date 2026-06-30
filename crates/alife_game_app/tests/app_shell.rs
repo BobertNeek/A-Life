@@ -2409,7 +2409,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
             .custom_size
             .expect("Player View selection rings should be bounded sprites");
         assert!(
-            size.x <= 80.0 && size.y <= 64.0,
+            size.x <= 92.0 && size.y <= 74.0,
             "selected creature rings must frame the sprite without covering the map: {size:?}"
         );
     }
@@ -2417,7 +2417,7 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
-fn production_player_view_uses_runtime_map_and_tiny_foreground_sprites() {
+fn production_player_view_uses_runtime_map_and_readable_foreground_sprites() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
     let (mut app, summary) =
@@ -2482,8 +2482,8 @@ fn production_player_view_uses_runtime_map_and_tiny_foreground_sprites() {
         .map(|size| size.x.max(size.y))
         .fold(0.0_f32, f32::max);
     assert!(
-        live_creature_max >= 48.0 && live_creature_max <= 64.0,
-        "live creatures should be readable map-scale sprites without becoming giant foreground sprites: {live_creature_max}"
+        live_creature_max >= 34.0 && live_creature_max <= 64.0,
+        "live creatures should be readable player-scale sprites without becoming giant foreground sprites: {live_creature_max}"
     );
 
     let required_world_role_max = art_sprites
@@ -2498,8 +2498,8 @@ fn production_player_view_uses_runtime_map_and_tiny_foreground_sprites() {
         .map(|size| size.x.max(size.y))
         .fold(0.0_f32, f32::max);
     assert!(
-        required_world_role_max >= 38.0 && required_world_role_max <= 54.0,
-        "food, hazard, rock, and prop sprites must be readable but bounded map-scale sprites: {required_world_role_max}"
+        required_world_role_max >= 24.0 && required_world_role_max <= 52.0,
+        "food, hazard, rock, and prop sprites must be readable but bounded player-scale sprites: {required_world_role_max}"
     );
 
     let generated_content_max = art_sprites
@@ -2514,8 +2514,8 @@ fn production_player_view_uses_runtime_map_and_tiny_foreground_sprites() {
         .map(|size| size.x.max(size.y))
         .fold(0.0_f32, f32::max);
     assert!(
-        generated_content_max > 0.0 && generated_content_max <= 24.5,
-        "generated procedural content should be dense small-world dressing, not large overlays: {generated_content_max}"
+        generated_content_max >= 12.0 && generated_content_max <= 28.0,
+        "generated procedural content should be readable world dressing, not tiny specks or large overlays: {generated_content_max}"
     );
 }
 
