@@ -51,6 +51,41 @@ fn procedural_chunks_activate_around_creatures_without_rendering() {
 }
 
 #[test]
+fn procedural_chunks_follow_creature_travel_from_same_seed() {
+    let config = ProceduralWorldConfig::with_seed(4242);
+
+    let origin_report =
+        activate_procedural_chunks_around_creatures(config, &[anchor(1, 0.0, 0.0)]).unwrap();
+    let traveled_report =
+        activate_procedural_chunks_around_creatures(config, &[anchor(1, 96.0, -64.0)]).unwrap();
+    let repeated_traveled_report =
+        activate_procedural_chunks_around_creatures(config, &[anchor(1, 96.0, -64.0)]).unwrap();
+
+    assert_eq!(traveled_report, repeated_traveled_report);
+    assert_eq!(origin_report.seed, traveled_report.seed);
+    assert_ne!(
+        origin_report.active_chunks, traveled_report.active_chunks,
+        "creature travel should materialize a new deterministic active chunk window instead of reusing a single screen"
+    );
+    assert!(origin_report.generated_without_rendering);
+    assert!(traveled_report.generated_without_rendering);
+    assert!(origin_report
+        .active_chunks
+        .iter()
+        .all(|chunk| chunk.anchor_stable_id == WorldEntityId(1)));
+    assert!(traveled_report
+        .active_chunks
+        .iter()
+        .all(|chunk| chunk.anchor_stable_id == WorldEntityId(1)));
+    assert!(traveled_report.active_chunks.iter().any(|chunk| {
+        chunk.anchor_tile == ProceduralTileCoord::new(96, -64)
+            && chunk.anchor_stable_id == WorldEntityId(1)
+    }));
+    origin_report.validate(config).unwrap();
+    traveled_report.validate(config).unwrap();
+}
+
+#[test]
 fn procedural_chunks_do_not_exist_without_creature_anchors() {
     let config = ProceduralWorldConfig::with_seed(4242);
 

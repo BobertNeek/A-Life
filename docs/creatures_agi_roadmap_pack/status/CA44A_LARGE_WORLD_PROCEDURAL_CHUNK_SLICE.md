@@ -10,6 +10,11 @@ Manual screenshots after CA44A still did not match the intended top-down game-wo
 
 The user also clarified that the world must be a large procedurally generated terrain map explored through creature-local materialization, not a single visible board.
 
+Current follow-up: the later seeded Player View correction replaces the
+painted-backdrop default with a runtime-generated procedural biome map. The
+painted world plate remains available only as Full Debug/style-reference
+presentation.
+
 ## Fix
 
 This branch keeps simulation semantics unchanged and fixes the presentation/scale contract:
@@ -17,7 +22,10 @@ This branch keeps simulation semantics unchanged and fixes the presentation/scal
 - `alife_world` now exposes a validated `ProceduralWorldScaleReport` proving a large virtual procedural terrain domain.
 - The default procedural world remains creature-anchored: no chunks exist without creature anchors, active chunks are bounded, and generated terrain/content remains non-authoritative.
 - The CA37 visual map constants now describe a large virtual map instead of a 97x73 visible board.
-- The Player View painted world backdrop now covers the zoomed-out player camera view instead of appearing as a small centered plate.
+- The original branch scaled the Player View painted world backdrop to the
+  zoomed-out player camera view. This is now superseded: default Player View
+  uses the runtime-generated seeded biome map, and the painted backdrop is not
+  spawned in Player View.
 - Foreground creatures, selection rings, food, hazards, rocks, and generated dressing props are rendered at map scale so they read like small agents/objects in a larger environment.
 
 ## Procedural World Scale
@@ -89,6 +97,11 @@ target/playtest_evidence/visual_fix/large_world_slice_full_surface_actual.png
 
 The first capture showed the painted map as a small centered plate surrounded by a flat field. The second capture, after scaling the painted surface to the camera framing, shows a broad target-style top-down map: paths, groves, stones, red hazard pressure, and small map-scale creature/object sprites.
 
+Later follow-up evidence captured the runtime-generated seeded biome map as the
+default Player View surface with small map-scale sprites and fog outside active
+creature chunk windows. Those screenshots remain local untracked evidence under
+`target/playtest_evidence/procedural_biome_player_view/`.
+
 ## Validation Results
 
 Full validation passed:
@@ -111,6 +124,9 @@ Optional Graphify update was attempted with the installed local `graphify.exe` a
 ## Known Limitations
 
 This is still a graphical/presentation slice. The procedural terrain map is deterministic, large, and creature-anchored, but it is not yet a fully authoritative offscreen ecology, navigation, sensory, or resource simulation substrate. Future roadmap work can make exploration deeper; this slice fixes the default player-facing scale/readability mismatch.
+
+The current default visual surface is generated from the seed at runtime. It is
+still alpha art and not final production rendering.
 
 ## Artifact Status
 
