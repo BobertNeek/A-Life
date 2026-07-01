@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Generate original low-poly glTF assets for the A-Life true 2.5D alpha lane.
+"""Generate original low-poly glTF seed assets for the A-Life true 2.5D lane.
 
 The assets are intentionally tiny and procedural, but they are authored as
 native glTF geometry rather than flat sprite rectangles. They are display-only:
 no physics, navigation, cognition, or action authority is encoded here.
+
+This script now emits seed `.gltf` files under `target/artifacts/` by default.
+The active product lane uses Blender-normalized `.glb` files validated by the
+committed manifest; do not overwrite that lane unless intentionally regenerating
+the seed pack before running the Blender normalization wrapper.
 """
 
 from __future__ import annotations
 
+import argparse
 import base64
 import json
 import math
@@ -17,11 +23,12 @@ import zlib
 from pathlib import Path
 
 
-ROOT = Path("crates/alife_game_app/assets/true_25d_alpha_v1")
-MANIFEST = ROOT / "true_25d_manifest.json"
+ACTIVE_ROOT = Path("crates/alife_game_app/assets/true_25d_alpha_v1")
+ACTIVE_MANIFEST = ACTIVE_ROOT / "true_25d_manifest.json"
+DEFAULT_ROOT = Path("target/artifacts/true25d_seed_gltf")
 SCHEMA = "alife.ca44a.true_25d_asset_manifest.v1"
 ART_DIRECTION = "true-2-5d-retro-futuristic-biological-v1"
-GROUND_TILE = Path("crates/alife_game_app/assets/alpha_art_v1/ground_tile_repeat.png")
+ACTIVE_GROUND_TILE = Path("crates/alife_game_app/assets/alpha_art_v1/ground_tile_repeat.png")
 
 
 def pack_f32(values):
@@ -586,21 +593,72 @@ ASSETS = [
 ]
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Generate seed glTF assets for later Blender normalization."
+    )
+    parser.add_argument(
+        "--output-root",
+        default=str(DEFAULT_ROOT),
+        help="Directory for seed glTF output. Defaults to an untracked target path.",
+    )
+    parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Manifest output path. Defaults to <output-root>/true_25d_seed_manifest.json.",
+    )
+    parser.add_argument(
+        "--ground-tile",
+        default=None,
+        help="Ground tile output path. Defaults to <output-root>/ground_tile_repeat.png.",
+    )
+    parser.add_argument(
+        "--overwrite-active",
+        action="store_true",
+        help=(
+            "Allow writing into committed active asset paths. This is seed-only "
+            "and must be followed by scripts/normalize_true25d_gltf_assets.ps1."
+        ),
+    )
+    return parser.parse_args()
+
+
+def reject_active_output_without_override(root: Path, manifest: Path, ground_tile: Path, allowed: bool):
+    targets = [root.resolve(), manifest.resolve(), ground_tile.resolve()]
+    active_targets = [ACTIVE_ROOT.resolve(), ACTIVE_MANIFEST.resolve(), ACTIVE_GROUND_TILE.resolve()]
+    if allowed:
+        return
+    for target in targets:
+        for active in active_targets:
+            if target == active or active in target.parents:
+                raise SystemExit(
+                    "Refusing to overwrite active true 2.5D product assets. "
+                    "Use --overwrite-active only for intentional seed regeneration "
+                    "followed by Blender normalization."
+                )
+
+
 def main():
-    ROOT.mkdir(parents=True, exist_ok=True)
-    if not GROUND_TILE.exists():
-        write_repeat_ground_tile(GROUND_TILE)
+    args = parse_args()
+    root = Path(args.output_root)
+    manifest = Path(args.manifest) if args.manifest else root / "true_25d_seed_manifest.json"
+    ground_tile = Path(args.ground_tile) if args.ground_tile else root / "ground_tile_repeat.png"
+    reject_active_output_without_override(root, manifest, ground_tile, args.overwrite_active)
+
+    root.mkdir(parents=True, exist_ok=True)
+    if not ground_tile.exists():
+        write_repeat_ground_tile(ground_tile)
     entries = []
     for role, filename, builder in ASSETS:
         primitives = builder()
-        path = ROOT / filename
+        path = root / filename
         make_gltf(path, filename[:-5], primitives)
         vertex_count = sum(len(primitive[0]) for primitive in primitives)
         index_count = sum(len(primitive[2]) for primitive in primitives)
         entries.append(
             {
                 "role": role,
-                "relative_path": f"crates/alife_game_app/assets/true_25d_alpha_v1/{filename}",
+                "relative_path": path.as_posix(),
                 "node_count": 1,
                 "mesh_count": 1,
                 "material_count": len(primitives),
@@ -609,13 +667,15 @@ def main():
                 "file_size_bytes": path.stat().st_size,
             }
         )
-    MANIFEST.write_text(
+    manifest.write_text(
         json.dumps(
             {
                 "schema": SCHEMA,
                 "schema_version": 1,
                 "pack_id": "true-25d-alpha-v1",
                 "art_direction": ART_DIRECTION,
+                "seed_only": True,
+                "requires_blender_normalization": True,
                 "camera": {
                     "projection": "orthographic",
                     "yaw_degrees": 0.0,
@@ -634,7 +694,8 @@ def main():
         ),
         encoding="utf-8",
     )
-    print(f"generated {len(entries)} true 2.5D glTF assets under {ROOT}")
+    print(f"generated {len(entries)} true 2.5D seed glTF assets under {root}")
+    print("active product assets still require Blender-normalized GLB manifest output")
 
 
 if __name__ == "__main__":

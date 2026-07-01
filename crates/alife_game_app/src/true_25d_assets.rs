@@ -61,7 +61,7 @@ pub struct True25dShaderStackContract {
     pub runtime_shader_contract_only: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct True25dAssetEntry {
     pub role: String,
     pub relative_path: String,
@@ -71,6 +71,13 @@ pub struct True25dAssetEntry {
     pub vertex_count: u32,
     pub index_count: u32,
     pub file_size_bytes: u64,
+    pub blender_normalized: bool,
+    pub origin_anchor: String,
+    pub transform_applied: bool,
+    pub max_dimension_units: f32,
+    pub decimation_threshold_triangles: u32,
+    pub triangle_count: u32,
+    pub decimation_applied: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -211,6 +218,16 @@ fn validate_true_25d_asset_entry(
         || entry.index_count < 6
         || entry.file_size_bytes == 0
         || entry.file_size_bytes > TRUE_25D_ALPHA_MAX_ASSET_BYTES
+        || !entry.blender_normalized
+        || entry.origin_anchor != "base-center"
+        || !entry.transform_applied
+        || !entry.max_dimension_units.is_finite()
+        || entry.max_dimension_units <= 0.0
+        || entry.max_dimension_units > 1.001
+        || entry.decimation_threshold_triangles == 0
+        || entry.triangle_count == 0
+        || entry.triangle_count > entry.decimation_threshold_triangles
+        || entry.index_count != entry.triangle_count.saturating_mul(3)
     {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
@@ -332,5 +349,32 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         manifest.entries[0].relative_path = "target/artifacts/fake.gltf".to_string();
         assert!(validate_true_25d_asset_manifest_inner(&root, &path, &manifest).is_err());
+    }
+
+    #[test]
+    fn true_25d_manifest_rejects_assets_without_blender_normalization_contract() {
+        let root = ca12_workspace_root();
+        let path = default_true_25d_asset_manifest_path();
+        let manifest: True25dAssetManifest =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+
+        let mut missing_normalization = manifest.clone();
+        missing_normalization.entries[0].blender_normalized = false;
+        assert!(
+            validate_true_25d_asset_manifest_inner(&root, &path, &missing_normalization).is_err()
+        );
+
+        let mut wrong_origin = manifest.clone();
+        wrong_origin.entries[0].origin_anchor = "scene-center".to_string();
+        assert!(validate_true_25d_asset_manifest_inner(&root, &path, &wrong_origin).is_err());
+
+        let mut oversized = manifest.clone();
+        oversized.entries[0].max_dimension_units = 1.25;
+        assert!(validate_true_25d_asset_manifest_inner(&root, &path, &oversized).is_err());
+
+        let mut stale_metrics = manifest;
+        stale_metrics.entries[0].triangle_count =
+            stale_metrics.entries[0].decimation_threshold_triangles + 1;
+        assert!(validate_true_25d_asset_manifest_inner(&root, &path, &stale_metrics).is_err());
     }
 }

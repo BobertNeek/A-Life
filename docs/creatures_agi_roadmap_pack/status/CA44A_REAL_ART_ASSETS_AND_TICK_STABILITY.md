@@ -43,7 +43,7 @@ crates/alife_game_app/assets/true_25d_alpha_v1/
 
 The active default Player View target is the True 2.5D retro-futuristic biological presentation:
 
-- low-poly `.gltf` creatures/items/props/fog accents in `true_25d_alpha_v1`;
+- low-poly `.glb` creatures/items/props/fog accents in `true_25d_alpha_v1`;
 - fixed orthographic 2.5D Bevy camera;
 - a single `Plane3d` seeded biome surface generated from a deterministic procedural sampler;
 - seeded micro-ecology dressing generated around active creature/chunk anchors;
@@ -61,7 +61,7 @@ The required visual roles are represented by assets:
 - rock/obstacle cluster
 - safe grass, soil/path, resource/grove, hazard-pressure, stone/rough, water, and sand tiles
 - prop/dressing variants including grass tuft, leaf patch, mushroom cluster, pebble cluster, and warning shard
-- low-poly 2.5D glTF roles for creature, food, hazard, rock, props, terrain ledgers, fog cells, and selection ring
+- low-poly 2.5D GLB roles for creature, food, hazard, rock, props, terrain ledgers, fog cells, and selection ring
 
 No third-party copyrighted art was downloaded.
 
@@ -72,7 +72,7 @@ Strict validation exists for both asset families:
 - schema/version checked;
 - required roles checked;
 - PNG signature, dimensions, manifest file size, and per-role size caps checked;
-- glTF files checked for existence, extension, required roles, size caps, local paths, and forbidden artifact/cache paths;
+- GLB files checked for existence, extension, required roles, size caps, local paths, and forbidden artifact/cache paths;
 - forbidden target/log/cache/screenshot/capture/model-artifact paths rejected;
 - package dry-run lists both `alpha_art_v1` and `true_25d_alpha_v1`.
 
@@ -82,7 +82,7 @@ Default Player View now renders the world through a true-2.5D scene:
 
 - camera uses fixed orthographic presentation with `FixedVertical(10.0)` and `(0, 12, 12)` looking at origin;
 - world surface is one static Bevy plane using a generated seed biome map;
-- creature/object/selection roles are spawned as normalized glTF scenes when available, with native low-poly fallback as degraded diagnostics;
+- creature/object/selection roles are spawned as normalized GLB scenes when available, with native low-poly fallback as degraded diagnostics;
 - seeded chunks and active creature anchors drive procedural dressing and fog/ledger state;
 - world labels, topology lines, stable ID spam, internal GPU/patch fields, teacher debug labels, and full event feed stay hidden in default Player View;
 - Dev Overlay and Full Debug remain available for validation.
@@ -96,7 +96,7 @@ The shader stack from the user brief remains a rendering contract only. CA44A do
 Focused coverage includes:
 
 - alpha PNG manifest acceptance/rejection tests;
-- true-2.5D glTF manifest acceptance/rejection tests;
+- true-2.5D GLB manifest acceptance/rejection tests;
 - Player View tests proving asset-backed 2.5D rendering is default;
 - tests proving the default view does not use fallback rectangles for required roles;
 - fixed orthographic camera contract tests;
@@ -253,7 +253,7 @@ Release/package runtime cadence is not claimed because the local release build d
 
 ## Artifacts Tracked
 
-Tracked: source code, docs, manifests, versioned PNG assets under `crates/alife_game_app/assets/alpha_art_v1/`, and versioned glTF assets under `crates/alife_game_app/assets/true_25d_alpha_v1/`.
+Tracked: source code, docs, manifests, versioned PNG assets under `crates/alife_game_app/assets/alpha_art_v1/`, and versioned GLB assets under `crates/alife_game_app/assets/true_25d_alpha_v1/`.
 
 Not tracked: screenshots, logs, target artifacts, model files, caches, captures, release zips, Blender temporary files, or generator scratch output.
 
