@@ -24,6 +24,7 @@ pub struct AppBundleManifest {
     pub environment_manifest: String,
     pub placeholder_art_manifest: String,
     pub alpha_art_manifest: String,
+    pub true_25d_asset_manifest: String,
     pub entries: Vec<AppBundleEntry>,
     pub shader_assets: Vec<ShaderAssetEntry>,
 }
@@ -74,6 +75,9 @@ pub struct AppBundleIngestionSummary {
     pub alpha_art_entries: usize,
     pub alpha_art_required_roles_present: bool,
     pub production_alpha_art: bool,
+    pub true_25d_asset_entries: usize,
+    pub true_25d_required_roles_present: bool,
+    pub production_true_25d_assets: bool,
     pub required_entries: usize,
     pub largest_file_bytes: u64,
     pub missing_required_rejected: bool,
@@ -97,6 +101,9 @@ impl AppBundleIngestionSummary {
             || self.alpha_art_entries < CA44A_REQUIRED_ALPHA_ART_ROLES
             || !self.alpha_art_required_roles_present
             || !self.production_alpha_art
+            || self.true_25d_asset_entries < TRUE_25D_ALPHA_MIN_REQUIRED_ROLES
+            || !self.true_25d_required_roles_present
+            || !self.production_true_25d_assets
             || self.required_entries == 0
             || self.largest_file_bytes > CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
             || !self.missing_required_rejected
@@ -112,7 +119,7 @@ impl AppBundleIngestionSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:entries={}:shaders={}/{}:art={}:largest={}",
+            "{}:{}:{}:entries={}:shaders={}/{}:art={}:true25d={}:largest={}",
             self.schema,
             self.schema_version,
             self.bundle_id,
@@ -120,6 +127,7 @@ impl AppBundleIngestionSummary {
             self.shader_assets,
             self.discovered_shader_assets,
             self.alpha_art_entries,
+            self.true_25d_asset_entries,
             self.largest_file_bytes
         )
     }
@@ -199,6 +207,11 @@ fn validate_app_bundle_manifest_inner(
     )?;
     largest_file_bytes = largest_file_bytes.max(alpha_art.largest_file_bytes);
 
+    let true_25d_path = resolve_workspace_path(root, &manifest.true_25d_asset_manifest)?;
+    let true_25d =
+        validate_true_25d_asset_manifest_inner(root, &true_25d_path, &read_json(&true_25d_path)?)?;
+    largest_file_bytes = largest_file_bytes.max(true_25d.largest_file_bytes);
+
     let mut ids = BTreeSet::new();
     let mut required_entries = 0;
     let mut large_binary_assets_committed = has_binary_like_extension(&placeholder_path);
@@ -257,6 +270,15 @@ fn validate_app_bundle_manifest_inner(
             && alpha_art.largest_file_bytes <= CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
             && alpha_art.entry_count >= CA44A_REQUIRED_ALPHA_ART_ROLES
             && alpha_art.pack_id == "alpha-art-v1",
+        true_25d_asset_entries: true_25d.entry_count,
+        true_25d_required_roles_present: true_25d.required_roles_present,
+        production_true_25d_assets: true_25d.required_roles_present
+            && true_25d.gltf_files_validated
+            && true_25d.orthographic_camera_locked
+            && true_25d.shader_stack_declared
+            && true_25d.no_action_authority
+            && true_25d.largest_file_bytes <= TRUE_25D_ALPHA_MAX_ASSET_BYTES
+            && true_25d.pack_id == "true-25d-alpha-v1",
         required_entries,
         largest_file_bytes,
         missing_required_rejected: false,
@@ -272,6 +294,8 @@ fn validate_app_bundle_manifest_inner(
             "App bundle manifest is versioned and validated.".to_string(),
             "WGSL shader assets are discovered from the committed shader directory.".to_string(),
             "Alpha art v1 PNG sprites/tiles are production-alpha, versioned, and manifest-validated."
+                .to_string(),
+            "True 2.5D glTF assets are the active player-facing art direction and are manifest-validated."
                 .to_string(),
         ],
     })

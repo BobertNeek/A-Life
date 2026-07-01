@@ -22,16 +22,17 @@ use alife_game_app::{
     run_platform_package_smoke, run_playable_survival_loop_smoke, run_player_sandbox_editor_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_procedural_world_travel_smoke, run_product_qa_hardening_smoke,
-    run_real_semantic_provider_smoke, run_realtime_wgsl_telemetry_smoke,
-    run_release_candidate_smoke, run_runtime_controls_smoke, run_runtime_prereq_diagnostics,
-    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke, run_tester_feedback_capture_smoke,
-    run_topological_concept_overlay_smoke, run_world_art_style_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, validate_app_bundle_manifest, validate_app_shell_config,
-    write_behavior_comparison_lab_report, write_ca36_soak_isolation_report, AppShellLaunchConfig,
-    BatchedGpuRuntimeOptions, EnvironmentManifest, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    RuntimePrereqDiagnosticsOptions, SampledGpuRuntimeOptions,
+    run_production_asset_pipeline_smoke, run_real_semantic_provider_smoke,
+    run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_runtime_prereq_diagnostics, run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_tester_feedback_capture_smoke, run_topological_concept_overlay_smoke,
+    run_world_art_style_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_bundle_manifest, validate_app_shell_config, write_behavior_comparison_lab_report,
+    write_ca36_soak_isolation_report, AppShellLaunchConfig, BatchedGpuRuntimeOptions,
+    EnvironmentManifest, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, RuntimePrereqDiagnosticsOptions,
+    SampledGpuRuntimeOptions,
 };
 
 fn main() -> ExitCode {
@@ -339,6 +340,29 @@ fn run() -> Result<String, String> {
                 summary.can_emit_actions,
                 summary.can_rewrite_weights,
                 summary.world_generation_claim,
+                summary.signature_line()
+            ))
+        }
+        [command] if command == "production-asset-pipeline-smoke" => {
+            let summary = run_production_asset_pipeline_smoke().map_err(|err| err.to_string())?;
+            Ok(format!(
+                "Production asset pipeline schema={} version={} id={} roles={} active_pngs={} blender_script={} launcher_script={} blender_on_path={} blender_discovered={} blender_executable={} status={} user_action_required={} runtime_dependency={} action_authority={} weight_authority={} semantics_authority={} signature={}",
+                summary.schema,
+                summary.schema_version,
+                summary.pipeline_id,
+                summary.role_count,
+                summary.active_pngs_exist,
+                summary.blender_script_present,
+                summary.launcher_script_present,
+                summary.blender_on_path,
+                summary.blender_discovered,
+                summary.blender_executable.as_deref().unwrap_or("none"),
+                summary.local_render_status,
+                summary.user_action_required,
+                summary.runtime_game_dependency,
+                summary.can_emit_actions,
+                summary.can_rewrite_weights,
+                summary.can_change_simulation_semantics,
                 summary.signature_line()
             ))
         }
@@ -711,7 +735,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--view-mode player|dev-overlay|full-debug] [--smoke-seconds N] [--require-gpu] | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | procedural-world-travel-smoke <fixture-root> | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--view-mode player|dev-overlay|full-debug] [--smoke-seconds N] [--require-gpu] | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -2360,7 +2384,7 @@ fn format_app_bundle_summary(
     summary: &alife_game_app::AppBundleIngestionSummary,
 ) -> String {
     format!(
-        "{prefix} schema={} version={} bundle={} scenarios={} entries={} shaders={}/{} legacy_art_descriptors={} alpha_art={} alpha_roles={} production_alpha_art={} required={} largest_bytes={} missing_required_rejected={} shader_discovery={} legacy_descriptors_valid={} large_binary_assets={} signature={}",
+        "{prefix} schema={} version={} bundle={} scenarios={} entries={} shaders={}/{} legacy_art_descriptors={} alpha_art={} alpha_roles={} production_alpha_art={} true_25d={} true_25d_roles={} production_true_25d={} required={} largest_bytes={} missing_required_rejected={} shader_discovery={} legacy_descriptors_valid={} large_binary_assets={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.bundle_id,
@@ -2372,6 +2396,9 @@ fn format_app_bundle_summary(
         summary.alpha_art_entries,
         summary.alpha_art_required_roles_present,
         summary.production_alpha_art,
+        summary.true_25d_asset_entries,
+        summary.true_25d_required_roles_present,
+        summary.production_true_25d_assets,
         summary.required_entries,
         summary.largest_file_bytes,
         summary.missing_required_rejected,
@@ -2995,7 +3022,7 @@ fn configure_windows_graphical_playground_environment() {
         .ok()
         .map(|value| value.trim().to_ascii_lowercase())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "dx12".to_string());
+        .unwrap_or_else(|| "vulkan".to_string());
 
     match backend_request.as_str() {
         "existing" => {
@@ -3007,25 +3034,36 @@ fn configure_windows_graphical_playground_environment() {
         "vulkan" | "vk" => {
             env::set_var("WGPU_BACKEND", "vulkan");
             eprintln!(
-                "Windows graphical backend: Vulkan diagnostics requested; injected overlay loader warnings may appear."
+                "Windows graphical backend: ALIFE_GRAPHICS_BACKEND=vulkan selected; injected overlay loader warnings may appear."
             );
         }
-        "dx12" | "d3d12" | "auto" => {
+        "dx12" | "d3d12" => {
             let previous = env::var("WGPU_BACKEND").ok();
             env::set_var("WGPU_BACKEND", "dx12");
             if matches!(previous.as_deref(), Some("dx12")) {
                 eprintln!("Windows graphical backend: WGPU_BACKEND=dx12.");
             } else {
                 eprintln!(
-                    "Windows graphical backend: WGPU_BACKEND=dx12 for clean alpha launch; set ALIFE_GRAPHICS_BACKEND=vulkan for Vulkan diagnostics."
+                    "Windows graphical backend: WGPU_BACKEND=dx12 explicitly selected; Vulkan remains the default True 2.5D Player View backend on this host."
+                );
+            }
+        }
+        "auto" => {
+            let previous = env::var("WGPU_BACKEND").ok();
+            env::set_var("WGPU_BACKEND", "vulkan");
+            if matches!(previous.as_deref(), Some("vulkan")) {
+                eprintln!("Windows graphical backend: WGPU_BACKEND=vulkan.");
+            } else {
+                eprintln!(
+                    "Windows graphical backend: auto selected WGPU_BACKEND=vulkan for True 2.5D Player View; set ALIFE_GRAPHICS_BACKEND=dx12 only for DX12 diagnostics."
                 );
             }
         }
         other => {
             eprintln!(
-                "Windows graphical backend: unknown ALIFE_GRAPHICS_BACKEND={other}; using dx12 for clean alpha launch."
+                "Windows graphical backend: unknown ALIFE_GRAPHICS_BACKEND={other}; using vulkan for True 2.5D Player View."
             );
-            env::set_var("WGPU_BACKEND", "dx12");
+            env::set_var("WGPU_BACKEND", "vulkan");
         }
     }
 

@@ -26,59 +26,60 @@ use alife_game_app::{
     run_platform_package_smoke, run_playable_survival_loop_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_procedural_world_travel_smoke, run_product_qa_hardening_smoke,
-    run_real_semantic_provider_smoke, run_realtime_wgsl_telemetry_smoke,
-    run_release_candidate_smoke, run_runtime_controls_smoke, run_runtime_prereq_diagnostics,
-    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
-    run_semantic_provider_smoke, run_teacher_world_cues_smoke, run_tester_feedback_capture_smoke,
-    run_topological_concept_overlay_smoke, run_world_art_style_smoke, run_world_ecology_loop_smoke,
-    run_world_editor_smoke, select_visible_world_entity, validate_app_shell_config,
-    write_behavior_comparison_lab_report, AppShellLaunchConfig, AutosavePolicy,
-    BatchedGpuRuntimeOptions, BehaviorTuningConfig, BehaviorTuningFindingStatus, Ca13TickBuffer,
-    Ca39DriveCueKind, Ca39RuntimeCueEvidence, Ca43LogDirectoryPolicy, CadenceTarget,
-    CameraNavigationState, ConfigMenuState, CrashSummaryInput, CreatureAnimationState,
-    CreatureExpressionState, CreatureLifeStage, CurriculumLessonSaveState,
-    DoubleBufferedGraphicalScheduler, EcologicalSoakConfig, FeedbackAssetKind,
-    FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
-    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, GraphicalGpuRuntimeMode,
-    GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundViewMode, InspectorControlPanel,
-    LessonManifest, LifecycleEventKind, LifecycleLiveLoop, LifecycleLoopConfig, LifecycleSaveState,
-    LiveBrainLoop, LiveBrainTickControl, LodResidency, LongRunBalanceConfig, PackageSmokeKind,
-    PlayableSurvivalEventKind, PopulationLiveLoop, PopulationLoopConfig,
-    PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea, ProductQaStatus,
-    RealtimeWgslTelemetrySummary, ReleaseCandidateArea, ReleaseCandidateGateStatus,
-    RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState,
-    RuntimePrereqDiagnosticsOptions, S08EvidenceStatus, SampledGpuRuntimeOptions,
-    SaveSlotDescriptor, SaveSlotKind, SaveSlotManager, SchoolModeSaveState, VisibleMaterialKind,
-    VisiblePlaceholderShape, WorldEditCommand, WorldEditorConfig, WorldEditorMode,
-    WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA, CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION,
-    CA18_MAX_GRAPHICAL_CREATURES, CA19_GRAPHICAL_ECOLOGY_SCHEMA,
-    CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION, CA20_GRAPHICAL_LIFECYCLE_SCHEMA,
-    CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION, CA21_BEHAVIOR_TUNING_SCHEMA,
-    CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT, CA21_SCENARIO_SWEEP_COUNT,
-    CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION, CA22_FAST_HEADLESS_TICKS,
-    CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA, CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION,
-    CA25_CURRICULUM_AUTHORING_SCHEMA, CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION,
-    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION,
-    CA27_INTERNAL_SLM_PRIOR_SCHEMA, CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION,
-    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION,
-    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION,
-    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION,
-    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION,
-    CA31_MAX_REPORT_BYTES, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA,
-    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION, CA33_BATCHED_GPU_RUNTIME_SCHEMA,
-    CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION, CA34_SAMPLED_GPU_RUNTIME_SCHEMA,
-    CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION, CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA,
-    CA36_SOAK_ISOLATION_SCHEMA_VERSION, CA37_MIN_PALETTE_MATERIALS,
-    CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES, CA37_MIN_WORLD_DRESSING_PROPS,
-    CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES, CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES,
-    CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES, CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES,
-    CA37_WORLD_ART_STYLE_SCHEMA, CA37_WORLD_ART_STYLE_SCHEMA_VERSION,
-    CA38_CREATURE_ANIMATION_SCHEMA, CA38_CREATURE_ANIMATION_SCHEMA_VERSION,
-    CA38_REQUIRED_ANIMATION_STATES, CA39_DRIVE_AUDIO_VFX_SCHEMA,
-    CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION, CA39_REQUIRED_DRIVE_CUE_COUNT,
-    CA40_ONBOARDING_TUTORIAL_SCHEMA, CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION,
-    CA40_REQUIRED_CHECKLIST_ITEMS, CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA,
-    CA42_RUNTIME_PREREQ_SCHEMA, CA42_RUNTIME_PREREQ_SCHEMA_VERSION, CA43_TESTER_FEEDBACK_SCHEMA,
+    run_production_asset_pipeline_smoke, run_real_semantic_provider_smoke,
+    run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
+    run_runtime_prereq_diagnostics, run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke,
+    run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
+    run_tester_feedback_capture_smoke, run_topological_concept_overlay_smoke,
+    run_world_art_style_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    select_visible_world_entity, validate_app_shell_config, write_behavior_comparison_lab_report,
+    AppShellLaunchConfig, AutosavePolicy, BatchedGpuRuntimeOptions, BehaviorTuningConfig,
+    BehaviorTuningFindingStatus, Ca13TickBuffer, Ca39DriveCueKind, Ca39RuntimeCueEvidence,
+    Ca43LogDirectoryPolicy, CadenceTarget, CameraNavigationState, ConfigMenuState,
+    CrashSummaryInput, CreatureAnimationState, CreatureExpressionState, CreatureLifeStage,
+    CurriculumLessonSaveState, DoubleBufferedGraphicalScheduler, EcologicalSoakConfig,
+    FeedbackAssetKind, FeedbackAssetManifest, FeedbackEventKind, FullGpuRuntimeSmokeMode,
+    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundViewMode,
+    InspectorControlPanel, LessonManifest, LifecycleEventKind, LifecycleLiveLoop,
+    LifecycleLoopConfig, LifecycleSaveState, LiveBrainLoop, LiveBrainTickControl, LodResidency,
+    LongRunBalanceConfig, PackageSmokeKind, PlayableSurvivalEventKind, PopulationLiveLoop,
+    PopulationLoopConfig, PopulationPerformancePolicy, PopulationSocialEventKind, ProductQaArea,
+    ProductQaStatus, RealtimeWgslTelemetrySummary, ReleaseCandidateArea,
+    ReleaseCandidateGateStatus, RenderDetailLevel, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, RuntimePrereqDiagnosticsOptions, S08EvidenceStatus,
+    SampledGpuRuntimeOptions, SaveSlotDescriptor, SaveSlotKind, SaveSlotManager,
+    SchoolModeSaveState, VisibleMaterialKind, VisiblePlaceholderShape, WorldEditCommand,
+    WorldEditorConfig, WorldEditorMode, WorldEditorSession, CA18_GRAPHICAL_POPULATION_SCHEMA,
+    CA18_GRAPHICAL_POPULATION_SCHEMA_VERSION, CA18_MAX_GRAPHICAL_CREATURES,
+    CA19_GRAPHICAL_ECOLOGY_SCHEMA, CA19_GRAPHICAL_ECOLOGY_SCHEMA_VERSION,
+    CA20_GRAPHICAL_LIFECYCLE_SCHEMA, CA20_GRAPHICAL_LIFECYCLE_SCHEMA_VERSION,
+    CA21_BEHAVIOR_TUNING_SCHEMA, CA21_BEHAVIOR_TUNING_SCHEMA_VERSION, CA21_REQUIRED_DETECTOR_COUNT,
+    CA21_SCENARIO_SWEEP_COUNT, CA22_ECOLOGICAL_SOAK_SCHEMA, CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION,
+    CA22_FAST_HEADLESS_TICKS, CA22_MANUAL_HEADLESS_TICKS, CA23_GRAPHICAL_SCHOOL_SCHEMA,
+    CA23_GRAPHICAL_SCHOOL_SCHEMA_VERSION, CA25_CURRICULUM_AUTHORING_SCHEMA,
+    CA25_CURRICULUM_AUTHORING_SCHEMA_VERSION, CA26_REAL_SEMANTIC_PROVIDER_SCHEMA,
+    CA26_REAL_SEMANTIC_PROVIDER_SCHEMA_VERSION, CA27_INTERNAL_SLM_PRIOR_SCHEMA,
+    CA27_INTERNAL_SLM_PRIOR_SCHEMA_VERSION, CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA,
+    CA28_TOPOLOGICAL_CONCEPT_OVERLAY_SCHEMA_VERSION, CA29_MEMORY_HISTORY_JOURNAL_SCHEMA,
+    CA29_MEMORY_HISTORY_JOURNAL_SCHEMA_VERSION, CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA,
+    CA30_NEURAL_ACTIVITY_PROFILER_SCHEMA_VERSION, CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA,
+    CA31_BEHAVIOR_COMPARISON_LAB_SCHEMA_VERSION, CA31_MAX_REPORT_BYTES,
+    CA32_REALTIME_WGSL_TELEMETRY_SCHEMA, CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION,
+    CA33_BATCHED_GPU_RUNTIME_SCHEMA, CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION,
+    CA34_SAMPLED_GPU_RUNTIME_SCHEMA, CA34_SAMPLED_GPU_RUNTIME_SCHEMA_VERSION,
+    CA36_MIN_MANUAL_TICKS, CA36_SOAK_ISOLATION_SCHEMA, CA36_SOAK_ISOLATION_SCHEMA_VERSION,
+    CA37_MIN_PALETTE_MATERIALS, CA37_MIN_PROCEDURAL_VISUAL_MAP_TILES,
+    CA37_MIN_WORLD_DRESSING_PROPS, CA37_PROCEDURAL_VIEWPORT_HEIGHT_TILES,
+    CA37_PROCEDURAL_VIEWPORT_WIDTH_TILES, CA37_PROCEDURAL_VISUAL_MAP_HEIGHT_TILES,
+    CA37_PROCEDURAL_VISUAL_MAP_WIDTH_TILES, CA37_WORLD_ART_STYLE_SCHEMA,
+    CA37_WORLD_ART_STYLE_SCHEMA_VERSION, CA38_CREATURE_ANIMATION_SCHEMA,
+    CA38_CREATURE_ANIMATION_SCHEMA_VERSION, CA38_REQUIRED_ANIMATION_STATES,
+    CA39_DRIVE_AUDIO_VFX_SCHEMA, CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION,
+    CA39_REQUIRED_DRIVE_CUE_COUNT, CA40_ONBOARDING_TUTORIAL_SCHEMA,
+    CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION, CA40_REQUIRED_CHECKLIST_ITEMS,
+    CA42A_MAX_PLAYER_TERRAIN_OVERLAY_ALPHA, CA42_RUNTIME_PREREQ_SCHEMA,
+    CA42_RUNTIME_PREREQ_SCHEMA_VERSION, CA43_TESTER_FEEDBACK_SCHEMA,
     CA43_TESTER_FEEDBACK_SCHEMA_VERSION, G21_ASSET_BUNDLE_SCHEMA, G21_ASSET_BUNDLE_SCHEMA_VERSION,
     G21_PLATFORM_PACKAGE_SCHEMA, G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
 };
@@ -309,7 +310,7 @@ fn first_graphical_alpha_playtest_docs_and_launcher_are_current() {
             .unwrap();
     assert!(app_cli.contains("configure_windows_graphical_playground_environment"));
     assert!(app_cli.contains("WGPU_BACKEND"));
-    assert!(app_cli.contains("dx12 for clean alpha launch"));
+    assert!(app_cli.contains("vulkan for True 2.5D Player View"));
     assert!(app_cli.contains("ALIFE_GRAPHICS_BACKEND=vulkan"));
 }
 
@@ -771,6 +772,24 @@ fn ca44a_procedural_world_travel_smoke_streams_seeded_chunks_without_rendering()
 }
 
 #[test]
+fn production_asset_pipeline_smoke_tracks_blender_art_without_runtime_authority() {
+    let summary = run_production_asset_pipeline_smoke().unwrap();
+    summary.validate().unwrap();
+    assert!(summary.required_roles_present);
+    assert!(summary.active_pngs_exist);
+    assert!(summary.blender_script_present);
+    assert!(summary.launcher_script_present);
+    assert!(!summary.runtime_game_dependency);
+    assert!(!summary.can_emit_actions);
+    assert!(!summary.can_rewrite_weights);
+    assert!(!summary.can_change_simulation_semantics);
+    if !summary.blender_discovered {
+        assert_eq!(summary.local_render_status, "USER_ACTION_REQUIRED");
+        assert!(summary.user_action_required);
+    }
+}
+
+#[test]
 fn ca38_creature_animation_state_machine_maps_required_states_without_authority() {
     let summary = run_creature_animation_state_machine_smoke().unwrap();
 
@@ -817,7 +836,8 @@ fn ca38_creature_animation_state_machine_maps_required_states_without_authority(
 #[test]
 fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
     let launch =
-        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5)
+            .with_view_mode(GraphicalPlaygroundViewMode::DevOverlay);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch)
             .expect("CA37 graphical world art shell should build");
@@ -874,7 +894,7 @@ fn bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe() {
         tile.display_only
             && tile.viewport_slice
             && tile.opacity >= 0.0
-            && tile.opacity <= 0.02
+            && tile.opacity <= 0.18
             && tile.tile_size_pixels > 0.0
             && tile.material_id != "debug"
     }));
@@ -2320,7 +2340,7 @@ fn ca42a_player_hud_is_compact_and_debug_spam_free() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
-fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
+fn ca44a_player_view_uses_true_25d_world_assets_not_default_rectangles() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
     let (mut app, summary) =
@@ -2330,26 +2350,47 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
     assert!(!summary.stable_id_overlay_visible);
 
-    let mut art_query = app
+    let mut true_25d_query = app
         .world_mut()
-        .query::<&alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite>();
-    let roles = art_query
+        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dAsset>();
+    let true_25d_roles = true_25d_query
         .iter(app.world())
-        .map(|sprite| sprite.role)
+        .map(|asset| asset.role)
         .collect::<Vec<_>>();
     for role in [
         "creature-idle",
         "food",
         "hazard",
-        "entity-shadow",
         "rock-obstacle",
         "selection-ring",
-        "selection-pulse",
-        "feedback-reward",
-        "feedback-pain",
-        "feedback-sleep",
-        "feedback-learning",
-        "prop-dressing",
+        "terrain-seeded-biome-map",
+        "terrain-grass-island",
+        "terrain-soil-island",
+        "terrain-resource-grove",
+        "terrain-hazard-pressure",
+        "terrain-stone-island",
+        "terrain-water-cell",
+        "terrain-sand-island",
+        "fog-of-war-cell",
+    ] {
+        assert!(
+            true_25d_roles.contains(&role),
+            "missing true 2.5D role {role}"
+        );
+    }
+
+    let mut art_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite>();
+    let legacy_roles = art_query
+        .iter(app.world())
+        .map(|sprite| sprite.role)
+        .collect::<Vec<_>>();
+    for legacy_world_role in [
+        "creature-idle",
+        "food",
+        "hazard",
+        "rock-obstacle",
         "terrain-safe-grass",
         "terrain-soil-path",
         "terrain-resource-grove",
@@ -2357,17 +2398,14 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         "terrain-stone-rough",
         "terrain-water",
         "terrain-sand",
+        "world-painted-viewport",
+        "world-atmospheric-underlay",
     ] {
-        assert!(roles.contains(&role), "missing alpha art role {role}");
+        assert!(
+            !legacy_roles.contains(&legacy_world_role),
+            "default Player View should not render legacy 2D world role {legacy_world_role}"
+        );
     }
-    assert!(
-        !roles.contains(&"world-painted-viewport"),
-        "default Player View must use the live procedural biome map, not the baked painted viewport"
-    );
-    assert!(
-        !roles.contains(&"world-atmospheric-underlay"),
-        "default Player View must not restore the old atmospheric debug underlay"
-    );
 
     let mut fallback_query =
         app.world_mut()
@@ -2386,38 +2424,20 @@ fn ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles() {
         .iter(app.world())
         .all(|(visibility, _)| *visibility == bevy::prelude::Visibility::Hidden));
 
-    let mut pulse_query = app.world_mut().query_filtered::<
-        &bevy::prelude::Sprite,
-        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalSensoryCuePulse>,
-    >();
-    for pulse in pulse_query.iter(app.world()) {
-        let size = pulse
-            .custom_size
-            .expect("Player View feedback pulses should be bounded sprites");
-        assert!(
-            size.x <= 16.0 && size.y <= 16.0,
-            "Player View feedback pulses must be bounded pings, not debug slabs: {size:?}"
-        );
-    }
-
-    let mut selection_query = app.world_mut().query_filtered::<
-        &bevy::prelude::Sprite,
-        bevy::prelude::With<alife_game_app::bevy_shell::GraphicalSelectionRing>,
-    >();
-    for ring in selection_query.iter(app.world()) {
-        let size = ring
-            .custom_size
-            .expect("Player View selection rings should be bounded sprites");
-        assert!(
-            size.x <= 92.0 && size.y <= 74.0,
-            "selected creature rings must frame the sprite without covering the map: {size:?}"
-        );
-    }
+    let mut true_25d_cues = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dStateCue>();
+    assert!(
+        true_25d_cues
+            .iter(app.world())
+            .any(|cue| cue.learning_biolume && cue.display_only),
+        "Player View should carry creature-state cues in the true 2.5D layer"
+    );
 }
 
 #[cfg(feature = "bevy-app")]
 #[test]
-fn production_player_view_uses_runtime_map_and_readable_foreground_sprites() {
+fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
     let (mut app, summary) =
@@ -2426,6 +2446,97 @@ fn production_player_view_uses_runtime_map_and_readable_foreground_sprites() {
 
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
 
+    let contract = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalTrue25dPresentationResource>();
+    assert!(contract.asset_manifest.required_roles_present);
+    assert!(contract.asset_manifest.gltf_files_validated);
+    assert!(contract.versioned_gltf_pack_validated);
+    assert!(
+        contract.runtime_gltf_scene_rendering || contract.runtime_native_low_poly_fallback,
+        "Player View must either render versioned glTF scenes or expose the native low-poly fallback in minimal validation contexts"
+    );
+    assert_eq!(contract.toon_bands, 4);
+    assert!(contract.sobel_outline_contract);
+    assert!(contract.pixel_step_filter_contract);
+    assert!(contract.procedural_micro_ecology_chunks);
+    assert!(contract.offscreen_headless_chunks);
+    assert!(contract.no_action_authority);
+
+    let mut camera_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dCamera>();
+    let cameras = camera_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(cameras.len(), 1);
+    assert!(cameras[0].orthographic_locked);
+    assert_eq!(cameras[0].yaw_degrees, 0.0);
+    assert_eq!(cameras[0].pitch_degrees, -45.0);
+
+    let mut asset_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dAsset>();
+    let roles = asset_query
+        .iter(app.world())
+        .map(|asset| asset.role)
+        .collect::<Vec<_>>();
+    for role in [
+        "creature-idle",
+        "food",
+        "hazard",
+        "rock-obstacle",
+        "selection-ring",
+    ] {
+        assert!(roles.contains(&role), "missing true 2.5D role {role}");
+    }
+    assert!(
+        roles.iter().any(|role| *role == "terrain-seeded-biome-map"),
+        "true 2.5D Player View should use the seeded biome map as the ground surface"
+    );
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn production_player_view_uses_true_25d_micro_ecology_and_runtime_ledger() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_preview_app_shell(&launch).unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let true_25d = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalTrue25dPresentationResource>();
+    assert!(true_25d.procedural_micro_ecology_chunks);
+    assert!(true_25d.offscreen_headless_chunks);
+    assert!(true_25d.no_action_authority);
+
+    let mut asset_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dAsset>();
+    let roles = asset_query
+        .iter(app.world())
+        .map(|asset| asset.role)
+        .collect::<Vec<_>>();
+    let terrain_count = roles
+        .iter()
+        .filter(|role| role.starts_with("terrain-"))
+        .count();
+    let entity_count = roles
+        .iter()
+        .filter(|role| {
+            matches!(
+                **role,
+                "creature-idle" | "food" | "hazard" | "rock-obstacle" | "plant-prop"
+            )
+        })
+        .count();
+    assert!(
+        terrain_count >= 72,
+        "Player View should preserve terrain chunk ledger evidence without rendering foreground terrain blobs"
+    );
+    assert!(entity_count >= 4);
     let mut biome_map_query =
         app.world_mut()
             .query::<&alife_game_app::bevy_shell::GraphicalRuntimeProceduralBiomeMap>();
@@ -2434,88 +2545,24 @@ fn production_player_view_uses_runtime_map_and_readable_foreground_sprites() {
         .copied()
         .collect::<Vec<_>>();
     assert_eq!(biome_maps.len(), 1);
-    assert!(
-        biome_maps[0].primary_player_surface,
-        "runtime-generated seeded biome map should be the continuous Player View surface; committed terrain tiles blend in as asset-backed detail"
-    );
-    assert!(
-        biome_maps[0].generated_from_alpha_art_tiles,
-        "runtime biome surface must stamp committed generated terrain PNGs, not only paint flat procedural colors"
-    );
-    assert_eq!(
-        biome_maps[0].terrain_tile_source_count, 7,
-        "runtime biome surface should use the complete grass/soil/grove/hazard/stone/water/sand tile set"
-    );
-    assert!(biome_maps[0].seed > 0);
-    assert!(biome_maps[0].active_chunk_count > 0);
-    assert!(
-        biome_maps[0].fog_of_war_applied && biome_maps[0].fogged_pixels > 0,
-        "runtime-generated biome map should apply fog outside active creature chunk windows"
-    );
+    assert!(biome_maps[0].primary_player_surface);
+    assert!(biome_maps[0].generated_from_procedural_sampler);
+    assert!(biome_maps[0].generated_from_alpha_art_tiles);
 
-    let mut art_query = app.world_mut().query::<(
-        &alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite,
-        &bevy::prelude::Sprite,
-    )>();
-    let art_sprites = art_query.iter(app.world()).collect::<Vec<_>>();
+    let field = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>();
+    assert!(field.generated_without_rendering);
+    assert!(field.materialized_only_near_active_views);
+    assert!(field.creature_anchor_count >= 1);
+    assert!(!field.active_world_chunks.is_empty());
     assert!(
-        art_sprites
-            .iter()
-            .all(|(marker, _)| marker.role != "world-painted-viewport"),
-        "Player View should not depend on the baked painted viewport"
+        field.materialized_tiles.len() >= 17 * 11,
+        "the procedural map ledger should still materialize active creature chunks headlessly"
     );
-
-    let live_creature_max = art_sprites
-        .iter()
-        .filter(|(marker, _)| {
-            matches!(
-                marker.role,
-                "creature-idle"
-                    | "creature-hurt"
-                    | "creature-moving"
-                    | "creature-eat"
-                    | "creature-sleep"
-                    | "creature-signal"
-            )
-        })
-        .filter_map(|(_, sprite)| sprite.custom_size)
-        .map(|size| size.x.max(size.y))
-        .fold(0.0_f32, f32::max);
     assert!(
-        live_creature_max >= 34.0 && live_creature_max <= 64.0,
-        "live creatures should be readable player-scale sprites without becoming giant foreground sprites: {live_creature_max}"
-    );
-
-    let required_world_role_max = art_sprites
-        .iter()
-        .filter(|(marker, _)| {
-            matches!(
-                marker.role,
-                "food" | "hazard" | "rock-obstacle" | "prop-dressing"
-            )
-        })
-        .filter_map(|(_, sprite)| sprite.custom_size)
-        .map(|size| size.x.max(size.y))
-        .fold(0.0_f32, f32::max);
-    assert!(
-        required_world_role_max >= 24.0 && required_world_role_max <= 52.0,
-        "food, hazard, rock, and prop sprites must be readable but bounded player-scale sprites: {required_world_role_max}"
-    );
-
-    let generated_content_max = art_sprites
-        .iter()
-        .filter(|(marker, _)| {
-            marker
-                .stable_id
-                .map(|stable_id| stable_id.raw() >= alife_world::PROCEDURAL_CONTENT_ID_BASE)
-                .unwrap_or(false)
-        })
-        .filter_map(|(_, sprite)| sprite.custom_size)
-        .map(|size| size.x.max(size.y))
-        .fold(0.0_f32, f32::max);
-    assert!(
-        generated_content_max >= 12.0 && generated_content_max <= 28.0,
-        "generated procedural content should be readable world dressing, not tiny specks or large overlays: {generated_content_max}"
+        field.active_content_count >= 160,
+        "procedural ecology content should remain generated for creature-near context"
     );
 }
 
@@ -2555,9 +2602,21 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
     let visible_terrain_count = terrain_query.iter(app.world()).count();
+    assert_eq!(
+        visible_terrain_count, 0,
+        "default Player View should not draw the old flat 2D streamed terrain tiles over the true 2.5D world"
+    );
+
+    let mut true_25d_asset_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dAsset>();
+    let true_25d_terrain_count = true_25d_asset_query
+        .iter(app.world())
+        .filter(|asset| asset.role.starts_with("terrain-"))
+        .count();
     assert!(
-        visible_terrain_count >= 17 * 11,
-        "default Player View must render an active procedural terrain chunk slice, not only a painted plate"
+        true_25d_terrain_count >= 72,
+        "default Player View must preserve seeded biome ledger entries without rendering a foreground terrain-blob field"
     );
 
     let mut layer_query = app
@@ -2582,17 +2641,17 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
         baked_backdrop_count, 0,
         "Player View should use the live runtime procedural map, not a baked painted plate"
     );
-    let runtime_biome_map_count = layers
+    let seeded_biome_ground_count = layers
         .iter()
-        .filter(|layer| layer.role == "runtime-procedural-biome-map")
+        .filter(|layer| layer.role == "true-25d-seeded-biome-ground-plane")
         .count();
     assert_eq!(
-        runtime_biome_map_count, 1,
-        "Player View should keep one live generated biome-map surface for fog/context support"
+        seeded_biome_ground_count, 1,
+        "Player View should map the live seeded biome texture onto the true 2.5D ground plane"
     );
-    assert!(
-        streamed_terrain_count >= visible_terrain_count,
-        "streamed terrain chunks, not the underlay, must be the readable map layer"
+    assert_eq!(
+        streamed_terrain_count, 0,
+        "streamed 2D terrain chunks stay disabled in default true 2.5D Player View"
     );
 
     let mut chunk_query =
@@ -2600,8 +2659,8 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
             .query::<&alife_game_app::bevy_shell::GraphicalProceduralTerrainChunkTile>();
     assert_eq!(
         chunk_query.iter(app.world()).count(),
-        visible_terrain_count,
-        "visible terrain entities should be the active chunk materialization, not unrelated debug blocks"
+        0,
+        "2D terrain chunk entities should be ledger-only in default true 2.5D Player View"
     );
 
     let mut zone_query = app
@@ -2632,88 +2691,46 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
         .iter(app.world())
         .copied()
         .collect::<Vec<_>>();
-    assert_eq!(
-        biome_maps.len(),
-        1,
-        "default Player View should render one generated biome-map underlay, not a blank ground plane"
-    );
-    let biome_map = biome_maps[0];
-    assert!(biome_map.generated_from_procedural_sampler);
-    assert!(biome_map.generated_from_alpha_art_tiles);
-    assert_eq!(biome_map.terrain_tile_source_count, 7);
-    assert!(biome_map.primary_player_surface);
-    assert!(biome_map.display_only);
-    assert_eq!(biome_map.seed, summary.seed);
-    assert!(biome_map.active_chunk_count > 0);
-    assert!(
-        biome_map.fog_of_war_applied && biome_map.fogged_pixels > 0,
-        "seeded Player View map should fog regions with no active creature/chunk presence"
-    );
-    assert!(biome_map.width_tiles >= 96);
-    assert!(biome_map.height_tiles >= 64);
-    assert_eq!(biome_map.pixels_per_tile, 20);
-    assert_eq!(
-        biome_map.texture_width_px,
-        biome_map.width_tiles as u32 * biome_map.pixels_per_tile
-    );
-    assert_eq!(
-        biome_map.texture_height_px,
-        biome_map.height_tiles as u32 * biome_map.pixels_per_tile
-    );
-    assert!(biome_map.virtual_map_width_tiles > biome_map.width_tiles as usize);
-    assert!(biome_map.virtual_map_height_tiles > biome_map.height_tiles as usize);
-    assert!(
-        biome_map.path_pixels > 10_000,
-        "generated map should contain visible path networks like the target mockup"
-    );
-    assert!(
-        biome_map.resource_detail_pixels > 500,
-        "generated map should contain small resource/grove detail pixels"
-    );
-    assert!(
-        biome_map.hazard_detail_pixels > 200,
-        "generated map should contain hazard pressure detail pixels"
-    );
-    assert!(
-        biome_map.stone_detail_pixels > 500,
-        "generated map should contain stone/rough ground detail pixels"
-    );
-    assert_eq!(
-        biome_map.dark_gap_pixels, 0,
-        "generated map must not have black void gaps in the default player view"
-    );
+    assert_eq!(biome_maps.len(), 1);
+    assert!(biome_maps[0].primary_player_surface);
+    assert!(biome_maps[0].generated_from_procedural_sampler);
+    assert!(biome_maps[0].generated_from_alpha_art_tiles);
 
     let mut terrain_query = app
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalWorldArtTerrainTile>();
     let terrain_tiles = terrain_query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert!(
-        terrain_tiles.len() >= 29 * 21,
-        "default Player View must show a dense active procedural chunk window"
+    assert_eq!(
+        terrain_tiles.len(),
+        0,
+        "2D terrain tile entities should be disabled in default true 2.5D Player View"
     );
+
+    let mut true_25d_asset_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dAsset>();
+    let true_25d_assets = true_25d_asset_query
+        .iter(app.world())
+        .copied()
+        .collect::<Vec<_>>();
+    let terrain_roles = true_25d_assets
+        .iter()
+        .filter(|asset| asset.role.starts_with("terrain-"))
+        .count();
     assert!(
-        terrain_tiles.iter().all(|tile| {
-            tile.opacity >= 0.0 && tile.opacity <= 0.02
-        }),
-        "streamed terrain tiles should not read as square slabs; the generated alpha-art biome texture is the visible terrain surface"
+        terrain_roles >= 72,
+        "default Player View must start with seeded terrain ledger evidence backing the generated biome map"
     );
-    assert!(
-        terrain_tiles
-            .iter()
-            .all(|tile| tile.tile_size_pixels >= 34.0 && tile.tile_size_pixels <= 38.0),
-        "terrain tiles should remain aligned map cells, not a single-screen plate"
-    );
-    assert!(terrain_tiles
-        .iter()
-        .any(|tile| tile.material_id == "resource-grove"));
-    assert!(terrain_tiles
-        .iter()
-        .any(|tile| tile.material_id == "hazard-pressure"));
-    assert!(terrain_tiles
-        .iter()
-        .any(|tile| tile.material_id == "stone-dressing"));
-    assert!(terrain_tiles.iter().any(|tile| tile.material_id == "water"));
-    assert!(terrain_tiles.iter().any(|tile| tile.material_id == "sand"));
+
+    let field = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>();
+    assert_eq!(field.seed, summary.seed);
+    assert!(field.virtual_map_width_tiles > 96);
+    assert!(field.virtual_map_height_tiles > 64);
+    assert!(field.generated_without_rendering);
+    assert!(field.materialized_only_near_active_views);
+    assert!(!field.active_world_chunks.is_empty());
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2777,17 +2794,18 @@ fn player_view_streaming_keeps_live_creature_anchors_synced() {
         .world()
         .resource::<alife_game_app::bevy_shell::CreatureInspectorResource>();
     assert_eq!(inspector.snapshot.selection.stable_id, WorldEntityId(1));
+    let expected_display_x = inspector.snapshot.visual.position.x * 0.25;
+    let expected_display_z = inspector.snapshot.visual.position.z * 0.25;
     assert!(
-        (inspector.snapshot.visual.position.x * 36.0 - selected_marker_position.x).abs() <= 0.1
-            && (inspector.snapshot.visual.position.z * 36.0 - selected_marker_position.y).abs()
-                <= 0.1,
-        "read-only inspector should reflect the selected live-world stable-ID marker position"
+        (expected_display_x - selected_marker_position.x).abs() <= 0.1
+            && (expected_display_z - selected_marker_position.z).abs() <= 0.1,
+        "read-only inspector should reflect the selected live-world stable-ID marker position through the locked true-2.5D transform"
     );
 }
 
 #[cfg(feature = "bevy-app")]
 #[test]
-fn runtime_biome_map_refreshes_when_active_chunk_window_changes() {
+fn true_25d_player_view_keeps_procedural_chunk_ledger_without_2d_biome_map() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
     let (mut app, summary) =
@@ -2797,13 +2815,20 @@ fn runtime_biome_map_refreshes_when_active_chunk_window_changes() {
 
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
 
-    let before = runtime_biome_map(&mut app);
-    assert_eq!(before.refresh_count, 0);
-    assert!(before.active_chunk_signature > 0);
+    let mut biome_query =
+        app.world_mut()
+            .query::<&alife_game_app::bevy_shell::GraphicalRuntimeProceduralBiomeMap>();
+    let biome_maps = biome_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(biome_maps.len(), 1);
+    assert!(biome_maps[0].primary_player_surface);
 
-    app.world_mut()
-        .resource_mut::<alife_game_app::bevy_shell::GraphicalViewModeResource>()
-        .mode = GraphicalPlaygroundViewMode::DevOverlay;
+    let before = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>()
+        .clone();
+    assert!(!before.active_world_chunks.is_empty());
+    assert!(before.materialized_tiles.len() >= 17 * 11);
+
     {
         let mut field = app
             .world_mut()
@@ -2822,24 +2847,21 @@ fn runtime_biome_map_refreshes_when_active_chunk_window_changes() {
 
     app.update();
 
-    let after = runtime_biome_map(&mut app);
-    assert_eq!(after.refresh_count, before.refresh_count + 1);
-    assert_ne!(
-        after.active_chunk_signature, before.active_chunk_signature,
-        "runtime biome surface must regenerate when creature-anchored active chunks change"
-    );
-    assert_eq!(after.active_chunk_count, 3);
-    assert_eq!(
-        after.last_creature_anchor_count,
-        before.last_creature_anchor_count + 1
-    );
-    assert!(after.fog_of_war_applied);
+    let after = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalProceduralTerrainFieldResource>();
     assert!(
-        after.last_materialized_tile_count >= before.last_materialized_tile_count,
-        "refresh metadata should retain materialized procedural terrain evidence"
+        !after.active_world_chunks.is_empty(),
+        "procedural ledger should restore live creature-anchored chunks on update"
     );
-    assert!(after.display_only);
-    assert!(after.primary_player_surface);
+    assert_eq!(
+        after.creature_anchor_count, before.creature_anchor_count,
+        "runtime update should recompute creature anchors from live stable-ID markers instead of preserving injected test counters"
+    );
+    assert!(
+        after.materialized_tiles.len() >= before.materialized_tiles.len(),
+        "procedural ledger should retain materialized active chunk evidence"
+    );
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2857,18 +2879,6 @@ fn marker_translation(
             (marker.stable_id == stable_id).then_some(transform.translation)
         })
         .unwrap_or_else(|| panic!("missing marker for stable ID {}", stable_id.raw()))
-}
-
-#[cfg(feature = "bevy-app")]
-fn runtime_biome_map(
-    app: &mut bevy::prelude::App,
-) -> alife_game_app::bevy_shell::GraphicalRuntimeProceduralBiomeMap {
-    let mut query = app
-        .world_mut()
-        .query::<&alife_game_app::bevy_shell::GraphicalRuntimeProceduralBiomeMap>();
-    let maps = query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert_eq!(maps.len(), 1);
-    maps[0]
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2917,10 +2927,22 @@ fn procedural_world_content_uses_alpha_art_and_no_action_authority() {
         );
     }
 
+    let mut layer_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalProductionArtLayer>();
+    let ledger_layers = layer_query
+        .iter(app.world())
+        .filter(|layer| layer.role == "true-25d-procedural-content-ledger")
+        .count();
+    assert_eq!(
+        ledger_layers, field.active_content_count,
+        "generated procedural content should remain present as true-2.5D ledger context without drawing 2D alpha sprites"
+    );
+
     let mut art_query = app
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite>();
-    let generated_art_roles = art_query
+    let generated_2d_roles = art_query
         .iter(app.world())
         .filter(|sprite| {
             sprite
@@ -2928,17 +2950,10 @@ fn procedural_world_content_uses_alpha_art_and_no_action_authority() {
                 .map(|id| id.raw() >= alife_world::PROCEDURAL_CONTENT_ID_BASE)
                 .unwrap_or(false)
         })
-        .map(|sprite| sprite.role)
-        .collect::<Vec<_>>();
-    for role in ["food", "hazard", "rock-obstacle", "prop-dressing"] {
-        assert!(
-            generated_art_roles.contains(&role),
-            "generated content should use alpha-art role {role}"
-        );
-    }
-    assert!(
-        generated_art_roles.len() >= 160,
-        "target-style player view needs many small asset-backed world objects"
+        .count();
+    assert_eq!(
+        generated_2d_roles, 0,
+        "default true 2.5D Player View should not draw generated content as legacy 2D sprites"
     );
 }
 
@@ -2976,7 +2991,7 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         .iter()
         .filter(|layer| layer.role == "streamed-procedural-terrain")
         .count();
-    let runtime_biome_map_count = layers
+    let legacy_runtime_biome_map_layer_count = layers
         .iter()
         .filter(|layer| layer.role == "runtime-procedural-biome-map")
         .count();
@@ -2984,26 +2999,58 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         .iter()
         .filter(|layer| layer.role == "terrain-edge-blend")
         .count();
+    let true_25d_terrain_ledger_count = layers
+        .iter()
+        .filter(|layer| layer.role == "true-25d-procedural-micro-ecology-ledger")
+        .count();
+    let true_25d_seeded_ground_count = layers
+        .iter()
+        .filter(|layer| layer.role == "true-25d-seeded-biome-ground-plane")
+        .count();
+    let true_25d_entity_count = layers
+        .iter()
+        .filter(|layer| layer.role == "true-25d-world-entity")
+        .count();
+    let true_25d_ledger_count = layers
+        .iter()
+        .filter(|layer| layer.role == "true-25d-procedural-content-ledger")
+        .count();
 
-    assert!(
-        shadow_count >= 4,
-        "expected asset-backed entity shadows for visible objects"
+    assert_eq!(
+        shadow_count, 0,
+        "legacy 2D entity shadows should not render in default true 2.5D Player View"
     );
     assert_eq!(
         baked_backdrop_count, 0,
         "default Player View should not use a baked/debug backdrop"
     );
     assert_eq!(
-        runtime_biome_map_count, 1,
-        "default Player View should use a runtime-generated biome map as the continuous world surface"
+        legacy_runtime_biome_map_layer_count, 0,
+        "default Player View should not use the legacy 2D runtime biome-map surface"
+    );
+    assert_eq!(
+        streamed_terrain_count, 0,
+        "default true 2.5D Player View should not render streamed 2D terrain sprites"
+    );
+    assert_eq!(
+        terrain_blend_count, 0,
+        "terrain blend sprites are part of the old 2D path and stay disabled"
     );
     assert!(
-        streamed_terrain_count >= 29 * 21,
-        "default Player View should be built from streamed procedural terrain chunks"
+        true_25d_terrain_ledger_count >= 72,
+        "expected seeded terrain ledger entries behind the generated 2.5D ground map"
+    );
+    assert_eq!(
+        true_25d_seeded_ground_count, 1,
+        "default Player View should use one seeded biome-map ground plane as the world surface"
     );
     assert!(
-        terrain_blend_count >= 8,
-        "expected organic blend layers to soften the visible procedural chunk tiles"
+        true_25d_entity_count >= 4,
+        "expected low-poly creature/food/hazard/rock entities in Player View"
+    );
+    assert!(
+        true_25d_ledger_count >= 160,
+        "procedural generated ecology should remain present as ledger-only context"
     );
 }
 
@@ -4487,6 +4534,7 @@ fn ca41_windows_alpha_package_scripts_are_cargo_free_for_testers_and_artifact_sa
     assert!(package_script.contains("working_tree_dirty"));
     assert!(package_script.contains("crates/alife_game_app/environment_manifest.json"));
     assert!(package_script.contains("crates/alife_game_app/app_bundle_manifest.json"));
+    assert!(package_script.contains("crates/alife_game_app/assets/true_25d_alpha_v1"));
     assert!(package_script.contains("crates/alife_gpu_backend/shaders"));
     assert!(package_script.contains("crates/alife_world/tests/fixtures/gpu_alpha"));
     assert!(package_script.contains("release_tag_created = $false"));

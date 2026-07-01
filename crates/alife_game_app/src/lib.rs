@@ -150,6 +150,12 @@ pub use world_art_style::*;
 mod procedural_world_streaming;
 pub use procedural_world_streaming::*;
 
+mod production_asset_pipeline;
+pub use production_asset_pipeline::*;
+
+mod true_25d_assets;
+pub use true_25d_assets::*;
+
 mod creature_animation_style;
 pub use creature_animation_style::*;
 

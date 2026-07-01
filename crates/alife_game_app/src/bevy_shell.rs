@@ -21,13 +21,19 @@ use alife_world::{
 use bevy::{
     app::AppExit,
     asset::{AssetPlugin, Assets, Handle, RenderAssetUsages},
+    camera::ScalingMode,
+    core_pipeline::tonemapping::Tonemapping,
     ecs::schedule::IntoScheduleConfigs,
+    gltf::GltfAssetLabel,
     image::{CompressedImageFormats, Image, ImageSampler, ImageType},
     prelude::{
-        default, App, BackgroundColor, ButtonInput, Camera, Camera2d, ClearColor, Color, Commands,
-        Component, DefaultPlugins, Entity, GlobalTransform, ImageNode, KeyCode, MessageWriter,
-        MinimalPlugins, MouseButton, Name, Node, NonSend, NonSendMut, PluginGroup, PositionType,
-        Projection, Quat, Res, ResMut, Resource, Sprite, Text, Text2d, TextColor, TextFont, Time,
+        default, AlphaMode, App, AssetServer, BackgroundColor, ButtonInput, Camera, Camera2d,
+        Camera3d, Capsule3d, Circle, ClearColor, ClearColorConfig, Color, Commands, Component,
+        Cone, Cuboid, DefaultPlugins, DirectionalLight, Entity, GlobalTransform, ImageNode,
+        KeyCode, Mesh, Mesh3d, MeshBuilder, MeshMaterial3d, Meshable, MessageWriter,
+        MinimalPlugins, MouseButton, Name, Node, NonSend, NonSendMut, OrthographicProjection,
+        Plane3d, PluginGroup, PositionType, Projection, Quat, Res, ResMut, Resource, SceneRoot,
+        Sphere, Sprite, StandardMaterial, Text, Text2d, TextColor, TextFont, Time, ToRing,
         Transform, Update, Val, Vec2, Vec3, Visibility, With, Without,
     },
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
@@ -581,6 +587,92 @@ pub struct RuntimeStatusOverlay;
 pub struct GraphicalMainCamera;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dCamera {
+    pub orthographic_locked: bool,
+    pub pitch_degrees: f32,
+    pub yaw_degrees: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dAsset {
+    pub role: &'static str,
+    pub stable_id: Option<WorldEntityId>,
+    pub display_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dStateCue {
+    pub stable_id: WorldEntityId,
+    pub pain_pose: bool,
+    pub stress_desaturated: bool,
+    pub learning_biolume: bool,
+    pub display_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct GraphicalTrue25dPresentationResource {
+    pub asset_manifest: crate::True25dAssetValidationSummary,
+    pub versioned_gltf_pack_validated: bool,
+    pub runtime_gltf_scene_rendering: bool,
+    pub runtime_native_low_poly_fallback: bool,
+    pub toon_bands: u8,
+    pub sobel_outline_contract: bool,
+    pub pixel_step_filter_contract: bool,
+    pub procedural_micro_ecology_chunks: bool,
+    pub offscreen_headless_chunks: bool,
+    pub no_action_authority: bool,
+}
+
+#[derive(Debug, Clone, Resource)]
+struct GraphicalTrue25dNativeAssets {
+    terrain_mesh: Handle<Mesh>,
+    crystal_mesh: Handle<Mesh>,
+    rock_mesh: Handle<Mesh>,
+    ring_mesh: Handle<Mesh>,
+    creature_body_mesh: Handle<Mesh>,
+    creature_eye_mesh: Handle<Mesh>,
+    creature_antenna_mesh: Handle<Mesh>,
+    food_mesh: Handle<Mesh>,
+    reed_mesh: Handle<Mesh>,
+    fog_material: Handle<StandardMaterial>,
+    creature_material: Handle<StandardMaterial>,
+    creature_hurt_material: Handle<StandardMaterial>,
+    creature_eye_material: Handle<StandardMaterial>,
+    creature_glow_material: Handle<StandardMaterial>,
+    food_material: Handle<StandardMaterial>,
+    hazard_crystal_material: Handle<StandardMaterial>,
+    rock_material: Handle<StandardMaterial>,
+    reed_material: Handle<StandardMaterial>,
+    selection_material: Handle<StandardMaterial>,
+}
+
+#[derive(Debug, Clone, Resource)]
+struct GraphicalTrue25dSceneAssets {
+    creature_idle: Handle<bevy::scene::Scene>,
+    creature_hurt: Handle<bevy::scene::Scene>,
+    selection_ring: Handle<bevy::scene::Scene>,
+    food: Handle<bevy::scene::Scene>,
+    hazard: Handle<bevy::scene::Scene>,
+    rock_obstacle: Handle<bevy::scene::Scene>,
+    plant_prop: Handle<bevy::scene::Scene>,
+    terrain_grass_island: Handle<bevy::scene::Scene>,
+    terrain_soil_island: Handle<bevy::scene::Scene>,
+    terrain_resource_grove: Handle<bevy::scene::Scene>,
+    terrain_hazard_pressure: Handle<bevy::scene::Scene>,
+    terrain_stone_island: Handle<bevy::scene::Scene>,
+    terrain_water_cell: Handle<bevy::scene::Scene>,
+    terrain_sand_island: Handle<bevy::scene::Scene>,
+    fog_of_war_cell: Handle<bevy::scene::Scene>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub struct GraphicalTrue25dGltfScene {
+    pub role: &'static str,
+    pub scene_path: &'static str,
+    pub display_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalSelectionRing;
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -854,7 +946,7 @@ pub struct GraphicalAdvancedGameplayResource {
 
 const GRAPHICAL_WORLD_SCALE: f32 = 36.0;
 const CA37_TERRAIN_TILE_PIXEL_SIZE: f32 = GRAPHICAL_WORLD_SCALE;
-pub(crate) const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 0.82;
+pub(crate) const CA37_EXPLORATION_CAMERA_ZOOM: f32 = 1.0;
 const CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES: i32 = 128;
 const CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES: i32 = 72;
 const CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE: u32 = 20;
@@ -862,6 +954,17 @@ const CA44A_PLAYER_WORLD_BACKDROP_WIDTH: f32 =
     CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as f32 * GRAPHICAL_WORLD_SCALE;
 const CA44A_PLAYER_WORLD_BACKDROP_HEIGHT: f32 =
     CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as f32 * GRAPHICAL_WORLD_SCALE;
+const TRUE_25D_VIEWPORT_VERTICAL_UNITS: f32 = 10.0;
+const TRUE_25D_SIM_TO_VIEW_SCALE: f32 = 0.25;
+const TRUE_25D_ACTIVE_CHUNK_SIM_WIDTH: f32 = 88.0;
+const TRUE_25D_ACTIVE_CHUNK_SIM_DEPTH: f32 = 56.0;
+const TRUE_25D_GROUND_WIDTH: f32 = TRUE_25D_ACTIVE_CHUNK_SIM_WIDTH * TRUE_25D_SIM_TO_VIEW_SCALE;
+const TRUE_25D_GROUND_DEPTH: f32 = TRUE_25D_ACTIVE_CHUNK_SIM_DEPTH * TRUE_25D_SIM_TO_VIEW_SCALE;
+const TRUE_25D_GROUND_UV_SPAN_X: f32 = 1.0;
+const TRUE_25D_GROUND_UV_SPAN_Z: f32 = 1.0;
+const TRUE_25D_BIOME_MAP_PIXELS_PER_TILE: u32 = 8;
+const TRUE_25D_MIN_NORMALIZED_SCALE: f32 = 0.08;
+const TRUE_25D_MAX_NORMALIZED_SCALE: f32 = 1.0;
 
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer {
@@ -975,7 +1078,7 @@ pub fn build_graphical_playground_app_shell(
     app.add_plugins(
         DefaultPlugins
             .set(AssetPlugin {
-                file_path: "crates/alife_game_app/assets".to_string(),
+                file_path: graphical_playground_asset_root(),
                 ..default()
             })
             .set(WindowPlugin {
@@ -992,7 +1095,7 @@ pub fn build_graphical_playground_app_shell(
             }),
     )
     .add_plugins(AlifeBevyAdapterPlugin)
-    .insert_resource(ClearColor(Color::srgb(0.39, 0.49, 0.25)))
+    .insert_resource(ClearColor(Color::srgb(0.110, 0.175, 0.105)))
     .insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
     })
@@ -1070,6 +1173,13 @@ pub fn build_graphical_playground_app_shell(
     }
 
     Ok((app, summary))
+}
+
+fn graphical_playground_asset_root() -> String {
+    crate::ca12_workspace_root()
+        .join("crates/alife_game_app/assets")
+        .to_string_lossy()
+        .to_string()
 }
 
 fn add_graphical_runtime_update_systems(app: &mut App) {
@@ -1156,6 +1266,1182 @@ fn ca37_graphical_default_camera_state(
     let state = inspector.camera;
     state.validate()?;
     Ok(state)
+}
+
+fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
+    if let Some(existing) = app.world().get_resource::<GraphicalTrue25dNativeAssets>() {
+        return existing.clone();
+    }
+    if !app.world().contains_resource::<Assets<Mesh>>() {
+        app.init_resource::<Assets<Mesh>>();
+    }
+    if !app.world().contains_resource::<Assets<StandardMaterial>>() {
+        app.init_resource::<Assets<StandardMaterial>>();
+    }
+
+    let (
+        terrain_mesh,
+        crystal_mesh,
+        rock_mesh,
+        ring_mesh,
+        creature_body_mesh,
+        creature_eye_mesh,
+        creature_antenna_mesh,
+        food_mesh,
+        reed_mesh,
+    ) = {
+        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
+        (
+            meshes.add(Circle::new(1.0)),
+            meshes.add(Cone::new(0.42, 1.28)),
+            meshes.add(Sphere::new(1.0).mesh().ico(1).expect("valid rock sphere")),
+            meshes.add(Circle::new(1.0).to_ring(0.26)),
+            meshes.add(Sphere::new(1.0).mesh().ico(2).expect("valid ico sphere")),
+            meshes.add(Sphere::new(1.0).mesh().ico(1).expect("valid eye sphere")),
+            meshes.add(Cuboid::new(0.06, 0.52, 0.06)),
+            meshes.add(Cone::new(0.26, 0.48)),
+            meshes.add(Capsule3d::new(0.06, 0.54)),
+        )
+    };
+
+    let (
+        fog_material,
+        creature_material,
+        creature_hurt_material,
+        creature_eye_material,
+        creature_glow_material,
+        food_material,
+        hazard_crystal_material,
+        rock_material,
+        reed_material,
+        selection_material,
+    ) = {
+        let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
+        (
+            true_25d_material(&mut materials, Color::srgba(0.02, 0.035, 0.032, 0.26), 0.26),
+            true_25d_material(&mut materials, Color::srgb(0.12, 0.82, 0.90), 1.0),
+            true_25d_material(&mut materials, Color::srgb(0.52, 0.88, 0.95), 1.0),
+            true_25d_material(&mut materials, Color::srgb(0.015, 0.045, 0.055), 1.0),
+            true_25d_material(&mut materials, Color::srgba(0.56, 1.0, 0.88, 0.78), 0.78),
+            true_25d_material(&mut materials, Color::srgb(0.32, 0.94, 0.26), 1.0),
+            true_25d_material(&mut materials, Color::srgb(1.0, 0.11, 0.14), 1.0),
+            true_25d_material(&mut materials, Color::srgb(0.54, 0.55, 0.50), 1.0),
+            true_25d_material(&mut materials, Color::srgb(0.42, 0.96, 0.32), 1.0),
+            true_25d_material(&mut materials, Color::srgba(0.88, 1.0, 0.28, 0.86), 0.86),
+        )
+    };
+
+    let handles = GraphicalTrue25dNativeAssets {
+        terrain_mesh,
+        crystal_mesh,
+        rock_mesh,
+        ring_mesh,
+        creature_body_mesh,
+        creature_eye_mesh,
+        creature_antenna_mesh,
+        food_mesh,
+        reed_mesh,
+        fog_material,
+        creature_material,
+        creature_hurt_material,
+        creature_eye_material,
+        creature_glow_material,
+        food_material,
+        hazard_crystal_material,
+        rock_material,
+        reed_material,
+        selection_material,
+    };
+    app.insert_resource(handles.clone());
+    handles
+}
+
+fn true_25d_material(
+    materials: &mut Assets<StandardMaterial>,
+    base_color: Color,
+    alpha: f32,
+) -> Handle<StandardMaterial> {
+    materials.add(StandardMaterial {
+        base_color,
+        unlit: true,
+        alpha_mode: if alpha < 0.995 {
+            AlphaMode::Blend
+        } else {
+            AlphaMode::Opaque
+        },
+        cull_mode: None,
+        perceptual_roughness: 0.82,
+        ..default()
+    })
+}
+
+fn true_25d_scene_assets(app: &mut App) -> Option<GraphicalTrue25dSceneAssets> {
+    if let Some(existing) = app.world().get_resource::<GraphicalTrue25dSceneAssets>() {
+        return Some(existing.clone());
+    }
+    let asset_server = app.world().get_resource::<AssetServer>()?.clone();
+    let load_scene =
+        |path: &'static str| asset_server.load(GltfAssetLabel::Scene(0).from_asset(path));
+    let handles = GraphicalTrue25dSceneAssets {
+        creature_idle: load_scene("true_25d_alpha_v1/creature_idle.gltf"),
+        creature_hurt: load_scene("true_25d_alpha_v1/creature_hurt.gltf"),
+        selection_ring: load_scene("true_25d_alpha_v1/selection_ring.gltf"),
+        food: load_scene("true_25d_alpha_v1/food_pod.gltf"),
+        hazard: load_scene("true_25d_alpha_v1/hazard_crystal.gltf"),
+        rock_obstacle: load_scene("true_25d_alpha_v1/rock_cluster.gltf"),
+        plant_prop: load_scene("true_25d_alpha_v1/bio_reed_prop.gltf"),
+        terrain_grass_island: load_scene("true_25d_alpha_v1/terrain_grass_island.gltf"),
+        terrain_soil_island: load_scene("true_25d_alpha_v1/terrain_soil_island.gltf"),
+        terrain_resource_grove: load_scene("true_25d_alpha_v1/terrain_resource_grove.gltf"),
+        terrain_hazard_pressure: load_scene("true_25d_alpha_v1/terrain_hazard_pressure.gltf"),
+        terrain_stone_island: load_scene("true_25d_alpha_v1/terrain_stone_island.gltf"),
+        terrain_water_cell: load_scene("true_25d_alpha_v1/terrain_water_cell.gltf"),
+        terrain_sand_island: load_scene("true_25d_alpha_v1/terrain_sand_island.gltf"),
+        fog_of_war_cell: load_scene("true_25d_alpha_v1/fog_of_war_cell.gltf"),
+    };
+    app.insert_resource(handles.clone());
+    Some(handles)
+}
+
+fn true_25d_scene_for_role(
+    scenes: &GraphicalTrue25dSceneAssets,
+    role: &'static str,
+) -> (Handle<bevy::scene::Scene>, &'static str) {
+    match role {
+        "creature-idle" => (
+            scenes.creature_idle.clone(),
+            "true_25d_alpha_v1/creature_idle.gltf",
+        ),
+        "creature-hurt" => (
+            scenes.creature_hurt.clone(),
+            "true_25d_alpha_v1/creature_hurt.gltf",
+        ),
+        "selection-ring" => (
+            scenes.selection_ring.clone(),
+            "true_25d_alpha_v1/selection_ring.gltf",
+        ),
+        "food" => (scenes.food.clone(), "true_25d_alpha_v1/food_pod.gltf"),
+        "hazard" => (
+            scenes.hazard.clone(),
+            "true_25d_alpha_v1/hazard_crystal.gltf",
+        ),
+        "rock-obstacle" => (
+            scenes.rock_obstacle.clone(),
+            "true_25d_alpha_v1/rock_cluster.gltf",
+        ),
+        "plant-prop" => (
+            scenes.plant_prop.clone(),
+            "true_25d_alpha_v1/bio_reed_prop.gltf",
+        ),
+        "terrain-soil-island" => (
+            scenes.terrain_soil_island.clone(),
+            "true_25d_alpha_v1/terrain_soil_island.gltf",
+        ),
+        "terrain-resource-grove" => (
+            scenes.terrain_resource_grove.clone(),
+            "true_25d_alpha_v1/terrain_resource_grove.gltf",
+        ),
+        "terrain-hazard-pressure" => (
+            scenes.terrain_hazard_pressure.clone(),
+            "true_25d_alpha_v1/terrain_hazard_pressure.gltf",
+        ),
+        "terrain-stone-island" => (
+            scenes.terrain_stone_island.clone(),
+            "true_25d_alpha_v1/terrain_stone_island.gltf",
+        ),
+        "terrain-water-cell" => (
+            scenes.terrain_water_cell.clone(),
+            "true_25d_alpha_v1/terrain_water_cell.gltf",
+        ),
+        "terrain-sand-island" => (
+            scenes.terrain_sand_island.clone(),
+            "true_25d_alpha_v1/terrain_sand_island.gltf",
+        ),
+        "fog-of-war-cell" => (
+            scenes.fog_of_war_cell.clone(),
+            "true_25d_alpha_v1/fog_of_war_cell.gltf",
+        ),
+        _ => (
+            scenes.terrain_grass_island.clone(),
+            "true_25d_alpha_v1/terrain_grass_island.gltf",
+        ),
+    }
+}
+
+fn spawn_true_25d_player_view_layer(
+    app: &mut App,
+    presentation: &VisibleWorldPresentation,
+    seed: u64,
+) -> Result<(), GameAppShellError> {
+    let manifest =
+        crate::validate_true_25d_asset_manifest(crate::default_true_25d_asset_manifest_path())?;
+    app.insert_resource(GraphicalTrue25dPresentationResource {
+        asset_manifest: manifest,
+        versioned_gltf_pack_validated: true,
+        runtime_gltf_scene_rendering: app.world().contains_resource::<AssetServer>(),
+        runtime_native_low_poly_fallback: !app.world().contains_resource::<AssetServer>(),
+        toon_bands: 4,
+        sobel_outline_contract: true,
+        pixel_step_filter_contract: true,
+        procedural_micro_ecology_chunks: true,
+        offscreen_headless_chunks: true,
+        no_action_authority: true,
+    });
+
+    let native_assets = true_25d_native_assets(app);
+    let scene_assets = true_25d_scene_assets(app);
+
+    app.world_mut().spawn((
+        Name::new("A-Life true 2.5D orthographic camera"),
+        Camera3d::default(),
+        Camera {
+            order: 0,
+            ..default()
+        },
+        Tonemapping::None,
+        Projection::from(OrthographicProjection {
+            scaling_mode: ScalingMode::FixedVertical {
+                viewport_height: TRUE_25D_VIEWPORT_VERTICAL_UNITS,
+            },
+            scale: 1.0,
+            near: -100.0,
+            far: 200.0,
+            ..OrthographicProjection::default_3d()
+        }),
+        Transform::from_xyz(0.0, 12.0, 12.0).looking_at(Vec3::ZERO, Vec3::Y),
+        GraphicalTrue25dCamera {
+            orthographic_locked: true,
+            pitch_degrees: -45.0,
+            yaw_degrees: 0.0,
+        },
+    ));
+    app.world_mut().spawn((
+        Name::new("A-Life true 2.5D toon key light"),
+        DirectionalLight {
+            illuminance: 12_500.0,
+            shadows_enabled: false,
+            ..default()
+        },
+        Transform::from_xyz(-5.0, 8.0, 6.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+
+    spawn_true_25d_terrain_island_patch(app, &native_assets, scene_assets.as_ref(), seed);
+    for object in &presentation.objects {
+        spawn_true_25d_object_scene(app, &native_assets, scene_assets.as_ref(), object)?;
+    }
+    Ok(())
+}
+
+fn spawn_true_25d_terrain_island_patch(
+    app: &mut App,
+    native_assets: &GraphicalTrue25dNativeAssets,
+    scene_assets: Option<&GraphicalTrue25dSceneAssets>,
+    seed: u64,
+) {
+    spawn_true_25d_foundation_regions(app, native_assets, scene_assets, seed);
+
+    for index in 0..72 {
+        let x = true_25d_region_coord(seed, index, 0xA11F, TRUE_25D_GROUND_WIDTH * 0.46);
+        let z = true_25d_region_coord(seed, index, 0xC0DE, TRUE_25D_GROUND_DEPTH * 0.45);
+        let ix = (x / TRUE_25D_SIM_TO_VIEW_SCALE).round() as i32;
+        let iz = (z / TRUE_25D_SIM_TO_VIEW_SCALE).round() as i32;
+        let material_id = true_25d_seeded_material_id(seed, ix, iz);
+        let role = true_25d_terrain_role_for_material(material_id);
+        spawn_true_25d_terrain_ledger(
+            app,
+            role,
+            "true-25d-procedural-micro-ecology-ledger",
+            index as usize,
+        );
+
+        if index % 3 == 0 {
+            spawn_true_25d_chunk_dressing(
+                app,
+                native_assets,
+                scene_assets,
+                seed,
+                ix,
+                iz,
+                material_id,
+                x,
+                z,
+            );
+        }
+    }
+
+    for index in 0..22 {
+        let side = index % 4;
+        let offset = true_25d_region_unit(seed, index, 0xF06) * 2.0 - 1.0;
+        let (x, z) = match side {
+            0 => (
+                -TRUE_25D_GROUND_WIDTH * 0.56,
+                offset * TRUE_25D_GROUND_DEPTH * 0.48,
+            ),
+            1 => (
+                TRUE_25D_GROUND_WIDTH * 0.56,
+                offset * TRUE_25D_GROUND_DEPTH * 0.48,
+            ),
+            2 => (
+                offset * TRUE_25D_GROUND_WIDTH * 0.56,
+                -TRUE_25D_GROUND_DEPTH * 0.56,
+            ),
+            _ => (
+                offset * TRUE_25D_GROUND_WIDTH * 0.56,
+                TRUE_25D_GROUND_DEPTH * 0.56,
+            ),
+        };
+        if let Some(scenes) = scene_assets {
+            let (scene, scene_path) = true_25d_scene_for_role(scenes, "fog-of-war-cell");
+            app.world_mut().spawn((
+                Name::new(format!(
+                    "A-Life true 2.5D organic fog-of-war region {index}"
+                )),
+                SceneRoot(scene),
+                Transform::from_xyz(x, 0.08, z).with_scale(true_25d_normalized_scale(0.92)),
+                GraphicalTrue25dGltfScene {
+                    role: "fog-of-war-cell",
+                    scene_path,
+                    display_only: true,
+                },
+                GraphicalTrue25dAsset {
+                    role: "fog-of-war-cell",
+                    stable_id: None,
+                    display_only: true,
+                },
+                GraphicalProductionArtLayer {
+                    role: "true-25d-fog-of-war",
+                    display_only: true,
+                },
+            ));
+        } else {
+            app.world_mut().spawn((
+                Name::new(format!(
+                    "A-Life true 2.5D organic fog-of-war fallback {index}"
+                )),
+                Mesh3d(native_assets.terrain_mesh.clone()),
+                MeshMaterial3d(native_assets.fog_material.clone()),
+                Transform::from_xyz(x, 0.08, z)
+                    .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
+                    .with_scale(true_25d_normalized_scale(0.92)),
+                GraphicalTrue25dAsset {
+                    role: "fog-of-war-cell",
+                    stable_id: None,
+                    display_only: true,
+                },
+                GraphicalProductionArtLayer {
+                    role: "true-25d-fog-of-war",
+                    display_only: true,
+                },
+            ));
+        }
+    }
+}
+
+fn spawn_true_25d_foundation_regions(
+    app: &mut App,
+    native_assets: &GraphicalTrue25dNativeAssets,
+    scene_assets: Option<&GraphicalTrue25dSceneAssets>,
+    seed: u64,
+) {
+    spawn_true_25d_textured_micro_ecology_ground(app, seed);
+
+    const FOUNDATION: [(&str, f32, f32, f32, f32, f32, f32); 18] = [
+        ("terrain-soil-island", -4.80, 2.25, 0.92, 0.92, -0.42, 0.018),
+        ("terrain-soil-island", -3.45, 1.45, 0.96, 0.96, -0.34, 0.019),
+        ("terrain-soil-island", -2.10, 0.70, 0.96, 0.96, -0.24, 0.020),
+        ("terrain-soil-island", -0.70, 0.12, 0.92, 0.92, -0.14, 0.021),
+        ("terrain-soil-island", 0.85, -0.36, 0.94, 0.94, 0.04, 0.022),
+        ("terrain-soil-island", 2.38, -0.94, 0.90, 0.90, 0.18, 0.023),
+        ("terrain-soil-island", 3.70, -1.66, 0.82, 0.82, 0.32, 0.024),
+        (
+            "terrain-resource-grove",
+            -4.65,
+            -1.42,
+            0.88,
+            0.88,
+            -0.16,
+            0.022,
+        ),
+        (
+            "terrain-resource-grove",
+            -2.15,
+            -2.70,
+            0.94,
+            0.94,
+            0.24,
+            0.024,
+        ),
+        (
+            "terrain-hazard-pressure",
+            4.55,
+            1.10,
+            1.00,
+            1.00,
+            -0.08,
+            0.026,
+        ),
+        (
+            "terrain-hazard-pressure",
+            5.95,
+            2.08,
+            0.88,
+            0.88,
+            0.36,
+            0.028,
+        ),
+        ("terrain-stone-island", 3.80, 3.00, 0.92, 0.92, 0.20, 0.024),
+        ("terrain-stone-island", 5.20, 3.62, 0.78, 0.78, -0.20, 0.025),
+        ("terrain-water-cell", -5.90, 3.28, 0.88, 0.88, -0.32, 0.022),
+        ("terrain-water-cell", -6.55, 2.30, 0.78, 0.78, 0.12, 0.021),
+        ("terrain-sand-island", -5.32, 1.58, 0.70, 0.70, 0.18, 0.020),
+        ("terrain-grass-island", 0.45, 1.86, 0.94, 0.94, -0.08, 0.018),
+        ("terrain-grass-island", 1.82, 1.82, 0.80, 0.80, 0.22, 0.019),
+    ];
+
+    for (index, (role, x, z, width, depth, rotation, y)) in FOUNDATION.iter().enumerate() {
+        let jitter_x = (true_25d_region_unit(seed, index as i32, 0xB45E) - 0.5) * 0.18;
+        let jitter_z = (true_25d_region_unit(seed, index as i32, 0xC411) - 0.5) * 0.14;
+        let ix = ((*x + jitter_x) / TRUE_25D_SIM_TO_VIEW_SCALE).round() as i32;
+        let iz = ((*z + jitter_z) / TRUE_25D_SIM_TO_VIEW_SCALE).round() as i32;
+        let material_id = true_25d_material_id_for_role(role);
+        spawn_true_25d_terrain_ledger(app, role, "true-25d-procedural-foundation-ledger", index);
+        spawn_true_25d_chunk_dressing(
+            app,
+            native_assets,
+            scene_assets,
+            seed,
+            ix,
+            iz,
+            material_id,
+            *x + jitter_x,
+            *z + jitter_z,
+        );
+        let _ = (width, depth, rotation, y);
+    }
+}
+
+fn spawn_true_25d_terrain_ledger(
+    app: &mut App,
+    role: &'static str,
+    layer_role: &'static str,
+    index: usize,
+) {
+    app.world_mut().spawn((
+        Name::new(format!(
+            "A-Life true 2.5D virtual terrain ledger {index} {role}"
+        )),
+        GraphicalTrue25dAsset {
+            role,
+            stable_id: None,
+            display_only: true,
+        },
+        GraphicalProductionArtLayer {
+            role: layer_role,
+            display_only: true,
+        },
+    ));
+}
+
+fn spawn_true_25d_textured_micro_ecology_ground(app: &mut App, seed: u64) {
+    let field = true_25d_ground_texture_field(seed);
+    if !app.world().contains_resource::<Assets<Image>>() {
+        app.init_resource::<Assets<Image>>();
+    }
+    if !app.world().contains_resource::<Assets<Mesh>>() {
+        app.init_resource::<Assets<Mesh>>();
+    }
+    if !app.world().contains_resource::<Assets<StandardMaterial>>() {
+        app.init_resource::<Assets<StandardMaterial>>();
+    }
+
+    let mesh =
+        app.world_mut()
+            .resource_mut::<Assets<Mesh>>()
+            .add(true_25d_repeating_ground_plane_mesh(
+                TRUE_25D_GROUND_WIDTH,
+                TRUE_25D_GROUND_DEPTH,
+                TRUE_25D_GROUND_UV_SPAN_X,
+                TRUE_25D_GROUND_UV_SPAN_Z,
+            ));
+    let (image, metrics) = ca44a_generate_runtime_procedural_biome_map_with_pixels_per_tile(
+        seed,
+        &field,
+        TRUE_25D_BIOME_MAP_PIXELS_PER_TILE,
+    );
+    let texture_width_px = image.texture_descriptor.size.width;
+    let texture_height_px = image.texture_descriptor.size.height;
+    let image_handle = app.world_mut().resource_mut::<Assets<Image>>().add(image);
+    let material = app
+        .world_mut()
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(StandardMaterial {
+            base_color_texture: Some(image_handle),
+            base_color: Color::srgb(0.74, 0.80, 0.68),
+            unlit: true,
+            cull_mode: None,
+            perceptual_roughness: 0.86,
+            ..default()
+        });
+
+    app.world_mut().spawn((
+        Name::new("A-Life true 2.5D seeded procedural ground texture"),
+        Mesh3d(mesh),
+        MeshMaterial3d(material),
+        Transform::from_xyz(0.0, -0.02, 0.0),
+        GraphicalTrue25dAsset {
+            role: "terrain-seeded-biome-map",
+            stable_id: None,
+            display_only: true,
+        },
+        GraphicalProductionArtLayer {
+            role: "true-25d-seeded-biome-ground-plane",
+            display_only: true,
+        },
+        GraphicalRuntimeProceduralBiomeMap {
+            seed,
+            width_tiles: CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES,
+            height_tiles: CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES,
+            texture_width_px,
+            texture_height_px,
+            pixels_per_tile: TRUE_25D_BIOME_MAP_PIXELS_PER_TILE,
+            virtual_map_width_tiles: field.virtual_map_width_tiles,
+            virtual_map_height_tiles: field.virtual_map_height_tiles,
+            path_pixels: metrics.path_pixels,
+            resource_detail_pixels: metrics.resource_detail_pixels,
+            hazard_detail_pixels: metrics.hazard_detail_pixels,
+            stone_detail_pixels: metrics.stone_detail_pixels,
+            fogged_pixels: metrics.fogged_pixels,
+            active_chunk_count: field.active_world_chunks.len(),
+            dark_gap_pixels: metrics.dark_gap_pixels,
+            generated_from_procedural_sampler: true,
+            generated_from_alpha_art_tiles: metrics.alpha_art_tile_pixels > 0,
+            terrain_tile_source_count: metrics.terrain_tile_source_count,
+            fog_of_war_applied: metrics.fogged_pixels > 0,
+            primary_player_surface: true,
+            display_only: true,
+            active_chunk_signature: ca44a_active_chunk_signature(&field),
+            refresh_count: 0,
+            last_creature_anchor_count: field.creature_anchor_count,
+            last_materialized_tile_count: field.materialized_tiles.len(),
+        },
+    ));
+    app.insert_resource(field);
+}
+
+fn true_25d_repeating_ground_plane_mesh(
+    width: f32,
+    depth: f32,
+    repeat_x: f32,
+    repeat_z: f32,
+) -> Mesh {
+    let mut mesh = Plane3d::default().mesh().size(width, depth).build();
+    mesh.insert_attribute(
+        Mesh::ATTRIBUTE_UV_0,
+        vec![
+            [0.0, 0.0],
+            [repeat_x, 0.0],
+            [0.0, repeat_z],
+            [repeat_x, repeat_z],
+        ],
+    );
+    mesh
+}
+
+fn true_25d_ground_texture_field(seed: u64) -> GraphicalProceduralTerrainFieldResource {
+    let mut active_world_chunks = BTreeSet::new();
+    for chunk_x in -5..=5 {
+        for chunk_z in -3..=3 {
+            active_world_chunks.insert((chunk_x, chunk_z));
+        }
+    }
+    GraphicalProceduralTerrainFieldResource {
+        seed,
+        chunk_tile_size: 8,
+        virtual_map_width_tiles: CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as usize,
+        virtual_map_height_tiles: CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as usize,
+        chunk_radius_x: 8,
+        chunk_radius_z: 5,
+        active_world_chunks,
+        creature_anchor_count: 3,
+        generated_without_rendering: true,
+        materialized_tiles: BTreeSet::new(),
+        materialized_content_stable_ids: BTreeSet::new(),
+        materialized_chunk_count: 0,
+        active_content_count: 0,
+        procedural_content_generated_without_rendering: true,
+        procedural_content_rendering_required: false,
+        materialized_only_near_active_views: true,
+    }
+}
+
+fn spawn_true_25d_chunk_dressing(
+    app: &mut App,
+    native_assets: &GraphicalTrue25dNativeAssets,
+    scene_assets: Option<&GraphicalTrue25dSceneAssets>,
+    seed: u64,
+    ix: i32,
+    iz: i32,
+    material_id: &str,
+    x: f32,
+    z: f32,
+) {
+    let hash = ca37_seeded_terrain_hash(seed, ix, iz);
+    let mut dressing: Vec<(&'static str, f32, f32, f32)> = Vec::new();
+    match material_id {
+        "resource-grove" => {
+            dressing.push(("plant-prop", -0.25, 0.18, 0.34));
+            if hash.rem_euclid(3) != 0 {
+                dressing.push(("food", 0.28, -0.12, 0.24));
+            }
+        }
+        "hazard-pressure" => {
+            dressing.push(("hazard", 0.10, -0.08, 0.34));
+            if hash.rem_euclid(2) == 0 {
+                dressing.push(("hazard", -0.28, 0.18, 0.22));
+            }
+        }
+        "stone-dressing" => {
+            dressing.push(("rock-obstacle", -0.10, 0.04, 0.30));
+        }
+        "water" => {
+            if hash.rem_euclid(2) == 0 {
+                dressing.push(("plant-prop", 0.18, 0.20, 0.20));
+            }
+        }
+        "sand" | "neutral-soil" => {
+            if hash.rem_euclid(5) == 0 {
+                dressing.push(("rock-obstacle", 0.16, -0.18, 0.18));
+            }
+        }
+        _ => {
+            if hash.rem_euclid(7) == 0 {
+                dressing.push(("plant-prop", -0.16, 0.18, 0.17));
+            }
+        }
+    }
+    for (role, ox, oz, scale) in dressing {
+        let transform = Transform::from_xyz(x + ox * 0.34, 0.09, z + oz * 0.34)
+            .with_scale(true_25d_normalized_scale(scale));
+        if let Some(scenes) = scene_assets {
+            let (scene, scene_path) = true_25d_scene_for_role(scenes, role);
+            app.world_mut().spawn((
+                Name::new(format!("A-Life true 2.5D glTF dressing {role} {ix}:{iz}")),
+                SceneRoot(scene),
+                transform,
+                GraphicalTrue25dGltfScene {
+                    role,
+                    scene_path,
+                    display_only: true,
+                },
+                GraphicalTrue25dAsset {
+                    role,
+                    stable_id: None,
+                    display_only: true,
+                },
+                GraphicalProductionArtLayer {
+                    role: "true-25d-procedural-dressing",
+                    display_only: true,
+                },
+            ));
+        } else {
+            let (mesh, material) = true_25d_native_mesh_material_for_role(native_assets, role);
+            app.world_mut().spawn((
+                Name::new(format!("A-Life true 2.5D dressing {role} {ix}:{iz}")),
+                Mesh3d(mesh),
+                MeshMaterial3d(material),
+                transform,
+                GraphicalTrue25dAsset {
+                    role,
+                    stable_id: None,
+                    display_only: true,
+                },
+                GraphicalProductionArtLayer {
+                    role: "true-25d-procedural-dressing",
+                    display_only: true,
+                },
+            ));
+        }
+    }
+}
+
+fn true_25d_region_unit(seed: u64, index: i32, salt: u32) -> f32 {
+    ca44a_runtime_pixel_hash(seed ^ u64::from(salt), index, salt as i32, 0, 0) as f32
+        / u32::MAX as f32
+}
+
+fn true_25d_region_coord(seed: u64, index: i32, salt: u32, extent: f32) -> f32 {
+    let unit = true_25d_region_unit(seed, index, salt);
+    let cluster = ((index % 8) as f32 - 3.5) / 3.5;
+    let clustered = (unit * 2.0 - 1.0) * 0.58 + cluster * 0.42;
+    clustered.clamp(-1.0, 1.0) * extent
+}
+
+fn true_25d_normalized_scale(requested: f32) -> Vec3 {
+    Vec3::splat(requested.clamp(TRUE_25D_MIN_NORMALIZED_SCALE, TRUE_25D_MAX_NORMALIZED_SCALE))
+}
+
+fn true_25d_seeded_material_id(seed: u64, ix: i32, iz: i32) -> &'static str {
+    let world_x = ix as f32 * 3.25;
+    let world_z = iz as f32 * 3.25;
+    let soil = ca44a_runtime_soil_weight(world_x, world_z);
+    let resource = ca44a_runtime_resource_weight(world_x, world_z);
+    let hazard = ca44a_runtime_hazard_weight(world_x, world_z);
+    let stone = ca44a_runtime_stone_weight(world_x, world_z);
+    let water = ca44a_runtime_water_weight(world_x, world_z);
+    let sand = ca44a_runtime_sand_weight(world_x, world_z);
+    let sampled = sample_procedural_terrain_tile(
+        ProceduralWorldConfig::with_seed(seed),
+        ProceduralTileCoord::new(ix, iz),
+    )
+    .map(|sample| sample.material.material_id())
+    .unwrap_or("safe-grass");
+    let mut ranked = [
+        ("safe-grass", 0.30_f32),
+        ("neutral-soil", soil * 1.08),
+        ("resource-grove", resource * 1.34),
+        ("hazard-pressure", hazard * 1.62),
+        ("stone-dressing", stone * 1.24),
+        ("water", water * 1.46),
+        ("sand", sand * 1.24),
+        (sampled, 0.38),
+    ];
+    ranked.sort_by(|(_, left), (_, right)| {
+        right.partial_cmp(left).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    ranked[0].0
+}
+
+fn true_25d_terrain_role_for_material(material_id: &str) -> &'static str {
+    match material_id {
+        "neutral-soil" => "terrain-soil-island",
+        "resource-grove" => "terrain-resource-grove",
+        "hazard-pressure" => "terrain-hazard-pressure",
+        "stone-dressing" => "terrain-stone-island",
+        "water" => "terrain-water-cell",
+        "sand" => "terrain-sand-island",
+        _ => "terrain-grass-island",
+    }
+}
+
+fn true_25d_material_id_for_role(role: &str) -> &'static str {
+    match role {
+        "terrain-soil-island" => "neutral-soil",
+        "terrain-resource-grove" => "resource-grove",
+        "terrain-hazard-pressure" => "hazard-pressure",
+        "terrain-stone-island" => "stone-dressing",
+        "terrain-water-cell" => "water",
+        "terrain-sand-island" => "sand",
+        _ => "safe-grass",
+    }
+}
+
+fn true_25d_native_mesh_material_for_role(
+    native_assets: &GraphicalTrue25dNativeAssets,
+    role: &'static str,
+) -> (Handle<Mesh>, Handle<StandardMaterial>) {
+    match role {
+        "food" => (
+            native_assets.food_mesh.clone(),
+            native_assets.food_material.clone(),
+        ),
+        "hazard" => (
+            native_assets.crystal_mesh.clone(),
+            native_assets.hazard_crystal_material.clone(),
+        ),
+        "rock-obstacle" => (
+            native_assets.rock_mesh.clone(),
+            native_assets.rock_material.clone(),
+        ),
+        "plant-prop" => (
+            native_assets.reed_mesh.clone(),
+            native_assets.reed_material.clone(),
+        ),
+        _ => (
+            native_assets.reed_mesh.clone(),
+            native_assets.reed_material.clone(),
+        ),
+    }
+}
+
+fn true_25d_native_mesh_material_for_world_object(
+    native_assets: &GraphicalTrue25dNativeAssets,
+    kind: WorldObjectKind,
+) -> (Handle<Mesh>, Handle<StandardMaterial>) {
+    match kind {
+        WorldObjectKind::Agent => (
+            native_assets.creature_body_mesh.clone(),
+            native_assets.creature_material.clone(),
+        ),
+        WorldObjectKind::Food => (
+            native_assets.food_mesh.clone(),
+            native_assets.food_material.clone(),
+        ),
+        WorldObjectKind::Hazard => (
+            native_assets.crystal_mesh.clone(),
+            native_assets.hazard_crystal_material.clone(),
+        ),
+        WorldObjectKind::Obstacle => (
+            native_assets.rock_mesh.clone(),
+            native_assets.rock_material.clone(),
+        ),
+        WorldObjectKind::Token => (
+            native_assets.reed_mesh.clone(),
+            native_assets.reed_material.clone(),
+        ),
+    }
+}
+
+fn spawn_true_25d_creature_details(
+    app: &mut App,
+    native_assets: &GraphicalTrue25dNativeAssets,
+    scene_assets: Option<&GraphicalTrue25dSceneAssets>,
+    stable_id: WorldEntityId,
+    base: Vec3,
+) {
+    let body_scale = 0.46;
+    if let Some(scenes) = scene_assets {
+        let (scene, scene_path) = true_25d_scene_for_role(scenes, "creature-hurt");
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life true 2.5D glTF creature pain/biolume cue stable:{}",
+                stable_id.raw()
+            )),
+            SceneRoot(scene),
+            Transform::from_translation(base + Vec3::new(0.0, 0.18, 0.0))
+                .with_scale(true_25d_normalized_scale(0.12)),
+            GraphicalTrue25dGltfScene {
+                role: "creature-state-cue",
+                scene_path,
+                display_only: true,
+            },
+            GraphicalTrue25dAsset {
+                role: "creature-state-cue",
+                stable_id: Some(stable_id),
+                display_only: true,
+            },
+            GraphicalProductionArtLayer {
+                role: "true-25d-creature-expression",
+                display_only: true,
+            },
+        ));
+        return;
+    }
+    for (name, offset, scale, material) in [
+        (
+            "belly glow",
+            Vec3::new(0.0, 0.02, -body_scale * 0.30),
+            Vec3::new(body_scale * 0.30, body_scale * 0.08, body_scale * 0.20),
+            native_assets.creature_glow_material.clone(),
+        ),
+        (
+            "left eye",
+            Vec3::new(-body_scale * 0.18, 0.18, -body_scale * 0.42),
+            Vec3::splat(body_scale * 0.075),
+            native_assets.creature_eye_material.clone(),
+        ),
+        (
+            "right eye",
+            Vec3::new(body_scale * 0.18, 0.18, -body_scale * 0.42),
+            Vec3::splat(body_scale * 0.075),
+            native_assets.creature_eye_material.clone(),
+        ),
+        (
+            "pain crest",
+            Vec3::new(0.0, 0.26, body_scale * 0.18),
+            Vec3::new(body_scale * 0.12, body_scale * 0.045, body_scale * 0.16),
+            native_assets.creature_hurt_material.clone(),
+        ),
+    ] {
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life true 2.5D creature {name} stable:{}",
+                stable_id.raw()
+            )),
+            Mesh3d(native_assets.creature_eye_mesh.clone()),
+            MeshMaterial3d(material),
+            Transform::from_translation(base + offset).with_scale(scale),
+            GraphicalTrue25dAsset {
+                role: "creature-state-cue",
+                stable_id: Some(stable_id),
+                display_only: true,
+            },
+            GraphicalProductionArtLayer {
+                role: "true-25d-creature-expression",
+                display_only: true,
+            },
+        ));
+    }
+
+    for (name, offset, rotation) in [
+        (
+            "left antenna",
+            Vec3::new(-body_scale * 0.20, 0.30, -body_scale * 0.08),
+            -0.35_f32,
+        ),
+        (
+            "right antenna",
+            Vec3::new(body_scale * 0.20, 0.30, -body_scale * 0.08),
+            0.35_f32,
+        ),
+    ] {
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life true 2.5D creature {name} stable:{}",
+                stable_id.raw()
+            )),
+            Mesh3d(native_assets.creature_antenna_mesh.clone()),
+            MeshMaterial3d(native_assets.creature_material.clone()),
+            Transform::from_translation(base + offset)
+                .with_rotation(Quat::from_rotation_z(rotation))
+                .with_scale(true_25d_normalized_scale(body_scale * 0.62)),
+            GraphicalTrue25dAsset {
+                role: "creature-state-cue",
+                stable_id: Some(stable_id),
+                display_only: true,
+            },
+            GraphicalProductionArtLayer {
+                role: "true-25d-creature-expression",
+                display_only: true,
+            },
+        ));
+    }
+}
+
+fn spawn_true_25d_object_scene(
+    app: &mut App,
+    native_assets: &GraphicalTrue25dNativeAssets,
+    scene_assets: Option<&GraphicalTrue25dSceneAssets>,
+    object: &VisibleWorldObjectPresentation,
+) -> Result<(), GameAppShellError> {
+    let role = true_25d_role_for_world_object(object.kind);
+    let base = true_25d_position(object);
+    let entity = if let Some(scenes) = scene_assets {
+        let (scene, scene_path) = true_25d_scene_for_role(scenes, role);
+        app.world_mut()
+            .spawn((
+                Name::new(format!(
+                    "A-Life true 2.5D glTF {role} stable:{}",
+                    object.stable_id.raw()
+                )),
+                SceneRoot(scene),
+                Transform::from_translation(base).with_scale(true_25d_normalized_scale(
+                    true_25d_gltf_scale_for_kind(object.kind),
+                )),
+                GraphicalTrue25dGltfScene {
+                    role,
+                    scene_path,
+                    display_only: true,
+                },
+                GraphicalTrue25dAsset {
+                    role,
+                    stable_id: Some(object.stable_id),
+                    display_only: true,
+                },
+                GraphicalTrue25dStateCue {
+                    stable_id: object.stable_id,
+                    pain_pose: object.kind == WorldObjectKind::Hazard,
+                    stress_desaturated: false,
+                    learning_biolume: object.kind == WorldObjectKind::Agent,
+                    display_only: true,
+                },
+                GraphicalProductionArtLayer {
+                    role: "true-25d-world-entity",
+                    display_only: true,
+                },
+            ))
+            .id()
+    } else {
+        let (mesh, material) =
+            true_25d_native_mesh_material_for_world_object(native_assets, object.kind);
+        app.world_mut()
+            .spawn((
+                Name::new(format!(
+                    "A-Life true 2.5D {role} stable:{}",
+                    object.stable_id.raw()
+                )),
+                Mesh3d(mesh),
+                MeshMaterial3d(material),
+                Transform::from_translation(base).with_scale(true_25d_normalized_scale(
+                    true_25d_scale_for_kind(object.kind),
+                )),
+                GraphicalTrue25dAsset {
+                    role,
+                    stable_id: Some(object.stable_id),
+                    display_only: true,
+                },
+                GraphicalTrue25dStateCue {
+                    stable_id: object.stable_id,
+                    pain_pose: object.kind == WorldObjectKind::Hazard,
+                    stress_desaturated: false,
+                    learning_biolume: object.kind == WorldObjectKind::Agent,
+                    display_only: true,
+                },
+                GraphicalProductionArtLayer {
+                    role: "true-25d-world-entity",
+                    display_only: true,
+                },
+            ))
+            .id()
+    };
+    attach_visible_world_runtime_components(app, entity, object)?;
+    if object.kind == WorldObjectKind::Agent {
+        spawn_true_25d_creature_details(app, native_assets, scene_assets, object.stable_id, base);
+    }
+    if object.kind == WorldObjectKind::Agent {
+        if let Some(scenes) = scene_assets {
+            let (scene, scene_path) = true_25d_scene_for_role(scenes, "selection-ring");
+            app.world_mut().spawn((
+                Name::new(format!(
+                    "A-Life true 2.5D glTF selection ring stable:{}",
+                    object.stable_id.raw()
+                )),
+                SceneRoot(scene),
+                Transform::from_translation(base + Vec3::new(0.0, 0.035, 0.0))
+                    .with_scale(true_25d_normalized_scale(0.62)),
+                GraphicalTrue25dGltfScene {
+                    role: "selection-ring",
+                    scene_path,
+                    display_only: true,
+                },
+                GraphicalTrue25dAsset {
+                    role: "selection-ring",
+                    stable_id: Some(object.stable_id),
+                    display_only: true,
+                },
+            ));
+        } else {
+            app.world_mut().spawn((
+                Name::new(format!(
+                    "A-Life true 2.5D selection ring stable:{}",
+                    object.stable_id.raw()
+                )),
+                Mesh3d(native_assets.ring_mesh.clone()),
+                MeshMaterial3d(native_assets.selection_material.clone()),
+                Transform::from_translation(base + Vec3::new(0.0, 0.035, 0.0))
+                    .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
+                    .with_scale(true_25d_normalized_scale(0.62)),
+                GraphicalTrue25dAsset {
+                    role: "selection-ring",
+                    stable_id: Some(object.stable_id),
+                    display_only: true,
+                },
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn attach_visible_world_runtime_components(
+    app: &mut App,
+    entity: Entity,
+    object: &VisibleWorldObjectPresentation,
+) -> Result<(), GameAppShellError> {
+    {
+        let mut entity_mut = app.world_mut().entity_mut(entity);
+        entity_mut.insert((
+            VisibleWorldObject {
+                stable_id: object.stable_id,
+                kind: object.kind,
+                shape: object.shape,
+                material: object.material,
+                rgba: object.material.rgba(),
+            },
+            VisibleWorldDebugLabel(object.debug_label.clone()),
+            GraphicalPlaygroundMarker {
+                stable_id: object.stable_id,
+                kind: object.kind,
+            },
+        ));
+        match object.kind {
+            WorldObjectKind::Agent => {
+                if let Some(organism_id) = object.organism_id {
+                    entity_mut.insert(CreatureBody::new(organism_id, object.stable_id)?);
+                }
+                let pose = crate::ca38_creature_pose_for_state(
+                    CreatureAnimationState::Idle,
+                    CreatureExpressionState::Neutral,
+                );
+                entity_mut.insert(GraphicalCreatureAnimationPose {
+                    stable_id: object.stable_id,
+                    pose_id: pose.pose_id,
+                    action_label: pose.action_label,
+                    display_only: true,
+                });
+            }
+            WorldObjectKind::Food => {
+                entity_mut.insert(AffordanceTags::food(object.nutrition));
+            }
+            WorldObjectKind::Hazard => {
+                entity_mut.insert(AffordanceTags::hazard(object.hazard_pain));
+            }
+            WorldObjectKind::Obstacle => {
+                entity_mut.insert(AffordanceTags {
+                    bits: AffordanceBits::RESOURCE,
+                    nutrition: 0.0,
+                    hazard_pain: 0.0,
+                    blocks_movement: true,
+                });
+            }
+            WorldObjectKind::Token => {
+                entity_mut.insert(SensoryEmitter {
+                    audible_token: object.token_id,
+                    ..SensoryEmitter::default()
+                });
+            }
+        }
+    }
+    app.world_mut()
+        .resource_mut::<BevyEntityMap>()
+        .bind(entity, object.stable_id)?;
+    Ok(())
+}
+
+fn true_25d_position(object: &VisibleWorldObjectPresentation) -> Vec3 {
+    Vec3::new(
+        object.position.x * TRUE_25D_SIM_TO_VIEW_SCALE,
+        true_25d_height_for_kind(object.kind),
+        object.position.z * TRUE_25D_SIM_TO_VIEW_SCALE,
+    )
+}
+
+fn true_25d_height_for_kind(kind: WorldObjectKind) -> f32 {
+    match kind {
+        WorldObjectKind::Agent => 0.34,
+        WorldObjectKind::Food => 0.18,
+        WorldObjectKind::Hazard => 0.30,
+        WorldObjectKind::Obstacle => 0.20,
+        WorldObjectKind::Token => 0.16,
+    }
+}
+
+fn true_25d_scale_for_kind(kind: WorldObjectKind) -> f32 {
+    match kind {
+        WorldObjectKind::Agent => 0.48,
+        WorldObjectKind::Food => 0.20,
+        WorldObjectKind::Hazard => 0.30,
+        WorldObjectKind::Obstacle => 0.34,
+        WorldObjectKind::Token => 0.18,
+    }
+}
+
+fn true_25d_gltf_scale_for_kind(kind: WorldObjectKind) -> f32 {
+    match kind {
+        WorldObjectKind::Agent => 0.46,
+        WorldObjectKind::Food => 0.22,
+        WorldObjectKind::Hazard => 0.30,
+        WorldObjectKind::Obstacle => 0.34,
+        WorldObjectKind::Token => 0.18,
+    }
+}
+
+fn true_25d_role_for_world_object(kind: WorldObjectKind) -> &'static str {
+    match kind {
+        WorldObjectKind::Agent => "creature-idle",
+        WorldObjectKind::Food => "food",
+        WorldObjectKind::Hazard => "hazard",
+        WorldObjectKind::Obstacle => "rock-obstacle",
+        WorldObjectKind::Token => "plant-prop",
+    }
 }
 
 pub fn build_graphical_playground_preview_app_shell(
@@ -1299,6 +2585,7 @@ pub fn build_ca03_intent_feedback_preview_app_shell(
         mode: summary.view_mode,
     });
     spawn_graphical_playground_scene(&mut app, &presentation, &summary, None, None, None)?;
+    spawn_graphical_intent_feedback(&mut app, summary.view_mode);
     app.insert_resource(GraphicalRuntimeControlsResource {
         panel,
         smoke_target_ticks: None,
@@ -1441,7 +2728,21 @@ fn spawn_graphical_playground_scene(
     world_art: Option<&Ca37WorldArtStyleSummary>,
     school: Option<&Ca23GraphicalSchoolSummary>,
 ) -> Result<(), GameAppShellError> {
-    app.world_mut().spawn((Camera2d, GraphicalMainCamera));
+    let true_25d_player_view = summary.view_mode == GraphicalPlaygroundViewMode::Player;
+    if true_25d_player_view {
+        app.world_mut().spawn((
+            Camera2d,
+            Camera {
+                order: 1,
+                clear_color: ClearColorConfig::None,
+                ..default()
+            },
+            Tonemapping::None,
+            GraphicalMainCamera,
+        ));
+    } else {
+        app.world_mut().spawn((Camera2d, GraphicalMainCamera));
+    }
     let alpha_art = if let Some(handles) = app.world().get_resource::<GraphicalAlphaArtHandles>() {
         Some(handles.clone())
     } else {
@@ -1455,37 +2756,30 @@ fn spawn_graphical_playground_scene(
         app.insert_resource(handles.clone());
         Some(handles)
     };
-    let (ground_color, ground_size, ground_label) =
-        if summary.view_mode == GraphicalPlaygroundViewMode::Player {
-            (
-                Color::srgb(0.45, 0.56, 0.25),
-                Vec2::new(5_600.0, 5_600.0),
-                "ground:production-player-backdrop",
-            )
-        } else {
-            (
-                rgba_to_color(presentation.ground_material.rgba()),
-                Vec2::new(860.0, 460.0),
-                "ground:p34-fixture",
-            )
-        };
-    app.world_mut().spawn((
-        Name::new("A-Life S01 ground plane"),
-        Sprite {
-            color: ground_color,
-            custom_size: Some(ground_size),
-            ..default()
-        },
-        Transform::from_xyz(0.0, 0.0, -10.0),
-        VisibleGroundPlane {
-            shape: presentation.ground_shape,
-            material: presentation.ground_material,
-            rgba: presentation.ground_material.rgba(),
-        },
-        VisibleWorldDebugLabel(ground_label.to_string()),
-    ));
-    if let Some(ecology) = ecology {
-        spawn_ca19_terrain_zone_visuals(app, ecology, summary.view_mode);
+    if true_25d_player_view {
+        spawn_true_25d_player_view_layer(app, presentation, summary.seed)?;
+    }
+    if !true_25d_player_view {
+        app.world_mut().spawn((
+            Name::new("A-Life S01 ground plane"),
+            Sprite {
+                color: rgba_to_color(presentation.ground_material.rgba()),
+                custom_size: Some(Vec2::new(860.0, 460.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, -10.0),
+            VisibleGroundPlane {
+                shape: presentation.ground_shape,
+                material: presentation.ground_material,
+                rgba: presentation.ground_material.rgba(),
+            },
+            VisibleWorldDebugLabel("ground:p34-fixture".to_string()),
+        ));
+    }
+    if !true_25d_player_view {
+        if let Some(ecology) = ecology {
+            spawn_ca19_terrain_zone_visuals(app, ecology, summary.view_mode);
+        }
     }
     if let Some(world_art) = world_art {
         spawn_ca37_world_art_dressing(
@@ -1497,15 +2791,21 @@ fn spawn_graphical_playground_scene(
         );
     }
 
-    for object in &presentation.objects {
-        spawn_graphical_object(app, object, summary.view_mode, alpha_art.as_ref())?;
+    if !true_25d_player_view {
+        for object in &presentation.objects {
+            spawn_graphical_object(app, object, summary.view_mode, alpha_art.as_ref())?;
+        }
     }
-    if let Some(school) = school {
-        spawn_ca23_school_teacher_markers(app, school, summary.view_mode);
+    if !true_25d_player_view {
+        if let Some(school) = school {
+            spawn_ca23_school_teacher_markers(app, school, summary.view_mode);
+        }
     }
-    spawn_graphical_intent_feedback(app, summary.view_mode);
-    spawn_ca08_feedback_pulses(app, presentation, summary.view_mode, alpha_art.as_ref());
-    spawn_ca18_social_proximity_cues(app, presentation, summary.view_mode);
+    if !true_25d_player_view {
+        spawn_graphical_intent_feedback(app, summary.view_mode);
+        spawn_ca08_feedback_pulses(app, presentation, summary.view_mode, alpha_art.as_ref());
+        spawn_ca18_social_proximity_cues(app, presentation, summary.view_mode);
+    }
     spawn_production_player_view_hud_skin(app, alpha_art.as_ref(), summary.view_mode);
 
     app.insert_resource(VisibleWorldSceneResource {
@@ -2116,7 +3416,21 @@ fn spawn_ca37_world_art_dressing(
     view_mode: GraphicalPlaygroundViewMode,
     presentation: &VisibleWorldPresentation,
 ) {
-    spawn_ca37_world_art_terrain_canvas(app, summary, alpha_art, view_mode, presentation);
+    let true_25d_player_view = view_mode == GraphicalPlaygroundViewMode::Player
+        && app
+            .world()
+            .contains_resource::<GraphicalTrue25dPresentationResource>();
+    spawn_ca37_world_art_terrain_canvas(
+        app,
+        summary,
+        alpha_art,
+        view_mode,
+        presentation,
+        !true_25d_player_view,
+    );
+    if true_25d_player_view {
+        return;
+    }
     spawn_production_player_view_ambient_layers(app, summary, alpha_art, view_mode);
     for prop in &summary.dressing_props {
         if view_mode == GraphicalPlaygroundViewMode::Player {
@@ -2201,6 +3515,7 @@ fn spawn_ca37_world_art_terrain_canvas(
     alpha_art: Option<&GraphicalAlphaArtHandles>,
     view_mode: GraphicalPlaygroundViewMode,
     presentation: &VisibleWorldPresentation,
+    render_player_surface: bool,
 ) {
     if view_mode == GraphicalPlaygroundViewMode::FullDebug {
         if let Some(handles) = alpha_art {
@@ -2212,19 +3527,34 @@ fn spawn_ca37_world_art_terrain_canvas(
     let activation = activate_procedural_chunks_around_creatures(config, &anchors)
         .expect("graphical procedural world activation should validate");
     let mut field = GraphicalProceduralTerrainFieldResource::new(summary, &activation);
-    if view_mode == GraphicalPlaygroundViewMode::Player {
+    if view_mode == GraphicalPlaygroundViewMode::Player && render_player_surface {
         ca44a_spawn_runtime_procedural_biome_map_app(app, summary, &field);
     }
     for (center_x, center_z, anchor) in
         ca44a_initial_procedural_terrain_centers(&activation, field.chunk_tile_size)
     {
         ca44a_materialize_terrain_chunk_app(
-            app, summary, &mut field, alpha_art, view_mode, center_x, center_z, anchor,
+            app,
+            summary,
+            &mut field,
+            alpha_art,
+            view_mode,
+            render_player_surface,
+            center_x,
+            center_z,
+            anchor,
         );
     }
     if let Ok(content) = generate_procedural_world_content(config, &activation) {
         field.record_content_report(&content);
-        ca44a_spawn_procedural_world_content_app(app, &mut field, alpha_art, view_mode, &content);
+        ca44a_spawn_procedural_world_content_app(
+            app,
+            &mut field,
+            alpha_art,
+            view_mode,
+            render_player_surface,
+            &content,
+        );
     }
     app.insert_resource(field);
 }
@@ -2340,10 +3670,13 @@ fn ca44a_active_chunk_signature(field: &GraphicalProceduralTerrainFieldResource)
 
 fn update_graphical_runtime_procedural_biome_map(
     field: Option<Res<GraphicalProceduralTerrainFieldResource>>,
-    mut images: ResMut<Assets<Image>>,
+    images: Option<ResMut<Assets<Image>>>,
     mut biome_maps: bevy::prelude::Query<(&mut GraphicalRuntimeProceduralBiomeMap, &Sprite)>,
 ) {
     let Some(field) = field else {
+        return;
+    };
+    let Some(mut images) = images else {
         return;
     };
     let signature = ca44a_active_chunk_signature(&field);
@@ -2499,10 +3832,21 @@ fn ca44a_generate_runtime_procedural_biome_map(
     seed: u64,
     field: &GraphicalProceduralTerrainFieldResource,
 ) -> (Image, RuntimeProceduralBiomeMapMetrics) {
-    let width_px =
-        (CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as u32) * CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE;
-    let height_px =
-        (CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as u32) * CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE;
+    ca44a_generate_runtime_procedural_biome_map_with_pixels_per_tile(
+        seed,
+        field,
+        CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE,
+    )
+}
+
+fn ca44a_generate_runtime_procedural_biome_map_with_pixels_per_tile(
+    seed: u64,
+    field: &GraphicalProceduralTerrainFieldResource,
+    pixels_per_tile: u32,
+) -> (Image, RuntimeProceduralBiomeMapMetrics) {
+    let pixels_per_tile = pixels_per_tile.max(2);
+    let width_px = (CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as u32) * pixels_per_tile;
+    let height_px = (CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as u32) * pixels_per_tile;
     let mut data = Vec::with_capacity((width_px * height_px * 4) as usize);
     let mut metrics = RuntimeProceduralBiomeMapMetrics::default();
     let terrain_tiles = ca44a_runtime_biome_tile_set();
@@ -2510,16 +3854,12 @@ fn ca44a_generate_runtime_procedural_biome_map(
     let half_width_tiles = CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES / 2;
     let half_height_tiles = CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES / 2;
     for y in 0..height_px {
-        let tile_z = (height_px.saturating_sub(1) - y) as i32
-            / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as i32
-            - half_height_tiles;
+        let tile_z =
+            (height_px.saturating_sub(1) - y) as i32 / pixels_per_tile as i32 - half_height_tiles;
         for x in 0..width_px {
-            let tile_x =
-                x as i32 / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as i32 - half_width_tiles;
-            let local_x = (x % CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE) as f32
-                / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as f32;
-            let local_y = (y % CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE) as f32
-                / CA44A_RUNTIME_BIOME_MAP_PIXELS_PER_TILE as f32;
+            let tile_x = x as i32 / pixels_per_tile as i32 - half_width_tiles;
+            let local_x = (x % pixels_per_tile) as f32 / pixels_per_tile as f32;
+            let local_y = (y % pixels_per_tile) as f32 / pixels_per_tile as f32;
             let world_x = tile_x as f32 + local_x - 0.5;
             let world_z = tile_z as f32 + (1.0 - local_y) - 0.5;
             let mut pixel =
@@ -2584,34 +3924,33 @@ fn ca44a_runtime_biome_tile_pixel(
         .max(stone)
         .max(water)
         .max(sand);
-    let hazard_gate = (1.0 - hazard * 1.65).clamp(0.0, 1.0);
+    let hazard_gate = (1.0 - hazard * 1.35).clamp(0.0, 1.0);
     let stone_gate = (1.0 - stone * 1.18).clamp(0.0, 1.0);
     let water_gate = (1.0 - water * 1.25).clamp(0.0, 1.0);
     let safe = ((0.48 - pressure * 0.38) * hazard_gate * stone_gate * water_gate).clamp(0.0, 0.52);
 
-    let sources = [
+    let mut sources = [
         ("safe-grass", safe),
-        ("neutral-soil", soil * 1.35 * hazard_gate * water_gate),
-        ("resource-grove", resource * 1.52 * hazard_gate * stone_gate),
-        ("hazard-pressure", hazard * (2.15 + hazard * 0.75)),
-        ("stone-dressing", stone * 1.65 * water_gate),
-        ("water", water * 1.72),
-        ("sand", sand * 1.28 * (1.0 - hazard * 0.45).clamp(0.25, 1.0)),
+        ("neutral-soil", soil * 1.22 * hazard_gate * water_gate),
+        ("resource-grove", resource * 1.34 * hazard_gate * stone_gate),
+        ("hazard-pressure", hazard * (1.56 + hazard * 0.36)),
+        ("stone-dressing", stone * 1.42 * water_gate),
+        ("water", water * 1.48),
+        ("sand", sand * 1.16 * (1.0 - hazard * 0.38).clamp(0.34, 1.0)),
     ];
-    let (dominant_material_id, dominant_weight) = sources
-        .iter()
-        .copied()
-        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .unwrap_or(("safe-grass", 0.0));
+    sources.sort_by(|(_, left), (_, right)| {
+        right.partial_cmp(left).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let (dominant_material_id, dominant_weight) = sources[0];
     let dominant_material_id = if dominant_weight > 0.01 {
         dominant_material_id
     } else {
         "safe-grass"
     };
-    let tile_rgb = ca44a_sample_runtime_tile_rgb(
-        dominant_material_id,
-        terrain_tiles.for_material(dominant_material_id),
+    let tile_rgb = ca44a_runtime_weighted_tile_rgb(
         seed,
+        terrain_tiles,
+        &sources,
         tile_x,
         tile_z,
         pixel_x,
@@ -2637,6 +3976,56 @@ fn ca44a_runtime_biome_tile_pixel(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn ca44a_runtime_weighted_tile_rgb(
+    seed: u64,
+    terrain_tiles: &RuntimeBiomeTileSet,
+    ranked_sources: &[(&str, f32); 7],
+    tile_x: i32,
+    tile_z: i32,
+    pixel_x: u32,
+    pixel_y: u32,
+    local_x: f32,
+    local_y: f32,
+) -> [u8; 3] {
+    let (primary_id, primary_weight) = ranked_sources[0];
+    let primary_id = if primary_weight > 0.01 {
+        primary_id
+    } else {
+        "safe-grass"
+    };
+    let mut rgb = ca44a_sample_runtime_tile_rgb(
+        primary_id,
+        terrain_tiles.for_material(primary_id),
+        seed,
+        tile_x,
+        tile_z,
+        pixel_x,
+        pixel_y,
+        local_x,
+        local_y,
+    );
+    for (material_id, weight) in ranked_sources.iter().skip(1).take(2) {
+        if *weight <= 0.10 || primary_weight <= 0.001 {
+            continue;
+        }
+        let blend = ((*weight / primary_weight) * 0.16).clamp(0.0, 0.12);
+        let secondary = ca44a_sample_runtime_tile_rgb(
+            material_id,
+            terrain_tiles.for_material(material_id),
+            seed ^ 0x9E37_4A7C,
+            tile_x,
+            tile_z,
+            pixel_x,
+            pixel_y,
+            local_x,
+            local_y,
+        );
+        rgb = ca44a_blend_rgb_u8(rgb, secondary, blend);
+    }
+    rgb
+}
+
 fn ca44a_sample_runtime_tile_rgb(
     material_id: &str,
     tile: &RuntimeBiomeTileImage,
@@ -2648,19 +4037,28 @@ fn ca44a_sample_runtime_tile_rgb(
     local_x: f32,
     local_y: f32,
 ) -> [u8; 3] {
-    let tile_hash = ca44a_runtime_pixel_hash(seed ^ 0x51A7_E111, tile_x, tile_z, 0, 0);
+    let material_salt = match material_id {
+        "neutral-soil" => 0x15,
+        "resource-grove" => 0x27,
+        "hazard-pressure" => 0x39,
+        "stone-dressing" => 0x4B,
+        "water" => 0x5D,
+        "sand" => 0x6F,
+        _ => 0x7A,
+    };
+    let tile_hash = ca44a_runtime_pixel_hash(seed ^ 0x51A7_E111, material_salt, 0, 0, 0);
     let world_u = tile_x as f32 + local_x;
     let world_v = tile_z as f32 + local_y;
     let offset_u = ((tile_hash & 0xFF) as f32) / 255.0;
     let offset_v = (((tile_hash >> 8) & 0xFF) as f32) / 255.0;
     let material_scale = match material_id {
-        "water" => 0.92,
-        "sand" => 0.88,
-        "stone-dressing" => 0.82,
-        "hazard-pressure" => 0.78,
-        "resource-grove" => 0.95,
-        "neutral-soil" => 0.86,
-        _ => 0.90,
+        "water" => 0.52,
+        "sand" => 0.50,
+        "stone-dressing" => 0.49,
+        "hazard-pressure" => 0.54,
+        "resource-grove" => 0.58,
+        "neutral-soil" => 0.47,
+        _ => 0.56,
     };
     let u = (world_u * material_scale + world_v * 0.031 + offset_u).rem_euclid(1.0);
     let v = (world_v * material_scale - world_u * 0.027 + offset_v).rem_euclid(1.0);
@@ -2668,22 +4066,27 @@ fn ca44a_sample_runtime_tile_rgb(
     let sample_y = ((v.clamp(0.0, 0.999) * tile.height as f32) as u32) % tile.height.max(1);
     let index = ((sample_y * tile.width + sample_x) * 4) as usize;
     let alpha = tile.data.get(index + 3).copied().unwrap_or(255) as f32 / 255.0;
-    let source = [
+    let mut source = [
         tile.data.get(index).copied().unwrap_or(0),
         tile.data.get(index + 1).copied().unwrap_or(0),
         tile.data.get(index + 2).copied().unwrap_or(0),
     ];
+    let max_channel = source[0].max(source[1]).max(source[2]);
+    let min_channel = source[0].min(source[1]).min(source[2]);
+    if max_channel > 188 && max_channel.saturating_sub(min_channel) < 92 {
+        source = ca44a_blend_rgb_u8(source, ca44a_runtime_material_base_rgb(material_id), 0.52);
+    }
     ca44a_blend_rgb_u8(ca44a_runtime_material_base_rgb(material_id), source, alpha)
 }
 
 fn ca44a_runtime_tile_blend(material_id: &str) -> f32 {
     match material_id {
-        "hazard-pressure" => 0.20,
-        "water" => 0.18,
-        "resource-grove" => 0.17,
-        "neutral-soil" | "sand" => 0.15,
-        "stone-dressing" => 0.15,
-        _ => 0.13,
+        "hazard-pressure" => 0.30,
+        "water" => 0.28,
+        "resource-grove" => 0.26,
+        "stone-dressing" => 0.24,
+        "neutral-soil" | "sand" => 0.22,
+        _ => 0.18,
     }
 }
 
@@ -2791,12 +4194,16 @@ fn ca44a_paint_runtime_biome_regions(
     data: &mut [u8],
 ) -> u32 {
     let regions = [
-        (-31.0, -21.0, 29.0, 13.0, [43, 139, 166], 0.66, 0xE9u32),
-        (-25.0, -17.0, 35.0, 15.0, [214, 170, 84], 0.54, 0x23u32),
-        (-39.0, 20.0, 43.0, 21.0, [112, 123, 116], 0.92, 0x51u32),
-        (12.0, 15.0, 32.0, 19.0, [28, 132, 47], 0.62, 0xC3u32),
-        (36.0, 1.0, 36.0, 25.0, [195, 47, 30], 0.90, 0xA7u32),
-        (50.0, -25.0, 22.0, 12.0, [142, 138, 118], 0.58, 0x77u32),
+        (-34.0, -22.0, 31.0, 15.0, [43, 139, 166], 0.22, 0xE9u32),
+        (-24.0, -17.0, 35.0, 16.0, [214, 170, 84], 0.16, 0x23u32),
+        (-37.0, 20.0, 43.0, 22.0, [112, 123, 116], 0.19, 0x51u32),
+        (8.0, 14.0, 34.0, 20.0, [28, 132, 47], 0.16, 0xC3u32),
+        (34.0, 1.0, 39.0, 26.0, [195, 47, 30], 0.23, 0xA7u32),
+        (49.0, -25.0, 24.0, 13.0, [142, 138, 118], 0.14, 0x77u32),
+        (-22.0, 2.0, 21.0, 10.0, [43, 139, 166], 0.18, 0xB4u32),
+        (20.0, 6.0, 23.0, 15.0, [195, 47, 30], 0.20, 0x91u32),
+        (-8.0, 21.0, 24.0, 11.0, [112, 123, 116], 0.17, 0x64u32),
+        (0.0, -16.0, 28.0, 13.0, [28, 132, 47], 0.14, 0xD8u32),
     ];
     regions
         .iter()
@@ -2836,9 +4243,7 @@ fn ca44a_paint_runtime_biome_region(
                 - CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES as f32 * 0.5;
             let world_z = CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as f32 * 0.5
                 - (y as f32 / height_px as f32) * CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES as f32;
-            if !ca44a_world_point_in_active_fog_window(field, world_x, world_z) {
-                continue;
-            }
+            let fogged = !ca44a_world_point_in_active_fog_window(field, world_x, world_z);
             let dx = (world_x - center_x) / radius_x.max(0.001);
             let dz = (world_z - center_z) / radius_z.max(0.001);
             let distance = (dx * dx + dz * dz).sqrt();
@@ -2851,8 +4256,9 @@ fn ca44a_paint_runtime_biome_region(
                 * (world_z * 0.27 - salt as f32).cos()
                 * 0.07)
                 + ((hash % 97) as f32 / 96.0 - 0.5) * 0.06;
-            let alpha = (max_alpha * 0.34 * (0.14 + edge * 0.86 + texture_breakup))
-                .clamp(0.0, max_alpha * 0.34);
+            let fog_factor = if fogged { 0.52 } else { 1.0 };
+            let alpha = (max_alpha * fog_factor * (0.10 + edge * 0.90 + texture_breakup))
+                .clamp(0.0, max_alpha * fog_factor);
             if alpha <= 0.01 {
                 continue;
             }
@@ -2987,12 +4393,12 @@ fn ca44a_paint_runtime_biome_dressing(
     data: &mut [u8],
     metrics: &mut RuntimeProceduralBiomeMapMetrics,
 ) {
-    for index in 0..140 {
+    for index in 0..460 {
         let (world_x, world_z) = ca44a_runtime_resource_grove_point(seed, index);
         let resource_weight = ca44a_runtime_resource_weight(world_x, world_z);
         let hazard_weight = ca44a_runtime_hazard_weight(world_x, world_z);
         let stone_weight = ca44a_runtime_stone_weight(world_x, world_z);
-        if resource_weight > 0.44
+        if resource_weight > 0.34
             && hazard_weight < 0.22
             && stone_weight < 0.58
             && ca44a_world_point_in_active_fog_window(field, world_x, world_z)
@@ -3001,7 +4407,7 @@ fn ca44a_paint_runtime_biome_dressing(
                 ca44a_paint_tree_cluster(data, width_px, height_px, world_x, world_z, index, seed);
         }
     }
-    for index in 0..190 {
+    for index in 0..360 {
         let (world_x, world_z) = ca44a_runtime_stone_cluster_point(seed, index);
         if (ca44a_runtime_stone_weight(world_x, world_z) > 0.30
             || ca44a_runtime_pixel_hash(seed, index, 17, 0, 0) % 11 == 0)
@@ -3011,7 +4417,7 @@ fn ca44a_paint_runtime_biome_dressing(
                 ca44a_paint_rock_cluster(data, width_px, height_px, world_x, world_z, index, seed);
         }
     }
-    for index in 0..145 {
+    for index in 0..260 {
         let (world_x, world_z) = ca44a_runtime_hazard_cluster_point(seed, index);
         if ca44a_runtime_hazard_weight(world_x, world_z) > 0.28
             && ca44a_world_point_in_active_fog_window(field, world_x, world_z)
@@ -3021,10 +4427,10 @@ fn ca44a_paint_runtime_biome_dressing(
             );
         }
     }
-    for index in 0..115 {
+    for index in 0..520 {
         let (world_x, world_z) = ca44a_runtime_random_world_point(seed, index, 0xF10A_0E51);
         let resource_weight = ca44a_runtime_resource_weight(world_x, world_z);
-        if resource_weight > 0.42
+        if resource_weight > 0.30
             && ca44a_runtime_hazard_weight(world_x, world_z) < 0.18
             && ca44a_world_point_in_active_fog_window(field, world_x, world_z)
         {
@@ -3040,7 +4446,7 @@ fn ca44a_world_point_in_active_fog_window(
     world_z: f32,
 ) -> bool {
     ca44a_distance_to_active_chunk_center(field, world_x, world_z)
-        .map(|distance| distance <= field.chunk_tile_size.max(1) as f32 * 3.85)
+        .map(|distance| distance <= field.chunk_tile_size.max(1) as f32 * 5.25)
         .unwrap_or(false)
 }
 
@@ -3144,7 +4550,7 @@ fn ca44a_paint_tree_cluster(
         (8.0 * scale) as i32,
         (4.0 * scale) as i32,
         [48, 78, 37],
-        0.08,
+        0.12,
     );
     for lobe in 0..4 {
         let offset_hash = ca44a_runtime_pixel_hash(seed ^ 0xBEE5, index, lobe, 0, 0);
@@ -3164,7 +4570,7 @@ fn ca44a_paint_tree_cluster(
             } else {
                 [67, 139, 48]
             },
-            0.30,
+            0.40,
         );
     }
     if hash % 3 == 0 {
@@ -3529,7 +4935,7 @@ fn ca44a_runtime_continuous_material_base_rgb(
         rgb = ca44a_blend_rgb_f32(
             rgb,
             ca44a_runtime_material_base_rgb("hazard-pressure").map(f32::from),
-            (hazard_weight * 0.90).clamp(0.0, 0.90),
+            (hazard_weight * 0.72).clamp(0.0, 0.72),
         );
     }
     [
@@ -3541,52 +4947,64 @@ fn ca44a_runtime_continuous_material_base_rgb(
 
 fn ca44a_runtime_material_base_rgb(material_id: &str) -> [u8; 3] {
     match material_id {
-        "neutral-soil" => [127, 96, 54],
-        "resource-grove" => [61, 130, 50],
-        "hazard-pressure" => [147, 69, 43],
-        "stone-dressing" => [109, 121, 101],
-        "water" => [45, 117, 148],
-        "sand" => [191, 162, 92],
-        _ => [116, 151, 67],
+        "neutral-soil" => [112, 83, 49],
+        "resource-grove" => [48, 112, 48],
+        "hazard-pressure" => [151, 62, 44],
+        "stone-dressing" => [91, 101, 90],
+        "water" => [40, 108, 134],
+        "sand" => [166, 137, 76],
+        _ => [86, 127, 55],
     }
 }
 
 fn ca44a_runtime_soil_weight(world_x: f32, world_z: f32) -> f32 {
-    (ca44a_smooth_blob(world_x, world_z, -48.0, -8.0, 22.0, 34.0) * 0.82
-        + ca44a_smooth_blob(world_x, world_z, -17.0, -29.0, 24.0, 12.0) * 0.58
-        + ca44a_smooth_blob(world_x, world_z, 12.0, -11.0, 18.0, 10.0) * 0.38
-        + ca44a_smooth_blob(world_x, world_z, 53.0, 12.0, 17.0, 18.0) * 0.42)
+    let texture_gate = ca44a_macro_biome_gate(world_x, world_z, 0.21, 0.27);
+    ((ca44a_smooth_blob(world_x, world_z, -48.0, -8.0, 20.0, 28.0) * 0.68
+        + ca44a_smooth_blob(world_x, world_z, -17.0, -29.0, 20.0, 10.0) * 0.46
+        + ca44a_smooth_blob(world_x, world_z, 12.0, -11.0, 16.0, 9.0) * 0.32
+        + ca44a_smooth_blob(world_x, world_z, 53.0, 12.0, 13.0, 13.0) * 0.30)
+        * texture_gate)
         .clamp(0.0, 1.0)
 }
 
 fn ca44a_runtime_resource_weight(world_x: f32, world_z: f32) -> f32 {
-    (ca44a_smooth_blob(world_x, world_z, -20.0, -7.0, 24.0, 17.0) * 0.88
-        + ca44a_smooth_blob(world_x, world_z, 4.0, 14.0, 28.0, 18.0) * 0.78
-        + ca44a_smooth_blob(world_x, world_z, 34.0, -18.0, 20.0, 13.0) * 0.70
-        + ca44a_smooth_blob(world_x, world_z, -42.0, 22.0, 18.0, 11.0) * 0.46)
+    let texture_gate = ca44a_macro_biome_gate(world_x, world_z, 0.17, 0.23);
+    ((ca44a_smooth_blob(world_x, world_z, -20.0, -7.0, 23.0, 16.0) * 0.80
+        + ca44a_smooth_blob(world_x, world_z, 4.0, 14.0, 24.0, 15.0) * 0.70
+        + ca44a_smooth_blob(world_x, world_z, 0.0, -16.0, 24.0, 12.0) * 0.50
+        + ca44a_smooth_blob(world_x, world_z, 34.0, -18.0, 18.0, 11.0) * 0.58
+        + ca44a_smooth_blob(world_x, world_z, -42.0, 22.0, 15.0, 9.0) * 0.38)
+        * texture_gate)
         .clamp(0.0, 1.0)
 }
 
 fn ca44a_runtime_hazard_weight(world_x: f32, world_z: f32) -> f32 {
-    (ca44a_smooth_blob(world_x, world_z, 42.0, -4.0, 32.0, 24.0) * 1.05
-        + ca44a_smooth_blob(world_x, world_z, 54.0, -28.0, 19.0, 12.0) * 0.62
-        + ca44a_smooth_blob(world_x, world_z, -48.0, -23.0, 18.0, 13.0) * 0.74
-        + ca44a_smooth_blob(world_x, world_z, 20.0, 23.0, 14.0, 9.0) * 0.36)
+    let texture_gate = ca44a_macro_biome_gate(world_x, world_z, 0.25, 0.19);
+    ((ca44a_smooth_blob(world_x, world_z, 45.0, -5.0, 27.0, 20.0) * 0.88
+        + ca44a_smooth_blob(world_x, world_z, 20.0, 6.0, 22.0, 14.0) * 0.62
+        + ca44a_smooth_blob(world_x, world_z, 54.0, -28.0, 17.0, 11.0) * 0.50
+        + ca44a_smooth_blob(world_x, world_z, -48.0, -23.0, 14.0, 10.0) * 0.50
+        + ca44a_smooth_blob(world_x, world_z, 20.0, 23.0, 10.0, 7.0) * 0.28)
+        * texture_gate)
         .clamp(0.0, 1.0)
 }
 
 fn ca44a_runtime_stone_weight(world_x: f32, world_z: f32) -> f32 {
-    (ca44a_smooth_blob(world_x, world_z, -28.0, 22.0, 32.0, 18.0) * 0.90
-        + ca44a_smooth_blob(world_x, world_z, 12.0, 26.0, 28.0, 13.0) * 0.82
-        + ca44a_smooth_blob(world_x, world_z, 46.0, 24.0, 24.0, 12.0) * 0.66
-        + ca44a_smooth_blob(world_x, world_z, 52.0, -29.0, 16.0, 9.0) * 0.42)
+    let texture_gate = ca44a_macro_biome_gate(world_x, world_z, 0.14, 0.22);
+    ((ca44a_smooth_blob(world_x, world_z, -28.0, 22.0, 32.0, 18.0) * 0.84
+        + ca44a_smooth_blob(world_x, world_z, 12.0, 26.0, 26.0, 13.0) * 0.74
+        + ca44a_smooth_blob(world_x, world_z, -8.0, 21.0, 24.0, 11.0) * 0.54
+        + ca44a_smooth_blob(world_x, world_z, 46.0, 24.0, 20.0, 10.0) * 0.52
+        + ca44a_smooth_blob(world_x, world_z, 52.0, -29.0, 13.0, 8.0) * 0.34)
+        * texture_gate)
         .clamp(0.0, 1.0)
 }
 
 fn ca44a_runtime_water_weight(world_x: f32, world_z: f32) -> f32 {
     let channel = world_z + world_x / 5.0 + 18.0;
     ((1.0 - channel.abs() / 4.0).clamp(0.0, 1.0)
-        + ca44a_smooth_blob(world_x, world_z, -30.0, -22.0, 18.0, 8.0) * 0.92
+        + ca44a_smooth_blob(world_x, world_z, -22.0, 2.0, 21.0, 9.0) * 0.76
+        + ca44a_smooth_blob(world_x, world_z, -34.0, -21.0, 22.0, 10.0) * 0.98
         + ca44a_smooth_blob(world_x, world_z, -18.0, -34.0, 28.0, 9.0) * 0.46)
         .clamp(0.0, 1.0)
 }
@@ -3594,8 +5012,15 @@ fn ca44a_runtime_water_weight(world_x: f32, world_z: f32) -> f32 {
 fn ca44a_runtime_sand_weight(world_x: f32, world_z: f32) -> f32 {
     let channel = world_z + world_x / 5.0 + 18.0;
     ((1.0 - channel.abs() / 7.0).clamp(0.0, 1.0) * 0.72
+        + ca44a_smooth_blob(world_x, world_z, -21.0, 1.0, 25.0, 12.0) * 0.40
         + ca44a_smooth_blob(world_x, world_z, -34.0, -18.0, 23.0, 11.0) * 0.55)
         .clamp(0.0, 1.0)
+}
+
+fn ca44a_macro_biome_gate(world_x: f32, world_z: f32, x_freq: f32, z_freq: f32) -> f32 {
+    let wave_a = (world_x * x_freq).sin() * (world_z * z_freq).cos();
+    let wave_b = ((world_x + world_z) * x_freq * 0.47).sin();
+    (0.66 + (wave_a + wave_b) * 0.12).clamp(0.48, 0.88)
 }
 
 fn ca44a_smooth_blob(
@@ -3609,7 +5034,8 @@ fn ca44a_smooth_blob(
     let dx = (world_x - center_x) / radius_x.max(0.001);
     let dz = (world_z - center_z) / radius_z.max(0.001);
     let distance = (dx * dx + dz * dz).sqrt();
-    (1.0 - distance).clamp(0.0, 1.0)
+    let t = (1.0 - distance).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 fn ca44a_blend_rgb_f32(base: [f32; 3], overlay: [f32; 3], weight: f32) -> [f32; 3] {
@@ -3729,6 +5155,7 @@ fn ca44a_materialize_terrain_chunk_app(
     field: &mut GraphicalProceduralTerrainFieldResource,
     alpha_art: Option<&GraphicalAlphaArtHandles>,
     view_mode: GraphicalPlaygroundViewMode,
+    render_player_surface: bool,
     center_x: i32,
     center_z: i32,
     anchor: Option<WorldEntityId>,
@@ -3739,6 +5166,9 @@ fn ca44a_materialize_terrain_chunk_app(
             if !ca44a_virtual_tile_in_bounds(field, ix, iz)
                 || !field.materialized_tiles.insert((ix, iz))
             {
+                continue;
+            }
+            if view_mode == GraphicalPlaygroundViewMode::Player && !render_player_surface {
                 continue;
             }
             ca44a_spawn_terrain_tile_app(
@@ -3753,6 +5183,7 @@ fn ca44a_spawn_procedural_world_content_app(
     field: &mut GraphicalProceduralTerrainFieldResource,
     alpha_art: Option<&GraphicalAlphaArtHandles>,
     view_mode: GraphicalPlaygroundViewMode,
+    render_player_surface: bool,
     content: &ProceduralWorldContentReport,
 ) {
     for candidate in &content.candidates {
@@ -3762,7 +5193,13 @@ fn ca44a_spawn_procedural_world_content_app(
         {
             continue;
         }
-        ca44a_spawn_procedural_content_candidate_app(app, alpha_art, view_mode, candidate);
+        ca44a_spawn_procedural_content_candidate_app(
+            app,
+            alpha_art,
+            view_mode,
+            render_player_surface,
+            candidate,
+        );
     }
 }
 
@@ -3770,6 +5207,7 @@ fn ca44a_spawn_procedural_content_candidate_app(
     app: &mut App,
     alpha_art: Option<&GraphicalAlphaArtHandles>,
     view_mode: GraphicalPlaygroundViewMode,
+    render_player_surface: bool,
     candidate: &ProceduralWorldContentCandidate,
 ) {
     let position = Vec3::new(
@@ -3777,6 +5215,20 @@ fn ca44a_spawn_procedural_content_candidate_app(
         candidate.position.z * GRAPHICAL_WORLD_SCALE,
         ca44a_procedural_content_z(candidate.kind),
     );
+    if view_mode == GraphicalPlaygroundViewMode::Player && !render_player_surface {
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life true 2.5D procedural content ledger stable:{}",
+                candidate.stable_id.raw()
+            )),
+            GraphicalProductionArtLayer {
+                role: "true-25d-procedural-content-ledger",
+                display_only: true,
+            },
+            ca44a_procedural_content_marker(candidate),
+        ));
+        return;
+    }
     if view_mode == GraphicalPlaygroundViewMode::Player {
         if let Some(handles) = alpha_art {
             let (image, role) = ca44a_procedural_content_art_handle(handles, candidate);
@@ -4066,7 +5518,11 @@ fn ca44a_alpha_terrain_opacity(material_id: &str) -> f32 {
 
 fn ca44a_sync_graphical_markers_from_live_world(
     snapshots: &[alife_world::WorldObject],
-    markers: &mut bevy::prelude::Query<(&GraphicalPlaygroundMarker, &mut Transform)>,
+    markers: &mut bevy::prelude::Query<(
+        &GraphicalPlaygroundMarker,
+        &mut Transform,
+        Option<&GraphicalTrue25dAsset>,
+    )>,
     badges: &mut bevy::prelude::Query<
         (&GraphicalObjectBadge, &mut Transform),
         Without<GraphicalPlaygroundMarker>,
@@ -4087,10 +5543,19 @@ fn ca44a_sync_graphical_markers_from_live_world(
         .map(|object| (object.id.raw(), object))
         .collect::<BTreeMap<_, _>>();
 
-    for (marker, mut transform) in markers.iter_mut() {
+    for (marker, mut transform, true_25d) in markers.iter_mut() {
         if let Some(object) = by_id.get(&marker.stable_id.raw()) {
-            let mut next = ca44a_world_object_graphical_position(object);
-            next.z = transform.translation.z;
+            let next = if true_25d.is_some() {
+                Vec3::new(
+                    object.position.x * TRUE_25D_SIM_TO_VIEW_SCALE,
+                    transform.translation.y,
+                    object.position.z * TRUE_25D_SIM_TO_VIEW_SCALE,
+                )
+            } else {
+                let mut next = ca44a_world_object_graphical_position(object);
+                next.z = transform.translation.z;
+                next
+            };
             transform.translation = next;
         }
     }
@@ -4152,7 +5617,11 @@ fn update_graphical_procedural_terrain_field(
     world_art: Option<Res<GraphicalWorldArtStyleResource>>,
     alpha_art: Option<Res<GraphicalAlphaArtHandles>>,
     field: Option<ResMut<GraphicalProceduralTerrainFieldResource>>,
-    mut markers: bevy::prelude::Query<(&GraphicalPlaygroundMarker, &mut Transform)>,
+    mut markers: bevy::prelude::Query<(
+        &GraphicalPlaygroundMarker,
+        &mut Transform,
+        Option<&GraphicalTrue25dAsset>,
+    )>,
     mut badges: bevy::prelude::Query<
         (&GraphicalObjectBadge, &mut Transform),
         Without<GraphicalPlaygroundMarker>,
@@ -4189,12 +5658,22 @@ fn update_graphical_procedural_terrain_field(
     }
 
     let mut anchors = Vec::new();
-    for (marker, transform) in &mut markers {
+    for (marker, transform, true_25d) in &mut markers {
         if marker.kind == WorldObjectKind::Agent {
+            let world_z = if true_25d.is_some() {
+                transform.translation.z / TRUE_25D_SIM_TO_VIEW_SCALE
+            } else {
+                transform.translation.y / GRAPHICAL_WORLD_SCALE
+            };
             let position = Vec3f::new(
-                transform.translation.x / GRAPHICAL_WORLD_SCALE,
+                transform.translation.x
+                    / if true_25d.is_some() {
+                        TRUE_25D_SIM_TO_VIEW_SCALE
+                    } else {
+                        GRAPHICAL_WORLD_SCALE
+                    },
                 0.0,
-                transform.translation.y / GRAPHICAL_WORLD_SCALE,
+                world_z,
             );
             if let Ok(anchor) = CreatureWorldAnchor::new(marker.stable_id, position) {
                 anchors.push(anchor);
@@ -4578,10 +6057,10 @@ fn ca44a_procedural_content_art_handle(
 
 fn ca44a_procedural_content_sprite_size(kind: ProceduralWorldContentKind) -> Vec2 {
     match kind {
-        ProceduralWorldContentKind::Food => Vec2::splat(14.0),
-        ProceduralWorldContentKind::Hazard => Vec2::splat(20.0),
-        ProceduralWorldContentKind::Obstacle => Vec2::splat(22.0),
-        ProceduralWorldContentKind::DressingProp => Vec2::splat(10.0),
+        ProceduralWorldContentKind::Food => Vec2::splat(13.0),
+        ProceduralWorldContentKind::Hazard => Vec2::splat(18.0),
+        ProceduralWorldContentKind::Obstacle => Vec2::splat(20.0),
+        ProceduralWorldContentKind::DressingProp => Vec2::splat(9.0),
     }
 }
 
@@ -5025,11 +6504,11 @@ fn ca44a_entity_shadow_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
 
 fn ca44a_player_sprite_size(object: &VisibleWorldObjectPresentation) -> Vec2 {
     match object.kind {
-        WorldObjectKind::Agent => Vec2::new(34.0, 28.0),
-        WorldObjectKind::Food => Vec2::splat(22.0),
-        WorldObjectKind::Hazard => Vec2::splat(30.0),
-        WorldObjectKind::Obstacle => Vec2::splat(32.0),
-        WorldObjectKind::Token => Vec2::new(22.0, 16.0),
+        WorldObjectKind::Agent => Vec2::new(24.0, 19.0),
+        WorldObjectKind::Food => Vec2::splat(15.0),
+        WorldObjectKind::Hazard => Vec2::splat(19.0),
+        WorldObjectKind::Obstacle => Vec2::splat(21.0),
+        WorldObjectKind::Token => Vec2::new(13.0, 10.0),
     }
 }
 
@@ -5305,7 +6784,7 @@ fn inspector_local_entity(
                 |handles| Sprite {
                     image: handles.selection_ring.clone(),
                     color: Color::WHITE,
-                    custom_size: Some(Vec2::new(54.0, 42.0)),
+                    custom_size: Some(Vec2::new(52.0, 41.0)),
                     ..default()
                 },
             );
@@ -5336,7 +6815,7 @@ fn inspector_local_entity(
                 Sprite {
                     image: selection_pulse,
                     color: Color::srgba(1.0, 1.0, 1.0, 0.28),
-                    custom_size: Some(Vec2::new(64.0, 50.0)),
+                    custom_size: Some(Vec2::new(60.0, 47.0)),
                     ..default()
                 },
                 Transform::from_xyz(0.0, 0.0, 0.46),
@@ -5375,9 +6854,14 @@ fn rgba_to_color(rgba: [f32; 4]) -> Color {
 
 fn close_after_graphical_smoke_timeout(
     timer: Res<GraphicalPlaygroundSmokeTimer>,
+    mut commands: Commands,
+    primary_windows: bevy::prelude::Query<Entity, With<PrimaryWindow>>,
     mut exits: MessageWriter<AppExit>,
 ) {
     if timer.started.elapsed() >= timer.duration {
+        for entity in primary_windows.iter() {
+            commands.entity(entity).despawn();
+        }
         exits.write(AppExit::Success);
     }
 }
@@ -6281,7 +7765,11 @@ fn update_graphical_intent_feedback(
     runtime: Res<GraphicalRuntimeControlsResource>,
     selection: Res<SelectionResource>,
     markers: bevy::prelude::Query<
-        (&GraphicalPlaygroundMarker, &Transform),
+        (
+            &GraphicalPlaygroundMarker,
+            &Transform,
+            Option<&GraphicalTrue25dAsset>,
+        ),
         (Without<GraphicalIntentLine>, Without<GraphicalActionBadge>),
     >,
     mut lines: bevy::prelude::Query<
@@ -6297,12 +7785,13 @@ fn update_graphical_intent_feedback(
     let mut target_position = None;
     let target = runtime.panel.target_entity.map(WorldEntityId);
 
-    for (marker, transform) in &markers {
+    for (marker, transform, true_25d) in &markers {
+        let display_position = intent_feedback_display_position(transform, true_25d.is_some());
         if marker.kind == WorldObjectKind::Agent && marker.stable_id == selection.stable_id {
-            creature_position = Some(transform.translation);
+            creature_position = Some(display_position);
         }
         if Some(marker.stable_id) == target {
-            target_position = Some(transform.translation);
+            target_position = Some(display_position);
         }
     }
 
@@ -6324,17 +7813,29 @@ fn update_graphical_intent_feedback(
         {
             let delta = end - start;
             let length = (delta.x * delta.x + delta.y * delta.y).sqrt();
-            if length > 1.0 {
+            if length > 0.05 {
                 transform.translation =
                     Vec3::new((start.x + end.x) * 0.5, (start.y + end.y) * 0.5, 0.32);
                 transform.rotation = bevy::prelude::Quat::from_rotation_z(delta.y.atan2(delta.x));
-                sprite.custom_size = Some(Vec2::new(length, 5.0));
+                sprite.custom_size = Some(Vec2::new(length.max(1.25), 5.0));
                 sprite.color = intent_line_color(action, runtime.panel.target_entity);
             }
         } else {
             sprite.color = Color::srgba(0.42, 1.0, 0.58, 0.0);
             sprite.custom_size = Some(Vec2::new(1.0, 5.0));
         }
+    }
+}
+
+fn intent_feedback_display_position(transform: &Transform, true_25d: bool) -> Vec3 {
+    if true_25d {
+        Vec3::new(
+            transform.translation.x,
+            transform.translation.z,
+            transform.translation.y,
+        )
+    } else {
+        transform.translation
     }
 }
 

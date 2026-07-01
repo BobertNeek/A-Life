@@ -2,37 +2,21 @@
 
 Plan: CA44A
 Branch: codex/CA44A-real-art-assets-and-tick-stability
-Follow-up visual correction branch: codex/production-procedural-world-visual-fix
-Status: implemented on branch; validation passed
-Next plan: CA44
+Status: implemented and validated on branch; merge/post-merge validation pending
+Next plan remains: CA44
 
-## Current Follow-up Status
+## Scope
 
-The later procedural seeded Player View correction supersedes the final
-post-feedback composition note below. Default Player View now uses a
-runtime-generated seeded biome map with active creature chunk windows and fog of
-war. `world-painted-viewport` is retained only for Full Debug/style-reference
-presentation and must not be restored as the default player terrain surface.
+CA44A is a direct fix before continuing the roadmap. It does not start CA45 and does not request external CA44 tester evidence.
 
-The latest visual correction replaces the rejected dark/noisy swatches, the
-muddy v25/v30 attempts, the still-insufficient v31 single-atlas attempt, and the
-v32 stamped-blob runtime result with new image-generated v33 ground tiles and
-sprites. The committed Player View assets now come from sliced generated PNGs
-for grass, path, grove ground, hazard-pressure ground, stone, water, sand,
-creatures, selection, food, hazard crystals, rocks, and props. The importer is
-tracked at `scripts/import_alpha_art_imagegen_atlas.py` so the split terrain and
-sprite sheets can be re-sliced repeatably, including terrain-only refreshes.
-The runtime biome compositor now samples generated tiles as fine material
-texture over a continuous seeded biome field, uses biome regions/trails for
-large-scale composition, smooths fog-of-war reveal radially around active
-creature chunks, avoids hard square chunk masks in default Player View, and
-uses readable map-scale creature/object sprites instead of close-up stickers or
-debug-map specks.
+The pass addresses two problems found in manual player launch:
 
-## Reproduction Summary
+- the default `gpu_alpha` scenario stopped near tick 7 with `TerminalInvalidState`;
+- default Player View still looked like programmer art/debug output instead of a game-world presentation.
 
-The default `gpu_alpha` player path previously stopped almost immediately with `TerminalInvalidState`.
-Focused reproduction used:
+## Tick-7 Reproduction And Root Cause
+
+Pre-fix focused reproduction:
 
 ```powershell
 cargo run -p alife_game_app --bin alife_game_app -- gpu-alpha-stability-smoke crates/alife_world/tests/fixtures/gpu_alpha 64
@@ -44,197 +28,116 @@ Pre-fix result:
 requested=64 completed=6 first_invalid_tick=Some(8) diagnostic=TopologyCapacityExceeded sealed=5 packed=5 topology=5/3/5/1
 ```
 
-This matched the manual observation that the graphical alpha stopped around tick 7.
+Root cause: topology staging treated repeated dynamic observations of the same object concept as unique permanent bindings. The default alpha run rapidly exhausted the per-concept binding cap, then later the default simplex cap. CA44A fixes the summarization/capacity path while preserving strict invalid-state reporting.
 
-## Root Cause
-
-The first stop was a real `alife_core` topology rejection, not a GPU/CPU parity failure and not presentation code. `ConceptCell::observe` treated changing drive and location samples as unique permanent bindings. Repeated observations of the same object concept filled the per-concept binding cap rapidly, causing `TopologyCapacityExceeded` during sealed-patch topology staging.
-
-After fixing dynamic binding summarization, the run advanced to 256 sealed patches and then hit the default simplex storage cap. Existing topology tests and world tests expect sealed patches to bind into simplexes, so CA44A preserves that contract and raises the bounded default simplex capacity from 256 to 1024 for the default `CreatureMind` topology map.
-
-`TerminalInvalidState` remains strict. Invalid states are not hidden, downgraded, or converted into warnings.
+`TerminalInvalidState` remains strict. Invalid states are not hidden, downgraded, or converted to warnings.
 
 ## Art Assets Generated
 
-Original generated PNG assets were committed under:
+CA44A commits versioned original assets under:
 
 ```text
 crates/alife_game_app/assets/alpha_art_v1/
+crates/alife_game_app/assets/true_25d_alpha_v1/
 ```
 
-Assets:
+The active default Player View target is the True 2.5D retro-futuristic biological presentation:
 
-- `creature_idle.png`
-- `creature_hurt.png`
-- `selection_ring.png`
-- `food_sprout.png`
-- `hazard_crystal.png`
-- `rock_cluster.png`
-- `terrain_safe_grass.png`
-- `terrain_soil_path.png`
-- `terrain_resource_grove.png`
-- `terrain_hazard_pressure.png`
-- `terrain_stone_rough.png`
-- `world_backdrop_gpu_alpha.png`
-- `prop_grass_tuft.png`
-- `prop_pebble_cluster.png`
-- `prop_warning_shard.png`
-- `prop_leaf_patch.png`
-- `alpha_art_manifest.json`
+- low-poly `.gltf` creatures/items/props/fog accents in `true_25d_alpha_v1`;
+- fixed orthographic 2.5D Bevy camera;
+- a single `Plane3d` seeded biome surface generated from a deterministic procedural sampler;
+- seeded micro-ecology dressing generated around active creature/chunk anchors;
+- offscreen regions represented by a data ledger/fog rather than rendered debug tiles;
+- debug rectangles retained only for diagnostics/degraded paths, not the default Player View.
 
-The active manifest art direction is now
-`production-alpha-generated-world-atlas-v21-distinct-biome-tiles`. Ordinary
-sprite/tile PNGs remain 128x128 and below the 64 KB per-file cap.
-`world_backdrop_gpu_alpha.png` is retained as a Full Debug/style-reference map
-plate, capped by the stricter world-backdrop exception (`<= 768 KB`). Assets are
-original project-generated sprites/tiles/backdrops, not third-party downloads.
+The `alpha_art_v1` PNG pack remains tracked and validated for HUD/debug/fallback/package surfaces, including `ground_tile_repeat.png`. It is not the primary terrain composition in default Player View.
 
-The v21 refresh regenerated the committed terrain and object PNGs from two new
-generated atlases:
+The required visual roles are represented by assets:
 
-- terrain atlas: grass, dirt path, resource grove, red hazard pressure, gray
-  stone, teal water, and sand;
-- object atlas: blue-green creature idle/hurt poses, selection ring, food
-  sprout, red crystal hazard, rock cluster, and prop variants.
+- creature idle/hurt/motion/sleep/signal/eat
+- selection ring/pulse
+- food sprout/bloom
+- hazard crystal/glow
+- rock/obstacle cluster
+- safe grass, soil/path, resource/grove, hazard-pressure, stone/rough, water, and sand tiles
+- prop/dressing variants including grass tuft, leaf patch, mushroom cluster, pebble cluster, and warning shard
+- low-poly 2.5D glTF roles for creature, food, hazard, rock, props, terrain ledgers, fog cells, and selection ring
 
-The live Player View capture at
-`target/playtest_evidence/terrain_tiles/generated_v21_preview/player_view_v21_clean_dressing_capture.png`
-confirmed that the default window uses the generated terrain/sprites instead of
-rectangle placeholders. That evidence path remains local and untracked.
-
-The v7 terrain refresh regenerated the committed terrain PNGs with organic
-alpha masks, deterministic texture noise, softer edges, and stronger biome
-color language:
-
-- `terrain_safe_grass.png` is 22,846 bytes
-- `terrain_soil_path.png` is 21,942 bytes
-- `terrain_resource_grove.png` is 23,522 bytes
-- `terrain_hazard_pressure.png` is 24,557 bytes
-- `terrain_stone_rough.png` is 22,236 bytes
-
-The manifest now contains 35 versioned art entries including creature poses,
-selection assets, food/hazard/rock sprites, five terrain roles, prop dressing,
-ambient layers, HUD skin assets, and the painted Player View world backdrop.
+No third-party copyrighted art was downloaded.
 
 ## Manifest Changes
 
-Added strict alpha art manifest validation:
+Strict validation exists for both asset families:
 
-- schema/version checked
-- required roles checked
-- PNG signature checked
-- PNG dimensions checked
-- manifest dimensions/file sizes checked against disk
-- per-file size cap enforced
-- world-backdrop role uses its own manifest-validated size/dimension cap
-- at least three prop/dressing variants required
-- forbidden artifact paths rejected
-
-The app bundle manifest now references the alpha art manifest, and package inputs include the alpha art directory.
+- schema/version checked;
+- required roles checked;
+- PNG signature, dimensions, manifest file size, and per-role size caps checked;
+- glTF files checked for existence, extension, required roles, size caps, local paths, and forbidden artifact/cache paths;
+- forbidden target/log/cache/screenshot/capture/model-artifact paths rejected;
+- package dry-run lists both `alpha_art_v1` and `true_25d_alpha_v1`.
 
 ## Rendering Changes
 
-Default Player View now uses asset-backed sprites for required visual roles:
+Default Player View now renders the world through a true-2.5D scene:
 
-- creature idle/hurt
-- selection ring
-- food
-- hazard
-- rock/obstacle
-- primary terrain/material tiles
-- painted world backdrop
-- prop dressing
+- camera uses fixed orthographic presentation with `FixedVertical(10.0)` and `(0, 12, 12)` looking at origin;
+- world surface is one static Bevy plane using a generated seed biome map;
+- creature/object/selection roles are spawned as normalized glTF scenes when available, with native low-poly fallback as degraded diagnostics;
+- seeded chunks and active creature anchors drive procedural dressing and fog/ledger state;
+- world labels, topology lines, stable ID spam, internal GPU/patch fields, teacher debug labels, and full event feed stay hidden in default Player View;
+- Dev Overlay and Full Debug remain available for validation.
 
-Rectangle fallback remains available only for degraded diagnostics or non-player debug paths. Player View tests assert that required roles are backed by alpha art components and fallback rectangle components are absent.
+The 2.5D presentation is display-only. Bevy visuals do not become simulation, sensory, navigation, neural, ecology, or action authority.
 
-The Player View terrain renderer now keeps the deterministic seeded terrain
-field virtual while the default player presentation is driven by a generated
-painted map surface, a runtime procedural biome texture, materialized
-procedural chunk evidence, and chunk-generated content. Active local chunk
-samples still carry asset-backed terrain sprites and chunk provenance, but
-those tile sprites are intentionally near-transparent so they do not read as
-square debug slabs. Offscreen terrain remains data-only until creature anchors
-or the camera require materialization. The terrain/content layers remain
-display-only; they are not physics, navigation, sensory, cognition, ecology,
-neural, or action authority.
-
-The v15 correction replaces the rejected v12/v13 compositions. The bad v12
-plate had giant baked creatures, high-contrast blob fields, and black gaps. The
-v13.1 plate fixed the square-placeholder problem but still read too sparse and
-washed out compared with the target top-down game-world mockup. The generator
-now always regenerates the committed backdrop instead of preserving an existing
-stale file. The new v15 backdrop is a dense 1280x720 painted map plate with
-small-scale terrain texture, narrow dirt trails, green resource groves, gray
-highlands, red hazard pressure, small rocks/flowers/crystals/creature hints,
-and no baked giant foreground actors. The Rust validation constant and manifest
-now both require v15.
-
-The post-feedback player-view correction keeps that v15 painted map as the
-dominant visible surface. The fix changed only presentation composition:
-default camera framing now starts with a world-establishing view, terrain masks
-are subtle live-context overlays, and foreground creatures/props/selection
-pulses are small map-scale sprites instead of giant close-up elements. Simulation
-semantics, GPU/CPU correctness rules, and action authority are unchanged.
-
-The final post-feedback correction previously made that generated painted map
-fill the default Player View instead of appearing as a small plate inside a flat
-field. That presentation was superseded by the seeded procedural Player View
-follow-up: the default Player View now asserts zero `world-painted-viewport`
-layers and one primary `runtime-procedural-biome-map` layer. The painted
-viewport remains a Full Debug/style reference only. This is still a
-graphical/presentation step toward the active goal, not a claim that procedural
-terrain is authoritative ecology or sensory state.
+The shader stack from the user brief remains a rendering contract only. CA44A does not claim implemented Sobel depth/normal outlines, pixel-step postprocessing, or full toon-shader postprocess.
 
 ## Tests Added/Changed
 
-- Core topology regression for repeated dynamic observations.
-- Alpha art unit tests for:
-  - complete manifest acceptance
-  - missing role rejection
-  - dimension mismatch rejection
-  - malformed PNG rejection
-  - forbidden artifact path rejection
-- App integration tests for:
-  - committed alpha art manifest validation
-  - 600-tick `gpu_alpha` stability regression
-  - Bevy Player View alpha-art backed rendering
-  - high-resolution painted Player View map fit
-  - procedural terrain/content ledger evidence without visible debug terrain tiles
-  - Dev Overlay / Full Debug preservation through existing view-mode tests
+Focused coverage includes:
+
+- alpha PNG manifest acceptance/rejection tests;
+- true-2.5D glTF manifest acceptance/rejection tests;
+- Player View tests proving asset-backed 2.5D rendering is default;
+- tests proving the default view does not use fallback rectangles for required roles;
+- fixed orthographic camera contract tests;
+- seeded procedural biome map and chunk ledger tests;
+- stable-ID/live creature anchor synchronization tests;
+- Dev Overlay / Full Debug preservation via existing view-mode tests;
+- 600-tick `gpu_alpha` stability smoke for the tick-7 regression.
 
 ## Focused Evidence
 
-Core topology regression:
-
-```powershell
-cargo test -p alife_core --test topological_map repeated_dynamic_observations_summarize_without_binding_capacity_failure -- --nocapture
-```
-
-Result: PASS.
-
-Alpha art validator tests:
+Alpha art validator:
 
 ```powershell
 cargo test -p alife_game_app alpha_art_inner_validator -- --nocapture
 ```
 
-Result: PASS, 6 tests.
+Result: PASS, 8 tests.
 
-CA44A app tests:
+True 2.5D asset validator:
 
 ```powershell
-cargo test -p alife_game_app --test app_shell ca44a -- --nocapture
+cargo test -p alife_game_app true_25d_assets -- --nocapture
 ```
 
 Result: PASS, 2 tests.
 
-Bevy Player View art-backed rendering:
+Player View focused suite:
 
 ```powershell
-cargo test -p alife_game_app --features bevy-app --test app_shell ca44a_player_view_uses_alpha_art_sprites_not_default_rectangles -- --nocapture
+cargo test -p alife_game_app --features bevy-app --test app_shell player_view -- --nocapture
 ```
 
-Result: PASS.
+Result: PASS, 9 tests.
+
+Production world-art regression:
+
+```powershell
+cargo test -p alife_game_app --features bevy-app --test app_shell production_world_art -- --nocapture
+```
+
+Result: PASS, 1 test.
 
 600-tick stability:
 
@@ -245,57 +148,8 @@ cargo run -p alife_game_app --bin alife_game_app -- gpu-alpha-stability-smoke cr
 Result:
 
 ```text
-requested=600 completed=600 first_invalid_tick=None diagnostic=None sealed=600 packed=600 topology=5/3/600/1 terminal_invalid=0 parity=true avg_ms_per_tick=2.508 ticks_per_second=398.71
+requested=600 completed=600 selected_creature=1 first_invalid_tick=None first_invalid_status=None action=None:None target=None diagnostic=None sealed=600 packed=600 topology=5/3/600/1 parity=true fallback=headless-cpu-oracle-stability-smoke terminal_invalid=0 recoverable_failures=0 avg_ms_per_tick=1.248 ticks_per_second=801.07
 ```
-
-App bundle smoke:
-
-```powershell
-cargo run -p alife_game_app --bin alife_game_app -- app-bundle-smoke --manifest crates/alife_game_app/app_bundle_manifest.json
-```
-
-Result: PASS, `alpha_art=35`, `alpha_roles=true`, `production_alpha_art=true`, largest file evidence 236,817 bytes.
-
-Production art / chunked terrain tests:
-
-```powershell
-cargo test -p alife_game_app --features bevy-app --test app_shell production_world_art_atlas_v3_breaks_up_debug_checkerboard -- --nocapture
-cargo test -p alife_game_app --all-features --test app_shell bevy_feature_ca37_world_art_props_are_display_only_and_stable_id_safe -- --nocapture
-```
-
-Result: PASS. These tests verify asset-backed terrain, opacity below
-debug-block levels, chunk provenance, and virtual-map materialization near
-active view/creature anchors.
-
-Procedural Player View / target-match focused tests:
-
-```powershell
-cargo test -p alife_game_app --features bevy-app production_player_view_default_camera_is_world_establishing -- --nocapture
-cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_starts_with_rendered_procedural_chunk_window -- --nocapture
-cargo test -p alife_game_app --features bevy-app --test app_shell production_player_view_composition_layers_are_asset_backed_and_display_only -- --nocapture
-cargo test -p alife_game_app --features bevy-app --test app_shell procedural_world_content_uses_alpha_art_and_no_action_authority -- --nocapture
-```
-
-Result: PASS. These tests verify the wide default camera, generated painted map
-surface, runtime procedural biome texture, rendered procedural terrain chunk
-window, generated content visual layer, display-only composition, and no action
-authority.
-
-Manual screenshot comparison used untracked local evidence:
-
-```text
-target/playtest_evidence/visual_fix/player_view_v15_actual_settled.png
-target/playtest_evidence/visual_fix/fresh_window_capture.png
-target/playtest_evidence/visual_fix/current_player_view_scaled_painted_surface.png
-```
-
-Result: the actual Bevy window now renders the target-style painted map plate
-as a full Player View surface with small creatures, food, rocks, narrow paths,
-dense resource greenery, gray rough terrain, and visible red hazard pressure
-region. The prior flat-green fallback capture was traced to the v11/v12
-manifest mismatch; the later noisy v12 composition, sparse/washed v13
-composition, and blocky runtime-only terrain view were replaced by the scaled
-v15 painted map plus procedural runtime evidence.
 
 Default graphical Player View smoke:
 
@@ -303,7 +157,7 @@ Default graphical Player View smoke:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 30 -GpuMode static-plastic-cpu-shadow-guarded
 ```
 
-Result: PASS. GPU selected `GpuPlastic` on RTX 3050/DX12; Player View acceptance true; smoke exited cleanly after wall-clock timeout.
+Result: PASS. GPU selected `GpuPlastic`; fallback `None`; Player View acceptance true; smoke exited cleanly.
 
 Forced CPU fallback graphical smoke:
 
@@ -313,7 +167,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playgr
 Remove-Item Env:\ALIFE_GPU_RUNTIME_AVAILABLE -ErrorAction SilentlyContinue
 ```
 
-Result: PASS. Fallback was explicit: `CpuReference`, `HardwareUnavailable`, degraded visible.
+Result: PASS. Fallback selected `CpuReference` with `HardwareUnavailable`; degraded fallback was visible; no GPU performance claim.
 
 Package dry-run:
 
@@ -321,33 +175,32 @@ Package dry-run:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_alpha.ps1 -DryRun
 ```
 
-Result: PASS. Dry-run listed alpha art manifest and alpha art directory.
+Result: PASS. Dry-run lists both asset directories and manifests.
 
-No-zip release package build:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_alpha.ps1 -NoZip
-```
-
-Result: PASS. Release build completed and package root was written under `target/artifacts/`.
-
-Packaged graphical smoke:
+Release/package cadence:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File target/artifacts/ca41_windows_alpha/alife-gpu-alpha-windows/run_windows_alpha_package.ps1 -SmokeSeconds 10 -GpuMode static-plastic-cpu-shadow-guarded
+cargo build -p alife_game_app --bin alife_game_app --features "bevy-app gpu-runtime" --release --jobs 1
 ```
 
-Result: PASS. GPU selected `GpuPlastic`; Player View acceptance true; packaged smoke exited cleanly.
-
-## Cadence Notes
-
-Debug cargo-run 600-tick headless stability smoke measured roughly 0.9-1.3 ms/tick on this machine after compilation. Graphical debug cargo-run includes compile time and is not performance evidence.
-
-Release/package smoke built with `cargo build --release` and launched the packaged executable successfully. The packaged 10-second smoke completed cleanly with GPU selected. CA44A does not claim full product performance or full action-authoritative GPU runtime.
+Result: not completed in the local command window. The build exceeded 20 minutes and produced no release executable. CA44A therefore does not claim release/package runtime cadence evidence from this run. Debug/headless cadence and debug graphical smoke remain the only local runtime cadence evidence for this branch.
 
 ## Commands Run
 
-Focused commands are listed above. Full validation was run before merge:
+Focused commands run before full validation:
+
+```powershell
+cargo test -p alife_game_app true_25d_assets -- --nocapture
+cargo test -p alife_game_app --features bevy-app --test app_shell player_view -- --nocapture
+cargo test -p alife_game_app alpha_art_inner_validator -- --nocapture
+cargo run -p alife_game_app --bin alife_game_app -- gpu-alpha-stability-smoke crates/alife_world/tests/fixtures/gpu_alpha 600
+cargo test -p alife_game_app --features bevy-app --test app_shell production_world_art -- --nocapture
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 30 -GpuMode static-plastic-cpu-shadow-guarded
+$env:ALIFE_GPU_RUNTIME_AVAILABLE="0"; powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 10 -GpuMode static-plastic-cpu-shadow-guarded; Remove-Item Env:\ALIFE_GPU_RUNTIME_AVAILABLE -ErrorAction SilentlyContinue
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_alpha.ps1 -DryRun
+```
+
+Full validation result: PASS on branch.
 
 ```powershell
 cargo fmt --all -- --check
@@ -362,45 +215,32 @@ cargo check --workspace --all-features --all-targets
 cargo test --workspace --all-features --all-targets --jobs 1
 ```
 
-## Validation Results
+The all-features workspace test was run with `--jobs 1` after an unconstrained
+all-features run exceeded the local command timeout. The serialized run passed.
+Graphify update was attempted with the installed local executable, but it
+refused to overwrite `graphify-out/graph.json` because the regenerated graph had
+a different node count. No forced graph update was performed.
 
-Focused validation passed. Full validation passed:
+## Cadence Notes
 
-- `cargo fmt --all -- --check`
-- `cargo check --workspace --all-targets`
-- `cargo test --workspace --all-targets`
-- `cargo clippy --workspace --all-targets -- -D warnings`
-- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`
-- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1`
-- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1`
-- `cargo tree -p alife_core`
-- `cargo check --workspace --all-features --all-targets`
-- `cargo test --workspace --all-features --all-targets --jobs 1`
+The focused 600-tick headless stability smoke measured about 1.248 ms/tick in debug after compilation on this machine.
 
-The first all-features test attempt without `--jobs 1` hit a local Windows
-resource failure (`C:` free space reached 0 bytes and the linker reported
-paging/PDB allocation errors). After deleting generated `target/` build
-artifacts with `cargo clean`, the same all-features target set passed with
-`--jobs 1`. This was an environment resource workaround, not a test weakening
-or code failure.
+The graphical debug smoke is useful launch/playability evidence, but it includes debug compilation/runtime overhead and is not release performance evidence.
+
+Release/package runtime cadence is not claimed because the local release build did not complete within the available command window.
 
 ## Known Limitations
 
-- The art pack is a small alpha pack, not a final production art direction.
-- PNG sprites are intentionally small and stylized.
-- Player View uses asset-backed sprites and a painted procedural viewport with
-  low-opacity chunk masks. Future CA work still needs camera paging polish,
-  long-lived offscreen region policy, and richer creature exploration across
-  many chunks.
-- Procedural terrain currently improves graphical presentation and active-chunk
-  rendering. It is not yet an authoritative Minecraft-like biome/chunk substrate
-  for creature sensory, navigation, resource spawning, learning, or offscreen
-  ecology.
-- Package artifacts and diagnostics are generated under `target/artifacts/` and must remain untracked.
+- The world now reads as a seed-generated 2.5D alpha environment, but final art direction still needs real postprocess toon/Sobel/pixel-step rendering work.
+- Procedural terrain is a graphical/display-context system for this pass. It is not yet an authoritative infinite ecology, sensory, navigation, resource-spawning, or offscreen simulation substrate.
+- The world is generated from a deterministic seed and active creature/chunk anchors, but long-range creature exploration and streaming gameplay remain future work.
+- Release/package runtime cadence remains unmeasured for this branch because the local release build did not complete in the command window.
+- Local screenshots/logs under `target/playtest_evidence/` are evidence only and remain untracked.
 
 ## Invariant Checks
 
 - No CA45 work started.
+- No external CA44 tester evidence requested.
 - No release tag created.
 - No S12, G25, or P37 created.
 - No semantic/SLM authority changes.
@@ -409,13 +249,13 @@ or code failure.
 - CPU shadow parity preserved.
 - No full action-authoritative GPU runtime claim.
 - No neural compression, custom sensory raycasting, planet topology, or ExperiencePatch transaction work.
-- `alife_core` remains engine-independent; CA44A changed bounded topology summarization/capacity only and added no Bevy/wgpu/app dependency.
+- `alife_core` remains engine-independent; CA44A adds no Bevy/wgpu/app/model-runtime dependency to `alife_core`.
 
 ## Artifacts Tracked
 
-Tracked: source code, docs, manifest files, and versioned PNG art assets under `crates/alife_game_app/assets/alpha_art_v1/`.
+Tracked: source code, docs, manifests, versioned PNG assets under `crates/alife_game_app/assets/alpha_art_v1/`, and versioned glTF assets under `crates/alife_game_app/assets/true_25d_alpha_v1/`.
 
-Not tracked: screenshots, logs, target artifacts, model files, caches, captures, release zips, or temporary generator outputs.
+Not tracked: screenshots, logs, target artifacts, model files, caches, captures, release zips, Blender temporary files, or generator scratch output.
 
 ## Release/Tag Status
 
@@ -423,8 +263,9 @@ No release tag was created. Release remains deferred.
 
 ## alife_core Dependency Status
 
-`alife_core` remains dependency-clean. CA44A does not add Bevy, wgpu, renderer, app, model-runtime, or GUI dependencies to `alife_core`.
+`alife_core` remains dependency-clean. CA44A does not add Bevy, wgpu, renderer, app, model-runtime, GUI, or asset-pipeline dependencies to `alife_core`.
 
 ## Main Status
 
-Branch implementation validated and ready for review/merge. Final main merge and post-merge validation status is recorded in the CA44A completion receipt.
+Branch implementation and validation are complete. Merge/post-merge validation
+status is recorded in the final CA44A receipt.

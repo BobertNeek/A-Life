@@ -3,8 +3,8 @@
 
 The source sheets are generated outside the repository. This importer keeps the
 grid map and post-processing in source control so the committed PNGs are not a
-mysterious one-off artifact. The preferred path uses a terrain-only sheet and a
-chroma-keyed sprite sheet; the old single-atlas path is retained only for
+mysterious one-off artifact. The preferred path uses the v41 generated
+terrain/sprite sheet; older split-sheet and atlas layouts are retained only for
 reproducibility of rejected visual attempts.
 """
 
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "crates" / "alife_game_app" / "assets" / "alpha_art_v1"
 MANIFEST = OUT / "alpha_art_manifest.json"
 SIZE = 128
-ART_DIRECTION = "production-alpha-imagegen-ground-tiles-v33"
+ART_DIRECTION = "production-alpha-imagegen-ground-tiles-v41"
 
 
 # Crop boxes are in source-atlas pixels. Terrain crops deliberately use the
@@ -82,11 +82,110 @@ SPRITE_GRID: dict[str, tuple[int, int]] = {
     "hazard_crystal": (0, 1),
     "rock_cluster": (1, 1),
     "prop_grass_tuft": (2, 1),
+    "prop_mushroom_cluster": (3, 1),
+    "prop_pebble_cluster": (0, 2),
+    "prop_warning_shard": (1, 2),
+    "prop_leaf_patch": (2, 2),
+    "food_bloom": (3, 0),
+}
+
+
+# v39 is a stronger production-art pass where the image generator produced a
+# higher-quality free-layout sheet instead of the requested strict grid. Keep
+# the crop map explicit so the committed product assets are reproducible rather
+# than hand-edited one-offs.
+TERRAIN_CROPS_V39: dict[str, tuple[int, int, int, int]] = {
+    "terrain_safe_grass": (0, 0, 355, 444),
+    "terrain_soil_path": (355, 0, 710, 444),
+    "terrain_resource_grove": (710, 0, 1065, 444),
+    "terrain_hazard_pressure": (1065, 0, 1420, 444),
+    "terrain_stone_rough": (1420, 0, 1774, 444),
+    "terrain_water": (0, 443, 355, 887),
+    "terrain_sand": (355, 443, 710, 887),
+}
+
+SPRITE_CROPS_V39: dict[str, tuple[int, int, int, int]] = {
+    "creature_idle": (0, 0, 290, 365),
+    "creature_hurt": (290, 0, 580, 365),
+    "selection_ring": (580, 0, 870, 365),
+    "food_sprout": (870, 0, 1160, 365),
+    "hazard_crystal": (1160, 0, 1448, 365),
+    "rock_cluster": (0, 365, 290, 735),
+    "prop_grass_tuft": (290, 365, 580, 735),
+    "prop_pebble_cluster": (580, 365, 870, 735),
+    "prop_warning_shard": (870, 365, 1160, 735),
+    "prop_leaf_patch": (1160, 365, 1448, 735),
+    "prop_mushroom_cluster": (260, 735, 760, 1086),
+    "food_bloom": (870, 0, 1160, 365),
+}
+
+
+# v40 uses a clean generated terrain strip and a chroma-keyed sprite grid.
+# The strip is seven top-down material tiles in this order:
+# grass, path, grove, hazard, stone, water, sand.
+TERRAIN_STRIP_ORDER_V40: tuple[str, ...] = (
+    "terrain_safe_grass",
+    "terrain_soil_path",
+    "terrain_resource_grove",
+    "terrain_hazard_pressure",
+    "terrain_stone_rough",
+    "terrain_water",
+    "terrain_sand",
+)
+
+SPRITE_GRID_V40: dict[str, tuple[int, int]] = {
+    "creature_idle": (0, 0),
+    "creature_hurt": (1, 0),
+    "selection_ring": (2, 0),
+    "food_sprout": (3, 0),
+    "hazard_crystal": (0, 1),
+    "rock_cluster": (1, 1),
+    "prop_grass_tuft": (2, 1),
     "prop_pebble_cluster": (3, 1),
-    "prop_leaf_patch": (0, 2),
-    "prop_mushroom_cluster": (1, 2),
-    "prop_warning_shard": (2, 2),
-    "food_bloom": (3, 2),
+    "prop_warning_shard": (0, 2),
+    "prop_leaf_patch": (1, 2),
+    "prop_mushroom_cluster": (2, 2),
+    "food_bloom": (3, 0),
+}
+
+
+# v41 is a single generated sheet with seven polished top-down ground tiles in
+# the top row and object sprites in the lower row. Component boxes were measured
+# from the committed generated source and are kept here so the product assets
+# can be regenerated without hand-cropping.
+TERRAIN_CROPS_V41: dict[str, tuple[int, int, int, int]] = {
+    "terrain_safe_grass": (18, 164, 244, 424),
+    "terrain_soil_path": (261, 161, 480, 425),
+    "terrain_resource_grove": (495, 154, 726, 425),
+    "terrain_hazard_pressure": (742, 160, 974, 420),
+    "terrain_stone_rough": (988, 169, 1204, 419),
+    "terrain_water": (1223, 174, 1434, 415),
+    "terrain_sand": (1451, 170, 1672, 418),
+}
+
+TERRAIN_BASE_RGB_V41: dict[str, tuple[int, int, int]] = {
+    "terrain_safe_grass": (94, 158, 48),
+    "terrain_soil_path": (151, 103, 45),
+    "terrain_resource_grove": (78, 150, 45),
+    "terrain_hazard_pressure": (172, 58, 39),
+    "terrain_stone_rough": (117, 122, 113),
+    "terrain_water": (50, 142, 174),
+    "terrain_sand": (214, 176, 96),
+}
+
+SPRITE_CROPS_V41: dict[str, tuple[int, int, int, int]] = {
+    "creature_idle": (84, 565, 198, 702),
+    "creature_hurt": (318, 552, 460, 697),
+    "selection_ring": (505, 562, 681, 701),
+    "food_sprout": (717, 538, 876, 712),
+    "hazard_crystal": (913, 519, 1049, 719),
+    "rock_cluster": (1083, 548, 1254, 715),
+    "prop_grass_tuft": (1293, 560, 1440, 709),
+    "prop_mushroom_cluster": (1495, 573, 1615, 709),
+    "prop_pebble_cluster": (1083, 548, 1254, 715),
+    "prop_warning_shard": (913, 519, 1049, 719),
+    "prop_leaf_patch": (717, 538, 876, 712),
+    "food_bloom": (717, 538, 876, 712),
 }
 
 
@@ -94,6 +193,32 @@ def resize_tile(source: Image.Image, box: tuple[int, int, int, int]) -> Image.Im
     tile = source.crop(box).convert("RGBA")
     tile = tile.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
     return tile
+
+
+def terrain_tile_from_cell(
+    source: Image.Image,
+    box: tuple[int, int, int, int],
+    base_rgb: tuple[int, int, int],
+) -> Image.Image:
+    """Crop a generated terrain component and return a fully opaque tile.
+
+    The generated v41 sheet uses a magenta background. Terrain tiles are used as
+    texture samples in the runtime biome map, so transparent/magenta corners
+    would produce visual gaps. Composite the visible crop over a role-specific
+    base color before resizing.
+    """
+
+    cell = source.crop(box).convert("RGBA")
+    alpha = background_mask(cell)
+    cell.putalpha(alpha)
+    bbox = alpha.getbbox()
+    if bbox is None:
+        raise ValueError(f"no visible terrain found for crop {box}")
+    cell = cell.crop(bbox)
+    tile = cell.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
+    base = Image.new("RGBA", (SIZE, SIZE), (*base_rgb, 255))
+    base.alpha_composite(tile)
+    return base
 
 
 def grid_box(
@@ -248,6 +373,53 @@ def import_from_split_sheets(terrain_source: Image.Image, sprite_source: Image.I
     return generated
 
 
+def import_from_v39_sheets(terrain_source: Image.Image, sprite_source: Image.Image) -> dict[str, Image.Image]:
+    generated: dict[str, Image.Image] = {}
+    for asset_id, box in TERRAIN_CROPS_V39.items():
+        generated[asset_id] = resize_tile(terrain_source, box)
+    for asset_id, box in SPRITE_CROPS_V39.items():
+        generated[asset_id] = sprite_from_cell(sprite_source, box, pad=18)
+    return generated
+
+
+def import_from_v40_sheets(terrain_source: Image.Image, sprite_source: Image.Image) -> dict[str, Image.Image]:
+    generated: dict[str, Image.Image] = {}
+    terrain_top = int(round(terrain_source.height * 0.24))
+    terrain_bottom = int(round(terrain_source.height * 0.81))
+    terrain_left = int(round(terrain_source.width * 0.012))
+    terrain_right = int(round(terrain_source.width * 0.989))
+    tile_width = (terrain_right - terrain_left) / len(TERRAIN_STRIP_ORDER_V40)
+
+    for index, asset_id in enumerate(TERRAIN_STRIP_ORDER_V40):
+        left = int(round(terrain_left + tile_width * index))
+        right = int(round(terrain_left + tile_width * (index + 1)))
+        generated[asset_id] = resize_tile(
+            terrain_source,
+            (left + 3, terrain_top + 3, right - 3, terrain_bottom - 3),
+        )
+
+    for asset_id, (column, row) in SPRITE_GRID_V40.items():
+        generated[asset_id] = sprite_from_cell(
+            sprite_source,
+            grid_box(sprite_source, 4, 3, column, row, margin=22),
+            pad=20,
+        )
+    return generated
+
+
+def import_from_v41_sheet(source: Image.Image) -> dict[str, Image.Image]:
+    generated: dict[str, Image.Image] = {}
+    for asset_id, box in TERRAIN_CROPS_V41.items():
+        generated[asset_id] = terrain_tile_from_cell(
+            source,
+            box,
+            TERRAIN_BASE_RGB_V41[asset_id],
+        )
+    for asset_id, box in SPRITE_CROPS_V41.items():
+        generated[asset_id] = sprite_from_cell(source, box, pad=18)
+    return generated
+
+
 def import_from_legacy_single_atlas(source: Image.Image) -> dict[str, Image.Image]:
     generated: dict[str, Image.Image] = {}
     for asset_id, box in TERRAIN_CROPS.items():
@@ -265,6 +437,12 @@ def main() -> None:
     parser.add_argument("--terrain-source", type=Path, help="preferred terrain-only source sheet")
     parser.add_argument("--sprite-source", type=Path, help="preferred chroma-keyed sprite source sheet")
     parser.add_argument(
+        "--layout",
+        choices=("grid", "v39", "v40", "v41"),
+        default="grid",
+        help="source sheet layout; v40 uses split sheets; v41 uses one polished generated tile/sprite sheet",
+    )
+    parser.add_argument(
         "--terrain-only",
         action="store_true",
         help="replace only committed terrain PNGs; keep the current sprite sheet crops",
@@ -278,12 +456,20 @@ def main() -> None:
             parser.error("--terrain-only requires only --terrain-source")
         generated = import_terrain_sheet(Image.open(args.terrain_source).convert("RGB"))
     elif args.terrain_source and args.sprite_source:
-        generated = import_from_split_sheets(
-            Image.open(args.terrain_source).convert("RGB"),
-            Image.open(args.sprite_source).convert("RGB"),
-        )
+        terrain_source = Image.open(args.terrain_source).convert("RGB")
+        sprite_source = Image.open(args.sprite_source).convert("RGB")
+        if args.layout == "v40":
+            generated = import_from_v40_sheets(terrain_source, sprite_source)
+        elif args.layout == "v39":
+            generated = import_from_v39_sheets(terrain_source, sprite_source)
+        else:
+            generated = import_from_split_sheets(terrain_source, sprite_source)
     elif args.source:
-        generated = import_from_legacy_single_atlas(Image.open(args.source).convert("RGB"))
+        source = Image.open(args.source).convert("RGB")
+        if args.layout == "v41":
+            generated = import_from_v41_sheet(source)
+        else:
+            generated = import_from_legacy_single_atlas(source)
     else:
         parser.error("provide --terrain-source and --sprite-source, or legacy --source")
 

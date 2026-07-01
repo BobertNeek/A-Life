@@ -27,6 +27,8 @@ bevy-app = [
     "bevy/default_platform",
     "bevy/bevy_core_pipeline",
     "bevy/bevy_render",
+    "bevy/bevy_gltf",
+    "bevy/bevy_pbr",
     "bevy/bevy_sprite",
     "bevy/bevy_sprite_render",
     "bevy/bevy_text",
