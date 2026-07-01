@@ -86,7 +86,7 @@ silhouettes for creature/food/hazard/rock/prop roles.
 ## Rendering Boundary
 
 Default Player View no longer uses this PNG tile/sprite compositor as its
-primary world-art path. The active branch uses committed low-poly `.gltf` assets
+primary world-art path. The active branch uses committed low-poly `.glb` assets
 from `crates/alife_game_app/assets/true_25d_alpha_v1/`, a locked orthographic
 3D camera, and a procedural micro-ecology ledger. The v41 PNGs remain available
 for HUD/debug/fallback diagnostics and packaging validation. Rectangle fallback

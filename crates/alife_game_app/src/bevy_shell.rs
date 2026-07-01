@@ -1418,21 +1418,21 @@ fn true_25d_scene_assets(app: &mut App) -> Option<GraphicalTrue25dSceneAssets> {
     let load_scene =
         |path: &'static str| asset_server.load(GltfAssetLabel::Scene(0).from_asset(path));
     let handles = GraphicalTrue25dSceneAssets {
-        creature_idle: load_scene("true_25d_alpha_v1/creature_idle.gltf"),
-        creature_hurt: load_scene("true_25d_alpha_v1/creature_hurt.gltf"),
-        selection_ring: load_scene("true_25d_alpha_v1/selection_ring.gltf"),
-        food: load_scene("true_25d_alpha_v1/food_pod.gltf"),
-        hazard: load_scene("true_25d_alpha_v1/hazard_crystal.gltf"),
-        rock_obstacle: load_scene("true_25d_alpha_v1/rock_cluster.gltf"),
-        plant_prop: load_scene("true_25d_alpha_v1/bio_reed_prop.gltf"),
-        terrain_grass_island: load_scene("true_25d_alpha_v1/terrain_grass_island.gltf"),
-        terrain_soil_island: load_scene("true_25d_alpha_v1/terrain_soil_island.gltf"),
-        terrain_resource_grove: load_scene("true_25d_alpha_v1/terrain_resource_grove.gltf"),
-        terrain_hazard_pressure: load_scene("true_25d_alpha_v1/terrain_hazard_pressure.gltf"),
-        terrain_stone_island: load_scene("true_25d_alpha_v1/terrain_stone_island.gltf"),
-        terrain_water_cell: load_scene("true_25d_alpha_v1/terrain_water_cell.gltf"),
-        terrain_sand_island: load_scene("true_25d_alpha_v1/terrain_sand_island.gltf"),
-        fog_of_war_cell: load_scene("true_25d_alpha_v1/fog_of_war_cell.gltf"),
+        creature_idle: load_scene("true_25d_alpha_v1/creature_idle.glb"),
+        creature_hurt: load_scene("true_25d_alpha_v1/creature_hurt.glb"),
+        selection_ring: load_scene("true_25d_alpha_v1/selection_ring.glb"),
+        food: load_scene("true_25d_alpha_v1/food_pod.glb"),
+        hazard: load_scene("true_25d_alpha_v1/hazard_crystal.glb"),
+        rock_obstacle: load_scene("true_25d_alpha_v1/rock_cluster.glb"),
+        plant_prop: load_scene("true_25d_alpha_v1/bio_reed_prop.glb"),
+        terrain_grass_island: load_scene("true_25d_alpha_v1/terrain_grass_island.glb"),
+        terrain_soil_island: load_scene("true_25d_alpha_v1/terrain_soil_island.glb"),
+        terrain_resource_grove: load_scene("true_25d_alpha_v1/terrain_resource_grove.glb"),
+        terrain_hazard_pressure: load_scene("true_25d_alpha_v1/terrain_hazard_pressure.glb"),
+        terrain_stone_island: load_scene("true_25d_alpha_v1/terrain_stone_island.glb"),
+        terrain_water_cell: load_scene("true_25d_alpha_v1/terrain_water_cell.glb"),
+        terrain_sand_island: load_scene("true_25d_alpha_v1/terrain_sand_island.glb"),
+        fog_of_war_cell: load_scene("true_25d_alpha_v1/fog_of_war_cell.glb"),
     };
     app.insert_resource(handles.clone());
     Some(handles)
@@ -1445,60 +1445,60 @@ fn true_25d_scene_for_role(
     match role {
         "creature-idle" => (
             scenes.creature_idle.clone(),
-            "true_25d_alpha_v1/creature_idle.gltf",
+            "true_25d_alpha_v1/creature_idle.glb",
         ),
         "creature-hurt" => (
             scenes.creature_hurt.clone(),
-            "true_25d_alpha_v1/creature_hurt.gltf",
+            "true_25d_alpha_v1/creature_hurt.glb",
         ),
         "selection-ring" => (
             scenes.selection_ring.clone(),
-            "true_25d_alpha_v1/selection_ring.gltf",
+            "true_25d_alpha_v1/selection_ring.glb",
         ),
-        "food" => (scenes.food.clone(), "true_25d_alpha_v1/food_pod.gltf"),
+        "food" => (scenes.food.clone(), "true_25d_alpha_v1/food_pod.glb"),
         "hazard" => (
             scenes.hazard.clone(),
-            "true_25d_alpha_v1/hazard_crystal.gltf",
+            "true_25d_alpha_v1/hazard_crystal.glb",
         ),
         "rock-obstacle" => (
             scenes.rock_obstacle.clone(),
-            "true_25d_alpha_v1/rock_cluster.gltf",
+            "true_25d_alpha_v1/rock_cluster.glb",
         ),
         "plant-prop" => (
             scenes.plant_prop.clone(),
-            "true_25d_alpha_v1/bio_reed_prop.gltf",
+            "true_25d_alpha_v1/bio_reed_prop.glb",
         ),
         "terrain-soil-island" => (
             scenes.terrain_soil_island.clone(),
-            "true_25d_alpha_v1/terrain_soil_island.gltf",
+            "true_25d_alpha_v1/terrain_soil_island.glb",
         ),
         "terrain-resource-grove" => (
             scenes.terrain_resource_grove.clone(),
-            "true_25d_alpha_v1/terrain_resource_grove.gltf",
+            "true_25d_alpha_v1/terrain_resource_grove.glb",
         ),
         "terrain-hazard-pressure" => (
             scenes.terrain_hazard_pressure.clone(),
-            "true_25d_alpha_v1/terrain_hazard_pressure.gltf",
+            "true_25d_alpha_v1/terrain_hazard_pressure.glb",
         ),
         "terrain-stone-island" => (
             scenes.terrain_stone_island.clone(),
-            "true_25d_alpha_v1/terrain_stone_island.gltf",
+            "true_25d_alpha_v1/terrain_stone_island.glb",
         ),
         "terrain-water-cell" => (
             scenes.terrain_water_cell.clone(),
-            "true_25d_alpha_v1/terrain_water_cell.gltf",
+            "true_25d_alpha_v1/terrain_water_cell.glb",
         ),
         "terrain-sand-island" => (
             scenes.terrain_sand_island.clone(),
-            "true_25d_alpha_v1/terrain_sand_island.gltf",
+            "true_25d_alpha_v1/terrain_sand_island.glb",
         ),
         "fog-of-war-cell" => (
             scenes.fog_of_war_cell.clone(),
-            "true_25d_alpha_v1/fog_of_war_cell.gltf",
+            "true_25d_alpha_v1/fog_of_war_cell.glb",
         ),
         _ => (
             scenes.terrain_grass_island.clone(),
-            "true_25d_alpha_v1/terrain_grass_island.gltf",
+            "true_25d_alpha_v1/terrain_grass_island.glb",
         ),
     }
 }

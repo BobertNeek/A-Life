@@ -68,6 +68,8 @@
   - low-resolution downsample pass remains to be implemented;
   - toon quantization pass remains to be implemented;
   - Sobel depth/normal outline pass remains to be implemented.
-- Blender normalization/decimation has not been run in this slice; the runtime scale clamp now protects Bevy instantiation.
+- Blender normalization/decimation is now covered by
+  `docs/creatures_agi_roadmap_pack/status/TRUE25D_BLENDER_PIPELINE_CALIBRATION.md`;
+  the runtime scale clamp remains as a defensive instantiation guard.
 - Neurochemical visual feedback remains limited to the existing display-only pose/cue layer and should be expanded in a later slice.
 - Headless chunk/render-bypass behavior remains covered by the existing procedural field ledger and should be profiled for draw-call evidence in a later slice.

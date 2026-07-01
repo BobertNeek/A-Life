@@ -14,7 +14,7 @@ a validated source manifest, launcher script, and Blender Python renderer.
 
 Superseded status: this document records a proposed Blender authoring lane, but
 it is not the active Player View implementation. The current active Player View
-correction uses committed native `.gltf` assets under
+correction uses committed native `.glb` assets under
 `crates/alife_game_app/assets/true_25d_alpha_v1/` and a locked orthographic 3D
 presentation. Blender remains a future authoring option once a local Blender
 runtime is installed and validated.
@@ -134,11 +134,11 @@ machines, not a failed game runtime.
   before promotion into the committed app asset pack.
 - The active Player View no longer treats the current committed v41
   `alpha_art_v1` PNG pack as the world-art target. The active visual lane is
-  committed glTF assets from `true_25d_alpha_v1`; the PNG pack remains for
+  committed Blender-normalized GLB assets from `true_25d_alpha_v1`; the PNG pack remains for
   HUD/debug/fallback evidence.
-- The active glTF lane uses a direct generator script, not Blender. That keeps
-  CA44A unblocked on this machine while leaving Blender as a future production
-  tool decision.
+- The active GLB lane now has a Blender normalization/calibration step. The
+  original direct generator script remains historical seed-art tooling, not the
+  final committed active asset contract.
 - The procedural terrain system is seeded and chunk/creature anchored, but it is
   still presentation/context-only rather than an authoritative Minecraft-like
   sensory/navigation/ecology substrate.
