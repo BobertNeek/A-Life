@@ -13,7 +13,7 @@
     "quantized_toon_bands": 4,
     "sobel_outline_contract": true,
     "low_resolution_pixel_step_filter": true,
-    "runtime_shader_contract_only": true
+    "runtime_shader_contract_only": false
   },
   "entries": [
     {
