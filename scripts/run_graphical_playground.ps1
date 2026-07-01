@@ -41,6 +41,7 @@ $PreflightLog = Join-Path $Root "target/artifacts/ca42_runtime_prereq/runtime_pr
 $FeedbackRoot = Join-Path $Root "target/artifacts/ca43_tester_feedback"
 $CrashSummaryPath = Join-Path $FeedbackRoot "crash_summary.md"
 $FeedbackTemplatePath = Join-Path $FeedbackRoot "tester_feedback_template.md"
+$SmokeWatchdogJob = $null
 
 function Format-CommandArgument {
     param([string]$Value)
@@ -134,6 +135,49 @@ logs, captures, target artifacts, model files, or caches.
     Write-Host "CA43 crash summary written: $CrashSummaryPath"
 }
 
+function Start-SmokeWindowWatchdog {
+    param(
+        [int]$Seconds,
+        [string]$Title
+    )
+
+    if ($Seconds -le 0) {
+        return $null
+    }
+
+    return Start-Job -ScriptBlock {
+        param([int]$Seconds, [string]$Title)
+
+        $WindowSeenAt = $null
+        $SearchDeadline = (Get-Date).AddMinutes(10)
+        $CloseSlackSeconds = 4
+
+        while ((Get-Date) -lt $SearchDeadline) {
+            $Matches = @(Get-Process -Name "alife_game_app" -ErrorAction SilentlyContinue | Where-Object {
+                $_.MainWindowTitle -eq $Title
+            })
+
+            if ($Matches.Count -gt 0) {
+                if ($null -eq $WindowSeenAt) {
+                    $WindowSeenAt = Get-Date
+                }
+
+                $Elapsed = ((Get-Date) - $WindowSeenAt).TotalSeconds
+                if ($Elapsed -ge ($Seconds + $CloseSlackSeconds)) {
+                    foreach ($Process in $Matches) {
+                        [void]$Process.CloseMainWindow()
+                    }
+                    return
+                }
+            } else {
+                $WindowSeenAt = $null
+            }
+
+            Start-Sleep -Milliseconds 500
+        }
+    } -ArgumentList $Seconds, $Title
+}
+
 $Command = @(
     "cargo",
     "run",
@@ -177,7 +221,11 @@ $IsWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatfo
 )
 
 if ($IsWindowsHost) {
-    $EffectiveGraphicsBackend = if ($GraphicsBackend -eq "auto") { "dx12" } else { $GraphicsBackend }
+    $EffectiveGraphicsBackend = if ($GraphicsBackend -eq "auto") {
+        if ($ViewMode -eq "player") { "vulkan" } else { "dx12" }
+    } else {
+        $GraphicsBackend
+    }
 
     if ($EffectiveGraphicsBackend -eq "existing") {
         if ([string]::IsNullOrWhiteSpace($env:WGPU_BACKEND)) {
@@ -196,9 +244,13 @@ if ($IsWindowsHost) {
         }
 
         if ($EffectiveGraphicsBackend -eq "vulkan") {
-            Write-Host "Graphics backend: Vulkan diagnostics requested; injected overlay loader warnings may appear if ALIFE_SHOW_VULKAN_LOADER_LOGS=1."
+            if ($GraphicsBackend -eq "auto" -and $ViewMode -eq "player") {
+                Write-Host "Graphics backend: auto selected Vulkan for True 2.5D Player View on this Windows host."
+            } else {
+                Write-Host "Graphics backend: Vulkan diagnostics requested; injected overlay loader warnings may appear if ALIFE_SHOW_VULKAN_LOADER_LOGS=1."
+            }
         } else {
-            Write-Host "Graphics backend: use -GraphicsBackend vulkan only for Vulkan diagnostics."
+            Write-Host "Graphics backend: DX12 selected. Use -GraphicsBackend vulkan for True 2.5D Player View diagnostics."
         }
     }
 } elseif (-not [string]::IsNullOrWhiteSpace($env:WGPU_BACKEND)) {
@@ -262,6 +314,11 @@ try {
         exit $PreflightExitCode
     }
 
+    if ($SmokeSeconds -gt 0) {
+        $SmokeWindowTitle = "A-Life GPU Alpha Playground - smoke ${SmokeSeconds}s"
+        $SmokeWatchdogJob = Start-SmokeWindowWatchdog -Seconds $SmokeSeconds -Title $SmokeWindowTitle
+    }
+
     $Args = $Command[1..($Command.Length - 1)]
     & $Command[0] @Args
     $AppExitCode = $LASTEXITCODE
@@ -270,5 +327,11 @@ try {
     }
     exit $AppExitCode
 } finally {
+    if ($null -ne $SmokeWatchdogJob) {
+        if ($SmokeWatchdogJob.State -eq "Running") {
+            Stop-Job -Job $SmokeWatchdogJob -ErrorAction SilentlyContinue
+        }
+        Remove-Job -Job $SmokeWatchdogJob -Force -ErrorAction SilentlyContinue
+    }
     Pop-Location
 }

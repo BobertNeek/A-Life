@@ -40,6 +40,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "terrain-water",
     "terrain-sand",
     "terrain-edge-blend",
+    "ground-repeat-tile",
     "world-backdrop",
     "prop-dressing",
     "ui-panel-frame",
@@ -49,7 +50,7 @@ pub const CA44A_REQUIRED_ALPHA_ART_ROLE_NAMES: [&str; CA44A_REQUIRED_ALPHA_ART_R
     "ui-control-keycap",
 ];
 
-pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-imagegen-ground-tiles-v33";
+pub const CA44A_ALPHA_ART_DIRECTION: &str = "production-alpha-imagegen-ground-tiles-v41";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AlphaArtManifest {
@@ -390,7 +391,8 @@ fn ca44a_pixel_policy_for_role(role: &str) -> AlphaArtPixelPolicy {
         | "terrain-hazard-pressure"
         | "terrain-stone-rough"
         | "terrain-water"
-        | "terrain-sand" => AlphaArtPixelPolicy::opaque_terrain(),
+        | "terrain-sand"
+        | "ground-repeat-tile" => AlphaArtPixelPolicy::opaque_terrain(),
         "creature-idle" | "creature-hurt" | "creature-moving" | "creature-eat"
         | "creature-sleep" | "creature-signal" | "food" | "food-variant" | "hazard"
         | "hazard-active" | "rock-obstacle" | "prop-dressing" => {
@@ -561,6 +563,9 @@ mod tests {
             "terrain-sand" => include_bytes!("../assets/alpha_art_v1/terrain_sand.png"),
             "terrain-edge-blend" => {
                 include_bytes!("../assets/alpha_art_v1/terrain_edge_blend.png")
+            }
+            "ground-repeat-tile" => {
+                include_bytes!("../assets/alpha_art_v1/ground_tile_repeat.png")
             }
             "world-backdrop" => {
                 include_bytes!("../assets/alpha_art_v1/world_backdrop_gpu_alpha.png")

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Legacy deterministic generator for the early A-Life alpha art pack.
 
-The active v33 art pack is imported from image-generated terrain and sprite
-sheets by `scripts/import_alpha_art_imagegen_atlas.py`. This script is retained
+The active v41 art pack is imported from an image-generated terrain/sprite
+sheet by `scripts/import_alpha_art_imagegen_atlas.py`. This script is retained
 only for historical reproducibility of the earlier procedural placeholder pack;
 running it will not reproduce the active committed visual direction.
 """

@@ -1,0 +1,170 @@
+{
+  "schema": "alife.ca44a.true_25d_asset_manifest.v1",
+  "schema_version": 1,
+  "pack_id": "true-25d-alpha-v1",
+  "art_direction": "true-2-5d-retro-futuristic-biological-v1",
+  "camera": {
+    "projection": "orthographic",
+    "yaw_degrees": 0.0,
+    "pitch_degrees": -45.0,
+    "rotation_locked": true
+  },
+  "shader_stack": {
+    "quantized_toon_bands": 4,
+    "sobel_outline_contract": true,
+    "low_resolution_pixel_step_filter": true,
+    "runtime_shader_contract_only": true
+  },
+  "entries": [
+    {
+      "role": "creature-idle",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/creature_idle.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 8,
+      "vertex_count": 154,
+      "index_count": 810,
+      "file_size_bytes": 19293
+    },
+    {
+      "role": "creature-hurt",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/creature_hurt.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 9,
+      "vertex_count": 159,
+      "index_count": 828,
+      "file_size_bytes": 20927
+    },
+    {
+      "role": "selection-ring",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/selection_ring.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 3,
+      "vertex_count": 195,
+      "index_count": 864,
+      "file_size_bytes": 13479
+    },
+    {
+      "role": "food",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/food_pod.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 2,
+      "vertex_count": 28,
+      "index_count": 54,
+      "file_size_bytes": 4432
+    },
+    {
+      "role": "hazard",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/hazard_crystal.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 2,
+      "vertex_count": 20,
+      "index_count": 72,
+      "file_size_bytes": 4213
+    },
+    {
+      "role": "rock-obstacle",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/rock_cluster.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 2,
+      "vertex_count": 20,
+      "index_count": 72,
+      "file_size_bytes": 4217
+    },
+    {
+      "role": "plant-prop",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/bio_reed_prop.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 2,
+      "vertex_count": 39,
+      "index_count": 117,
+      "file_size_bytes": 5005
+    },
+    {
+      "role": "terrain-grass-island",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/terrain_grass_island.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 8,
+      "vertex_count": 204,
+      "index_count": 687,
+      "file_size_bytes": 20932
+    },
+    {
+      "role": "terrain-soil-island",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/terrain_soil_island.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 8,
+      "vertex_count": 168,
+      "index_count": 720,
+      "file_size_bytes": 19796
+    },
+    {
+      "role": "terrain-resource-grove",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/terrain_resource_grove.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 8,
+      "vertex_count": 240,
+      "index_count": 723,
+      "file_size_bytes": 22111
+    },
+    {
+      "role": "terrain-hazard-pressure",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/terrain_hazard_pressure.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 8,
+      "vertex_count": 167,
+      "index_count": 702,
+      "file_size_bytes": 19789
+    },
+    {
+      "role": "terrain-stone-island",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/terrain_stone_island.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 8,
+      "vertex_count": 167,
+      "index_count": 702,
+      "file_size_bytes": 19827
+    },
+    {
+      "role": "terrain-water-cell",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/terrain_water_cell.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 8,
+      "vertex_count": 184,
+      "index_count": 792,
+      "file_size_bytes": 20604
+    },
+    {
+      "role": "terrain-sand-island",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/terrain_sand_island.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 8,
+      "vertex_count": 204,
+      "index_count": 687,
+      "file_size_bytes": 20924
+    },
+    {
+      "role": "fog-of-war-cell",
+      "relative_path": "crates/alife_game_app/assets/true_25d_alpha_v1/fog_of_war_cell.gltf",
+      "node_count": 1,
+      "mesh_count": 1,
+      "material_count": 1,
+      "vertex_count": 21,
+      "index_count": 90,
+      "file_size_bytes": 2995
+    }
+  ]
+}

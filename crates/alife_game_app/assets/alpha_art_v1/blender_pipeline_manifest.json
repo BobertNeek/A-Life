@@ -1,0 +1,143 @@
+{
+  "schema": "alife.production.asset_pipeline.blender_2_5d.v1",
+  "schema_version": 1,
+  "pipeline_id": "alpha-art-blender-2-5d-v1",
+  "art_direction": "production-blender-to-bevy-2-5d-v1",
+  "active_alpha_art_pack": "production-alpha-imagegen-ground-tiles-v41",
+  "blender_runtime_required_for_generation": true,
+  "runtime_game_dependency": false,
+  "render_backend": "blender-eevee-toon-orthographic",
+  "output_dir": "target/generated_art/alpha_blender_v1",
+  "source_script": "tools/blender/render_alpha_art_v1.py",
+  "launcher_script": "scripts/render_alpha_art_blender_sprites.ps1",
+  "roles": [
+    {
+      "role": "creature-idle",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/creature_idle.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/creature_idle.png",
+      "required_model_features": ["rounded organism body", "eyes", "antennae", "soft shadow"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "creature-hurt",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/creature_hurt.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/creature_hurt.png",
+      "required_model_features": ["tilted organism pose", "pain color accent", "eyes", "antennae"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "selection-ring",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/selection_ring.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/selection_ring.png",
+      "required_model_features": ["thin glowing halo", "transparent center", "orthographic ring"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "food",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/food_sprout.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/food_sprout.png",
+      "required_model_features": ["organic sprout", "leaf cluster", "berry accent"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "hazard",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/hazard_crystal.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/hazard_crystal.png",
+      "required_model_features": ["spiky crystal silhouette", "danger red material", "glow accent"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "rock-obstacle",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/rock_cluster.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/rock_cluster.png",
+      "required_model_features": ["irregular stone cluster", "non-square silhouette", "toon shade"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "terrain-safe-grass",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_safe_grass.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/terrain_safe_grass.png",
+      "required_model_features": ["tileable grass plane", "tufts", "organic color variation"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "terrain-soil-path",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_soil_path.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/terrain_soil_path.png",
+      "required_model_features": ["tileable dirt path", "soft worn edge", "pebble accents"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "terrain-resource-grove",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_resource_grove.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/terrain_resource_grove.png",
+      "required_model_features": ["tileable rich green ground", "small leaves", "resource-friendly cues"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "terrain-hazard-pressure",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_hazard_pressure.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/terrain_hazard_pressure.png",
+      "required_model_features": ["tileable red hazard ground", "cracked soil", "warning shards"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "terrain-stone-rough",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_stone_rough.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/terrain_stone_rough.png",
+      "required_model_features": ["tileable rough stone", "gray slabs", "non-grid surface detail"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "terrain-water",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_water.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/terrain_water.png",
+      "required_model_features": ["tileable shallow water", "toon highlights", "soft ripples"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "terrain-sand",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_sand.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/terrain_sand.png",
+      "required_model_features": ["tileable sand", "warm dunes", "small stones"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "prop-dressing",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/prop_grass_tuft.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/prop_grass_tuft.png",
+      "required_model_features": ["small grass tuft", "readable silhouette", "orthographic sprite"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "prop-dressing",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/prop_pebble_cluster.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/prop_pebble_cluster.png",
+      "required_model_features": ["small pebble cluster", "irregular silhouette", "toon shade"],
+      "expected_render_count": 1
+    },
+    {
+      "role": "prop-dressing",
+      "source_kind": "low-poly-toon-blender",
+      "active_png_path": "crates/alife_game_app/assets/alpha_art_v1/prop_warning_shard.png",
+      "blender_target_png_path": "target/generated_art/alpha_blender_v1/prop_warning_shard.png",
+      "required_model_features": ["small warning shard", "hazard accent", "sharp silhouette"],
+      "expected_render_count": 1
+    }
+  ]
+}

@@ -98,6 +98,7 @@ $CopyFiles = @(
     "crates/alife_game_app/app_bundle_manifest.json",
     "crates/alife_game_app/placeholder_art_manifest.json",
     "crates/alife_game_app/assets/alpha_art_v1/alpha_art_manifest.json",
+    "crates/alife_game_app/assets/true_25d_alpha_v1/true_25d_manifest.json",
     "crates/alife_world/tests/fixtures/gpu_alpha/tiny_config.json",
     "crates/alife_world/tests/fixtures/gpu_alpha/tiny_asset_manifest.json",
     "crates/alife_world/tests/fixtures/gpu_alpha/tiny_save.json",
@@ -112,6 +113,7 @@ $CopyFiles = @(
 
 $CopyDirectories = @(
     "crates/alife_game_app/assets/alpha_art_v1",
+    "crates/alife_game_app/assets/true_25d_alpha_v1",
     "crates/alife_gpu_backend/shaders"
 )
 
@@ -188,6 +190,7 @@ try {
         runner = "run_windows_alpha_package.ps1"
         environment_manifest = "crates/alife_game_app/environment_manifest.json"
         alpha_art = "crates/alife_game_app/assets/alpha_art_v1"
+        true_25d_alpha = "crates/alife_game_app/assets/true_25d_alpha_v1"
         default_scenario = $Scenario
         default_gpu_mode = $GpuMode
         product_runtime_claim = "CpuShadowGuardedStaticPlusLiveHShadow"
@@ -198,6 +201,7 @@ try {
         artifacts_must_remain_untracked = $true
         packaged_paths = @(
             "crates/alife_game_app",
+            "crates/alife_game_app/assets/true_25d_alpha_v1",
             "crates/alife_world/tests/fixtures/gpu_alpha",
             "crates/alife_world/tests/fixtures/p34",
             "docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md",

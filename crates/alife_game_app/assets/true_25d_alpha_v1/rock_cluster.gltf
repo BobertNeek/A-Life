@@ -1,0 +1,185 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "A-Life true_25d alpha generator"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "rock_cluster",
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "rock_cluster-mesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1
+          },
+          "indices": 2,
+          "material": 0
+        },
+        {
+          "attributes": {
+            "POSITION": 3,
+            "NORMAL": 4
+          },
+          "indices": 5,
+          "material": 1
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "rock_cluster-stone-cluster-toon",
+      "doubleSided": true,
+      "emissiveFactor": [
+        0.09200000000000001,
+        0.096,
+        0.09000000000000001
+      ],
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.46,
+          0.48,
+          0.45,
+          1.0
+        ],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.82
+      }
+    },
+    {
+      "name": "rock_cluster-stone-highlight-toon",
+      "doubleSided": true,
+      "emissiveFactor": [
+        0.13999999999999999,
+        0.144,
+        0.132
+      ],
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.7,
+          0.72,
+          0.66,
+          1.0
+        ],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.82
+      }
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 624,
+      "uri": "data:application/octet-stream;base64,j8J1vgAAAAAbL12+j8J1PgAAAAAbL12+8IVJPgAAAAAbL10+7FE4vgAAAAAbL10+AAAAAFyPwj4AAAAAPQrXvgAAAADjpZu9j8J1vQAAAADjpZu9Njy9vQAAAACiRbY+AADAvgAAAACiRbY+j8J1vlK4nj4pXA8+CtejPAAAAAApXI++PQrXPgAAAAApXI++ppvEPgAAAAAK1yM9KVyPPQAAAAAK1yM9rkdhPnsUrj6PwvW9MzOzvmZmJj/NzAy/zcwMP2ZmJj/NzEy+MzOzPmZmJj/NzAw/zcwMv2ZmJj/NzEw+AAAAAAAAgD8AAAAAMzOzvmZmJj/NzAy/zcwMP2ZmJj/NzEy+MzOzPmZmJj/NzAw/zcwMv2ZmJj/NzEw+AAAAAAAAgD8AAAAAMzOzvmZmJj/NzAy/zcwMP2ZmJj/NzEy+MzOzPmZmJj/NzAw/zcwMv2ZmJj/NzEw+AAAAAAAAgD8AAAAAAAABAAQAAQACAAQAAgADAAQAAwAAAAQAAAADAAIAAAACAAEABQAGAAkABgAHAAkABwAIAAkACAAFAAkABQAIAAcABQAHAAYACgALAA4ACwAMAA4ADAANAA4ADQAKAA4ACgANAAwACgAMAAsACtejvAAAAACPwnW97FE4PgAAAACPwnW9VOMlPgAAAADNzMw9CtejOwAAAADNzMw9CtejPSlcjz4K16M8MzOzvmZmJj/NzAy/zcwMP2ZmJj/NzEy+MzOzPmZmJj/NzAw/zcwMv2ZmJj/NzEw+AAAAAAAAgD8AAAAAAAABAAQAAQACAAQAAgADAAQAAwAAAAQAAAADAAIAAAACAAEA"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 180,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 180,
+      "byteLength": 180,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 360,
+      "byteLength": 108,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 468,
+      "byteLength": 60,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 528,
+      "byteLength": 60,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 588,
+      "byteLength": 36,
+      "target": 34963
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 15,
+      "type": "VEC3",
+      "min": [
+        -0.42,
+        0.0,
+        -0.28
+      ],
+      "max": [
+        0.42000000000000004,
+        0.38,
+        0.356
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 15,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5123,
+      "count": 54,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC3",
+      "min": [
+        -0.020000000000000004,
+        0.0,
+        -0.06000000000000001
+      ],
+      "max": [
+        0.18,
+        0.28,
+        0.10000000000000002
+      ]
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5123,
+      "count": 18,
+      "type": "SCALAR"
+    }
+  ]
+}
