@@ -69,6 +69,11 @@
       "id": "p28-recompaction-autophagy",
       "relative_path": "crates/alife_gpu_backend/shaders/p28_recompaction_autophagy.wgsl",
       "required": true
+    },
+    {
+      "id": "true25d-stylization-postprocess",
+      "relative_path": "crates/alife_gpu_backend/shaders/true25d_stylization_postprocess.wgsl",
+      "required": true
     }
   ]
 }

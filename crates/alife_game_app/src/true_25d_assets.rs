@@ -167,7 +167,8 @@ pub(crate) fn validate_true_25d_asset_manifest_inner(
         && (manifest.camera.pitch_degrees + 45.0).abs() <= 0.01;
     let shader_stack_declared = manifest.shader_stack.quantized_toon_bands >= 3
         && manifest.shader_stack.sobel_outline_contract
-        && manifest.shader_stack.low_resolution_pixel_step_filter;
+        && manifest.shader_stack.low_resolution_pixel_step_filter
+        && !manifest.shader_stack.runtime_shader_contract_only;
 
     let mut roles = BTreeMap::new();
     let mut paths = BTreeSet::new();
@@ -327,6 +328,18 @@ mod tests {
         assert!(summary.orthographic_camera_locked);
         assert!(summary.shader_stack_declared);
         assert!(summary.no_action_authority);
+    }
+
+    #[test]
+    fn true_25d_manifest_rejects_contract_only_shader_stack() {
+        let root = ca12_workspace_root();
+        let path = default_true_25d_asset_manifest_path();
+        let mut manifest: True25dAssetManifest =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        manifest.shader_stack.runtime_shader_contract_only = true;
+        let summary = validate_true_25d_asset_manifest_inner(&root, &path, &manifest).unwrap();
+        assert!(!summary.shader_stack_declared);
+        assert!(summary.validate().is_err());
     }
 
     #[test]

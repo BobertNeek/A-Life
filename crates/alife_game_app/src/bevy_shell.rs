@@ -22,12 +22,16 @@ use bevy::{
     app::AppExit,
     asset::{AssetPlugin, Assets, Handle, RenderAssetUsages},
     camera::ScalingMode,
-    core_pipeline::tonemapping::Tonemapping,
-    ecs::schedule::IntoScheduleConfigs,
+    core_pipeline::{
+        core_3d::graph::{Core3d, Node3d},
+        tonemapping::Tonemapping,
+        FullscreenShader,
+    },
+    ecs::{query::QueryItem, schedule::IntoScheduleConfigs},
     gltf::GltfAssetLabel,
     image::{
-        CompressedImageFormats, Image, ImageAddressMode, ImageSampler, ImageSamplerDescriptor,
-        ImageType,
+        BevyDefault, CompressedImageFormats, Image, ImageAddressMode, ImageSampler,
+        ImageSamplerDescriptor, ImageType,
     },
     prelude::{
         default, AlphaMode, App, AssetServer, BackgroundColor, ButtonInput, Camera, Camera2d,
@@ -35,11 +39,32 @@ use bevy::{
         Cone, Cuboid, DefaultPlugins, DirectionalLight, Entity, GlobalTransform, ImageNode,
         KeyCode, Mesh, Mesh3d, MeshBuilder, MeshMaterial3d, Meshable, MessageWriter,
         MinimalPlugins, MouseButton, Name, Node, NonSend, NonSendMut, OrthographicProjection,
-        Plane3d, PluginGroup, PositionType, Projection, Quat, Res, ResMut, Resource, SceneRoot,
-        Sphere, Sprite, StandardMaterial, Text, Text2d, TextColor, TextFont, Time, ToRing,
-        Transform, Update, Val, Vec2, Vec3, Visibility, With, Without,
+        Plane3d, Plugin, PluginGroup, PositionType, Projection, Quat, Res, ResMut, Resource,
+        SceneRoot, Sphere, Sprite, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
+        ToRing, Transform, Update, Val, Vec2, Vec3, Visibility, With, Without, World,
     },
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    render::{
+        extract_component::{
+            ComponentUniforms, DynamicUniformIndex, ExtractComponent, ExtractComponentPlugin,
+            UniformComponentPlugin,
+        },
+        extract_resource::{ExtractResource, ExtractResourcePlugin},
+        render_graph::{
+            NodeRunError, RenderGraphContext, RenderGraphExt, RenderLabel, ViewNode, ViewNodeRunner,
+        },
+        render_resource::{
+            binding_types::{sampler, texture_2d, texture_depth_2d_multisampled, uniform_buffer},
+            BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries,
+            CachedRenderPipelineId, ColorTargetState, ColorWrites, Extent3d, FragmentState,
+            Operations, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
+            RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages,
+            ShaderType, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
+        },
+        renderer::{RenderContext, RenderDevice},
+        view::{ViewDepthTexture, ViewTarget},
+        RenderApp, RenderStartup,
+    },
+    shader::Shader,
     window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
 };
 
@@ -655,6 +680,220 @@ pub struct GraphicalTrue25dPresentationResource {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Resource)]
+pub struct GraphicalTrue25dStylizationRenderPassResource {
+    pub shader_path: &'static str,
+    pub shader_source_embedded: bool,
+    pub runtime_render_graph_registered: bool,
+    pub attached_to_player_camera: bool,
+    pub pixel_grid_width: u32,
+    pub pixel_grid_height: u32,
+    pub toon_bands: u8,
+    pub depth_sobel_outline: bool,
+    pub luminance_sobel_fallback: bool,
+    pub low_resolution_pixel_step_filter: bool,
+    pub display_only: bool,
+    pub no_action_authority: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component, ExtractComponent, ShaderType)]
+pub struct GraphicalTrue25dStylizationSettings {
+    pub pixel_grid: Vec2,
+    pub toon_bands: f32,
+    pub outline_threshold: f32,
+    pub outline_strength: f32,
+    pub depth_outline_strength: f32,
+    pub _padding: Vec2,
+}
+
+impl Default for GraphicalTrue25dStylizationSettings {
+    fn default() -> Self {
+        Self {
+            pixel_grid: TRUE_25D_STYLIZATION_PIXEL_GRID,
+            toon_bands: TRUE_25D_STYLIZATION_TOON_BANDS,
+            outline_threshold: TRUE_25D_STYLIZATION_OUTLINE_THRESHOLD,
+            outline_strength: TRUE_25D_STYLIZATION_OUTLINE_STRENGTH,
+            depth_outline_strength: TRUE_25D_STYLIZATION_DEPTH_OUTLINE_STRENGTH,
+            _padding: Vec2::ZERO,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Resource, ExtractResource)]
+struct GraphicalTrue25dStylizationShaderHandle(pub Handle<Shader>);
+
+struct True25dStylizationPostProcessPlugin;
+
+impl Plugin for True25dStylizationPostProcessPlugin {
+    fn build(&self, app: &mut App) {
+        let shader_handle = register_true_25d_stylization_shader(app);
+        app.insert_resource(GraphicalTrue25dStylizationShaderHandle(
+            shader_handle.clone(),
+        ));
+        app.add_plugins((
+            ExtractComponentPlugin::<GraphicalTrue25dStylizationSettings>::default(),
+            UniformComponentPlugin::<GraphicalTrue25dStylizationSettings>::default(),
+            ExtractResourcePlugin::<GraphicalTrue25dStylizationShaderHandle>::default(),
+        ));
+
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
+            return;
+        };
+        render_app
+            .world_mut()
+            .insert_resource(GraphicalTrue25dStylizationShaderHandle(shader_handle));
+        render_app.add_systems(RenderStartup, init_true_25d_stylization_pipeline);
+        render_app
+            .add_render_graph_node::<ViewNodeRunner<True25dStylizationNode>>(
+                Core3d,
+                True25dStylizationLabel,
+            )
+            .add_render_graph_edges(
+                Core3d,
+                (
+                    Node3d::Tonemapping,
+                    True25dStylizationLabel,
+                    Node3d::EndMainPassPostProcessing,
+                ),
+            );
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+struct True25dStylizationLabel;
+
+#[derive(Default)]
+struct True25dStylizationNode;
+
+impl ViewNode for True25dStylizationNode {
+    type ViewQuery = (
+        &'static ViewTarget,
+        &'static ViewDepthTexture,
+        &'static GraphicalTrue25dStylizationSettings,
+        &'static DynamicUniformIndex<GraphicalTrue25dStylizationSettings>,
+    );
+
+    fn run(
+        &self,
+        _graph: &mut RenderGraphContext,
+        render_context: &mut RenderContext,
+        (view_target, view_depth, _settings, settings_index): QueryItem<Self::ViewQuery>,
+        world: &World,
+    ) -> Result<(), NodeRunError> {
+        let pipeline = world.resource::<True25dStylizationPipeline>();
+        let pipeline_cache = world.resource::<PipelineCache>();
+        let Some(render_pipeline) = pipeline_cache.get_render_pipeline(pipeline.pipeline_id) else {
+            return Ok(());
+        };
+        let settings_uniforms =
+            world.resource::<ComponentUniforms<GraphicalTrue25dStylizationSettings>>();
+        let Some(settings_binding) = settings_uniforms.uniforms().binding() else {
+            return Ok(());
+        };
+        let post_process = view_target.post_process_write();
+        let bind_group = render_context.render_device().create_bind_group(
+            "true25d_stylization_postprocess_bind_group",
+            &pipeline_cache.get_bind_group_layout(&pipeline.layout),
+            &BindGroupEntries::sequential((
+                post_process.source,
+                view_depth.view(),
+                &pipeline.sampler,
+                settings_binding.clone(),
+            )),
+        );
+
+        let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some("true25d_stylization_postprocess_pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: post_process.destination,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations::default(),
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        render_pass.set_render_pipeline(render_pipeline);
+        render_pass.set_bind_group(0, &bind_group, &[settings_index.index()]);
+        render_pass.draw(0..3, 0..1);
+        Ok(())
+    }
+}
+
+#[derive(Resource)]
+struct True25dStylizationPipeline {
+    layout: BindGroupLayoutDescriptor,
+    sampler: Sampler,
+    pipeline_id: CachedRenderPipelineId,
+}
+
+fn register_true_25d_stylization_shader(app: &mut App) -> Handle<Shader> {
+    if !app.world().contains_resource::<Assets<Shader>>() {
+        app.init_resource::<Assets<Shader>>();
+    }
+    app.world_mut()
+        .resource_mut::<Assets<Shader>>()
+        .add(Shader::from_wgsl(
+            TRUE_25D_STYLIZATION_SHADER_SOURCE,
+            TRUE_25D_STYLIZATION_SHADER_PATH,
+        ))
+}
+
+pub fn true_25d_stylization_shader_source_is_complete() -> bool {
+    TRUE_25D_STYLIZATION_SHADER_SOURCE.contains("@fragment")
+        && TRUE_25D_STYLIZATION_SHADER_SOURCE.contains("toon_quantize")
+        && TRUE_25D_STYLIZATION_SHADER_SOURCE.contains("sobel_depth")
+        && TRUE_25D_STYLIZATION_SHADER_SOURCE.contains("sobel_luma")
+        && TRUE_25D_STYLIZATION_SHADER_SOURCE.contains("texture_depth_multisampled_2d")
+        && TRUE_25D_STYLIZATION_SHADER_SOURCE.contains("pixel_grid")
+}
+
+fn init_true_25d_stylization_pipeline(
+    mut commands: Commands,
+    render_device: Res<RenderDevice>,
+    fullscreen_shader: Res<FullscreenShader>,
+    pipeline_cache: Res<PipelineCache>,
+    shader_handle: Res<GraphicalTrue25dStylizationShaderHandle>,
+) {
+    let layout = BindGroupLayoutDescriptor::new(
+        "true25d_stylization_postprocess_bind_group_layout",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::FRAGMENT,
+            (
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                texture_depth_2d_multisampled(),
+                sampler(SamplerBindingType::Filtering),
+                uniform_buffer::<GraphicalTrue25dStylizationSettings>(true),
+            ),
+        ),
+    );
+    let sampler = render_device.create_sampler(&SamplerDescriptor {
+        label: Some("true25d_stylization_postprocess_sampler"),
+        ..default()
+    });
+    let pipeline_id = pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+        label: Some("true25d_stylization_postprocess_pipeline".into()),
+        layout: vec![layout.clone()],
+        vertex: fullscreen_shader.to_vertex_state(),
+        fragment: Some(FragmentState {
+            shader: shader_handle.0.clone(),
+            targets: vec![Some(ColorTargetState {
+                format: TextureFormat::bevy_default(),
+                blend: None,
+                write_mask: ColorWrites::ALL,
+            })],
+            ..default()
+        }),
+        ..default()
+    });
+    commands.insert_resource(True25dStylizationPipeline {
+        layout,
+        sampler,
+        pipeline_id,
+    });
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Resource)]
 pub struct GraphicalTrue25dRenderBypassSummaryResource {
     pub locked_camera_viewport_width_units: f32,
     pub locked_camera_viewport_height_units: f32,
@@ -1024,6 +1263,15 @@ const TRUE_25D_GROUND_DEPTH: f32 = TRUE_25D_ACTIVE_CHUNK_SIM_DEPTH * TRUE_25D_SI
 const TRUE_25D_GROUND_UV_SPAN_X: f32 = 16.0;
 const TRUE_25D_GROUND_UV_SPAN_Z: f32 = 10.0;
 const TRUE_25D_GROUND_TILE_TEXTURE_PATH: &str = "alpha_art_v1/ground_tile_repeat.png";
+pub const TRUE_25D_STYLIZATION_SHADER_PATH: &str =
+    "crates/alife_gpu_backend/shaders/true25d_stylization_postprocess.wgsl";
+pub const TRUE_25D_STYLIZATION_SHADER_SOURCE: &str =
+    include_str!("../../alife_gpu_backend/shaders/true25d_stylization_postprocess.wgsl");
+const TRUE_25D_STYLIZATION_PIXEL_GRID: Vec2 = Vec2::new(320.0, 240.0);
+const TRUE_25D_STYLIZATION_TOON_BANDS: f32 = 4.0;
+const TRUE_25D_STYLIZATION_OUTLINE_THRESHOLD: f32 = 0.012;
+const TRUE_25D_STYLIZATION_OUTLINE_STRENGTH: f32 = 0.92;
+const TRUE_25D_STYLIZATION_DEPTH_OUTLINE_STRENGTH: f32 = 1.0;
 const TRUE_25D_MIN_NORMALIZED_SCALE: f32 = 0.08;
 const TRUE_25D_MAX_NORMALIZED_SCALE: f32 = 1.0;
 const TRUE_25D_VIEWPORT_ASPECT: f32 = 16.0 / 9.0;
@@ -1157,7 +1405,7 @@ pub fn build_graphical_playground_app_shell(
                 ..default()
             }),
     )
-    .add_plugins(AlifeBevyAdapterPlugin)
+    .add_plugins((AlifeBevyAdapterPlugin, True25dStylizationPostProcessPlugin))
     .insert_resource(ClearColor(Color::srgb(0.110, 0.175, 0.105)))
     .insert_resource(GraphicalPlaygroundSceneResource {
         summary: summary.clone(),
@@ -1562,13 +1810,34 @@ fn spawn_true_25d_player_view_layer(
         offscreen_zero_draw_call_contract: true,
         no_action_authority: true,
     });
+    app.insert_resource(GraphicalTrue25dStylizationRenderPassResource {
+        shader_path: TRUE_25D_STYLIZATION_SHADER_PATH,
+        shader_source_embedded: true_25d_stylization_shader_source_is_complete(),
+        runtime_render_graph_registered: app
+            .world()
+            .contains_resource::<GraphicalTrue25dStylizationShaderHandle>(),
+        attached_to_player_camera: true,
+        pixel_grid_width: TRUE_25D_STYLIZATION_PIXEL_GRID.x as u32,
+        pixel_grid_height: TRUE_25D_STYLIZATION_PIXEL_GRID.y as u32,
+        toon_bands: TRUE_25D_STYLIZATION_TOON_BANDS as u8,
+        depth_sobel_outline: true,
+        luminance_sobel_fallback: true,
+        low_resolution_pixel_step_filter: true,
+        display_only: true,
+        no_action_authority: true,
+    });
 
     let native_assets = true_25d_native_assets(app);
     let scene_assets = true_25d_scene_assets(app);
 
     app.world_mut().spawn((
         Name::new("A-Life true 2.5D orthographic camera"),
-        Camera3d::default(),
+        Camera3d {
+            depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING)
+                .into(),
+            ..default()
+        },
         Camera {
             order: 0,
             ..default()
@@ -1581,6 +1850,7 @@ fn spawn_true_25d_player_view_layer(
             pitch_degrees: -45.0,
             yaw_degrees: 0.0,
         },
+        GraphicalTrue25dStylizationSettings::default(),
     ));
     app.world_mut().spawn((
         Name::new("A-Life true 2.5D toon key light"),

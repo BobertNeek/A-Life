@@ -2473,24 +2473,57 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
     assert!(contract.offscreen_zero_draw_call_contract);
     assert!(contract.no_action_authority);
 
+    let stylization = app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalTrue25dStylizationRenderPassResource>(
+    );
+    assert_eq!(
+        stylization.shader_path,
+        alife_game_app::bevy_shell::TRUE_25D_STYLIZATION_SHADER_PATH
+    );
+    assert!(stylization.shader_source_embedded);
+    assert!(
+        !stylization.runtime_render_graph_registered,
+        "minimal preview shells do not include Bevy RenderApp and must not overclaim render graph registration"
+    );
+    assert!(stylization.attached_to_player_camera);
+    assert_eq!(stylization.pixel_grid_width, 320);
+    assert_eq!(stylization.pixel_grid_height, 240);
+    assert_eq!(stylization.toon_bands, 4);
+    assert!(stylization.depth_sobel_outline);
+    assert!(stylization.luminance_sobel_fallback);
+    assert!(stylization.low_resolution_pixel_step_filter);
+    assert!(stylization.display_only);
+    assert!(stylization.no_action_authority);
+
     let mut camera_query = app.world_mut().query::<(
         &alife_game_app::bevy_shell::GraphicalTrue25dCamera,
+        &alife_game_app::bevy_shell::GraphicalTrue25dStylizationSettings,
         &bevy::prelude::Transform,
         &bevy::prelude::Projection,
     )>();
     let cameras = camera_query
         .iter(app.world())
-        .map(|(camera, transform, projection)| (*camera, *transform, projection.clone()))
+        .map(|(camera, settings, transform, projection)| {
+            (*camera, *settings, *transform, projection.clone())
+        })
         .collect::<Vec<_>>();
     assert_eq!(cameras.len(), 1);
     assert!(cameras[0].0.orthographic_locked);
     assert_eq!(cameras[0].0.yaw_degrees, 0.0);
     assert_eq!(cameras[0].0.pitch_degrees, -45.0);
     assert_eq!(
-        cameras[0].1.translation,
+        cameras[0].1.pixel_grid,
+        bevy::prelude::Vec2::new(320.0, 240.0)
+    );
+    assert_eq!(cameras[0].1.toon_bands, 4.0);
+    assert!(cameras[0].1.outline_strength > 0.0);
+    assert!(cameras[0].1.depth_outline_strength > 0.0);
+    assert_eq!(
+        cameras[0].2.translation,
         bevy::prelude::Vec3::new(0.0, 12.0, 12.0)
     );
-    if let bevy::prelude::Projection::Orthographic(orthographic) = &cameras[0].2 {
+    if let bevy::prelude::Projection::Orthographic(orthographic) = &cameras[0].3 {
         match orthographic.scaling_mode {
             bevy::camera::ScalingMode::FixedVertical { viewport_height } => {
                 assert!((viewport_height - 10.0).abs() <= f32::EPSILON);
@@ -2558,6 +2591,19 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
             "validation preview without AssetServer should not pretend glTF scenes were loaded"
         );
     }
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn true_25d_stylization_shader_embeds_toon_pixel_and_sobel_pass() {
+    assert!(alife_game_app::bevy_shell::true_25d_stylization_shader_source_is_complete());
+    let source = alife_game_app::bevy_shell::TRUE_25D_STYLIZATION_SHADER_SOURCE;
+    assert!(source.contains("low-resolution pixel-step"));
+    assert!(source.contains("toon_quantize"));
+    assert!(source.contains("texture_depth_multisampled_2d"));
+    assert!(source.contains("sobel_depth"));
+    assert!(source.contains("sobel_luma"));
+    assert!(source.contains("no action authority"));
 }
 
 #[cfg(feature = "bevy-app")]
