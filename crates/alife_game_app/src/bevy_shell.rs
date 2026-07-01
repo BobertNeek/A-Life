@@ -58,7 +58,8 @@ use crate::{
     GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
     GraphicalPlaygroundViewMode, LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand,
     RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
-    VisibleWorldObjectPresentation, VisibleWorldPresentation, S02_MAX_SMOKE_TICKS,
+    VisibleWorldObjectPresentation, VisibleWorldPresentation, CA13_FIXED_SIM_TICK_HZ,
+    CA13_TARGET_RENDER_FRAME_HZ, S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -616,6 +617,15 @@ pub struct GraphicalTrue25dAsset {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dViewportRenderBypass {
+    pub inside_locked_camera_viewport: bool,
+    pub render_pass_bypassed: bool,
+    pub headless_update_continues: bool,
+    pub zero_draw_call_contract: bool,
+    pub display_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalTrue25dStateCue {
     pub stable_id: WorldEntityId,
     pub pain_pose: bool,
@@ -639,6 +649,26 @@ pub struct GraphicalTrue25dPresentationResource {
     pub pixel_step_filter_contract: bool,
     pub procedural_micro_ecology_chunks: bool,
     pub offscreen_headless_chunks: bool,
+    pub viewport_render_bypass: bool,
+    pub offscreen_zero_draw_call_contract: bool,
+    pub no_action_authority: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Resource)]
+pub struct GraphicalTrue25dRenderBypassSummaryResource {
+    pub locked_camera_viewport_width_units: f32,
+    pub locked_camera_viewport_height_units: f32,
+    pub renderable_true_25d_entities: usize,
+    pub visible_true_25d_entities: usize,
+    pub bypassed_true_25d_entities: usize,
+    pub ledger_only_true_25d_assets: usize,
+    pub active_headless_chunks: usize,
+    pub materialized_headless_tiles: usize,
+    pub render_frame_hz: u32,
+    pub fixed_headless_tick_hz: u32,
+    pub offscreen_regions_zero_draw_calls: bool,
+    pub headless_updates_continue: bool,
+    pub procedural_generation_without_rendering: bool,
     pub no_action_authority: bool,
 }
 
@@ -996,6 +1026,8 @@ const TRUE_25D_GROUND_UV_SPAN_Z: f32 = 10.0;
 const TRUE_25D_GROUND_TILE_TEXTURE_PATH: &str = "alpha_art_v1/ground_tile_repeat.png";
 const TRUE_25D_MIN_NORMALIZED_SCALE: f32 = 0.08;
 const TRUE_25D_MAX_NORMALIZED_SCALE: f32 = 1.0;
+const TRUE_25D_VIEWPORT_ASPECT: f32 = 16.0 / 9.0;
+const TRUE_25D_VIEWPORT_RENDER_MARGIN_UNITS: f32 = 0.65;
 
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer {
@@ -1226,6 +1258,7 @@ fn add_graphical_runtime_update_systems(app: &mut App) {
             update_graphical_runtime_procedural_biome_map,
             normalize_true_25d_gltf_asset_scales,
             enforce_true_25d_camera_contract,
+            update_true_25d_viewport_render_bypass,
             update_graphical_camera_transform,
             update_graphical_selection_ring,
             update_graphical_gpu_visual_cues,
@@ -1275,6 +1308,7 @@ fn add_graphical_runtime_core_update_systems(app: &mut App) {
             update_graphical_runtime_procedural_biome_map,
             normalize_true_25d_gltf_asset_scales,
             enforce_true_25d_camera_contract,
+            update_true_25d_viewport_render_bypass,
             update_graphical_camera_transform,
             update_graphical_selection_ring,
             update_graphical_gpu_visual_cues,
@@ -1524,6 +1558,8 @@ fn spawn_true_25d_player_view_layer(
         pixel_step_filter_contract: true,
         procedural_micro_ecology_chunks: true,
         offscreen_headless_chunks: true,
+        viewport_render_bypass: true,
+        offscreen_zero_draw_call_contract: true,
         no_action_authority: true,
     });
 
@@ -1561,6 +1597,7 @@ fn spawn_true_25d_player_view_layer(
         spawn_true_25d_object_scene(app, &native_assets, scene_assets.as_ref(), object)?;
     }
     normalize_existing_true_25d_gltf_asset_scales(app.world_mut());
+    apply_existing_true_25d_viewport_render_bypass(app.world_mut());
     Ok(())
 }
 
@@ -2120,6 +2157,153 @@ fn enforce_true_25d_camera_contract(
         *transform = true_25d_camera_transform();
         *projection = true_25d_camera_projection();
     }
+}
+
+fn true_25d_locked_camera_viewport_width_units() -> f32 {
+    TRUE_25D_VIEWPORT_VERTICAL_UNITS * TRUE_25D_VIEWPORT_ASPECT
+}
+
+fn true_25d_inside_locked_camera_viewport(translation: Vec3) -> bool {
+    let half_width =
+        true_25d_locked_camera_viewport_width_units() * 0.5 + TRUE_25D_VIEWPORT_RENDER_MARGIN_UNITS;
+    let half_depth = TRUE_25D_VIEWPORT_VERTICAL_UNITS * 0.5 + TRUE_25D_VIEWPORT_RENDER_MARGIN_UNITS;
+    translation.x.abs() <= half_width && translation.z.abs() <= half_depth
+}
+
+fn true_25d_bypass_receipt(
+    transform: Option<&Transform>,
+    ground: Option<&GraphicalTrue25dGroundPlane>,
+) -> Option<GraphicalTrue25dViewportRenderBypass> {
+    let transform = transform?;
+    let inside_locked_camera_viewport =
+        ground.is_some() || true_25d_inside_locked_camera_viewport(transform.translation);
+    Some(GraphicalTrue25dViewportRenderBypass {
+        inside_locked_camera_viewport,
+        render_pass_bypassed: !inside_locked_camera_viewport,
+        headless_update_continues: true,
+        zero_draw_call_contract: !inside_locked_camera_viewport,
+        display_only: true,
+    })
+}
+
+fn true_25d_bypass_summary(
+    renderable_true_25d_entities: usize,
+    visible_true_25d_entities: usize,
+    bypassed_true_25d_entities: usize,
+    ledger_only_true_25d_assets: usize,
+    field: Option<&GraphicalProceduralTerrainFieldResource>,
+) -> GraphicalTrue25dRenderBypassSummaryResource {
+    GraphicalTrue25dRenderBypassSummaryResource {
+        locked_camera_viewport_width_units: true_25d_locked_camera_viewport_width_units(),
+        locked_camera_viewport_height_units: TRUE_25D_VIEWPORT_VERTICAL_UNITS,
+        renderable_true_25d_entities,
+        visible_true_25d_entities,
+        bypassed_true_25d_entities,
+        ledger_only_true_25d_assets,
+        active_headless_chunks: field
+            .map(|field| field.active_world_chunks.len())
+            .unwrap_or_default(),
+        materialized_headless_tiles: field
+            .map(|field| field.materialized_tiles.len())
+            .unwrap_or_default(),
+        render_frame_hz: CA13_TARGET_RENDER_FRAME_HZ,
+        fixed_headless_tick_hz: CA13_FIXED_SIM_TICK_HZ,
+        offscreen_regions_zero_draw_calls: true,
+        headless_updates_continue: true,
+        procedural_generation_without_rendering: field
+            .map(|field| {
+                field.generated_without_rendering
+                    && field.procedural_content_generated_without_rendering
+                    && !field.procedural_content_rendering_required
+            })
+            .unwrap_or(true),
+        no_action_authority: true,
+    }
+}
+
+fn apply_existing_true_25d_viewport_render_bypass(world: &mut bevy::prelude::World) {
+    let field = world
+        .get_resource::<GraphicalProceduralTerrainFieldResource>()
+        .cloned();
+    let mut updates = Vec::new();
+    let mut renderable_true_25d_entities = 0usize;
+    let mut visible_true_25d_entities = 0usize;
+    let mut bypassed_true_25d_entities = 0usize;
+    let mut ledger_only_true_25d_assets = 0usize;
+    {
+        let mut query = world.query::<(
+            Entity,
+            &GraphicalTrue25dAsset,
+            Option<&Transform>,
+            Option<&GraphicalTrue25dGroundPlane>,
+        )>();
+        for (entity, _asset, transform, ground) in query.iter(world) {
+            let Some(receipt) = true_25d_bypass_receipt(transform, ground) else {
+                ledger_only_true_25d_assets = ledger_only_true_25d_assets.saturating_add(1);
+                continue;
+            };
+            renderable_true_25d_entities = renderable_true_25d_entities.saturating_add(1);
+            if receipt.render_pass_bypassed {
+                bypassed_true_25d_entities = bypassed_true_25d_entities.saturating_add(1);
+            } else {
+                visible_true_25d_entities = visible_true_25d_entities.saturating_add(1);
+            }
+            let visibility = if receipt.render_pass_bypassed {
+                Visibility::Hidden
+            } else {
+                Visibility::Visible
+            };
+            updates.push((entity, visibility, receipt));
+        }
+    }
+    for (entity, visibility, receipt) in updates {
+        world.entity_mut(entity).insert((visibility, receipt));
+    }
+    world.insert_resource(true_25d_bypass_summary(
+        renderable_true_25d_entities,
+        visible_true_25d_entities,
+        bypassed_true_25d_entities,
+        ledger_only_true_25d_assets,
+        field.as_ref(),
+    ));
+}
+
+fn update_true_25d_viewport_render_bypass(
+    mut commands: Commands,
+    field: Option<Res<GraphicalProceduralTerrainFieldResource>>,
+    assets: bevy::prelude::Query<(
+        Entity,
+        &GraphicalTrue25dAsset,
+        Option<&Transform>,
+        Option<&GraphicalTrue25dGroundPlane>,
+    )>,
+) {
+    let mut renderable_true_25d_entities = 0usize;
+    let mut visible_true_25d_entities = 0usize;
+    let mut bypassed_true_25d_entities = 0usize;
+    let mut ledger_only_true_25d_assets = 0usize;
+    for (entity, _asset, transform, ground) in &assets {
+        let Some(receipt) = true_25d_bypass_receipt(transform, ground) else {
+            ledger_only_true_25d_assets = ledger_only_true_25d_assets.saturating_add(1);
+            continue;
+        };
+        renderable_true_25d_entities = renderable_true_25d_entities.saturating_add(1);
+        let visibility = if receipt.render_pass_bypassed {
+            bypassed_true_25d_entities = bypassed_true_25d_entities.saturating_add(1);
+            Visibility::Hidden
+        } else {
+            visible_true_25d_entities = visible_true_25d_entities.saturating_add(1);
+            Visibility::Visible
+        };
+        commands.entity(entity).insert((visibility, receipt));
+    }
+    commands.insert_resource(true_25d_bypass_summary(
+        renderable_true_25d_entities,
+        visible_true_25d_entities,
+        bypassed_true_25d_entities,
+        ledger_only_true_25d_assets,
+        field.as_deref(),
+    ));
 }
 
 fn true_25d_seeded_material_id(seed: u64, ix: i32, iz: i32) -> &'static str {
