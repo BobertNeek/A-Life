@@ -25,7 +25,10 @@ use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     ecs::schedule::IntoScheduleConfigs,
     gltf::GltfAssetLabel,
-    image::{CompressedImageFormats, Image, ImageSampler, ImageType},
+    image::{
+        CompressedImageFormats, Image, ImageAddressMode, ImageSampler, ImageSamplerDescriptor,
+        ImageType,
+    },
     prelude::{
         default, AlphaMode, App, AssetServer, BackgroundColor, ButtonInput, Camera, Camera2d,
         Camera3d, Capsule3d, Circle, ClearColor, ClearColorConfig, Color, Commands, Component,
@@ -594,6 +597,18 @@ pub struct GraphicalTrue25dCamera {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dGroundPlane {
+    pub texture_path: &'static str,
+    pub width_world_units: f32,
+    pub depth_world_units: f32,
+    pub uv_repeat_x: f32,
+    pub uv_repeat_z: f32,
+    pub sampler_repeat_wrapped: bool,
+    pub static_primitive_plane: bool,
+    pub synchronous_runtime_texture_generation: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct GraphicalTrue25dAsset {
     pub role: &'static str,
     pub stable_id: Option<WorldEntityId>,
@@ -615,6 +630,10 @@ pub struct GraphicalTrue25dPresentationResource {
     pub versioned_gltf_pack_validated: bool,
     pub runtime_gltf_scene_rendering: bool,
     pub runtime_native_low_poly_fallback: bool,
+    pub fixed_orthographic_camera: bool,
+    pub preprocessed_repeating_ground_plane: bool,
+    pub synchronous_runtime_ground_texture_generation: bool,
+    pub ground_texture_path: &'static str,
     pub toon_bands: u8,
     pub sobel_outline_contract: bool,
     pub pixel_step_filter_contract: bool,
@@ -670,6 +689,14 @@ pub struct GraphicalTrue25dGltfScene {
     pub role: &'static str,
     pub scene_path: &'static str,
     pub display_only: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dScaleNormalized {
+    pub applied_scale: f32,
+    pub min_scale: f32,
+    pub max_scale: f32,
+    pub authoring_space_clamped: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -814,6 +841,10 @@ pub struct GraphicalRuntimeProceduralBiomeMap {
     pub dark_gap_pixels: u32,
     pub generated_from_procedural_sampler: bool,
     pub generated_from_alpha_art_tiles: bool,
+    pub rendered_from_preprocessed_ground_tile: bool,
+    pub sampler_repeat_wrapped: bool,
+    pub synchronous_texture_generation: bool,
+    pub texture_source_path: &'static str,
     pub terrain_tile_source_count: u32,
     pub fog_of_war_applied: bool,
     pub primary_player_surface: bool,
@@ -960,9 +991,9 @@ const TRUE_25D_ACTIVE_CHUNK_SIM_WIDTH: f32 = 88.0;
 const TRUE_25D_ACTIVE_CHUNK_SIM_DEPTH: f32 = 56.0;
 const TRUE_25D_GROUND_WIDTH: f32 = TRUE_25D_ACTIVE_CHUNK_SIM_WIDTH * TRUE_25D_SIM_TO_VIEW_SCALE;
 const TRUE_25D_GROUND_DEPTH: f32 = TRUE_25D_ACTIVE_CHUNK_SIM_DEPTH * TRUE_25D_SIM_TO_VIEW_SCALE;
-const TRUE_25D_GROUND_UV_SPAN_X: f32 = 1.0;
-const TRUE_25D_GROUND_UV_SPAN_Z: f32 = 1.0;
-const TRUE_25D_BIOME_MAP_PIXELS_PER_TILE: u32 = 8;
+const TRUE_25D_GROUND_UV_SPAN_X: f32 = 16.0;
+const TRUE_25D_GROUND_UV_SPAN_Z: f32 = 10.0;
+const TRUE_25D_GROUND_TILE_TEXTURE_PATH: &str = "alpha_art_v1/ground_tile_repeat.png";
 const TRUE_25D_MIN_NORMALIZED_SCALE: f32 = 0.08;
 const TRUE_25D_MAX_NORMALIZED_SCALE: f32 = 1.0;
 
@@ -1193,6 +1224,8 @@ fn add_graphical_runtime_update_systems(app: &mut App) {
             advance_graphical_runtime_loop,
             update_graphical_procedural_terrain_field,
             update_graphical_runtime_procedural_biome_map,
+            normalize_true_25d_gltf_asset_scales,
+            enforce_true_25d_camera_contract,
             update_graphical_camera_transform,
             update_graphical_selection_ring,
             update_graphical_gpu_visual_cues,
@@ -1240,6 +1273,8 @@ fn add_graphical_runtime_core_update_systems(app: &mut App) {
             advance_graphical_runtime_loop,
             update_graphical_procedural_terrain_field,
             update_graphical_runtime_procedural_biome_map,
+            normalize_true_25d_gltf_asset_scales,
+            enforce_true_25d_camera_contract,
             update_graphical_camera_transform,
             update_graphical_selection_ring,
             update_graphical_gpu_visual_cues,
@@ -1480,6 +1515,10 @@ fn spawn_true_25d_player_view_layer(
         versioned_gltf_pack_validated: true,
         runtime_gltf_scene_rendering: app.world().contains_resource::<AssetServer>(),
         runtime_native_low_poly_fallback: !app.world().contains_resource::<AssetServer>(),
+        fixed_orthographic_camera: true,
+        preprocessed_repeating_ground_plane: true,
+        synchronous_runtime_ground_texture_generation: false,
+        ground_texture_path: TRUE_25D_GROUND_TILE_TEXTURE_PATH,
         toon_bands: 4,
         sobel_outline_contract: true,
         pixel_step_filter_contract: true,
@@ -1499,16 +1538,8 @@ fn spawn_true_25d_player_view_layer(
             ..default()
         },
         Tonemapping::None,
-        Projection::from(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: TRUE_25D_VIEWPORT_VERTICAL_UNITS,
-            },
-            scale: 1.0,
-            near: -100.0,
-            far: 200.0,
-            ..OrthographicProjection::default_3d()
-        }),
-        Transform::from_xyz(0.0, 12.0, 12.0).looking_at(Vec3::ZERO, Vec3::Y),
+        true_25d_camera_projection(),
+        true_25d_camera_transform(),
         GraphicalTrue25dCamera {
             orthographic_locked: true,
             pitch_degrees: -45.0,
@@ -1529,6 +1560,7 @@ fn spawn_true_25d_player_view_layer(
     for object in &presentation.objects {
         spawn_true_25d_object_scene(app, &native_assets, scene_assets.as_ref(), object)?;
     }
+    normalize_existing_true_25d_gltf_asset_scales(app.world_mut());
     Ok(())
 }
 
@@ -1763,11 +1795,7 @@ fn spawn_true_25d_textured_micro_ecology_ground(app: &mut App, seed: u64) {
                 TRUE_25D_GROUND_UV_SPAN_X,
                 TRUE_25D_GROUND_UV_SPAN_Z,
             ));
-    let (image, metrics) = ca44a_generate_runtime_procedural_biome_map_with_pixels_per_tile(
-        seed,
-        &field,
-        TRUE_25D_BIOME_MAP_PIXELS_PER_TILE,
-    );
+    let image = true_25d_repeating_ground_texture_image();
     let texture_width_px = image.texture_descriptor.size.width;
     let texture_height_px = image.texture_descriptor.size.height;
     let image_handle = app.world_mut().resource_mut::<Assets<Image>>().add(image);
@@ -1784,17 +1812,27 @@ fn spawn_true_25d_textured_micro_ecology_ground(app: &mut App, seed: u64) {
         });
 
     app.world_mut().spawn((
-        Name::new("A-Life true 2.5D seeded procedural ground texture"),
+        Name::new("A-Life true 2.5D static repeated ground substrate"),
         Mesh3d(mesh),
         MeshMaterial3d(material),
         Transform::from_xyz(0.0, -0.02, 0.0),
+        GraphicalTrue25dGroundPlane {
+            texture_path: TRUE_25D_GROUND_TILE_TEXTURE_PATH,
+            width_world_units: TRUE_25D_GROUND_WIDTH,
+            depth_world_units: TRUE_25D_GROUND_DEPTH,
+            uv_repeat_x: TRUE_25D_GROUND_UV_SPAN_X,
+            uv_repeat_z: TRUE_25D_GROUND_UV_SPAN_Z,
+            sampler_repeat_wrapped: true,
+            static_primitive_plane: true,
+            synchronous_runtime_texture_generation: false,
+        },
         GraphicalTrue25dAsset {
-            role: "terrain-seeded-biome-map",
+            role: "terrain-repeating-ground-plane",
             stable_id: None,
             display_only: true,
         },
         GraphicalProductionArtLayer {
-            role: "true-25d-seeded-biome-ground-plane",
+            role: "true-25d-repeating-ground-plane",
             display_only: true,
         },
         GraphicalRuntimeProceduralBiomeMap {
@@ -1803,20 +1841,24 @@ fn spawn_true_25d_textured_micro_ecology_ground(app: &mut App, seed: u64) {
             height_tiles: CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES,
             texture_width_px,
             texture_height_px,
-            pixels_per_tile: TRUE_25D_BIOME_MAP_PIXELS_PER_TILE,
+            pixels_per_tile: 1,
             virtual_map_width_tiles: field.virtual_map_width_tiles,
             virtual_map_height_tiles: field.virtual_map_height_tiles,
-            path_pixels: metrics.path_pixels,
-            resource_detail_pixels: metrics.resource_detail_pixels,
-            hazard_detail_pixels: metrics.hazard_detail_pixels,
-            stone_detail_pixels: metrics.stone_detail_pixels,
-            fogged_pixels: metrics.fogged_pixels,
+            path_pixels: 0,
+            resource_detail_pixels: 0,
+            hazard_detail_pixels: 0,
+            stone_detail_pixels: 0,
+            fogged_pixels: 0,
             active_chunk_count: field.active_world_chunks.len(),
-            dark_gap_pixels: metrics.dark_gap_pixels,
-            generated_from_procedural_sampler: true,
-            generated_from_alpha_art_tiles: metrics.alpha_art_tile_pixels > 0,
-            terrain_tile_source_count: metrics.terrain_tile_source_count,
-            fog_of_war_applied: metrics.fogged_pixels > 0,
+            dark_gap_pixels: 0,
+            generated_from_procedural_sampler: false,
+            generated_from_alpha_art_tiles: true,
+            rendered_from_preprocessed_ground_tile: true,
+            sampler_repeat_wrapped: true,
+            synchronous_texture_generation: false,
+            texture_source_path: TRUE_25D_GROUND_TILE_TEXTURE_PATH,
+            terrain_tile_source_count: 1,
+            fog_of_war_applied: false,
             primary_player_surface: true,
             display_only: true,
             active_chunk_signature: ca44a_active_chunk_signature(&field),
@@ -1826,6 +1868,22 @@ fn spawn_true_25d_textured_micro_ecology_ground(app: &mut App, seed: u64) {
         },
     ));
     app.insert_resource(field);
+}
+
+fn true_25d_repeating_ground_texture_image() -> Image {
+    let mut image = Image::from_buffer(
+        include_bytes!("../assets/alpha_art_v1/ground_tile_repeat.png"),
+        ImageType::Extension("png"),
+        CompressedImageFormats::NONE,
+        true,
+        ImageSampler::nearest(),
+        RenderAssetUsages::default(),
+    )
+    .expect("committed true 2.5D repeating ground tile must decode");
+    let mut sampler = ImageSamplerDescriptor::nearest();
+    sampler.set_address_mode(ImageAddressMode::Repeat);
+    image.sampler = ImageSampler::Descriptor(sampler);
+    image
 }
 
 fn true_25d_repeating_ground_plane_mesh(
@@ -1978,6 +2036,90 @@ fn true_25d_region_coord(seed: u64, index: i32, salt: u32, extent: f32) -> f32 {
 
 fn true_25d_normalized_scale(requested: f32) -> Vec3 {
     Vec3::splat(requested.clamp(TRUE_25D_MIN_NORMALIZED_SCALE, TRUE_25D_MAX_NORMALIZED_SCALE))
+}
+
+fn true_25d_normalize_transform_scale(
+    transform: &mut Transform,
+) -> GraphicalTrue25dScaleNormalized {
+    let requested = transform
+        .scale
+        .x
+        .abs()
+        .max(transform.scale.y.abs())
+        .max(transform.scale.z.abs());
+    let applied_scale =
+        requested.clamp(TRUE_25D_MIN_NORMALIZED_SCALE, TRUE_25D_MAX_NORMALIZED_SCALE);
+    let authoring_space_clamped = (applied_scale - requested).abs() > f32::EPSILON
+        || (transform.scale.x - transform.scale.y).abs() > f32::EPSILON
+        || (transform.scale.y - transform.scale.z).abs() > f32::EPSILON;
+    transform.scale = Vec3::splat(applied_scale);
+    GraphicalTrue25dScaleNormalized {
+        applied_scale,
+        min_scale: TRUE_25D_MIN_NORMALIZED_SCALE,
+        max_scale: TRUE_25D_MAX_NORMALIZED_SCALE,
+        authoring_space_clamped,
+    }
+}
+
+fn normalize_true_25d_gltf_asset_scales(
+    mut commands: Commands,
+    mut scenes: bevy::prelude::Query<
+        (Entity, &mut Transform),
+        (
+            With<GraphicalTrue25dGltfScene>,
+            Without<GraphicalTrue25dScaleNormalized>,
+        ),
+    >,
+) {
+    for (entity, mut transform) in &mut scenes {
+        let receipt = true_25d_normalize_transform_scale(&mut transform);
+        commands.entity(entity).insert(receipt);
+    }
+}
+
+fn normalize_existing_true_25d_gltf_asset_scales(world: &mut bevy::prelude::World) {
+    let mut receipts = Vec::new();
+    {
+        let mut query = world.query_filtered::<(Entity, &mut Transform), (
+            With<GraphicalTrue25dGltfScene>,
+            Without<GraphicalTrue25dScaleNormalized>,
+        )>();
+        for (entity, mut transform) in query.iter_mut(world) {
+            let receipt = true_25d_normalize_transform_scale(&mut transform);
+            receipts.push((entity, receipt));
+        }
+    }
+    for (entity, receipt) in receipts {
+        world.entity_mut(entity).insert(receipt);
+    }
+}
+
+fn true_25d_camera_transform() -> Transform {
+    Transform::from_xyz(0.0, 12.0, 12.0).looking_at(Vec3::ZERO, Vec3::Y)
+}
+
+fn true_25d_camera_projection() -> Projection {
+    Projection::from(OrthographicProjection {
+        scaling_mode: ScalingMode::FixedVertical {
+            viewport_height: TRUE_25D_VIEWPORT_VERTICAL_UNITS,
+        },
+        scale: 1.0,
+        near: -100.0,
+        far: 200.0,
+        ..OrthographicProjection::default_3d()
+    })
+}
+
+fn enforce_true_25d_camera_contract(
+    mut cameras: bevy::prelude::Query<(&mut Transform, &mut Projection, &GraphicalTrue25dCamera)>,
+) {
+    for (mut transform, mut projection, camera) in &mut cameras {
+        if !camera.orthographic_locked {
+            continue;
+        }
+        *transform = true_25d_camera_transform();
+        *projection = true_25d_camera_projection();
+    }
 }
 
 fn true_25d_seeded_material_id(seed: u64, ix: i32, iz: i32) -> &'static str {
@@ -3640,6 +3782,10 @@ fn ca44a_spawn_runtime_procedural_biome_map_app(
             dark_gap_pixels: metrics.dark_gap_pixels,
             generated_from_procedural_sampler: true,
             generated_from_alpha_art_tiles: metrics.alpha_art_tile_pixels > 0,
+            rendered_from_preprocessed_ground_tile: false,
+            sampler_repeat_wrapped: false,
+            synchronous_texture_generation: true,
+            texture_source_path: "runtime-generated-procedural-biome-map",
             terrain_tile_source_count: metrics.terrain_tile_source_count,
             fog_of_war_applied: metrics.fogged_pixels > 0,
             primary_player_surface: true,
