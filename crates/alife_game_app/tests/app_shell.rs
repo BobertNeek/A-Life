@@ -2363,7 +2363,7 @@ fn ca44a_player_view_uses_true_25d_world_assets_not_default_rectangles() {
         "hazard",
         "rock-obstacle",
         "selection-ring",
-        "terrain-seeded-biome-map",
+        "terrain-repeating-ground-plane",
         "terrain-grass-island",
         "terrain-soil-island",
         "terrain-resource-grove",
@@ -2448,13 +2448,21 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
 
     let contract = app
         .world()
-        .resource::<alife_game_app::bevy_shell::GraphicalTrue25dPresentationResource>();
+        .resource::<alife_game_app::bevy_shell::GraphicalTrue25dPresentationResource>()
+        .clone();
     assert!(contract.asset_manifest.required_roles_present);
     assert!(contract.asset_manifest.gltf_files_validated);
     assert!(contract.versioned_gltf_pack_validated);
     assert!(
         contract.runtime_gltf_scene_rendering || contract.runtime_native_low_poly_fallback,
         "Player View must either render versioned glTF scenes or expose the native low-poly fallback in minimal validation contexts"
+    );
+    assert!(contract.fixed_orthographic_camera);
+    assert!(contract.preprocessed_repeating_ground_plane);
+    assert!(!contract.synchronous_runtime_ground_texture_generation);
+    assert_eq!(
+        contract.ground_texture_path,
+        "alpha_art_v1/ground_tile_repeat.png"
     );
     assert_eq!(contract.toon_bands, 4);
     assert!(contract.sobel_outline_contract);
@@ -2463,14 +2471,34 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
     assert!(contract.offscreen_headless_chunks);
     assert!(contract.no_action_authority);
 
-    let mut camera_query = app
-        .world_mut()
-        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dCamera>();
-    let cameras = camera_query.iter(app.world()).copied().collect::<Vec<_>>();
+    let mut camera_query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalTrue25dCamera,
+        &bevy::prelude::Transform,
+        &bevy::prelude::Projection,
+    )>();
+    let cameras = camera_query
+        .iter(app.world())
+        .map(|(camera, transform, projection)| (*camera, *transform, projection.clone()))
+        .collect::<Vec<_>>();
     assert_eq!(cameras.len(), 1);
-    assert!(cameras[0].orthographic_locked);
-    assert_eq!(cameras[0].yaw_degrees, 0.0);
-    assert_eq!(cameras[0].pitch_degrees, -45.0);
+    assert!(cameras[0].0.orthographic_locked);
+    assert_eq!(cameras[0].0.yaw_degrees, 0.0);
+    assert_eq!(cameras[0].0.pitch_degrees, -45.0);
+    assert_eq!(
+        cameras[0].1.translation,
+        bevy::prelude::Vec3::new(0.0, 12.0, 12.0)
+    );
+    if let bevy::prelude::Projection::Orthographic(orthographic) = &cameras[0].2 {
+        match orthographic.scaling_mode {
+            bevy::camera::ScalingMode::FixedVertical { viewport_height } => {
+                assert!((viewport_height - 10.0).abs() <= f32::EPSILON);
+            }
+            _ => panic!("true 2.5D camera must use FixedVertical(10.0)"),
+        }
+        assert_eq!(orthographic.scale, 1.0);
+    } else {
+        panic!("true 2.5D camera must use orthographic projection");
+    }
 
     let mut asset_query = app
         .world_mut()
@@ -2489,9 +2517,97 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
         assert!(roles.contains(&role), "missing true 2.5D role {role}");
     }
     assert!(
-        roles.iter().any(|role| *role == "terrain-seeded-biome-map"),
-        "true 2.5D Player View should use the seeded biome map as the ground surface"
+        roles
+            .iter()
+            .any(|role| *role == "terrain-repeating-ground-plane"),
+        "true 2.5D Player View should use the preprocessed repeated tile as the ground surface"
     );
+
+    let mut ground_query = app
+        .world_mut()
+        .query::<&alife_game_app::bevy_shell::GraphicalTrue25dGroundPlane>();
+    let ground_planes = ground_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(ground_planes.len(), 1);
+    assert_eq!(
+        ground_planes[0].texture_path,
+        "alpha_art_v1/ground_tile_repeat.png"
+    );
+    assert!(ground_planes[0].sampler_repeat_wrapped);
+    assert!(ground_planes[0].static_primitive_plane);
+    assert!(!ground_planes[0].synchronous_runtime_texture_generation);
+
+    let mut normalized_query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalTrue25dGltfScene,
+        &alife_game_app::bevy_shell::GraphicalTrue25dScaleNormalized,
+    )>();
+    let normalized = normalized_query.iter(app.world()).collect::<Vec<_>>();
+    if contract.runtime_gltf_scene_rendering {
+        assert!(
+            normalized.len() >= 4,
+            "true 2.5D glTF scene roots should carry scale-normalization receipts"
+        );
+        assert!(normalized.iter().all(|(_, receipt)| {
+            receipt.applied_scale >= receipt.min_scale && receipt.applied_scale <= receipt.max_scale
+        }));
+    } else {
+        assert!(contract.runtime_native_low_poly_fallback);
+        assert!(
+            normalized.is_empty(),
+            "validation preview without AssetServer should not pretend glTF scenes were loaded"
+        );
+    }
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn runtime_true_25d_camera_contract_restores_accidental_zoom_or_rotation() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_runtime_preview_app_shell(&launch)
+            .unwrap();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+    {
+        let world = app.world_mut();
+        let mut camera_query = world.query::<(
+            &mut bevy::prelude::Transform,
+            &mut bevy::prelude::Projection,
+            &alife_game_app::bevy_shell::GraphicalTrue25dCamera,
+        )>();
+        let (mut transform, mut projection, camera) = camera_query.iter_mut(world).next().unwrap();
+        assert!(camera.orthographic_locked);
+        transform.translation = bevy::prelude::Vec3::new(99.0, 2.0, -42.0);
+        transform.rotation = bevy::prelude::Quat::from_rotation_y(1.2);
+        if let bevy::prelude::Projection::Orthographic(ref mut orthographic) = *projection {
+            orthographic.scale = 2.5;
+        }
+    }
+
+    app.update();
+
+    let mut camera_query = app.world_mut().query::<(
+        &bevy::prelude::Transform,
+        &bevy::prelude::Projection,
+        &alife_game_app::bevy_shell::GraphicalTrue25dCamera,
+    )>();
+    let (transform, projection, camera) = camera_query.iter(app.world()).next().unwrap();
+    assert!(camera.orthographic_locked);
+    assert_eq!(
+        transform.translation,
+        bevy::prelude::Vec3::new(0.0, 12.0, 12.0)
+    );
+    if let bevy::prelude::Projection::Orthographic(orthographic) = projection {
+        assert_eq!(orthographic.scale, 1.0);
+        match orthographic.scaling_mode {
+            bevy::camera::ScalingMode::FixedVertical { viewport_height } => {
+                assert!((viewport_height - 10.0).abs() <= f32::EPSILON);
+            }
+            _ => panic!("true 2.5D camera contract must restore FixedVertical(10.0)"),
+        }
+    } else {
+        panic!("true 2.5D camera contract must restore orthographic projection");
+    }
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2546,8 +2662,15 @@ fn production_player_view_uses_true_25d_micro_ecology_and_runtime_ledger() {
         .collect::<Vec<_>>();
     assert_eq!(biome_maps.len(), 1);
     assert!(biome_maps[0].primary_player_surface);
-    assert!(biome_maps[0].generated_from_procedural_sampler);
+    assert!(!biome_maps[0].generated_from_procedural_sampler);
     assert!(biome_maps[0].generated_from_alpha_art_tiles);
+    assert!(biome_maps[0].rendered_from_preprocessed_ground_tile);
+    assert!(biome_maps[0].sampler_repeat_wrapped);
+    assert!(!biome_maps[0].synchronous_texture_generation);
+    assert_eq!(
+        biome_maps[0].texture_source_path,
+        "alpha_art_v1/ground_tile_repeat.png"
+    );
 
     let field = app
         .world()
@@ -2643,11 +2766,11 @@ fn production_world_art_atlas_v3_breaks_up_debug_checkerboard() {
     );
     let seeded_biome_ground_count = layers
         .iter()
-        .filter(|layer| layer.role == "true-25d-seeded-biome-ground-plane")
+        .filter(|layer| layer.role == "true-25d-repeating-ground-plane")
         .count();
     assert_eq!(
         seeded_biome_ground_count, 1,
-        "Player View should map the live seeded biome texture onto the true 2.5D ground plane"
+        "Player View should map the preprocessed repeated tile onto the true 2.5D ground plane"
     );
     assert_eq!(
         streamed_terrain_count, 0,
@@ -2693,8 +2816,11 @@ fn production_player_view_starts_with_rendered_procedural_chunk_window() {
         .collect::<Vec<_>>();
     assert_eq!(biome_maps.len(), 1);
     assert!(biome_maps[0].primary_player_surface);
-    assert!(biome_maps[0].generated_from_procedural_sampler);
+    assert!(!biome_maps[0].generated_from_procedural_sampler);
     assert!(biome_maps[0].generated_from_alpha_art_tiles);
+    assert!(biome_maps[0].rendered_from_preprocessed_ground_tile);
+    assert!(biome_maps[0].sampler_repeat_wrapped);
+    assert!(!biome_maps[0].synchronous_texture_generation);
 
     let mut terrain_query = app
         .world_mut()
@@ -3005,7 +3131,7 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         .count();
     let true_25d_seeded_ground_count = layers
         .iter()
-        .filter(|layer| layer.role == "true-25d-seeded-biome-ground-plane")
+        .filter(|layer| layer.role == "true-25d-repeating-ground-plane")
         .count();
     let true_25d_entity_count = layers
         .iter()
@@ -3042,7 +3168,7 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
     );
     assert_eq!(
         true_25d_seeded_ground_count, 1,
-        "default Player View should use one seeded biome-map ground plane as the world surface"
+        "default Player View should use one repeated-tile ground plane as the world surface"
     );
     assert!(
         true_25d_entity_count >= 4,
