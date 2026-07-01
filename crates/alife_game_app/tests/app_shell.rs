@@ -2469,6 +2469,8 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
     assert!(contract.pixel_step_filter_contract);
     assert!(contract.procedural_micro_ecology_chunks);
     assert!(contract.offscreen_headless_chunks);
+    assert!(contract.viewport_render_bypass);
+    assert!(contract.offscreen_zero_draw_call_contract);
     assert!(contract.no_action_authority);
 
     let mut camera_query = app.world_mut().query::<(
@@ -2556,6 +2558,72 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
             "validation preview without AssetServer should not pretend glTF scenes were loaded"
         );
     }
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
+fn true_25d_viewport_render_bypass_hides_offscreen_regions_without_sim_authority() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_runtime_preview_app_shell(&launch)
+            .unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let bypass_summary =
+        *app.world()
+            .resource::<alife_game_app::bevy_shell::GraphicalTrue25dRenderBypassSummaryResource>();
+    assert_eq!(bypass_summary.render_frame_hz, 60);
+    assert_eq!(bypass_summary.fixed_headless_tick_hz, 20);
+    assert!(bypass_summary.renderable_true_25d_entities > 0);
+    assert!(bypass_summary.visible_true_25d_entities > 0);
+    assert!(
+        bypass_summary.bypassed_true_25d_entities > 0,
+        "true 2.5D Player View should hide offscreen/fogged regions instead of sending every presentation entity to the render pass"
+    );
+    assert!(
+        bypass_summary.ledger_only_true_25d_assets >= 72,
+        "procedural micro-ecology terrain ledger should remain headless data"
+    );
+    assert!(bypass_summary.active_headless_chunks > 0);
+    assert!(bypass_summary.materialized_headless_tiles > 0);
+    assert!(bypass_summary.offscreen_regions_zero_draw_calls);
+    assert!(bypass_summary.headless_updates_continue);
+    assert!(bypass_summary.procedural_generation_without_rendering);
+    assert!(bypass_summary.no_action_authority);
+
+    let mut query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalTrue25dViewportRenderBypass,
+        &bevy::prelude::Visibility,
+        Option<&alife_game_app::bevy_shell::GraphicalTrue25dGroundPlane>,
+    )>();
+    let receipts = query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(
+        receipts.len(),
+        bypass_summary.renderable_true_25d_entities,
+        "every renderable true 2.5D entity should carry a viewport bypass receipt"
+    );
+    assert!(receipts.iter().any(|(receipt, visibility, _)| {
+        receipt.render_pass_bypassed && **visibility == bevy::prelude::Visibility::Hidden
+    }));
+    assert!(receipts.iter().all(|(receipt, visibility, _)| {
+        if receipt.render_pass_bypassed {
+            **visibility == bevy::prelude::Visibility::Hidden
+                && receipt.zero_draw_call_contract
+                && receipt.headless_update_continues
+        } else {
+            **visibility == bevy::prelude::Visibility::Visible
+                && !receipt.zero_draw_call_contract
+                && receipt.headless_update_continues
+        }
+    }));
+    assert!(receipts.iter().any(|(receipt, visibility, ground)| {
+        ground.is_some()
+            && receipt.inside_locked_camera_viewport
+            && **visibility == bevy::prelude::Visibility::Visible
+    }));
 }
 
 #[cfg(feature = "bevy-app")]
