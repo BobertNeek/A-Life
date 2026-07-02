@@ -659,6 +659,72 @@ pub struct GraphicalTrue25dStateCue {
     pub display_only: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphicalTrue25dNeurochemicalCueKind {
+    HungerGlow,
+    PainSpike,
+    StressDesaturation,
+    EnergyTrail,
+    SleepBloom,
+    LearningBiolume,
+}
+
+impl GraphicalTrue25dNeurochemicalCueKind {
+    pub const fn role(self) -> &'static str {
+        match self {
+            Self::HungerGlow => "neurochemical-hunger-glow",
+            Self::PainSpike => "neurochemical-pain-spike",
+            Self::StressDesaturation => "neurochemical-stress-desaturation",
+            Self::EnergyTrail => "neurochemical-energy-trail",
+            Self::SleepBloom => "neurochemical-sleep-bloom",
+            Self::LearningBiolume => "neurochemical-learning-biolume",
+        }
+    }
+
+    pub const fn player_label(self) -> &'static str {
+        match self {
+            Self::HungerGlow => "hunger",
+            Self::PainSpike => "pain",
+            Self::StressDesaturation => "stress",
+            Self::EnergyTrail => "energy",
+            Self::SleepBloom => "sleep",
+            Self::LearningBiolume => "learning",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dNeurochemicalCue {
+    pub stable_id: WorldEntityId,
+    pub kind: GraphicalTrue25dNeurochemicalCueKind,
+    pub intensity: f32,
+    pub active: bool,
+    pub anchored_to_selected_creature: bool,
+    pub display_only: bool,
+    pub no_action_authority: bool,
+    pub no_weight_authority: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Resource)]
+pub struct GraphicalTrue25dNeurochemicalFeedbackResource {
+    pub schema_version: u16,
+    pub selected_stable_id: WorldEntityId,
+    pub cue_count: usize,
+    pub active_cue_count: usize,
+    pub hunger: f32,
+    pub pain: f32,
+    pub stress: f32,
+    pub energy: f32,
+    pub sleep_pressure: f32,
+    pub learning: f32,
+    pub direct_mesh_presentation: bool,
+    pub display_only: bool,
+    pub no_action_authority: bool,
+    pub no_weight_authority: bool,
+    pub cpu_shadow_gate_preserved: bool,
+    pub no_active_bulk_readback: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalTrue25dPresentationResource {
     pub asset_manifest: crate::True25dAssetValidationSummary,
@@ -932,6 +998,12 @@ struct GraphicalTrue25dNativeAssets {
     rock_material: Handle<StandardMaterial>,
     reed_material: Handle<StandardMaterial>,
     selection_material: Handle<StandardMaterial>,
+    hunger_glow_material: Handle<StandardMaterial>,
+    pain_spike_material: Handle<StandardMaterial>,
+    stress_desaturation_material: Handle<StandardMaterial>,
+    energy_trail_material: Handle<StandardMaterial>,
+    sleep_bloom_material: Handle<StandardMaterial>,
+    learning_biolume_material: Handle<StandardMaterial>,
 }
 
 #[derive(Debug, Clone, Resource)]
@@ -1429,6 +1501,13 @@ pub fn build_graphical_playground_app_shell(
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
     let (controls, live_loop, gpu_telemetry) = graphical_runtime_resources(launch)?;
     let camera_state = ca37_graphical_default_camera_state(&inspector, world_art_summary.as_ref())?;
+    if summary.view_mode == GraphicalPlaygroundViewMode::Player {
+        spawn_true_25d_neurochemical_visual_feedback(
+            &mut app,
+            &inspector,
+            &gpu_telemetry.telemetry,
+        );
+    }
     app.insert_resource(controls)
         .insert_resource(gpu_telemetry)
         .insert_non_send_resource(live_loop)
@@ -1506,6 +1585,7 @@ fn add_graphical_runtime_update_systems(app: &mut App) {
             update_graphical_runtime_procedural_biome_map,
             normalize_true_25d_gltf_asset_scales,
             enforce_true_25d_camera_contract,
+            update_true_25d_neurochemical_visual_feedback,
             update_true_25d_viewport_render_bypass,
             update_graphical_camera_transform,
             update_graphical_selection_ring,
@@ -1556,6 +1636,7 @@ fn add_graphical_runtime_core_update_systems(app: &mut App) {
             update_graphical_runtime_procedural_biome_map,
             normalize_true_25d_gltf_asset_scales,
             enforce_true_25d_camera_contract,
+            update_true_25d_neurochemical_visual_feedback,
             update_true_25d_viewport_render_bypass,
             update_graphical_camera_transform,
             update_graphical_selection_ring,
@@ -1632,6 +1713,12 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
         rock_material,
         reed_material,
         selection_material,
+        hunger_glow_material,
+        pain_spike_material,
+        stress_desaturation_material,
+        energy_trail_material,
+        sleep_bloom_material,
+        learning_biolume_material,
     ) = {
         let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
         (
@@ -1645,6 +1732,12 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
             true_25d_material(&mut materials, Color::srgb(0.54, 0.55, 0.50), 1.0),
             true_25d_material(&mut materials, Color::srgb(0.42, 0.96, 0.32), 1.0),
             true_25d_material(&mut materials, Color::srgba(0.88, 1.0, 0.28, 0.86), 0.86),
+            true_25d_material(&mut materials, Color::srgba(1.0, 0.78, 0.24, 0.74), 0.74),
+            true_25d_material(&mut materials, Color::srgba(1.0, 0.18, 0.22, 0.86), 0.86),
+            true_25d_material(&mut materials, Color::srgba(0.58, 0.60, 0.66, 0.54), 0.54),
+            true_25d_material(&mut materials, Color::srgba(0.24, 0.78, 1.0, 0.62), 0.62),
+            true_25d_material(&mut materials, Color::srgba(0.46, 0.46, 1.0, 0.58), 0.58),
+            true_25d_material(&mut materials, Color::srgba(0.38, 1.0, 0.82, 0.72), 0.72),
         )
     };
 
@@ -1668,6 +1761,12 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
         rock_material,
         reed_material,
         selection_material,
+        hunger_glow_material,
+        pain_spike_material,
+        stress_desaturation_material,
+        energy_trail_material,
+        sleep_bloom_material,
+        learning_biolume_material,
     };
     app.insert_resource(handles.clone());
     handles
@@ -2803,6 +2902,246 @@ fn spawn_true_25d_creature_details(
     }
 }
 
+fn spawn_true_25d_neurochemical_visual_feedback(
+    app: &mut App,
+    inspector: &CreatureInspectorSnapshot,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) {
+    let native_assets = true_25d_native_assets(app);
+    let feedback = true_25d_neurochemical_feedback_from_snapshot(inspector, gpu);
+    app.insert_resource(feedback);
+    let base = true_25d_creature_visual_position(&inspector.visual);
+    for kind in [
+        GraphicalTrue25dNeurochemicalCueKind::HungerGlow,
+        GraphicalTrue25dNeurochemicalCueKind::PainSpike,
+        GraphicalTrue25dNeurochemicalCueKind::StressDesaturation,
+        GraphicalTrue25dNeurochemicalCueKind::EnergyTrail,
+        GraphicalTrue25dNeurochemicalCueKind::SleepBloom,
+        GraphicalTrue25dNeurochemicalCueKind::LearningBiolume,
+    ] {
+        let intensity =
+            true_25d_neurochemical_intensity(kind, &inspector.visual, gpu).clamp(0.0, 1.0);
+        let active = true_25d_neurochemical_cue_active(kind, intensity);
+        let (mesh, material) = true_25d_neurochemical_mesh_material(&native_assets, kind);
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life true 2.5D {} cue stable:{}",
+                kind.player_label(),
+                inspector.visual.stable_id.raw()
+            )),
+            Mesh3d(mesh),
+            MeshMaterial3d(material),
+            Transform::from_translation(base + true_25d_neurochemical_offset(kind))
+                .with_scale(true_25d_neurochemical_scale(kind, intensity)),
+            if active {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            },
+            GraphicalTrue25dNeurochemicalCue {
+                stable_id: inspector.visual.stable_id,
+                kind,
+                intensity,
+                active,
+                anchored_to_selected_creature: true,
+                display_only: true,
+                no_action_authority: true,
+                no_weight_authority: true,
+            },
+            GraphicalTrue25dAsset {
+                role: kind.role(),
+                stable_id: Some(inspector.visual.stable_id),
+                display_only: true,
+            },
+            GraphicalProductionArtLayer {
+                role: "true-25d-neurochemical-feedback",
+                display_only: true,
+            },
+        ));
+    }
+}
+
+fn true_25d_creature_visual_position(visual: &CreatureVisualSnapshot) -> Vec3 {
+    Vec3::new(
+        visual.position.x * TRUE_25D_SIM_TO_VIEW_SCALE,
+        true_25d_height_for_kind(WorldObjectKind::Agent) + 0.10,
+        visual.position.z * TRUE_25D_SIM_TO_VIEW_SCALE,
+    )
+}
+
+fn true_25d_neurochemical_feedback_from_snapshot(
+    snapshot: &CreatureInspectorSnapshot,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> GraphicalTrue25dNeurochemicalFeedbackResource {
+    let visual = &snapshot.visual;
+    let stress = true_25d_neurochemical_stress(visual);
+    let sleep_pressure = visual
+        .cues
+        .sleep_pressure
+        .value
+        .max(visual.cues.fatigue.value)
+        .clamp(0.0, 1.0);
+    let learning = true_25d_learning_cue_intensity(gpu);
+    let intensities = [
+        visual.cues.hunger.value,
+        visual.cues.pain.value,
+        stress,
+        visual.cues.energy.value,
+        sleep_pressure,
+        learning,
+    ];
+    let active_cue_count = intensities
+        .into_iter()
+        .zip([
+            GraphicalTrue25dNeurochemicalCueKind::HungerGlow,
+            GraphicalTrue25dNeurochemicalCueKind::PainSpike,
+            GraphicalTrue25dNeurochemicalCueKind::StressDesaturation,
+            GraphicalTrue25dNeurochemicalCueKind::EnergyTrail,
+            GraphicalTrue25dNeurochemicalCueKind::SleepBloom,
+            GraphicalTrue25dNeurochemicalCueKind::LearningBiolume,
+        ])
+        .filter(|(intensity, kind)| true_25d_neurochemical_cue_active(*kind, *intensity))
+        .count();
+    GraphicalTrue25dNeurochemicalFeedbackResource {
+        schema_version: 1,
+        selected_stable_id: visual.stable_id,
+        cue_count: 6,
+        active_cue_count,
+        hunger: visual.cues.hunger.value,
+        pain: visual.cues.pain.value,
+        stress,
+        energy: visual.cues.energy.value,
+        sleep_pressure,
+        learning,
+        direct_mesh_presentation: true,
+        display_only: true,
+        no_action_authority: true,
+        no_weight_authority: true,
+        cpu_shadow_gate_preserved: gpu.no_active_bulk_readback
+            && !gpu.full_action_authoritative_claim,
+        no_active_bulk_readback: gpu.no_active_bulk_readback,
+    }
+}
+
+fn true_25d_neurochemical_intensity(
+    kind: GraphicalTrue25dNeurochemicalCueKind,
+    visual: &CreatureVisualSnapshot,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> f32 {
+    match kind {
+        GraphicalTrue25dNeurochemicalCueKind::HungerGlow => visual.cues.hunger.value,
+        GraphicalTrue25dNeurochemicalCueKind::PainSpike => visual.cues.pain.value,
+        GraphicalTrue25dNeurochemicalCueKind::StressDesaturation => {
+            true_25d_neurochemical_stress(visual)
+        }
+        GraphicalTrue25dNeurochemicalCueKind::EnergyTrail => visual.cues.energy.value,
+        GraphicalTrue25dNeurochemicalCueKind::SleepBloom => visual
+            .cues
+            .sleep_pressure
+            .value
+            .max(visual.cues.fatigue.value),
+        GraphicalTrue25dNeurochemicalCueKind::LearningBiolume => {
+            true_25d_learning_cue_intensity(gpu)
+        }
+    }
+    .clamp(0.0, 1.0)
+}
+
+fn true_25d_neurochemical_stress(visual: &CreatureVisualSnapshot) -> f32 {
+    visual
+        .cues
+        .fear
+        .value
+        .max(visual.cues.pain.value * 0.85)
+        .max(visual.cues.fatigue.value * 0.45)
+        .clamp(0.0, 1.0)
+}
+
+fn true_25d_learning_cue_intensity(gpu: &GraphicalGpuRuntimeTelemetry) -> f32 {
+    if gpu.h_shadow_applications == 0 {
+        0.0
+    } else {
+        (0.35 + gpu.last_h_shadow_delta.abs() * 18.0).clamp(0.35, 1.0)
+    }
+}
+
+fn true_25d_neurochemical_cue_active(
+    kind: GraphicalTrue25dNeurochemicalCueKind,
+    intensity: f32,
+) -> bool {
+    let threshold = match kind {
+        GraphicalTrue25dNeurochemicalCueKind::HungerGlow => 0.18,
+        GraphicalTrue25dNeurochemicalCueKind::PainSpike => 0.08,
+        GraphicalTrue25dNeurochemicalCueKind::StressDesaturation => 0.22,
+        GraphicalTrue25dNeurochemicalCueKind::EnergyTrail => 0.42,
+        GraphicalTrue25dNeurochemicalCueKind::SleepBloom => 0.48,
+        GraphicalTrue25dNeurochemicalCueKind::LearningBiolume => f32::EPSILON,
+    };
+    intensity >= threshold
+}
+
+fn true_25d_neurochemical_mesh_material(
+    native_assets: &GraphicalTrue25dNativeAssets,
+    kind: GraphicalTrue25dNeurochemicalCueKind,
+) -> (Handle<Mesh>, Handle<StandardMaterial>) {
+    match kind {
+        GraphicalTrue25dNeurochemicalCueKind::HungerGlow => (
+            native_assets.terrain_mesh.clone(),
+            native_assets.hunger_glow_material.clone(),
+        ),
+        GraphicalTrue25dNeurochemicalCueKind::PainSpike => (
+            native_assets.crystal_mesh.clone(),
+            native_assets.pain_spike_material.clone(),
+        ),
+        GraphicalTrue25dNeurochemicalCueKind::StressDesaturation => (
+            native_assets.rock_mesh.clone(),
+            native_assets.stress_desaturation_material.clone(),
+        ),
+        GraphicalTrue25dNeurochemicalCueKind::EnergyTrail => (
+            native_assets.reed_mesh.clone(),
+            native_assets.energy_trail_material.clone(),
+        ),
+        GraphicalTrue25dNeurochemicalCueKind::SleepBloom => (
+            native_assets.terrain_mesh.clone(),
+            native_assets.sleep_bloom_material.clone(),
+        ),
+        GraphicalTrue25dNeurochemicalCueKind::LearningBiolume => (
+            native_assets.ring_mesh.clone(),
+            native_assets.learning_biolume_material.clone(),
+        ),
+    }
+}
+
+fn true_25d_neurochemical_offset(kind: GraphicalTrue25dNeurochemicalCueKind) -> Vec3 {
+    match kind {
+        GraphicalTrue25dNeurochemicalCueKind::HungerGlow => Vec3::new(-0.34, 0.06, -0.28),
+        GraphicalTrue25dNeurochemicalCueKind::PainSpike => Vec3::new(0.32, 0.30, 0.16),
+        GraphicalTrue25dNeurochemicalCueKind::StressDesaturation => Vec3::new(0.00, -0.02, 0.08),
+        GraphicalTrue25dNeurochemicalCueKind::EnergyTrail => Vec3::new(-0.62, 0.04, 0.42),
+        GraphicalTrue25dNeurochemicalCueKind::SleepBloom => Vec3::new(0.52, 0.05, -0.40),
+        GraphicalTrue25dNeurochemicalCueKind::LearningBiolume => Vec3::new(0.0, 0.14, 0.0),
+    }
+}
+
+fn true_25d_neurochemical_scale(
+    kind: GraphicalTrue25dNeurochemicalCueKind,
+    intensity: f32,
+) -> Vec3 {
+    let i = intensity.clamp(0.0, 1.0);
+    match kind {
+        GraphicalTrue25dNeurochemicalCueKind::HungerGlow => Vec3::splat(0.18 + i * 0.18),
+        GraphicalTrue25dNeurochemicalCueKind::PainSpike => Vec3::splat(0.10 + i * 0.16),
+        GraphicalTrue25dNeurochemicalCueKind::StressDesaturation => Vec3::splat(0.24 + i * 0.20),
+        GraphicalTrue25dNeurochemicalCueKind::EnergyTrail => {
+            Vec3::new(0.12 + i * 0.10, 0.12 + i * 0.10, 0.42 + i * 0.30)
+        }
+        GraphicalTrue25dNeurochemicalCueKind::SleepBloom => {
+            Vec3::new(0.22 + i * 0.18, 0.22 + i * 0.18, 0.12)
+        }
+        GraphicalTrue25dNeurochemicalCueKind::LearningBiolume => Vec3::splat(0.34 + i * 0.18),
+    }
+}
+
 fn spawn_true_25d_object_scene(
     app: &mut App,
     native_assets: &GraphicalTrue25dNativeAssets,
@@ -3064,6 +3403,10 @@ pub fn build_graphical_playground_preview_app_shell(
     let inspector = run_creature_inspector_smoke(&launch.app_launch)?;
     let local_entity =
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
+    if summary.view_mode == GraphicalPlaygroundViewMode::Player {
+        let gpu = GraphicalGpuRuntimeTelemetry::cpu_reference(launch.gpu_mode, 0);
+        spawn_true_25d_neurochemical_visual_feedback(&mut app, &inspector, &gpu);
+    }
     app.insert_resource(SelectionResource {
         stable_id: inspector.selection.stable_id,
         local_entity,
@@ -3117,6 +3460,13 @@ pub fn build_graphical_playground_runtime_preview_app_shell(
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
     let (controls, live_loop, gpu_telemetry) = graphical_runtime_resources(launch)?;
     let camera_state = ca37_graphical_default_camera_state(&inspector, world_art_summary.as_ref())?;
+    if summary.view_mode == GraphicalPlaygroundViewMode::Player {
+        spawn_true_25d_neurochemical_visual_feedback(
+            &mut app,
+            &inspector,
+            &gpu_telemetry.telemetry,
+        );
+    }
     app.insert_resource(controls)
         .insert_resource(gpu_telemetry)
         .insert_non_send_resource(live_loop)
@@ -8021,6 +8371,54 @@ fn update_graphical_selection_ring(
     });
     for mut ring in &mut ring_query {
         ring.translation = Vec3::new(ring_position.x, ring_position.y, ring.translation.z);
+    }
+}
+
+fn update_true_25d_neurochemical_visual_feedback(
+    view_mode: Res<GraphicalViewModeResource>,
+    inspector: Res<CreatureInspectorResource>,
+    gpu: Res<GraphicalGpuTelemetryResource>,
+    mut feedback: Option<ResMut<GraphicalTrue25dNeurochemicalFeedbackResource>>,
+    mut cues: bevy::prelude::Query<(
+        &mut GraphicalTrue25dNeurochemicalCue,
+        &mut Transform,
+        &mut Visibility,
+    )>,
+) {
+    if view_mode.mode != GraphicalPlaygroundViewMode::Player {
+        return;
+    }
+    let visual = &inspector.snapshot.visual;
+    let base = true_25d_creature_visual_position(visual);
+    let mut active_cue_count = 0usize;
+    let mut cue_count = 0usize;
+    for (mut cue, mut transform, mut visibility) in &mut cues {
+        if cue.stable_id != visual.stable_id {
+            *visibility = Visibility::Hidden;
+            cue.active = false;
+            continue;
+        }
+        let intensity = true_25d_neurochemical_intensity(cue.kind, visual, &gpu.telemetry);
+        let active = true_25d_neurochemical_cue_active(cue.kind, intensity);
+        cue.intensity = intensity;
+        cue.active = active;
+        cue_count += 1;
+        if active {
+            active_cue_count += 1;
+        }
+        transform.translation = base + true_25d_neurochemical_offset(cue.kind);
+        transform.scale = true_25d_neurochemical_scale(cue.kind, intensity);
+        *visibility = if active {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+    if let Some(feedback) = feedback.as_deref_mut() {
+        *feedback =
+            true_25d_neurochemical_feedback_from_snapshot(&inspector.snapshot, &gpu.telemetry);
+        feedback.cue_count = cue_count.max(feedback.cue_count);
+        feedback.active_cue_count = active_cue_count;
     }
 }
 
