@@ -4,16 +4,17 @@ Created: 2026-07-01
 
 ## Current State
 
-- Original Phase 5 branch: `codex/true25d-neurochemical-visual-feedback-phase5`
+- Current branch: `codex/true25d-neurochemical-visual-feedback-phase5`
 - Classification: CA44A-ext-05, a CA44A extension slice.
 - Original Phase 5 status: committed, merged to `main`, post-merge validated,
   and pushed.
-- Active continuation addendum branch:
-  `codex/true25d-endocrine-asset-feedback-phase6`.
-- Active addendum classification: CA44A-ext-05 continuation/addendum, not a new
-  roadmap item.
-- Active addendum status: local validation and review required before
-  commit/merge.
+- Continuation addendum status: `codex/true25d-endocrine-asset-feedback-phase6`
+  was committed, merged to `main`, post-merge validated, and pushed as a
+  CA44A-ext-05 addendum.
+- Later render-bypass proof status: committed, merged to `main`,
+  post-merge validated, and pushed as a CA44A extension proof slice.
+- This handoff was refreshed after the Phase 5 branch was fast-forwarded to
+  the current `main` tip so it does not describe stale uncommitted work.
 - CA roadmap continuation remains stopped.
 - This work does not advance the CA roadmap.
 - CA44 remains blocked until independent external tester evidence exists.
@@ -84,9 +85,10 @@ Notes:
 - Forced fallback smoke selected `CpuReference` with
   `HardwareUnavailable` and made no GPU claim.
 
-## Addendum Validation Still Pending
+## Current Resume Validation
 
-For the active CA44A-ext-05 addendum branch, run before commit/merge:
+For this handoff/status correction, rerun the required validation before
+commit/merge:
 
 ```powershell
 cargo check --workspace --all-targets
@@ -134,11 +136,11 @@ appears.
 2. Run the remaining full validation listed above.
 3. Run Graphify update if available and appropriate after code changes.
 4. Review scope and invariants.
-5. Commit the branch if validation passes:
+5. Commit only the handoff/status correction if validation passes:
 
    ```powershell
-   git add crates/alife_game_app/src/bevy_shell.rs crates/alife_game_app/tests/app_shell.rs docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK.md docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK_HANDOFF.md docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_ASSET_FEEDBACK.md
-   git commit -m "Add CA44A True 2.5D endocrine asset feedback"
+   git add docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK_HANDOFF.md
+   git commit -m "Refresh CA44A True 2.5D neurochemical handoff"
    ```
 
 6. Push/merge only after validation and review pass.
