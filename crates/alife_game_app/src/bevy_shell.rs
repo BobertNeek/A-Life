@@ -659,6 +659,25 @@ pub struct GraphicalTrue25dStateCue {
     pub display_only: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dCreatureEndocrinePresentation {
+    pub stable_id: WorldEntityId,
+    pub base_scale: f32,
+    pub asset_scale_multiplier: f32,
+    pub posture_roll_degrees: f32,
+    pub posture_lift: f32,
+    pub adrenaline_proxy: f32,
+    pub cortisol_desaturation: f32,
+    pub hunger_satisfaction_biolume: f32,
+    pub learning_biolume: f32,
+    pub particle_trail_count: u8,
+    pub creature_root_transform_applied: bool,
+    pub material_shell_applied: bool,
+    pub display_only: bool,
+    pub no_action_authority: bool,
+    pub no_weight_authority: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicalTrue25dNeurochemicalCueKind {
     HungerGlow,
@@ -718,6 +737,30 @@ pub struct GraphicalTrue25dNeurochemicalFeedbackResource {
     pub sleep_pressure: f32,
     pub learning: f32,
     pub direct_mesh_presentation: bool,
+    pub display_only: bool,
+    pub no_action_authority: bool,
+    pub no_weight_authority: bool,
+    pub cpu_shadow_gate_preserved: bool,
+    pub no_active_bulk_readback: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Resource)]
+pub struct GraphicalTrue25dEndocrineAssetFeedbackResource {
+    pub schema_version: u16,
+    pub selected_stable_id: WorldEntityId,
+    pub applied_to_creature_root: bool,
+    pub root_transform_posture: bool,
+    pub material_shell_applied: bool,
+    pub pain_posture_active: bool,
+    pub adrenaline_proxy: f32,
+    pub cortisol_desaturation: f32,
+    pub hunger_satisfaction_biolume: f32,
+    pub learning_biolume: f32,
+    pub asset_scale_multiplier: f32,
+    pub posture_roll_degrees: f32,
+    pub posture_lift: f32,
+    pub particle_trail_count: u8,
+    pub derived_from_visual_snapshot: bool,
     pub display_only: bool,
     pub no_action_authority: bool,
     pub no_weight_authority: bool,
@@ -2910,6 +2953,9 @@ fn spawn_true_25d_neurochemical_visual_feedback(
     let native_assets = true_25d_native_assets(app);
     let feedback = true_25d_neurochemical_feedback_from_snapshot(inspector, gpu);
     app.insert_resource(feedback);
+    app.insert_resource(true_25d_endocrine_asset_feedback_from_snapshot(
+        inspector, gpu, 0, false,
+    ));
     let base = true_25d_creature_visual_position(&inspector.visual);
     for kind in [
         GraphicalTrue25dNeurochemicalCueKind::HungerGlow,
@@ -2961,12 +3007,97 @@ fn spawn_true_25d_neurochemical_visual_feedback(
     }
 }
 
+impl GraphicalTrue25dCreatureEndocrinePresentation {
+    fn neutral(stable_id: WorldEntityId, base_scale: f32) -> Self {
+        Self {
+            stable_id,
+            base_scale,
+            asset_scale_multiplier: 1.0,
+            posture_roll_degrees: 0.0,
+            posture_lift: 0.0,
+            adrenaline_proxy: 0.0,
+            cortisol_desaturation: 0.0,
+            hunger_satisfaction_biolume: 0.0,
+            learning_biolume: 0.0,
+            particle_trail_count: 0,
+            creature_root_transform_applied: false,
+            material_shell_applied: false,
+            display_only: true,
+            no_action_authority: true,
+            no_weight_authority: true,
+        }
+    }
+}
+
 fn true_25d_creature_visual_position(visual: &CreatureVisualSnapshot) -> Vec3 {
     Vec3::new(
         visual.position.x * TRUE_25D_SIM_TO_VIEW_SCALE,
         true_25d_height_for_kind(WorldObjectKind::Agent) + 0.10,
         visual.position.z * TRUE_25D_SIM_TO_VIEW_SCALE,
     )
+}
+
+fn true_25d_endocrine_asset_feedback_from_snapshot(
+    snapshot: &CreatureInspectorSnapshot,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+    mind_tick: u64,
+    applied_to_creature_root: bool,
+) -> GraphicalTrue25dEndocrineAssetFeedbackResource {
+    let visual = &snapshot.visual;
+    let pain = visual.cues.pain.value.clamp(0.0, 1.0);
+    let fear = visual.cues.fear.value.clamp(0.0, 1.0);
+    let hunger = visual.cues.hunger.value.clamp(0.0, 1.0);
+    let curiosity = visual.cues.curiosity.value.clamp(0.0, 1.0);
+    let stress = true_25d_neurochemical_stress(visual);
+    let learning = true_25d_learning_cue_intensity(gpu);
+    let adrenaline_proxy = pain.max(fear).max(curiosity * 0.35).clamp(0.0, 1.0);
+    let hunger_satisfaction_biolume = (1.0 - hunger).max(learning).clamp(0.0, 1.0);
+    let pain_posture_active = pain >= 0.08 || adrenaline_proxy >= 0.18;
+    let phase = if mind_tick % 2 == 0 { 1.0 } else { -1.0 };
+    let posture_roll_degrees = if pain_posture_active {
+        phase * (2.0 + adrenaline_proxy * 5.0)
+    } else {
+        0.0
+    };
+    let posture_lift = (pain * 0.055 + learning * 0.035).clamp(0.0, 0.11);
+    let asset_scale_multiplier = (1.0 + hunger_satisfaction_biolume * 0.045 + pain * 0.025
+        - stress * 0.030)
+        .clamp(0.92, 1.09);
+    let particle_trail_count = if hunger_satisfaction_biolume >= 0.70 || learning >= 0.50 {
+        3
+    } else if hunger_satisfaction_biolume >= 0.42 || learning > 0.0 {
+        2
+    } else if hunger_satisfaction_biolume >= 0.20 {
+        1
+    } else {
+        0
+    };
+
+    GraphicalTrue25dEndocrineAssetFeedbackResource {
+        schema_version: 1,
+        selected_stable_id: visual.stable_id,
+        applied_to_creature_root,
+        root_transform_posture: pain_posture_active || posture_lift > f32::EPSILON,
+        material_shell_applied: stress >= 0.22
+            || hunger_satisfaction_biolume >= 0.20
+            || learning > 0.0,
+        pain_posture_active,
+        adrenaline_proxy,
+        cortisol_desaturation: stress,
+        hunger_satisfaction_biolume,
+        learning_biolume: learning,
+        asset_scale_multiplier,
+        posture_roll_degrees,
+        posture_lift,
+        particle_trail_count,
+        derived_from_visual_snapshot: true,
+        display_only: true,
+        no_action_authority: true,
+        no_weight_authority: true,
+        cpu_shadow_gate_preserved: gpu.no_active_bulk_readback
+            && !gpu.full_action_authoritative_claim,
+        no_active_bulk_readback: gpu.no_active_bulk_readback,
+    }
 }
 
 fn true_25d_neurochemical_feedback_from_snapshot(
@@ -3218,6 +3349,16 @@ fn spawn_true_25d_object_scene(
             ))
             .id()
     };
+    if object.kind == WorldObjectKind::Agent {
+        let base_scale = if scene_assets.is_some() {
+            true_25d_gltf_scale_for_kind(object.kind)
+        } else {
+            true_25d_scale_for_kind(object.kind)
+        };
+        app.world_mut().entity_mut(entity).insert(
+            GraphicalTrue25dCreatureEndocrinePresentation::neutral(object.stable_id, base_scale),
+        );
+    }
     attach_visible_world_runtime_components(app, entity, object)?;
     if object.kind == WorldObjectKind::Agent {
         spawn_true_25d_creature_details(app, native_assets, scene_assets, object.stable_id, base);
@@ -8376,9 +8517,20 @@ fn update_graphical_selection_ring(
 
 fn update_true_25d_neurochemical_visual_feedback(
     view_mode: Res<GraphicalViewModeResource>,
+    runtime: Res<GraphicalRuntimeControlsResource>,
     inspector: Res<CreatureInspectorResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
     mut feedback: Option<ResMut<GraphicalTrue25dNeurochemicalFeedbackResource>>,
+    mut endocrine_feedback: Option<ResMut<GraphicalTrue25dEndocrineAssetFeedbackResource>>,
+    mut creature_presentations: bevy::prelude::Query<
+        (
+            &mut GraphicalTrue25dCreatureEndocrinePresentation,
+            &mut GraphicalTrue25dStateCue,
+            &mut Transform,
+            &GraphicalTrue25dAsset,
+        ),
+        Without<GraphicalTrue25dNeurochemicalCue>,
+    >,
     mut cues: bevy::prelude::Query<(
         &mut GraphicalTrue25dNeurochemicalCue,
         &mut Transform,
@@ -8390,6 +8542,55 @@ fn update_true_25d_neurochemical_visual_feedback(
     }
     let visual = &inspector.snapshot.visual;
     let base = true_25d_creature_visual_position(visual);
+    let endocrine = true_25d_endocrine_asset_feedback_from_snapshot(
+        &inspector.snapshot,
+        &gpu.telemetry,
+        runtime.panel.mind_tick,
+        true,
+    );
+    let mut selected_root_updated = false;
+    for (mut presentation, mut state_cue, mut transform, asset) in &mut creature_presentations {
+        if asset.role != "creature-idle" {
+            continue;
+        }
+        if presentation.stable_id != visual.stable_id || asset.stable_id != Some(visual.stable_id) {
+            presentation.asset_scale_multiplier = 1.0;
+            presentation.posture_roll_degrees = 0.0;
+            presentation.posture_lift = 0.0;
+            presentation.adrenaline_proxy = 0.0;
+            presentation.cortisol_desaturation = 0.0;
+            presentation.hunger_satisfaction_biolume = 0.0;
+            presentation.learning_biolume = 0.0;
+            presentation.particle_trail_count = 0;
+            presentation.creature_root_transform_applied = false;
+            presentation.material_shell_applied = false;
+            state_cue.pain_pose = false;
+            state_cue.stress_desaturated = false;
+            state_cue.learning_biolume = false;
+            transform.rotation = Quat::IDENTITY;
+            transform.scale = true_25d_normalized_scale(presentation.base_scale);
+            continue;
+        }
+        presentation.asset_scale_multiplier = endocrine.asset_scale_multiplier;
+        presentation.posture_roll_degrees = endocrine.posture_roll_degrees;
+        presentation.posture_lift = endocrine.posture_lift;
+        presentation.adrenaline_proxy = endocrine.adrenaline_proxy;
+        presentation.cortisol_desaturation = endocrine.cortisol_desaturation;
+        presentation.hunger_satisfaction_biolume = endocrine.hunger_satisfaction_biolume;
+        presentation.learning_biolume = endocrine.learning_biolume;
+        presentation.particle_trail_count = endocrine.particle_trail_count;
+        presentation.creature_root_transform_applied = true;
+        presentation.material_shell_applied = endocrine.material_shell_applied;
+        state_cue.pain_pose = endocrine.pain_posture_active;
+        state_cue.stress_desaturated = endocrine.cortisol_desaturation >= 0.22;
+        state_cue.learning_biolume =
+            endocrine.learning_biolume > 0.0 || endocrine.hunger_satisfaction_biolume >= 0.20;
+        transform.translation = base + Vec3::Y * endocrine.posture_lift;
+        transform.rotation = Quat::from_rotation_z(endocrine.posture_roll_degrees.to_radians());
+        transform.scale =
+            true_25d_normalized_scale(presentation.base_scale * endocrine.asset_scale_multiplier);
+        selected_root_updated = true;
+    }
     let mut active_cue_count = 0usize;
     let mut cue_count = 0usize;
     for (mut cue, mut transform, mut visibility) in &mut cues {
@@ -8419,6 +8620,13 @@ fn update_true_25d_neurochemical_visual_feedback(
             true_25d_neurochemical_feedback_from_snapshot(&inspector.snapshot, &gpu.telemetry);
         feedback.cue_count = cue_count.max(feedback.cue_count);
         feedback.active_cue_count = active_cue_count;
+    }
+    if let Some(endocrine_feedback) = endocrine_feedback.as_deref_mut() {
+        *endocrine_feedback = GraphicalTrue25dEndocrineAssetFeedbackResource {
+            applied_to_creature_root: selected_root_updated,
+            root_transform_posture: selected_root_updated && endocrine.root_transform_posture,
+            ..endocrine
+        };
     }
 }
 
