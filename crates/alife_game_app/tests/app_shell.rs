@@ -2489,6 +2489,12 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
         .clone();
     assert!(contract.asset_manifest.required_roles_present);
     assert!(contract.asset_manifest.gltf_files_validated);
+    assert_eq!(contract.asset_manifest.endocrine_feedback_assets, 2);
+    assert!(
+        contract
+            .asset_manifest
+            .endocrine_feedback_contract_validated
+    );
     assert!(contract.versioned_gltf_pack_validated);
     assert!(
         contract.runtime_gltf_scene_rendering || contract.runtime_native_low_poly_fallback,
@@ -2771,6 +2777,9 @@ fn true_25d_creature_asset_feedback_applies_endocrine_state_to_selected_root() {
     );
     assert_eq!(receipt.schema_version, 1);
     assert_eq!(receipt.selected_stable_id.raw(), 1);
+    assert!(receipt.gltf_endocrine_feedback_contract_validated);
+    assert_eq!(receipt.gltf_endocrine_feedback_assets, 2);
+    assert!(receipt.direct_asset_feedback_contract);
     assert!(receipt.applied_to_creature_root);
     assert!(receipt.root_transform_posture);
     assert!(receipt.material_shell_applied);

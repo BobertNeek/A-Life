@@ -153,6 +153,8 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
     assert!(summary.production_alpha_art);
     assert_eq!(summary.true_25d_asset_entries, 15);
     assert!(summary.true_25d_required_roles_present);
+    assert_eq!(summary.true_25d_endocrine_feedback_assets, 2);
+    assert!(summary.true_25d_endocrine_feedback_contract_validated);
     assert!(summary.production_true_25d_assets);
     assert!(summary.shader_discovery_complete);
     assert!(summary.tiny_placeholder_art);

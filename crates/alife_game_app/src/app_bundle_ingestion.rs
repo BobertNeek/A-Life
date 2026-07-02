@@ -77,6 +77,8 @@ pub struct AppBundleIngestionSummary {
     pub production_alpha_art: bool,
     pub true_25d_asset_entries: usize,
     pub true_25d_required_roles_present: bool,
+    pub true_25d_endocrine_feedback_assets: usize,
+    pub true_25d_endocrine_feedback_contract_validated: bool,
     pub production_true_25d_assets: bool,
     pub required_entries: usize,
     pub largest_file_bytes: u64,
@@ -103,6 +105,7 @@ impl AppBundleIngestionSummary {
             || !self.production_alpha_art
             || self.true_25d_asset_entries < TRUE_25D_ALPHA_MIN_REQUIRED_ROLES
             || !self.true_25d_required_roles_present
+            || !self.true_25d_endocrine_feedback_contract_validated
             || !self.production_true_25d_assets
             || self.required_entries == 0
             || self.largest_file_bytes > CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
@@ -119,7 +122,7 @@ impl AppBundleIngestionSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:entries={}:shaders={}/{}:art={}:true25d={}:largest={}",
+            "{}:{}:{}:entries={}:shaders={}/{}:art={}:true25d={}:endocrine={}:largest={}",
             self.schema,
             self.schema_version,
             self.bundle_id,
@@ -128,6 +131,7 @@ impl AppBundleIngestionSummary {
             self.discovered_shader_assets,
             self.alpha_art_entries,
             self.true_25d_asset_entries,
+            self.true_25d_endocrine_feedback_assets,
             self.largest_file_bytes
         )
     }
@@ -272,10 +276,14 @@ fn validate_app_bundle_manifest_inner(
             && alpha_art.pack_id == "alpha-art-v1",
         true_25d_asset_entries: true_25d.entry_count,
         true_25d_required_roles_present: true_25d.required_roles_present,
+        true_25d_endocrine_feedback_assets: true_25d.endocrine_feedback_assets,
+        true_25d_endocrine_feedback_contract_validated: true_25d
+            .endocrine_feedback_contract_validated,
         production_true_25d_assets: true_25d.required_roles_present
             && true_25d.gltf_files_validated
             && true_25d.orthographic_camera_locked
             && true_25d.shader_stack_declared
+            && true_25d.endocrine_feedback_contract_validated
             && true_25d.no_action_authority
             && true_25d.largest_file_bytes <= TRUE_25D_ALPHA_MAX_ASSET_BYTES
             && true_25d.pack_id == "true-25d-alpha-v1",

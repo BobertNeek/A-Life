@@ -13,6 +13,11 @@ Created: 2026-07-01
   CA44A-ext-05 addendum.
 - Later render-bypass proof status: committed, merged to `main`,
   post-merge validated, and pushed as a CA44A extension proof slice.
+- Current addendum status: `codex/true25d-endocrine-gltf-feedback-contract`
+  adds a GLB-internal endocrine visual-feedback metadata contract for the
+  active creature assets. It remains a CA44A-ext-05 addendum, does not advance
+  the CA roadmap, and does not unblock CA44 without independent external tester
+  evidence.
 - This handoff was refreshed after the Phase 5 branch was fast-forwarded to
   the current `main` tip so it does not describe stale uncommitted work.
 - CA roadmap continuation remains stopped.
@@ -59,6 +64,11 @@ Docs:
   - Records the CA44A-ext-05 addendum that moves display-only feedback onto the
     selected creature root through bounded posture/material-shell presentation.
   - This addendum does not advance the CA roadmap and does not unblock CA44.
+- `docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_GLTF_FEEDBACK_CONTRACT.md`
+  - Records the CA44A-ext-05 addendum that requires active creature GLB files to
+    carry matching endocrine-feedback metadata.
+  - This addendum proves a versioned display-only GLB contract, not authored
+    keyframe animation clips or action-authoritative GPU runtime.
 
 ## Checks Already Run
 
@@ -85,12 +95,13 @@ Notes:
 - Forced fallback smoke selected `CpuReference` with
   `HardwareUnavailable` and made no GPU claim.
 
-## Current Resume Validation
+## Current Branch Validation
 
-For this handoff/status correction, rerun the required validation before
-commit/merge:
+The CA44A-ext-05 GLB feedback-contract addendum has rerun the required branch
+validation:
 
 ```powershell
+cargo fmt --all -- --check
 cargo check --workspace --all-targets
 cargo test --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
@@ -102,8 +113,19 @@ cargo check --workspace --all-features --all-targets
 cargo test --workspace --all-features --all-targets
 ```
 
-Use `CARGO_BUILD_JOBS=1` for all-features tests if the known MSVC linker flake
-appears.
+Result: PASS. The all-features test suite passed without needing the
+`CARGO_BUILD_JOBS=1` linker-flake workaround in this run.
+
+Graphical evidence for this addendum:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 30 -GpuMode static-plastic-cpu-shadow-guarded
+$env:ALIFE_GPU_RUNTIME_AVAILABLE="0"; powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 10 -GpuMode static-plastic-cpu-shadow-guarded; Remove-Item Env:\ALIFE_GPU_RUNTIME_AVAILABLE -ErrorAction SilentlyContinue
+```
+
+Result: PASS. The default graphical smoke selected the local `GpuPlastic`
+path with fallback `None`; the forced fallback smoke selected `CpuReference`
+with `HardwareUnavailable` and made no GPU-performance claim.
 
 ## Boundaries And Invariants
 
@@ -133,14 +155,15 @@ appears.
    git status --short --branch
    ```
 
-2. Run the remaining full validation listed above.
+2. Review the passed branch validation listed above.
 3. Run Graphify update if available and appropriate after code changes.
 4. Review scope and invariants.
-5. Commit only the handoff/status correction if validation passes:
+5. Commit only the CA44A-ext-05 GLB feedback contract files if validation
+   passes:
 
    ```powershell
-   git add docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK_HANDOFF.md
-   git commit -m "Refresh CA44A True 2.5D neurochemical handoff"
+   git add crates/alife_game_app/src/true_25d_assets.rs crates/alife_game_app/src/app_bundle_ingestion.rs crates/alife_game_app/src/bevy_shell.rs crates/alife_game_app/src/tests.rs crates/alife_game_app/tests/app_shell.rs crates/alife_game_app/assets/true_25d_alpha_v1/creature_idle.glb crates/alife_game_app/assets/true_25d_alpha_v1/creature_hurt.glb crates/alife_game_app/assets/true_25d_alpha_v1/true_25d_manifest.json docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK.md docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK_HANDOFF.md docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_GLTF_FEEDBACK_CONTRACT.md
+   git commit -m "Add CA44A True 2.5D endocrine GLB feedback contract"
    ```
 
 6. Push/merge only after validation and review pass.
