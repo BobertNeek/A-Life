@@ -72,6 +72,11 @@ Roadmap evidence status:
   That addendum validates endocrine visual-feedback metadata inside the active
   committed creature GLB files and records the same no-action/no-weight
   authority boundary. It does not add authored keyframe animation clips.
+- This CA44A-ext-05 slice also has an animation/particle addendum at
+  `docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_ANIMATION_PARTICLE_FEEDBACK.md`.
+  That addendum wires the validated endocrine-feedback contract into a bounded
+  selected-creature animation-speed layer and three display-only bioluminescent
+  particle lanes.
 - This phase does not add new Blender-authored assets. The fixed Blender path
   remains available for future mesh calibration, but was not required for this
   display-feedback slice.
@@ -79,6 +84,10 @@ Roadmap evidence status:
   H_shadow applications.
 - These cues are presentation mirrors only; they do not alter drives,
   arbitration, ExperiencePatch sealing, or GPU neural runtime behavior.
+- The active True 2.5D goal still has a separate 60Hz authoritative headless
+  simulation-cadence gap. Current evidence preserves CA13's 20Hz authoritative
+  simulation cadence and records `claim_60hz_sim=false`; changing that cadence
+  requires a separate reviewed scheduler plan.
 
 ## Invariant Checks
 

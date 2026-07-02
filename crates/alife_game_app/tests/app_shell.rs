@@ -2809,7 +2809,17 @@ fn true_25d_creature_asset_feedback_applies_endocrine_state_to_selected_root() {
     assert!((0.0..=1.0).contains(&receipt.hunger_satisfaction_biolume));
     assert!((0.0..=1.0).contains(&receipt.learning_biolume));
     assert!((0.92..=1.09).contains(&receipt.asset_scale_multiplier));
+    assert!((1.0..=2.75).contains(&receipt.animation_speed_multiplier));
+    assert!(receipt.animation_speed_layer_applied);
+    assert!(receipt.animation_phase_index < 4);
     assert!(receipt.particle_trail_count <= 3);
+    assert!(receipt.biolume_particle_array_initialized);
+    assert!(receipt.emissive_particle_array_initialized);
+    assert_eq!(receipt.biolume_particle_lanes_max, 3);
+    assert_eq!(
+        receipt.biolume_particle_lanes_visible,
+        receipt.particle_trail_count
+    );
     assert!(
         receipt.pain_posture_active || receipt.adrenaline_proxy >= receipt.pain_drive_companion
     );
@@ -2838,6 +2848,18 @@ fn true_25d_creature_asset_feedback_applies_endocrine_state_to_selected_root() {
         selected.0.particle_trail_count,
         receipt.particle_trail_count
     );
+    assert_eq!(
+        selected.0.animation_speed_multiplier,
+        receipt.animation_speed_multiplier
+    );
+    assert_eq!(
+        selected.0.animation_phase_index,
+        receipt.animation_phase_index
+    );
+    assert_eq!(
+        selected.0.biolume_particle_array_initialized,
+        receipt.biolume_particle_array_initialized
+    );
     assert_eq!(selected.1.display_only, receipt.display_only);
     assert_eq!(selected.1.pain_pose, receipt.pain_posture_active);
     assert_eq!(
@@ -2859,6 +2881,36 @@ fn true_25d_creature_asset_feedback_applies_endocrine_state_to_selected_root() {
             <= 0.0001,
         "selected creature root scale should be the normalized endocrine multiplier"
     );
+
+    let mut particle_query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalTrue25dEndocrineParticleLane,
+        &bevy::prelude::Transform,
+        &bevy::prelude::Visibility,
+        &alife_game_app::bevy_shell::GraphicalTrue25dAsset,
+    )>();
+    let particles = particle_query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(particles.len(), 3);
+    let visible_particles = particles
+        .iter()
+        .filter(|(lane, _, visibility, asset)| {
+            lane.stable_id.raw() == 1
+                && lane.active
+                && **visibility == bevy::prelude::Visibility::Visible
+                && asset.role == "endocrine-biolume-particle"
+        })
+        .count();
+    assert_eq!(visible_particles, usize::from(receipt.particle_trail_count));
+    assert!(particles.iter().all(|(lane, transform, _, asset)| {
+        lane.initialized_from_endocrine_tensor
+            && lane.display_only
+            && lane.no_action_authority
+            && lane.no_weight_authority
+            && lane.lane_index < 3
+            && lane.animation_phase_index == receipt.animation_phase_index
+            && transform.scale.x > 0.0
+            && asset.display_only
+            && asset.stable_id == Some(WorldEntityId(1))
+    }));
 }
 
 #[cfg(feature = "bevy-app")]
