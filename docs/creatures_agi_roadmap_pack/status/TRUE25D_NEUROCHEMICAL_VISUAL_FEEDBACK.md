@@ -62,6 +62,11 @@ Roadmap evidence status:
 
 ## Known Limitations
 
+- This CA44A-ext-05 slice has an addendum at
+  `docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_ASSET_FEEDBACK.md`.
+  The addendum adds selected-creature root posture/asset-presentation feedback
+  while preserving the same display-only boundaries and without advancing the
+  CA roadmap.
 - This phase does not add new Blender-authored assets. The fixed Blender path
   remains available for future mesh calibration, but was not required for this
   display-feedback slice.

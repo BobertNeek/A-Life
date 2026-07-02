@@ -2660,6 +2660,87 @@ fn true_25d_player_view_has_display_only_neurochemical_world_cues() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
+fn true_25d_creature_asset_feedback_applies_endocrine_state_to_selected_root() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_runtime_preview_app_shell(&launch)
+            .unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let receipt = *app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalTrue25dEndocrineAssetFeedbackResource>(
+    );
+    assert_eq!(receipt.schema_version, 1);
+    assert_eq!(receipt.selected_stable_id.raw(), 1);
+    assert!(receipt.applied_to_creature_root);
+    assert!(receipt.root_transform_posture);
+    assert!(receipt.material_shell_applied);
+    assert!(receipt.derived_from_visual_snapshot);
+    assert!(receipt.display_only);
+    assert!(receipt.no_action_authority);
+    assert!(receipt.no_weight_authority);
+    assert!(receipt.cpu_shadow_gate_preserved);
+    assert!(receipt.no_active_bulk_readback);
+    assert!((0.0..=1.0).contains(&receipt.adrenaline_proxy));
+    assert!((0.0..=1.0).contains(&receipt.cortisol_desaturation));
+    assert!((0.0..=1.0).contains(&receipt.hunger_satisfaction_biolume));
+    assert!((0.0..=1.0).contains(&receipt.learning_biolume));
+    assert!((0.92..=1.09).contains(&receipt.asset_scale_multiplier));
+    assert!(receipt.particle_trail_count <= 3);
+
+    let mut root_query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalTrue25dCreatureEndocrinePresentation,
+        &alife_game_app::bevy_shell::GraphicalTrue25dStateCue,
+        &bevy::prelude::Transform,
+        &alife_game_app::bevy_shell::GraphicalTrue25dAsset,
+    )>();
+    let selected = root_query
+        .iter(app.world())
+        .find(|(presentation, _, _, asset)| {
+            presentation.stable_id.raw() == 1
+                && asset.stable_id == Some(WorldEntityId(1))
+                && asset.role == "creature-idle"
+        })
+        .expect("selected creature root should carry endocrine presentation state");
+
+    assert!(selected.0.creature_root_transform_applied);
+    assert!(selected.0.material_shell_applied);
+    assert_eq!(selected.0.display_only, receipt.display_only);
+    assert_eq!(selected.0.no_action_authority, receipt.no_action_authority);
+    assert_eq!(selected.0.no_weight_authority, receipt.no_weight_authority);
+    assert_eq!(
+        selected.0.particle_trail_count,
+        receipt.particle_trail_count
+    );
+    assert_eq!(selected.1.display_only, receipt.display_only);
+    assert_eq!(selected.1.pain_pose, receipt.pain_posture_active);
+    assert_eq!(
+        selected.1.stress_desaturated,
+        receipt.cortisol_desaturation >= 0.22
+    );
+    assert_eq!(
+        selected.1.learning_biolume,
+        receipt.learning_biolume > 0.0 || receipt.hunger_satisfaction_biolume >= 0.20
+    );
+    assert!(
+        selected.2.translation.y > 0.34,
+        "selected creature root should lift when endocrine posture is active"
+    );
+    assert!(
+        (selected.2.scale.x
+            - (selected.0.base_scale * selected.0.asset_scale_multiplier).clamp(0.02, 1.0))
+        .abs()
+            <= 0.0001,
+        "selected creature root scale should be the normalized endocrine multiplier"
+    );
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
 fn true_25d_stylization_shader_embeds_toon_pixel_and_sobel_pass() {
     assert!(alife_game_app::bevy_shell::true_25d_stylization_shader_source_is_complete());
     let source = alife_game_app::bevy_shell::TRUE_25D_STYLIZATION_SHADER_SOURCE;

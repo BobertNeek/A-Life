@@ -4,12 +4,16 @@ Created: 2026-07-01
 
 ## Current State
 
-- Current branch: `codex/true25d-neurochemical-visual-feedback-phase5`
+- Original Phase 5 branch: `codex/true25d-neurochemical-visual-feedback-phase5`
 - Classification: CA44A-ext-05, a CA44A extension slice.
-- Base `HEAD`: `118318f`
-- `origin/main`: `118318f`
-- Working tree: dirty, uncommitted Phase 5 changes are present.
-- Branch has not been committed, pushed, merged, or post-merge validated.
+- Original Phase 5 status: committed, merged to `main`, post-merge validated,
+  and pushed.
+- Active continuation addendum branch:
+  `codex/true25d-endocrine-asset-feedback-phase6`.
+- Active addendum classification: CA44A-ext-05 continuation/addendum, not a new
+  roadmap item.
+- Active addendum status: local validation and review required before
+  commit/merge.
 - CA roadmap continuation remains stopped.
 - This work does not advance the CA roadmap.
 - CA44 remains blocked until independent external tester evidence exists.
@@ -50,6 +54,10 @@ Docs:
   - Records objective, implementation summary, boundaries, evidence, known
     limitations, invariants, and CA44A extension classification for this
     Phase 5 slice.
+- `docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_ASSET_FEEDBACK.md`
+  - Records the CA44A-ext-05 addendum that moves display-only feedback onto the
+    selected creature root through bounded posture/material-shell presentation.
+  - This addendum does not advance the CA roadmap and does not unblock CA44.
 
 ## Checks Already Run
 
@@ -76,11 +84,9 @@ Notes:
 - Forced fallback smoke selected `CpuReference` with
   `HardwareUnavailable` and made no GPU claim.
 
-## Full Validation Still Pending
+## Addendum Validation Still Pending
 
-Full validation was interrupted after `cargo fmt --all -- --check` passed.
-
-Still run before commit/merge:
+For the active CA44A-ext-05 addendum branch, run before commit/merge:
 
 ```powershell
 cargo check --workspace --all-targets
@@ -131,8 +137,8 @@ appears.
 5. Commit the branch if validation passes:
 
    ```powershell
-   git add crates/alife_game_app/src/bevy_shell.rs crates/alife_game_app/tests/app_shell.rs docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK.md docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK_HANDOFF.md
-   git commit -m "Add CA44A True 2.5D neurochemical visual feedback"
+   git add crates/alife_game_app/src/bevy_shell.rs crates/alife_game_app/tests/app_shell.rs docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK.md docs/creatures_agi_roadmap_pack/status/TRUE25D_NEUROCHEMICAL_VISUAL_FEEDBACK_HANDOFF.md docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_ASSET_FEEDBACK.md
+   git commit -m "Add CA44A True 2.5D endocrine asset feedback"
    ```
 
 6. Push/merge only after validation and review pass.
