@@ -37,6 +37,14 @@ This slice does not change gameplay scheduling semantics and does not claim a
 new 60Hz simulation tick. Changing the authoritative fixed tick cadence would
 require a separate reviewed scheduler plan.
 
+CA44A extension addendum
+`docs/creatures_agi_roadmap_pack/status/TRUE25D_RENDER_BYPASS_PROOF.md`
+tightens the presentation-side proof fields. It records the 60Hz presentation
+headless cadence separately from the 20Hz authoritative simulation cadence and
+adds explicit zero offscreen presentation draw/animation budgets. It still does
+not advance the CA roadmap, does not change CA13 scheduler semantics, and does
+not claim GPU profiler counters.
+
 ## Invariant Checks
 
 - `alife_core` unchanged.
@@ -97,9 +105,10 @@ Results:
 
 ## Known Limitations
 
-- This is a visibility/render-pass bypass receipt, not a GPU draw-call profiler.
-  It proves offscreen entities are hidden before rendering; it does not capture
-  GPU draw-call counters.
+- This is a visibility/render-pass/draw-budget receipt, not a GPU draw-call
+  profiler. It proves offscreen True 2.5D presentation entities are marked
+  hidden before rendering and carry an explicit zero presentation draw budget;
+  it does not capture hardware GPU draw-call counters.
 - Fog of war remains presentation-side and not an authoritative sensory
   visibility system.
 - The fixed headless simulation tick remains `20Hz`.

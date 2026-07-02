@@ -2769,6 +2769,12 @@ fn true_25d_viewport_render_bypass_hides_offscreen_regions_without_sim_authority
             .resource::<alife_game_app::bevy_shell::GraphicalTrue25dRenderBypassSummaryResource>();
     assert_eq!(bypass_summary.render_frame_hz, 60);
     assert_eq!(bypass_summary.fixed_headless_tick_hz, 20);
+    assert_eq!(bypass_summary.presentation_headless_tick_hz, 60);
+    assert_eq!(bypass_summary.authoritative_sim_tick_hz, 20);
+    assert_eq!(bypass_summary.offscreen_presentation_draw_call_budget, 0);
+    assert_eq!(bypass_summary.offscreen_animation_update_budget, 0);
+    assert!(bypass_summary.offscreen_render_extraction_bypassed);
+    assert!(bypass_summary.authoritative_scheduler_unchanged);
     assert!(bypass_summary.renderable_true_25d_entities > 0);
     assert!(bypass_summary.visible_true_25d_entities > 0);
     assert!(
@@ -2803,11 +2809,17 @@ fn true_25d_viewport_render_bypass_hides_offscreen_regions_without_sim_authority
     assert!(receipts.iter().all(|(receipt, visibility, _)| {
         if receipt.render_pass_bypassed {
             **visibility == bevy::prelude::Visibility::Hidden
+                && receipt.render_extraction_bypassed
                 && receipt.zero_draw_call_contract
+                && receipt.presentation_draw_call_budget == 0
+                && receipt.offscreen_animation_update_budget == 0
                 && receipt.headless_update_continues
         } else {
             **visibility == bevy::prelude::Visibility::Visible
+                && !receipt.render_extraction_bypassed
                 && !receipt.zero_draw_call_contract
+                && receipt.presentation_draw_call_budget > 0
+                && receipt.offscreen_animation_update_budget > 0
                 && receipt.headless_update_continues
         }
     }));

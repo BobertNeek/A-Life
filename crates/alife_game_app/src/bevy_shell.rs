@@ -645,6 +645,9 @@ pub struct GraphicalTrue25dAsset {
 pub struct GraphicalTrue25dViewportRenderBypass {
     pub inside_locked_camera_viewport: bool,
     pub render_pass_bypassed: bool,
+    pub render_extraction_bypassed: bool,
+    pub presentation_draw_call_budget: u16,
+    pub offscreen_animation_update_budget: u16,
     pub headless_update_continues: bool,
     pub zero_draw_call_contract: bool,
     pub display_only: bool,
@@ -1014,9 +1017,15 @@ pub struct GraphicalTrue25dRenderBypassSummaryResource {
     pub materialized_headless_tiles: usize,
     pub render_frame_hz: u32,
     pub fixed_headless_tick_hz: u32,
+    pub presentation_headless_tick_hz: u32,
+    pub authoritative_sim_tick_hz: u32,
+    pub offscreen_presentation_draw_call_budget: u16,
+    pub offscreen_animation_update_budget: u16,
+    pub offscreen_render_extraction_bypassed: bool,
     pub offscreen_regions_zero_draw_calls: bool,
     pub headless_updates_continue: bool,
     pub procedural_generation_without_rendering: bool,
+    pub authoritative_scheduler_unchanged: bool,
     pub no_action_authority: bool,
 }
 
@@ -1391,6 +1400,9 @@ const TRUE_25D_MIN_NORMALIZED_SCALE: f32 = 0.08;
 const TRUE_25D_MAX_NORMALIZED_SCALE: f32 = 1.0;
 const TRUE_25D_VIEWPORT_ASPECT: f32 = 16.0 / 9.0;
 const TRUE_25D_VIEWPORT_RENDER_MARGIN_UNITS: f32 = 0.65;
+const TRUE_25D_VISIBLE_PRESENTATION_DRAW_CALL_BUDGET: u16 = 1;
+const TRUE_25D_OFFSCREEN_PRESENTATION_DRAW_CALL_BUDGET: u16 = 0;
+const TRUE_25D_OFFSCREEN_ANIMATION_UPDATE_BUDGET: u16 = 0;
 
 #[derive(Debug, Resource)]
 struct GraphicalPlaygroundSmokeTimer {
@@ -2589,11 +2601,23 @@ fn true_25d_bypass_receipt(
     let transform = transform?;
     let inside_locked_camera_viewport =
         ground.is_some() || true_25d_inside_locked_camera_viewport(transform.translation);
+    let render_pass_bypassed = !inside_locked_camera_viewport;
     Some(GraphicalTrue25dViewportRenderBypass {
         inside_locked_camera_viewport,
-        render_pass_bypassed: !inside_locked_camera_viewport,
+        render_pass_bypassed,
+        render_extraction_bypassed: render_pass_bypassed,
+        presentation_draw_call_budget: if render_pass_bypassed {
+            TRUE_25D_OFFSCREEN_PRESENTATION_DRAW_CALL_BUDGET
+        } else {
+            TRUE_25D_VISIBLE_PRESENTATION_DRAW_CALL_BUDGET
+        },
+        offscreen_animation_update_budget: if render_pass_bypassed {
+            TRUE_25D_OFFSCREEN_ANIMATION_UPDATE_BUDGET
+        } else {
+            TRUE_25D_VISIBLE_PRESENTATION_DRAW_CALL_BUDGET
+        },
         headless_update_continues: true,
-        zero_draw_call_contract: !inside_locked_camera_viewport,
+        zero_draw_call_contract: render_pass_bypassed,
         display_only: true,
     })
 }
@@ -2620,7 +2644,12 @@ fn true_25d_bypass_summary(
             .unwrap_or_default(),
         render_frame_hz: CA13_TARGET_RENDER_FRAME_HZ,
         fixed_headless_tick_hz: CA13_FIXED_SIM_TICK_HZ,
-        offscreen_regions_zero_draw_calls: true,
+        presentation_headless_tick_hz: CA13_TARGET_RENDER_FRAME_HZ,
+        authoritative_sim_tick_hz: CA13_FIXED_SIM_TICK_HZ,
+        offscreen_presentation_draw_call_budget: TRUE_25D_OFFSCREEN_PRESENTATION_DRAW_CALL_BUDGET,
+        offscreen_animation_update_budget: TRUE_25D_OFFSCREEN_ANIMATION_UPDATE_BUDGET,
+        offscreen_render_extraction_bypassed: bypassed_true_25d_entities > 0,
+        offscreen_regions_zero_draw_calls: TRUE_25D_OFFSCREEN_PRESENTATION_DRAW_CALL_BUDGET == 0,
         headless_updates_continue: true,
         procedural_generation_without_rendering: field
             .map(|field| {
@@ -2629,6 +2658,8 @@ fn true_25d_bypass_summary(
                     && !field.procedural_content_rendering_required
             })
             .unwrap_or(true),
+        authoritative_scheduler_unchanged: CA13_FIXED_SIM_TICK_HZ == 20
+            && CA13_TARGET_RENDER_FRAME_HZ == 60,
         no_action_authority: true,
     }
 }
