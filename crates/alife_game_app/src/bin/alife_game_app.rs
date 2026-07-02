@@ -27,8 +27,9 @@ use alife_game_app::{
     run_runtime_prereq_diagnostics, run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke,
     run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
     run_tester_feedback_capture_smoke, run_topological_concept_overlay_smoke,
-    run_world_art_style_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_bundle_manifest, validate_app_shell_config, write_behavior_comparison_lab_report,
+    run_true25d_headless_chunk_continuity_smoke, run_world_art_style_smoke,
+    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_bundle_manifest,
+    validate_app_shell_config, write_behavior_comparison_lab_report,
     write_ca36_soak_isolation_report, AppShellLaunchConfig, BatchedGpuRuntimeOptions,
     EnvironmentManifest, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
     GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, RuntimePrereqDiagnosticsOptions,
@@ -340,6 +341,40 @@ fn run() -> Result<String, String> {
                 summary.can_emit_actions,
                 summary.can_rewrite_weights,
                 summary.world_generation_claim,
+                summary.signature_line()
+            ))
+        }
+        [command, fixture_root] if command == "true25d-headless-continuity-smoke" => {
+            let launch = AppShellLaunchConfig::from_p34_fixture_root(fixture_root);
+            let summary = run_true25d_headless_chunk_continuity_smoke(&launch)
+                .map_err(|err| err.to_string())?;
+            Ok(format!(
+                "CA44A True2.5D headless continuity schema={} version={} seed={} stable={} steps={} unique_chunks={} max_active={} no_render={} zero_draw_budget={} ticks={}/{} mind_delta={} world_delta={} sealed={} packed={} first_invalid={:?} action={:?} target={:?} auth_hz={} presentation_hz={} goal_hz={} claim_60hz_sim={} action_authority={} weight_authority={} cpu_shadow={} signature={}",
+                summary.schema,
+                summary.schema_version,
+                summary.seed,
+                summary.stable_id.raw(),
+                summary.route_steps,
+                summary.total_unique_materialized_chunks,
+                summary.max_active_chunk_count,
+                summary.generated_without_rendering,
+                summary.offscreen_presentation_draw_call_budget,
+                summary.completed_ticks,
+                summary.requested_ticks,
+                summary.mind_ticks_advanced,
+                summary.world_ticks_advanced,
+                summary.sealed_patches,
+                summary.packed_records,
+                summary.first_invalid_tick,
+                summary.first_invalid_action_kind,
+                summary.first_invalid_target,
+                summary.authoritative_scheduler_hz,
+                summary.presentation_frame_hz,
+                summary.requested_goal_headless_hz,
+                summary.sixty_hz_sim_claim,
+                summary.can_emit_actions,
+                summary.can_rewrite_weights,
+                summary.cpu_shadow_parity_preserved,
                 summary.signature_line()
             ))
         }
