@@ -681,6 +681,31 @@ pub struct GraphicalTrue25dCreatureEndocrinePresentation {
     pub no_weight_authority: bool,
 }
 
+const TRUE_25D_ENDOCRINE_TENSOR_SCHEMA_VERSION: u16 = 1;
+const TRUE_25D_ENDOCRINE_ADRENALINE_CHANNEL: usize = 0;
+const TRUE_25D_ENDOCRINE_CORTISOL_CHANNEL: usize = 1;
+const TRUE_25D_ENDOCRINE_DOPAMINE_CHANNEL: usize = 2;
+const TRUE_25D_ENDOCRINE_SLEEP_PRESSURE_CHANNEL: usize = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GraphicalTrue25dFlatEndocrineTensor {
+    pub schema_version: u16,
+    pub channel_count: usize,
+    pub values: [f32; alife_core::EndocrineSnapshot::CHANNEL_COUNT],
+    pub adrenaline_channel_index: usize,
+    pub cortisol_channel_index: usize,
+    pub dopamine_channel_index: usize,
+    pub sleep_pressure_channel_index: usize,
+    pub pain_drive_companion: f32,
+    pub low_hunger_drive_companion: f32,
+    pub learning_companion: f32,
+    pub source: &'static str,
+    pub values_bounded: bool,
+    pub display_only: bool,
+    pub no_action_authority: bool,
+    pub no_weight_authority: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicalTrue25dNeurochemicalCueKind {
     HungerGlow,
@@ -754,9 +779,16 @@ pub struct GraphicalTrue25dEndocrineAssetFeedbackResource {
     pub applied_to_creature_root: bool,
     pub root_transform_posture: bool,
     pub material_shell_applied: bool,
+    pub flat_endocrine_tensor_channels: usize,
+    pub flat_endocrine_tensor_bounded: bool,
+    pub derived_from_flat_endocrine_tensor: bool,
+    pub endocrine_tensor_source: &'static str,
     pub pain_posture_active: bool,
     pub adrenaline_proxy: f32,
     pub cortisol_desaturation: f32,
+    pub dopamine_biolume: f32,
+    pub pain_drive_companion: f32,
+    pub low_hunger_drive_companion: f32,
     pub hunger_satisfaction_biolume: f32,
     pub learning_biolume: f32,
     pub asset_scale_multiplier: f32,
@@ -767,6 +799,8 @@ pub struct GraphicalTrue25dEndocrineAssetFeedbackResource {
     pub display_only: bool,
     pub no_action_authority: bool,
     pub no_weight_authority: bool,
+    pub tensor_action_authority: bool,
+    pub tensor_weight_authority: bool,
     pub cpu_shadow_gate_preserved: bool,
     pub no_active_bulk_readback: bool,
 }
@@ -3173,14 +3207,17 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
     applied_to_creature_root: bool,
 ) -> GraphicalTrue25dEndocrineAssetFeedbackResource {
     let visual = &snapshot.visual;
-    let pain = visual.cues.pain.value.clamp(0.0, 1.0);
-    let fear = visual.cues.fear.value.clamp(0.0, 1.0);
-    let hunger = visual.cues.hunger.value.clamp(0.0, 1.0);
-    let curiosity = visual.cues.curiosity.value.clamp(0.0, 1.0);
-    let stress = true_25d_neurochemical_stress(visual);
-    let learning = true_25d_learning_cue_intensity(gpu);
-    let adrenaline_proxy = pain.max(fear).max(curiosity * 0.35).clamp(0.0, 1.0);
-    let hunger_satisfaction_biolume = (1.0 - hunger).max(learning).clamp(0.0, 1.0);
+    let tensor = true_25d_flat_endocrine_tensor_from_snapshot(visual, gpu);
+    let pain = tensor.pain_drive_companion;
+    let adrenaline = tensor.values[tensor.adrenaline_channel_index];
+    let cortisol = tensor.values[tensor.cortisol_channel_index];
+    let dopamine = tensor.values[tensor.dopamine_channel_index];
+    let learning = tensor.learning_companion;
+    let adrenaline_proxy = adrenaline.max(pain).clamp(0.0, 1.0);
+    let dopamine_biolume = dopamine
+        .max(tensor.low_hunger_drive_companion)
+        .clamp(0.0, 1.0);
+    let hunger_satisfaction_biolume = dopamine_biolume.max(learning).clamp(0.0, 1.0);
     let pain_posture_active = pain >= 0.08 || adrenaline_proxy >= 0.18;
     let phase = if mind_tick % 2 == 0 { 1.0 } else { -1.0 };
     let posture_roll_degrees = if pain_posture_active {
@@ -3190,7 +3227,7 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
     };
     let posture_lift = (pain * 0.055 + learning * 0.035).clamp(0.0, 0.11);
     let asset_scale_multiplier = (1.0 + hunger_satisfaction_biolume * 0.045 + pain * 0.025
-        - stress * 0.030)
+        - cortisol * 0.030)
         .clamp(0.92, 1.09);
     let particle_trail_count = if hunger_satisfaction_biolume >= 0.70 || learning >= 0.50 {
         3
@@ -3207,12 +3244,19 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
         selected_stable_id: visual.stable_id,
         applied_to_creature_root,
         root_transform_posture: pain_posture_active || posture_lift > f32::EPSILON,
-        material_shell_applied: stress >= 0.22
+        material_shell_applied: cortisol >= 0.22
             || hunger_satisfaction_biolume >= 0.20
             || learning > 0.0,
+        flat_endocrine_tensor_channels: tensor.channel_count,
+        flat_endocrine_tensor_bounded: tensor.values_bounded,
+        derived_from_flat_endocrine_tensor: true,
+        endocrine_tensor_source: tensor.source,
         pain_posture_active,
         adrenaline_proxy,
-        cortisol_desaturation: stress,
+        cortisol_desaturation: cortisol,
+        dopamine_biolume,
+        pain_drive_companion: tensor.pain_drive_companion,
+        low_hunger_drive_companion: tensor.low_hunger_drive_companion,
         hunger_satisfaction_biolume,
         learning_biolume: learning,
         asset_scale_multiplier,
@@ -3223,9 +3267,38 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
         display_only: true,
         no_action_authority: true,
         no_weight_authority: true,
+        tensor_action_authority: false,
+        tensor_weight_authority: false,
         cpu_shadow_gate_preserved: gpu.no_active_bulk_readback
             && !gpu.full_action_authoritative_claim,
         no_active_bulk_readback: gpu.no_active_bulk_readback,
+    }
+}
+
+fn true_25d_flat_endocrine_tensor_from_snapshot(
+    visual: &CreatureVisualSnapshot,
+    gpu: &GraphicalGpuRuntimeTelemetry,
+) -> GraphicalTrue25dFlatEndocrineTensor {
+    let values = visual
+        .endocrine
+        .to_array()
+        .map(|value| value.clamp(0.0, 1.0));
+    GraphicalTrue25dFlatEndocrineTensor {
+        schema_version: TRUE_25D_ENDOCRINE_TENSOR_SCHEMA_VERSION,
+        channel_count: alife_core::EndocrineSnapshot::CHANNEL_COUNT,
+        values,
+        adrenaline_channel_index: TRUE_25D_ENDOCRINE_ADRENALINE_CHANNEL,
+        cortisol_channel_index: TRUE_25D_ENDOCRINE_CORTISOL_CHANNEL,
+        dopamine_channel_index: TRUE_25D_ENDOCRINE_DOPAMINE_CHANNEL,
+        sleep_pressure_channel_index: TRUE_25D_ENDOCRINE_SLEEP_PRESSURE_CHANNEL,
+        pain_drive_companion: visual.cues.pain.value.clamp(0.0, 1.0),
+        low_hunger_drive_companion: (1.0 - visual.cues.hunger.value).clamp(0.0, 1.0),
+        learning_companion: true_25d_learning_cue_intensity(gpu),
+        source: "alife_core.EndocrineSnapshot::to_array plus bounded drive companions",
+        values_bounded: values.iter().all(|value| (0.0..=1.0).contains(value)),
+        display_only: true,
+        no_action_authority: true,
+        no_weight_authority: true,
     }
 }
 

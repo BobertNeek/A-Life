@@ -2,6 +2,7 @@
 
 use crate::prelude::*;
 use crate::*;
+use alife_core::EndocrineSnapshot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CreatureAnimationState {
@@ -101,6 +102,7 @@ pub struct CreatureVisualSnapshot {
     pub accent_rgba: [f32; 4],
     pub intent_rgba: [f32; 4],
     pub cues: CreatureVisualCueSet,
+    pub endocrine: EndocrineSnapshot,
     pub debug_summary: String,
 }
 
@@ -128,6 +130,7 @@ impl CreatureVisualSnapshot {
             NormalizedScalar::new(cue.value)?;
             validate_rgba(cue.rgba)?;
         }
+        self.endocrine.validate_contract()?;
         Ok(())
     }
 
@@ -234,6 +237,7 @@ pub fn creature_visual_snapshot_from_parts(
         accent_rgba,
         intent_rgba,
         cues,
+        endocrine: homeostasis.hormones,
         debug_summary: format!(
             "organism={} animation={} expression={} action={:?} sleep={:?}",
             organism_id.raw(),

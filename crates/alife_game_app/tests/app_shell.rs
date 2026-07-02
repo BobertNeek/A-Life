@@ -2774,18 +2774,36 @@ fn true_25d_creature_asset_feedback_applies_endocrine_state_to_selected_root() {
     assert!(receipt.applied_to_creature_root);
     assert!(receipt.root_transform_posture);
     assert!(receipt.material_shell_applied);
+    assert_eq!(
+        receipt.flat_endocrine_tensor_channels,
+        alife_core::EndocrineSnapshot::CHANNEL_COUNT
+    );
+    assert!(receipt.flat_endocrine_tensor_bounded);
+    assert!(receipt.derived_from_flat_endocrine_tensor);
+    assert_eq!(
+        receipt.endocrine_tensor_source,
+        "alife_core.EndocrineSnapshot::to_array plus bounded drive companions"
+    );
     assert!(receipt.derived_from_visual_snapshot);
     assert!(receipt.display_only);
     assert!(receipt.no_action_authority);
     assert!(receipt.no_weight_authority);
+    assert!(!receipt.tensor_action_authority);
+    assert!(!receipt.tensor_weight_authority);
     assert!(receipt.cpu_shadow_gate_preserved);
     assert!(receipt.no_active_bulk_readback);
     assert!((0.0..=1.0).contains(&receipt.adrenaline_proxy));
     assert!((0.0..=1.0).contains(&receipt.cortisol_desaturation));
+    assert!((0.0..=1.0).contains(&receipt.dopamine_biolume));
+    assert!((0.0..=1.0).contains(&receipt.pain_drive_companion));
+    assert!((0.0..=1.0).contains(&receipt.low_hunger_drive_companion));
     assert!((0.0..=1.0).contains(&receipt.hunger_satisfaction_biolume));
     assert!((0.0..=1.0).contains(&receipt.learning_biolume));
     assert!((0.92..=1.09).contains(&receipt.asset_scale_multiplier));
     assert!(receipt.particle_trail_count <= 3);
+    assert!(
+        receipt.pain_posture_active || receipt.adrenaline_proxy >= receipt.pain_drive_companion
+    );
 
     let mut root_query = app.world_mut().query::<(
         &alife_game_app::bevy_shell::GraphicalTrue25dCreatureEndocrinePresentation,
