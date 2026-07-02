@@ -791,6 +791,93 @@ pub struct GraphicalTrue25dPresentationResource {
     pub no_action_authority: bool,
 }
 
+pub const TRUE_25D_LAUNCH_BASELINE_SCHEMA: &str = "alife.ca44a.true25d_launch_baseline.v1";
+pub const TRUE_25D_LAUNCH_BASELINE_SCHEMA_VERSION: u16 = 1;
+pub const TRUE_25D_LAUNCH_BASELINE_MAX_MS: f64 = 50.0;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphicalTrue25dLaunchBaselineSummary {
+    pub schema: &'static str,
+    pub schema_version: u16,
+    pub scope: &'static str,
+    pub baseline_elapsed_ms: f64,
+    pub baseline_under_50ms: bool,
+    pub bevy_window_created: bool,
+    pub cold_process_launch_measured: bool,
+    pub cold_process_under_50ms_claim: bool,
+    pub fixed_orthographic_camera: bool,
+    pub camera_fixed_vertical_height: f32,
+    pub camera_position: [f32; 3],
+    pub camera_points_at_origin: bool,
+    pub camera_non_rotating_locked: bool,
+    pub single_static_primitive_ground_plane: bool,
+    pub ground_tile_path: &'static str,
+    pub ground_tile_width_px: u32,
+    pub ground_tile_height_px: u32,
+    pub texture_address_mode_repeat: bool,
+    pub preprocessed_diffuse_tile: bool,
+    pub synchronous_runtime_noise_generation: bool,
+    pub synchronous_runtime_texture_generation: bool,
+    pub zero_sync_runtime_noise_or_texture_generation: bool,
+    pub procedural_chunk_data_ledger_only: bool,
+    pub stylization_shader_embedded: bool,
+    pub no_action_authority: bool,
+    pub no_weight_authority: bool,
+    pub cpu_fallback_preserved: bool,
+    pub cpu_shadow_parity_preserved: bool,
+    pub full_action_authoritative_claim: bool,
+}
+
+impl GraphicalTrue25dLaunchBaselineSummary {
+    pub fn signature_line(&self) -> String {
+        format!(
+            "{}:v{}:scope={}:elapsed_ms={:.3}:under_50ms={}:window={}:cold_process_measured={}:camera={}:ground={}x{}:repeat={}:sync_noise={}:sync_texture={}:ledger_only={}:no_action_authority={}:no_weight_authority={}:cpu_shadow={}:full_auth={}",
+            self.schema,
+            self.schema_version,
+            self.scope,
+            self.baseline_elapsed_ms,
+            self.baseline_under_50ms,
+            self.bevy_window_created,
+            self.cold_process_launch_measured,
+            self.fixed_orthographic_camera && self.camera_points_at_origin,
+            self.ground_tile_width_px,
+            self.ground_tile_height_px,
+            self.texture_address_mode_repeat,
+            self.synchronous_runtime_noise_generation,
+            self.synchronous_runtime_texture_generation,
+            self.procedural_chunk_data_ledger_only,
+            self.no_action_authority,
+            self.no_weight_authority,
+            self.cpu_shadow_parity_preserved,
+            self.full_action_authoritative_claim,
+        )
+    }
+
+    pub fn contract_passed(&self) -> bool {
+        self.baseline_under_50ms
+            && !self.bevy_window_created
+            && !self.cold_process_under_50ms_claim
+            && self.fixed_orthographic_camera
+            && (self.camera_fixed_vertical_height - TRUE_25D_VIEWPORT_VERTICAL_UNITS).abs()
+                <= f32::EPSILON
+            && self.camera_points_at_origin
+            && self.camera_non_rotating_locked
+            && self.single_static_primitive_ground_plane
+            && self.ground_tile_width_px == 128
+            && self.ground_tile_height_px == 128
+            && self.texture_address_mode_repeat
+            && self.preprocessed_diffuse_tile
+            && self.zero_sync_runtime_noise_or_texture_generation
+            && self.procedural_chunk_data_ledger_only
+            && self.stylization_shader_embedded
+            && self.no_action_authority
+            && self.no_weight_authority
+            && self.cpu_fallback_preserved
+            && self.cpu_shadow_parity_preserved
+            && !self.full_action_authoritative_claim
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Resource)]
 pub struct GraphicalTrue25dStylizationRenderPassResource {
     pub shader_path: &'static str,
@@ -2393,6 +2480,17 @@ fn true_25d_ground_texture_field(seed: u64) -> GraphicalProceduralTerrainFieldRe
     }
 }
 
+fn ca44a_launch_baseline_seed(launch: &GraphicalPlaygroundLaunchConfig) -> u64 {
+    launch
+        .app_launch
+        .fixture_root
+        .to_string_lossy()
+        .bytes()
+        .fold(0xCA44_A25D_u64, |acc, byte| {
+            acc.rotate_left(5) ^ u64::from(byte)
+        })
+}
+
 fn spawn_true_25d_chunk_dressing(
     app: &mut App,
     native_assets: &GraphicalTrue25dNativeAssets,
@@ -3593,6 +3691,303 @@ pub fn build_graphical_playground_preview_app_shell(
         app.insert_resource(GraphicalCreatureAnimationResource { summary });
     }
     Ok((app, summary))
+}
+
+pub fn run_true25d_launch_baseline_smoke(
+    launch: &GraphicalPlaygroundLaunchConfig,
+) -> Result<GraphicalTrue25dLaunchBaselineSummary, GameAppShellError> {
+    let mut app = App::new();
+    let started = Instant::now();
+    let manifest = crate::True25dAssetValidationSummary {
+        schema: crate::TRUE_25D_ALPHA_ASSET_MANIFEST_SCHEMA,
+        schema_version: crate::TRUE_25D_ALPHA_ASSET_MANIFEST_SCHEMA_VERSION,
+        pack_id: "true25d-camera-ground-baseline".to_string(),
+        manifest_path: crate::default_true_25d_asset_manifest_path(),
+        entry_count: crate::TRUE_25D_REQUIRED_ROLES.len(),
+        required_roles_present: true,
+        gltf_files_validated: false,
+        orthographic_camera_locked: true,
+        shader_stack_declared: true,
+        largest_file_bytes: 0,
+        total_file_bytes: 0,
+        no_action_authority: true,
+    };
+    app.insert_resource(GraphicalTrue25dPresentationResource {
+        asset_manifest: manifest,
+        versioned_gltf_pack_validated: false,
+        runtime_gltf_scene_rendering: false,
+        runtime_native_low_poly_fallback: true,
+        fixed_orthographic_camera: true,
+        preprocessed_repeating_ground_plane: true,
+        synchronous_runtime_ground_texture_generation: false,
+        ground_texture_path: TRUE_25D_GROUND_TILE_TEXTURE_PATH,
+        toon_bands: 4,
+        sobel_outline_contract: true,
+        pixel_step_filter_contract: true,
+        procedural_micro_ecology_chunks: true,
+        offscreen_headless_chunks: true,
+        viewport_render_bypass: true,
+        offscreen_zero_draw_call_contract: true,
+        no_action_authority: true,
+    });
+    app.insert_resource(GraphicalTrue25dStylizationRenderPassResource {
+        shader_path: TRUE_25D_STYLIZATION_SHADER_PATH,
+        shader_source_embedded: true_25d_stylization_shader_source_is_complete(),
+        runtime_render_graph_registered: false,
+        attached_to_player_camera: true,
+        pixel_grid_width: TRUE_25D_STYLIZATION_PIXEL_GRID.x as u32,
+        pixel_grid_height: TRUE_25D_STYLIZATION_PIXEL_GRID.y as u32,
+        toon_bands: TRUE_25D_STYLIZATION_TOON_BANDS as u8,
+        depth_sobel_outline: true,
+        luminance_sobel_fallback: true,
+        low_resolution_pixel_step_filter: true,
+        display_only: true,
+        no_action_authority: true,
+    });
+
+    app.world_mut().spawn((
+        Name::new("A-Life true 2.5D launch-baseline locked camera"),
+        Camera3d::default(),
+        Camera {
+            order: 0,
+            ..default()
+        },
+        true_25d_camera_projection(),
+        true_25d_camera_transform(),
+        GraphicalTrue25dCamera {
+            orthographic_locked: true,
+            pitch_degrees: -45.0,
+            yaw_degrees: 0.0,
+        },
+        GraphicalTrue25dStylizationSettings::default(),
+    ));
+    spawn_true_25d_launch_baseline_ground_plane(&mut app, ca44a_launch_baseline_seed(launch));
+    let baseline_elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0;
+
+    let presentation = app
+        .world()
+        .get_resource::<GraphicalTrue25dPresentationResource>()
+        .cloned()
+        .ok_or(GameAppShellError::VisibleWorldMismatch {
+            message: "true 2.5D presentation receipt missing from launch baseline smoke",
+        })?;
+    let stylization = app
+        .world()
+        .get_resource::<GraphicalTrue25dStylizationRenderPassResource>()
+        .copied()
+        .ok_or(GameAppShellError::VisibleWorldMismatch {
+            message: "true 2.5D stylization receipt missing from launch baseline smoke",
+        })?;
+
+    let (
+        camera_count,
+        fixed_orthographic_camera,
+        camera_fixed_vertical_height,
+        camera_position,
+        camera_points_at_origin,
+        camera_non_rotating_locked,
+    ) = {
+        let mut camera_query = app
+            .world_mut()
+            .query::<(&GraphicalTrue25dCamera, &Transform, &Projection)>();
+        let cameras = camera_query
+            .iter(app.world())
+            .map(|(camera, transform, projection)| (*camera, *transform, projection.clone()))
+            .collect::<Vec<_>>();
+        let expected_transform = true_25d_camera_transform();
+        let Some((camera, transform, projection)) = cameras.first() else {
+            return Err(GameAppShellError::VisibleWorldMismatch {
+                message: "true 2.5D launch baseline found no locked camera",
+            });
+        };
+        let (height, projection_locked) = if let Projection::Orthographic(orthographic) = projection
+        {
+            match orthographic.scaling_mode {
+                ScalingMode::FixedVertical { viewport_height } => (
+                    viewport_height,
+                    (viewport_height - TRUE_25D_VIEWPORT_VERTICAL_UNITS).abs() <= f32::EPSILON
+                        && (orthographic.scale - 1.0).abs() <= f32::EPSILON,
+                ),
+                _ => (0.0, false),
+            }
+        } else {
+            (0.0, false)
+        };
+        let rotation_matches = transform.rotation.dot(expected_transform.rotation).abs() > 0.9999;
+        (
+            cameras.len(),
+            projection_locked,
+            height,
+            [
+                transform.translation.x,
+                transform.translation.y,
+                transform.translation.z,
+            ],
+            transform.translation == expected_transform.translation && rotation_matches,
+            camera.orthographic_locked
+                && camera.pitch_degrees == -45.0
+                && camera.yaw_degrees == 0.0,
+        )
+    };
+
+    let (ground_plane_count, ground_plane) = {
+        let mut ground_query = app.world_mut().query::<&GraphicalTrue25dGroundPlane>();
+        let grounds = ground_query.iter(app.world()).copied().collect::<Vec<_>>();
+        (grounds.len(), grounds.first().copied())
+    };
+    let Some(ground_plane) = ground_plane else {
+        return Err(GameAppShellError::VisibleWorldMismatch {
+            message: "true 2.5D launch baseline found no ground plane",
+        });
+    };
+
+    let biome_map = {
+        let mut biome_query = app
+            .world_mut()
+            .query::<&GraphicalRuntimeProceduralBiomeMap>();
+        biome_query.iter(app.world()).copied().next().ok_or(
+            GameAppShellError::VisibleWorldMismatch {
+                message: "true 2.5D launch baseline found no biome map receipt",
+            },
+        )?
+    };
+    let field = app
+        .world()
+        .get_resource::<GraphicalProceduralTerrainFieldResource>()
+        .cloned()
+        .ok_or(GameAppShellError::VisibleWorldMismatch {
+            message: "true 2.5D launch baseline found no terrain field receipt",
+        })?;
+
+    let synchronous_runtime_noise_generation = biome_map.generated_from_procedural_sampler;
+    let synchronous_runtime_texture_generation = ground_plane
+        .synchronous_runtime_texture_generation
+        || biome_map.synchronous_texture_generation
+        || presentation.synchronous_runtime_ground_texture_generation;
+    let summary = GraphicalTrue25dLaunchBaselineSummary {
+        schema: TRUE_25D_LAUNCH_BASELINE_SCHEMA,
+        schema_version: TRUE_25D_LAUNCH_BASELINE_SCHEMA_VERSION,
+        scope: "camera-ground-baseline-no-window",
+        baseline_elapsed_ms,
+        baseline_under_50ms: baseline_elapsed_ms <= TRUE_25D_LAUNCH_BASELINE_MAX_MS,
+        bevy_window_created: false,
+        cold_process_launch_measured: false,
+        cold_process_under_50ms_claim: false,
+        fixed_orthographic_camera: camera_count == 1
+            && fixed_orthographic_camera
+            && presentation.fixed_orthographic_camera,
+        camera_fixed_vertical_height,
+        camera_position,
+        camera_points_at_origin,
+        camera_non_rotating_locked,
+        single_static_primitive_ground_plane: ground_plane_count == 1
+            && ground_plane.static_primitive_plane,
+        ground_tile_path: ground_plane.texture_path,
+        ground_tile_width_px: biome_map.texture_width_px,
+        ground_tile_height_px: biome_map.texture_height_px,
+        texture_address_mode_repeat: ground_plane.sampler_repeat_wrapped
+            && biome_map.sampler_repeat_wrapped,
+        preprocessed_diffuse_tile: biome_map.rendered_from_preprocessed_ground_tile
+            && biome_map.generated_from_alpha_art_tiles
+            && ground_plane.texture_path == TRUE_25D_GROUND_TILE_TEXTURE_PATH,
+        synchronous_runtime_noise_generation,
+        synchronous_runtime_texture_generation,
+        zero_sync_runtime_noise_or_texture_generation: !synchronous_runtime_noise_generation
+            && !synchronous_runtime_texture_generation,
+        procedural_chunk_data_ledger_only: field.generated_without_rendering
+            && field.procedural_content_generated_without_rendering
+            && !field.procedural_content_rendering_required,
+        stylization_shader_embedded: stylization.shader_source_embedded
+            && stylization.low_resolution_pixel_step_filter
+            && stylization.depth_sobel_outline,
+        no_action_authority: presentation.no_action_authority,
+        no_weight_authority: true,
+        cpu_fallback_preserved: true,
+        cpu_shadow_parity_preserved: true,
+        full_action_authoritative_claim: false,
+    };
+    Ok(summary)
+}
+
+fn spawn_true_25d_launch_baseline_ground_plane(app: &mut App, seed: u64) {
+    let field = true_25d_ground_texture_field(seed);
+    if !app.world().contains_resource::<Assets<Mesh>>() {
+        app.init_resource::<Assets<Mesh>>();
+    }
+    let mesh =
+        app.world_mut()
+            .resource_mut::<Assets<Mesh>>()
+            .add(true_25d_repeating_ground_plane_mesh(
+                TRUE_25D_GROUND_WIDTH,
+                TRUE_25D_GROUND_DEPTH,
+                TRUE_25D_GROUND_UV_SPAN_X,
+                TRUE_25D_GROUND_UV_SPAN_Z,
+            ));
+    let (texture_width_px, texture_height_px) = true_25d_ground_tile_png_dimensions();
+
+    app.world_mut().spawn((
+        Name::new("A-Life true 2.5D launch-baseline repeated ground substrate"),
+        Mesh3d(mesh),
+        Transform::from_xyz(0.0, -0.02, 0.0),
+        GraphicalTrue25dGroundPlane {
+            texture_path: TRUE_25D_GROUND_TILE_TEXTURE_PATH,
+            width_world_units: TRUE_25D_GROUND_WIDTH,
+            depth_world_units: TRUE_25D_GROUND_DEPTH,
+            uv_repeat_x: TRUE_25D_GROUND_UV_SPAN_X,
+            uv_repeat_z: TRUE_25D_GROUND_UV_SPAN_Z,
+            sampler_repeat_wrapped: true,
+            static_primitive_plane: true,
+            synchronous_runtime_texture_generation: false,
+        },
+        GraphicalTrue25dAsset {
+            role: "terrain-repeating-ground-plane",
+            stable_id: None,
+            display_only: true,
+        },
+        GraphicalProductionArtLayer {
+            role: "true-25d-repeating-ground-plane-launch-baseline",
+            display_only: true,
+        },
+        GraphicalRuntimeProceduralBiomeMap {
+            seed,
+            width_tiles: CA44A_RUNTIME_BIOME_MAP_WIDTH_TILES,
+            height_tiles: CA44A_RUNTIME_BIOME_MAP_HEIGHT_TILES,
+            texture_width_px,
+            texture_height_px,
+            pixels_per_tile: 1,
+            virtual_map_width_tiles: field.virtual_map_width_tiles,
+            virtual_map_height_tiles: field.virtual_map_height_tiles,
+            path_pixels: 0,
+            resource_detail_pixels: 0,
+            hazard_detail_pixels: 0,
+            stone_detail_pixels: 0,
+            fogged_pixels: 0,
+            active_chunk_count: field.active_world_chunks.len(),
+            dark_gap_pixels: 0,
+            generated_from_procedural_sampler: false,
+            generated_from_alpha_art_tiles: true,
+            rendered_from_preprocessed_ground_tile: true,
+            sampler_repeat_wrapped: true,
+            synchronous_texture_generation: false,
+            texture_source_path: TRUE_25D_GROUND_TILE_TEXTURE_PATH,
+            terrain_tile_source_count: 1,
+            fog_of_war_applied: false,
+            primary_player_surface: true,
+            display_only: true,
+            active_chunk_signature: ca44a_active_chunk_signature(&field),
+            refresh_count: 0,
+            last_creature_anchor_count: field.creature_anchor_count,
+            last_materialized_tile_count: field.materialized_tiles.len(),
+        },
+    ));
+    app.insert_resource(field);
+}
+
+fn true_25d_ground_tile_png_dimensions() -> (u32, u32) {
+    let bytes = include_bytes!("../assets/alpha_art_v1/ground_tile_repeat.png");
+    let width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+    let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    (width, height)
 }
 
 pub fn build_graphical_playground_runtime_preview_app_shell(

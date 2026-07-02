@@ -378,6 +378,9 @@ fn run() -> Result<String, String> {
                 summary.signature_line()
             ))
         }
+        [command, fixture_root] if command == "true25d-launch-baseline-smoke" => {
+            run_true25d_launch_baseline_cli(fixture_root)
+        }
         [command] if command == "production-asset-pipeline-smoke" => {
             let summary = run_production_asset_pipeline_smoke().map_err(|err| err.to_string())?;
             Ok(format!(
@@ -770,7 +773,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--view-mode player|dev-overlay|full-debug] [--smoke-seconds N] [--require-gpu] | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--view-mode player|dev-overlay|full-debug] [--smoke-seconds N] [--require-gpu] | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | true25d-launch-baseline-smoke <fixture-root> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
     }
 }
 
@@ -3121,6 +3124,52 @@ fn configure_windows_graphical_playground_environment() {
 #[cfg(not(feature = "bevy-app"))]
 fn run_graphical_playground_cli(_args: &[String]) -> Result<String, String> {
     Err("graphical-playground requires feature `bevy-app`; run `cargo run -p alife_game_app --features \"bevy-app gpu-runtime\" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/gpu_alpha --gpu-mode static-plastic-cpu-shadow-guarded`".to_string())
+}
+
+#[cfg(feature = "bevy-app")]
+fn run_true25d_launch_baseline_cli(fixture_root: &str) -> Result<String, String> {
+    let launch = alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(fixture_root, 1);
+    let summary = alife_game_app::bevy_shell::run_true25d_launch_baseline_smoke(&launch)
+        .map_err(|err| err.to_string())?;
+    Ok(format!(
+        "CA44A True2.5D launch baseline schema={} version={} scope={} elapsed_ms={:.3} under_50ms={} window_created={} cold_process_measured={} cold_under_50_claim={} camera_fixed={} fixed_vertical={} camera_pos={:.1},{:.1},{:.1} points_origin={} ground_plane={} tile={} {}x{} repeat={} preprocessed_tile={} sync_noise={} sync_texture={} zero_sync_generation={} ledger_only={} stylization={} no_action_authority={} no_weight_authority={} cpu_fallback={} cpu_shadow={} full_auth_claim={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.scope,
+        summary.baseline_elapsed_ms,
+        summary.baseline_under_50ms,
+        summary.bevy_window_created,
+        summary.cold_process_launch_measured,
+        summary.cold_process_under_50ms_claim,
+        summary.fixed_orthographic_camera,
+        summary.camera_fixed_vertical_height,
+        summary.camera_position[0],
+        summary.camera_position[1],
+        summary.camera_position[2],
+        summary.camera_points_at_origin,
+        summary.single_static_primitive_ground_plane,
+        summary.ground_tile_path,
+        summary.ground_tile_width_px,
+        summary.ground_tile_height_px,
+        summary.texture_address_mode_repeat,
+        summary.preprocessed_diffuse_tile,
+        summary.synchronous_runtime_noise_generation,
+        summary.synchronous_runtime_texture_generation,
+        summary.zero_sync_runtime_noise_or_texture_generation,
+        summary.procedural_chunk_data_ledger_only,
+        summary.stylization_shader_embedded,
+        summary.no_action_authority,
+        summary.no_weight_authority,
+        summary.cpu_fallback_preserved,
+        summary.cpu_shadow_parity_preserved,
+        summary.full_action_authoritative_claim,
+        summary.signature_line()
+    ))
+}
+
+#[cfg(not(feature = "bevy-app"))]
+fn run_true25d_launch_baseline_cli(_fixture_root: &str) -> Result<String, String> {
+    Err("true25d-launch-baseline-smoke requires feature `bevy-app`; run `cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- true25d-launch-baseline-smoke crates/alife_world/tests/fixtures/gpu_alpha`".to_string())
 }
 
 #[cfg(feature = "bevy-app")]

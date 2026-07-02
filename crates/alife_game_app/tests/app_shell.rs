@@ -2632,6 +2632,64 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
+fn true_25d_launch_baseline_proves_preprocessed_ground_and_locked_camera_under_50ms() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 1);
+    let summary = alife_game_app::bevy_shell::run_true25d_launch_baseline_smoke(&launch).unwrap();
+
+    assert_eq!(
+        summary.schema,
+        alife_game_app::bevy_shell::TRUE_25D_LAUNCH_BASELINE_SCHEMA
+    );
+    assert_eq!(
+        summary.schema_version,
+        alife_game_app::bevy_shell::TRUE_25D_LAUNCH_BASELINE_SCHEMA_VERSION
+    );
+    assert!(summary.contract_passed());
+    assert!(
+        summary.baseline_elapsed_ms <= alife_game_app::bevy_shell::TRUE_25D_LAUNCH_BASELINE_MAX_MS,
+        "baseline proof scope exceeded 50 ms: {:.3} ms",
+        summary.baseline_elapsed_ms
+    );
+    assert!(!summary.bevy_window_created);
+    assert!(!summary.cold_process_launch_measured);
+    assert!(!summary.cold_process_under_50ms_claim);
+    assert!(summary.fixed_orthographic_camera);
+    assert_eq!(summary.camera_fixed_vertical_height, 10.0);
+    assert_eq!(summary.camera_position, [0.0, 12.0, 12.0]);
+    assert!(summary.camera_points_at_origin);
+    assert!(summary.camera_non_rotating_locked);
+    assert!(summary.single_static_primitive_ground_plane);
+    assert_eq!(
+        summary.ground_tile_path,
+        "alpha_art_v1/ground_tile_repeat.png"
+    );
+    assert_eq!(summary.ground_tile_width_px, 128);
+    assert_eq!(summary.ground_tile_height_px, 128);
+    assert!(summary.texture_address_mode_repeat);
+    assert!(summary.preprocessed_diffuse_tile);
+    assert!(!summary.synchronous_runtime_noise_generation);
+    assert!(!summary.synchronous_runtime_texture_generation);
+    assert!(summary.zero_sync_runtime_noise_or_texture_generation);
+    assert!(summary.procedural_chunk_data_ledger_only);
+    assert!(summary.stylization_shader_embedded);
+    assert!(summary.no_action_authority);
+    assert!(summary.no_weight_authority);
+    assert!(summary
+        .signature_line()
+        .contains("no_action_authority=true"));
+    assert!(summary
+        .signature_line()
+        .contains("no_weight_authority=true"));
+    assert!(!summary.signature_line().contains(":action_authority=true"));
+    assert!(!summary.signature_line().contains(":weight_authority=true"));
+    assert!(summary.cpu_fallback_preserved);
+    assert!(summary.cpu_shadow_parity_preserved);
+    assert!(!summary.full_action_authoritative_claim);
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
 fn true_25d_player_view_has_display_only_neurochemical_world_cues() {
     let launch =
         alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
