@@ -18,6 +18,12 @@ Created: 2026-07-01
   active creature assets. It remains a CA44A-ext-05 addendum, does not advance
   the CA roadmap, and does not unblock CA44 without independent external tester
   evidence.
+- Current continuation status:
+  `codex/true25d-endocrine-animation-particle-feedback` adds bounded
+  selected-creature animation-speed and bioluminescent particle-lane feedback
+  from the validated flat endocrine tensor path. It remains a CA44A-ext-05
+  addendum, does not advance the CA roadmap, and does not unblock CA44 without
+  independent external tester evidence.
 - This handoff was refreshed after the Phase 5 branch was fast-forwarded to
   the current `main` tip so it does not describe stale uncommitted work.
 - CA roadmap continuation remains stopped.
@@ -69,6 +75,12 @@ Docs:
     carry matching endocrine-feedback metadata.
   - This addendum proves a versioned display-only GLB contract, not authored
     keyframe animation clips or action-authoritative GPU runtime.
+- `docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_ANIMATION_PARTICLE_FEEDBACK.md`
+  - Records the CA44A-ext-05 addendum that applies the endocrine contract to a
+    bounded selected-creature animation-speed layer and three display-only
+    bioluminescent particle lanes.
+  - This addendum is still presentation-only; it does not change scheduler,
+    action, weight, GPU, or semantic authority.
 
 ## Checks Already Run
 
@@ -146,6 +158,11 @@ with `HardwareUnavailable` and made no GPU-performance claim.
   media should be committed.
 - Blender path was not used in this slice; it remains available for future
   mesh calibration work.
+- The active True 2.5D goal still contains a 60Hz authoritative headless
+  simulation-cadence requirement. Current CA13 evidence preserves 20Hz
+  authoritative simulation plus 60Hz presentation and records
+  `claim_60hz_sim=false`; changing authoritative cadence requires a separate
+  reviewed scheduler plan.
 
 ## Resume Steps
 

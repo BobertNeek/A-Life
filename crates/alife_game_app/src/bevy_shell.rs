@@ -667,6 +667,8 @@ pub struct GraphicalTrue25dCreatureEndocrinePresentation {
     pub stable_id: WorldEntityId,
     pub base_scale: f32,
     pub asset_scale_multiplier: f32,
+    pub animation_speed_multiplier: f32,
+    pub animation_phase_index: u8,
     pub posture_roll_degrees: f32,
     pub posture_lift: f32,
     pub adrenaline_proxy: f32,
@@ -674,6 +676,7 @@ pub struct GraphicalTrue25dCreatureEndocrinePresentation {
     pub hunger_satisfaction_biolume: f32,
     pub learning_biolume: f32,
     pub particle_trail_count: u8,
+    pub biolume_particle_array_initialized: bool,
     pub creature_root_transform_applied: bool,
     pub material_shell_applied: bool,
     pub display_only: bool,
@@ -752,6 +755,19 @@ pub struct GraphicalTrue25dNeurochemicalCue {
     pub no_weight_authority: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct GraphicalTrue25dEndocrineParticleLane {
+    pub stable_id: WorldEntityId,
+    pub lane_index: u8,
+    pub intensity: f32,
+    pub active: bool,
+    pub animation_phase_index: u8,
+    pub initialized_from_endocrine_tensor: bool,
+    pub display_only: bool,
+    pub no_action_authority: bool,
+    pub no_weight_authority: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Resource)]
 pub struct GraphicalTrue25dNeurochemicalFeedbackResource {
     pub schema_version: u16,
@@ -795,9 +811,16 @@ pub struct GraphicalTrue25dEndocrineAssetFeedbackResource {
     pub hunger_satisfaction_biolume: f32,
     pub learning_biolume: f32,
     pub asset_scale_multiplier: f32,
+    pub animation_speed_multiplier: f32,
+    pub animation_phase_index: u8,
+    pub animation_speed_layer_applied: bool,
     pub posture_roll_degrees: f32,
     pub posture_lift: f32,
     pub particle_trail_count: u8,
+    pub biolume_particle_array_initialized: bool,
+    pub biolume_particle_lanes_visible: u8,
+    pub biolume_particle_lanes_max: u8,
+    pub emissive_particle_array_initialized: bool,
     pub derived_from_visual_snapshot: bool,
     pub display_only: bool,
     pub no_action_authority: bool,
@@ -3131,14 +3154,15 @@ fn spawn_true_25d_neurochemical_visual_feedback(
     let native_assets = true_25d_native_assets(app);
     let feedback = true_25d_neurochemical_feedback_from_snapshot(inspector, gpu);
     app.insert_resource(feedback);
-    app.insert_resource(true_25d_endocrine_asset_feedback_from_snapshot(
+    let endocrine = true_25d_endocrine_asset_feedback_from_snapshot(
         inspector,
         gpu,
         0,
         false,
         gltf_contract_validated,
         gltf_contract_assets,
-    ));
+    );
+    app.insert_resource(endocrine);
     let base = true_25d_creature_visual_position(&inspector.visual);
     for kind in [
         GraphicalTrue25dNeurochemicalCueKind::HungerGlow,
@@ -3188,6 +3212,55 @@ fn spawn_true_25d_neurochemical_visual_feedback(
             },
         ));
     }
+    for lane_index in 0..3_u8 {
+        let active = lane_index < endocrine.particle_trail_count;
+        let intensity = endocrine
+            .hunger_satisfaction_biolume
+            .max(endocrine.learning_biolume)
+            .clamp(0.0, 1.0);
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life true 2.5D endocrine particle lane {} stable:{}",
+                lane_index,
+                inspector.visual.stable_id.raw()
+            )),
+            Mesh3d(native_assets.creature_eye_mesh.clone()),
+            MeshMaterial3d(native_assets.learning_biolume_material.clone()),
+            Transform::from_translation(
+                base + true_25d_endocrine_particle_offset(
+                    lane_index,
+                    intensity,
+                    endocrine.animation_phase_index,
+                ),
+            )
+            .with_scale(true_25d_endocrine_particle_scale(lane_index, intensity)),
+            if active {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            },
+            GraphicalTrue25dEndocrineParticleLane {
+                stable_id: inspector.visual.stable_id,
+                lane_index,
+                intensity,
+                active,
+                animation_phase_index: endocrine.animation_phase_index,
+                initialized_from_endocrine_tensor: true,
+                display_only: true,
+                no_action_authority: true,
+                no_weight_authority: true,
+            },
+            GraphicalTrue25dAsset {
+                role: "endocrine-biolume-particle",
+                stable_id: Some(inspector.visual.stable_id),
+                display_only: true,
+            },
+            GraphicalProductionArtLayer {
+                role: "true-25d-endocrine-particle-array",
+                display_only: true,
+            },
+        ));
+    }
 }
 
 impl GraphicalTrue25dCreatureEndocrinePresentation {
@@ -3196,6 +3269,8 @@ impl GraphicalTrue25dCreatureEndocrinePresentation {
             stable_id,
             base_scale,
             asset_scale_multiplier: 1.0,
+            animation_speed_multiplier: 1.0,
+            animation_phase_index: 0,
             posture_roll_degrees: 0.0,
             posture_lift: 0.0,
             adrenaline_proxy: 0.0,
@@ -3203,6 +3278,7 @@ impl GraphicalTrue25dCreatureEndocrinePresentation {
             hunger_satisfaction_biolume: 0.0,
             learning_biolume: 0.0,
             particle_trail_count: 0,
+            biolume_particle_array_initialized: false,
             creature_root_transform_applied: false,
             material_shell_applied: false,
             display_only: true,
@@ -3241,7 +3317,14 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
         .clamp(0.0, 1.0);
     let hunger_satisfaction_biolume = dopamine_biolume.max(learning).clamp(0.0, 1.0);
     let pain_posture_active = pain >= 0.08 || adrenaline_proxy >= 0.18;
-    let phase = if mind_tick % 2 == 0 { 1.0 } else { -1.0 };
+    let animation_speed_multiplier = (1.0 + adrenaline_proxy * 0.85 + pain * 0.70).clamp(1.0, 2.75);
+    let animation_phase_index =
+        ((mind_tick as f32 * animation_speed_multiplier).floor() as u64 % 4) as u8;
+    let phase = if animation_phase_index % 2 == 0 {
+        1.0
+    } else {
+        -1.0
+    };
     let posture_roll_degrees = if pain_posture_active {
         phase * (2.0 + adrenaline_proxy * 5.0)
     } else {
@@ -3286,9 +3369,16 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
         hunger_satisfaction_biolume,
         learning_biolume: learning,
         asset_scale_multiplier,
+        animation_speed_multiplier,
+        animation_phase_index,
+        animation_speed_layer_applied: animation_speed_multiplier > 1.01,
         posture_roll_degrees,
         posture_lift,
         particle_trail_count,
+        biolume_particle_array_initialized: particle_trail_count > 0,
+        biolume_particle_lanes_visible: particle_trail_count,
+        biolume_particle_lanes_max: 3,
+        emissive_particle_array_initialized: hunger_satisfaction_biolume >= 0.20 || learning > 0.0,
         derived_from_visual_snapshot: true,
         display_only: true,
         no_action_authority: true,
@@ -3499,6 +3589,26 @@ fn true_25d_neurochemical_scale(
         }
         GraphicalTrue25dNeurochemicalCueKind::LearningBiolume => Vec3::splat(0.34 + i * 0.18),
     }
+}
+
+fn true_25d_endocrine_particle_offset(
+    lane_index: u8,
+    intensity: f32,
+    animation_phase_index: u8,
+) -> Vec3 {
+    let lane = lane_index.min(2) as f32;
+    let i = intensity.clamp(0.0, 1.0);
+    let phase = animation_phase_index as f32 * 0.18;
+    Vec3::new(
+        -0.42 + lane * 0.28,
+        0.24 + lane * 0.035 + i * 0.10,
+        0.34 + phase - lane * 0.12,
+    )
+}
+
+fn true_25d_endocrine_particle_scale(lane_index: u8, intensity: f32) -> Vec3 {
+    let i = intensity.clamp(0.0, 1.0);
+    Vec3::splat(0.055 + i * 0.055 + lane_index.min(2) as f32 * 0.012)
 }
 
 fn spawn_true_25d_object_scene(
@@ -9057,13 +9167,30 @@ fn update_true_25d_neurochemical_visual_feedback(
             &mut Transform,
             &GraphicalTrue25dAsset,
         ),
-        Without<GraphicalTrue25dNeurochemicalCue>,
+        (
+            Without<GraphicalTrue25dNeurochemicalCue>,
+            Without<GraphicalTrue25dEndocrineParticleLane>,
+        ),
     >,
-    mut cues: bevy::prelude::Query<(
-        &mut GraphicalTrue25dNeurochemicalCue,
-        &mut Transform,
-        &mut Visibility,
-    )>,
+    mut cues: bevy::prelude::Query<
+        (
+            &mut GraphicalTrue25dNeurochemicalCue,
+            &mut Transform,
+            &mut Visibility,
+        ),
+        Without<GraphicalTrue25dEndocrineParticleLane>,
+    >,
+    mut particle_lanes: bevy::prelude::Query<
+        (
+            &mut GraphicalTrue25dEndocrineParticleLane,
+            &mut Transform,
+            &mut Visibility,
+        ),
+        (
+            Without<GraphicalTrue25dNeurochemicalCue>,
+            Without<GraphicalTrue25dCreatureEndocrinePresentation>,
+        ),
+    >,
 ) {
     if view_mode.mode != GraphicalPlaygroundViewMode::Player {
         return;
@@ -9098,11 +9225,14 @@ fn update_true_25d_neurochemical_visual_feedback(
             presentation.asset_scale_multiplier = 1.0;
             presentation.posture_roll_degrees = 0.0;
             presentation.posture_lift = 0.0;
+            presentation.animation_speed_multiplier = 1.0;
+            presentation.animation_phase_index = 0;
             presentation.adrenaline_proxy = 0.0;
             presentation.cortisol_desaturation = 0.0;
             presentation.hunger_satisfaction_biolume = 0.0;
             presentation.learning_biolume = 0.0;
             presentation.particle_trail_count = 0;
+            presentation.biolume_particle_array_initialized = false;
             presentation.creature_root_transform_applied = false;
             presentation.material_shell_applied = false;
             state_cue.pain_pose = false;
@@ -9113,6 +9243,8 @@ fn update_true_25d_neurochemical_visual_feedback(
             continue;
         }
         presentation.asset_scale_multiplier = endocrine.asset_scale_multiplier;
+        presentation.animation_speed_multiplier = endocrine.animation_speed_multiplier;
+        presentation.animation_phase_index = endocrine.animation_phase_index;
         presentation.posture_roll_degrees = endocrine.posture_roll_degrees;
         presentation.posture_lift = endocrine.posture_lift;
         presentation.adrenaline_proxy = endocrine.adrenaline_proxy;
@@ -9120,6 +9252,8 @@ fn update_true_25d_neurochemical_visual_feedback(
         presentation.hunger_satisfaction_biolume = endocrine.hunger_satisfaction_biolume;
         presentation.learning_biolume = endocrine.learning_biolume;
         presentation.particle_trail_count = endocrine.particle_trail_count;
+        presentation.biolume_particle_array_initialized =
+            endocrine.biolume_particle_array_initialized;
         presentation.creature_root_transform_applied = true;
         presentation.material_shell_applied = endocrine.material_shell_applied;
         state_cue.pain_pose = endocrine.pain_posture_active;
@@ -9156,6 +9290,36 @@ fn update_true_25d_neurochemical_visual_feedback(
             Visibility::Hidden
         };
     }
+    let particle_intensity = endocrine
+        .hunger_satisfaction_biolume
+        .max(endocrine.learning_biolume)
+        .clamp(0.0, 1.0);
+    let mut visible_particle_lanes = 0_u8;
+    for (mut lane, mut transform, mut visibility) in &mut particle_lanes {
+        if lane.stable_id != visual.stable_id {
+            lane.active = false;
+            *visibility = Visibility::Hidden;
+            continue;
+        }
+        let active = lane.lane_index < endocrine.particle_trail_count;
+        lane.intensity = particle_intensity;
+        lane.active = active;
+        lane.animation_phase_index = endocrine.animation_phase_index;
+        lane.initialized_from_endocrine_tensor = true;
+        transform.translation = base
+            + true_25d_endocrine_particle_offset(
+                lane.lane_index,
+                particle_intensity,
+                endocrine.animation_phase_index,
+            );
+        transform.scale = true_25d_endocrine_particle_scale(lane.lane_index, particle_intensity);
+        *visibility = if active {
+            visible_particle_lanes = visible_particle_lanes.saturating_add(1);
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
     if let Some(feedback) = feedback.as_deref_mut() {
         *feedback =
             true_25d_neurochemical_feedback_from_snapshot(&inspector.snapshot, &gpu.telemetry);
@@ -9166,6 +9330,11 @@ fn update_true_25d_neurochemical_visual_feedback(
         *endocrine_feedback = GraphicalTrue25dEndocrineAssetFeedbackResource {
             applied_to_creature_root: selected_root_updated,
             root_transform_posture: selected_root_updated && endocrine.root_transform_posture,
+            biolume_particle_lanes_visible: visible_particle_lanes,
+            biolume_particle_array_initialized: endocrine.biolume_particle_array_initialized
+                && visible_particle_lanes > 0,
+            emissive_particle_array_initialized: endocrine.emissive_particle_array_initialized
+                && visible_particle_lanes > 0,
             ..endocrine
         };
     }
