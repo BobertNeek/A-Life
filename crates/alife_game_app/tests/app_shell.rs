@@ -2595,6 +2595,71 @@ fn true_25d_player_view_uses_versioned_assets_and_locked_orthographic_camera() {
 
 #[cfg(feature = "bevy-app")]
 #[test]
+fn true_25d_player_view_has_display_only_neurochemical_world_cues() {
+    let launch =
+        alife_game_app::GraphicalPlaygroundLaunchConfig::smoke(gpu_alpha_fixture_root(), 5);
+    let (mut app, summary) =
+        alife_game_app::bevy_shell::build_graphical_playground_runtime_preview_app_shell(&launch)
+            .unwrap();
+    app.update();
+
+    assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
+
+    let feedback = *app
+        .world()
+        .resource::<alife_game_app::bevy_shell::GraphicalTrue25dNeurochemicalFeedbackResource>(
+    );
+    assert_eq!(feedback.schema_version, 1);
+    assert_eq!(feedback.selected_stable_id.raw(), 1);
+    assert_eq!(feedback.cue_count, 6);
+    assert!(feedback.active_cue_count > 0);
+    assert!(feedback.hunger > 0.0);
+    assert!(feedback.energy > 0.0);
+    assert!(feedback.direct_mesh_presentation);
+    assert!(feedback.display_only);
+    assert!(feedback.no_action_authority);
+    assert!(feedback.no_weight_authority);
+    assert!(feedback.cpu_shadow_gate_preserved);
+    assert!(feedback.no_active_bulk_readback);
+
+    let mut cue_query = app.world_mut().query::<(
+        &alife_game_app::bevy_shell::GraphicalTrue25dNeurochemicalCue,
+        &alife_game_app::bevy_shell::GraphicalTrue25dAsset,
+        Option<&alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite>,
+    )>();
+    let cues = cue_query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(cues.len(), 6);
+    let roles = cues
+        .iter()
+        .map(|(_, asset, _)| asset.role)
+        .collect::<Vec<_>>();
+    for role in [
+        "neurochemical-hunger-glow",
+        "neurochemical-pain-spike",
+        "neurochemical-stress-desaturation",
+        "neurochemical-energy-trail",
+        "neurochemical-sleep-bloom",
+        "neurochemical-learning-biolume",
+    ] {
+        assert!(roles.contains(&role), "missing neurochemical cue {role}");
+    }
+    assert!(cues.iter().all(|(cue, asset, sprite)| {
+        cue.display_only
+            && cue.no_action_authority
+            && cue.no_weight_authority
+            && cue.anchored_to_selected_creature
+            && asset.display_only
+            && asset.stable_id.is_some()
+            && sprite.is_none()
+    }));
+    assert!(
+        cues.iter().any(|(cue, _, _)| cue.active),
+        "the selected creature should expose at least one visible state cue"
+    );
+}
+
+#[cfg(feature = "bevy-app")]
+#[test]
 fn true_25d_stylization_shader_embeds_toon_pixel_and_sobel_pass() {
     assert!(alife_game_app::bevy_shell::true_25d_stylization_shader_source_is_complete());
     let source = alife_game_app::bevy_shell::TRUE_25D_STYLIZATION_SHADER_SOURCE;
