@@ -67,6 +67,11 @@ Roadmap evidence status:
   The addendum adds selected-creature root posture/asset-presentation feedback
   while preserving the same display-only boundaries and without advancing the
   CA roadmap.
+- This CA44A-ext-05 slice also has a GLB metadata-contract addendum at
+  `docs/creatures_agi_roadmap_pack/status/TRUE25D_ENDOCRINE_GLTF_FEEDBACK_CONTRACT.md`.
+  That addendum validates endocrine visual-feedback metadata inside the active
+  committed creature GLB files and records the same no-action/no-weight
+  authority boundary. It does not add authored keyframe animation clips.
 - This phase does not add new Blender-authored assets. The fixed Blender path
   remains available for future mesh calibration, but was not required for this
   display-feedback slice.

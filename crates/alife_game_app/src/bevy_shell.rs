@@ -776,6 +776,9 @@ pub struct GraphicalTrue25dNeurochemicalFeedbackResource {
 pub struct GraphicalTrue25dEndocrineAssetFeedbackResource {
     pub schema_version: u16,
     pub selected_stable_id: WorldEntityId,
+    pub gltf_endocrine_feedback_contract_validated: bool,
+    pub gltf_endocrine_feedback_assets: usize,
+    pub direct_asset_feedback_contract: bool,
     pub applied_to_creature_root: bool,
     pub root_transform_posture: bool,
     pub material_shell_applied: bool,
@@ -3113,11 +3116,28 @@ fn spawn_true_25d_neurochemical_visual_feedback(
     inspector: &CreatureInspectorSnapshot,
     gpu: &GraphicalGpuRuntimeTelemetry,
 ) {
+    let (gltf_contract_validated, gltf_contract_assets) = app
+        .world()
+        .get_resource::<GraphicalTrue25dPresentationResource>()
+        .map(|presentation| {
+            (
+                presentation
+                    .asset_manifest
+                    .endocrine_feedback_contract_validated,
+                presentation.asset_manifest.endocrine_feedback_assets,
+            )
+        })
+        .unwrap_or((false, 0));
     let native_assets = true_25d_native_assets(app);
     let feedback = true_25d_neurochemical_feedback_from_snapshot(inspector, gpu);
     app.insert_resource(feedback);
     app.insert_resource(true_25d_endocrine_asset_feedback_from_snapshot(
-        inspector, gpu, 0, false,
+        inspector,
+        gpu,
+        0,
+        false,
+        gltf_contract_validated,
+        gltf_contract_assets,
     ));
     let base = true_25d_creature_visual_position(&inspector.visual);
     for kind in [
@@ -3205,6 +3225,8 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
     gpu: &GraphicalGpuRuntimeTelemetry,
     mind_tick: u64,
     applied_to_creature_root: bool,
+    gltf_endocrine_feedback_contract_validated: bool,
+    gltf_endocrine_feedback_assets: usize,
 ) -> GraphicalTrue25dEndocrineAssetFeedbackResource {
     let visual = &snapshot.visual;
     let tensor = true_25d_flat_endocrine_tensor_from_snapshot(visual, gpu);
@@ -3242,6 +3264,10 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
     GraphicalTrue25dEndocrineAssetFeedbackResource {
         schema_version: 1,
         selected_stable_id: visual.stable_id,
+        gltf_endocrine_feedback_contract_validated,
+        gltf_endocrine_feedback_assets,
+        direct_asset_feedback_contract: gltf_endocrine_feedback_contract_validated
+            && gltf_endocrine_feedback_assets >= crate::TRUE_25D_ENDOCRINE_FEEDBACK_ROLES.len(),
         applied_to_creature_root,
         root_transform_posture: pain_posture_active || posture_lift > f32::EPSILON,
         material_shell_applied: cortisol >= 0.22
@@ -3783,6 +3809,8 @@ pub fn run_true25d_launch_baseline_smoke(
         shader_stack_declared: true,
         largest_file_bytes: 0,
         total_file_bytes: 0,
+        endocrine_feedback_assets: 0,
+        endocrine_feedback_contract_validated: false,
         no_action_authority: true,
     };
     app.insert_resource(GraphicalTrue25dPresentationResource {
@@ -9019,6 +9047,7 @@ fn update_true_25d_neurochemical_visual_feedback(
     runtime: Res<GraphicalRuntimeControlsResource>,
     inspector: Res<CreatureInspectorResource>,
     gpu: Res<GraphicalGpuTelemetryResource>,
+    presentation: Option<Res<GraphicalTrue25dPresentationResource>>,
     mut feedback: Option<ResMut<GraphicalTrue25dNeurochemicalFeedbackResource>>,
     mut endocrine_feedback: Option<ResMut<GraphicalTrue25dEndocrineAssetFeedbackResource>>,
     mut creature_presentations: bevy::prelude::Query<
@@ -9041,11 +9070,24 @@ fn update_true_25d_neurochemical_visual_feedback(
     }
     let visual = &inspector.snapshot.visual;
     let base = true_25d_creature_visual_position(visual);
+    let (gltf_contract_validated, gltf_contract_assets) = presentation
+        .as_ref()
+        .map(|presentation| {
+            (
+                presentation
+                    .asset_manifest
+                    .endocrine_feedback_contract_validated,
+                presentation.asset_manifest.endocrine_feedback_assets,
+            )
+        })
+        .unwrap_or((false, 0));
     let endocrine = true_25d_endocrine_asset_feedback_from_snapshot(
         &inspector.snapshot,
         &gpu.telemetry,
         runtime.panel.mind_tick,
         true,
+        gltf_contract_validated,
+        gltf_contract_assets,
     );
     let mut selected_root_updated = false;
     for (mut presentation, mut state_cue, mut transform, asset) in &mut creature_presentations {
