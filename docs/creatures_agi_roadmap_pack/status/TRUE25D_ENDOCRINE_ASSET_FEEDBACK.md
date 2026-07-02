@@ -21,14 +21,17 @@ feedback display-only and non-authoritative.
   roots in the True 2.5D layer.
 - Added `GraphicalTrue25dEndocrineAssetFeedbackResource` as a bounded runtime
   receipt for:
+  - fixed flat endocrine tensor channel count/source;
   - pain/adrenaline posture;
   - cortisol/stress desaturation;
-  - hunger-satisfaction biolume;
+  - dopamine and hunger-satisfaction biolume;
   - H_shadow learning biolume;
   - compact particle-trail count;
   - CPU-shadow/no-bulk-readback boundary.
 - The selected creature root receives a bounded transform/posture pulse derived
-  from the existing `CreatureVisualSnapshot` and GPU telemetry.
+  from the existing `CreatureVisualSnapshot`, its core
+  `EndocrineSnapshot::to_array()` channel data, bounded drive companions, and
+  GPU telemetry.
 - Existing low-poly neurochemical cue meshes remain supplemental display-only
   material shells around the selected creature.
 
@@ -56,15 +59,15 @@ Result: PASS, 1 passed.
 cargo test -p alife_game_app --features bevy-app --test app_shell true_25d -- --nocapture
 ```
 
-Result: PASS, 9 passed.
+Result: PASS, 10 passed.
 
 ## Known Limitations
 
 - The feedback uses bounded root transform/material-shell presentation. It does
   not yet edit Blender-authored animation clips or glTF material internals.
-- Dopamine is not a first-class runtime field in this slice. The biolume cue
-  uses low hunger/satisfaction and H_shadow learning telemetry as bounded
-  presentation proxies.
+- Dopamine is now carried through the app visual snapshot from the existing
+  core endocrine snapshot and used as a display-only biolume input. Low hunger
+  and H_shadow learning remain bounded presentation companions.
 - This is still not independent external CA44 tester evidence.
 - This does not start CA45 and does not request external tester evidence.
 - This addendum does not replace CA44. CA44 remains the next roadmap item after
