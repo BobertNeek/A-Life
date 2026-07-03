@@ -2401,6 +2401,7 @@ fn ca44a_player_view_uses_true_25d_world_assets_not_default_rectangles() {
         "rock-obstacle",
         "selection-ring",
         "terrain-seeded-biome-ground-plane",
+        "terrain-painted-biome-art-substrate",
         "terrain-grass-island",
         "terrain-soil-island",
         "terrain-resource-grove",
@@ -2415,6 +2416,10 @@ fn ca44a_player_view_uses_true_25d_world_assets_not_default_rectangles() {
             "missing true 2.5D role {role}"
         );
     }
+    assert!(
+        !true_25d_roles.contains(&"plant-prop"),
+        "default Player View should not render token-like reed props over the map"
+    );
 
     let mut art_query = app
         .world_mut()

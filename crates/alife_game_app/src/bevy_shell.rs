@@ -1195,6 +1195,7 @@ struct GraphicalTrue25dNativeAssets {
     rock_material: Handle<StandardMaterial>,
     reed_material: Handle<StandardMaterial>,
     selection_material: Handle<StandardMaterial>,
+    contact_shadow_material: Handle<StandardMaterial>,
     hunger_glow_material: Handle<StandardMaterial>,
     pain_spike_material: Handle<StandardMaterial>,
     stress_desaturation_material: Handle<StandardMaterial>,
@@ -1913,6 +1914,7 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
         rock_material,
         reed_material,
         selection_material,
+        contact_shadow_material,
         hunger_glow_material,
         pain_spike_material,
         stress_desaturation_material,
@@ -1932,6 +1934,11 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
             true_25d_material(&mut materials, Color::srgb(0.54, 0.55, 0.50), 1.0),
             true_25d_material(&mut materials, Color::srgb(0.42, 0.96, 0.32), 1.0),
             true_25d_material(&mut materials, Color::srgba(0.88, 1.0, 0.28, 0.86), 0.86),
+            true_25d_material(
+                &mut materials,
+                Color::srgba(0.005, 0.010, 0.008, 0.30),
+                0.30,
+            ),
             true_25d_material(&mut materials, Color::srgba(1.0, 0.78, 0.24, 0.74), 0.74),
             true_25d_material(&mut materials, Color::srgba(1.0, 0.18, 0.22, 0.86), 0.86),
             true_25d_material(&mut materials, Color::srgba(0.58, 0.60, 0.66, 0.54), 0.54),
@@ -1961,6 +1968,7 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
         rock_material,
         reed_material,
         selection_material,
+        contact_shadow_material,
         hunger_glow_material,
         pain_spike_material,
         stress_desaturation_material,
@@ -2518,7 +2526,49 @@ fn spawn_true_25d_textured_micro_ecology_ground(
             last_materialized_tile_count: field.materialized_tiles.len(),
         },
     ));
+    if let Some(handles) = app
+        .world()
+        .get_resource::<GraphicalAlphaArtHandles>()
+        .cloned()
+    {
+        spawn_true_25d_alpha_painted_backdrop(app, &handles);
+    }
     app.insert_resource(field);
+}
+
+fn spawn_true_25d_alpha_painted_backdrop(app: &mut App, handles: &GraphicalAlphaArtHandles) {
+    let mesh = app.world_mut().resource_mut::<Assets<Mesh>>().add(
+        Plane3d::default()
+            .mesh()
+            .size(TRUE_25D_GROUND_WIDTH, TRUE_25D_GROUND_DEPTH),
+    );
+    let material = app
+        .world_mut()
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(StandardMaterial {
+            base_color_texture: Some(handles.world_backdrop.clone()),
+            base_color: Color::srgba(1.0, 1.0, 1.0, 0.88),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            cull_mode: None,
+            perceptual_roughness: 0.86,
+            ..default()
+        });
+    app.world_mut().spawn((
+        Name::new("A-Life true 2.5D painted biome art substrate"),
+        Mesh3d(mesh),
+        MeshMaterial3d(material),
+        Transform::from_xyz(0.0, -0.015, 0.0),
+        GraphicalTrue25dAsset {
+            role: "terrain-painted-biome-art-substrate",
+            stable_id: None,
+            display_only: true,
+        },
+        GraphicalProductionArtLayer {
+            role: "true-25d-painted-biome-art-substrate",
+            display_only: true,
+        },
+    ));
 }
 
 fn true_25d_repeating_ground_plane_mesh(
@@ -2640,35 +2690,30 @@ fn spawn_true_25d_chunk_dressing(
     let mut dressing: Vec<(&'static str, f32, f32, f32)> = Vec::new();
     match material_id {
         "resource-grove" => {
-            dressing.push(("plant-prop", -0.25, 0.18, 0.58));
             if hash.rem_euclid(3) != 0 {
-                dressing.push(("food", 0.28, -0.12, 0.44));
+                dressing.push(("food", 0.16, -0.08, 0.68));
             }
         }
         "hazard-pressure" => {
-            dressing.push(("hazard", 0.10, -0.08, 0.58));
+            dressing.push(("hazard", 0.10, -0.08, 0.78));
             if hash.rem_euclid(2) == 0 {
-                dressing.push(("hazard", -0.28, 0.18, 0.40));
+                dressing.push(("hazard", -0.24, 0.14, 0.58));
             }
         }
         "stone-dressing" => {
-            dressing.push(("rock-obstacle", -0.10, 0.04, 0.56));
+            dressing.push(("rock-obstacle", -0.10, 0.04, 0.70));
         }
         "water" => {
-            if hash.rem_euclid(2) == 0 {
-                dressing.push(("plant-prop", 0.18, 0.20, 0.38));
+            if hash.rem_euclid(4) == 0 {
+                dressing.push(("rock-obstacle", 0.16, 0.18, 0.34));
             }
         }
         "sand" | "neutral-soil" => {
-            if hash.rem_euclid(5) == 0 {
-                dressing.push(("rock-obstacle", 0.16, -0.18, 0.40));
+            if hash.rem_euclid(11) == 0 {
+                dressing.push(("rock-obstacle", 0.16, -0.18, 0.34));
             }
         }
-        _ => {
-            if hash.rem_euclid(7) == 0 {
-                dressing.push(("plant-prop", -0.16, 0.18, 0.34));
-            }
-        }
+        _ => {}
     }
     for (role, ox, oz, scale) in dressing {
         let transform = Transform::from_xyz(x + ox * 0.34, 0.09, z + oz * 0.34)
@@ -3689,6 +3734,29 @@ fn spawn_true_25d_object_scene(
     scene_assets: Option<&GraphicalTrue25dSceneAssets>,
     object: &VisibleWorldObjectPresentation,
 ) -> Result<(), GameAppShellError> {
+    if object.kind == WorldObjectKind::Token {
+        let entity = app
+            .world_mut()
+            .spawn((
+                Name::new(format!(
+                    "A-Life true 2.5D hidden school token stable:{}",
+                    object.stable_id.raw()
+                )),
+                Transform::from_translation(true_25d_position(object)),
+                GraphicalTrue25dAsset {
+                    role: "school-token-hidden",
+                    stable_id: Some(object.stable_id),
+                    display_only: true,
+                },
+                GraphicalProductionArtLayer {
+                    role: "true-25d-world-entity-hidden-token",
+                    display_only: true,
+                },
+            ))
+            .id();
+        attach_visible_world_runtime_components(app, entity, object)?;
+        return Ok(());
+    }
     let role = true_25d_role_for_world_object(object.kind);
     let base = true_25d_position(object);
     let entity = if let Some(scenes) = scene_assets {
@@ -3769,6 +3837,7 @@ fn spawn_true_25d_object_scene(
             GraphicalTrue25dCreatureEndocrinePresentation::neutral(object.stable_id, base_scale),
         );
     }
+    spawn_true_25d_entity_contact_shadow(app, native_assets, object.kind, base, object.stable_id);
     attach_visible_world_runtime_components(app, entity, object)?;
     if object.kind == WorldObjectKind::Agent {
         spawn_true_25d_creature_details(app, native_assets, scene_assets, object.stable_id, base);
@@ -3815,6 +3884,42 @@ fn spawn_true_25d_object_scene(
         }
     }
     Ok(())
+}
+
+fn spawn_true_25d_entity_contact_shadow(
+    app: &mut App,
+    native_assets: &GraphicalTrue25dNativeAssets,
+    kind: WorldObjectKind,
+    base: Vec3,
+    stable_id: WorldEntityId,
+) {
+    let (width, depth) = match kind {
+        WorldObjectKind::Agent => (0.46, 0.26),
+        WorldObjectKind::Food => (0.24, 0.16),
+        WorldObjectKind::Hazard => (0.34, 0.22),
+        WorldObjectKind::Obstacle => (0.38, 0.24),
+        WorldObjectKind::Token => return,
+    };
+    app.world_mut().spawn((
+        Name::new(format!(
+            "A-Life true 2.5D contact shadow stable:{}",
+            stable_id.raw()
+        )),
+        Mesh3d(native_assets.terrain_mesh.clone()),
+        MeshMaterial3d(native_assets.contact_shadow_material.clone()),
+        Transform::from_translation(Vec3::new(base.x, 0.026, base.z))
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
+            .with_scale(Vec3::new(width, depth, 1.0)),
+        GraphicalTrue25dAsset {
+            role: "entity-contact-shadow",
+            stable_id: Some(stable_id),
+            display_only: true,
+        },
+        GraphicalProductionArtLayer {
+            role: "true-25d-entity-contact-shadow",
+            display_only: true,
+        },
+    ));
 }
 
 fn attach_visible_world_runtime_components(
@@ -3902,21 +4007,21 @@ fn true_25d_height_for_kind(kind: WorldObjectKind) -> f32 {
 
 fn true_25d_scale_for_kind(kind: WorldObjectKind) -> f32 {
     match kind {
-        WorldObjectKind::Agent => 0.22,
-        WorldObjectKind::Food => 0.22,
-        WorldObjectKind::Hazard => 0.34,
-        WorldObjectKind::Obstacle => 0.36,
-        WorldObjectKind::Token => 0.18,
+        WorldObjectKind::Agent => 0.24,
+        WorldObjectKind::Food => 0.34,
+        WorldObjectKind::Hazard => 0.48,
+        WorldObjectKind::Obstacle => 0.46,
+        WorldObjectKind::Token => 0.08,
     }
 }
 
 fn true_25d_gltf_scale_for_kind(kind: WorldObjectKind) -> f32 {
     match kind {
-        WorldObjectKind::Agent => 0.22,
-        WorldObjectKind::Food => 0.22,
-        WorldObjectKind::Hazard => 0.34,
-        WorldObjectKind::Obstacle => 0.36,
-        WorldObjectKind::Token => 0.18,
+        WorldObjectKind::Agent => 0.24,
+        WorldObjectKind::Food => 0.34,
+        WorldObjectKind::Hazard => 0.48,
+        WorldObjectKind::Obstacle => 0.46,
+        WorldObjectKind::Token => 0.08,
     }
 }
 
@@ -5693,7 +5798,7 @@ fn ca44a_generate_runtime_procedural_biome_map_with_pixels_per_tile(
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::default(),
     );
-    image.sampler = ImageSampler::linear();
+    image.sampler = ImageSampler::nearest();
     (image, metrics)
 }
 
@@ -5992,18 +6097,18 @@ fn ca44a_paint_runtime_biome_regions(
     data: &mut [u8],
 ) -> u32 {
     let regions = [
-        (-38.0, -23.0, 35.0, 13.0, [36, 139, 158], 0.48, 0xE9u32),
-        (-33.0, -16.0, 29.0, 13.0, [223, 187, 103], 0.42, 0x23u32),
-        (-36.0, 20.0, 41.0, 19.0, [98, 108, 101], 0.40, 0x51u32),
-        (2.0, 13.0, 34.0, 17.0, [50, 151, 55], 0.38, 0xC3u32),
-        (38.0, 0.0, 39.0, 24.0, [205, 58, 39], 0.48, 0xA7u32),
-        (50.0, -24.0, 24.0, 13.0, [178, 155, 104], 0.34, 0x77u32),
-        (-24.0, 2.0, 22.0, 9.0, [36, 142, 160], 0.40, 0xB4u32),
-        (18.0, 6.0, 24.0, 15.0, [213, 63, 37], 0.38, 0x91u32),
-        (-8.0, 21.0, 24.0, 11.0, [105, 115, 107], 0.35, 0x64u32),
-        (0.0, -16.0, 28.0, 13.0, [48, 145, 54], 0.34, 0xD8u32),
-        (-48.0, 5.0, 18.0, 11.0, [222, 190, 109], 0.31, 0x47u32),
-        (45.0, 21.0, 21.0, 10.0, [89, 96, 91], 0.32, 0x33u32),
+        (-38.0, -23.0, 35.0, 13.0, [30, 142, 164], 0.68, 0xE9u32),
+        (-33.0, -16.0, 29.0, 13.0, [228, 191, 103], 0.58, 0x23u32),
+        (-36.0, 20.0, 41.0, 19.0, [99, 108, 101], 0.58, 0x51u32),
+        (2.0, 13.0, 34.0, 17.0, [45, 158, 55], 0.52, 0xC3u32),
+        (38.0, 0.0, 39.0, 24.0, [211, 54, 38], 0.72, 0xA7u32),
+        (50.0, -24.0, 24.0, 13.0, [187, 158, 100], 0.52, 0x77u32),
+        (-24.0, 2.0, 22.0, 9.0, [32, 148, 169], 0.58, 0xB4u32),
+        (18.0, 6.0, 24.0, 15.0, [218, 61, 37], 0.56, 0x91u32),
+        (-8.0, 21.0, 24.0, 11.0, [105, 115, 107], 0.50, 0x64u32),
+        (0.0, -16.0, 28.0, 13.0, [44, 152, 52], 0.48, 0xD8u32),
+        (-48.0, 5.0, 18.0, 11.0, [228, 191, 106], 0.46, 0x47u32),
+        (45.0, 21.0, 21.0, 10.0, [88, 96, 92], 0.46, 0x33u32),
     ];
     regions
         .iter()
@@ -6125,7 +6230,7 @@ fn ca44a_paint_runtime_biome_region(
                 * 0.07)
                 + ((hash % 97) as f32 / 96.0 - 0.5) * 0.06;
             let fog_factor = if fogged { 0.72 } else { 1.0 };
-            let alpha = (max_alpha * fog_factor * (0.10 + edge * 0.90 + texture_breakup))
+            let alpha = (max_alpha * fog_factor * (0.22 + edge * 0.78 + texture_breakup))
                 .clamp(0.0, max_alpha * fog_factor);
             if alpha <= 0.01 {
                 continue;
@@ -6275,10 +6380,10 @@ fn ca44a_paint_runtime_biome_dressing(
                 ca44a_paint_tree_cluster(data, width_px, height_px, world_x, world_z, index, seed);
         }
     }
-    for index in 0..520 {
+    for index in 0..260 {
         let (world_x, world_z) = ca44a_runtime_stone_cluster_point(seed, index);
-        if (ca44a_runtime_stone_weight(world_x, world_z) > 0.30
-            || ca44a_runtime_pixel_hash(seed, index, 17, 0, 0) % 11 == 0)
+        if (ca44a_runtime_stone_weight(world_x, world_z) > 0.42
+            || ca44a_runtime_pixel_hash(seed, index, 17, 0, 0) % 23 == 0)
             && ca44a_world_point_in_active_fog_window(field, world_x, world_z)
         {
             metrics.stone_detail_pixels +=

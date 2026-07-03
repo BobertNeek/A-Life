@@ -2,7 +2,7 @@
 
 Plan: CA44A extension
 Branch: codex/CA44A-visual-rebuild-computer-use-loop
-Status: branch validated; latest Computer Use screenshot capture blocked
+Status: branch validated; fallback app-window capture available
 Next plan remains: CA44 after visual acceptance and external tester evidence
 
 ## Scope
@@ -30,10 +30,11 @@ target/playtest_evidence/visual_rebuild/baseline_user_reported_current.png
 target/playtest_evidence/visual_rebuild/blueprint_target.png
 ```
 
-Iteration captures before this final smoothing pass:
+Iteration captures:
 
 ```text
 target/playtest_evidence/visual_rebuild/iteration12_crisp_texture_reduced_routes.png
+target/playtest_evidence/visual_rebuild/current_branch_player_view_window.png
 ```
 
 The baseline/user evidence showed the Player View still reading as a debug or
@@ -62,19 +63,21 @@ tiles with continuous material fields for:
 The runtime map is display-only and mirrors world/context state. It is not
 simulation, sensory, resource-spawn, navigation, or action authority.
 
-The final smoothing pass changed the remaining presentation issues:
+The latest visual hierarchy pass changed the remaining presentation issues:
 
-- switched the generated biome image sampler to linear filtering to reduce
-  nearest-neighbor carpet artifacts;
-- reduced terrain-tile blend strength so macro biome shapes carry the scene
-  instead of per-pixel texture noise;
-- reduced per-pixel micro-noise;
-- thinned and softened procedural tile-edge accents so they no longer draw a
-  visible grid over most tiles;
-- slightly enlarged 2.5D dressing props so food, hazard, rock, and plant cues
-  are easier to read;
-- reduced broad fog-cell GLB scale so fog-of-war does not obscure the whole
-  play surface.
+- added the committed `world_backdrop_gpu_alpha.png` as a 3D painted biome art
+  substrate under the True 2.5D runtime objects;
+- kept the seeded runtime biome map and procedural chunk ledger active beneath
+  the art substrate for deterministic terrain evidence;
+- switched the generated biome image sampler to nearest filtering for crisper
+  terrain detail;
+- strengthened water, sand, stone, resource, and hazard biome region contrast;
+- hid token/school cue entities from the default Player View while preserving
+  their stable-ID runtime mapping;
+- removed token-like reed/plant prop dressing from the default Player View;
+- rebalanced object scale so food, hazard, and rock accents read more clearly;
+- added display-only contact shadows under world objects so they sit on the
+  map instead of floating as flat cutouts.
 
 The `alpha_art_v1` terrain PNGs were regenerated as small original project
 assets and the manifest file sizes were updated. The strict manifest validator
@@ -99,24 +102,31 @@ presentation. The latest pass reduces fog-cell scale to avoid opaque blobs.
 Fog remains display-only and cannot alter creature perception, actions, or
 world state.
 
-## Computer Use Evidence
+## Computer Use / Screenshot Evidence
 
 Previous app-window captures were saved under the local evidence directory.
 
-This thread could not capture the latest app-window screenshot after the final
-smoothing pass because the Computer Use JS bootstrap failed before app
-enumeration with:
+Native Computer Use remains unavailable in this thread because the Computer Use
+JS bootstrap fails before app enumeration with:
 
 ```text
 failed to write kernel assets: The system cannot find the path specified. (os error 3)
 ```
 
-The failure occurred before `sky.list_apps()` could run, and remained after two
-supported setup attempts with a JS kernel reset between them. Therefore the
-latest final image comparison is not claimed as Computer Use screenshot
-evidence in this document.
+The failure occurs before `sky.list_apps()` can run. Therefore the latest image
+comparison is not claimed as native Computer Use screenshot evidence.
 
-The graphical smoke itself was run in the foreground and passed.
+Fallback app-window capture succeeded using the local screenshot helper:
+
+```text
+target/playtest_evidence/visual_rebuild/current_branch_player_view_window.png
+```
+
+That fallback capture shows a materially cleaner player view than the user
+baseline: coherent roads, groves, rocks, hazard/resource zones, selected
+creature ring, and compact HUD. It still does not fully match the generated
+blueprint quality and remains a CA44A visual-quality iteration rather than
+external alpha evidence.
 
 ## Focused Evidence
 
@@ -135,6 +145,15 @@ cargo test -p alife_game_app --features bevy-app --test app_shell true_25d -- --
 ```
 
 Result: PASS, 10 tests.
+
+Player View art-substrate regression:
+
+```powershell
+cargo test -p alife_game_app --features bevy-app --test app_shell ca44a_player_view_uses_true_25d_world_assets_not_default_rectangles -- --nocapture
+```
+
+Result: PASS. The default Player View includes the painted biome art substrate
+and hides token-like reed props.
 
 Production/player-view focused tests:
 
@@ -166,13 +185,35 @@ Result: PASS. Fallback selected `CpuReference` with
 `HardwareUnavailable`; degraded fallback remained explicit and no GPU
 performance claim was emitted.
 
+## Validation Results
+
+Full branch validation passed:
+
+```powershell
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
+cargo tree -p alife_core
+cargo check --workspace --all-features --all-targets
+cargo test --workspace --all-features --all-targets
+```
+
+Result: PASS. The final all-features test was rerun with
+`CARGO_BUILD_JOBS=1` after context compaction so the result could be verified
+from this thread.
+
 ## Known Limitations
 
-- The latest final screenshot could not be captured in this thread because the
-  Computer Use JS runtime failed before app enumeration.
-- The scene is improved toward a seed-generated 2.5D ecosystem, but final
-  acceptance still needs a fresh app-window screenshot compared to the
-  blueprint.
+- Native Computer Use app enumeration/screenshot capture remains blocked in
+  this thread by the node kernel asset-path error, so visual evidence is
+  fallback app-window capture, not native Computer Use evidence.
+- The scene is materially improved but still not at the blueprint quality bar:
+  entity meshes remain low-poly placeholder silhouettes and the painted
+  substrate is an authored alpha art layer over the deterministic terrain map.
 - The terrain generation is display/context-only and not a full streamed
   authoritative ecology substrate.
 - The renderer still does not claim full action-authoritative GPU runtime.
@@ -207,6 +248,5 @@ No release tag was created. Release remains deferred.
 
 ## Main Status
 
-Branch validation passed. Main has not been advanced by this extension document
-because the latest Computer Use screenshot comparison could not be captured in
-this thread.
+Branch validation passed after the latest visual hierarchy pass. Main has not
+been advanced by this extension document.
