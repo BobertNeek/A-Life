@@ -10,6 +10,9 @@ This is a CA44A extension slice. It does not advance the CA roadmap. CA44
 remains blocked until independent external tester evidence exists. CA45 was
 not started. The next roadmap item remains CA44 after evidence, not CA45.
 
+The completed CA44A True 2.5D extension sequence is consolidated in
+`docs/creatures_agi_roadmap_pack/status/CA44A_TRUE25D_EXTENSION_ROLLUP.md`.
+
 ## Objective
 
 Make the selected creature's internal drive state readable in the default
