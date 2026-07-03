@@ -7,6 +7,7 @@ Repository target: `BobertNeek/A-Life`.
 Hardware target supplied by Cassidy:
 
 ```text
+Minimum comfortable spec, not a stretch target:
 GPU: NVIDIA RTX 3050
 VRAM: 8 GB
 CPU: Intel Core i7-3770K
@@ -19,6 +20,8 @@ Platform: desktop only
 ## Controlling decision
 
 Replace the old ugly frontend with a finished Bevy 0.18 fullstack game frontend whose default player view is a stylized voxel world with real ALife backend integration, GPU-backed neural/runtime scaling, saved backend state, production UI, production assets, and finished desktop validation. Reuse existing code only when it is cheaper and safer than replacement; lean toward replacement.
+
+Cassidy's RTX 3050 / i7-3770K system is the minimum comfortable supported machine for the default desktop experience. The default `MinSpecComfort1080p` profile must run smoothly on that hardware without requiring the user to manually disable core features. Stronger machines may unlock larger worlds, more hot/warm brain slots, longer view distances, denser VFX, higher creature counts, larger brain classes, and research-scale modes through explicit scale-up profiles. The implementation must not hard-code the minimum spec as an architectural ceiling.
 
 This pack deliberately rejects the previous pattern of alpha plans, practice attempts, smoke-only slices, manifest-only art contracts, mock data sources, and future-human cleanup. FVR00 is the only scaffolding/review pass. Every FVR plan after FVR00 must leave its owned subsystem finished, integrated, saved, validated, and enabled in the production path.
 
@@ -33,6 +36,17 @@ This pack deliberately rejects the previous pattern of alpha plans, practice att
 - No mockups, no mock simulation, no fake backend, no placeholder art-as-final, no visual-only lies. If an existing command or status file says alpha/smoke, Codex may preserve it only as a regression command; new production entrypoints must use production names and real data.
 - External assets are allowed only if their license is committed and recorded in the asset manifest with source, license, digest, and local path. Prefer CC0, MIT, Apache-2.0, BSD, Zlib, or public-domain assets.
 - Desktop only: Windows 10 first, Linux acceptable. No web/mobile work in this pack.
+
+## Scalability rule
+
+The minimum spec profile must be comfortable, but the architecture must remain scale-up capable. Codex must implement all performance-sensitive systems as profile-driven budgets, not single constants:
+
+- `MinSpecComfort1080p`: default supported profile for RTX 3050 8 GB and i7-3770K. Smooth 1080p play, bounded chunk radius, GPU-instanced creatures, adaptive VFX, compact overlays, and conservative hot-brain residency.
+- `Balanced1080p`: same feature set with moderate increases when timing headroom is available.
+- `HighSpecScaleUp`: increased chunk radius, creature population, VFX density, hot/warm brain slots, and larger brain-class budgets on stronger GPUs/CPUs.
+- `ResearchScale`: non-default experimental mode for large worlds, long soaks, larger brains, and high population studies. It may miss consumer-play comfort targets but must keep save/schema/ABI compatibility.
+
+Data layouts must be sparse, chunked, class-bucketed, dirty-region based, and saved with profile metadata so later scale-up does not require rewriting world, brain, renderer, or save architecture.
 
 ## Bevy/ecosystem baseline
 
@@ -54,19 +68,21 @@ FVR00 is the single scaffolding/review pass. It creates the exact demolition map
 |---|---|---|
 | FVR00 | One-pass repo audit and replacement blueprint | Codex knows what to delete/reuse, where to write, and what exact validations prove completion. |
 | FVR01 | Production launcher, dependency cutover, and frontend demolition | Old graphical frontend paths are retired or routed through the new production app; Bevy 0.18 voxel stack dependencies and feature flags are wired. |
-| FVR02 | Real persistent world backend and chunk/snapshot contracts | `alife_world` owns saved procedural voxel chunk truth, ecology/resource layers, and adapter snapshots with no renderer contamination. |
-| FVR03 | Finished default voxel world renderer | The player sees a stylized, streamed, selectable voxel world at 1080p with LOD, materials, lighting, camera, and persistence-backed chunks. |
-| FVR04 | GPU-scaled creatures, animation, selection, and expression | Real creatures render through GPU-friendly batching/instancing with expression data from core/world state and Bevy picking. |
-| FVR05 | Production game UX, overlays, and inspectors | The frontend has real menus, camera, settings, debug overlays, brain/world inspection, and no debug authority leaks. |
-| FVR06 | Full gameplay GPU backend integration and saved runtime state | The neural/GPU runtime is selected and persisted as a real gameplay backend on RTX 3050 when validation passes, with CPU oracle fallback only as diagnosed fallback. |
-| FVR07 | Art, assets, VFX, audio-visual polish, and license manifest | The game is visually coherent, uses licensed/generated assets, GPU VFX, stylized materials, and no placeholder art claims. |
-| FVR08 | Final replacement hardening, packaging, and acceptance | The old ugly frontend is fully replaced; desktop package and validation prove finished 1080p operation on target hardware. |
+| FVR02 | Real persistent world backend and chunk/snapshot contracts | `alife_world` owns saved procedural voxel chunk truth, ecology/resource layers, profile metadata, and adapter snapshots with no renderer contamination. |
+| FVR03 | Finished default voxel world renderer | The player sees a stylized, streamed, selectable voxel world at 1080p with LOD, materials, lighting, camera, persistence-backed chunks, and min-spec/scale-up profile budgets. |
+| FVR04 | GPU-scaled creatures, animation, selection, and expression | Real creatures render through GPU-friendly batching/instancing with expression data from core/world state, min-spec comfort budgets, and scale-up population profiles. |
+| FVR05 | Production game UX, overlays, and inspectors | The frontend has real menus, camera, settings, debug overlays, brain/world inspection, profile controls, and no debug authority leaks. |
+| FVR06 | Full gameplay GPU backend integration and saved runtime state | The neural/GPU runtime is selected and persisted as a real gameplay backend on RTX 3050 when validation passes, with CPU oracle fallback only as diagnosed fallback and scale-up profiles for stronger hardware. |
+| FVR07 | Art, assets, VFX, audio-visual polish, and license manifest | The game is visually coherent, uses licensed/generated assets, GPU VFX, stylized materials, and adaptive quality budgets instead of placeholder art claims. |
+| FVR08 | Final replacement hardening, packaging, and acceptance | The old ugly frontend is fully replaced; desktop package and validation prove comfortable 1080p operation on the minimum spec and preserve later scale-up. |
 
 ## Definition of done for the whole pack
 
 The default desktop launch opens a polished 1080p Bevy game using the real saved ALife backend, a voxel terrain world, visible creatures, resource/ecology state, camera controls, selection, overlays, persistence, GPU-backed rendering/VFX, GPU neural/runtime selection on RTX 3050 when available, adaptive quality scaling, and explicit performance/diagnostic receipts. The app should be playable and inspectable without a human developer finishing missing systems.
 
-The system must preserve core architecture boundaries and save enough backend state to resume world, creatures, brain residency/backend mode, visual settings, chunk materialization, and asset manifest references.
+The `MinSpecComfort1080p` profile must be the default on Cassidy's system and must run comfortably as the minimum supported spec. Higher profiles must scale up through data-driven budgets rather than forks or rewrites.
+
+The system must preserve core architecture boundaries and save enough backend state to resume world, creatures, brain residency/backend mode, visual settings, chunk materialization, profile selection, and asset manifest references.
 
 ## Required final validation posture
 
