@@ -155,7 +155,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_safe_grass.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 38019
+      "file_size_bytes": 29149
     },
     {
       "id": "terrain_soil_path",
@@ -164,7 +164,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_soil_path.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 36705
+      "file_size_bytes": 30814
     },
     {
       "id": "terrain_resource_grove",
@@ -173,7 +173,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_resource_grove.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 40066
+      "file_size_bytes": 31465
     },
     {
       "id": "terrain_hazard_pressure",
@@ -182,7 +182,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_hazard_pressure.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 38422
+      "file_size_bytes": 29446
     },
     {
       "id": "terrain_stone_rough",
@@ -191,7 +191,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_stone_rough.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 41484
+      "file_size_bytes": 28254
     },
     {
       "id": "terrain_water",
@@ -200,7 +200,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_water.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 39590
+      "file_size_bytes": 33030
     },
     {
       "id": "terrain_sand",
@@ -209,7 +209,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/terrain_sand.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 36974
+      "file_size_bytes": 29241
     },
     {
       "id": "terrain_edge_blend",
@@ -227,7 +227,7 @@
       "relative_path": "crates/alife_game_app/assets/alpha_art_v1/ground_tile_repeat.png",
       "width": 128,
       "height": 128,
-      "file_size_bytes": 43953
+      "file_size_bytes": 29270
     },
     {
       "id": "world_backdrop_gpu_alpha",
