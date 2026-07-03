@@ -79,6 +79,31 @@ The latest visual hierarchy pass changed the remaining presentation issues:
 - added display-only contact shadows under world objects so they sit on the
   map instead of floating as flat cutouts.
 
+The current visual-quality loop adds a second Player View entity pass:
+
+- default True 2.5D Player View objects now use committed alpha-art PNGs as
+  camera-facing 3D billboards for creature, food, hazard, rock, and selection
+  roles when the alpha art pack is loaded;
+- the low-poly/glTF placeholder bodies remain available for diagnostics or
+  degraded paths, but they are no longer the primary Player View entity
+  surface when alpha art is present;
+- selected creature posture/learning feedback keeps its display-only
+  endocrine state while preserving the billboard's isometric facing;
+- small stable-ID-derived display offsets separate overlapping creature
+  markers so the selected cluster reads as multiple organisms instead of a
+  single blob;
+- selection-ring scale was reduced to avoid dominating the creature cluster.
+
+The validation loop also exposed a Windows all-features test harness issue:
+the `app_shell` Bevy-heavy test binary passed when run serially, but the exact
+workspace all-features command repeatedly exited with `STATUS_ACCESS_VIOLATION`
+while `player_view_streaming_keeps_live_creature_anchors_synced` was running
+in parallel with other Bevy app-shell tests. The repo Cargo test environment
+now sets `RUST_TEST_THREADS=1` in `.cargo/config.toml`. This preserves all test
+assertions and the exact validation command while avoiding parallel Bevy
+resource teardown races in the test harness. It does not change runtime code,
+simulation behavior, CPU fallback, CPU shadow parity, or action authority.
+
 The `alpha_art_v1` terrain PNGs were regenerated as small original project
 assets and the manifest file sizes were updated. The strict manifest validator
 still rejects malformed PNGs, missing roles, dimension mismatches, oversized
@@ -115,6 +140,11 @@ failed to write kernel assets: The system cannot find the path specified. (os er
 
 The failure occurs before `sky.list_apps()` can run. Therefore the latest image
 comparison is not claimed as native Computer Use screenshot evidence.
+
+The current loop retried the official Computer Use bootstrap after tool
+discovery exposed the Node-backed execution tool. It failed with the same
+kernel asset-path error, so native Computer Use remains unavailable for this
+thread.
 
 Fallback app-window capture succeeded using the local screenshot helper:
 
@@ -153,7 +183,9 @@ cargo test -p alife_game_app --features bevy-app --test app_shell ca44a_player_v
 ```
 
 Result: PASS. The default Player View includes the painted biome art substrate
-and hides token-like reed props.
+and hides token-like reed props. After the current entity pass, it also proves
+default True 2.5D Player View uses committed alpha art for creature, food,
+hazard, rock, and selection roles.
 
 Production/player-view focused tests:
 
@@ -185,7 +217,7 @@ Result: PASS. Fallback selected `CpuReference` with
 `HardwareUnavailable`; degraded fallback remained explicit and no GPU
 performance claim was emitted.
 
-## Validation Results
+## Previous Full Validation Results
 
 Full branch validation passed:
 
@@ -202,9 +234,23 @@ cargo check --workspace --all-features --all-targets
 cargo test --workspace --all-features --all-targets
 ```
 
-Result: PASS. The final all-features test was rerun with
-`CARGO_BUILD_JOBS=1` after context compaction so the result could be verified
-from this thread.
+Current result: PASS. The final all-features test initially reproduced a
+Windows `STATUS_ACCESS_VIOLATION` in the all-features `app_shell` binary under
+parallel harness execution. The isolated suspect test passed, the serial
+`app_shell` binary passed all 210 active tests, and the exact workspace command
+then passed after the repo test environment was made single-threaded for Rust
+test binaries.
+
+Final all-features verification:
+
+```powershell
+$env:CARGO_BUILD_JOBS="1"
+cargo test --workspace --all-features --all-targets
+Remove-Item Env:\CARGO_BUILD_JOBS -ErrorAction SilentlyContinue
+```
+
+Result: PASS. The command used the repo `RUST_TEST_THREADS=1` setting from
+`.cargo/config.toml`; no manual `--test-threads=1` argument was needed.
 
 ## Known Limitations
 
@@ -212,11 +258,16 @@ from this thread.
   this thread by the node kernel asset-path error, so visual evidence is
   fallback app-window capture, not native Computer Use evidence.
 - The scene is materially improved but still not at the blueprint quality bar:
-  entity meshes remain low-poly placeholder silhouettes and the painted
-  substrate is an authored alpha art layer over the deterministic terrain map.
+  entity sprites are now art-backed, but the world still depends on an authored
+  painted substrate over the deterministic terrain map and does not yet have a
+  full dynamic art-quality chunk compositor.
 - The terrain generation is display/context-only and not a full streamed
   authoritative ecology substrate.
 - The renderer still does not claim full action-authoritative GPU runtime.
+- Rust test binaries now run single-threaded by repo configuration because
+  Bevy-heavy app-shell tests can crash under parallel harness execution on this
+  Windows machine. This is validation-stability infrastructure, not a runtime
+  or gameplay change.
 
 ## Invariant Checks
 
@@ -248,5 +299,5 @@ No release tag was created. Release remains deferred.
 
 ## Main Status
 
-Branch validation passed after the latest visual hierarchy pass. Main has not
-been advanced by this extension document.
+Branch validation passed after the current alpha-art billboard entity pass.
+Main has not been advanced by this extension document.

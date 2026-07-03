@@ -1177,6 +1177,7 @@ pub struct GraphicalTrue25dRenderBypassSummaryResource {
 #[derive(Debug, Clone, Resource)]
 struct GraphicalTrue25dNativeAssets {
     terrain_mesh: Handle<Mesh>,
+    billboard_plane_mesh: Handle<Mesh>,
     crystal_mesh: Handle<Mesh>,
     rock_mesh: Handle<Mesh>,
     ring_mesh: Handle<Mesh>,
@@ -1880,6 +1881,7 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
 
     let (
         terrain_mesh,
+        billboard_plane_mesh,
         crystal_mesh,
         rock_mesh,
         ring_mesh,
@@ -1892,6 +1894,7 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         (
             meshes.add(Circle::new(1.0)),
+            meshes.add(Plane3d::default().mesh().size(1.0, 1.0)),
             meshes.add(Cone::new(0.42, 1.28)),
             meshes.add(Sphere::new(1.0).mesh().ico(1).expect("valid rock sphere")),
             meshes.add(Circle::new(1.0).to_ring(0.26)),
@@ -1950,6 +1953,7 @@ fn true_25d_native_assets(app: &mut App) -> GraphicalTrue25dNativeAssets {
 
     let handles = GraphicalTrue25dNativeAssets {
         terrain_mesh,
+        billboard_plane_mesh,
         crystal_mesh,
         rock_mesh,
         ring_mesh,
@@ -3759,6 +3763,40 @@ fn spawn_true_25d_object_scene(
     }
     let role = true_25d_role_for_world_object(object.kind);
     let base = true_25d_position(object);
+    if let Some(alpha_art) = app
+        .world()
+        .get_resource::<GraphicalAlphaArtHandles>()
+        .cloned()
+    {
+        let entity =
+            spawn_true_25d_alpha_art_billboard(app, native_assets, &alpha_art, object, role, base);
+        if object.kind == WorldObjectKind::Agent {
+            app.world_mut().entity_mut(entity).insert(
+                GraphicalTrue25dCreatureEndocrinePresentation::neutral(
+                    object.stable_id,
+                    true_25d_alpha_billboard_scale_for_kind(object.kind),
+                ),
+            );
+        }
+        spawn_true_25d_entity_contact_shadow(
+            app,
+            native_assets,
+            object.kind,
+            base,
+            object.stable_id,
+        );
+        attach_visible_world_runtime_components(app, entity, object)?;
+        if object.kind == WorldObjectKind::Agent {
+            spawn_true_25d_alpha_art_selection_ring(
+                app,
+                native_assets,
+                &alpha_art,
+                base,
+                object.stable_id,
+            );
+        }
+        return Ok(());
+    }
     let entity = if let Some(scenes) = scene_assets {
         let (scene, scene_path) = true_25d_scene_for_role(scenes, role);
         app.world_mut()
@@ -3886,6 +3924,156 @@ fn spawn_true_25d_object_scene(
     Ok(())
 }
 
+fn spawn_true_25d_alpha_art_billboard(
+    app: &mut App,
+    native_assets: &GraphicalTrue25dNativeAssets,
+    alpha_art: &GraphicalAlphaArtHandles,
+    object: &VisibleWorldObjectPresentation,
+    role: &'static str,
+    base: Vec3,
+) -> Entity {
+    let texture = true_25d_alpha_art_handle_for_world_object(alpha_art, object.kind);
+    let material = app
+        .world_mut()
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(StandardMaterial {
+            base_color_texture: Some(texture),
+            base_color: true_25d_alpha_art_tint_for_world_object(object.kind),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            cull_mode: None,
+            perceptual_roughness: 0.88,
+            ..default()
+        });
+    app.world_mut()
+        .spawn((
+            Name::new(format!(
+                "A-Life true 2.5D alpha-art {role} stable:{}",
+                object.stable_id.raw()
+            )),
+            Mesh3d(native_assets.billboard_plane_mesh.clone()),
+            MeshMaterial3d(material),
+            Transform::from_translation(base + true_25d_alpha_billboard_offset(object.kind))
+                .with_rotation(true_25d_alpha_billboard_rotation())
+                .with_scale(true_25d_normalized_scale(
+                    true_25d_alpha_billboard_scale_for_kind(object.kind),
+                )),
+            GraphicalAlphaArtBackedSprite {
+                role,
+                stable_id: Some(object.stable_id),
+            },
+            GraphicalTrue25dAsset {
+                role,
+                stable_id: Some(object.stable_id),
+                display_only: true,
+            },
+            GraphicalTrue25dStateCue {
+                stable_id: object.stable_id,
+                pain_pose: object.kind == WorldObjectKind::Hazard,
+                stress_desaturated: false,
+                learning_biolume: object.kind == WorldObjectKind::Agent,
+                display_only: true,
+            },
+            GraphicalProductionArtLayer {
+                role: "true-25d-alpha-art-world-entity",
+                display_only: true,
+            },
+        ))
+        .id()
+}
+
+fn spawn_true_25d_alpha_art_selection_ring(
+    app: &mut App,
+    native_assets: &GraphicalTrue25dNativeAssets,
+    alpha_art: &GraphicalAlphaArtHandles,
+    base: Vec3,
+    stable_id: WorldEntityId,
+) {
+    let material = app
+        .world_mut()
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(StandardMaterial {
+            base_color_texture: Some(alpha_art.selection_ring.clone()),
+            base_color: Color::srgba(1.0, 1.0, 1.0, 0.92),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            cull_mode: None,
+            perceptual_roughness: 0.9,
+            ..default()
+        });
+    app.world_mut().spawn((
+        Name::new(format!(
+            "A-Life true 2.5D alpha-art selection ring stable:{}",
+            stable_id.raw()
+        )),
+        Mesh3d(native_assets.billboard_plane_mesh.clone()),
+        MeshMaterial3d(material),
+        Transform::from_translation(base + Vec3::new(0.0, -0.01, 0.0))
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
+            .with_scale(true_25d_normalized_scale(0.38)),
+        GraphicalAlphaArtBackedSprite {
+            role: "selection-ring",
+            stable_id: Some(stable_id),
+        },
+        GraphicalTrue25dAsset {
+            role: "selection-ring",
+            stable_id: Some(stable_id),
+            display_only: true,
+        },
+        GraphicalProductionArtLayer {
+            role: "true-25d-alpha-art-selection-ring",
+            display_only: true,
+        },
+    ));
+}
+
+fn true_25d_alpha_art_handle_for_world_object(
+    alpha_art: &GraphicalAlphaArtHandles,
+    kind: WorldObjectKind,
+) -> Handle<Image> {
+    match kind {
+        WorldObjectKind::Agent => alpha_art.creature_idle.clone(),
+        WorldObjectKind::Food => alpha_art.food.clone(),
+        WorldObjectKind::Hazard => alpha_art.hazard.clone(),
+        WorldObjectKind::Obstacle => alpha_art.rock_obstacle.clone(),
+        WorldObjectKind::Token => alpha_art.prop_warning_shard.clone(),
+    }
+}
+
+fn true_25d_alpha_art_tint_for_world_object(kind: WorldObjectKind) -> Color {
+    match kind {
+        WorldObjectKind::Agent => Color::srgba(1.0, 1.0, 1.0, 1.0),
+        WorldObjectKind::Food => Color::srgba(1.0, 1.0, 1.0, 0.96),
+        WorldObjectKind::Hazard => Color::srgba(1.0, 0.96, 0.92, 0.98),
+        WorldObjectKind::Obstacle => Color::srgba(1.0, 1.0, 1.0, 0.96),
+        WorldObjectKind::Token => Color::srgba(1.0, 1.0, 1.0, 0.74),
+    }
+}
+
+fn true_25d_alpha_billboard_offset(kind: WorldObjectKind) -> Vec3 {
+    match kind {
+        WorldObjectKind::Agent => Vec3::new(0.0, 0.05, 0.0),
+        WorldObjectKind::Food => Vec3::new(0.0, 0.04, 0.0),
+        WorldObjectKind::Hazard => Vec3::new(0.0, 0.04, 0.0),
+        WorldObjectKind::Obstacle => Vec3::new(0.0, 0.03, 0.0),
+        WorldObjectKind::Token => Vec3::new(0.0, 0.02, 0.0),
+    }
+}
+
+fn true_25d_alpha_billboard_scale_for_kind(kind: WorldObjectKind) -> f32 {
+    match kind {
+        WorldObjectKind::Agent => 0.42,
+        WorldObjectKind::Food => 0.38,
+        WorldObjectKind::Hazard => 0.56,
+        WorldObjectKind::Obstacle => 0.54,
+        WorldObjectKind::Token => 0.24,
+    }
+}
+
+fn true_25d_alpha_billboard_rotation() -> Quat {
+    Quat::from_rotation_x(std::f32::consts::FRAC_PI_4)
+}
+
 fn spawn_true_25d_entity_contact_shadow(
     app: &mut App,
     native_assets: &GraphicalTrue25dNativeAssets,
@@ -3992,6 +4180,28 @@ fn true_25d_position(object: &VisibleWorldObjectPresentation) -> Vec3 {
         object.position.x * TRUE_25D_SIM_TO_VIEW_SCALE,
         true_25d_height_for_kind(object.kind),
         object.position.z * TRUE_25D_SIM_TO_VIEW_SCALE,
+    ) + true_25d_display_separation_offset(object.stable_id, object.kind)
+}
+
+fn true_25d_display_separation_offset(stable_id: WorldEntityId, kind: WorldObjectKind) -> Vec3 {
+    let radius = match kind {
+        WorldObjectKind::Agent => 0.58,
+        WorldObjectKind::Food => 0.08,
+        WorldObjectKind::Hazard => 0.08,
+        WorldObjectKind::Obstacle => 0.06,
+        WorldObjectKind::Token => 0.0,
+    };
+    if radius == 0.0 {
+        return Vec3::ZERO;
+    }
+    let raw = stable_id.raw();
+    let angle_index = raw.wrapping_mul(1_103_515_245).wrapping_add(12_345) % 360;
+    let angle = (angle_index as f32).to_radians();
+    let ring = 0.68 + ((raw.wrapping_mul(37) % 32) as f32 / 31.0) * 0.32;
+    Vec3::new(
+        angle.cos() * radius * ring,
+        0.0,
+        angle.sin() * radius * ring,
     )
 }
 
@@ -9493,6 +9703,7 @@ fn update_true_25d_neurochemical_visual_feedback(
             &mut GraphicalTrue25dStateCue,
             &mut Transform,
             &GraphicalTrue25dAsset,
+            Option<&GraphicalAlphaArtBackedSprite>,
         ),
         (
             Without<GraphicalTrue25dNeurochemicalCue>,
@@ -9544,10 +9755,17 @@ fn update_true_25d_neurochemical_visual_feedback(
         gltf_contract_assets,
     );
     let mut selected_root_updated = false;
-    for (mut presentation, mut state_cue, mut transform, asset) in &mut creature_presentations {
+    for (mut presentation, mut state_cue, mut transform, asset, alpha_art) in
+        &mut creature_presentations
+    {
         if asset.role != "creature-idle" {
             continue;
         }
+        let base_rotation = if alpha_art.is_some() {
+            true_25d_alpha_billboard_rotation()
+        } else {
+            Quat::IDENTITY
+        };
         if presentation.stable_id != visual.stable_id || asset.stable_id != Some(visual.stable_id) {
             presentation.asset_scale_multiplier = 1.0;
             presentation.posture_roll_degrees = 0.0;
@@ -9565,7 +9783,7 @@ fn update_true_25d_neurochemical_visual_feedback(
             state_cue.pain_pose = false;
             state_cue.stress_desaturated = false;
             state_cue.learning_biolume = false;
-            transform.rotation = Quat::IDENTITY;
+            transform.rotation = base_rotation;
             transform.scale = true_25d_normalized_scale(presentation.base_scale);
             continue;
         }
@@ -9588,7 +9806,8 @@ fn update_true_25d_neurochemical_visual_feedback(
         state_cue.learning_biolume =
             endocrine.learning_biolume > 0.0 || endocrine.hunger_satisfaction_biolume >= 0.20;
         transform.translation = base + Vec3::Y * endocrine.posture_lift;
-        transform.rotation = Quat::from_rotation_z(endocrine.posture_roll_degrees.to_radians());
+        transform.rotation =
+            base_rotation * Quat::from_rotation_z(endocrine.posture_roll_degrees.to_radians());
         transform.scale =
             true_25d_normalized_scale(presentation.base_scale * endocrine.asset_scale_multiplier);
         selected_root_updated = true;

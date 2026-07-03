@@ -2424,15 +2424,23 @@ fn ca44a_player_view_uses_true_25d_world_assets_not_default_rectangles() {
     let mut art_query = app
         .world_mut()
         .query::<&alife_game_app::bevy_shell::GraphicalAlphaArtBackedSprite>();
-    let legacy_roles = art_query
+    let alpha_art_roles = art_query
         .iter(app.world())
         .map(|sprite| sprite.role)
         .collect::<Vec<_>>();
-    for legacy_world_role in [
+    for required_alpha_art_role in [
         "creature-idle",
         "food",
         "hazard",
         "rock-obstacle",
+        "selection-ring",
+    ] {
+        assert!(
+            alpha_art_roles.contains(&required_alpha_art_role),
+            "default true 2.5D Player View should render {required_alpha_art_role} through committed alpha art"
+        );
+    }
+    for legacy_world_role in [
         "terrain-safe-grass",
         "terrain-soil-path",
         "terrain-resource-grove",
@@ -2444,7 +2452,7 @@ fn ca44a_player_view_uses_true_25d_world_assets_not_default_rectangles() {
         "world-atmospheric-underlay",
     ] {
         assert!(
-            !legacy_roles.contains(&legacy_world_role),
+            !alpha_art_roles.contains(&legacy_world_role),
             "default Player View should not render legacy 2D world role {legacy_world_role}"
         );
     }
@@ -3595,6 +3603,10 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         .iter()
         .filter(|layer| layer.role == "true-25d-world-entity")
         .count();
+    let true_25d_alpha_art_entity_count = layers
+        .iter()
+        .filter(|layer| layer.role == "true-25d-alpha-art-world-entity")
+        .count();
     let true_25d_ledger_count = layers
         .iter()
         .filter(|layer| layer.role == "true-25d-procedural-content-ledger")
@@ -3628,9 +3640,13 @@ fn production_player_view_composition_layers_are_asset_backed_and_display_only()
         true_25d_seeded_ground_count, 1,
         "default Player View should use one generated seeded-biome ground plane as the world surface"
     );
+    assert_eq!(
+        true_25d_entity_count, 0,
+        "default Player View should not use low-poly placeholder bodies as the primary creature/food/hazard/rock surface"
+    );
     assert!(
-        true_25d_entity_count >= 4,
-        "expected low-poly creature/food/hazard/rock entities in Player View"
+        true_25d_alpha_art_entity_count >= 4,
+        "expected alpha-art creature/food/hazard/rock billboards in Player View"
     );
     assert!(
         true_25d_ledger_count >= 160,
