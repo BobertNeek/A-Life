@@ -20,6 +20,9 @@ use thiserror::Error;
 use crate::{
     ecology::EcologyState,
     headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
+    persistent_voxel::{
+        migrated_voxel_backend_for_world, PersistentVoxelProfileId, PersistentVoxelWorldSaveState,
+    },
 };
 
 pub const P34_SAVE_FILE_SCHEMA: &str = "alife.p34.save_file.v1";
@@ -597,6 +600,8 @@ pub struct WorldSaveState {
     pub last_touched_entities: Vec<WorldEntityId>,
     #[serde(default)]
     pub ecology: EcologyState,
+    #[serde(default)]
+    pub voxel_backend: Option<PersistentVoxelWorldSaveState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -636,6 +641,14 @@ impl PortableSaveFile {
             .iter()
             .filter_map(|creature| creature.weights.generated_weight_asset_id.clone())
             .collect();
+        let mut world_state = WorldSaveState::from_parts(parts);
+        world_state.voxel_backend = Some(
+            migrated_voxel_backend_for_world(
+                &world_state,
+                PersistentVoxelProfileId::MinimumSettings30x30,
+            )
+            .map_err(PersistenceError::Contract)?,
+        );
         let save = Self {
             schema: P34_SAVE_FILE_SCHEMA.to_string(),
             schema_version: P34_SAVE_FILE_SCHEMA_VERSION,
@@ -643,7 +656,7 @@ impl PortableSaveFile {
             deterministic_seed: world.seed(),
             config,
             assets,
-            world: WorldSaveState::from_parts(parts),
+            world: world_state,
             creatures,
             school: SchoolSaveState::default(),
             adapter_remap: AdapterRemapTable::default(),
@@ -725,6 +738,42 @@ impl PortableSaveFile {
 
     pub fn restore_headless_world(&self) -> Result<HeadlessWorld, PersistenceError> {
         self.world.restore()
+    }
+
+    pub fn require_voxel_backend(
+        &self,
+    ) -> Result<&PersistentVoxelWorldSaveState, PersistenceError> {
+        match &self.world.voxel_backend {
+            Some(voxel_backend) => {
+                voxel_backend
+                    .validate()
+                    .map_err(PersistenceError::Contract)?;
+                Ok(voxel_backend)
+            }
+            None => Err(PersistenceError::MigrationUnsupported {
+                from_schema_version: self.schema_version,
+                to_schema_version: self.schema_version,
+            }),
+        }
+    }
+
+    pub fn with_migrated_voxel_backend(
+        &self,
+        profile_id: PersistentVoxelProfileId,
+    ) -> Result<Self, PersistenceError> {
+        let mut migrated = self.clone();
+        let regenerate = migrated
+            .world
+            .voxel_backend
+            .as_ref()
+            .is_none_or(|backend| backend.profile_id != profile_id);
+        if regenerate {
+            migrated.world.voxel_backend = Some(
+                migrated_voxel_backend_for_world(&migrated.world, profile_id)
+                    .map_err(PersistenceError::Contract)?,
+            );
+        }
+        Ok(migrated)
     }
 }
 
@@ -855,6 +904,7 @@ impl WorldSaveState {
                 .collect(),
             last_touched_entities: parts.last_touched_entities,
             ecology: parts.ecology,
+            voxel_backend: None,
         }
     }
 
@@ -885,6 +935,17 @@ impl WorldSaveState {
             }
         }
         self.ecology.validate()?;
+        if let Some(voxel_backend) = &self.voxel_backend {
+            if voxel_backend.world_seed != self.seed {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "world.voxel_backend.world_seed",
+                    message: "voxel backend seed must match world seed",
+                });
+            }
+            voxel_backend
+                .validate()
+                .map_err(PersistenceError::Contract)?;
+        }
         for resource in &self.ecology.resources {
             if !ids.contains(&resource.object_id.raw()) {
                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));

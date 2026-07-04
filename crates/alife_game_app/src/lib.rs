@@ -42,9 +42,10 @@ mod prelude {
         SchoolSaveState, WorldObjectSaveState,
     };
     pub(crate) use alife_world::{
-        EcologyMetrics, EcologyZoneId, HeadlessActionIds, HeadlessBrainHarness,
-        HeadlessScenarioBuilder, HeadlessSensoryReport, HeadlessWorld, TerrainZone,
-        TerrainZoneKind, WorldEditorSpawnSpec, WorldObjectKind,
+        CreatureWorldAnchor, EcologyMetrics, EcologyZoneId, HeadlessActionIds,
+        HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessSensoryReport, HeadlessWorld,
+        PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZone, TerrainZoneKind,
+        WorldEditorSpawnSpec, WorldObjectKind,
     };
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use thiserror::Error;

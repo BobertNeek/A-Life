@@ -354,6 +354,14 @@ pub struct ProductionSaveMetadata {
     pub object_count: usize,
     pub creature_count: usize,
     pub asset_count: usize,
+    pub voxel_backend_schema: Option<String>,
+    pub voxel_visible_chunk_signatures: usize,
+    pub voxel_materialized_chunks: usize,
+    pub voxel_resource_hazard_refs: usize,
+    pub voxel_stable_selection_refs: usize,
+    pub voxel_dirty_region_count: usize,
+    pub voxel_roundtrip_signatures_match: bool,
+    pub no_renderer_tokens_in_voxel_save: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -478,6 +486,10 @@ pub fn run_production_voxel_frontend_preflight(
 
     let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
     save.validate_with_asset_root(&launch.app_launch.asset_root)?;
+    let production_save =
+        save.with_migrated_voxel_backend(persistent_profile_id(launch.profile_id))?;
+    production_save.validate_with_asset_root(&launch.app_launch.asset_root)?;
+    let voxel_evidence = production_voxel_backend_evidence(&production_save)?;
     let visible = load_visible_world_from_p34_save(&launch.app_launch)?;
     compare_visible_world_to_headless(&visible)?;
     trace.transition(ProductionAppState::LoadOrCreateWorld)?;
@@ -504,17 +516,25 @@ pub fn run_production_voxel_frontend_preflight(
     };
 
     let save_metadata = ProductionSaveMetadata {
-        save_id: save.save_id,
-        deterministic_seed: save.deterministic_seed,
+        save_id: production_save.save_id,
+        deterministic_seed: production_save.deterministic_seed,
         selected_profile: launch.profile_id.label().to_string(),
         profile_budget_version: FVR01_PROFILE_BUDGET_SCHEMA_VERSION,
-        save_schema: save.schema,
-        save_schema_version: save.schema_version,
+        save_schema: production_save.schema,
+        save_schema_version: production_save.schema_version,
         config_schema: config.schema,
         config_schema_version: config.schema_version,
         object_count: visible.object_count,
         creature_count: visible.kind_count(WorldObjectKind::Agent),
         asset_count: manifest.entries.len(),
+        voxel_backend_schema: Some(voxel_evidence.schema),
+        voxel_visible_chunk_signatures: voxel_evidence.visible_chunk_signatures,
+        voxel_materialized_chunks: voxel_evidence.materialized_chunks,
+        voxel_resource_hazard_refs: voxel_evidence.resource_hazard_refs,
+        voxel_stable_selection_refs: voxel_evidence.stable_selection_refs,
+        voxel_dirty_region_count: voxel_evidence.dirty_regions,
+        voxel_roundtrip_signatures_match: voxel_evidence.roundtrip_signatures_match,
+        no_renderer_tokens_in_voxel_save: voxel_evidence.no_renderer_tokens,
     };
 
     Ok(ProductionVoxelLaunchSummary {
@@ -582,4 +602,67 @@ fn valid_production_transition(from: ProductionAppState, to: ProductionAppState)
             | (ProductionAppState::Paused, ProductionAppState::Shutdown)
             | (ProductionAppState::Settings, ProductionAppState::Shutdown)
     )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProductionVoxelBackendEvidence {
+    schema: String,
+    visible_chunk_signatures: usize,
+    materialized_chunks: usize,
+    resource_hazard_refs: usize,
+    stable_selection_refs: usize,
+    dirty_regions: usize,
+    roundtrip_signatures_match: bool,
+    no_renderer_tokens: bool,
+}
+
+fn persistent_profile_id(profile_id: ProductionFrontendProfileId) -> PersistentVoxelProfileId {
+    match profile_id {
+        ProductionFrontendProfileId::MinimumSettings30x30 => {
+            PersistentVoxelProfileId::MinimumSettings30x30
+        }
+        ProductionFrontendProfileId::MinSpecComfort1080p => {
+            PersistentVoxelProfileId::MinSpecComfort1080p
+        }
+        ProductionFrontendProfileId::Balanced1080p => PersistentVoxelProfileId::Balanced1080p,
+        ProductionFrontendProfileId::HighSpecScaleUp => PersistentVoxelProfileId::HighSpecScaleUp,
+        ProductionFrontendProfileId::ResearchScale => PersistentVoxelProfileId::ResearchScale,
+    }
+}
+
+fn production_voxel_backend_evidence(
+    save: &PortableSaveFile,
+) -> Result<ProductionVoxelBackendEvidence, GameAppShellError> {
+    let backend_state = save.require_voxel_backend()?.clone();
+    let backend = PersistentVoxelWorldBackend::from_save_state(backend_state.clone())?;
+    let anchors = backend_state
+        .creature_anchors
+        .iter()
+        .map(|anchor| {
+            CreatureWorldAnchor::new(
+                anchor.stable_id,
+                Vec3f::new(anchor.tile.x as f32, 0.0, anchor.tile.z as f32),
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let snapshot = backend.snapshot_for_anchors(&anchors)?;
+    let backend_json = serde_json::to_string(&backend_state)?;
+    let roundtrip: alife_world::PersistentVoxelWorldSaveState =
+        serde_json::from_str(&backend_json)?;
+    let roundtrip_signatures_match =
+        backend_state.visible_chunk_signatures() == roundtrip.visible_chunk_signatures();
+    let lower = backend_json.to_ascii_lowercase();
+    let no_renderer_tokens = ["bevy", "wgpu", "entity(", "renderer", "windowhandle"]
+        .iter()
+        .all(|needle| !lower.contains(needle));
+    Ok(ProductionVoxelBackendEvidence {
+        schema: backend_state.schema,
+        visible_chunk_signatures: snapshot.visible_chunks.len(),
+        materialized_chunks: backend_state.materialized_chunk_count,
+        resource_hazard_refs: snapshot.resources_and_hazards.len(),
+        stable_selection_refs: snapshot.selection_refs.len(),
+        dirty_regions: snapshot.dirty_regions.len(),
+        roundtrip_signatures_match,
+        no_renderer_tokens,
+    })
 }

@@ -3175,7 +3175,7 @@ fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunch
         "self"
     };
     format!(
-        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} dry_run={} record_performance={} signature={}",
+        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} voxel_backend_schema={} voxel_chunks={} voxel_materialized={} voxel_resource_hazard_refs={} voxel_selection_refs={} voxel_dirty_regions={} voxel_roundtrip={} voxel_renderer_tokens_saved={} dry_run={} record_performance={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.window_title,
@@ -3201,6 +3201,18 @@ fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunch
         summary.mock_data_source,
         summary.save_metadata.selected_profile,
         summary.save_metadata.profile_budget_version,
+        summary
+            .save_metadata
+            .voxel_backend_schema
+            .as_deref()
+            .unwrap_or("none"),
+        summary.save_metadata.voxel_visible_chunk_signatures,
+        summary.save_metadata.voxel_materialized_chunks,
+        summary.save_metadata.voxel_resource_hazard_refs,
+        summary.save_metadata.voxel_stable_selection_refs,
+        summary.save_metadata.voxel_dirty_region_count,
+        summary.save_metadata.voxel_roundtrip_signatures_match,
+        !summary.save_metadata.no_renderer_tokens_in_voxel_save,
         summary.dry_run,
         summary.record_performance,
         summary.signature_line()
