@@ -124,6 +124,11 @@ pub use environment_launcher::*;
 mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
 
+#[cfg(feature = "bevy-app")]
+mod production_voxel_renderer;
+#[cfg(feature = "bevy-app")]
+pub use production_voxel_renderer::*;
+
 mod interactive_runtime;
 pub use interactive_runtime::*;
 
