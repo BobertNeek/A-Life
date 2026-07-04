@@ -286,7 +286,7 @@ fn first_graphical_alpha_playtest_docs_and_launcher_are_current() {
     let launcher =
         std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
 
-    for text in [&checklist, &report, &launcher] {
+    for text in [&checklist, &report] {
         assert!(text.contains("A-Life GPU Alpha Playground"));
         assert!(text.contains("-GpuMode static-plastic-cpu-shadow-guarded"));
         assert!(text.contains("CPU fallback") || text.contains("fallback"));
@@ -298,21 +298,24 @@ fn first_graphical_alpha_playtest_docs_and_launcher_are_current() {
     assert!(checklist.contains("No Bevy Entity IDs"));
     assert!(report.contains("CpuShadowGuardedStaticPlusLiveHShadow"));
     assert!(report.contains("not full action-authoritative"));
-    assert!(launcher.contains("Reset/restart"));
+    assert!(launcher.contains("FVR01 compatibility alias"));
+    assert!(launcher.contains("run_production_voxel_frontend.ps1"));
+    assert!(launcher.contains("production-voxel"));
+    assert!(launcher.contains("MinSpecComfort1080p"));
+    assert!(launcher.contains("Runtime preflight log"));
+    assert!(launcher.contains("ca43_tester_feedback"));
+    assert!(!launcher.contains("Starting A-Life GPU Alpha Playground"));
     assert!(launcher.contains("[string]$ViewMode = \"player\""));
-    assert!(launcher.contains("--view-mode"));
-    assert!(launcher.contains("-ViewMode dev-overlay"));
     assert!(launcher.contains("[string]$GraphicsBackend"));
-    assert!(launcher.contains("overriding inherited WGPU_BACKEND"));
-    assert!(launcher.contains("-GraphicsBackend vulkan"));
 
     let app_cli =
         std::fs::read_to_string(root.join("crates/alife_game_app/src/bin/alife_game_app.rs"))
             .unwrap();
-    assert!(app_cli.contains("configure_windows_graphical_playground_environment"));
+    assert!(app_cli.contains("run_production_voxel_cli"));
+    assert!(app_cli.contains("legacy_alias"));
+    assert!(app_cli.contains("production-voxel"));
     assert!(app_cli.contains("WGPU_BACKEND"));
-    assert!(app_cli.contains("vulkan for True 2.5D Player View"));
-    assert!(app_cli.contains("ALIFE_GRAPHICS_BACKEND=vulkan"));
+    assert!(app_cli.contains("dx12"));
 }
 
 #[test]

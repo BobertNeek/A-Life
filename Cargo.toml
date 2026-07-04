@@ -10,7 +10,7 @@ repository = "https://github.com/BobertNeek/A-Life"
 
 [workspace.dependencies]
 alife_core = { path = "crates/alife_core" }
-bevy = { version = "0.18.0", default-features = false }
+bevy = { version = "=0.18.0", default-features = false }
 bitflags = "2.13.0"
 bytemuck = { version = "1.25.0", features = ["derive"] }
 pollster = "0.4.0"

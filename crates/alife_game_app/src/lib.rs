@@ -120,6 +120,9 @@ pub use graphical_playground::*;
 mod environment_launcher;
 pub use environment_launcher::*;
 
+mod production_voxel_frontend;
+pub use production_voxel_frontend::*;
+
 mod interactive_runtime;
 pub use interactive_runtime::*;
 

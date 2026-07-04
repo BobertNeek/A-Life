@@ -22,6 +22,8 @@ pub enum GameAppShellError {
     VisibleWorldMismatch { message: &'static str },
     #[error("invalid graphical playground launch: {message}")]
     InvalidGraphicalLaunch { message: &'static str },
+    #[error("invalid production voxel frontend launch: {message}")]
+    InvalidProductionFrontend { message: String },
     #[error("environment launcher error: {message}")]
     EnvironmentManifest { message: String },
 }

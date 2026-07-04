@@ -91,6 +91,11 @@ pub struct BevyAppShellSummary {
     pub graphics_required_for_default_path: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct ProductionVoxelFrontendResource {
+    pub summary: crate::ProductionVoxelLaunchSummary,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct VisibleWorldObject {
     pub stable_id: WorldEntityId,
@@ -4739,6 +4744,114 @@ pub fn run_graphical_playground_window_with_controls(
         runtime,
         gpu,
     })
+}
+
+pub fn build_production_voxel_frontend_app_shell(
+    launch: &crate::ProductionVoxelLaunchConfig,
+) -> Result<(App, crate::ProductionVoxelLaunchSummary), GameAppShellError> {
+    let summary = crate::run_production_voxel_frontend_preflight(launch)?;
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(AssetPlugin {
+                file_path: "assets".to_string(),
+                ..default()
+            })
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: summary.window_title.clone(),
+                    name: Some("alife.production_voxel_frontend".to_string()),
+                    resolution: summary.resolution.into(),
+                    present_mode: PresentMode::AutoVsync,
+                    window_theme: Some(WindowTheme::Dark),
+                    ..default()
+                }),
+                exit_condition: ExitCondition::OnPrimaryClosed,
+                ..default()
+            }),
+    )
+    .add_plugins(AlifeBevyAdapterPlugin)
+    .insert_resource(ClearColor(Color::srgb(0.065, 0.105, 0.090)))
+    .insert_resource(ProductionVoxelFrontendResource {
+        summary: summary.clone(),
+    });
+    spawn_production_voxel_frontend_boot_scene(&mut app, &summary);
+    if let Some(seconds) = launch.smoke_seconds {
+        app.insert_resource(GraphicalPlaygroundSmokeTimer {
+            started: Instant::now(),
+            duration: Duration::from_secs(seconds as u64),
+        })
+        .add_systems(Update, close_after_graphical_smoke_timeout);
+    }
+    Ok((app, summary))
+}
+
+pub fn run_production_voxel_frontend_window(
+    launch: &crate::ProductionVoxelLaunchConfig,
+) -> Result<crate::ProductionVoxelLaunchSummary, GameAppShellError> {
+    let (mut app, mut summary) = build_production_voxel_frontend_app_shell(launch)?;
+    app.run();
+    if summary.state_trace.last() != Some(&crate::ProductionAppState::Shutdown) {
+        summary
+            .state_trace
+            .push(crate::ProductionAppState::Shutdown);
+    }
+    Ok(summary)
+}
+
+fn spawn_production_voxel_frontend_boot_scene(
+    app: &mut App,
+    summary: &crate::ProductionVoxelLaunchSummary,
+) {
+    app.world_mut().spawn((
+        Name::new("A-Life FVR01 production camera"),
+        Camera2d,
+        Camera {
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.065, 0.105, 0.090)),
+            ..default()
+        },
+        Transform::default(),
+    ));
+    app.world_mut().spawn((
+        Name::new("A-Life FVR01 production voxel launch diagnostics"),
+        Text::new(format!(
+            "A-Life Voxel Frontend\nprofile: {} | population: {}\nstate: {}\nrenderer: {}\nbackend: {} | fallback: {}\nsave: {}\nassets: {}",
+            summary.profile_id.label(),
+            summary.effective_population,
+            summary.state_labels().join(" > "),
+            summary.renderer_profile,
+            summary.diagnostics.selected_backend,
+            summary
+                .diagnostics
+                .fallback_reason
+                .as_deref()
+                .unwrap_or("None"),
+            summary
+                .save_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("unknown"),
+            summary
+                .asset_manifest_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("unknown"),
+        )),
+        TextFont {
+            font_size: 18.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.86, 0.96, 0.90)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(24.0),
+            left: Val::Px(24.0),
+            max_width: Val::Px(620.0),
+            padding: bevy::ui::UiRect::all(Val::Px(12.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.015, 0.026, 0.020, 0.82)),
+    ));
 }
 
 pub fn spawn_visible_world(

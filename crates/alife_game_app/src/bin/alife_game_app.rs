@@ -22,18 +22,19 @@ use alife_game_app::{
     run_platform_package_smoke, run_playable_survival_loop_smoke, run_player_sandbox_editor_smoke,
     run_population_performance_lod_smoke, run_population_social_loop_smoke,
     run_procedural_world_travel_smoke, run_product_qa_hardening_smoke,
-    run_production_asset_pipeline_smoke, run_real_semantic_provider_smoke,
-    run_realtime_wgsl_telemetry_smoke, run_release_candidate_smoke, run_runtime_controls_smoke,
-    run_runtime_prereq_diagnostics, run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke,
-    run_school_mode_smoke, run_semantic_provider_smoke, run_teacher_world_cues_smoke,
-    run_tester_feedback_capture_smoke, run_topological_concept_overlay_smoke,
-    run_true25d_headless_chunk_continuity_smoke, run_world_art_style_smoke,
-    run_world_ecology_loop_smoke, run_world_editor_smoke, validate_app_bundle_manifest,
-    validate_app_shell_config, write_behavior_comparison_lab_report,
-    write_ca36_soak_isolation_report, AppShellLaunchConfig, BatchedGpuRuntimeOptions,
-    EnvironmentManifest, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
-    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, RuntimePrereqDiagnosticsOptions,
-    SampledGpuRuntimeOptions,
+    run_production_asset_pipeline_smoke, run_production_voxel_frontend_dry_run,
+    run_real_semantic_provider_smoke, run_realtime_wgsl_telemetry_smoke,
+    run_release_candidate_smoke, run_runtime_controls_smoke, run_runtime_prereq_diagnostics,
+    run_sampled_gpu_runtime_smoke, run_save_load_ux_smoke, run_school_mode_smoke,
+    run_semantic_provider_smoke, run_teacher_world_cues_smoke, run_tester_feedback_capture_smoke,
+    run_topological_concept_overlay_smoke, run_true25d_headless_chunk_continuity_smoke,
+    run_world_art_style_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
+    validate_app_bundle_manifest, validate_app_shell_config, validate_production_voxel_save,
+    write_behavior_comparison_lab_report, write_ca36_soak_isolation_report, AppShellLaunchConfig,
+    BatchedGpuRuntimeOptions, EnvironmentManifest, FullGpuRuntimeSmokeMode,
+    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
+    ProductionFrontendProfileId, ProductionVoxelLaunchConfig, ProductionVoxelLaunchSummary,
+    RuntimePrereqDiagnosticsOptions, SampledGpuRuntimeOptions, PRODUCTION_VOXEL_COMMAND,
 };
 
 fn main() -> ExitCode {
@@ -82,6 +83,15 @@ fn run() -> Result<String, String> {
             run_environment_launch_smoke_cli(rest)
         }
         [command, fixture_root] if command == "bevy-smoke" => run_bevy_smoke(fixture_root),
+        [command, rest @ ..] if command == PRODUCTION_VOXEL_COMMAND => {
+            run_production_voxel_cli(rest, false, false)
+        }
+        [command, rest @ ..] if command == "record-production-performance" => {
+            run_production_voxel_cli(rest, true, false)
+        }
+        [command, rest @ ..] if command == "validate-production-save" => {
+            run_validate_production_save_cli(rest)
+        }
         [command, rest @ ..] if command == "graphical-playground" => {
             run_graphical_playground_cli(rest)
         }
@@ -773,7 +783,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err("usage: alife_game_app headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | graphical-playground [<fixture-root>|--scenario id] [--manifest path] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--view-mode player|dev-overlay|full-debug] [--smoke-seconds N] [--require-gpu] | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | true25d-launch-baseline-smoke <fixture-root> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke".to_string()),
+        _ => Err(format!("usage: alife_game_app {PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--dry-run] [--record-performance] | validate-production-save [--profile PROFILE] | graphical-playground --dry-run (legacy alias) | headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | true25d-launch-baseline-smoke <fixture-root> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke")),
     }
 }
 
@@ -2939,8 +2949,291 @@ fn run_runtime_prereq_cli(args: &[String]) -> Result<String, String> {
     Ok(formatted)
 }
 
-#[cfg(feature = "bevy-app")]
+fn run_production_voxel_cli(
+    args: &[String],
+    force_record_performance: bool,
+    legacy_alias: bool,
+) -> Result<String, String> {
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        return Ok(production_voxel_help());
+    }
+
+    let mut launch = parse_production_voxel_launch(args, legacy_alias)?;
+    if force_record_performance {
+        launch.record_performance = true;
+    }
+    let summary = run_production_voxel_launch(&launch)?;
+    let prefix = if legacy_alias {
+        "FVR01 legacy graphical alias"
+    } else if launch.dry_run {
+        "FVR01 production voxel dry run"
+    } else if launch.record_performance {
+        "FVR01 production voxel performance run"
+    } else {
+        "FVR01 production voxel closed"
+    };
+    Ok(format_production_voxel_summary(prefix, &summary))
+}
+
+fn run_validate_production_save_cli(args: &[String]) -> Result<String, String> {
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        return Ok("validate-production-save [--profile PROFILE] [--manifest path] [--scenario production-voxel] validates the real P34 save/config/assets through FVR01 production profile metadata.".to_string());
+    }
+    let mut launch = parse_production_voxel_launch(args, false)?;
+    launch.dry_run = true;
+    let summary = validate_production_voxel_save(&launch).map_err(|err| err.to_string())?;
+    Ok(format_production_voxel_summary(
+        "FVR01 production save validation",
+        &summary,
+    ))
+}
+
 fn run_graphical_playground_cli(args: &[String]) -> Result<String, String> {
+    run_production_voxel_cli(args, false, true)
+}
+
+fn parse_production_voxel_launch(
+    args: &[String],
+    legacy_alias: bool,
+) -> Result<ProductionVoxelLaunchConfig, String> {
+    let mut manifest_path = alife_game_app::default_environment_manifest_path();
+    let mut scenario_id = None::<String>;
+    let mut profile_id = ProductionFrontendProfileId::default();
+    let mut population = None::<u16>;
+    let mut resolution = None::<(u32, u32)>;
+    let mut gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded;
+    let mut require_gpu = false;
+    let mut graphics_backend = if cfg!(windows) {
+        "dx12".to_string()
+    } else {
+        "auto".to_string()
+    };
+    let mut smoke_seconds = None::<u32>;
+    let mut dry_run = false;
+    let mut record_performance = false;
+    let mut index = 0_usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            value if legacy_alias && !value.starts_with("--") => {
+                index += 1;
+            }
+            "--manifest" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--manifest requires a path".to_string())?;
+                manifest_path = PathBuf::from(value);
+                index += 2;
+            }
+            "--scenario" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--scenario requires an environment id".to_string())?;
+                if !legacy_alias || value == alife_game_app::PRODUCTION_VOXEL_SCENARIO_ID {
+                    scenario_id = Some(value.clone());
+                }
+                index += 2;
+            }
+            "--profile" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--profile requires a value".to_string())?;
+                profile_id =
+                    ProductionFrontendProfileId::parse(value).map_err(|err| err.to_string())?;
+                index += 2;
+            }
+            "--population" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--population requires a value".to_string())?;
+                population = Some(
+                    value
+                        .parse::<u16>()
+                        .map_err(|_| "--population must be an unsigned integer".to_string())?,
+                );
+                index += 2;
+            }
+            "--resolution" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--resolution requires WIDTHxHEIGHT".to_string())?;
+                resolution = Some(parse_resolution(value)?);
+                index += 2;
+            }
+            "--gpu-mode" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--gpu-mode requires a value".to_string())?;
+                gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::parse(value)
+                    .map_err(|err| err.to_string())?;
+                index += 2;
+            }
+            "--graphics-backend" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--graphics-backend requires a value".to_string())?;
+                graphics_backend = value.clone();
+                index += 2;
+            }
+            "--view-mode" if legacy_alias => {
+                args.get(index + 1)
+                    .ok_or_else(|| "--view-mode requires a value".to_string())?;
+                index += 2;
+            }
+            "--smoke-seconds" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--smoke-seconds requires a value".to_string())?;
+                smoke_seconds = Some(
+                    value
+                        .parse::<u32>()
+                        .map_err(|_| "--smoke-seconds must be an unsigned integer".to_string())?,
+                );
+                index += 2;
+            }
+            "--dry-run" => {
+                dry_run = true;
+                index += 1;
+            }
+            "--record-performance" => {
+                record_performance = true;
+                index += 1;
+            }
+            "--require-gpu" => {
+                require_gpu = true;
+                index += 1;
+            }
+            unknown => {
+                let command = if legacy_alias {
+                    "graphical-playground compatibility alias"
+                } else {
+                    PRODUCTION_VOXEL_COMMAND
+                };
+                return Err(format!("unknown {command} option: {unknown}"));
+            }
+        }
+    }
+
+    let mut launch = ProductionVoxelLaunchConfig::from_manifest(
+        &manifest_path,
+        scenario_id.as_deref(),
+        profile_id,
+    )
+    .map_err(|err| err.to_string())?;
+    launch.population = population;
+    if let Some(resolution) = resolution {
+        launch.resolution = resolution;
+    }
+    launch.gpu_mode = gpu_mode;
+    launch.require_gpu = require_gpu;
+    launch.graphics_backend = graphics_backend;
+    launch.smoke_seconds = smoke_seconds;
+    launch.dry_run = dry_run;
+    launch.record_performance = record_performance;
+    launch.legacy_alias = legacy_alias;
+    Ok(launch)
+}
+
+fn parse_resolution(value: &str) -> Result<(u32, u32), String> {
+    let Some((width, height)) = value.split_once('x') else {
+        return Err("--resolution must use WIDTHxHEIGHT, for example 1920x1080".to_string());
+    };
+    let width = width
+        .parse::<u32>()
+        .map_err(|_| "--resolution width must be an unsigned integer".to_string())?;
+    let height = height
+        .parse::<u32>()
+        .map_err(|_| "--resolution height must be an unsigned integer".to_string())?;
+    if width == 0 || height == 0 {
+        return Err("--resolution dimensions must be nonzero".to_string());
+    }
+    Ok((width, height))
+}
+
+fn production_voxel_help() -> String {
+    format!(
+        "{command} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--graphics-backend auto|dx12|vulkan|existing] [--dry-run] [--smoke-seconds N] [--record-performance] [--require-gpu]\nProfiles: {}\nDefault profile: {}\nLegacy graphical-playground now routes here as a compatibility alias.",
+        ProductionFrontendProfileId::labels().join(", "),
+        ProductionFrontendProfileId::default().label(),
+        command = PRODUCTION_VOXEL_COMMAND,
+    )
+}
+
+fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunchSummary) -> String {
+    let adapter = summary
+        .diagnostics
+        .adapter_name
+        .as_deref()
+        .unwrap_or("unavailable");
+    let backend_api = summary
+        .diagnostics
+        .backend_api
+        .as_deref()
+        .unwrap_or("unknown");
+    let routed_to = if summary.legacy_alias {
+        PRODUCTION_VOXEL_COMMAND
+    } else {
+        "self"
+    };
+    format!(
+        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} dry_run={} record_performance={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.window_title,
+        PRODUCTION_VOXEL_COMMAND,
+        routed_to,
+        summary.legacy_alias,
+        summary.profile_id.label(),
+        summary.effective_population,
+        summary.resolution.0,
+        summary.resolution.1,
+        summary.profile_budget.target_fps,
+        summary.state_labels().join(">"),
+        summary.renderer_profile,
+        summary.diagnostics.selected_backend,
+        adapter,
+        backend_api,
+        summary.diagnostics.fallback_reason,
+        summary.diagnostics.graphics_backend,
+        summary.diagnostics.require_gpu,
+        summary.save_path.display(),
+        summary.asset_manifest_path.display(),
+        summary.real_save_loaded,
+        summary.mock_data_source,
+        summary.save_metadata.selected_profile,
+        summary.save_metadata.profile_budget_version,
+        summary.dry_run,
+        summary.record_performance,
+        summary.signature_line()
+    )
+}
+
+fn run_production_voxel_launch(
+    launch: &ProductionVoxelLaunchConfig,
+) -> Result<ProductionVoxelLaunchSummary, String> {
+    if launch.dry_run {
+        return run_production_voxel_frontend_dry_run(launch).map_err(|err| err.to_string());
+    }
+    run_production_voxel_graphical_launch(launch)
+}
+
+#[cfg(feature = "bevy-app")]
+fn run_production_voxel_graphical_launch(
+    launch: &ProductionVoxelLaunchConfig,
+) -> Result<ProductionVoxelLaunchSummary, String> {
+    alife_game_app::bevy_shell::run_production_voxel_frontend_window(launch)
+        .map_err(|err| err.to_string())
+}
+
+#[cfg(not(feature = "bevy-app"))]
+fn run_production_voxel_graphical_launch(
+    _launch: &ProductionVoxelLaunchConfig,
+) -> Result<ProductionVoxelLaunchSummary, String> {
+    Err("production-voxel graphical launch requires feature `bevy-app`; use --dry-run for headless production validation".to_string())
+}
+
+#[cfg(feature = "bevy-app")]
+#[allow(dead_code)]
+fn run_legacy_alpha_graphical_playground_cli(args: &[String]) -> Result<String, String> {
     use alife_game_app::{
         GraphicalGpuRuntimeMode, GraphicalPlaygroundMode, GraphicalPlaygroundViewMode,
     };
@@ -3122,7 +3415,8 @@ fn configure_windows_graphical_playground_environment() {
 }
 
 #[cfg(not(feature = "bevy-app"))]
-fn run_graphical_playground_cli(_args: &[String]) -> Result<String, String> {
+#[allow(dead_code)]
+fn run_legacy_alpha_graphical_playground_cli(_args: &[String]) -> Result<String, String> {
     Err("graphical-playground requires feature `bevy-app`; run `cargo run -p alife_game_app --features \"bevy-app gpu-runtime\" --bin alife_game_app -- graphical-playground crates/alife_world/tests/fixtures/gpu_alpha --gpu-mode static-plastic-cpu-shadow-guarded`".to_string())
 }
 

@@ -13,6 +13,13 @@ alife_school = { path = "../alife_school" }
 alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider", "local-llamacpp"] }
 alife_world = { path = "../alife_world" }
 bevy = { workspace = true, optional = true }
+bevy-inspector-egui = { version = "=0.36.0", default-features = false, optional = true }
+bevy_asset_loader = { version = "=0.26.0", default-features = false, optional = true }
+bevy_egui = { version = "=0.39.0", default-features = false, optional = true }
+bevy_hanabi = { version = "=0.18.0", default-features = false, optional = true }
+bevy_sprite3d = { version = "=8.0.0", default-features = false, optional = true }
+bevy_voxel_world = { version = "=0.16.0", default-features = false, optional = true }
+block-mesh = { version = "=0.2.0", optional = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -29,11 +36,41 @@ bevy-app = [
     "bevy/bevy_render",
     "bevy/bevy_gltf",
     "bevy/bevy_pbr",
+    "bevy/bevy_picking",
     "bevy/bevy_sprite",
     "bevy/bevy_sprite_render",
     "bevy/bevy_text",
     "bevy/bevy_ui",
     "bevy/bevy_ui_render",
+    "bevy/mesh_picking",
     "bevy/png",
+    "bevy/sprite_picking",
+    "bevy/ui_picking",
 ]
 gpu-runtime = ["dep:alife_gpu_backend"]
+voxel-backend = ["bevy-app", "dep:bevy_voxel_world"]
+voxel-internal-mesh = ["bevy-app", "dep:block-mesh"]
+creature-sprites = ["bevy-app", "dep:bevy_sprite3d"]
+licensed-assets = [
+    "bevy-app",
+    "dep:bevy_asset_loader",
+    "bevy_asset_loader/3d",
+]
+vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
+debug-tools = [
+    "bevy-app",
+    "dep:bevy_egui",
+    "dep:bevy-inspector-egui",
+    "bevy_egui/render",
+    "bevy_egui/bevy_ui",
+    "bevy_egui/picking",
+    "bevy-inspector-egui/bevy",
+]
+presentation-physics = ["bevy-app", "alife_bevy_adapter/avian3d"]
+production-voxel-frontend = [
+    "bevy-app",
+    "voxel-backend",
+    "creature-sprites",
+    "licensed-assets",
+    "presentation-physics",
+]

@@ -1,18 +1,29 @@
 {
   "schema": "alife.ca10.environment_manifest.v1",
   "schema_version": 1,
-  "default_scenario_id": "gpu-alpha",
+  "default_scenario_id": "production-voxel",
   "scenarios": [
     {
-      "id": "gpu-alpha",
-      "title": "GPU Alpha Playground",
-      "description": "Default GPU-first alpha arena with three stable-ID creatures, food, hazard, obstacle, and social proximity cues.",
+      "id": "production-voxel",
+      "title": "A-Life Voxel Frontend",
+      "description": "Default production voxel frontend launch using the real saved A-Life fixture while FVR02-FVR08 complete the saved voxel renderer and asset stack.",
       "fixture_root": "../alife_world/tests/fixtures/gpu_alpha",
       "config_file": "tiny_config.json",
       "asset_manifest_file": "tiny_asset_manifest.json",
       "save_file": "tiny_save.json",
       "player_visible": true,
-      "tags": ["gpu-first", "alpha", "population", "creature", "food", "hazard", "obstacle"]
+      "tags": ["production", "voxel", "default", "population", "creature", "food", "hazard", "obstacle"]
+    },
+    {
+      "id": "gpu-alpha",
+      "title": "Legacy GPU Alpha Playground",
+      "description": "Compatibility arena preserved for historical GPU-alpha regression checks after FVR01 production launch cutover.",
+      "fixture_root": "../alife_world/tests/fixtures/gpu_alpha",
+      "config_file": "tiny_config.json",
+      "asset_manifest_file": "tiny_asset_manifest.json",
+      "save_file": "tiny_save.json",
+      "player_visible": false,
+      "tags": ["gpu-first", "alpha", "legacy", "regression", "population", "creature", "food", "hazard", "obstacle"]
     },
     {
       "id": "p34",

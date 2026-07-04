@@ -28,7 +28,7 @@ fn headless_app_shell_loads_p34_config_and_manifest() {
 }
 
 #[test]
-fn ca10_environment_manifest_validates_and_selects_default_gpu_alpha() {
+fn ca10_environment_manifest_validates_and_selects_default_production_voxel() {
     let manifest_path = default_environment_manifest_path();
     let manifest = EnvironmentManifest::from_json_file(&manifest_path).unwrap();
     manifest.validate(&manifest_path).unwrap();
@@ -37,13 +37,16 @@ fn ca10_environment_manifest_validates_and_selects_default_gpu_alpha() {
         manifest.schema_version,
         CA10_ENVIRONMENT_MANIFEST_SCHEMA_VERSION
     );
-    assert_eq!(manifest.default_scenario_id, "gpu-alpha");
-    assert_eq!(manifest.scenario_ids(), vec!["gpu-alpha", "p34"]);
+    assert_eq!(manifest.default_scenario_id, "production-voxel");
+    assert_eq!(
+        manifest.scenario_ids(),
+        vec!["production-voxel", "gpu-alpha", "p34"]
+    );
 
     let summary = run_environment_launcher_smoke(&manifest_path, None).unwrap();
     assert_eq!(summary.schema, CA10_ENVIRONMENT_MANIFEST_SCHEMA);
-    assert_eq!(summary.selected_scenario_id, "gpu-alpha");
-    assert_eq!(summary.scenario_count, 2);
+    assert_eq!(summary.selected_scenario_id, "production-voxel");
+    assert_eq!(summary.scenario_count, 3);
     assert!(path_ends_with(
         &summary.fixture_root,
         "crates/alife_world/tests/fixtures/gpu_alpha"
@@ -82,7 +85,7 @@ fn ca10_environment_manifest_reports_known_scenarios_for_bad_selection() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("unknown environment scenario 'missing-arena'"));
-    assert!(err.contains("Known scenarios: gpu-alpha, p34"));
+    assert!(err.contains("Known scenarios: production-voxel, gpu-alpha, p34"));
 }
 
 #[test]
@@ -94,7 +97,7 @@ fn ca11_player_sandbox_editor_edits_default_manifest_scenario() {
         summary.schema_version,
         CA11_PLAYER_SANDBOX_EDITOR_SCHEMA_VERSION
     );
-    assert_eq!(summary.scenario_id, "gpu-alpha");
+    assert_eq!(summary.scenario_id, "production-voxel");
     assert_eq!(summary.initial_object_count, 12);
     assert!(summary.final_object_count > summary.initial_object_count);
     assert!(summary.placed_food && summary.removed_food);
@@ -143,7 +146,7 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
         summary.schema_version,
         CA12_APP_BUNDLE_MANIFEST_SCHEMA_VERSION
     );
-    assert_eq!(summary.environment_scenarios, 2);
+    assert_eq!(summary.environment_scenarios, 3);
     assert_eq!(summary.config_entries, 6);
     assert_eq!(summary.shader_assets, 6);
     assert_eq!(summary.discovered_shader_assets, 6);
@@ -309,6 +312,8 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let script =
         std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1")).unwrap();
+    let production =
+        std::fs::read_to_string(root.join("scripts/run_production_voxel_frontend.ps1")).unwrap();
 
     assert!(script.contains("[switch]$DryRun"));
     assert!(script.contains("[int]$SmokeSeconds"));
@@ -316,20 +321,19 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     assert!(script.contains("[string]$Scenario"));
     assert!(script.contains("[string]$EnvironmentManifest"));
     assert!(script.contains("[string]$GraphicsBackend"));
-    assert!(script.contains("graphical-playground"));
-    assert!(script.contains("--scenario"));
-    assert!(script.contains("gpu-alpha"));
-    assert!(script.contains("Environment manifest:"));
-    assert!(script.contains("--gpu-mode"));
-    assert!(script.contains("--smoke-seconds"));
-    assert!(script.contains("bevy-app gpu-runtime"));
-    assert!(script.contains("Format-CommandArgument"));
-    assert!(script.contains("$DisplayCommand"));
-    assert!(script.contains("arrows/WASD pan"));
-    assert!(script.contains("Inspector is read-only"));
-    assert!(script.contains("Readability:"));
-    assert!(script.contains("overriding inherited WGPU_BACKEND"));
-    assert!(script.contains("-GraphicsBackend vulkan"));
+    assert!(script.contains("FVR01 compatibility alias"));
+    assert!(script.contains("run_production_voxel_frontend.ps1"));
+    assert!(script.contains("production-voxel"));
+    assert!(!script.contains("Starting A-Life GPU Alpha Playground"));
+    assert!(production.contains("production-voxel"));
+    assert!(production.contains("A-Life Voxel Frontend"));
+    assert!(production.contains("MinSpecComfort1080p"));
+    assert!(production.contains("MinimumSettings30x30"));
+    assert!(production.contains("bevy-app gpu-runtime voxel-backend"));
+    assert!(production.contains("--gpu-mode"));
+    assert!(production.contains("--smoke-seconds"));
+    assert!(production.contains("Format-CommandArgument"));
+    assert!(production.contains("-DryRun"));
     assert!(!script.contains("\"visible-world-smoke\""));
     assert!(!script.contains("$ModeArgs += \"crates/alife_world/tests/fixtures/gpu_alpha\""));
 }
