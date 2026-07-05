@@ -783,7 +783,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err(format!("usage: alife_game_app {PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--dry-run] [--record-performance] | validate-production-save [--profile PROFILE] | graphical-playground --dry-run (legacy alias) | headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | true25d-launch-baseline-smoke <fixture-root> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke")),
+        _ => Err(format!("usage: alife_game_app {PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--dry-run] [--record-performance] | validate-production-save [--profile PROFILE] | graphical-playground --dry-run (legacy alias) | headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | true25d-launch-baseline-smoke <fixture-root> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--mode static-action-authoritative|static-plastic-cpu-shadow-guarded|full-action-authoritative] [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke")),
     }
 }
 
@@ -1077,6 +1077,13 @@ fn run_batched_gpu_runtime_cli(args: &[String]) -> Result<String, String> {
                 options.cpu_shadow_every = value
                     .parse::<u32>()
                     .map_err(|_| "--cpu-shadow-every must be an unsigned integer".to_string())?;
+                index += 2;
+            }
+            "--mode" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--mode requires a value".to_string())?;
+                options.mode = parse_full_gpu_runtime_mode(value)?;
                 index += 2;
             }
             "--json" => {
@@ -2871,7 +2878,7 @@ fn run_bevy_smoke(_fixture_root: &str) -> Result<String, String> {
 }
 
 fn run_runtime_prereq_cli(args: &[String]) -> Result<String, String> {
-    let mut gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded;
+    let mut gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::AutoWithCpuFallback;
     let mut require_gpu = false;
     let mut graphics_backend = "dx12".to_string();
     let mut log_path = PathBuf::from("target/artifacts/ca42_runtime_prereq/runtime_prereq.log");
@@ -3001,7 +3008,7 @@ fn parse_production_voxel_launch(
     let mut profile_id = ProductionFrontendProfileId::default();
     let mut population = None::<u16>;
     let mut resolution = None::<(u32, u32)>;
-    let mut gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded;
+    let mut gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::AutoWithCpuFallback;
     let mut require_gpu = false;
     let mut graphics_backend = if cfg!(windows) {
         "vulkan".to_string()
@@ -3160,7 +3167,7 @@ fn parse_resolution(value: &str) -> Result<(u32, u32), String> {
 
 fn production_voxel_help() -> String {
     format!(
-        "{command} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--graphics-backend auto|dx12|vulkan|existing] [--ui-settings PATH] [--dry-run] [--smoke-seconds N] [--record-performance] [--require-gpu]\nProfiles: {}\nDefault profile: {}\nLegacy graphical-playground now routes here as a compatibility alias.",
+        "{command} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--gpu-mode cpu-reference|static-cpu-shadow-guarded|static-plastic-cpu-shadow-guarded|full-cpu-shadow-guarded|auto-with-cpu-fallback] [--graphics-backend auto|dx12|vulkan|existing] [--ui-settings PATH] [--dry-run] [--smoke-seconds N] [--record-performance] [--require-gpu]\nProfiles: {}\nDefault profile: {}\nLegacy graphical-playground now routes here as a compatibility alias.",
         ProductionFrontendProfileId::labels().join(", "),
         ProductionFrontendProfileId::default().label(),
         command = PRODUCTION_VOXEL_COMMAND,
@@ -3183,8 +3190,45 @@ fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunch
     } else {
         "self"
     };
+    let gpu_gameplay_receipt_path = summary
+        .gpu_gameplay_receipt
+        .as_ref()
+        .map(|receipt| receipt.receipt_path.display().to_string())
+        .unwrap_or_else(|| "none".to_string());
+    let gpu_gameplay_selected = summary
+        .gpu_gameplay_receipt
+        .as_ref()
+        .map(|receipt| receipt.selected_backend.as_str())
+        .unwrap_or("none");
+    let gpu_gameplay_mode = summary
+        .gpu_gameplay_receipt
+        .as_ref()
+        .map(|receipt| receipt.requested_mode.as_str())
+        .unwrap_or("none");
+    let gpu_gameplay_runtime_mode = summary
+        .gpu_gameplay_receipt
+        .as_ref()
+        .map(|receipt| receipt.batched_runtime_mode.as_str())
+        .unwrap_or("none");
+    let gpu_gameplay_batch = summary
+        .gpu_gameplay_receipt
+        .as_ref()
+        .map_or(0, |receipt| receipt.batch_size);
+    let gpu_gameplay_proposals = summary
+        .gpu_gameplay_receipt
+        .as_ref()
+        .map_or(0, |receipt| receipt.gpu_proposal_creatures);
+    let gpu_gameplay_hshadow = summary
+        .gpu_gameplay_receipt
+        .as_ref()
+        .map_or(0, |receipt| receipt.post_seal_hshadow_applications);
+    let gpu_gameplay_claim = summary
+        .gpu_gameplay_receipt
+        .as_ref()
+        .map(|receipt| receipt.product_runtime_claim.as_str())
+        .unwrap_or("none");
     format!(
-        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} voxel_backend_schema={} voxel_chunks={} voxel_materialized={} voxel_resource_hazard_refs={} voxel_selection_refs={} voxel_dirty_regions={} voxel_roundtrip={} voxel_renderer_tokens_saved={} ux_schema={} ux_version={} ux_settings={} ux_loaded_error={:?} ux_overlays={} debug_authority=\"{}\" dry_run={} record_performance={} signature={}",
+        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} voxel_backend_schema={} voxel_chunks={} voxel_materialized={} voxel_resource_hazard_refs={} voxel_selection_refs={} voxel_dirty_regions={} voxel_roundtrip={} voxel_renderer_tokens_saved={} gpu_runtime_schema={} gpu_runtime_selected={} gpu_runtime_fallback={:?} gpu_runtime_no_bulk_readback={} compact_action_readback_bytes={} gpu_checkpoint='{}' gpu_gameplay_receipt={} gpu_gameplay_mode={} gpu_gameplay_runtime_mode={} gpu_gameplay_selected={} gpu_gameplay_batch={} gpu_gameplay_proposals={} gpu_gameplay_hshadow={} gpu_gameplay_claim={} ux_schema={} ux_version={} ux_settings={} ux_loaded_error={:?} ux_overlays={} debug_authority=\"{}\" dry_run={} record_performance={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.window_title,
@@ -3222,6 +3266,24 @@ fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunch
         summary.save_metadata.voxel_dirty_region_count,
         summary.save_metadata.voxel_roundtrip_signatures_match,
         !summary.save_metadata.no_renderer_tokens_in_voxel_save,
+        summary
+            .save_metadata
+            .gpu_runtime_schema
+            .as_deref()
+            .unwrap_or("none"),
+        summary.save_metadata.gpu_runtime_selected_backend,
+        summary.save_metadata.gpu_runtime_fallback_reason,
+        summary.save_metadata.gpu_runtime_no_active_bulk_readback,
+        summary.save_metadata.gpu_runtime_compact_action_readback_bytes,
+        summary.save_metadata.gpu_runtime_checkpoint_label,
+        gpu_gameplay_receipt_path,
+        gpu_gameplay_mode,
+        gpu_gameplay_runtime_mode,
+        gpu_gameplay_selected,
+        gpu_gameplay_batch,
+        gpu_gameplay_proposals,
+        gpu_gameplay_hshadow,
+        gpu_gameplay_claim,
         summary.ui_settings.schema,
         summary.ui_settings.schema_version,
         summary.ui_settings_path.display(),

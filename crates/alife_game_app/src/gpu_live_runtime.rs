@@ -616,6 +616,7 @@ pub struct BatchedGpuRuntimeCreatureSummary {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BatchedGpuRuntimeOptions {
+    pub mode: FullGpuRuntimeSmokeMode,
     pub max_creatures: usize,
     pub ticks: u32,
     pub cpu_shadow_every: u32,
@@ -625,6 +626,7 @@ pub struct BatchedGpuRuntimeOptions {
 impl Default for BatchedGpuRuntimeOptions {
     fn default() -> Self {
         Self {
+            mode: FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded,
             max_creatures: CA33_MAX_BATCH_CREATURES,
             ticks: 1,
             cpu_shadow_every: 1,
@@ -1000,7 +1002,7 @@ pub fn run_batched_gpu_runtime_smoke(
     let summary = BatchedGpuRuntimeSummary {
         schema: CA33_BATCHED_GPU_RUNTIME_SCHEMA,
         schema_version: CA33_BATCHED_GPU_RUNTIME_SCHEMA_VERSION,
-        requested_mode: "static-plastic-cpu-shadow-guarded".to_string(),
+        requested_mode: options.mode.label().to_string(),
         batch_size: targets.len(),
         max_batch_size: options.max_creatures,
         ticks_run: options.ticks,
@@ -1141,7 +1143,7 @@ pub fn run_batched_gpu_runtime_smoke(
         .map(|target| LiveBrainLoop::from_p34_launch_for_organism(launch, target.organism_id))
         .collect::<Result<Vec<_>, _>>()?;
     let mut schema_initialized = vec![false; lives.len()];
-    let mode = FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded;
+    let mode = options.mode;
     let session = FullGpuRuntimeSession::new(backend_mode(mode))?;
 
     let mut per_creature = targets
@@ -1238,7 +1240,7 @@ pub fn run_batched_gpu_runtime_smoke(
             if !static_report.cpu_shadow_parity_passed {
                 parity_failures = parity_failures.saturating_add(1);
             }
-            if gpu_static_available && !schema_initialized[index] {
+            if mode.requests_plasticity() && gpu_static_available && !schema_initialized[index] {
                 lives[index].initialize_neural_projection_schema(
                     full_gpu_runtime_live_plasticity_schema()?,
                 )?;
@@ -1290,6 +1292,7 @@ pub fn run_batched_gpu_runtime_smoke(
             creature.routing_active_synapses = static_report.routing.active_synapses;
 
             if tick.summary.patch_sealed
+                && mode.requests_plasticity()
                 && gpu_static_available
                 && static_report.cpu_shadow_parity_passed
                 && post_seal_gpu_plasticity_diagnostic_enabled()
@@ -1770,7 +1773,9 @@ impl GraphicalGpuRuntimeController {
                 );
                 Ok((tick.summary, motor_ring))
             }
-            GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
+            GraphicalGpuRuntimeMode::StaticCpuShadowGuarded
+            | GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
+            | GraphicalGpuRuntimeMode::FullCpuShadowGuarded
             | GraphicalGpuRuntimeMode::AutoWithCpuFallback => self.tick_gpu_requested(live),
         }
     }
@@ -1801,10 +1806,8 @@ impl GraphicalGpuRuntimeController {
 
         let report = live.current_sensory_report()?;
         let input = runtime_input_from_sensory(&report)?;
-        let static_report = run_full_gpu_runtime_static_tick(
-            input,
-            alife_gpu_backend::FullGpuRuntimeMode::GpuStaticPlasticCpuShadowGuarded,
-        )?;
+        let backend_mode = graphical_backend_mode(self.mode);
+        let static_report = run_full_gpu_runtime_static_tick(input, backend_mode)?;
         let gpu_available = static_report.backend.fallback_reason.is_none();
         let mut gpu_scores_used = false;
         let mut plasticity_applied = false;
@@ -1831,7 +1834,11 @@ impl GraphicalGpuRuntimeController {
             live.current_context_proposals()?
         };
 
-        if gpu_available && !self.schema_initialized && live.mind().current_tick().raw() == 0 {
+        if self.mode.requests_plasticity()
+            && gpu_available
+            && !self.schema_initialized
+            && live.mind().current_tick().raw() == 0
+        {
             live.initialize_neural_projection_schema(full_gpu_runtime_live_plasticity_schema()?)?;
             self.schema_initialized = true;
         }
@@ -1843,6 +1850,7 @@ impl GraphicalGpuRuntimeController {
             && tick.summary.patch_sealed
             && self.schema_initialized
             && !self.h_shadow_applied_once
+            && self.mode.requests_plasticity()
             && post_seal_gpu_plasticity_diagnostic_enabled()
         {
             if let Some(patch) = tick.sealed_patch.as_ref() {
@@ -2910,7 +2918,7 @@ fn run_full_gpu_runtime_smoke_inner(
     use alife_gpu_backend::{
         full_gpu_runtime_live_plasticity_schema, post_seal_delta_batch_from_plasticity_report,
         run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
-        FullGpuRuntimeProductClaim,
+        FullGpuRuntimeProductClaim, GpuRuntimeBackendKind,
     };
 
     let mut live = LiveBrainLoop::from_p34_launch(launch)?;
@@ -3028,11 +3036,17 @@ fn run_full_gpu_runtime_smoke_inner(
         } else {
             format!("{:?}", static_report.product_runtime_claim)
         };
+    let cpu_shadow_guarded_plasticity_mode = matches!(
+        mode,
+        FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded
+            | FullGpuRuntimeSmokeMode::FullActionAuthoritative
+    );
+    let full_backend_selected = static_report.backend.selected == GpuRuntimeBackendKind::GpuFull;
     let summary = FullGpuRuntimeSmokeSummary {
         schema: FULL_GPU_NEURAL_RUNTIME_SCHEMA,
         schema_version: FULL_GPU_NEURAL_RUNTIME_SCHEMA_VERSION,
         requested_mode: mode.label().to_string(),
-        combined_mode: mode == FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded,
+        combined_mode: cpu_shadow_guarded_plasticity_mode,
         selected_backend: format!("{:?}", static_report.backend.selected),
         fallback_reason: static_report
             .backend
@@ -3088,9 +3102,9 @@ fn run_full_gpu_runtime_smoke_inner(
         cpu_shadow_ms: static_report.timing.cpu_shadow_ms,
         total_gpu_runtime_ms: static_report.timing.total_gpu_runtime_ms,
         product_runtime_claim,
-        unsupported_full_runtime_gap_remaining: true,
+        unsupported_full_runtime_gap_remaining: !full_backend_selected,
         plasticity_live_gap: if receipt.is_some() {
-            "post-seal H_shadow delta batch applied through alife_core contract; full action-authoritative static+routing+plastic runtime remains unsupported"
+            "post-seal H_shadow delta batch applied through alife_core contract; GPU runtime remains CPU-shadow guarded and not full action-authoritative"
                 .to_string()
         } else if let Some(note) = plasticity_failure_note {
             note
@@ -3116,7 +3130,11 @@ fn cpu_fallback_summary(
         schema: FULL_GPU_NEURAL_RUNTIME_SCHEMA,
         schema_version: FULL_GPU_NEURAL_RUNTIME_SCHEMA_VERSION,
         requested_mode: mode.label().to_string(),
-        combined_mode: mode == FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded,
+        combined_mode: matches!(
+            mode,
+            FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded
+                | FullGpuRuntimeSmokeMode::FullActionAuthoritative
+        ),
         selected_backend: "CpuReference".to_string(),
         fallback_reason: Some(reason.to_string()),
         hardware_identifier: None,
@@ -3177,6 +3195,25 @@ fn post_seal_gpu_plasticity_diagnostic_enabled() -> bool {
     std::env::var("ALIFE_GPU_PLASTICITY_DIAGNOSTIC_AVAILABLE")
         .map(|value| !matches!(value.as_str(), "0" | "false" | "FALSE" | "False"))
         .unwrap_or(true)
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn graphical_backend_mode(mode: GraphicalGpuRuntimeMode) -> alife_gpu_backend::FullGpuRuntimeMode {
+    match mode {
+        GraphicalGpuRuntimeMode::CpuReference => {
+            alife_gpu_backend::FullGpuRuntimeMode::CpuReference
+        }
+        GraphicalGpuRuntimeMode::StaticCpuShadowGuarded => {
+            alife_gpu_backend::FullGpuRuntimeMode::GpuStaticActionAuthoritative
+        }
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded => {
+            alife_gpu_backend::FullGpuRuntimeMode::GpuStaticPlasticCpuShadowGuarded
+        }
+        GraphicalGpuRuntimeMode::FullCpuShadowGuarded
+        | GraphicalGpuRuntimeMode::AutoWithCpuFallback => {
+            alife_gpu_backend::FullGpuRuntimeMode::GpuFullActionAuthoritative
+        }
+    }
 }
 
 #[cfg(feature = "gpu-runtime")]

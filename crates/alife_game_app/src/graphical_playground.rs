@@ -13,7 +13,9 @@ pub const S01_DEFAULT_FIXTURE_ROOT: &str = "crates/alife_world/tests/fixtures/gp
 pub enum GraphicalGpuRuntimeMode {
     #[default]
     CpuReference,
+    StaticCpuShadowGuarded,
     StaticPlasticCpuShadowGuarded,
+    FullCpuShadowGuarded,
     AutoWithCpuFallback,
 }
 
@@ -21,7 +23,9 @@ impl GraphicalGpuRuntimeMode {
     pub const fn label(self) -> &'static str {
         match self {
             Self::CpuReference => "cpu-reference",
+            Self::StaticCpuShadowGuarded => "static-cpu-shadow-guarded",
             Self::StaticPlasticCpuShadowGuarded => "static-plastic-cpu-shadow-guarded",
+            Self::FullCpuShadowGuarded => "full-cpu-shadow-guarded",
             Self::AutoWithCpuFallback => "auto-with-cpu-fallback",
         }
     }
@@ -30,13 +34,24 @@ impl GraphicalGpuRuntimeMode {
         !matches!(self, Self::CpuReference)
     }
 
+    pub const fn requests_plasticity(self) -> bool {
+        matches!(
+            self,
+            Self::StaticPlasticCpuShadowGuarded
+                | Self::FullCpuShadowGuarded
+                | Self::AutoWithCpuFallback
+        )
+    }
+
     pub fn parse(value: &str) -> Result<Self, GameAppShellError> {
         match value {
             "cpu-reference" => Ok(Self::CpuReference),
+            "static-cpu-shadow-guarded" => Ok(Self::StaticCpuShadowGuarded),
             "static-plastic-cpu-shadow-guarded" => Ok(Self::StaticPlasticCpuShadowGuarded),
+            "full-cpu-shadow-guarded" => Ok(Self::FullCpuShadowGuarded),
             "auto-with-cpu-fallback" => Ok(Self::AutoWithCpuFallback),
             _ => Err(GameAppShellError::InvalidGraphicalLaunch {
-                message: "graphical GPU mode must be cpu-reference, static-plastic-cpu-shadow-guarded, or auto-with-cpu-fallback",
+                message: "graphical GPU mode must be cpu-reference, static-cpu-shadow-guarded, static-plastic-cpu-shadow-guarded, full-cpu-shadow-guarded, or auto-with-cpu-fallback",
             }),
         }
     }

@@ -50,6 +50,16 @@ fn backend_selection_defaults_to_cpu_and_falls_back_cleanly() {
         .unwrap();
     assert_eq!(plastic.selected, GpuRuntimeBackendKind::GpuPlastic);
     assert_eq!(plastic.fallback_reason, None);
+
+    let full = GpuRuntimeBackendConfig::request(GpuRuntimeBackendKind::GpuFull)
+        .with_hardware_available(true)
+        .with_gpu_feature_enabled(true)
+        .with_validation_passed(true)
+        .with_full_runtime_available(true)
+        .select_backend()
+        .unwrap();
+    assert_eq!(full.selected, GpuRuntimeBackendKind::GpuFull);
+    assert_eq!(full.fallback_reason, None);
 }
 
 #[test]
@@ -209,6 +219,7 @@ fn performance_tier_report_covers_all_required_populations_without_fabricating_g
         [
             GpuTierPopulation::One,
             GpuTierPopulation::Ten,
+            GpuTierPopulation::Thirty,
             GpuTierPopulation::Fifty,
             GpuTierPopulation::OneHundred,
             GpuTierPopulation::TwoHundredFifty,

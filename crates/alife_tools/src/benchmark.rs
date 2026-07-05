@@ -31,10 +31,11 @@ impl BenchmarkTier {
         }
     }
 
-    pub const fn required_tiers() -> [Self; 6] {
+    pub const fn required_tiers() -> [Self; 7] {
         [
             Self::new(1),
             Self::new(10),
+            Self::new(30),
             Self::new(50),
             Self::new(100),
             Self::new(250),
@@ -500,6 +501,7 @@ fn tier_population(population: u16) -> Option<GpuTierPopulation> {
     match population {
         1 => Some(GpuTierPopulation::One),
         10 => Some(GpuTierPopulation::Ten),
+        30 => Some(GpuTierPopulation::Thirty),
         50 => Some(GpuTierPopulation::Fifty),
         100 => Some(GpuTierPopulation::OneHundred),
         250 => Some(GpuTierPopulation::TwoHundredFifty),

@@ -697,6 +697,7 @@ impl GpuRuntimeCapabilityManifest {
 pub enum GpuTierPopulation {
     One,
     Ten,
+    Thirty,
     Fifty,
     OneHundred,
     TwoHundredFifty,
@@ -704,10 +705,11 @@ pub enum GpuTierPopulation {
 }
 
 impl GpuTierPopulation {
-    pub const fn required() -> [Self; 6] {
+    pub const fn required() -> [Self; 7] {
         [
             Self::One,
             Self::Ten,
+            Self::Thirty,
             Self::Fifty,
             Self::OneHundred,
             Self::TwoHundredFifty,
@@ -719,6 +721,7 @@ impl GpuTierPopulation {
         match self {
             Self::One => 1,
             Self::Ten => 10,
+            Self::Thirty => 30,
             Self::Fifty => 50,
             Self::OneHundred => 100,
             Self::TwoHundredFifty => 250,

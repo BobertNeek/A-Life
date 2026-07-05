@@ -206,6 +206,7 @@ fn runtime_prereq_diagnostics_impl(
         .with_gpu_feature_enabled(true)
         .with_hardware_available(probe.hardware_available())
         .with_validation_passed(probe.error.is_none())
+        .with_full_runtime_available(requested_backend == GpuRuntimeBackendKind::GpuFull)
         .select_backend();
     let (selected_backend, fallback_reason) = match status {
         Ok(status) => (
@@ -239,8 +240,10 @@ fn runtime_prereq_diagnostics_impl(
 ) -> RuntimePrereqDiagnosticsSummary {
     let requested_backend = match options.gpu_mode {
         GraphicalGpuRuntimeMode::CpuReference => "CpuReference",
-        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
-        | GraphicalGpuRuntimeMode::AutoWithCpuFallback => "GpuPlastic",
+        GraphicalGpuRuntimeMode::StaticCpuShadowGuarded => "GpuStatic",
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded => "GpuPlastic",
+        GraphicalGpuRuntimeMode::FullCpuShadowGuarded
+        | GraphicalGpuRuntimeMode::AutoWithCpuFallback => "GpuFull",
     };
     let fallback_reason = options
         .gpu_mode
@@ -275,9 +278,15 @@ const fn gpu_mode_to_backend(
         GraphicalGpuRuntimeMode::CpuReference => {
             alife_gpu_backend::GpuRuntimeBackendKind::CpuReference
         }
-        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
-        | GraphicalGpuRuntimeMode::AutoWithCpuFallback => {
+        GraphicalGpuRuntimeMode::StaticCpuShadowGuarded => {
+            alife_gpu_backend::GpuRuntimeBackendKind::GpuStatic
+        }
+        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded => {
             alife_gpu_backend::GpuRuntimeBackendKind::GpuPlastic
+        }
+        GraphicalGpuRuntimeMode::FullCpuShadowGuarded
+        | GraphicalGpuRuntimeMode::AutoWithCpuFallback => {
+            alife_gpu_backend::GpuRuntimeBackendKind::GpuFull
         }
     }
 }

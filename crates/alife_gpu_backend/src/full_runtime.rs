@@ -63,6 +63,10 @@ impl FullGpuRuntimeMode {
                 | Self::GpuFullActionAuthoritative
         )
     }
+
+    pub const fn bounded_full_runtime_available(self) -> bool {
+        matches!(self, Self::GpuFullShadow | Self::GpuFullActionAuthoritative)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -390,6 +394,7 @@ impl FullGpuRuntimeSession {
             .with_gpu_feature_enabled(true)
             .with_hardware_available(true)
             .with_validation_passed(true)
+            .with_full_runtime_available(mode.bounded_full_runtime_available())
             .select_backend()?;
         if backend.selected == GpuRuntimeBackendKind::CpuReference {
             return Ok(Self {
@@ -836,6 +841,7 @@ async fn run_full_gpu_runtime_static_tick_async(
         .with_gpu_feature_enabled(true)
         .with_hardware_available(true)
         .with_validation_passed(true)
+        .with_full_runtime_available(mode.bounded_full_runtime_available())
         .select_backend()?;
     if backend.selected == GpuRuntimeBackendKind::CpuReference {
         return cpu_status_report(

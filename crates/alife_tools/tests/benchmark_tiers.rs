@@ -16,7 +16,7 @@ fn benchmark_tiers_cover_required_population_counts_and_manual_upper_tiers() {
     let tiers = BenchmarkTier::required_tiers();
     assert_eq!(
         tiers.iter().map(|tier| tier.population).collect::<Vec<_>>(),
-        [1, 10, 50, 100, 250, 500]
+        [1, 10, 30, 50, 100, 250, 500]
     );
     assert!(tiers
         .iter()
@@ -25,7 +25,7 @@ fn benchmark_tiers_cover_required_population_counts_and_manual_upper_tiers() {
     assert!(tiers
         .iter()
         .filter(|tier| !tier.expected_slow_cpu_only)
-        .all(|tier| tier.population <= 10));
+        .all(|tier| tier.population <= 30));
 }
 
 #[test]
@@ -171,6 +171,7 @@ fn gpu_runtime_bridge_reuses_p20_smoke_without_fabricating_gpu_results() {
         [
             GpuTierPopulation::One,
             GpuTierPopulation::Ten,
+            GpuTierPopulation::Thirty,
             GpuTierPopulation::Fifty,
             GpuTierPopulation::OneHundred,
             GpuTierPopulation::TwoHundredFifty,

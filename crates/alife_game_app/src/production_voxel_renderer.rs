@@ -13,7 +13,7 @@ use std::{
 
 use alife_core::Vec3f;
 use alife_world::{
-    persistence::{CreatureSaveState, PortableSaveFile},
+    persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
     CreatureWorldAnchor, PersistentVoxelWorldBackend, PersistentVoxelWorldSnapshot,
     ProceduralTerrainMaterial, ProceduralTileCoord, ProceduralWorldConfig, StableVoxelObjectRef,
     StableVoxelRefKind, VoxelChunkCoord, VoxelTileCoord, WorldObjectKind,
@@ -754,6 +754,7 @@ pub struct Fvr05ProductionUxStateResource {
     pub renderer_profile: String,
     pub state_trace: String,
     pub authority: Fvr05ProductionDebugAuthorityReport,
+    pub gpu_runtime_state: GpuRuntimeSaveState,
     pub last_action: String,
     pub last_error: Option<String>,
 }
@@ -790,6 +791,7 @@ impl Fvr05ProductionUxStateResource {
             renderer_profile: summary.renderer_profile.clone(),
             state_trace: summary.state_labels().join(">"),
             authority: summary.debug_authority.clone(),
+            gpu_runtime_state: summary.gpu_runtime_state.clone(),
             last_action: "Ready: production voxel world loaded from validated save".to_string(),
             last_error: summary.ui_settings_load_error.clone(),
         }
@@ -839,6 +841,8 @@ impl Fvr05ProductionUxStateResource {
                 self.profile_id,
                 self.population,
             )?;
+            let production_save =
+                production_save.with_gpu_runtime_state(self.gpu_runtime_state.clone())?;
             if let Some(parent) = target_path.parent() {
                 fs::create_dir_all(parent)?;
             }

@@ -38,8 +38,11 @@ mod prelude {
         G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::persistence::{
-        AssetManifest, BackendSelection, PersistenceError, PortableSaveFile, RuntimeConfig,
-        SchoolSaveState, WorldObjectSaveState,
+        AssetManifest, BackendSelection, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
+        GpuRuntimeClassBucketAllocation, GpuRuntimeCpuShadowParityState, GpuRuntimeResidencySlots,
+        GpuRuntimeSafeCheckpoint, GpuRuntimeSaveState, GpuRuntimeShaderAbiVersions,
+        PersistenceError, PortableSaveFile, RuntimeConfig, SchoolSaveState, WorldObjectSaveState,
+        FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::{
         CreatureWorldAnchor, EcologyMetrics, EcologyZoneId, HeadlessActionIds,

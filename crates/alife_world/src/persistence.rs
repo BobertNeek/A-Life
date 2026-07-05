@@ -33,6 +33,8 @@ pub const P34_ASSET_MANIFEST_SCHEMA: &str = "alife.p34.asset_manifest.v1";
 pub const P34_ASSET_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const P34_MIGRATION_HOOK_SCHEMA_VERSION: u16 = 1;
 pub const P34_MAX_INLINE_SAVE_BYTES: u64 = 64 * 1024;
+pub const FVR06_GPU_RUNTIME_STATE_SCHEMA: &str = "alife.fvr06.gpu_runtime_state.v1";
+pub const FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION: u16 = 1;
 
 #[derive(Debug, Error)]
 pub enum PersistenceError {
@@ -318,6 +320,224 @@ pub struct GpuLimitsConfig {
     pub max_storage_buffers: u32,
     pub neural_budget_ms: f32,
     pub no_active_gameplay_readback: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeAdapterIdentity {
+    pub adapter_name: Option<String>,
+    pub backend_api: Option<String>,
+    pub adapter_type: Option<String>,
+    pub driver: Option<String>,
+    pub driver_info: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeResidencySlots {
+    pub hot_slots: u16,
+    pub warm_slots: u16,
+    pub cold_slots: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeClassBucketAllocation {
+    pub brain_class: BrainScaleTier,
+    pub hot_slots: u16,
+    pub warm_slots: u16,
+    pub cold_slots: u16,
+    pub max_creatures: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GpuRuntimeActiveProfileCaps {
+    pub target_fps: u16,
+    pub target_frame_ms: f32,
+    pub renderer_reserve_ms: f32,
+    pub gpu_neural_budget_ms: f32,
+    pub neural_heap_mb: u32,
+    pub staging_readback_budget_kib: u32,
+    pub chunk_activation_radius: u16,
+    pub active_chunk_cap: u16,
+    pub vfx_budget: String,
+    pub adaptive_throttling_order: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeShaderAbiVersions {
+    pub shader_manifest: Vec<String>,
+    pub abi_manifest: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeCpuShadowParityState {
+    pub static_forward_checked: bool,
+    pub plasticity_checked: bool,
+    pub last_action_summary_parity: Option<bool>,
+    pub fallback_on_parity_failure: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuRuntimeSafeCheckpoint {
+    pub save_id: String,
+    pub world_tick: Tick,
+    pub sealed_patch_boundary: bool,
+    pub checkpoint_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GpuRuntimeSaveState {
+    pub schema: String,
+    pub schema_version: u16,
+    pub requested_backend_mode: String,
+    pub selected_backend_mode: String,
+    pub adapter_identity: GpuRuntimeAdapterIdentity,
+    pub validation_profile: String,
+    pub brain_residency_slots: GpuRuntimeResidencySlots,
+    pub class_bucket_allocations: Vec<GpuRuntimeClassBucketAllocation>,
+    pub active_profile_caps: GpuRuntimeActiveProfileCaps,
+    pub shader_abi_versions: GpuRuntimeShaderAbiVersions,
+    pub cpu_shadow_parity: GpuRuntimeCpuShadowParityState,
+    pub last_safe_checkpoint: GpuRuntimeSafeCheckpoint,
+    pub fallback_reason: Option<String>,
+    pub selected_scale_profile: String,
+    pub compact_action_readback_bytes_per_creature: u32,
+    pub no_active_bulk_readback: bool,
+}
+
+impl GpuRuntimeSaveState {
+    pub fn validate(&self) -> Result<(), PersistenceError> {
+        require_named_schema(
+            &self.schema,
+            FVR06_GPU_RUNTIME_STATE_SCHEMA,
+            self.schema_version,
+            FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
+        )?;
+        if self.requested_backend_mode.trim().is_empty()
+            || self.selected_backend_mode.trim().is_empty()
+            || self.validation_profile.trim().is_empty()
+            || self.selected_scale_profile.trim().is_empty()
+            || self.class_bucket_allocations.is_empty()
+            || self.shader_abi_versions.shader_manifest.is_empty()
+            || self.shader_abi_versions.abi_manifest.is_empty()
+            || self.last_safe_checkpoint.save_id.trim().is_empty()
+            || self.last_safe_checkpoint.checkpoint_label.trim().is_empty()
+            || !self.last_safe_checkpoint.sealed_patch_boundary
+            || !self.cpu_shadow_parity.fallback_on_parity_failure
+            || !self.no_active_bulk_readback
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "gpu_runtime",
+                message: "FVR06 GPU runtime descriptor is incomplete",
+            });
+        }
+        if self.selected_backend_mode != "CpuReference"
+            && (self
+                .adapter_identity
+                .adapter_name
+                .as_deref()
+                .is_none_or(str::is_empty)
+                || self
+                    .adapter_identity
+                    .backend_api
+                    .as_deref()
+                    .is_none_or(str::is_empty))
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "gpu_runtime.adapter_identity",
+                message: "selected GPU backend requires adapter name and API",
+            });
+        }
+        self.brain_residency_slots.validate()?;
+        self.active_profile_caps.validate()?;
+        for allocation in &self.class_bucket_allocations {
+            allocation.validate()?;
+        }
+        if self.compact_action_readback_bytes_per_creature == 0
+            || self.compact_action_readback_bytes_per_creature
+                > self
+                    .active_profile_caps
+                    .staging_readback_budget_kib
+                    .saturating_mul(1024)
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "gpu_runtime.compact_action_readback_bytes_per_creature",
+                message: "compact action readback budget must be bounded and nonzero",
+            });
+        }
+        let json = serde_json::to_string(self)?;
+        if contains_engine_local_runtime_token(&json) {
+            return Err(PersistenceError::EngineLocalIdLeak {
+                field: "gpu_runtime",
+                value: "engine-local token".to_string(),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuRuntimeResidencySlots {
+    fn validate(&self) -> Result<(), PersistenceError> {
+        if self.hot_slots == 0
+            || self.warm_slots == 0
+            || self
+                .hot_slots
+                .saturating_add(self.warm_slots)
+                .saturating_add(self.cold_slots)
+                == 0
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "gpu_runtime.brain_residency_slots",
+                message: "runtime residency slots must include hot and warm brains",
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuRuntimeClassBucketAllocation {
+    fn validate(&self) -> Result<(), PersistenceError> {
+        if self.brain_class.neuron_count().is_none()
+            || self.max_creatures == 0
+            || self.hot_slots.saturating_add(self.warm_slots) == 0
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "gpu_runtime.class_bucket_allocations",
+                message: "class buckets require a canonical brain class and active slots",
+            });
+        }
+        Ok(())
+    }
+}
+
+impl GpuRuntimeActiveProfileCaps {
+    fn validate(&self) -> Result<(), PersistenceError> {
+        for value in [
+            self.target_frame_ms,
+            self.renderer_reserve_ms,
+            self.gpu_neural_budget_ms,
+        ] {
+            if !value.is_finite() || value <= 0.0 {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "gpu_runtime.active_profile_caps",
+                    message: "profile timing caps must be finite and positive",
+                });
+            }
+        }
+        if self.target_fps == 0
+            || self.neural_heap_mb == 0
+            || self.staging_readback_budget_kib == 0
+            || self.chunk_activation_radius == 0
+            || self.active_chunk_cap == 0
+            || self.vfx_budget.trim().is_empty()
+            || self.adaptive_throttling_order.is_empty()
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "gpu_runtime.active_profile_caps",
+                message:
+                    "profile caps must record frame, heap, chunk, staging, and throttle budgets",
+            });
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -611,6 +831,8 @@ pub struct PortableSaveFile {
     pub save_id: String,
     pub deterministic_seed: u64,
     pub config: RuntimeConfig,
+    #[serde(default)]
+    pub gpu_runtime: Option<GpuRuntimeSaveState>,
     pub assets: AssetManifest,
     pub world: WorldSaveState,
     pub creatures: Vec<CreatureSaveState>,
@@ -655,6 +877,7 @@ impl PortableSaveFile {
             save_id: save_id.into(),
             deterministic_seed: world.seed(),
             config,
+            gpu_runtime: None,
             assets,
             world: world_state,
             creatures,
@@ -688,7 +911,7 @@ impl PortableSaveFile {
     }
 
     pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), PersistenceError> {
-        fs::write(path, self.to_json_string_pretty()?)?;
+        fs::write(path, serde_json::to_string_pretty(self)?)?;
         Ok(())
     }
 
@@ -714,6 +937,17 @@ impl PortableSaveFile {
             });
         }
         self.config.validate()?;
+        if let Some(gpu_runtime) = &self.gpu_runtime {
+            gpu_runtime.validate()?;
+            if gpu_runtime.last_safe_checkpoint.save_id != self.save_id
+                || gpu_runtime.last_safe_checkpoint.world_tick != self.world.tick
+            {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "gpu_runtime.last_safe_checkpoint",
+                    message: "GPU runtime checkpoint must match save id and world tick",
+                });
+            }
+        }
         self.assets.validate_with_root(root)?;
         self.world.validate()?;
         self.adapter_remap.validate()?;
@@ -774,6 +1008,24 @@ impl PortableSaveFile {
             );
         }
         Ok(migrated)
+    }
+
+    pub fn with_gpu_runtime_state(
+        &self,
+        gpu_runtime: GpuRuntimeSaveState,
+    ) -> Result<Self, PersistenceError> {
+        gpu_runtime.validate()?;
+        if gpu_runtime.last_safe_checkpoint.save_id != self.save_id
+            || gpu_runtime.last_safe_checkpoint.world_tick != self.world.tick
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "gpu_runtime.last_safe_checkpoint",
+                message: "GPU runtime checkpoint must match save id and world tick",
+            });
+        }
+        let mut save = self.clone();
+        save.gpu_runtime = Some(gpu_runtime);
+        Ok(save)
     }
 }
 
@@ -1146,6 +1398,25 @@ fn reject_engine_local_token(field: &'static str, value: &str) -> Result<(), Per
     } else {
         Ok(())
     }
+}
+
+fn contains_engine_local_runtime_token(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    [
+        "entity(",
+        "bevy::",
+        "avian::",
+        "wgpu::",
+        "windowhandle",
+        "rendererhandle",
+        "oswindow",
+        "handle<",
+        "mesh3d",
+        "standardmaterial",
+        "egui",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
 }
 
 #[allow(dead_code)]

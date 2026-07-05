@@ -1356,7 +1356,10 @@ fn full_gpu_runtime_combined_static_plastic_mode_is_cpu_shadow_guarded() {
             summary.product_runtime_claim,
             "CpuShadowGuardedStaticPlusLiveHShadow"
         );
-        assert!(summary.plasticity_live_gap.contains("unsupported"));
+        assert!(summary.plasticity_live_gap.contains("alife_core contract"));
+        assert!(summary
+            .plasticity_live_gap
+            .contains("not full action-authoritative"));
     } else {
         assert_eq!(summary.selected_backend, "CpuReference");
         assert!(summary.fallback_reason.is_some());
@@ -1737,7 +1740,9 @@ fn ca36_soak_isolation_protocol_preserves_gpu_truth_boundaries() {
 }
 
 #[test]
-fn full_gpu_runtime_unsupported_full_mode_falls_back_without_claiming_gpu_work() {
+fn full_gpu_runtime_full_mode_selects_bounded_gpu_or_explicit_fallback() {
+    let _guard = gpu_plasticity_env_lock();
+    std::env::remove_var("ALIFE_GPU_PLASTICITY_DIAGNOSTIC_AVAILABLE");
     let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     let summary = run_full_gpu_runtime_smoke(
         &launch,
@@ -1749,12 +1754,26 @@ fn full_gpu_runtime_unsupported_full_mode_falls_back_without_claiming_gpu_work()
     )
     .unwrap();
 
-    assert_eq!(summary.selected_backend, "CpuReference");
-    assert!(summary.fallback_reason.is_some());
-    assert!(!summary.gpu_static_dispatched);
-    assert!(!summary.gpu_output_used_for_proposals);
-    assert!(!summary.plasticity_dispatched);
-    assert_eq!(summary.product_runtime_claim, "None");
+    assert_eq!(summary.requested_mode, "full-action-authoritative");
+    assert!(summary.combined_mode);
+    assert_ne!(summary.product_runtime_claim, "ActionAuthoritative");
+    if summary.selected_backend == "GpuFull" {
+        assert!(summary.fallback_reason.is_none());
+        assert!(summary.gpu_static_dispatched);
+        assert!(summary.gpu_output_used_for_proposals);
+        assert!(summary.cpu_shadow_parity);
+        assert!(summary.plasticity_dispatched);
+        assert_eq!(
+            summary.product_runtime_claim,
+            "CpuShadowGuardedStaticPlusLiveHShadow"
+        );
+        assert!(!summary.unsupported_full_runtime_gap_remaining);
+    } else {
+        assert_eq!(summary.selected_backend, "CpuReference");
+        assert!(summary.fallback_reason.is_some());
+        assert!(!summary.gpu_output_used_for_proposals);
+        assert_eq!(summary.product_runtime_claim, "None");
+    }
     summary.validate().unwrap();
 }
 
@@ -6447,6 +6466,7 @@ fn ca33_batched_gpu_runtime_uses_stable_id_population_and_honest_claims() {
     let summary = run_batched_gpu_runtime_smoke(
         &launch,
         BatchedGpuRuntimeOptions {
+            mode: FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded,
             max_creatures: 3,
             ticks: 1,
             cpu_shadow_every: 1,
@@ -6497,6 +6517,7 @@ fn ca33_batched_gpu_runtime_uses_stable_id_population_and_honest_claims() {
 #[test]
 fn ca33_batched_gpu_runtime_rejects_sampled_shadow_until_ca34() {
     let options = BatchedGpuRuntimeOptions {
+        mode: FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded,
         cpu_shadow_every: 2,
         ..Default::default()
     };
