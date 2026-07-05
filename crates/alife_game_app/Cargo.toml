@@ -24,6 +24,7 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+wgpu = { version = "=27.0.1", optional = true }
 
 [features]
 default = []
@@ -46,6 +47,7 @@ bevy-app = [
     "bevy/png",
     "bevy/sprite_picking",
     "bevy/ui_picking",
+    "dep:wgpu",
 ]
 gpu-runtime = ["dep:alife_gpu_backend"]
 voxel-backend = ["bevy-app", "dep:bevy_voxel_world"]

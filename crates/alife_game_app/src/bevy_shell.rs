@@ -58,8 +58,9 @@ use bevy::{
             ShaderType, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
         },
         renderer::{RenderContext, RenderDevice},
+        settings::{RenderCreation, WgpuSettings},
         view::{ViewDepthTexture, ViewTarget},
-        RenderApp, RenderStartup,
+        RenderApp, RenderPlugin, RenderStartup,
     },
     shader::Shader,
     window::{ExitCondition, PresentMode, PrimaryWindow, Window, WindowPlugin, WindowTheme},
@@ -4759,18 +4760,24 @@ pub fn build_production_voxel_frontend_app_shell(
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<ButtonInput<MouseButton>>();
     } else {
+        let present_mode = if launch.record_performance {
+            PresentMode::Immediate
+        } else {
+            PresentMode::AutoVsync
+        };
         app.add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {
                     file_path: "assets".to_string(),
                     ..default()
                 })
+                .set(production_voxel_render_plugin(launch.record_performance))
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: summary.window_title.clone(),
                         name: Some("alife.production_voxel_frontend".to_string()),
                         resolution: summary.resolution.into(),
-                        present_mode: PresentMode::AutoVsync,
+                        present_mode,
                         window_theme: Some(WindowTheme::Dark),
                         ..default()
                     }),
@@ -4794,6 +4801,18 @@ pub fn build_production_voxel_frontend_app_shell(
         .add_systems(Update, close_after_graphical_smoke_timeout);
     }
     Ok((app, summary))
+}
+
+fn production_voxel_render_plugin(record_performance: bool) -> RenderPlugin {
+    let mut wgpu_settings = WgpuSettings::default();
+    if record_performance {
+        wgpu_settings.instance_flags = wgpu::InstanceFlags::empty();
+    }
+    RenderPlugin {
+        render_creation: RenderCreation::Automatic(wgpu_settings),
+        synchronous_pipeline_compilation: false,
+        debug_flags: default(),
+    }
 }
 
 pub fn run_production_voxel_frontend_window(

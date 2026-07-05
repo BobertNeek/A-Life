@@ -6,6 +6,10 @@
 
 use crate::prelude::*;
 use crate::*;
+use alife_core::{DriveSnapshot, EndocrineSnapshot};
+use alife_world::persistence::{
+    CreatureMindSaveSummary, CreatureSaveState, LearningTraceSaveSummary, WeightLayerSaveSummary,
+};
 
 pub const PRODUCTION_VOXEL_COMMAND: &str = "production-voxel";
 pub const PRODUCTION_VOXEL_WINDOW_TITLE: &str = "A-Life Voxel Frontend";
@@ -330,7 +334,7 @@ impl ProductionVoxelLaunchConfig {
 
     pub fn effective_graphics_backend(&self) -> Result<String, GameAppShellError> {
         match self.graphics_backend.as_str() {
-            "auto" if cfg!(windows) => Ok("dx12".to_string()),
+            "auto" if cfg!(windows) => Ok("vulkan".to_string()),
             "auto" => Ok("auto".to_string()),
             "existing" => Ok("existing".to_string()),
             "dx12" | "vulkan" => Ok(self.graphics_backend.clone()),
@@ -485,12 +489,15 @@ pub fn run_production_voxel_frontend_preflight(
     trace.transition(ProductionAppState::LoadAssets)?;
 
     let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
-    save.validate_with_asset_root(&launch.app_launch.asset_root)?;
-    let production_save =
-        save.with_migrated_voxel_backend(persistent_profile_id(launch.profile_id))?;
+    let production_save = production_voxel_save_with_population(
+        &save,
+        &launch.app_launch.asset_root,
+        launch.profile_id,
+        population,
+    )?;
     production_save.validate_with_asset_root(&launch.app_launch.asset_root)?;
     let voxel_evidence = production_voxel_backend_evidence(&production_save)?;
-    let visible = load_visible_world_from_p34_save(&launch.app_launch)?;
+    let visible = visible_world_from_save(&production_save)?;
     compare_visible_world_to_headless(&visible)?;
     trace.transition(ProductionAppState::LoadOrCreateWorld)?;
     trace.transition(ProductionAppState::Running)?;
@@ -571,9 +578,285 @@ pub fn validate_production_voxel_save(
     run_production_voxel_frontend_dry_run(launch)
 }
 
+pub(crate) fn production_voxel_save_with_population(
+    save: &PortableSaveFile,
+    asset_root: &Path,
+    profile_id: ProductionFrontendProfileId,
+    target_population: u16,
+) -> Result<PortableSaveFile, GameAppShellError> {
+    if target_population == 0 {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "production population must be nonzero".to_string(),
+        });
+    }
+    save.validate_with_asset_root(asset_root)?;
+    let mut production_save = save.clone();
+    apply_production_population_target(&mut production_save, usize::from(target_population))?;
+    production_save.world.voxel_backend = None;
+    let production_save =
+        production_save.with_migrated_voxel_backend(persistent_profile_id(profile_id))?;
+    production_save.validate_with_asset_root(asset_root)?;
+    Ok(production_save)
+}
+
+fn apply_production_population_target(
+    save: &mut PortableSaveFile,
+    target_population: usize,
+) -> Result<(), GameAppShellError> {
+    let mut agents = save
+        .world
+        .objects
+        .iter()
+        .filter(|object| object.kind == WorldObjectKind::Agent)
+        .cloned()
+        .collect::<Vec<_>>();
+    agents.sort_by_key(|object| object.id.raw());
+    if agents.is_empty() {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "production save must contain at least one real creature agent".to_string(),
+        });
+    }
+
+    if target_population < agents.len() {
+        let keep_agent_ids = agents
+            .iter()
+            .take(target_population)
+            .map(|object| object.id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        let keep_organism_ids = agents
+            .iter()
+            .take(target_population)
+            .filter_map(|object| object.organism_id)
+            .map(|id| id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        save.world.objects.retain(|object| {
+            object.kind != WorldObjectKind::Agent || keep_agent_ids.contains(&object.id.raw())
+        });
+        save.creatures
+            .retain(|creature| keep_organism_ids.contains(&creature.organism_id.raw()));
+        retain_existing_touched_entities(save);
+        return Ok(());
+    }
+
+    let Some(template_agent) = agents.first().cloned() else {
+        return Ok(());
+    };
+    let template_organism =
+        template_agent
+            .organism_id
+            .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+                message: "production creature agent must carry an organism_id".to_string(),
+            })?;
+    let template_creature = save
+        .creatures
+        .iter()
+        .find(|creature| creature.organism_id == template_organism)
+        .or_else(|| save.creatures.first())
+        .cloned()
+        .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+            message: "production save must contain at least one creature mind record".to_string(),
+        })?;
+
+    let mut next_world_id = save
+        .world
+        .objects
+        .iter()
+        .map(|object| object.id.raw())
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    let mut next_organism_id = save
+        .world
+        .objects
+        .iter()
+        .filter_map(|object| object.organism_id)
+        .map(|id| id.raw())
+        .chain(
+            save.creatures
+                .iter()
+                .map(|creature| creature.organism_id.raw()),
+        )
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    let mut next_genome_id = save
+        .creatures
+        .iter()
+        .map(|creature| creature.genome_id.raw())
+        .max()
+        .unwrap_or(template_creature.genome_id.raw())
+        .saturating_add(1);
+
+    for slot in agents.len()..target_population {
+        let stable_id = WorldEntityId(next_world_id)
+            .validate()
+            .map_err(GameAppShellError::Core)?;
+        let organism_id = OrganismId(next_organism_id)
+            .validate()
+            .map_err(GameAppShellError::Core)?;
+        let genome_id = GenomeId(next_genome_id)
+            .validate()
+            .map_err(GameAppShellError::Core)?;
+        next_world_id = next_world_id.saturating_add(1);
+        next_organism_id = next_organism_id.saturating_add(1);
+        next_genome_id = next_genome_id.saturating_add(1);
+
+        save.world.objects.push(WorldObjectSaveState {
+            id: stable_id,
+            label: format!("production-creature-{slot:03}"),
+            kind: WorldObjectKind::Agent,
+            organism_id: Some(organism_id),
+            position: production_population_position(save.deterministic_seed, slot),
+            radius: template_agent.radius,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: None,
+            social_affinity: production_social_affinity(slot),
+            teacher_channel: None,
+            consumed: false,
+            carried_by: None,
+        });
+        save.creatures.push(production_creature_save_for_slot(
+            &template_creature,
+            organism_id,
+            genome_id,
+            slot,
+        )?);
+    }
+
+    save.world.objects.sort_by_key(|object| object.id.raw());
+    save.creatures
+        .sort_by_key(|creature| creature.organism_id.raw());
+    save.world.next_entity_id = save.world.next_entity_id.max(next_world_id).max(
+        save.world
+            .objects
+            .iter()
+            .map(|object| object.id.raw())
+            .max()
+            .unwrap_or(0)
+            + 1,
+    );
+    retain_existing_touched_entities(save);
+    Ok(())
+}
+
+fn production_creature_save_for_slot(
+    template: &CreatureSaveState,
+    organism_id: OrganismId,
+    genome_id: GenomeId,
+    slot: usize,
+) -> Result<CreatureSaveState, GameAppShellError> {
+    let tick = template.mind.tick;
+    let homeostasis = production_homeostasis_for_slot(tick, slot)?;
+    Ok(CreatureSaveState {
+        organism_id,
+        genome_id,
+        brain_class: template.brain_class,
+        development_tick: template.development_tick,
+        mind: CreatureMindSaveSummary {
+            tick,
+            homeostasis,
+            memory_record_count: template.mind.memory_record_count,
+            memory_source_ids: template.mind.memory_source_ids.clone(),
+            concept_count: template.mind.concept_count,
+            edge_count: template.mind.edge_count,
+            simplex_count: template.mind.simplex_count,
+            unresolved_gap_count: template.mind.unresolved_gap_count,
+            sleep_state_label: if homeostasis.hormones.sleep_pressure >= 0.78 {
+                "sleeping".to_string()
+            } else {
+                "awake".to_string()
+            },
+            diagnostics: vec![
+                "FVR04 production population target materialized from P34 save/config".to_string(),
+                format!("population_slot={slot}"),
+            ],
+        },
+        weights: WeightLayerSaveSummary {
+            generated_weight_asset_id: template.weights.generated_weight_asset_id.clone(),
+            genetic_fixed_digest: template.weights.genetic_fixed_digest.clone(),
+            genetic_layer_mutable: false,
+            lifetime_consolidated_entries: template.weights.lifetime_consolidated_entries,
+            h_operational_entries: template.weights.h_operational_entries,
+            h_shadow_entries: template.weights.h_shadow_entries,
+        },
+        learning: LearningTraceSaveSummary {
+            lifetime_learning_enabled: template.learning.lifetime_learning_enabled,
+            lamarckian_mode_enabled: false,
+            last_consolidated_tick: template.learning.last_consolidated_tick,
+        },
+    })
+}
+
+fn production_homeostasis_for_slot(
+    tick: Tick,
+    slot: usize,
+) -> Result<HomeostaticSnapshot, GameAppShellError> {
+    let phase = production_unit_wave(slot, 17);
+    let alternate = production_unit_wave(slot, 41);
+    let stress = production_unit_wave(slot, 73);
+    let mut drives = DriveSnapshot::baseline();
+    drives.hunger = (0.18 + phase * 0.74).clamp(0.0, 1.0);
+    drives.fatigue = (0.12 + alternate * 0.78).clamp(0.0, 1.0);
+    drives.fear = (stress * 0.82).clamp(0.0, 1.0);
+    drives.pain = if stress > 0.86 { 0.36 } else { 0.0 };
+    drives.loneliness = (1.0 - production_social_affinity(slot).max(0.0)) * 0.5;
+    drives.curiosity = (0.28 + production_unit_wave(slot, 23) * 0.62).clamp(0.0, 1.0);
+    drives.brain_atp = (0.92 - drives.fatigue * 0.42 - drives.hunger * 0.18).clamp(0.05, 1.0);
+    drives.temperature_stress = (production_unit_wave(slot, 97) * 0.22).clamp(0.0, 1.0);
+    drives.reproductive_drive = (0.08 + production_unit_wave(slot, 61) * 0.78).clamp(0.0, 1.0);
+
+    let mut hormones = EndocrineSnapshot::baseline();
+    hormones.adrenaline = (0.12 + drives.fear * 0.58 + drives.pain * 0.30).clamp(0.0, 1.0);
+    hormones.cortisol = (0.16 + drives.fear * 0.64 + drives.fatigue * 0.16).clamp(0.0, 1.0);
+    hormones.dopamine = (0.28 + drives.curiosity * 0.34 + drives.brain_atp * 0.26
+        - drives.fear * 0.14)
+        .clamp(0.0, 1.0);
+    hormones.oxytocin = (0.42 + production_social_affinity(slot) * 0.28).clamp(0.0, 1.0);
+    hormones.serotonin = (0.36 + drives.brain_atp * 0.36 - drives.pain * 0.22).clamp(0.0, 1.0);
+    hormones.acetylcholine = (0.40 + drives.curiosity * 0.42).clamp(0.0, 1.0);
+    hormones.learning_modulator = (0.32 + hormones.dopamine * 0.48).clamp(0.0, 1.0);
+    hormones.developmental_hormone = (0.42 + drives.reproductive_drive * 0.20).clamp(0.0, 1.0);
+    hormones.sleep_pressure = (0.10 + drives.fatigue * 0.82).clamp(0.0, 1.0);
+
+    HomeostaticSnapshot::new(tick, drives, hormones).map_err(GameAppShellError::Core)
+}
+
+fn production_population_position(seed: u64, slot: usize) -> Vec3f {
+    let ring = (slot / 12) as f32 + 1.0;
+    let lane = (slot % 12) as f32;
+    let seed_phase = (seed % 360) as f32 * 0.017_453_292;
+    let angle = seed_phase + lane * 0.523_598_8 + ring * 0.37;
+    let radius = 2.0 + ring * 2.35;
+    Vec3f::new(angle.cos() * radius, 0.0, angle.sin() * radius)
+}
+
+fn production_social_affinity(slot: usize) -> f32 {
+    (production_unit_wave(slot, 29) * 2.0 - 1.0).clamp(-1.0, 1.0)
+}
+
+fn production_unit_wave(slot: usize, salt: usize) -> f32 {
+    let mixed = slot
+        .saturating_mul(1_103_515_245)
+        .saturating_add(salt.saturating_mul(12_345));
+    (mixed % 10_000) as f32 / 10_000.0
+}
+
+fn retain_existing_touched_entities(save: &mut PortableSaveFile) {
+    let ids = save
+        .world
+        .objects
+        .iter()
+        .map(|object| object.id.raw())
+        .collect::<std::collections::BTreeSet<_>>();
+    save.world
+        .last_touched_entities
+        .retain(|id| ids.contains(&id.raw()));
+}
+
 fn default_production_graphics_backend() -> String {
     if cfg!(windows) {
-        "dx12".to_string()
+        "vulkan".to_string()
     } else {
         "auto".to_string()
     }
@@ -665,4 +948,150 @@ fn production_voxel_backend_evidence(
         roundtrip_signatures_match,
         no_renderer_tokens,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn gpu_alpha_fixture_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/gpu_alpha")
+    }
+
+    fn gpu_alpha_save() -> PortableSaveFile {
+        PortableSaveFile::from_json_file(gpu_alpha_fixture_root().join("tiny_save.json")).unwrap()
+    }
+
+    fn creature_anchor_signature(save: &PortableSaveFile) -> Vec<(u64, i32, i32, i32, i32)> {
+        let backend = save.require_voxel_backend().unwrap();
+        backend
+            .creature_anchors
+            .iter()
+            .map(|anchor| {
+                (
+                    anchor.stable_id.raw(),
+                    anchor.tile.x,
+                    anchor.tile.z,
+                    anchor.chunk.x,
+                    anchor.chunk.z,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn fvr04_population_target_materializes_real_save_state_and_voxel_anchors() {
+        let root = gpu_alpha_fixture_root();
+        let save = gpu_alpha_save();
+        let production = production_voxel_save_with_population(
+            &save,
+            &root,
+            ProductionFrontendProfileId::MinimumSettings30x30,
+            30,
+        )
+        .unwrap();
+        let visible = visible_world_from_save(&production).unwrap();
+        let backend = production.require_voxel_backend().unwrap();
+
+        assert_eq!(visible.kind_count(WorldObjectKind::Agent), 30);
+        assert_eq!(production.creatures.len(), 30);
+        assert_eq!(backend.creature_anchors.len(), 30);
+        assert!(backend.validate().is_ok());
+        assert!(production.creatures.iter().any(|creature| creature
+            .mind
+            .homeostasis
+            .drives
+            .hunger
+            > 0.70));
+        assert!(production.creatures.iter().any(|creature| creature
+            .mind
+            .homeostasis
+            .hormones
+            .sleep_pressure
+            > 0.65));
+    }
+
+    #[test]
+    fn fvr04_population_target_supports_one_and_scale_up_500_without_renderer_tokens() {
+        let root = gpu_alpha_fixture_root();
+        let save = gpu_alpha_save();
+        let one = production_voxel_save_with_population(
+            &save,
+            &root,
+            ProductionFrontendProfileId::MinimumSettings30x30,
+            1,
+        )
+        .unwrap();
+        assert_eq!(
+            visible_world_from_save(&one)
+                .unwrap()
+                .kind_count(WorldObjectKind::Agent),
+            1
+        );
+        assert_eq!(one.creatures.len(), 1);
+        assert_eq!(
+            one.require_voxel_backend().unwrap().creature_anchors.len(),
+            1
+        );
+
+        let scale_up = production_voxel_save_with_population(
+            &save,
+            &root,
+            ProductionFrontendProfileId::HighSpecScaleUp,
+            500,
+        )
+        .unwrap();
+        let backend = scale_up.require_voxel_backend().unwrap();
+        let backend_json = serde_json::to_string(backend).unwrap().to_ascii_lowercase();
+        assert_eq!(
+            visible_world_from_save(&scale_up)
+                .unwrap()
+                .kind_count(WorldObjectKind::Agent),
+            500
+        );
+        assert_eq!(scale_up.creatures.len(), 500);
+        assert_eq!(backend.creature_anchors.len(), 500);
+        assert!(!backend_json.contains("bevy"));
+        assert!(!backend_json.contains("wgpu"));
+        assert!(!backend_json.contains("renderer"));
+    }
+
+    #[test]
+    fn fvr04_save_roundtrip_preserves_selected_creature_and_visible_signature() {
+        let root = gpu_alpha_fixture_root();
+        let save = gpu_alpha_save();
+        let production = production_voxel_save_with_population(
+            &save,
+            &root,
+            ProductionFrontendProfileId::MinSpecComfort1080p,
+            30,
+        )
+        .unwrap();
+        let selected_creature = production
+            .require_voxel_backend()
+            .unwrap()
+            .creature_anchors
+            .first()
+            .unwrap()
+            .clone();
+        let signature_before = creature_anchor_signature(&production);
+        let json = serde_json::to_string_pretty(&production).unwrap();
+        let roundtrip = PortableSaveFile::from_json_str(&json).unwrap();
+        let signature_after = creature_anchor_signature(&roundtrip);
+        let selected_after = roundtrip
+            .require_voxel_backend()
+            .unwrap()
+            .creature_anchors
+            .first()
+            .unwrap()
+            .clone();
+        let lower_json = json.to_ascii_lowercase();
+
+        assert_eq!(selected_after, selected_creature);
+        assert_eq!(signature_after, signature_before);
+        assert!(!lower_json.contains("entity("));
+        assert!(!lower_json.contains("bevy"));
+        assert!(!lower_json.contains("wgpu"));
+        assert!(!lower_json.contains("renderer"));
+    }
 }

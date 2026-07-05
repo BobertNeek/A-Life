@@ -3004,7 +3004,7 @@ fn parse_production_voxel_launch(
     let mut gpu_mode = alife_game_app::GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded;
     let mut require_gpu = false;
     let mut graphics_backend = if cfg!(windows) {
-        "dx12".to_string()
+        "vulkan".to_string()
     } else {
         "auto".to_string()
     };

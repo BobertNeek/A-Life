@@ -4,7 +4,7 @@ use crate::prelude::*;
 use crate::*;
 use alife_core::EndocrineSnapshot;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CreatureAnimationState {
     Idle,
     Moving,
@@ -35,7 +35,7 @@ impl CreatureAnimationState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CreatureExpressionState {
     Neutral,
     Hungry,
