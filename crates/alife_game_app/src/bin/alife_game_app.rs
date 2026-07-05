@@ -3011,6 +3011,7 @@ fn parse_production_voxel_launch(
     let mut smoke_seconds = None::<u32>;
     let mut dry_run = false;
     let mut record_performance = false;
+    let mut ui_settings_path = None::<PathBuf>;
     let mut index = 0_usize;
     while index < args.len() {
         match args[index].as_str() {
@@ -3098,6 +3099,13 @@ fn parse_production_voxel_launch(
                 record_performance = true;
                 index += 1;
             }
+            "--ui-settings" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--ui-settings requires a path".to_string())?;
+                ui_settings_path = Some(PathBuf::from(value));
+                index += 2;
+            }
             "--require-gpu" => {
                 require_gpu = true;
                 index += 1;
@@ -3130,6 +3138,7 @@ fn parse_production_voxel_launch(
     launch.dry_run = dry_run;
     launch.record_performance = record_performance;
     launch.legacy_alias = legacy_alias;
+    launch.ui_settings_path = ui_settings_path;
     Ok(launch)
 }
 
@@ -3151,7 +3160,7 @@ fn parse_resolution(value: &str) -> Result<(u32, u32), String> {
 
 fn production_voxel_help() -> String {
     format!(
-        "{command} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--graphics-backend auto|dx12|vulkan|existing] [--dry-run] [--smoke-seconds N] [--record-performance] [--require-gpu]\nProfiles: {}\nDefault profile: {}\nLegacy graphical-playground now routes here as a compatibility alias.",
+        "{command} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--gpu-mode cpu-reference|static-plastic-cpu-shadow-guarded|auto-with-cpu-fallback] [--graphics-backend auto|dx12|vulkan|existing] [--ui-settings PATH] [--dry-run] [--smoke-seconds N] [--record-performance] [--require-gpu]\nProfiles: {}\nDefault profile: {}\nLegacy graphical-playground now routes here as a compatibility alias.",
         ProductionFrontendProfileId::labels().join(", "),
         ProductionFrontendProfileId::default().label(),
         command = PRODUCTION_VOXEL_COMMAND,
@@ -3175,7 +3184,7 @@ fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunch
         "self"
     };
     format!(
-        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} voxel_backend_schema={} voxel_chunks={} voxel_materialized={} voxel_resource_hazard_refs={} voxel_selection_refs={} voxel_dirty_regions={} voxel_roundtrip={} voxel_renderer_tokens_saved={} dry_run={} record_performance={} signature={}",
+        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} voxel_backend_schema={} voxel_chunks={} voxel_materialized={} voxel_resource_hazard_refs={} voxel_selection_refs={} voxel_dirty_regions={} voxel_roundtrip={} voxel_renderer_tokens_saved={} ux_schema={} ux_version={} ux_settings={} ux_loaded_error={:?} ux_overlays={} debug_authority=\"{}\" dry_run={} record_performance={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.window_title,
@@ -3213,6 +3222,12 @@ fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunch
         summary.save_metadata.voxel_dirty_region_count,
         summary.save_metadata.voxel_roundtrip_signatures_match,
         !summary.save_metadata.no_renderer_tokens_in_voxel_save,
+        summary.ui_settings.schema,
+        summary.ui_settings.schema_version,
+        summary.ui_settings_path.display(),
+        summary.ui_settings_load_error.as_deref(),
+        summary.ui_settings.overlay_labels().join("|"),
+        summary.debug_authority.compact_line(),
         summary.dry_run,
         summary.record_performance,
         summary.signature_line()

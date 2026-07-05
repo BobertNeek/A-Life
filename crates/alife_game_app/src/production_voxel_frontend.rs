@@ -4,6 +4,8 @@
 //! around the existing real P34 config/save/asset contracts. It does not move
 //! renderer, Bevy, or GPU handles into core/world state.
 
+use std::fs;
+
 use crate::prelude::*;
 use crate::*;
 use alife_core::{DriveSnapshot, EndocrineSnapshot};
@@ -17,6 +19,335 @@ pub const PRODUCTION_VOXEL_RENDERER_PROFILE: &str = "voxel-backend";
 pub const PRODUCTION_VOXEL_SCENARIO_ID: &str = "production-voxel";
 pub const FVR01_RUNTIME_DIAGNOSTIC_LOG: &str =
     "target/artifacts/fvr01_production_voxel/runtime_prereq.log";
+pub const FVR05_PRODUCTION_UX_SCHEMA: &str = "alife.fvr05.production_ux.v1";
+pub const FVR05_PRODUCTION_UX_SCHEMA_VERSION: u16 = 1;
+pub const FVR05_PRODUCTION_UX_SETTINGS_DIR: &str = "target/artifacts/fvr05";
+
+const FVR05_ENGINE_LOCAL_TOKENS: [&str; 11] = [
+    "bevy",
+    "wgpu",
+    "entity(",
+    "renderer",
+    "windowhandle",
+    "oswindow",
+    "mesh3d",
+    "standardmaterial",
+    "handle<",
+    "avian",
+    "egui",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Fvr05ProductionOverlayKind {
+    Resources,
+    Danger,
+    Pheromones,
+    Energy,
+    Age,
+    Fertility,
+    Territory,
+    Neural,
+    Residency,
+    BackendTiming,
+    ChunkBoundaries,
+    LodBudget,
+    Persistence,
+}
+
+impl Fvr05ProductionOverlayKind {
+    pub const fn all() -> &'static [Self; 13] {
+        &[
+            Self::Resources,
+            Self::Danger,
+            Self::Pheromones,
+            Self::Energy,
+            Self::Age,
+            Self::Fertility,
+            Self::Territory,
+            Self::Neural,
+            Self::Residency,
+            Self::BackendTiming,
+            Self::ChunkBoundaries,
+            Self::LodBudget,
+            Self::Persistence,
+        ]
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Resources => "Resources",
+            Self::Danger => "Danger",
+            Self::Pheromones => "Pheromones",
+            Self::Energy => "Energy",
+            Self::Age => "Age",
+            Self::Fertility => "Fertility",
+            Self::Territory => "Territory",
+            Self::Neural => "Neural",
+            Self::Residency => "Residency",
+            Self::BackendTiming => "BackendTiming",
+            Self::ChunkBoundaries => "ChunkBoundaries",
+            Self::LodBudget => "LodBudget",
+            Self::Persistence => "Persistence",
+        }
+    }
+
+    pub fn default_enabled_for_profile(profile_id: ProductionFrontendProfileId) -> Vec<Self> {
+        match profile_id {
+            ProductionFrontendProfileId::MinimumSettings30x30 => vec![
+                Self::Resources,
+                Self::Danger,
+                Self::Energy,
+                Self::BackendTiming,
+                Self::Persistence,
+            ],
+            ProductionFrontendProfileId::MinSpecComfort1080p => vec![
+                Self::Resources,
+                Self::Danger,
+                Self::Energy,
+                Self::Fertility,
+                Self::Neural,
+                Self::Residency,
+                Self::BackendTiming,
+                Self::Persistence,
+            ],
+            _ => Self::all().to_vec(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Fvr05ProductionInspectorTab {
+    Creature,
+    Tile,
+    World,
+    GpuRuntime,
+}
+
+impl Fvr05ProductionInspectorTab {
+    pub const fn all() -> &'static [Self; 4] {
+        &[Self::Creature, Self::Tile, Self::World, Self::GpuRuntime]
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Creature => "Creature",
+            Self::Tile => "Tile",
+            Self::World => "World",
+            Self::GpuRuntime => "GPU",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        let all = Self::all();
+        let index = all.iter().position(|tab| *tab == self).unwrap_or_default();
+        all[(index + 1) % all.len()]
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Fvr05ProductionUxSettings {
+    pub schema: String,
+    pub schema_version: u16,
+    pub selected_profile: ProductionFrontendProfileId,
+    pub preferred_profile_for_next_launch: ProductionFrontendProfileId,
+    pub active_inspector_tab: Fvr05ProductionInspectorTab,
+    pub enabled_overlays: Vec<Fvr05ProductionOverlayKind>,
+    pub camera_mode: String,
+    pub paused: bool,
+    pub simulation_speed: f32,
+    pub follow_selection: bool,
+    pub show_menu: bool,
+    pub show_settings: bool,
+    pub show_overlays: bool,
+    pub pause_on_focus_loss: bool,
+    pub selected_stable_id: Option<u64>,
+    pub source_save_path: String,
+    pub runtime_save_path: String,
+    pub created_world_save_path: String,
+    pub asset_manifest_path: String,
+    pub backend_descriptor: String,
+    pub validation_receipt: String,
+}
+
+impl Fvr05ProductionUxSettings {
+    pub fn default_for_launch(
+        launch: &ProductionVoxelLaunchConfig,
+        diagnostics: &ProductionRuntimeDiagnostics,
+        save_metadata: &ProductionSaveMetadata,
+    ) -> Self {
+        let artifact_dir = PathBuf::from(FVR05_PRODUCTION_UX_SETTINGS_DIR);
+        let profile = launch.profile_id.label();
+        Self {
+            schema: FVR05_PRODUCTION_UX_SCHEMA.to_string(),
+            schema_version: FVR05_PRODUCTION_UX_SCHEMA_VERSION,
+            selected_profile: launch.profile_id,
+            preferred_profile_for_next_launch: launch.profile_id,
+            active_inspector_tab: Fvr05ProductionInspectorTab::Creature,
+            enabled_overlays: Fvr05ProductionOverlayKind::default_enabled_for_profile(
+                launch.profile_id,
+            ),
+            camera_mode: "orthographic-isometric".to_string(),
+            paused: false,
+            simulation_speed: 1.0,
+            follow_selection: false,
+            show_menu: true,
+            show_settings: true,
+            show_overlays: true,
+            pause_on_focus_loss: true,
+            selected_stable_id: None,
+            source_save_path: launch.app_launch.save_path.display().to_string(),
+            runtime_save_path: artifact_dir
+                .join(format!("{profile}_runtime_save.json"))
+                .display()
+                .to_string(),
+            created_world_save_path: artifact_dir
+                .join(format!("{profile}_created_world_save.json"))
+                .display()
+                .to_string(),
+            asset_manifest_path: launch.app_launch.asset_manifest_path.display().to_string(),
+            backend_descriptor: diagnostics.selected_backend.clone(),
+            validation_receipt: format!(
+                "save={} schema={} v{} profile={} chunks={} selections={}",
+                save_metadata.save_id,
+                save_metadata.save_schema,
+                save_metadata.save_schema_version,
+                save_metadata.selected_profile,
+                save_metadata.voxel_visible_chunk_signatures,
+                save_metadata.voxel_stable_selection_refs
+            ),
+        }
+    }
+
+    pub fn refresh_runtime_context(&mut self, default: &Self) {
+        self.schema = default.schema.clone();
+        self.schema_version = default.schema_version;
+        self.selected_profile = default.selected_profile;
+        self.source_save_path = default.source_save_path.clone();
+        self.runtime_save_path = default.runtime_save_path.clone();
+        self.created_world_save_path = default.created_world_save_path.clone();
+        self.asset_manifest_path = default.asset_manifest_path.clone();
+        self.backend_descriptor = default.backend_descriptor.clone();
+        self.validation_receipt = default.validation_receipt.clone();
+    }
+
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        if self.schema != FVR05_PRODUCTION_UX_SCHEMA
+            || self.schema_version != FVR05_PRODUCTION_UX_SCHEMA_VERSION
+            || self.enabled_overlays.is_empty()
+            || !self.simulation_speed.is_finite()
+            || !(0.10..=5.0).contains(&self.simulation_speed)
+            || self.camera_mode.trim().is_empty()
+            || self.source_save_path.trim().is_empty()
+            || self.runtime_save_path.trim().is_empty()
+            || self.created_world_save_path.trim().is_empty()
+            || self.asset_manifest_path.trim().is_empty()
+            || self.backend_descriptor.trim().is_empty()
+            || self.validation_receipt.trim().is_empty()
+        {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "invalid FVR05 production UX settings".to_string(),
+            });
+        }
+        let json = serde_json::to_string(self)?;
+        if fvr05_contains_engine_local_token(&json) {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "FVR05 UX settings leaked engine-local renderer tokens".to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn from_json_str(text: &str) -> Result<Self, GameAppShellError> {
+        let settings: Self = serde_json::from_str(text)?;
+        settings.validate()?;
+        Ok(settings)
+    }
+
+    pub fn from_json_file(path: impl AsRef<Path>) -> Result<Self, GameAppShellError> {
+        Self::from_json_str(&fs::read_to_string(path)?)
+    }
+
+    pub fn to_json_string_pretty(&self) -> Result<String, GameAppShellError> {
+        self.validate()?;
+        Ok(serde_json::to_string_pretty(self)?)
+    }
+
+    pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), GameAppShellError> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, self.to_json_string_pretty()?)?;
+        Ok(())
+    }
+
+    pub fn overlay_labels(&self) -> Vec<&'static str> {
+        self.enabled_overlays
+            .iter()
+            .map(|overlay| overlay.label())
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fvr05ProductionDebugAuthorityReport {
+    pub schema: &'static str,
+    pub schema_version: u16,
+    pub read_only_projection: bool,
+    pub direct_actions_blocked: bool,
+    pub action_arbitration_bypass_blocked: bool,
+    pub reward_injection_blocked: bool,
+    pub weight_mutation_blocked: bool,
+    pub hidden_cognition_mutation_blocked: bool,
+    pub bulk_neural_readback_blocked: bool,
+}
+
+impl Fvr05ProductionDebugAuthorityReport {
+    pub const fn production_read_only() -> Self {
+        Self {
+            schema: FVR05_PRODUCTION_UX_SCHEMA,
+            schema_version: FVR05_PRODUCTION_UX_SCHEMA_VERSION,
+            read_only_projection: true,
+            direct_actions_blocked: true,
+            action_arbitration_bypass_blocked: true,
+            reward_injection_blocked: true,
+            weight_mutation_blocked: true,
+            hidden_cognition_mutation_blocked: true,
+            bulk_neural_readback_blocked: true,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), GameAppShellError> {
+        if self.schema != FVR05_PRODUCTION_UX_SCHEMA
+            || self.schema_version != FVR05_PRODUCTION_UX_SCHEMA_VERSION
+            || !self.read_only_projection
+            || !self.direct_actions_blocked
+            || !self.action_arbitration_bypass_blocked
+            || !self.reward_injection_blocked
+            || !self.weight_mutation_blocked
+            || !self.hidden_cognition_mutation_blocked
+            || !self.bulk_neural_readback_blocked
+        {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "FVR05 debug authority report is not read-only".to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn compact_line(&self) -> String {
+        format!(
+            "read_only={} actions_blocked={} arbitration_bypass_blocked={} rewards_blocked={} weights_blocked={} cognition_blocked={} bulk_readback_blocked={}",
+            self.read_only_projection,
+            self.direct_actions_blocked,
+            self.action_arbitration_bypass_blocked,
+            self.reward_injection_blocked,
+            self.weight_mutation_blocked,
+            self.hidden_cognition_mutation_blocked,
+            self.bulk_neural_readback_blocked,
+        )
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProductionAppState {
@@ -295,6 +626,7 @@ pub struct ProductionVoxelLaunchConfig {
     pub dry_run: bool,
     pub record_performance: bool,
     pub legacy_alias: bool,
+    pub ui_settings_path: Option<PathBuf>,
 }
 
 impl ProductionVoxelLaunchConfig {
@@ -324,6 +656,7 @@ impl ProductionVoxelLaunchConfig {
             dry_run: false,
             record_performance: false,
             legacy_alias: false,
+            ui_settings_path: None,
         })
     }
 
@@ -408,6 +741,10 @@ pub struct ProductionVoxelLaunchSummary {
     pub legacy_alias: bool,
     pub dry_run: bool,
     pub record_performance: bool,
+    pub ui_settings_path: PathBuf,
+    pub ui_settings: Fvr05ProductionUxSettings,
+    pub ui_settings_load_error: Option<String>,
+    pub debug_authority: Fvr05ProductionDebugAuthorityReport,
 }
 
 impl ProductionVoxelLaunchSummary {
@@ -429,6 +766,40 @@ impl ProductionVoxelLaunchSummary {
             self.save_path.display(),
             self.asset_manifest_path.display()
         )
+    }
+}
+
+pub fn fvr05_default_ui_settings_path(profile_id: ProductionFrontendProfileId) -> PathBuf {
+    PathBuf::from(FVR05_PRODUCTION_UX_SETTINGS_DIR).join(format!(
+        "{}_production_ux_settings.json",
+        profile_id.label()
+    ))
+}
+
+fn fvr05_contains_engine_local_token(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    FVR05_ENGINE_LOCAL_TOKENS
+        .iter()
+        .any(|token| lower.contains(token))
+}
+
+fn load_fvr05_ui_settings_or_default(
+    path: &Path,
+    default_settings: &Fvr05ProductionUxSettings,
+) -> (Fvr05ProductionUxSettings, Option<String>) {
+    if !path.exists() {
+        return (default_settings.clone(), None);
+    }
+    match Fvr05ProductionUxSettings::from_json_file(path) {
+        Ok(mut settings) => {
+            settings.refresh_runtime_context(default_settings);
+            if let Err(error) = settings.validate() {
+                (default_settings.clone(), Some(error.to_string()))
+            } else {
+                (settings, None)
+            }
+        }
+        Err(error) => (default_settings.clone(), Some(error.to_string())),
     }
 }
 
@@ -543,6 +914,16 @@ pub fn run_production_voxel_frontend_preflight(
         voxel_roundtrip_signatures_match: voxel_evidence.roundtrip_signatures_match,
         no_renderer_tokens_in_voxel_save: voxel_evidence.no_renderer_tokens,
     };
+    let default_ui_settings =
+        Fvr05ProductionUxSettings::default_for_launch(launch, &diagnostics, &save_metadata);
+    let ui_settings_path = launch
+        .ui_settings_path
+        .clone()
+        .unwrap_or_else(|| fvr05_default_ui_settings_path(launch.profile_id));
+    let (ui_settings, ui_settings_load_error) =
+        load_fvr05_ui_settings_or_default(&ui_settings_path, &default_ui_settings);
+    let debug_authority = Fvr05ProductionDebugAuthorityReport::production_read_only();
+    debug_authority.validate()?;
 
     Ok(ProductionVoxelLaunchSummary {
         schema: FVR01_PRODUCTION_FRONTEND_SCHEMA,
@@ -569,6 +950,10 @@ pub fn run_production_voxel_frontend_preflight(
         legacy_alias: launch.legacy_alias,
         dry_run: launch.dry_run,
         record_performance: launch.record_performance,
+        ui_settings_path,
+        ui_settings,
+        ui_settings_load_error,
+        debug_authority,
     })
 }
 
@@ -962,6 +1347,73 @@ mod tests {
         PortableSaveFile::from_json_file(gpu_alpha_fixture_root().join("tiny_save.json")).unwrap()
     }
 
+    fn fvr05_test_launch() -> ProductionVoxelLaunchConfig {
+        let root = gpu_alpha_fixture_root();
+        let app_launch = AppShellLaunchConfig::from_p34_fixture_root(&root);
+        ProductionVoxelLaunchConfig {
+            manifest_path: root.join("environment_manifest.json"),
+            scenario_id: Some(PRODUCTION_VOXEL_SCENARIO_ID.to_string()),
+            app_launch,
+            profile_id: ProductionFrontendProfileId::MinSpecComfort1080p,
+            population: Some(30),
+            resolution: (1920, 1080),
+            gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+            require_gpu: false,
+            graphics_backend: "existing".to_string(),
+            smoke_seconds: None,
+            dry_run: true,
+            record_performance: false,
+            legacy_alias: false,
+            ui_settings_path: None,
+        }
+    }
+
+    fn fvr05_test_diagnostics(
+        launch: &ProductionVoxelLaunchConfig,
+    ) -> ProductionRuntimeDiagnostics {
+        ProductionRuntimeDiagnostics {
+            requested_backend: "StaticPlasticCpuShadowGuarded".to_string(),
+            selected_backend: "CpuReference".to_string(),
+            adapter_name: Some("test-adapter".to_string()),
+            backend_api: Some("test-api".to_string()),
+            fallback_reason: Some("unit-test fallback".to_string()),
+            renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
+            save_path: launch.app_launch.save_path.clone(),
+            asset_manifest_path: launch.app_launch.asset_manifest_path.clone(),
+            graphics_backend: launch.graphics_backend.clone(),
+            require_gpu: false,
+            cpu_fallback_degraded_visible: true,
+            no_full_action_authoritative_claim: true,
+            cpu_shadow_gate_preserved: true,
+        }
+    }
+
+    fn fvr05_test_save_metadata() -> ProductionSaveMetadata {
+        ProductionSaveMetadata {
+            save_id: "unit-test-save".to_string(),
+            deterministic_seed: 42,
+            selected_profile: ProductionFrontendProfileId::MinSpecComfort1080p
+                .label()
+                .to_string(),
+            profile_budget_version: FVR01_PROFILE_BUDGET_SCHEMA_VERSION,
+            save_schema: "alife.p34.save.v1".to_string(),
+            save_schema_version: 1,
+            config_schema: "alife.p34.runtime_config.v1".to_string(),
+            config_schema_version: 1,
+            object_count: 30,
+            creature_count: 30,
+            asset_count: 3,
+            voxel_backend_schema: Some("alife.fvr02.persistent_voxel_world.v1".to_string()),
+            voxel_visible_chunk_signatures: 25,
+            voxel_materialized_chunks: 25,
+            voxel_resource_hazard_refs: 12,
+            voxel_stable_selection_refs: 30,
+            voxel_dirty_region_count: 0,
+            voxel_roundtrip_signatures_match: true,
+            no_renderer_tokens_in_voxel_save: true,
+        }
+    }
+
     fn creature_anchor_signature(save: &PortableSaveFile) -> Vec<(u64, i32, i32, i32, i32)> {
         let backend = save.require_voxel_backend().unwrap();
         backend
@@ -977,6 +1429,80 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    #[test]
+    fn fvr05_overlay_catalog_covers_production_debug_surfaces() {
+        let labels = Fvr05ProductionOverlayKind::all()
+            .iter()
+            .map(|overlay| overlay.label())
+            .collect::<Vec<_>>();
+        for required in [
+            "Resources",
+            "Danger",
+            "Pheromones",
+            "Energy",
+            "Age",
+            "Fertility",
+            "Territory",
+            "Neural",
+            "Residency",
+            "BackendTiming",
+            "ChunkBoundaries",
+            "LodBudget",
+            "Persistence",
+        ] {
+            assert!(labels.contains(&required));
+        }
+        assert!(Fvr05ProductionOverlayKind::default_enabled_for_profile(
+            ProductionFrontendProfileId::MinimumSettings30x30
+        )
+        .contains(&Fvr05ProductionOverlayKind::Persistence));
+    }
+
+    #[test]
+    fn fvr05_ux_settings_roundtrip_excludes_engine_tokens_and_preserves_profile() {
+        let launch = fvr05_test_launch();
+        let diagnostics = fvr05_test_diagnostics(&launch);
+        let metadata = fvr05_test_save_metadata();
+        let settings =
+            Fvr05ProductionUxSettings::default_for_launch(&launch, &diagnostics, &metadata);
+        settings.validate().unwrap();
+        let json = settings.to_json_string_pretty().unwrap();
+        let lower = json.to_ascii_lowercase();
+        assert!(!lower.contains("bevy"));
+        assert!(!lower.contains("wgpu"));
+        assert!(!lower.contains("entity("));
+        assert!(!lower.contains("renderer"));
+
+        let path = std::env::temp_dir().join(format!(
+            "alife_fvr05_ux_settings_{}.json",
+            std::process::id()
+        ));
+        settings.to_json_file(&path).unwrap();
+        let roundtrip = Fvr05ProductionUxSettings::from_json_file(&path).unwrap();
+        let _ = std::fs::remove_file(path);
+        assert_eq!(roundtrip.selected_profile, launch.profile_id);
+        assert_eq!(
+            roundtrip.active_inspector_tab,
+            Fvr05ProductionInspectorTab::Creature
+        );
+        assert!(roundtrip
+            .enabled_overlays
+            .contains(&Fvr05ProductionOverlayKind::BackendTiming));
+    }
+
+    #[test]
+    fn fvr05_debug_authority_blocks_every_mutating_path() {
+        let report = Fvr05ProductionDebugAuthorityReport::production_read_only();
+        report.validate().unwrap();
+        assert!(report.read_only_projection);
+        assert!(report.direct_actions_blocked);
+        assert!(report.action_arbitration_bypass_blocked);
+        assert!(report.reward_injection_blocked);
+        assert!(report.weight_mutation_blocked);
+        assert!(report.hidden_cognition_mutation_blocked);
+        assert!(report.bulk_neural_readback_blocked);
     }
 
     #[test]
