@@ -1,0 +1,20 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "voxel-material-atlas",
+  "style": "stylized-voxel-alife-production-v1",
+  "resolution_policy": {
+    "minimum": "indexed palette and simple material IDs",
+    "comfort": "same atlas IDs with richer shading",
+    "scale_up": "higher material detail without ID rewrites"
+  },
+  "materials": [
+    { "id": "safe-grass", "rgba": [56, 140, 76, 255], "roughness": 0.92 },
+    { "id": "soil", "rgba": [107, 76, 51, 255], "roughness": 0.96 },
+    { "id": "resource", "rgba": [46, 173, 133, 255], "roughness": 0.74 },
+    { "id": "hazard", "rgba": [171, 41, 110, 255], "roughness": 0.72 },
+    { "id": "decay", "rgba": [82, 46, 99, 255], "roughness": 0.88 },
+    { "id": "stone", "rgba": [117, 125, 120, 255], "roughness": 0.98 },
+    { "id": "water", "rgba": [31, 89, 158, 209], "roughness": 0.34 },
+    { "id": "sand", "rgba": [181, 158, 99, 255], "roughness": 0.90 }
+  ]
+}

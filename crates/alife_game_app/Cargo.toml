@@ -58,6 +58,7 @@ licensed-assets = [
     "dep:bevy_asset_loader",
     "bevy_asset_loader/3d",
 ]
+production-assets = ["licensed-assets"]
 vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
 debug-tools = [
     "bevy-app",

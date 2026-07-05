@@ -1,0 +1,11 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "props",
+  "style": "stylized-voxel-alife-production-v1",
+  "props": [
+    { "id": "rock-cluster", "material_ref": "stone-rough", "density": "low" },
+    { "id": "grass-tuft", "material_ref": "safe-grass", "density": "medium" },
+    { "id": "warning-shard", "material_ref": "hazard-pressure", "density": "low" }
+  ],
+  "minimum_profile": "instanced or batched props capped before gameplay readability is reduced"
+}

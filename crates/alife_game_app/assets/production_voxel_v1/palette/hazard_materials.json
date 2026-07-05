@@ -1,0 +1,12 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "hazard-materials",
+  "style": "stylized-voxel-alife-production-v1",
+  "material": {
+    "id": "hazard-pressure",
+    "albedo_ref": "hazard",
+    "warning_shape": "angular-crystal",
+    "danger_vfx_ref": "danger-hazard-particles",
+    "minimum_profile": "reduced particles but retained magenta silhouette"
+  }
+}

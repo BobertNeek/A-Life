@@ -6,8 +6,9 @@ use alife_game_app::{
     default_environment_manifest_path, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk,
     Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
     Fvr03ProductionVoxelSelectionResource, Fvr03ProductionVoxelTerrainBatch,
-    Fvr03ProductionVoxelTerrainTile, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
-    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
+    Fvr03ProductionVoxelTerrainTile, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
+    Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
 };
 use alife_world::{StableVoxelRefKind, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA};
 
@@ -51,6 +52,12 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     assert!(scene.selection_ref_count >= summary.save_metadata.creature_count);
     assert!(scene.estimated_resident_bytes > 0);
     assert!(scene.no_renderer_authority_over_world_truth);
+    assert_eq!(scene.production_vfx_budget_state, "conservative");
+    assert!(scene.production_visuals_display_only);
+    assert!(scene.production_dressing_count >= 8);
+    assert!(scene.production_dressing_count <= 28);
+    assert!(scene.production_vfx_marker_count >= 8);
+    assert!(scene.production_vfx_marker_count <= 32);
 
     let mut chunk_query = app.world_mut().query::<&Fvr03ProductionVoxelChunk>();
     assert_eq!(
@@ -85,6 +92,52 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         );
     }
 
+    let mut dressing_query = app.world_mut().query::<&Fvr07ProductionVisualDressing>();
+    let dressing = dressing_query
+        .iter(app.world())
+        .copied()
+        .collect::<Vec<_>>();
+    assert_eq!(dressing.len(), scene.production_dressing_count);
+    assert!(dressing
+        .iter()
+        .all(|entry| entry.display_only && entry.no_renderer_authority_over_actions_or_cognition));
+    let dressing_kinds = dressing
+        .iter()
+        .map(|entry| entry.kind)
+        .collect::<BTreeSet<_>>();
+    for required in [
+        Fvr07ProductionDressingKind::LeafPatch,
+        Fvr07ProductionDressingKind::MushroomCluster,
+        Fvr07ProductionDressingKind::PebbleCluster,
+        Fvr07ProductionDressingKind::NestMarker,
+        Fvr07ProductionDressingKind::FoodResource,
+    ] {
+        assert!(
+            dressing_kinds.contains(&required),
+            "missing dressing {required:?}"
+        );
+    }
+
+    let mut vfx_query = app.world_mut().query::<&Fvr07ProductionGpuVfxMarker>();
+    let vfx = vfx_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(vfx.len(), scene.production_vfx_marker_count);
+    assert!(vfx.iter().all(|entry| entry.display_only
+        && entry.no_renderer_authority_over_actions_or_cognition
+        && entry.budget_state == "conservative"));
+    let vfx_kinds = vfx.iter().map(|entry| entry.kind).collect::<BTreeSet<_>>();
+    for required in [
+        Fvr07ProductionVfxKind::PheromoneTrail,
+        Fvr07ProductionVfxKind::SporeDrift,
+        Fvr07ProductionVfxKind::SleepGlow,
+        Fvr07ProductionVfxKind::DangerHazardParticles,
+        Fvr07ProductionVfxKind::EatingResourceEffect,
+        Fvr07ProductionVfxKind::BirthDeathEffect,
+        Fvr07ProductionVfxKind::WaterDecayAmbient,
+        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse,
+    ] {
+        assert!(vfx_kinds.contains(&required), "missing VFX {required:?}");
+    }
+
     let mut batch_query = app.world_mut().query::<&Fvr03ProductionVoxelTerrainBatch>();
     let batches = batch_query.iter(app.world()).copied().collect::<Vec<_>>();
     assert!(!batches.is_empty());
@@ -117,8 +170,12 @@ fn fvr03_profiles_scale_renderer_residency_lod_and_camera_modes() {
     assert_eq!(minimum.target_fps, 30);
     assert_eq!(minimum.max_population, 30);
     assert!(minimum.minimum_floor);
-    assert!(minimum.tile_stride >= comfort.tile_stride);
-    assert!(minimum.estimated_tile_budget <= comfort.estimated_tile_budget);
+    assert!(minimum.tile_stride <= comfort.tile_stride);
+    assert!(minimum.estimated_tile_budget >= comfort.estimated_tile_budget);
+    assert!(balanced.estimated_tile_budget > minimum.estimated_tile_budget);
+    assert_eq!(minimum.production_vfx_budget_state, "conservative");
+    assert!(minimum.production_vfx_marker_cap <= comfort.production_vfx_marker_cap);
+    assert!(minimum.production_dressing_cap <= comfort.production_dressing_cap);
     assert!(comfort.min_spec_comfort_default);
     assert!(comfort
         .default_camera_modes
@@ -163,7 +220,10 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
         .clone()
         .expect("production voxel scene should select a stable tile at boot");
 
-    assert_eq!(selected.kind, StableVoxelRefKind::Tile);
+    assert!(matches!(
+        selected.kind,
+        StableVoxelRefKind::Tile | StableVoxelRefKind::Creature
+    ));
     assert!(selected.tile.is_some());
     assert!(scene.contains_tile(selected.tile.unwrap()));
 

@@ -1,0 +1,11 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "resource-materials",
+  "style": "stylized-voxel-alife-production-v1",
+  "material": {
+    "id": "resource-grove",
+    "albedo_ref": "resource",
+    "accent": "mint-glow",
+    "minimum_profile": "static accent cap with eating spark overlay"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "stylization-lighting",
+  "style": "stylized-voxel-alife-production-v1",
+  "lighting": {
+    "toon_bands": 3,
+    "outline_policy": "material edge contrast plus optional post outline",
+    "fog": "height-readable cool distance fog",
+    "color_grading": "balanced green, gold, magenta, blue accents",
+    "minimum_profile": "no expensive shadows required, silhouettes remain readable"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "selection-hover-effects",
+  "style": "stylized-voxel-alife-production-v1",
+  "effects": [
+    { "id": "tile-hover-outline", "color": "warm-white", "minimum": true },
+    { "id": "creature-selection-ring", "color": "gold", "minimum": true },
+    { "id": "neural-pulse", "vfx_ref": "selected-creature-neural-pulse", "minimum": true }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "corpses",
+  "style": "stylized-voxel-alife-production-v1",
+  "visual": {
+    "id": "corpse-marker",
+    "materials": ["decay-cell", "soil-path"],
+    "vfx_ref": "birth-death-effects",
+    "minimum_profile": "static low silhouette with no looping particle requirement"
+  }
+}

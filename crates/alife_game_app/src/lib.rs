@@ -165,6 +165,9 @@ pub use procedural_world_streaming::*;
 mod production_asset_pipeline;
 pub use production_asset_pipeline::*;
 
+mod production_assets;
+pub use production_assets::*;
+
 mod true_25d_assets;
 pub use true_25d_assets::*;
 

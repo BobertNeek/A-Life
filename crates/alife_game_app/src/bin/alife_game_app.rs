@@ -29,12 +29,13 @@ use alife_game_app::{
     run_semantic_provider_smoke, run_teacher_world_cues_smoke, run_tester_feedback_capture_smoke,
     run_topological_concept_overlay_smoke, run_true25d_headless_chunk_continuity_smoke,
     run_world_art_style_smoke, run_world_ecology_loop_smoke, run_world_editor_smoke,
-    validate_app_bundle_manifest, validate_app_shell_config, validate_production_voxel_save,
-    write_behavior_comparison_lab_report, write_ca36_soak_isolation_report, AppShellLaunchConfig,
-    BatchedGpuRuntimeOptions, EnvironmentManifest, FullGpuRuntimeSmokeMode,
-    FullGpuRuntimeSmokeOptions, GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions,
-    ProductionFrontendProfileId, ProductionVoxelLaunchConfig, ProductionVoxelLaunchSummary,
-    RuntimePrereqDiagnosticsOptions, SampledGpuRuntimeOptions, PRODUCTION_VOXEL_COMMAND,
+    validate_app_bundle_manifest, validate_app_shell_config, validate_production_assets,
+    validate_production_voxel_save, write_behavior_comparison_lab_report,
+    write_ca36_soak_isolation_report, AppShellLaunchConfig, BatchedGpuRuntimeOptions,
+    EnvironmentManifest, FullGpuRuntimeSmokeMode, FullGpuRuntimeSmokeOptions,
+    GpuLongrunSoakOptions, GpuSustainedLearningSoakOptions, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig, ProductionVoxelLaunchSummary, RuntimePrereqDiagnosticsOptions,
+    SampledGpuRuntimeOptions, PRODUCTION_VOXEL_COMMAND,
 };
 
 fn main() -> ExitCode {
@@ -414,6 +415,42 @@ fn run() -> Result<String, String> {
                 summary.signature_line()
             ))
         }
+        [command] if command == "validate-production-assets" => {
+            let summary =
+                validate_production_assets(alife_game_app::default_production_asset_manifest_path())
+                    .map_err(|err| err.to_string())?;
+            Ok(format!(
+                "FVR07 production assets schema={} version={} pack={} manifest={} assets={} generated={} external={} required_categories={} final_art={} placeholder_final={} unknown_license={} rejected={} committed_bytes={} largest={} generated_target={} loader={}:{} missing_policy={} vfx_profiles={} vfx_effects={} min_vfx={} comfort_vfx={} display_only_vfx={} adaptive_vfx={} no_large_artifacts={} renderer_authority_blocked={} scale_up_profiles={} signature={}",
+                summary.schema,
+                summary.schema_version,
+                summary.pack_id,
+                summary.manifest_path.display(),
+                summary.asset_count,
+                summary.generated_assets,
+                summary.external_assets,
+                summary.required_usage_categories_present,
+                summary.final_art_entries,
+                summary.placeholder_final_entries,
+                summary.unknown_license_entries,
+                summary.missing_or_rejected_assets,
+                summary.committed_asset_bytes,
+                summary.largest_asset_bytes,
+                summary.generated_art_target,
+                summary.loader_crate,
+                summary.loader_version,
+                summary.missing_asset_policy,
+                summary.vfx_profile_count,
+                summary.vfx_effects_present,
+                summary.minimum_vfx_budget_state,
+                summary.comfort_vfx_budget_state,
+                summary.display_only_vfx,
+                summary.adaptive_vfx,
+                summary.no_large_artifacts_committed,
+                summary.no_renderer_authority,
+                summary.scale_up_profiles_present,
+                summary.signature_line()
+            ))
+        }
         [command] if command == "creature-animation-state-smoke" => {
             let summary =
                 run_creature_animation_state_machine_smoke().map_err(|err| err.to_string())?;
@@ -783,7 +820,7 @@ fn run() -> Result<String, String> {
                 &summary,
             ))
         }
-        _ => Err(format!("usage: alife_game_app {PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--dry-run] [--record-performance] | validate-production-save [--profile PROFILE] | graphical-playground --dry-run (legacy alias) | headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | true25d-launch-baseline-smoke <fixture-root> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--mode static-action-authoritative|static-plastic-cpu-shadow-guarded|full-action-authoritative] [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke")),
+        _ => Err(format!("usage: alife_game_app {PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution 1920x1080] [--dry-run] [--record-performance] | validate-production-assets | validate-production-save [--profile PROFILE] | graphical-playground --dry-run (legacy alias) | headless-smoke <p34-fixture-root> | headless-paused-smoke <p34-fixture-root> | validate-config <config> <manifest> <asset-root> | list-environments [--manifest path] | environment-launch-smoke [--manifest path] [--scenario id] | bevy-smoke <p34-fixture-root> | runtime-prereq-smoke [--gpu-mode MODE] [--graphics-backend BACKEND] [--log PATH] [--require-gpu] | tester-feedback-smoke | graphical-playground-smoke --seconds <N> <p34-fixture-root> | visible-signature <p34-fixture-root> | visible-world-smoke <p34-fixture-root> | live-brain-tick-smoke <p34-fixture-root> | live-brain-paused-smoke <p34-fixture-root> | live-brain-fixed-smoke <p34-fixture-root> <ticks> | runtime-controls-smoke <p34-fixture-root> <ticks> | gpu-alpha-stability-smoke <fixture-root> <ticks> | true25d-launch-baseline-smoke <fixture-root> | procedural-world-travel-smoke <fixture-root> | production-asset-pipeline-smoke | graphical-controls-smoke <p34-fixture-root> | topological-concept-overlay-smoke <p34-fixture-root> | memory-history-journal-smoke <p34-fixture-root> | neural-activity-profiler-smoke <p34-fixture-root> | realtime-wgsl-telemetry-smoke <p34-fixture-root> | behavior-comparison-lab-smoke [--manifest path] [--a scenario] [--b scenario] [--ticks N] [--out path] | graphical-population-smoke <p34-fixture-root> | graphical-ecology-smoke <p34-fixture-root> | world-art-style-smoke <p34-fixture-root> | graphical-lifecycle-smoke | double-buffered-scheduler-smoke <p34-fixture-root> | motor-ring-arbitration-smoke <p34-fixture-root> | homeostasis-runtime-smoke <p34-fixture-root> | affordance-loop-smoke <p34-fixture-root> | hazard-recovery-smoke <p34-fixture-root> | graphical-save-load-menu-smoke <p34-fixture-root> | creature-visual-smoke <p34-fixture-root> | creature-inspector-smoke <p34-fixture-root> | playable-survival-loop-smoke | world-ecology-loop-smoke | population-social-loop-smoke | lifecycle-lineage-smoke | school-mode-smoke | graphical-school-mode-smoke | teacher-world-cues-smoke | curriculum-authoring-smoke [manifest-path] | semantic-provider-smoke | real-semantic-provider-smoke | internal-slm-prior-smoke | llamacpp-semantic-provider-smoke | llamacpp-slm-prior-smoke | llamacpp-local-model-runtime-smoke | advanced-gameplay-ux-smoke | gpu-product-smoke | full-gpu-runtime-smoke <p34-fixture-root> [--mode static-shadow|static-action-authoritative|static-plastic-shadow|static-plastic-cpu-shadow-guarded|full-shadow|full-action-authoritative] [--ticks N] | batched-gpu-runtime-smoke <p34-fixture-root> [--mode static-action-authoritative|static-plastic-cpu-shadow-guarded|full-action-authoritative] [--creatures N] [--ticks N] | sampled-gpu-runtime-smoke <p34-fixture-root> [--creatures N] [--ticks N] | gpu-longrun-soak <p34-fixture-root> [--ticks N] [--report-every N] | gpu-sustained-learning-soak <p34-fixture-root> [--ticks N] [--report-every N] | multi-hour-soak-isolation-smoke [--out path] | gpu-graphics-performance-smoke <p34-fixture-root> | world-editor-smoke | player-sandbox-editor-smoke [--manifest path] [--scenario id] [--output path] | app-bundle-smoke [--manifest path] | cognition-debug-smoke | save-load-ux-smoke <p34-fixture-root> | feedback-polish-smoke <p34-fixture-root> | drive-coupled-audio-vfx-smoke <p34-fixture-root> | population-performance-smoke <p34-fixture-root> | longrun-balance-smoke | behavior-tuning-metrics-smoke | ecological-soak-smoke | onboarding-help-smoke | onboarding-tutorial-smoke <p34-fixture-root> | content-authoring-smoke | platform-package-smoke | product-qa-smoke | release-candidate-smoke")),
     }
 }
 
@@ -2439,7 +2476,7 @@ fn format_app_bundle_summary(
     summary: &alife_game_app::AppBundleIngestionSummary,
 ) -> String {
     format!(
-        "{prefix} schema={} version={} bundle={} scenarios={} entries={} shaders={}/{} legacy_art_descriptors={} alpha_art={} alpha_roles={} production_alpha_art={} true_25d={} true_25d_roles={} production_true_25d={} required={} largest_bytes={} missing_required_rejected={} shader_discovery={} legacy_descriptors_valid={} large_binary_assets={} signature={}",
+        "{prefix} schema={} version={} bundle={} scenarios={} entries={} shaders={}/{} legacy_art_descriptors={} alpha_art={} alpha_roles={} production_alpha_art={} true_25d={} true_25d_roles={} production_true_25d={} production_voxel_assets={} production_voxel_generated={} production_voxel_validated={} required={} largest_bytes={} missing_required_rejected={} shader_discovery={} legacy_descriptors_valid={} large_binary_assets={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.bundle_id,
@@ -2454,6 +2491,9 @@ fn format_app_bundle_summary(
         summary.true_25d_asset_entries,
         summary.true_25d_required_roles_present,
         summary.production_true_25d_assets,
+        summary.production_voxel_asset_entries,
+        summary.production_voxel_generated_assets,
+        summary.production_voxel_asset_manifest_validated,
         summary.required_entries,
         summary.largest_file_bytes,
         summary.missing_required_rejected,
@@ -3228,7 +3268,7 @@ fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunch
         .map(|receipt| receipt.product_runtime_claim.as_str())
         .unwrap_or("none");
     format!(
-        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} voxel_backend_schema={} voxel_chunks={} voxel_materialized={} voxel_resource_hazard_refs={} voxel_selection_refs={} voxel_dirty_regions={} voxel_roundtrip={} voxel_renderer_tokens_saved={} gpu_runtime_schema={} gpu_runtime_selected={} gpu_runtime_fallback={:?} gpu_runtime_no_bulk_readback={} compact_action_readback_bytes={} gpu_checkpoint='{}' gpu_gameplay_receipt={} gpu_gameplay_mode={} gpu_gameplay_runtime_mode={} gpu_gameplay_selected={} gpu_gameplay_batch={} gpu_gameplay_proposals={} gpu_gameplay_hshadow={} gpu_gameplay_claim={} ux_schema={} ux_version={} ux_settings={} ux_loaded_error={:?} ux_overlays={} debug_authority=\"{}\" dry_run={} record_performance={} signature={}",
+        "{prefix} schema={} version={} title='{}' command={} routed_to={} legacy_alias={} profile={} population={} resolution={}x{} target_fps={} states={} renderer_profile={} selected_backend={} adapter='{}' backend_api={} fallback={:?} graphics_backend={} require_gpu={} save={} asset_manifest={} production_asset_manifest={} production_assets={} production_vfx={} production_asset_licenses={} real_save_loaded={} mock_data_source={} selected_profile_metadata={} profile_budget_version={} voxel_backend_schema={} voxel_chunks={} voxel_materialized={} voxel_resource_hazard_refs={} voxel_selection_refs={} voxel_dirty_regions={} voxel_roundtrip={} voxel_renderer_tokens_saved={} gpu_runtime_schema={} gpu_runtime_selected={} gpu_runtime_fallback={:?} gpu_runtime_no_bulk_readback={} compact_action_readback_bytes={} gpu_checkpoint='{}' gpu_gameplay_receipt={} gpu_gameplay_mode={} gpu_gameplay_runtime_mode={} gpu_gameplay_selected={} gpu_gameplay_batch={} gpu_gameplay_proposals={} gpu_gameplay_hshadow={} gpu_gameplay_claim={} ux_schema={} ux_version={} ux_settings={} ux_loaded_error={:?} ux_overlays={} debug_authority=\"{}\" dry_run={} record_performance={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.window_title,
@@ -3250,6 +3290,10 @@ fn format_production_voxel_summary(prefix: &str, summary: &ProductionVoxelLaunch
         summary.diagnostics.require_gpu,
         summary.save_path.display(),
         summary.asset_manifest_path.display(),
+        summary.production_asset_manifest_path.display(),
+        summary.production_asset_count,
+        summary.production_asset_vfx_budget_state,
+        summary.production_asset_license_metadata_validated,
         summary.real_save_loaded,
         summary.mock_data_source,
         summary.save_metadata.selected_profile,

@@ -4757,6 +4757,8 @@ pub fn build_production_voxel_frontend_app_shell(
         app.add_plugins(MinimalPlugins);
         app.init_resource::<Assets<Mesh>>();
         app.init_resource::<Assets<StandardMaterial>>();
+        #[cfg(feature = "vfx-hanabi")]
+        app.init_resource::<Assets<bevy_hanabi::prelude::EffectAsset>>();
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<ButtonInput<MouseButton>>();
     } else {
@@ -4785,6 +4787,8 @@ pub fn build_production_voxel_frontend_app_shell(
                     ..default()
                 }),
         );
+        #[cfg(feature = "vfx-hanabi")]
+        app.add_plugins(bevy_hanabi::prelude::HanabiPlugin);
     }
     app.add_plugins(AlifeBevyAdapterPlugin)
         .insert_resource(WinitSettings::continuous())

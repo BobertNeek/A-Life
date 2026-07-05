@@ -6,6 +6,7 @@
   "placeholder_art_manifest": "crates/alife_game_app/placeholder_art_manifest.json",
   "alpha_art_manifest": "crates/alife_game_app/assets/alpha_art_v1/alpha_art_manifest.json",
   "true_25d_asset_manifest": "crates/alife_game_app/assets/true_25d_alpha_v1/true_25d_manifest.json",
+  "production_voxel_asset_manifest": "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",
   "entries": [
     {
       "id": "gpu-alpha-config",

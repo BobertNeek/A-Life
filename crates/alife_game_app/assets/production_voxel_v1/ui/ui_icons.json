@@ -1,0 +1,17 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "ui-icons",
+  "style": "stylized-voxel-alife-production-v1",
+  "icons": [
+    "profile",
+    "backend",
+    "save",
+    "pause",
+    "selection",
+    "danger",
+    "resource",
+    "neural",
+    "settings"
+  ],
+  "font_policy": "system font only until an external font has committed license metadata"
+}

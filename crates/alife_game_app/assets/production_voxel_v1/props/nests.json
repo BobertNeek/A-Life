@@ -1,0 +1,11 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "nests",
+  "style": "stylized-voxel-alife-production-v1",
+  "visual": {
+    "id": "nest-bowl",
+    "materials": ["soil-path", "safe-grass"],
+    "selection_affordance": "soft ring plus fertility overlay",
+    "minimum_profile": "single instanced bowl mesh"
+  }
+}

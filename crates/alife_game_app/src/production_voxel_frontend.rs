@@ -942,6 +942,10 @@ pub struct ProductionVoxelLaunchSummary {
     pub save_path: PathBuf,
     pub config_path: PathBuf,
     pub asset_manifest_path: PathBuf,
+    pub production_asset_manifest_path: PathBuf,
+    pub production_asset_count: usize,
+    pub production_asset_vfx_budget_state: String,
+    pub production_asset_license_metadata_validated: bool,
     pub asset_root: PathBuf,
     pub diagnostics: ProductionRuntimeDiagnostics,
     pub save_metadata: ProductionSaveMetadata,
@@ -979,7 +983,7 @@ impl ProductionVoxelLaunchSummary {
             })
             .unwrap_or_default();
         format!(
-            "{}:{}:{}:profile={}:population={}:states={}:backend={}:fallback={:?}:gpu_state={}:checkpoint={}{}:save={}:assets={}",
+            "{}:{}:{}:profile={}:population={}:states={}:backend={}:fallback={:?}:gpu_state={}:checkpoint={}{}:save={}:assets={}:production_assets={}:production_vfx={}",
             self.schema,
             self.schema_version,
             self.scenario_id,
@@ -994,7 +998,9 @@ impl ProductionVoxelLaunchSummary {
                 .checkpoint_label,
             gameplay,
             self.save_path.display(),
-            self.asset_manifest_path.display()
+            self.asset_manifest_path.display(),
+            self.production_asset_count,
+            self.production_asset_vfx_budget_state,
         )
     }
 }
@@ -1259,6 +1265,8 @@ pub fn run_production_voxel_frontend_preflight(
     config.validate()?;
     let manifest = AssetManifest::from_json_file(&launch.app_launch.asset_manifest_path)?;
     manifest.validate_with_root(&launch.app_launch.asset_root)?;
+    let production_asset_manifest_path = default_production_asset_manifest_path();
+    let production_assets = validate_production_assets(&production_asset_manifest_path)?;
     trace.transition(ProductionAppState::LoadAssets)?;
 
     let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path)?;
@@ -1361,6 +1369,22 @@ pub fn run_production_voxel_frontend_preflight(
         save_path: launch.app_launch.save_path.clone(),
         config_path: launch.app_launch.config_path.clone(),
         asset_manifest_path: launch.app_launch.asset_manifest_path.clone(),
+        production_asset_manifest_path,
+        production_asset_count: production_assets.asset_count,
+        production_asset_vfx_budget_state: match launch.profile_id {
+            ProductionFrontendProfileId::MinimumSettings30x30 => {
+                production_assets.minimum_vfx_budget_state
+            }
+            ProductionFrontendProfileId::MinSpecComfort1080p => {
+                production_assets.comfort_vfx_budget_state
+            }
+            ProductionFrontendProfileId::Balanced1080p => "balanced".to_string(),
+            ProductionFrontendProfileId::HighSpecScaleUp => "high".to_string(),
+            ProductionFrontendProfileId::ResearchScale => "research".to_string(),
+        },
+        production_asset_license_metadata_validated: production_assets.unknown_license_entries == 0
+            && production_assets.missing_or_rejected_assets == 0
+            && production_assets.placeholder_final_entries == 0,
         asset_root: launch.app_launch.asset_root.clone(),
         diagnostics,
         save_metadata,

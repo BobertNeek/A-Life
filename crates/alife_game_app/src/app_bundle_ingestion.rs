@@ -25,6 +25,7 @@ pub struct AppBundleManifest {
     pub placeholder_art_manifest: String,
     pub alpha_art_manifest: String,
     pub true_25d_asset_manifest: String,
+    pub production_voxel_asset_manifest: String,
     pub entries: Vec<AppBundleEntry>,
     pub shader_assets: Vec<ShaderAssetEntry>,
 }
@@ -80,6 +81,9 @@ pub struct AppBundleIngestionSummary {
     pub true_25d_endocrine_feedback_assets: usize,
     pub true_25d_endocrine_feedback_contract_validated: bool,
     pub production_true_25d_assets: bool,
+    pub production_voxel_asset_entries: usize,
+    pub production_voxel_generated_assets: usize,
+    pub production_voxel_asset_manifest_validated: bool,
     pub required_entries: usize,
     pub largest_file_bytes: u64,
     pub missing_required_rejected: bool,
@@ -107,6 +111,9 @@ impl AppBundleIngestionSummary {
             || !self.true_25d_required_roles_present
             || !self.true_25d_endocrine_feedback_contract_validated
             || !self.production_true_25d_assets
+            || self.production_voxel_asset_entries < FVR07_REQUIRED_USAGE_CATEGORIES.len()
+            || self.production_voxel_generated_assets == 0
+            || !self.production_voxel_asset_manifest_validated
             || self.required_entries == 0
             || self.largest_file_bytes > CA44A_MAX_ALPHA_ART_BACKDROP_BYTES
             || !self.missing_required_rejected
@@ -122,7 +129,7 @@ impl AppBundleIngestionSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:entries={}:shaders={}/{}:art={}:true25d={}:endocrine={}:largest={}",
+            "{}:{}:{}:entries={}:shaders={}/{}:art={}:true25d={}:production_voxel_assets={}:endocrine={}:largest={}",
             self.schema,
             self.schema_version,
             self.bundle_id,
@@ -131,6 +138,7 @@ impl AppBundleIngestionSummary {
             self.discovered_shader_assets,
             self.alpha_art_entries,
             self.true_25d_asset_entries,
+            self.production_voxel_asset_entries,
             self.true_25d_endocrine_feedback_assets,
             self.largest_file_bytes
         )
@@ -216,6 +224,13 @@ fn validate_app_bundle_manifest_inner(
         validate_true_25d_asset_manifest_inner(root, &true_25d_path, &read_json(&true_25d_path)?)?;
     largest_file_bytes = largest_file_bytes.max(true_25d.largest_file_bytes);
 
+    let production_voxel_asset_path =
+        resolve_workspace_path(root, &manifest.production_voxel_asset_manifest)?;
+    let production_voxel_assets = validate_production_assets(&production_voxel_asset_path)?;
+    largest_file_bytes = largest_file_bytes
+        .max(tiny_file_size(&production_voxel_asset_path)?)
+        .max(production_voxel_assets.largest_asset_bytes);
+
     let mut ids = BTreeSet::new();
     let mut required_entries = 0;
     let mut large_binary_assets_committed = has_binary_like_extension(&placeholder_path);
@@ -287,6 +302,15 @@ fn validate_app_bundle_manifest_inner(
             && true_25d.no_action_authority
             && true_25d.largest_file_bytes <= TRUE_25D_ALPHA_MAX_ASSET_BYTES
             && true_25d.pack_id == "true-25d-alpha-v1",
+        production_voxel_asset_entries: production_voxel_assets.asset_count,
+        production_voxel_generated_assets: production_voxel_assets.generated_assets,
+        production_voxel_asset_manifest_validated: production_voxel_assets
+            .required_usage_categories_present
+            && production_voxel_assets.placeholder_final_entries == 0
+            && production_voxel_assets.unknown_license_entries == 0
+            && production_voxel_assets.missing_or_rejected_assets == 0
+            && production_voxel_assets.display_only_vfx
+            && production_voxel_assets.no_renderer_authority,
         required_entries,
         largest_file_bytes,
         missing_required_rejected: false,
@@ -306,6 +330,8 @@ fn validate_app_bundle_manifest_inner(
             "Alpha art v1 PNG sprites/tiles remain manifest-validated as historical regression assets."
                 .to_string(),
             "True 2.5D glTF assets remain manifest-validated as historical reference assets, not the FVR production default."
+                .to_string(),
+            "FVR07 production voxel assets are manifest-validated with license, digest, source, and VFX budget metadata."
                 .to_string(),
         ],
     })

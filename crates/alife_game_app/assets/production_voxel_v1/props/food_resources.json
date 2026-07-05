@@ -1,0 +1,10 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "food-resources",
+  "style": "stylized-voxel-alife-production-v1",
+  "objects": [
+    { "id": "food-pod", "material_ref": "resource-grove", "effect": "eating-resource-effects" },
+    { "id": "resource-sprout", "material_ref": "resource-grove", "effect": "spores" }
+  ],
+  "minimum_profile": "coalesced sparkle bursts with fixed cap"
+}

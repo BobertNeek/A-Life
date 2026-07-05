@@ -1,0 +1,12 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "water-materials",
+  "style": "stylized-voxel-alife-production-v1",
+  "material": {
+    "id": "water-cell",
+    "albedo_ref": "water",
+    "alpha": 0.82,
+    "ambient_motion": "low-amplitude-sine-ripple",
+    "minimum_profile_motion": "single shared phase"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "vfx-budget-config",
+  "style": "stylized-voxel-alife-production-v1",
+  "display_only": true,
+  "effects": [
+    "pheromone-trails",
+    "spores",
+    "sleep-consolidation-glows",
+    "danger-hazard-particles",
+    "eating-resource-effects",
+    "birth-death-effects",
+    "water-decay-ambient-motion",
+    "selected-creature-neural-pulse"
+  ],
+  "profile_budget_order": [
+    "MinimumSettings30x30",
+    "MinSpecComfort1080p",
+    "Balanced1080p",
+    "HighSpecScaleUp",
+    "ResearchScale"
+  ]
+}

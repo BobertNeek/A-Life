@@ -1,0 +1,11 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "creatures",
+  "style": "stylized-voxel-alife-production-v1",
+  "lod_policy": {
+    "minimum": "compact voxel body with selected hover label only",
+    "comfort": "compact voxel body, expression tint, sleep/drive cues",
+    "scale_up": "additional appendages and smoother animation cadence"
+  },
+  "states": ["idle", "moving", "eat", "hurt", "sleep", "signal", "birth", "death"]
+}

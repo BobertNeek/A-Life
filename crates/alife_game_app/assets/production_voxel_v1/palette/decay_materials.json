@@ -1,0 +1,12 @@
+{
+  "schema": "alife.fvr07.generated_asset_source.v1",
+  "category": "decay-materials",
+  "style": "stylized-voxel-alife-production-v1",
+  "material": {
+    "id": "decay-cell",
+    "albedo_ref": "decay",
+    "surface_noise": "low-frequency-mottled",
+    "ambient_motion": "slow-spore-pulse",
+    "readability_note": "dark violet separates decay from soil and hazard"
+  }
+}
