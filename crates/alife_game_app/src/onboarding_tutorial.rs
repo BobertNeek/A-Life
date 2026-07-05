@@ -138,7 +138,7 @@ pub fn run_onboarding_tutorial_smoke(
         schema_version: CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION,
         fixture_root: launch.fixture_root.clone(),
         launch_command:
-            "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -GpuMode static-plastic-cpu-shadow-guarded",
+            "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -GpuMode auto-with-cpu-fallback",
         checklist: ca40_tutorial_checklist_items(),
         pause_step_follow_instructions_visible: tutorial_panel_text.contains("Space")
             && tutorial_panel_text.contains("N step")

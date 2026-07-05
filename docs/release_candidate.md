@@ -47,8 +47,8 @@ cargo run -p alife_game_app --bin alife_game_app -- platform-package-smoke
 Graphical playtest:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
 The dry-run checks command wiring only. A real graphical playtest depends on local graphics support and should record the hardware/display context.

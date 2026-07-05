@@ -183,10 +183,10 @@ pub fn run_gpu_graphics_performance_evidence_smoke(
     let benchmark_gpu_runtime_command =
         "cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime".to_string();
     let graphical_dry_run_command =
-        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun"
+        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun"
             .to_string();
     let graphical_smoke_command =
-        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 5"
+        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 5 -RecordPerformance"
             .to_string();
     let launch_window_smoke_status = if graphical.smoke_seconds == Some(5)
         && graphical.cpu_fallback_visible

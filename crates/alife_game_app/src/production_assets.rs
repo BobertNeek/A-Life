@@ -16,6 +16,8 @@ use crate::*;
 
 pub const FVR07_PRODUCTION_ASSET_MANIFEST_RELATIVE_PATH: &str =
     "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json";
+pub const FVR07_PRODUCTION_ASSET_MANIFEST_APP_RELATIVE_PATH: &str =
+    "assets/production_voxel_v1/production_asset_manifest.json";
 pub const FVR07_PRODUCTION_ASSET_PACK_ID: &str = "production-voxel-v1";
 pub const FVR07_ART_DIRECTION: &str = "stylized-voxel-alife-production-v1";
 pub const FVR07_MAX_COMMITTED_ASSET_BYTES: u64 = 256 * 1024;
@@ -205,6 +207,27 @@ pub fn default_production_asset_manifest_path() -> PathBuf {
     ca12_workspace_root().join(FVR07_PRODUCTION_ASSET_MANIFEST_RELATIVE_PATH)
 }
 
+pub fn production_asset_manifest_path_for_environment_manifest(
+    environment_manifest_path: impl AsRef<Path>,
+) -> PathBuf {
+    let candidate = environment_manifest_path
+        .as_ref()
+        .parent()
+        .map(|parent| parent.join(FVR07_PRODUCTION_ASSET_MANIFEST_APP_RELATIVE_PATH));
+    match candidate {
+        Some(path) if path.exists() => path,
+        _ => default_production_asset_manifest_path(),
+    }
+}
+
+fn production_asset_validation_root(manifest_path: &Path) -> PathBuf {
+    manifest_path
+        .ancestors()
+        .nth(5)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(ca12_workspace_root)
+}
+
 #[cfg(feature = "production-assets")]
 pub fn production_asset_loader_runtime_type_names() -> Vec<&'static str> {
     vec![std::any::type_name::<
@@ -236,8 +259,8 @@ pub fn validate_production_assets(
     let manifest_path = manifest_path.as_ref();
     let manifest: ProductionVoxelAssetManifest =
         serde_json::from_str(&std::fs::read_to_string(manifest_path)?)?;
-    let summary =
-        validate_production_assets_inner(&ca12_workspace_root(), manifest_path, &manifest)?;
+    let root = production_asset_validation_root(manifest_path);
+    let summary = validate_production_assets_inner(&root, manifest_path, &manifest)?;
     summary.validate()?;
     Ok(summary)
 }

@@ -102,7 +102,7 @@ cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke
 cargo run -p alife_game_app --bin alife_game_app -- platform-package-smoke
 cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json
 cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime --measure-gpu
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
 ```
 
 ## Hidden Continuation Audit

@@ -1,0 +1,6 @@
+{
+  "schema": "alife.p32.initial_weight_asset.v1",
+  "schema_version": 1,
+  "fixture": "p34 reference only",
+  "bulk_tensor_payload": "not committed"
+}

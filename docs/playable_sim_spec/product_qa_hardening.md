@@ -72,8 +72,8 @@ ALIFE_GPU_RUNTIME_BACKEND=static ALIFE_GPU_RUNTIME_FEATURE=1 ALIFE_GPU_RUNTIME_A
 Graphical smoke remains manual and feature-gated:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
 ## Known issue handling

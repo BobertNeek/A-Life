@@ -6,8 +6,8 @@
     {
       "id": "production-voxel",
       "title": "A-Life Voxel Frontend",
-      "description": "Default production voxel frontend launch using the real saved A-Life fixture while FVR02-FVR08 complete the saved voxel renderer and asset stack.",
-      "fixture_root": "../alife_world/tests/fixtures/gpu_alpha",
+      "description": "Default production voxel frontend launch using the real saved A-Life production fixture and production asset stack.",
+      "fixture_root": "../alife_world/tests/fixtures/production_voxel",
       "config_file": "tiny_config.json",
       "asset_manifest_file": "tiny_asset_manifest.json",
       "save_file": "tiny_save.json",

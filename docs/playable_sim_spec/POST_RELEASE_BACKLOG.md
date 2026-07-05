@@ -12,7 +12,7 @@ requires a new explicit user instruction before implementation.
    - Current status: manual.
    - Command:
      ```powershell
-     powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1
+     powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
      ```
    - Evidence required: OS, GPU/display context, command output, screenshots if
      visual verification is requested.

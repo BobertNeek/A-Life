@@ -2,6 +2,19 @@
 
 Playable-sim app shell crate.
 
+The player-facing desktop path is now the production voxel frontend:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
+```
+
+The default profile is `MinSpecComfort1080p`; `MinimumSettings30x30` is the
+minimum fallback floor. The Windows production package is built with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
+```
+
 The default path is headless and validates P34 config/assets without requiring
 graphics, GPU, semantic providers, school UI, or Bevy runtime support. The
 optional `bevy-app` feature constructs a minimal Bevy app shell with the

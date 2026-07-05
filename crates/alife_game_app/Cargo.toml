@@ -72,8 +72,10 @@ debug-tools = [
 presentation-physics = ["bevy-app", "alife_bevy_adapter/avian3d"]
 production-voxel-frontend = [
     "bevy-app",
+    "gpu-runtime",
     "voxel-backend",
     "creature-sprites",
-    "licensed-assets",
+    "production-assets",
+    "vfx-hanabi",
     "presentation-physics",
 ]

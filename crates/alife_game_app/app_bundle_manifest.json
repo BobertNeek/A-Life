@@ -9,21 +9,21 @@
   "production_voxel_asset_manifest": "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",
   "entries": [
     {
-      "id": "gpu-alpha-config",
+      "id": "production-voxel-config",
       "kind": "runtime-config",
-      "relative_path": "crates/alife_world/tests/fixtures/gpu_alpha/tiny_config.json",
+      "relative_path": "crates/alife_world/tests/fixtures/production_voxel/tiny_config.json",
       "required": true
     },
     {
-      "id": "gpu-alpha-assets",
+      "id": "production-voxel-assets",
       "kind": "asset-manifest",
-      "relative_path": "crates/alife_world/tests/fixtures/gpu_alpha/tiny_asset_manifest.json",
+      "relative_path": "crates/alife_world/tests/fixtures/production_voxel/tiny_asset_manifest.json",
       "required": true
     },
     {
-      "id": "gpu-alpha-save",
+      "id": "production-voxel-save",
       "kind": "portable-save",
-      "relative_path": "crates/alife_world/tests/fixtures/gpu_alpha/tiny_save.json",
+      "relative_path": "crates/alife_world/tests/fixtures/production_voxel/tiny_save.json",
       "required": true
     },
     {

@@ -13,6 +13,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $PackageRoot = Split-Path -Parent $PSCommandPath
+
+# Legacy GPU Alpha package runner. The FVR08 production Windows package uses
+# run_windows_production_voxel_package.ps1.
 $Exe = Join-Path $PackageRoot "alife_game_app.exe"
 $Manifest = Join-Path $PackageRoot "crates/alife_game_app/environment_manifest.json"
 $EffectiveGraphicsBackend = $GraphicsBackend

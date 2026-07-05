@@ -53,8 +53,8 @@ Severity: manual evidence required
 Reproduction:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
 The headless path is the default CI-safe route. Graphical smoke remains manual

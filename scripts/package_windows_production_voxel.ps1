@@ -2,19 +2,19 @@ param(
     [switch]$DryRun,
     [switch]$SkipBuild,
     [switch]$NoZip,
-    [ValidateSet("static-plastic-cpu-shadow-guarded", "cpu-reference", "auto-with-cpu-fallback")]
-    [string]$GpuMode = "static-plastic-cpu-shadow-guarded",
-    [ValidateSet("gpu-alpha", "p34")]
-    [string]$Scenario = "gpu-alpha",
-    [string]$OutputRoot = "target/artifacts/ca41_windows_alpha",
-    [string]$PackageName = "alife-gpu-alpha-windows"
+    [ValidateSet("MinimumSettings30x30", "MinSpecComfort1080p", "Balanced1080p", "HighSpecScaleUp", "ResearchScale")]
+    [string]$Profile = "MinSpecComfort1080p",
+    [ValidateSet("MinimumSettings30x30", "MinSpecComfort1080p", "Balanced1080p", "HighSpecScaleUp", "ResearchScale")]
+    [string]$FallbackProfile = "MinimumSettings30x30",
+    [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
+    [string]$GpuMode = "auto-with-cpu-fallback",
+    [string]$OutputRoot = "target/artifacts/fvr08_windows_production",
+    [string]$PackageName = "alife-production-voxel-windows"
 )
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-
-# Legacy regression package only. The FVR08 production Windows package is
-# scripts/package_windows_production_voxel.ps1.
+$ProductionFeatures = "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi"
 
 function Resolve-InWorkspacePath {
     param([string]$Path)
@@ -74,15 +74,36 @@ function Copy-PackageDirectory {
     $Destination = Join-Path $DestinationRoot $RelativePath
     $Parent = Split-Path -Parent $Destination
     New-Item -ItemType Directory -Force -Path $Parent | Out-Null
-    Copy-Item -LiteralPath $Source -Destination $Destination -Recurse -Force
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
+}
+
+function Write-ProductionOnlyEnvironmentManifest {
+    param([string]$DestinationRoot)
+
+    $EnvironmentPath = Join-Path $DestinationRoot "crates/alife_game_app/environment_manifest.json"
+    $Environment = Get-Content -Raw -LiteralPath $EnvironmentPath | ConvertFrom-Json
+    $ProductionScenarios = @(
+        $Environment.scenarios | Where-Object { $_.id -eq "production-voxel" }
+    )
+    if ($ProductionScenarios.Count -ne 1) {
+        throw "Packaged environment manifest must contain exactly one production-voxel scenario."
+    }
+    $Environment.default_scenario_id = "production-voxel"
+    $Environment.scenarios = $ProductionScenarios
+    $Json = $Environment | ConvertTo-Json -Depth 8
+    $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($EnvironmentPath, $Json + [Environment]::NewLine, $Utf8NoBom)
 }
 
 $PackageRoot = Assert-TargetArtifactPath (Join-Path $OutputRoot $PackageName)
 $ZipPath = Assert-TargetArtifactPath ((Join-Path $OutputRoot "$PackageName.zip"))
 $ReleaseExe = Join-Path $Root "target/release/alife_game_app.exe"
 $PackageExe = Join-Path $PackageRoot "alife_game_app.exe"
-$PackageRunScript = Join-Path $PackageRoot "run_windows_alpha_package.ps1"
+$PackageRunScript = Join-Path $PackageRoot "run_windows_production_voxel_package.ps1"
+$CopiedSourceLauncher = Join-Path $PackageRoot "scripts/run_production_voxel_frontend.ps1"
 $PackageManifest = Join-Path $PackageRoot "crates/alife_game_app/environment_manifest.json"
+$PackageCrashSummary = Join-Path $PackageRoot "diagnostics/fvr08_acceptance/crash_summary.md"
 
 $BuildCommand = @(
     "cargo",
@@ -92,46 +113,44 @@ $BuildCommand = @(
     "--bin",
     "alife_game_app",
     "--features",
-    "bevy-app gpu-runtime",
+    $ProductionFeatures,
     "--release"
 )
 
 $CopyFiles = @(
+    "LICENSE",
+    "scripts/run_production_voxel_frontend.ps1",
+    "scripts/run_windows_production_voxel_package.ps1",
     "crates/alife_game_app/environment_manifest.json",
     "crates/alife_game_app/app_bundle_manifest.json",
-    "crates/alife_game_app/placeholder_art_manifest.json",
-    "crates/alife_game_app/assets/alpha_art_v1/alpha_art_manifest.json",
-    "crates/alife_game_app/assets/true_25d_alpha_v1/true_25d_manifest.json",
-    "crates/alife_world/tests/fixtures/gpu_alpha/tiny_config.json",
-    "crates/alife_world/tests/fixtures/gpu_alpha/tiny_asset_manifest.json",
-    "crates/alife_world/tests/fixtures/gpu_alpha/tiny_save.json",
-    "crates/alife_world/tests/fixtures/gpu_alpha/assets/tiny_generated_weights_ref.json",
-    "crates/alife_world/tests/fixtures/p34/tiny_config.json",
-    "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
-    "crates/alife_world/tests/fixtures/p34/tiny_save.json",
-    "crates/alife_world/tests/fixtures/p34/assets/tiny_generated_weights_ref.json",
-    "docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md",
-    "examples/model_manifests/local_semantic_models.json"
+    "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",
+    "crates/alife_world/tests/fixtures/production_voxel/tiny_config.json",
+    "crates/alife_world/tests/fixtures/production_voxel/tiny_asset_manifest.json",
+    "crates/alife_world/tests/fixtures/production_voxel/tiny_save.json",
+    "crates/alife_world/tests/fixtures/production_voxel/assets/tiny_generated_weights_ref.json"
 )
 
 $CopyDirectories = @(
-    "crates/alife_game_app/assets/alpha_art_v1",
-    "crates/alife_game_app/assets/true_25d_alpha_v1",
+    "crates/alife_game_app/assets/production_voxel_v1",
     "crates/alife_gpu_backend/shaders"
 )
 
-Write-Host "A-Life CA41 Windows alpha package builder"
-Write-Host "Legacy regression package: use scripts/package_windows_production_voxel.ps1 for the finished production voxel package."
+Write-Host "A-Life FVR08 Windows production voxel package builder"
 Write-Host "Package root: $PackageRoot"
 Write-Host "Zip path: $ZipPath"
+Write-Host "Default profile: $Profile"
+Write-Host "Minimum fallback profile: $FallbackProfile"
 Write-Host "GPU mode default: $GpuMode"
-Write-Host "Scenario default: $Scenario"
-Write-Host "Release tag: not created"
+Write-Host "Features: $ProductionFeatures"
+Write-Host "License bundle: LICENSE plus crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json"
+Write-Host "GPU fallback diagnostics: gpu_fallback_diagnostics metadata and production-voxel preflight output"
+Write-Host "Crash summary path: $PackageCrashSummary"
 Write-Host "Cargo build command: $($BuildCommand -join ' ')"
 
 if ($DryRun) {
     Write-Host "Dry run: no build, copy, zip, or artifact writes will occur."
-    Write-Host "Would copy runner: scripts/run_windows_alpha_package.ps1 -> $PackageRunScript"
+    Write-Host "Would copy package runner: scripts/run_windows_production_voxel_package.ps1 -> $PackageRunScript"
+    Write-Host "Would copy source launcher: scripts/run_production_voxel_frontend.ps1 -> $CopiedSourceLauncher"
     foreach ($File in $CopyFiles) {
         Write-Host "Would copy file: $File"
     }
@@ -139,6 +158,7 @@ if ($DryRun) {
         Write-Host "Would copy directory: $Directory"
     }
     Write-Host "Would write metadata: package_metadata.json"
+    Write-Host "Would write package README: README_PACKAGE.md"
     exit 0
 }
 
@@ -161,7 +181,7 @@ try {
     New-Item -ItemType Directory -Force -Path $PackageRoot | Out-Null
 
     Copy-Item -LiteralPath $ReleaseExe -Destination $PackageExe -Force
-    Copy-Item -LiteralPath (Join-Path $Root "scripts/run_windows_alpha_package.ps1") `
+    Copy-Item -LiteralPath (Join-Path $Root "scripts/run_windows_production_voxel_package.ps1") `
         -Destination $PackageRunScript -Force
 
     foreach ($File in $CopyFiles) {
@@ -170,6 +190,7 @@ try {
     foreach ($Directory in $CopyDirectories) {
         Copy-PackageDirectory -RelativePath $Directory -DestinationRoot $PackageRoot
     }
+    Write-ProductionOnlyEnvironmentManifest -DestinationRoot $PackageRoot
 
     $Commit = (git rev-parse --short HEAD 2>$null)
     if ([string]::IsNullOrWhiteSpace($Commit)) {
@@ -183,7 +204,7 @@ try {
     $WorkingTreeDirty = -not [string]::IsNullOrWhiteSpace($GitStatus)
 
     $Metadata = [ordered]@{
-        schema = "alife.ca41.windows_alpha_package.v1"
+        schema = "alife.fvr08.windows_production_package.v1"
         schema_version = 1
         package_id = $PackageName
         branch = $Branch.Trim()
@@ -191,54 +212,65 @@ try {
         working_tree_dirty = $WorkingTreeDirty
         built_at_utc = [DateTime]::UtcNow.ToString("o")
         executable = "alife_game_app.exe"
-        runner = "run_windows_alpha_package.ps1"
+        runner = "run_windows_production_voxel_package.ps1"
+        source_launcher = "scripts/run_production_voxel_frontend.ps1"
         environment_manifest = "crates/alife_game_app/environment_manifest.json"
-        alpha_art = "crates/alife_game_app/assets/alpha_art_v1"
-        true_25d_alpha = "crates/alife_game_app/assets/true_25d_alpha_v1"
-        default_scenario = $Scenario
+        production_asset_manifest = "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json"
+        production_asset_root = "crates/alife_game_app/assets/production_voxel_v1"
+        license_bundle = @("LICENSE", "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json")
+        default_profile = $Profile
+        minimum_fallback_profile = $FallbackProfile
         default_gpu_mode = $GpuMode
-        product_runtime_claim = "CpuShadowGuardedStaticPlusLiveHShadow"
-        cpu_shadow_parity_required = $true
-        cpu_fallback_available = $true
-        full_action_authoritative_claim = $false
+        default_resolution = "1920x1080"
+        save_directory_policy = "Package carries clean fixture saves; user/runtime settings and diagnostics are app-managed and kept out of git."
+        gpu_fallback_diagnostics = [ordered]@{
+            mode = $GpuMode
+            visible = $true
+            require_gpu_supported = $true
+            cpu_fallback_available = $true
+        }
+        crash_summary = "diagnostics/fvr08_acceptance/crash_summary.md"
         release_tag_created = $false
         artifacts_must_remain_untracked = $true
         packaged_paths = @(
-            "crates/alife_game_app",
-            "crates/alife_game_app/assets/true_25d_alpha_v1",
-            "crates/alife_world/tests/fixtures/gpu_alpha",
-            "crates/alife_world/tests/fixtures/p34",
-            "docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md",
+            "alife_game_app.exe",
+            "run_windows_production_voxel_package.ps1",
+            "scripts/run_production_voxel_frontend.ps1",
+            "crates/alife_game_app/environment_manifest.json",
+            "crates/alife_game_app/assets/production_voxel_v1",
+            "crates/alife_world/tests/fixtures/production_voxel",
             "crates/alife_gpu_backend/shaders",
-            "examples/model_manifests/local_semantic_models.json"
+            "LICENSE"
         )
     }
-    $Metadata | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $PackageRoot "package_metadata.json")
+    $Metadata | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $PackageRoot "package_metadata.json")
 
     @"
-# A-Life GPU Alpha Windows Package
+# A-Life Production Voxel Windows Package
 
 Run from this directory:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run_windows_alpha_package.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run_windows_production_voxel_package.ps1
 ```
 
-Timed smoke:
+Minimum fallback run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run_windows_alpha_package.ps1 -SmokeSeconds 30
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run_windows_production_voxel_package.ps1 -Profile MinimumSettings30x30 -Population 30 -RecordPerformance
 ```
 
-This package is GPU-first and requests `static-plastic-cpu-shadow-guarded` by
-default. CPU fallback remains available and is visibly degraded/safety mode.
-This is not a full action-authoritative GPU runtime claim and no release tag is
-created by the package builder.
+Default profile: `MinSpecComfort1080p`.
+Minimum fallback profile: `MinimumSettings30x30`.
+GPU fallback diagnostics: `auto-with-cpu-fallback` with visible production
+preflight output and crash summary at `diagnostics/fvr08_acceptance/crash_summary.md`.
+Save directory policy: clean package fixture saves ship with the package;
+runtime diagnostics and generated receipts stay package-local or under
+`target/artifacts/` and must not be committed.
 
-If launch fails, the runner writes a sanitized CA43 crash summary and tester
-feedback template under `diagnostics/ca43_tester_feedback/`. Keep those files
-local or reference them externally; do not commit screenshots, logs, captures,
-target artifacts, model files, or caches.
+The package includes the production voxel asset pack, production asset manifest,
+MIT project license, GPU shader sources, production environment manifest, and
+production-named fixture data. It creates no release tag.
 "@ | Set-Content -Encoding UTF8 (Join-Path $PackageRoot "README_PACKAGE.md")
 
     if (-not $NoZip) {
@@ -259,6 +291,7 @@ target artifacts, model files, or caches.
         Write-Host "Zip path: $ZipPath"
     }
     Write-Host "Run script: $PackageRunScript"
+    Write-Host "Source launcher copy: $CopiedSourceLauncher"
     Write-Host "Manifest: $PackageManifest"
     Write-Host "Release tag: not created"
     exit 0

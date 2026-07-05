@@ -3011,26 +3011,26 @@ fn run_production_voxel_cli(
     }
     let summary = run_production_voxel_launch(&launch)?;
     let prefix = if legacy_alias {
-        "FVR01 legacy graphical alias"
+        "FVR08 legacy graphical alias"
     } else if launch.dry_run {
-        "FVR01 production voxel dry run"
+        "FVR08 production voxel dry run"
     } else if launch.record_performance {
-        "FVR01 production voxel performance run"
+        "FVR08 production voxel performance run"
     } else {
-        "FVR01 production voxel closed"
+        "FVR08 production voxel closed"
     };
     Ok(format_production_voxel_summary(prefix, &summary))
 }
 
 fn run_validate_production_save_cli(args: &[String]) -> Result<String, String> {
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        return Ok("validate-production-save [--profile PROFILE] [--manifest path] [--scenario production-voxel] validates the real P34 save/config/assets through FVR01 production profile metadata.".to_string());
+        return Ok("validate-production-save [--profile PROFILE] [--manifest path] [--scenario production-voxel] validates the real P34 save/config/assets through FVR08 production profile metadata.".to_string());
     }
     let mut launch = parse_production_voxel_launch(args, false)?;
     launch.dry_run = true;
     let summary = validate_production_voxel_save(&launch).map_err(|err| err.to_string())?;
     Ok(format_production_voxel_summary(
-        "FVR01 production save validation",
+        "FVR08 production save validation",
         &summary,
     ))
 }

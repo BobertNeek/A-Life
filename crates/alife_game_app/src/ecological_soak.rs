@@ -210,7 +210,7 @@ impl EcologicalSoakSummary {
             || !self.manual_10k_command.contains("--ignored")
             || !self
                 .graphical_bounded_command
-                .contains("run_graphical_playground.ps1")
+                .contains("run_production_voxel_frontend.ps1")
             || !self.report_markdown.contains("Remaining issues")
             || !self.report_markdown.contains("10k")
             || !self.report_markdown.contains("config-first")
@@ -283,7 +283,7 @@ pub fn run_ecological_soak_with_config(
     let metrics = ecological_soak_metrics(&config, &balance, &graphical, &tick_soak)?;
     let findings = ecological_soak_findings(&behavior, &metrics);
     let manual_10k_command = "cargo test -p alife_game_app --test app_shell ca22_manual_10k_ecological_soak -- --ignored --nocapture".to_string();
-    let graphical_bounded_command = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 30 -GpuMode static-plastic-cpu-shadow-guarded".to_string();
+    let graphical_bounded_command = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 30 -GpuMode auto-with-cpu-fallback -RecordPerformance".to_string();
     let mut summary = EcologicalSoakSummary {
         schema: CA22_ECOLOGICAL_SOAK_SCHEMA,
         schema_version: CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION,

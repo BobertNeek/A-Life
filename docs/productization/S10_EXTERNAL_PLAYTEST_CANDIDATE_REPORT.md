@@ -73,8 +73,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_headless_playgro
 Graphical dry-run and manual local graphical check:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
 The graphical command is manual evidence. It should not be reported as passing

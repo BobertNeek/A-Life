@@ -156,16 +156,16 @@ pub fn run_multi_hour_soak_isolation_smoke() -> Result<SoakIsolationSummary, Gam
     }];
     let graphical_commands = vec![
         SoakIsolationCommand {
-            name: "graphical_gpu_30s_smoke".to_string(),
-            command: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 30 -GpuMode static-plastic-cpu-shadow-guarded".to_string(),
+            name: "production_voxel_gpu_30s_smoke".to_string(),
+            command: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 30 -GpuMode auto-with-cpu-fallback -RecordPerformance".to_string(),
             manual: false,
             min_ticks: None,
             expected_artifact: None,
             evidence_boundary: "Bounded graphical smoke; dry-run is not graphical evidence.".to_string(),
         },
         SoakIsolationCommand {
-            name: "graphical_forced_cpu_fallback_10s_smoke".to_string(),
-            command: "$env:ALIFE_GPU_RUNTIME_AVAILABLE=\"0\"; powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -SmokeSeconds 10 -GpuMode static-plastic-cpu-shadow-guarded; Remove-Item Env:\\ALIFE_GPU_RUNTIME_AVAILABLE -ErrorAction SilentlyContinue".to_string(),
+            name: "production_voxel_forced_cpu_fallback_10s_smoke".to_string(),
+            command: "$env:ALIFE_GPU_RUNTIME_AVAILABLE=\"0\"; powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 10 -GpuMode auto-with-cpu-fallback -RecordPerformance; Remove-Item Env:\\ALIFE_GPU_RUNTIME_AVAILABLE -ErrorAction SilentlyContinue".to_string(),
             manual: false,
             min_ticks: None,
             expected_artifact: None,

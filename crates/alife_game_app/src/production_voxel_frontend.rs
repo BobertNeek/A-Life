@@ -1,4 +1,4 @@
-//! FVR01 production voxel frontend launch policy.
+//! FVR08 production voxel frontend launch policy.
 //!
 //! This module wires production profile budgets, launch states, and diagnostics
 //! around the existing real P34 config/save/asset contracts. It does not move
@@ -180,7 +180,7 @@ impl Fvr05ProductionUxSettings {
         diagnostics: &ProductionRuntimeDiagnostics,
         save_metadata: &ProductionSaveMetadata,
     ) -> Self {
-        let artifact_dir = PathBuf::from(FVR05_PRODUCTION_UX_SETTINGS_DIR);
+        let artifact_dir = fvr08_launch_artifact_dir(launch, FVR05_PRODUCTION_UX_SETTINGS_DIR);
         let profile = launch.profile_id.label();
         Self {
             schema: FVR05_PRODUCTION_UX_SCHEMA.to_string(),
@@ -1012,6 +1012,32 @@ pub fn fvr05_default_ui_settings_path(profile_id: ProductionFrontendProfileId) -
     ))
 }
 
+fn fvr05_default_ui_settings_path_for_launch(launch: &ProductionVoxelLaunchConfig) -> PathBuf {
+    fvr08_launch_artifact_dir(launch, FVR05_PRODUCTION_UX_SETTINGS_DIR).join(format!(
+        "{}_production_ux_settings.json",
+        launch.profile_id.label()
+    ))
+}
+
+fn fvr08_launch_root(launch: &ProductionVoxelLaunchConfig) -> PathBuf {
+    launch
+        .manifest_path
+        .ancestors()
+        .nth(3)
+        .map(Path::to_path_buf)
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(ca12_workspace_root)
+}
+
+fn fvr08_launch_artifact_dir(launch: &ProductionVoxelLaunchConfig, relative_path: &str) -> PathBuf {
+    let path = Path::new(relative_path);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        fvr08_launch_root(launch).join(path)
+    }
+}
+
 fn fvr05_contains_engine_local_token(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     FVR05_ENGINE_LOCAL_TOKENS
@@ -1152,7 +1178,7 @@ fn fvr06_production_gpu_gameplay_receipt(
         return Ok(None);
     }
 
-    let receipt_dir = ca12_workspace_root().join(FVR06_PRODUCTION_GPU_RECEIPT_DIR);
+    let receipt_dir = fvr08_launch_artifact_dir(launch, FVR06_PRODUCTION_GPU_RECEIPT_DIR);
     fs::create_dir_all(&receipt_dir)?;
     let profile = launch.profile_id.label();
     let production_save_path =
@@ -1265,7 +1291,8 @@ pub fn run_production_voxel_frontend_preflight(
     config.validate()?;
     let manifest = AssetManifest::from_json_file(&launch.app_launch.asset_manifest_path)?;
     manifest.validate_with_root(&launch.app_launch.asset_root)?;
-    let production_asset_manifest_path = default_production_asset_manifest_path();
+    let production_asset_manifest_path =
+        production_asset_manifest_path_for_environment_manifest(&launch.manifest_path);
     let production_assets = validate_production_assets(&production_asset_manifest_path)?;
     trace.transition(ProductionAppState::LoadAssets)?;
 
@@ -1346,7 +1373,7 @@ pub fn run_production_voxel_frontend_preflight(
     let ui_settings_path = launch
         .ui_settings_path
         .clone()
-        .unwrap_or_else(|| fvr05_default_ui_settings_path(launch.profile_id));
+        .unwrap_or_else(|| fvr05_default_ui_settings_path_for_launch(launch));
     let (ui_settings, ui_settings_load_error) =
         load_fvr05_ui_settings_or_default(&ui_settings_path, &default_ui_settings);
     let debug_authority = Fvr05ProductionDebugAuthorityReport::production_read_only();
@@ -1655,8 +1682,8 @@ fn production_homeostasis_for_slot(
 fn production_population_position(seed: u64, slot: usize) -> Vec3f {
     let ring = (slot / 12) as f32 + 1.0;
     let lane = (slot % 12) as f32;
-    let seed_phase = (seed % 360) as f32 * 0.017_453_292;
-    let angle = seed_phase + lane * 0.523_598_8 + ring * 0.37;
+    let seed_phase = ((seed % 360) as f32).to_radians();
+    let angle = seed_phase + lane * std::f32::consts::FRAC_PI_6 + ring * 0.37;
     let radius = 2.0 + ring * 2.35;
     Vec3f::new(angle.cos() * radius, 0.0, angle.sin() * radius)
 }
@@ -1944,6 +1971,23 @@ mod tests {
         assert!(roundtrip
             .enabled_overlays
             .contains(&Fvr05ProductionOverlayKind::BackendTiming));
+    }
+
+    #[test]
+    fn fvr08_package_launch_artifacts_are_rooted_next_to_packaged_manifest() {
+        let mut launch = fvr05_test_launch();
+        let package_root = PathBuf::from(
+            "target/artifacts/fvr08_package_path_test/alife-production-voxel-windows",
+        );
+        launch.manifest_path = package_root.join("crates/alife_game_app/environment_manifest.json");
+        let diagnostics = fvr05_test_diagnostics(&launch);
+        let metadata = fvr05_test_save_metadata();
+
+        let settings =
+            Fvr05ProductionUxSettings::default_for_launch(&launch, &diagnostics, &metadata);
+
+        assert!(PathBuf::from(&settings.runtime_save_path).starts_with(&package_root));
+        assert!(PathBuf::from(&settings.created_world_save_path).starts_with(&package_root));
     }
 
     #[test]

@@ -325,7 +325,7 @@ fn validate_app_bundle_manifest_inner(
         player_visible_status: vec![
             "App bundle manifest is versioned and validated.".to_string(),
             "WGSL shader assets are discovered from the committed shader directory.".to_string(),
-            "FVR01 production voxel route is the default environment entry and loads real saved config/assets."
+            "FVR08 production voxel route is the default environment entry and loads real saved config/assets."
                 .to_string(),
             "Alpha art v1 PNG sprites/tiles remain manifest-validated as historical regression assets."
                 .to_string(),

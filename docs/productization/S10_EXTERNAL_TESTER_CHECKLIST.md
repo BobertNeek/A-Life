@@ -22,8 +22,8 @@ the full command and output.
 ## Optional Manual Graphics Check
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
 Pass criteria:

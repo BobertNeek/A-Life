@@ -216,7 +216,7 @@ fn s10_external_playtest_candidate_docs_are_current_and_artifact_safe() {
             "cargo run -p alife_game_app --bin alife_game_app -- content-authoring-smoke"
         ));
         assert!(text.contains("cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json"));
-        assert!(text.contains("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1"));
+        assert!(text.contains("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1"));
         assert!(text.contains("ALIFE_GPU_RUNTIME_BACKEND=static"));
         assert!(text.contains("--gpu-runtime"));
         assert!(text.contains("git ls-files target dist target/artifacts graphify-out"));
@@ -258,7 +258,7 @@ fn s11_release_decision_docs_are_honest_and_stop_the_chain() {
         "cargo run -p alife_game_app --bin alife_game_app -- platform-package-smoke",
         "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json",
         "cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime",
-        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun",
+        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun",
     ] {
         assert!(report.contains(required));
     }
@@ -4876,7 +4876,7 @@ fn ca22_ecological_soak_smoke_records_bounds_and_remaining_issues() {
         .contains("ca22_manual_10k_ecological_soak"));
     assert!(summary
         .graphical_bounded_command
-        .contains("run_graphical_playground.ps1"));
+        .contains("run_production_voxel_frontend.ps1"));
     assert!(summary.report_markdown.contains("Remaining issues"));
     assert!(summary.report_markdown.contains("config-first"));
     assert!(summary
@@ -5099,7 +5099,7 @@ fn platform_package_smoke_validates_scripts_manifest_and_artifact_policy() {
     assert_eq!(summary.schema_version, G21_PLATFORM_PACKAGE_SCHEMA_VERSION);
     assert_eq!(
         summary.output_directory,
-        "target/artifacts/g21_local_package"
+        "target/artifacts/fvr08_windows_production"
     );
     assert!(!summary.generated_artifacts_tracked);
     assert!(summary.windows_wrappers_used);
@@ -5121,15 +5121,15 @@ fn platform_package_smoke_validates_scripts_manifest_and_artifact_policy() {
             && !command.windows_command.contains("ALIFE_GPU_BACKEND")
     }));
     assert!(summary.commands.iter().any(|command| command.id
-        == "ca41-windows-alpha-package-dry-run"
+        == "fvr08-windows-production-voxel-package-dry-run"
         && command
             .windows_command
-            .contains("scripts/package_windows_alpha.ps1 -DryRun")));
+            .contains("scripts/package_windows_production_voxel.ps1 -DryRun")));
     assert!(summary.commands.iter().any(|command| command.id
-        == "ca41-windows-alpha-package-runner-dry-run"
+        == "fvr08-windows-production-package-runner-dry-run"
         && command
             .windows_command
-            .contains("run_windows_alpha_package.ps1 -DryRun")));
+            .contains("run_windows_production_voxel_package.ps1 -DryRun")));
     summary.validate().unwrap();
 }
 

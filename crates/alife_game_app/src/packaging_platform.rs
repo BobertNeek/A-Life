@@ -251,7 +251,8 @@ pub fn run_platform_package_smoke() -> Result<PlatformPackageSummary, GameAppShe
     let validation = manifest.validate_with_root(&root)?;
     let docs = std::fs::read_to_string(root.join("docs/playable_sim_spec/platform_packaging.md"))?;
     if !docs.contains("scripts/run_headless_playground.ps1")
-        || !docs.contains("scripts/run_graphical_playground.ps1")
+        || !docs.contains("scripts/run_production_voxel_frontend.ps1")
+        || !docs.contains("scripts/package_windows_production_voxel.ps1")
         || !docs.contains("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1")
         || docs.contains("bash scripts/check.sh")
     {
@@ -262,7 +263,7 @@ pub fn run_platform_package_smoke() -> Result<PlatformPackageSummary, GameAppShe
     let summary = PlatformPackageSummary {
         schema: G21_PLATFORM_PACKAGE_SCHEMA,
         schema_version: G21_PLATFORM_PACKAGE_SCHEMA_VERSION,
-        output_directory: "target/artifacts/g21_local_package",
+        output_directory: "target/artifacts/fvr08_windows_production",
         commands: platform_package_commands(),
         asset_bundle_entries: validation.entry_count,
         required_asset_entries: validation.required_count,
@@ -300,12 +301,14 @@ pub fn platform_package_commands() -> Vec<PlatformPackageCommand> {
             requires_gpu: false,
         },
         PlatformPackageCommand {
-            id: "graphical-run-script-manual".to_string(),
+            id: "fvr08-windows-production-voxel-launcher-dry-run".to_string(),
             kind: PackageSmokeKind::GraphicalManual,
             windows_command:
-                "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_graphical_playground.ps1 -DryRun"
+                "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun"
                     .to_string(),
-            non_windows_command: "./scripts/run_graphical_playground.sh --dry-run".to_string(),
+            non_windows_command:
+                "Windows production voxel launcher uses PowerShell wrapper on Windows."
+                    .to_string(),
             manual: true,
             requires_graphics: true,
             requires_gpu: false,
@@ -335,25 +338,26 @@ pub fn platform_package_commands() -> Vec<PlatformPackageCommand> {
             requires_gpu: false,
         },
         PlatformPackageCommand {
-            id: "ca41-windows-alpha-package-dry-run".to_string(),
+            id: "fvr08-windows-production-voxel-package-dry-run".to_string(),
             kind: PackageSmokeKind::Validation,
             windows_command:
-                "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_alpha.ps1 -DryRun"
+                "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1 -DryRun"
                     .to_string(),
             non_windows_command:
-                "Windows-only CA41 packaging dry-run; use PowerShell on Windows.".to_string(),
+                "Windows-only FVR08 production packaging dry-run; use PowerShell on Windows."
+                    .to_string(),
             manual: false,
             requires_graphics: false,
             requires_gpu: false,
         },
         PlatformPackageCommand {
-            id: "ca41-windows-alpha-package-runner-dry-run".to_string(),
+            id: "fvr08-windows-production-package-runner-dry-run".to_string(),
             kind: PackageSmokeKind::GraphicalManual,
             windows_command:
-                "powershell -NoProfile -ExecutionPolicy Bypass -File target/artifacts/ca41_windows_alpha/alife-gpu-alpha-windows/run_windows_alpha_package.ps1 -DryRun"
+                "powershell -NoProfile -ExecutionPolicy Bypass -File target/artifacts/fvr08_windows_production/alife-production-voxel-windows/run_windows_production_voxel_package.ps1 -DryRun"
                     .to_string(),
             non_windows_command:
-                "Windows-only packaged graphical alpha runner; use PowerShell on Windows."
+                "Windows-only packaged production voxel runner; use PowerShell on Windows."
                     .to_string(),
             manual: true,
             requires_graphics: true,

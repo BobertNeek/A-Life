@@ -8,7 +8,7 @@ param(
     [int]$Population = 0,
     [string]$Resolution = "1920x1080",
     [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
-    [string]$GpuMode = "static-plastic-cpu-shadow-guarded",
+    [string]$GpuMode = "auto-with-cpu-fallback",
     [ValidateSet("auto", "dx12", "vulkan", "existing")]
     [string]$GraphicsBackend = "auto",
     [switch]$RequireGpu,
@@ -17,7 +17,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$FeatureList = "bevy-app gpu-runtime voxel-backend"
+$FeatureList = "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi"
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
 
 function Format-CommandArgument {
@@ -70,7 +70,10 @@ $CommandPreview = "cargo " + (($CargoArgs | ForEach-Object { Format-CommandArgum
 
 Write-Host "A-Life Voxel Frontend"
 Write-Host "Profile: $Profile"
+Write-Host "Minimum fallback profile: MinimumSettings30x30"
 Write-Host "Features: $FeatureList"
+Write-Host "Save directory policy: fixture saves stay under the selected environment; UI/profile settings are written under target/artifacts/fvr05 unless --ui-settings overrides them."
+Write-Host "GPU fallback diagnostics: $GpuMode with explicit production-voxel preflight output."
 Write-Host "Command: $CommandPreview"
 
 if ($DryRun) {

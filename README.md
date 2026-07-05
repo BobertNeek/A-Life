@@ -1,6 +1,29 @@
 # A-Life
 
-A-Life is a Rust + Bevy + wgpu/WebGPU + WGSL artificial-life simulation project. It uses scalable sparse Hebbian/Oja brain classes, genome-controlled brain topology, neurochemistry, evolution, internal semantic priors, and future-compatible schooling/teacher architecture.
+A-Life is a Rust + Bevy + wgpu/WebGPU + WGSL artificial-life simulation project. Its desktop product path is the Bevy 0.18 production voxel frontend backed by real A-Life saved world/core/runtime data.
+
+Launch the production voxel frontend on Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
+```
+
+Dry-run the launch without opening the window:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -DryRun
+```
+
+Build the local Windows production package:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
+```
+
+Default profile: `MinSpecComfort1080p` at 1920x1080. Minimum fallback profile:
+`MinimumSettings30x30`, the 30-creature/30-FPS floor. Production launch uses
+`bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi` and reports
+GPU fallback diagnostics honestly.
 
 Start with:
 
@@ -9,9 +32,6 @@ Start with:
 - `docs/codex_handoff_prompt.md`
 - `docs/release_checklist.md`
 - `docs/final_status_report.md`
-
-The current codebase is a scaffold: it defines crate boundaries, public contract
-types, and invariant tests. It does not implement neural runtime kernels.
 
 This repository should not use Unity, C#, or HLSL production shaders. `Standard2048` is only a reference brain class; the architecture is scalable.
 

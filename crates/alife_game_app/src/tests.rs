@@ -49,7 +49,7 @@ fn ca10_environment_manifest_validates_and_selects_default_production_voxel() {
     assert_eq!(summary.scenario_count, 3);
     assert!(path_ends_with(
         &summary.fixture_root,
-        "crates/alife_world/tests/fixtures/gpu_alpha"
+        "crates/alife_world/tests/fixtures/production_voxel"
     ));
     assert_eq!(summary.seed, 4242);
     assert_eq!(summary.object_count, 12);
@@ -170,8 +170,8 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
 fn ca12_app_bundle_manifest_rejects_missing_required_entries() {
     let source = std::fs::read_to_string(default_app_bundle_manifest_path()).unwrap();
     let broken = source.replace(
-        "crates/alife_world/tests/fixtures/gpu_alpha/tiny_config.json",
-        "crates/alife_world/tests/fixtures/gpu_alpha/missing_config.json",
+        "crates/alife_world/tests/fixtures/production_voxel/tiny_config.json",
+        "crates/alife_world/tests/fixtures/production_voxel/missing_config.json",
     );
     let path = std::env::temp_dir().join("alife_ca12_broken_bundle_manifest.json");
     std::fs::write(&path, broken).unwrap();
