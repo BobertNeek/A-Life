@@ -16,8 +16,8 @@
       "asset_id": "voxel-material-atlas",
       "usage_category": "voxel-material-atlas",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/palette/voxel_material_atlas.json",
-      "digest": "fnv1a64:5c438d8d4e879e01",
-      "size_bytes": 937,
+      "digest": "fnv1a64:28dc3bf032d574af",
+      "size_bytes": 2077,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -26,7 +26,7 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/voxel_material_atlas.json",
-        "seed": "fvr07-voxel-material-atlas-v1",
+        "seed": "fvr09-natural-materials-v1",
         "date": "2026-07-05"
       },
       "external": false,
@@ -38,8 +38,8 @@
       "asset_id": "terrain-materials",
       "usage_category": "terrain-materials",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/palette/terrain_materials.json",
-      "digest": "fnv1a64:bfe77c0e98262b51",
-      "size_bytes": 623,
+      "digest": "fnv1a64:3dcd65f84e5cb47b",
+      "size_bytes": 910,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -48,7 +48,7 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/terrain_materials.json",
-        "seed": "fvr07-terrain-materials-v1",
+        "seed": "fvr09-terrain-top-side-materials-v1",
         "date": "2026-07-05"
       },
       "external": false,
@@ -60,8 +60,8 @@
       "asset_id": "water-materials",
       "usage_category": "water-materials",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/palette/water_materials.json",
-      "digest": "fnv1a64:e7c597779800c4a4",
-      "size_bytes": 332,
+      "digest": "fnv1a64:c776b79c3523d9e5",
+      "size_bytes": 415,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -70,7 +70,7 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/water_materials.json",
-        "seed": "fvr07-water-materials-v1",
+        "seed": "fvr09-water-wet-ground-materials-v1",
         "date": "2026-07-05"
       },
       "external": false,
@@ -82,8 +82,8 @@
       "asset_id": "decay-materials",
       "usage_category": "decay-materials",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/palette/decay_materials.json",
-      "digest": "fnv1a64:22e9db3785d6dae3",
-      "size_bytes": 373,
+      "digest": "fnv1a64:25098e7b168e7d62",
+      "size_bytes": 452,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -92,7 +92,7 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/decay_materials.json",
-        "seed": "fvr07-decay-materials-v1",
+        "seed": "fvr09-decay-rot-duff-materials-v1",
         "date": "2026-07-05"
       },
       "external": false,
@@ -104,8 +104,8 @@
       "asset_id": "resource-materials",
       "usage_category": "resource-materials",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/palette/resource_materials.json",
-      "digest": "fnv1a64:0c343fcf91115d5e",
-      "size_bytes": 316,
+      "digest": "fnv1a64:4654a779f040c90b",
+      "size_bytes": 393,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -114,7 +114,7 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/resource_materials.json",
-        "seed": "fvr07-resource-materials-v1",
+        "seed": "fvr09-resource-clover-materials-v1",
         "date": "2026-07-05"
       },
       "external": false,
@@ -126,8 +126,8 @@
       "asset_id": "hazard-materials",
       "usage_category": "hazard-materials",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/palette/hazard_materials.json",
-      "digest": "fnv1a64:b2c1e05deb1c9b35",
-      "size_bytes": 381,
+      "digest": "fnv1a64:cbb194c188d5e27c",
+      "size_bytes": 467,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -136,7 +136,7 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/hazard_materials.json",
-        "seed": "fvr07-hazard-materials-v1",
+        "seed": "fvr09-hazard-thorn-fungal-materials-v1",
         "date": "2026-07-05"
       },
       "external": false,
@@ -148,8 +148,8 @@
       "asset_id": "creatures",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creatures/creature_visuals.json",
-      "digest": "fnv1a64:261ba34c038600dc",
-      "size_bytes": 450,
+      "digest": "fnv1a64:7514a8a994aab999",
+      "size_bytes": 970,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -158,7 +158,7 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creatures/creature_visuals.json",
-        "seed": "fvr07-creatures-v1",
+        "seed": "fvr09-cute-biped-creatures-v1",
         "date": "2026-07-05"
       },
       "external": false,

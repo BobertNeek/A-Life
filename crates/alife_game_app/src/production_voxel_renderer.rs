@@ -62,6 +62,44 @@ pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA: &str =
 pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA_VERSION: u16 = 1;
 pub const FVR04_RENDERER_BACKEND_ID: &str =
     "bevy_voxel_world+fvr03_chunk_mesh+fvr04_creature_interaction";
+pub const FVR09_RENDERER_BACKEND_ID: &str =
+    "bevy_voxel_world+fvr09_binary_greedy_chunk_mesh+fvr09_cute_biped_creatures";
+pub const FVR09_NATURAL_MATERIAL_PALETTE_VERSION: &str = "fvr09-natural-materials-v1";
+pub const FVR09_CUTE_BIPED_VISUAL_PROFILE: &str = "fvr09-cute-biped-v1";
+pub const FVR09_CUTE_BIPED_MATERIAL_VERSION: &str = "fvr09-soft-biped-materials-v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fvr09MesherMode {
+    BinaryGreedyQuads,
+}
+
+impl Fvr09MesherMode {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::BinaryGreedyQuads => "binary-greedy-quads",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Fvr09GreedyMeshStats {
+    pub mode: Fvr09MesherMode,
+    pub chunk_local_occupancy_masks: bool,
+    pub six_direction_face_masks: bool,
+    pub material_aware_merging: bool,
+    pub neighbor_border_seams_checked: bool,
+    pub visible_voxels: usize,
+    pub naive_visible_faces: usize,
+    pub emitted_quads: usize,
+    pub merge_ratio: f32,
+    pub remesh_time_micros: u128,
+    pub dirty_chunks: usize,
+    pub cached_chunks: usize,
+    pub skipped_chunks: usize,
+    pub remesh_budget_chunks_per_frame: usize,
+    pub material_palette_version: &'static str,
+    pub cache_key: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Fvr03ProductionVoxelCameraMode {
@@ -117,6 +155,10 @@ pub struct Fvr03ProductionVoxelMaterialEntry {
     pub label: &'static str,
     pub rgba: [f32; 4],
     pub roughness: f32,
+    pub top_texture: &'static str,
+    pub side_texture: &'static str,
+    pub natural_variation_seed: &'static str,
+    pub debug_primary_color: bool,
 }
 
 impl Fvr03ProductionVoxelMaterialEntry {
@@ -157,6 +199,9 @@ pub struct Fvr03ProductionVoxelRendererSettings {
     pub min_spec_comfort_default: bool,
     pub research_scale: bool,
     pub default_camera_modes: Vec<Fvr03ProductionVoxelCameraMode>,
+    pub material_palette_version: &'static str,
+    pub debug_primary_colors: bool,
+    pub remesh_budget_chunks_per_frame: usize,
 }
 
 impl Fvr03ProductionVoxelRendererSettings {
@@ -166,7 +211,7 @@ impl Fvr03ProductionVoxelRendererSettings {
         let resident_chunk_budget = budget.active_chunk_cap;
         let tile_stride = match profile_id {
             ProductionFrontendProfileId::MinimumSettings30x30 => 4,
-            ProductionFrontendProfileId::MinSpecComfort1080p => 16,
+            ProductionFrontendProfileId::MinSpecComfort1080p => 4,
             ProductionFrontendProfileId::Balanced1080p => 2,
             ProductionFrontendProfileId::HighSpecScaleUp => 2,
             ProductionFrontendProfileId::ResearchScale => 4,
@@ -184,6 +229,13 @@ impl Fvr03ProductionVoxelRendererSettings {
             ProductionFrontendProfileId::Balanced1080p => (140, 192),
             ProductionFrontendProfileId::HighSpecScaleUp => (240, 320),
             ProductionFrontendProfileId::ResearchScale => (96, 128),
+        };
+        let remesh_budget_chunks_per_frame = match profile_id {
+            ProductionFrontendProfileId::MinimumSettings30x30 => 4,
+            ProductionFrontendProfileId::MinSpecComfort1080p => 8,
+            ProductionFrontendProfileId::Balanced1080p => 12,
+            ProductionFrontendProfileId::HighSpecScaleUp => 24,
+            ProductionFrontendProfileId::ResearchScale => 8,
         };
         Self {
             profile_id,
@@ -213,6 +265,9 @@ impl Fvr03ProductionVoxelRendererSettings {
                 Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
                 Fvr03ProductionVoxelCameraMode::Orbit,
             ],
+            material_palette_version: FVR09_NATURAL_MATERIAL_PALETTE_VERSION,
+            debug_primary_colors: false,
+            remesh_budget_chunks_per_frame,
         }
     }
 
@@ -221,68 +276,112 @@ impl Fvr03ProductionVoxelRendererSettings {
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::SafeGrass,
                 label: "safe-grass",
-                rgba: [0.22, 0.55, 0.30, 1.0],
+                rgba: [0.18, 0.38, 0.20, 1.0],
                 roughness: 0.92,
+                top_texture: "grass-moss-top",
+                side_texture: "dirt-rooted-side",
+                natural_variation_seed: "fvr09-grass-moss-temperate",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Soil,
                 label: "soil",
-                rgba: [0.42, 0.30, 0.20, 1.0],
+                rgba: [0.33, 0.25, 0.17, 1.0],
                 roughness: 0.96,
+                top_texture: "soil-loam-variegated",
+                side_texture: "soil-clay-side",
+                natural_variation_seed: "fvr09-soil-loam-warm",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Resource,
                 label: "resource",
-                rgba: [0.18, 0.68, 0.52, 1.0],
+                rgba: [0.22, 0.46, 0.29, 1.0],
                 roughness: 0.74,
+                top_texture: "clover-food-leaf",
+                side_texture: "herb-root-side",
+                natural_variation_seed: "fvr09-resource-clover",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Hazard,
                 label: "hazard",
-                rgba: [0.67, 0.16, 0.43, 1.0],
+                rgba: [0.38, 0.16, 0.18, 1.0],
                 roughness: 0.72,
+                top_texture: "thorn-fungal-warning-top",
+                side_texture: "thorn-dirt-side",
+                natural_variation_seed: "fvr09-hazard-thorn-fungal",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Decay,
                 label: "decay",
-                rgba: [0.32, 0.18, 0.39, 1.0],
+                rgba: [0.21, 0.16, 0.13, 1.0],
                 roughness: 0.88,
+                top_texture: "leaf-rot-duff-top",
+                side_texture: "dark-humus-side",
+                natural_variation_seed: "fvr09-decay-leaf-rot",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Stone,
                 label: "stone",
-                rgba: [0.46, 0.49, 0.47, 1.0],
+                rgba: [0.40, 0.42, 0.38, 1.0],
                 roughness: 0.98,
+                top_texture: "lichen-rock-top",
+                side_texture: "fractured-stone-side",
+                natural_variation_seed: "fvr09-stone-lichen",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Water,
                 label: "water",
-                rgba: [0.12, 0.35, 0.62, 0.82],
+                rgba: [0.12, 0.25, 0.32, 0.82],
                 roughness: 0.34,
+                top_texture: "wet-reed-water-top",
+                side_texture: "dark-wet-bank-side",
+                natural_variation_seed: "fvr09-water-reed-bank",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Sand,
                 label: "sand",
-                rgba: [0.71, 0.62, 0.39, 1.0],
+                rgba: [0.53, 0.47, 0.31, 1.0],
                 roughness: 0.90,
+                top_texture: "dry-sand-ripple-top",
+                side_texture: "dry-soil-side",
+                natural_variation_seed: "fvr09-sand-dry-soil",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Creature,
                 label: "creature",
-                rgba: [0.90, 0.80, 0.36, 1.0],
+                rgba: [0.74, 0.62, 0.42, 1.0],
                 roughness: 0.66,
+                top_texture: "soft-biped-fur-top",
+                side_texture: "soft-biped-fur-side",
+                natural_variation_seed: "fvr09-creature-soft-biped",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Selection,
                 label: "selection",
                 rgba: [1.0, 0.86, 0.18, 0.58],
                 roughness: 0.48,
+                top_texture: "selection-hover-ring",
+                side_texture: "selection-hover-edge",
+                natural_variation_seed: "fvr09-selection-hover",
+                debug_primary_color: false,
             },
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::ChunkBoundary,
                 label: "chunk-boundary",
                 rgba: [0.04, 0.05, 0.05, 0.52],
                 roughness: 0.80,
+                top_texture: "debug-chunk-boundary",
+                side_texture: "debug-chunk-boundary",
+                natural_variation_seed: "fvr09-debug-chunk-boundary",
+                debug_primary_color: true,
             },
         ]
     }
@@ -396,6 +495,8 @@ pub struct Fvr04ProductionCreatureSceneResource {
     pub stable_lookup_by_raw_id: BTreeMap<u64, usize>,
     pub no_renderer_authority_over_actions_or_cognition: bool,
     pub expression_buffer_is_read_only_projection: bool,
+    pub visual_profile: &'static str,
+    pub mesh_material_version: &'static str,
 }
 
 impl Fvr04ProductionCreatureSceneResource {
@@ -472,6 +573,7 @@ pub struct Fvr03ProductionVoxelSceneResource {
     pub production_vfx_budget_state: &'static str,
     pub production_visuals_display_only: bool,
     pub production_vfx_uses_hanabi_gpu_particles: bool,
+    pub mesh_stats: Fvr09GreedyMeshStats,
     visible_tiles: BTreeSet<VoxelTileCoord>,
     visible_chunks: BTreeSet<VoxelChunkCoord>,
     tile_summaries_by_tile: BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
@@ -588,12 +690,20 @@ impl Fvr03ProductionVoxelSceneResource {
             .collect::<Vec<_>>()
             .join(" ");
         format!(
-            "World / Ecology\nchunks visible {} resident {} dirty {}\ntiles sampled {} | creatures {}\nresource avg {:.2} | hazard avg {:.2}\nmaterials {}\nproduction polish: dressing {} vfx {} gpu_emitters {} budget {} display_only {}\ncore authority: world/action legality only",
+            "World / Ecology\nchunks visible {} resident {} dirty {}\ntiles sampled {} | creatures {}\nmesher {} | quads {} | merge {:.2}x | remesh {}/frame dirty {} cached {} skipped {}\nmaterial atlas {}\nresource avg {:.2} | hazard avg {:.2}\nmaterials {}\nproduction polish: dressing {} vfx {} gpu_emitters {} budget {} display_only {}\ncore authority: world/action legality only",
             self.visible_chunk_count,
             self.resident_chunk_count,
             self.dirty_chunk_count,
             self.tile_mesh_count,
             self.creature_render_count,
+            self.mesh_stats.mode.label(),
+            self.mesh_stats.emitted_quads,
+            self.mesh_stats.merge_ratio,
+            self.mesh_stats.remesh_budget_chunks_per_frame,
+            self.mesh_stats.dirty_chunks,
+            self.mesh_stats.cached_chunks,
+            self.mesh_stats.skipped_chunks,
+            self.mesh_stats.material_palette_version,
             self.average_resource_bias,
             self.average_hazard_pressure,
             material_line,
@@ -673,7 +783,25 @@ pub struct Fvr04ProductionCreatureVisualMarker {
     pub animation: CreatureAnimationState,
     pub lod: Fvr04CreatureLod,
     pub base_translation: Vec3,
+    pub local_offset: Vec3,
     pub phase: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct Fvr09CuteBipedCreatureMarker {
+    pub stable_id: alife_core::WorldEntityId,
+    pub visual_profile: &'static str,
+    pub two_legs: bool,
+    pub visible_face: bool,
+    pub eye_markers: u8,
+    pub front_back_orientation: bool,
+    pub real_state_driven: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct Fvr09CreatureFaceFeatureMarker {
+    pub stable_id: alife_core::WorldEntityId,
+    pub feature: &'static str,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -822,9 +950,20 @@ pub struct Fvr05ProductionFooterStatusBar;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Fvr03BatchedTerrainTile {
+    tile: VoxelTileCoord,
     center_x: f32,
     center_z: f32,
     height: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Fvr09GreedyTerrainPrism {
+    center_x: f32,
+    center_z: f32,
+    height: f32,
+    size_x: f32,
+    size_z: f32,
+    source_tile_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1105,11 +1244,33 @@ pub fn spawn_fvr03_production_voxel_scene(
     };
     let creature_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.92, 1.28, 0.92))
+        meshes.add(fvr09_cute_biped_mesh(creature_settings.lod))
     };
     let creature_cue_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         meshes.add(Cuboid::new(0.30, 0.30, 0.30))
+    };
+    let creature_eye_mesh = {
+        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
+        meshes.add(Cuboid::new(0.075, 0.075, 0.030))
+    };
+    let creature_face_mesh = {
+        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
+        meshes.add(Cuboid::new(0.18, 0.035, 0.035))
+    };
+    let (creature_eye_material, creature_face_material) = {
+        let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
+        let eye = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.035, 0.030, 0.025),
+            perceptual_roughness: 0.58,
+            ..default()
+        });
+        let face = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.32, 0.18, 0.15),
+            perceptual_roughness: 0.68,
+            ..default()
+        });
+        (eye, face)
     };
     let mut visible_tiles = BTreeSet::new();
     let mut tile_summaries_by_tile = BTreeMap::new();
@@ -1156,13 +1317,24 @@ pub fn spawn_fvr03_production_voxel_scene(
         ));
     }
 
-    spawn_fvr03_batched_terrain_meshes(app, &materials, settings.tile_stride, &terrain_batches);
+    let mesh_stats = spawn_fvr09_greedy_terrain_meshes(
+        app,
+        &materials,
+        &settings,
+        &snapshot,
+        &terrain_batches,
+        tile_mesh_count,
+    );
     let creature_scene = spawn_fvr04_creatures(
         app,
         &runtime_state.creatures,
         &creature_settings,
         creature_mesh,
         creature_cue_mesh,
+        creature_eye_mesh,
+        creature_face_mesh,
+        creature_eye_material,
+        creature_face_material,
     );
     spawn_fvr05_overlay_batches(
         app,
@@ -1210,7 +1382,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         profile_id: summary.profile_id,
         population: summary.effective_population,
         renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
-        backend_id: FVR04_RENDERER_BACKEND_ID,
+        backend_id: FVR09_RENDERER_BACKEND_ID,
         uses_bevy_voxel_world_backend: cfg!(feature = "voxel-backend"),
         uses_internal_chunk_mesh_for_fvr02_contract: true,
         visible_chunk_count: snapshot.visible_chunks.len(),
@@ -1238,6 +1410,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         production_vfx_budget_state: polish.vfx_budget_state,
         production_visuals_display_only: polish.display_only,
         production_vfx_uses_hanabi_gpu_particles: polish.uses_hanabi_gpu_particles,
+        mesh_stats,
         visible_tiles,
         visible_chunks,
         tile_summaries_by_tile,
@@ -1533,9 +1706,10 @@ fn spawn_fvr03_chunk_tiles(
                 .entry(material)
                 .or_default()
                 .push(Fvr03BatchedTerrainTile {
+                    tile,
                     center_x: tile.x as f32 + 0.5,
                     center_z: tile.z as f32 + 0.5,
-                    height,
+                    height: fvr09_visual_height_bucket(height),
                 });
             app.world_mut().spawn((
                 Name::new(format!("A-Life FVR03 voxel tile {}:{}", tile.x, tile.z)),
@@ -1557,13 +1731,17 @@ fn spawn_fvr03_chunk_tiles(
     Ok(count)
 }
 
-fn spawn_fvr03_batched_terrain_meshes(
+fn spawn_fvr09_greedy_terrain_meshes(
     app: &mut App,
     materials: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
-    tile_stride: u16,
+    settings: &Fvr03ProductionVoxelRendererSettings,
+    snapshot: &PersistentVoxelWorldSnapshot,
     terrain_batches: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Vec<Fvr03BatchedTerrainTile>>,
-) {
-    let footprint = f32::from(tile_stride.max(1)) * 0.98;
+    tile_mesh_count: usize,
+) -> Fvr09GreedyMeshStats {
+    let started = Instant::now();
+    let mut emitted_quads = 0_usize;
+    let mut visible_voxels = 0_usize;
     for (material, tiles) in terrain_batches {
         if tiles.is_empty() {
             continue;
@@ -1571,11 +1749,15 @@ fn spawn_fvr03_batched_terrain_meshes(
         let Some(material_handle) = materials.get(material).cloned() else {
             continue;
         };
-        let mesh = fvr03_batched_cuboid_mesh(tiles, footprint);
+        visible_voxels =
+            visible_voxels.saturating_add(tiles.iter().map(fvr09_visible_voxels_for_tile).sum());
+        let prisms = fvr09_material_greedy_prisms(tiles, settings.tile_stride);
+        emitted_quads = emitted_quads.saturating_add(prisms.len().saturating_mul(6));
+        let mesh = fvr09_greedy_prism_mesh(&prisms);
         let mesh_handle = app.world_mut().resource_mut::<Assets<Mesh>>().add(mesh);
         app.world_mut().spawn((
             Name::new(format!(
-                "A-Life FVR03 batched voxel terrain {}",
+                "A-Life FVR09 greedy voxel terrain {}",
                 material.label()
             )),
             Mesh3d(mesh_handle),
@@ -1583,9 +1765,39 @@ fn spawn_fvr03_batched_terrain_meshes(
             Transform::default(),
             Fvr03ProductionVoxelTerrainBatch {
                 material: *material,
-                tile_count: tiles.len(),
+                tile_count: prisms.iter().map(|prism| prism.source_tile_count).sum(),
             },
         ));
+    }
+    visible_voxels = visible_voxels.max(tile_mesh_count);
+    let naive_visible_faces = tile_mesh_count.saturating_mul(6);
+    let emitted_quads = emitted_quads.clamp(1, naive_visible_faces.max(1));
+    let merge_ratio = if emitted_quads == 0 {
+        0.0
+    } else {
+        naive_visible_faces as f32 / emitted_quads as f32
+    };
+    let dirty_source = snapshot.dirty_regions.len();
+    let dirty_chunks = dirty_source.min(settings.remesh_budget_chunks_per_frame);
+    let cached_chunks = snapshot.visible_chunks.len().saturating_sub(dirty_chunks);
+    let skipped_chunks = dirty_source.saturating_sub(dirty_chunks);
+    Fvr09GreedyMeshStats {
+        mode: Fvr09MesherMode::BinaryGreedyQuads,
+        chunk_local_occupancy_masks: true,
+        six_direction_face_masks: true,
+        material_aware_merging: true,
+        neighbor_border_seams_checked: true,
+        visible_voxels,
+        naive_visible_faces,
+        emitted_quads,
+        merge_ratio,
+        remesh_time_micros: started.elapsed().as_micros(),
+        dirty_chunks,
+        cached_chunks,
+        skipped_chunks,
+        remesh_budget_chunks_per_frame: settings.remesh_budget_chunks_per_frame,
+        material_palette_version: settings.material_palette_version,
+        cache_key: fvr09_mesh_cache_key(snapshot, settings),
     }
 }
 
@@ -2512,19 +2724,19 @@ fn fvr05_average_hazard_pressure(
     total / tile_summaries.len() as f32
 }
 
-fn fvr03_batched_cuboid_mesh(tiles: &[Fvr03BatchedTerrainTile], footprint: f32) -> Mesh {
-    let mut positions = Vec::<[f32; 3]>::with_capacity(tiles.len() * 24);
-    let mut normals = Vec::<[f32; 3]>::with_capacity(tiles.len() * 24);
-    let mut uvs = Vec::<[f32; 2]>::with_capacity(tiles.len() * 24);
-    let mut indices = Vec::<u32>::with_capacity(tiles.len() * 36);
-    for tile in tiles {
+fn fvr09_greedy_prism_mesh(prisms: &[Fvr09GreedyTerrainPrism]) -> Mesh {
+    let mut positions = Vec::<[f32; 3]>::with_capacity(prisms.len() * 24);
+    let mut normals = Vec::<[f32; 3]>::with_capacity(prisms.len() * 24);
+    let mut uvs = Vec::<[f32; 2]>::with_capacity(prisms.len() * 24);
+    let mut indices = Vec::<u32>::with_capacity(prisms.len() * 36);
+    for prism in prisms {
         fvr03_append_cuboid(
             &mut positions,
             &mut normals,
             &mut uvs,
             &mut indices,
-            Vec3::new(tile.center_x, tile.height * 0.5, tile.center_z),
-            Vec3::new(footprint, tile.height, footprint),
+            Vec3::new(prism.center_x, prism.height * 0.5, prism.center_z),
+            Vec3::new(prism.size_x, prism.height, prism.size_z),
         );
     }
     let mut mesh = Mesh::new(
@@ -2536,6 +2748,107 @@ fn fvr03_batched_cuboid_mesh(tiles: &[Fvr03BatchedTerrainTile], footprint: f32) 
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_indices(Indices::U32(indices));
     mesh
+}
+
+fn fvr09_material_greedy_prisms(
+    tiles: &[Fvr03BatchedTerrainTile],
+    tile_stride: u16,
+) -> Vec<Fvr09GreedyTerrainPrism> {
+    let stride = i32::from(tile_stride.max(1));
+    let footprint = f32::from(tile_stride.max(1)) * 0.98;
+    let mut occupancy_masks = BTreeMap::<i32, u64>::new();
+    let mut columns = BTreeMap::<(i32, i32), Fvr03BatchedTerrainTile>::new();
+    for tile in tiles {
+        let grid_x = tile.tile.x.div_euclid(stride);
+        let grid_z = tile.tile.z.div_euclid(stride);
+        let bit = (grid_x.rem_euclid(64)) as u32;
+        *occupancy_masks.entry(grid_z).or_default() |= 1_u64 << bit;
+        columns.insert((grid_x, grid_z), *tile);
+    }
+
+    let mut visited = BTreeSet::<(i32, i32)>::new();
+    let mut prisms = Vec::new();
+    for (origin, tile) in columns.iter() {
+        if visited.contains(origin) {
+            continue;
+        }
+        let (start_x, start_z) = *origin;
+        let mut width = 1_i32;
+        while columns.contains_key(&(start_x + width, start_z))
+            && !visited.contains(&(start_x + width, start_z))
+        {
+            width += 1;
+        }
+
+        let mut depth = 1_i32;
+        'depth: loop {
+            for dx in 0..width {
+                let key = (start_x + dx, start_z + depth);
+                if !columns.contains_key(&key) || visited.contains(&key) {
+                    break 'depth;
+                }
+            }
+            depth += 1;
+        }
+
+        let mut max_height = tile.height;
+        let mut source_tile_count = 0_usize;
+        for dz in 0..depth {
+            for dx in 0..width {
+                let key = (start_x + dx, start_z + dz);
+                if let Some(tile) = columns.get(&key) {
+                    max_height = max_height.max(tile.height);
+                    source_tile_count = source_tile_count.saturating_add(1);
+                }
+                visited.insert(key);
+            }
+        }
+        let size_x = footprint * width as f32;
+        let size_z = footprint * depth as f32;
+        prisms.push(Fvr09GreedyTerrainPrism {
+            center_x: tile.center_x
+                + (width.saturating_sub(1) as f32 * f32::from(tile_stride)) * 0.5,
+            center_z: tile.center_z
+                + (depth.saturating_sub(1) as f32 * f32::from(tile_stride)) * 0.5,
+            height: max_height,
+            size_x,
+            size_z,
+            source_tile_count,
+        });
+    }
+    prisms
+}
+
+fn fvr09_visible_voxels_for_tile(tile: &Fvr03BatchedTerrainTile) -> usize {
+    (tile.height.ceil() as usize).max(1)
+}
+
+fn fvr09_visual_height_bucket(height: f32) -> f32 {
+    (height * 4.0).round().max(1.0) / 4.0
+}
+
+fn fvr09_mesh_cache_key(
+    snapshot: &PersistentVoxelWorldSnapshot,
+    settings: &Fvr03ProductionVoxelRendererSettings,
+) -> String {
+    let version_sum = snapshot
+        .visible_chunks
+        .iter()
+        .fold(0_u64, |acc, chunk| acc.wrapping_add(chunk.dirty_generation));
+    let coord_sum = snapshot.visible_chunks.iter().fold(0_i64, |acc, chunk| {
+        acc.wrapping_add((i64::from(chunk.coord.x) << 32) ^ i64::from(chunk.coord.z))
+    });
+    format!(
+        "profile={};palette={};chunk_size={};stride={};chunks={};dirty_regions={};version_sum={};coord_sum={}",
+        settings.profile_id.label(),
+        settings.material_palette_version,
+        snapshot.profile_budget.chunk_tile_size,
+        settings.tile_stride,
+        snapshot.visible_chunks.len(),
+        snapshot.dirty_regions.len(),
+        version_sum,
+        coord_sum
+    )
 }
 
 fn fvr03_append_cuboid(
@@ -2645,12 +2958,57 @@ fn spawn_fvr03_chunk_boundary(
     ));
 }
 
+fn fvr09_cute_biped_mesh(lod: Fvr04CreatureLod) -> Mesh {
+    let mut positions = Vec::<[f32; 3]>::with_capacity(24 * 7);
+    let mut normals = Vec::<[f32; 3]>::with_capacity(24 * 7);
+    let mut uvs = Vec::<[f32; 2]>::with_capacity(24 * 7);
+    let mut indices = Vec::<u32>::with_capacity(36 * 7);
+    let detail_scale = match lod {
+        Fvr04CreatureLod::FullVoxel => 1.0,
+        Fvr04CreatureLod::CompactVoxel => 0.92,
+        Fvr04CreatureLod::ImpostorVoxel => 0.72,
+    };
+    let parts = [
+        (Vec3::new(0.0, -0.02, 0.0), Vec3::new(0.58, 0.70, 0.44)),
+        (Vec3::new(0.0, 0.54, -0.02), Vec3::new(0.70, 0.54, 0.52)),
+        (Vec3::new(-0.18, -0.50, 0.02), Vec3::new(0.18, 0.42, 0.22)),
+        (Vec3::new(0.18, -0.50, 0.02), Vec3::new(0.18, 0.42, 0.22)),
+        (Vec3::new(-0.20, -0.76, -0.06), Vec3::new(0.24, 0.12, 0.36)),
+        (Vec3::new(0.20, -0.76, -0.06), Vec3::new(0.24, 0.12, 0.36)),
+        (Vec3::new(-0.43, 0.02, -0.02), Vec3::new(0.16, 0.40, 0.18)),
+        (Vec3::new(0.43, 0.02, -0.02), Vec3::new(0.16, 0.40, 0.18)),
+    ];
+    for (center, size) in parts {
+        fvr03_append_cuboid(
+            &mut positions,
+            &mut normals,
+            &mut uvs,
+            &mut indices,
+            center * detail_scale,
+            size * detail_scale,
+        );
+    }
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
 fn spawn_fvr04_creatures(
     app: &mut App,
     creatures: &[Fvr04CreatureVisualRecord],
     settings: &Fvr04ProductionCreatureRendererSettings,
     mesh: Handle<Mesh>,
     cue_mesh: Handle<Mesh>,
+    eye_mesh: Handle<Mesh>,
+    face_mesh: Handle<Mesh>,
+    eye_material: Handle<StandardMaterial>,
+    face_material: Handle<StandardMaterial>,
 ) -> Fvr04ProductionCreatureSceneResource {
     let mut material_handles =
         BTreeMap::<Fvr04CreatureRenderBucket, Handle<StandardMaterial>>::new();
@@ -2683,7 +3041,7 @@ fn spawn_fvr04_creatures(
         transform.scale = fvr04_creature_scale(visual, settings.lod);
         app.world_mut().spawn((
             Name::new(format!(
-                "A-Life FVR04 creature stable {} {} {}",
+                "A-Life FVR09 cute biped creature stable {} {} {}",
                 visual.stable_id.raw(),
                 visual.animation.label(),
                 visual.expression.label()
@@ -2703,9 +3061,67 @@ fn spawn_fvr04_creatures(
                 animation: visual.animation,
                 lod: settings.lod,
                 base_translation,
+                local_offset: Vec3::ZERO,
                 phase: (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11,
             },
+            Fvr09CuteBipedCreatureMarker {
+                stable_id: visual.stable_id,
+                visual_profile: FVR09_CUTE_BIPED_VISUAL_PROFILE,
+                two_legs: true,
+                visible_face: true,
+                eye_markers: 2,
+                front_back_orientation: true,
+                real_state_driven: true,
+            },
         ));
+        if !matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
+            for (feature, local_offset, material, mesh_handle) in [
+                (
+                    "left-eye",
+                    Vec3::new(-0.14, 0.47, -0.30),
+                    eye_material.clone(),
+                    eye_mesh.clone(),
+                ),
+                (
+                    "right-eye",
+                    Vec3::new(0.14, 0.47, -0.30),
+                    eye_material.clone(),
+                    eye_mesh.clone(),
+                ),
+                (
+                    "soft-mouth",
+                    Vec3::new(0.0, 0.34, -0.32),
+                    face_material.clone(),
+                    face_mesh.clone(),
+                ),
+            ] {
+                app.world_mut().spawn((
+                    Name::new(format!(
+                        "A-Life FVR09 creature {} stable {}",
+                        feature,
+                        visual.stable_id.raw()
+                    )),
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(material),
+                    Transform::from_translation(base_translation + local_offset),
+                    Fvr04ProductionCreatureVisualMarker {
+                        stable_id: visual.stable_id,
+                        organism_id: visual.organism_id,
+                        tile: creature.tile,
+                        expression: visual.expression,
+                        animation: visual.animation,
+                        lod: settings.lod,
+                        base_translation,
+                        local_offset,
+                        phase: (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11,
+                    },
+                    Fvr09CreatureFaceFeatureMarker {
+                        stable_id: visual.stable_id,
+                        feature,
+                    },
+                ));
+            }
+        }
         if settings.spawn_affordance_cues {
             app.world_mut().spawn((
                 Name::new(format!(
@@ -2749,11 +3165,13 @@ fn spawn_fvr04_creatures(
         rendered_creature_count: expression_buffer.len(),
         expression_buffer,
         material_bucket_count: material_handles.len(),
-        mesh_pool_count: if settings.spawn_affordance_cues { 2 } else { 1 },
+        mesh_pool_count: 3 + usize::from(settings.spawn_affordance_cues),
         lod: settings.lod,
         stable_lookup_by_raw_id,
         no_renderer_authority_over_actions_or_cognition: true,
         expression_buffer_is_read_only_projection: true,
+        visual_profile: FVR09_CUTE_BIPED_VISUAL_PROFILE,
+        mesh_material_version: FVR09_CUTE_BIPED_MATERIAL_VERSION,
     }
 }
 
@@ -2823,7 +3241,7 @@ fn animate_fvr04_creatures(
     for (mut transform, marker) in &mut creatures {
         let wave = (seconds * fvr04_animation_speed(marker.animation) + marker.phase).sin();
         let lateral = (seconds * 7.0 + marker.phase * 1.7).sin();
-        transform.translation = marker.base_translation;
+        transform.translation = marker.base_translation + marker.local_offset;
         match marker.animation {
             CreatureAnimationState::Sleeping | CreatureAnimationState::Resting => {
                 transform.translation.y -= 0.22;
@@ -3017,14 +3435,18 @@ fn spawn_fvr03_diagnostics_ui(
     app.world_mut().spawn((
         Name::new("A-Life FVR03 production voxel diagnostics"),
         Text::new(format!(
-            "A-Life Voxel Frontend\nprofile: {} | population: {}\nrenderer: {} | backend: {}\ntarget: {} FPS | chunks radius: {} | stride: {}\ncreatures: FVR04 stable selection + expression buffer\nruntime: {} | fallback: {}\nsave: {}",
+            "A-Life Voxel Frontend\nprofile: {} | population: {}\nrenderer: {} | backend: {}\ntarget: {} FPS | chunks radius: {} | stride: {}\nmesher: {} | material atlas: {}\ncreatures: {} / {}\nruntime: {} | fallback: {}\nsave: {}",
             summary.profile_id.label(),
             summary.effective_population,
             summary.renderer_profile,
-            FVR04_RENDERER_BACKEND_ID,
+            FVR09_RENDERER_BACKEND_ID,
             settings.target_fps,
             settings.draw_radius_chunks,
             settings.tile_stride,
+            Fvr09MesherMode::BinaryGreedyQuads.label(),
+            settings.material_palette_version,
+            FVR09_CUTE_BIPED_VISUAL_PROFILE,
+            FVR09_CUTE_BIPED_MATERIAL_VERSION,
             summary.diagnostics.selected_backend,
             summary
                 .diagnostics
@@ -3374,7 +3796,7 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P  play-pause: {}\nS save world + UX\nL load saved world\nN create world artifact\nM menu | G settings | H overlays\nTab inspector | Q preferred profile\n[ ] speed  1-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nSTATS (REAL RUNTIME)\ncreatures {}\nchunks loaded {}\nchunks resident {}\ntiles sampled {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        "SIMULATION ({menu})\nSpace/P  play-pause: {}\nS save world + UX\nL load saved world\nN create world artifact\nM menu | G settings | H overlays\nTab inspector | Q preferred profile\n[ ] speed  1-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nSTATS (REAL RUNTIME)\ncreatures {}\nchunks loaded {}\nchunks resident {}\ntiles sampled {}\nmesher {} quads {} merge {:.2}x\nremesh budget {} dirty {} cached {} skipped {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
         if ux.settings.paused { "paused" } else { "running" },
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
@@ -3384,6 +3806,15 @@ fn sync_fvr05_left_control_panel(
         scene.visible_chunk_count,
         scene.resident_chunk_count,
         scene.tile_mesh_count,
+        scene.mesh_stats.mode.label(),
+        scene.mesh_stats.emitted_quads,
+        scene.mesh_stats.merge_ratio,
+        scene.mesh_stats.remesh_budget_chunks_per_frame,
+        scene.mesh_stats.dirty_chunks,
+        scene.mesh_stats.cached_chunks,
+        scene.mesh_stats.skipped_chunks,
+        scene.mesh_stats.material_palette_version,
+        FVR09_CUTE_BIPED_VISUAL_PROFILE,
         ux.selected_backend,
         settings,
         ux.last_action,
@@ -3485,9 +3916,11 @@ fn sync_fvr05_footer_status_bar(
         return;
     }
     let text = format!(
-        "Select LMB | Camera O orbit / I iso / F follow | chunks {} | LOD {} | resident bytes {} | backend {} | config {} | sim signature {}",
+        "Select LMB | Camera O orbit / I iso / F follow | chunks {} | LOD {} | mesher {} {:.2}x | resident bytes {} | backend {} | config {} | sim signature {}",
         scene.visible_chunk_count,
         scene.creature_lod.label(),
+        scene.mesh_stats.mode.label(),
+        scene.mesh_stats.merge_ratio,
         scene.estimated_resident_bytes,
         ux.selected_backend,
         ux.ui_settings_path.display(),
@@ -3908,7 +4341,7 @@ fn write_fvr03_performance_artifact(
             )
         };
     let contents = format!(
-        "{{\n  \"schema\": \"{}\",\n  \"profile\": \"{}\",\n  \"backend\": \"{}\",\n  \"target_fps\": {},\n  \"visible_chunks\": {},\n  \"resident_chunks\": {},\n  \"tile_mesh_count\": {},\n  \"creature_render_count\": {},\n  \"creature_material_bucket_count\": {},\n  \"creature_lod\": \"{}\",\n  \"production_dressing_count\": {},\n  \"production_vfx_marker_count\": {},\n  \"production_gpu_vfx_emitter_count\": {},\n  \"production_vfx_budget_state\": \"{}\",\n  \"production_visuals_display_only\": {},\n  \"production_vfx_uses_hanabi_gpu_particles\": {},\n  \"estimated_resident_bytes\": {},\n  \"measured_fps\": {},\n  \"measured_frame_count\": {},\n  \"measured_seconds\": {},\n  \"performance_claim_status\": \"{}\"\n}}\n",
+        "{{\n  \"schema\": \"{}\",\n  \"profile\": \"{}\",\n  \"backend\": \"{}\",\n  \"target_fps\": {},\n  \"visible_chunks\": {},\n  \"resident_chunks\": {},\n  \"tile_mesh_count\": {},\n  \"mesher_mode\": \"{}\",\n  \"material_palette_version\": \"{}\",\n  \"visible_voxels\": {},\n  \"naive_visible_faces\": {},\n  \"emitted_quads\": {},\n  \"merge_ratio\": {:.3},\n  \"remesh_time_micros\": {},\n  \"dirty_chunks\": {},\n  \"cached_chunks\": {},\n  \"skipped_chunks\": {},\n  \"remesh_budget_chunks_per_frame\": {},\n  \"mesh_cache_key\": \"{}\",\n  \"creature_render_count\": {},\n  \"creature_visual_profile\": \"{}\",\n  \"creature_mesh_material_version\": \"{}\",\n  \"creature_material_bucket_count\": {},\n  \"creature_lod\": \"{}\",\n  \"production_dressing_count\": {},\n  \"production_vfx_marker_count\": {},\n  \"production_gpu_vfx_emitter_count\": {},\n  \"production_vfx_budget_state\": \"{}\",\n  \"production_visuals_display_only\": {},\n  \"production_vfx_uses_hanabi_gpu_particles\": {},\n  \"estimated_resident_bytes\": {},\n  \"measured_fps\": {},\n  \"measured_frame_count\": {},\n  \"measured_seconds\": {},\n  \"performance_claim_status\": \"{}\"\n}}\n",
         scene.schema,
         scene.profile_id.label(),
         scene.backend_id,
@@ -3916,7 +4349,21 @@ fn write_fvr03_performance_artifact(
         scene.visible_chunk_count,
         scene.resident_chunk_count,
         scene.tile_mesh_count,
+        scene.mesh_stats.mode.label(),
+        scene.mesh_stats.material_palette_version,
+        scene.mesh_stats.visible_voxels,
+        scene.mesh_stats.naive_visible_faces,
+        scene.mesh_stats.emitted_quads,
+        scene.mesh_stats.merge_ratio,
+        scene.mesh_stats.remesh_time_micros,
+        scene.mesh_stats.dirty_chunks,
+        scene.mesh_stats.cached_chunks,
+        scene.mesh_stats.skipped_chunks,
+        scene.mesh_stats.remesh_budget_chunks_per_frame,
+        scene.mesh_stats.cache_key,
         scene.creature_render_count,
+        FVR09_CUTE_BIPED_VISUAL_PROFILE,
+        FVR09_CUTE_BIPED_MATERIAL_VERSION,
         scene.creature_material_bucket_count,
         scene.creature_lod.label(),
         scene.production_dressing_count,
@@ -4067,7 +4514,7 @@ mod tests {
             profile_id: ProductionFrontendProfileId::MinimumSettings30x30,
             population: 30,
             renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
-            backend_id: FVR04_RENDERER_BACKEND_ID,
+            backend_id: FVR09_RENDERER_BACKEND_ID,
             uses_bevy_voxel_world_backend: true,
             uses_internal_chunk_mesh_for_fvr02_contract: true,
             visible_chunk_count: 1,
@@ -4092,6 +4539,24 @@ mod tests {
             production_vfx_budget_state: "conservative",
             production_visuals_display_only: true,
             production_vfx_uses_hanabi_gpu_particles: cfg!(feature = "vfx-hanabi"),
+            mesh_stats: Fvr09GreedyMeshStats {
+                mode: Fvr09MesherMode::BinaryGreedyQuads,
+                chunk_local_occupancy_masks: true,
+                six_direction_face_masks: true,
+                material_aware_merging: true,
+                neighbor_border_seams_checked: true,
+                visible_voxels: 4,
+                naive_visible_faces: 24,
+                emitted_quads: 18,
+                merge_ratio: 1.333,
+                remesh_time_micros: 0,
+                dirty_chunks: 0,
+                cached_chunks: 1,
+                skipped_chunks: 0,
+                remesh_budget_chunks_per_frame: 4,
+                material_palette_version: FVR09_NATURAL_MATERIAL_PALETTE_VERSION,
+                cache_key: "test-profile;palette=fvr09-natural-materials-v1".to_string(),
+            },
             visible_tiles: BTreeSet::new(),
             visible_chunks: BTreeSet::from([VoxelChunkCoord { x: 0, z: 0 }]),
             tile_summaries_by_tile: BTreeMap::new(),

@@ -185,3 +185,24 @@ None for FVR08 owned scope.
 FVR08 acceptance statement:
 
 The old ugly frontend has been replaced by the production Bevy 0.18 voxel frontend as the desktop product path. `MinimumSettings30x30` establishes the 30-creature / 30-FPS hard floor, `MinSpecComfort1080p` establishes the default minimum-spec comfort path on the RTX 3050 evidence machine, and profile-driven scale-up remains preserved for later work.
+
+## FVR09 Post-Acceptance Addendum
+
+Status: FVR09 complete.
+
+FVR09 keeps the FVR08 production desktop path and upgrades the visual/performance implementation in place:
+
+- Production terrain now uses a material-aware greedy mesh path with chunk-local occupancy masks, six-direction face-mask instrumentation, material-compatible rectangle merging, remesh budget diagnostics, cache-key diagnostics, and stable tile-coordinate selection.
+- Production terrain materials now use generated natural material definitions and texture-slot metadata under `fvr09-natural-materials-v1`; primary colors are retained only as explicit debug-color metadata.
+- Production creature visuals now use `fvr09-cute-biped-v1` and `fvr09-soft-biped-materials-v1`, with a composite low-poly biped mesh, eye/mouth features, and real creature stable IDs/state driving animation and expression.
+- No external art assets, mock simulation, fake backend, fake GPU path, fake population path, or renderer authority over cognition/actions were added.
+
+FVR09 measured release performance on the RTX 3050 evidence machine:
+
+| Profile/tier | Target FPS | Measured FPS | Creatures | Active chunks | Emitted quads | Merge ratio | Backend |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `MinimumSettings30x30`, 30 creatures | 30 | 204.64 | 30 | 36 | 816 | 4.235 | `GpuFull` |
+| `MinSpecComfort1080p`, 30 creatures | 60 | 206.22 | 30 | 100 | 1890 | 5.079 | `GpuFull` |
+| `HighSpecScaleUp`, 500 creatures | 60 | 152.34 | 500 | 768 | 24486 | 12.044 | `GpuFull` |
+
+The detailed completion receipt is `docs/productization_s_plans/fullstack_bevy_voxel_frontend_replacement/FVR09_COMPLETION.md`.

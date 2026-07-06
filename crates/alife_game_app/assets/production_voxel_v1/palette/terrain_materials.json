@@ -8,9 +8,9 @@
     "minimum_profile": "coarse tiles remain distinguishable at 0.80 internal scale"
   },
   "variants": [
-    { "id": "safe-grass", "albedo_ref": "safe-grass", "shape": "soft-block" },
-    { "id": "soil-path", "albedo_ref": "soil", "shape": "worn-block" },
-    { "id": "stone-rough", "albedo_ref": "stone", "shape": "chipped-block" },
-    { "id": "sand-bank", "albedo_ref": "sand", "shape": "flat-block" }
+    { "id": "safe-grass", "albedo_ref": "safe-grass", "top_texture": "grass-moss-top", "side_texture": "dirt-rooted-side", "shape": "soft-block" },
+    { "id": "soil-path", "albedo_ref": "soil", "top_texture": "soil-loam-variegated", "side_texture": "soil-clay-side", "shape": "worn-block" },
+    { "id": "stone-rough", "albedo_ref": "stone", "top_texture": "lichen-rock-top", "side_texture": "fractured-stone-side", "shape": "chipped-block" },
+    { "id": "sand-bank", "albedo_ref": "sand", "top_texture": "dry-sand-ripple-top", "side_texture": "dry-soil-side", "shape": "flat-block" }
   ]
 }

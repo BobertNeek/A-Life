@@ -5,6 +5,8 @@
   "material": {
     "id": "resource-grove",
     "albedo_ref": "resource",
+    "top_texture": "clover-food-leaf",
+    "side_texture": "herb-root-side",
     "accent": "mint-glow",
     "minimum_profile": "static accent cap with eating spark overlay"
   }
