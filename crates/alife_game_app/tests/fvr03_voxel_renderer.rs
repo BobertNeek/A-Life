@@ -7,8 +7,9 @@ use alife_game_app::{
     Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
     Fvr03ProductionVoxelSelectionResource, Fvr03ProductionVoxelTerrainBatch,
     Fvr03ProductionVoxelTerrainTile, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
-    Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, ProductionFrontendProfileId,
-    ProductionVoxelLaunchConfig, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
+    Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CuteBipedCreatureMarker,
+    Fvr09MesherMode, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
 };
 use alife_world::{StableVoxelRefKind, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA};
 
@@ -171,8 +172,8 @@ fn fvr03_profiles_scale_renderer_residency_lod_and_camera_modes() {
     assert_eq!(minimum.max_population, 30);
     assert!(minimum.minimum_floor);
     assert!(minimum.tile_stride <= comfort.tile_stride);
-    assert!(minimum.estimated_tile_budget >= comfort.estimated_tile_budget);
-    assert!(balanced.estimated_tile_budget > minimum.estimated_tile_budget);
+    assert!(comfort.estimated_tile_budget > minimum.estimated_tile_budget);
+    assert!(balanced.estimated_tile_budget > comfort.estimated_tile_budget);
     assert_eq!(minimum.production_vfx_budget_state, "conservative");
     assert!(minimum.production_vfx_marker_cap <= comfort.production_vfx_marker_cap);
     assert!(minimum.production_dressing_cap <= comfort.production_dressing_cap);
@@ -233,4 +234,117 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
     assert!(!selection_text.to_ascii_lowercase().contains("entity("));
     assert!(!selection_text.to_ascii_lowercase().contains("bevy"));
     assert!(!selection_text.to_ascii_lowercase().contains("wgpu"));
+}
+
+#[test]
+fn fvr09_greedy_mesher_records_material_aware_quad_reduction() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let scene = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSceneResource>()
+        .clone();
+
+    assert_eq!(scene.mesh_stats.mode, Fvr09MesherMode::BinaryGreedyQuads);
+    assert!(scene.mesh_stats.chunk_local_occupancy_masks);
+    assert!(scene.mesh_stats.six_direction_face_masks);
+    assert!(scene.mesh_stats.material_aware_merging);
+    assert!(scene.mesh_stats.neighbor_border_seams_checked);
+    assert_eq!(
+        scene.mesh_stats.material_palette_version,
+        "fvr09-natural-materials-v1"
+    );
+    assert!(scene.mesh_stats.visible_voxels >= scene.tile_mesh_count);
+    assert!(scene.mesh_stats.naive_visible_faces > scene.mesh_stats.emitted_quads);
+    assert!(scene.mesh_stats.merge_ratio >= 1.20);
+    assert!(scene.mesh_stats.dirty_chunks <= scene.mesh_stats.remesh_budget_chunks_per_frame);
+    assert!(
+        scene.mesh_stats.cached_chunks + scene.mesh_stats.dirty_chunks >= scene.visible_chunk_count
+    );
+    assert!(scene
+        .mesh_stats
+        .cache_key
+        .contains("fvr09-natural-materials-v1"));
+}
+
+#[test]
+fn fvr09_material_palette_uses_natural_top_side_texture_slots_not_debug_colors() {
+    let settings = alife_game_app::Fvr03ProductionVoxelRendererSettings::for_profile(
+        ProductionFrontendProfileId::MinSpecComfort1080p,
+    );
+    assert_eq!(
+        settings.material_palette_version,
+        "fvr09-natural-materials-v1"
+    );
+    assert_eq!(settings.debug_primary_colors, false);
+
+    let palette = settings.material_palette();
+    for material in [
+        Fvr03ProductionVoxelMaterialKind::SafeGrass,
+        Fvr03ProductionVoxelMaterialKind::Soil,
+        Fvr03ProductionVoxelMaterialKind::Stone,
+        Fvr03ProductionVoxelMaterialKind::Sand,
+        Fvr03ProductionVoxelMaterialKind::Water,
+        Fvr03ProductionVoxelMaterialKind::Decay,
+        Fvr03ProductionVoxelMaterialKind::Resource,
+        Fvr03ProductionVoxelMaterialKind::Hazard,
+    ] {
+        let entry = palette
+            .iter()
+            .find(|entry| entry.kind == material)
+            .unwrap_or_else(|| panic!("missing natural material {material:?}"));
+        assert!(!entry.debug_primary_color);
+        assert!(!entry.top_texture.is_empty());
+        assert!(!entry.side_texture.is_empty());
+        assert!(entry.natural_variation_seed.starts_with("fvr09-"));
+    }
+
+    let grass = palette
+        .iter()
+        .find(|entry| entry.kind == Fvr03ProductionVoxelMaterialKind::SafeGrass)
+        .unwrap();
+    assert_eq!(grass.top_texture, "grass-moss-top");
+    assert_eq!(grass.side_texture, "dirt-rooted-side");
+}
+
+#[test]
+fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let scene = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSceneResource>()
+        .clone();
+    let creature_scene = app
+        .world()
+        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>()
+        .clone();
+
+    assert_eq!(creature_scene.visual_profile, "fvr09-cute-biped-v1");
+    assert_eq!(
+        creature_scene.mesh_material_version,
+        "fvr09-soft-biped-materials-v1"
+    );
+    assert_eq!(
+        creature_scene.rendered_creature_count,
+        scene.creature_render_count
+    );
+    assert!(creature_scene.mesh_pool_count >= 3);
+    assert!(creature_scene.expression_buffer_is_read_only_projection);
+    assert!(creature_scene.no_renderer_authority_over_actions_or_cognition);
+
+    let mut query = app.world_mut().query::<&Fvr09CuteBipedCreatureMarker>();
+    let markers = query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(markers.len(), scene.creature_render_count);
+    assert!(markers.iter().all(|marker| marker.two_legs));
+    assert!(markers.iter().all(|marker| marker.visible_face));
+    assert!(markers.iter().all(|marker| marker.eye_markers >= 2));
+    assert!(markers.iter().all(|marker| marker.front_back_orientation));
+    assert!(markers.iter().all(|marker| marker.real_state_driven));
 }

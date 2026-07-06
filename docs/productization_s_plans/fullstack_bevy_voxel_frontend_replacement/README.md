@@ -79,6 +79,7 @@ FVR00 is the single scaffolding/review pass. It creates the exact demolition map
 | FVR06 | Full gameplay GPU backend integration and saved runtime state | The neural/GPU runtime is selected and persisted as a real gameplay backend on RTX 3050 when validation passes, with CPU oracle fallback only as diagnosed fallback and profile-driven scaling for minimum floor through stronger hardware. |
 | FVR07 | Art, assets, VFX, audio-visual polish, and license manifest | The game is visually coherent, uses licensed/generated assets, GPU VFX, stylized materials, minimum-settings fallbacks, and adaptive quality budgets instead of placeholder art claims. |
 | FVR08 | Final replacement hardening, packaging, and acceptance | The old ugly frontend is fully replaced; desktop package and validation prove minimum-settings playability, comfortable 1080p operation on the minimum spec, and later scale-up. |
+| FVR09 | Greedy meshing, natural world textures, and cute bipedal creatures | Post-acceptance visual/performance upgrade: production chunks use material-aware greedy meshing, default terrain uses natural generated material slots instead of primary debug colors, and real creatures render as cute bipedal state-driven visuals while preserving FVR08 performance gates. |
 
 ## Definition of done for the whole pack
 

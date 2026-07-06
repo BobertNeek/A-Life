@@ -53,7 +53,7 @@
         "asset_id": "tiny-generated-weights",
         "kind": "GeneratedWeights",
         "relative_path": "assets/tiny_generated_weights_ref.json",
-        "digest": "fnv1a64:a2b87fbf6dd2c9e5",
+        "digest": "fnv1a64:f2ee994a00d74a0d",
         "presence": "Required",
         "schema_version": 1,
         "size_bytes": null,

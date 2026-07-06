@@ -5,6 +5,8 @@
   "material": {
     "id": "water-cell",
     "albedo_ref": "water",
+    "top_texture": "wet-reed-water-top",
+    "side_texture": "dark-wet-bank-side",
     "alpha": 0.82,
     "ambient_motion": "low-amplitude-sine-ripple",
     "minimum_profile_motion": "single shared phase"

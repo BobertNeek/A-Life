@@ -5,6 +5,8 @@
   "material": {
     "id": "decay-cell",
     "albedo_ref": "decay",
+    "top_texture": "leaf-rot-duff-top",
+    "side_texture": "dark-humus-side",
     "surface_noise": "low-frequency-mottled",
     "ambient_motion": "slow-spore-pulse",
     "readability_note": "dark violet separates decay from soil and hazard"
