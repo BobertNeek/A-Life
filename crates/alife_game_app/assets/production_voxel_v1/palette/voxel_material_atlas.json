@@ -2,21 +2,21 @@
   "schema": "alife.fvr07.generated_asset_source.v1",
   "category": "voxel-material-atlas",
   "style": "stylized-voxel-alife-production-v1",
-  "fvr09_palette_version": "fvr09-natural-materials-v1",
+  "fvr10_palette_version": "fvr10-visible-surface-variation-v1",
   "resolution_policy": {
-    "minimum": "indexed natural material IDs with coarse top/side texture slots",
-    "comfort": "same atlas IDs with richer natural shading and deterministic variation",
+    "minimum": "indexed natural material IDs with bound generated vertex-color face variation",
+    "comfort": "same atlas IDs with richer top/side separation and deterministic surface buckets",
     "scale_up": "higher material detail without ID rewrites"
   },
   "debug_color_policy": "primary/debug colors are explicit overlay-only, never the production default",
   "materials": [
-    { "id": "safe-grass", "rgba": [46, 97, 51, 255], "roughness": 0.92, "top_texture": "grass-moss-top", "side_texture": "dirt-rooted-side", "variation_seed": "fvr09-grass-moss-temperate" },
-    { "id": "soil", "rgba": [84, 64, 43, 255], "roughness": 0.96, "top_texture": "soil-loam-variegated", "side_texture": "soil-clay-side", "variation_seed": "fvr09-soil-loam-warm" },
-    { "id": "resource", "rgba": [56, 117, 74, 255], "roughness": 0.74, "top_texture": "clover-food-leaf", "side_texture": "herb-root-side", "variation_seed": "fvr09-resource-clover" },
-    { "id": "hazard", "rgba": [97, 41, 46, 255], "roughness": 0.72, "top_texture": "thorn-fungal-warning-top", "side_texture": "thorn-dirt-side", "variation_seed": "fvr09-hazard-thorn-fungal" },
-    { "id": "decay", "rgba": [54, 41, 33, 255], "roughness": 0.88, "top_texture": "leaf-rot-duff-top", "side_texture": "dark-humus-side", "variation_seed": "fvr09-decay-leaf-rot" },
-    { "id": "stone", "rgba": [102, 107, 97, 255], "roughness": 0.98, "top_texture": "lichen-rock-top", "side_texture": "fractured-stone-side", "variation_seed": "fvr09-stone-lichen" },
-    { "id": "water", "rgba": [31, 64, 82, 209], "roughness": 0.34, "top_texture": "wet-reed-water-top", "side_texture": "dark-wet-bank-side", "variation_seed": "fvr09-water-reed-bank" },
-    { "id": "sand", "rgba": [135, 120, 79, 255], "roughness": 0.90, "top_texture": "dry-sand-ripple-top", "side_texture": "dry-soil-side", "variation_seed": "fvr09-sand-dry-soil" }
+    { "id": "safe-grass", "rgba": [46, 97, 51, 255], "roughness": 0.92, "top_texture": "grass-moss-top", "side_texture": "dirt-rooted-side", "variation_seed": "fvr10-grass-moss-temperate-vertex-face" },
+    { "id": "soil", "rgba": [84, 64, 43, 255], "roughness": 0.96, "top_texture": "soil-loam-variegated", "side_texture": "soil-clay-side", "variation_seed": "fvr10-soil-loam-warm-vertex-face" },
+    { "id": "resource", "rgba": [56, 117, 74, 255], "roughness": 0.74, "top_texture": "clover-food-leaf", "side_texture": "herb-root-side", "variation_seed": "fvr10-resource-clover-vertex-face" },
+    { "id": "hazard", "rgba": [97, 41, 46, 255], "roughness": 0.72, "top_texture": "thorn-fungal-warning-top", "side_texture": "thorn-dirt-side", "variation_seed": "fvr10-hazard-thorn-fungal-vertex-face" },
+    { "id": "decay", "rgba": [54, 41, 33, 255], "roughness": 0.88, "top_texture": "leaf-rot-duff-top", "side_texture": "dark-humus-side", "variation_seed": "fvr10-decay-leaf-rot-vertex-face" },
+    { "id": "stone", "rgba": [102, 107, 97, 255], "roughness": 0.98, "top_texture": "lichen-rock-top", "side_texture": "fractured-stone-side", "variation_seed": "fvr10-stone-lichen-vertex-face" },
+    { "id": "water", "rgba": [31, 64, 82, 209], "roughness": 0.34, "top_texture": "wet-reed-water-top", "side_texture": "dark-wet-bank-side", "variation_seed": "fvr10-water-reed-bank-vertex-face" },
+    { "id": "sand", "rgba": [135, 120, 79, 255], "roughness": 0.90, "top_texture": "dry-sand-ripple-top", "side_texture": "dry-soil-side", "variation_seed": "fvr10-sand-dry-soil-vertex-face" }
   ]
 }

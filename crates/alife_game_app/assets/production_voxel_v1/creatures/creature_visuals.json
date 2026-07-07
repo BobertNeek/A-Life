@@ -2,18 +2,18 @@
   "schema": "alife.fvr07.generated_asset_source.v1",
   "category": "creatures",
   "style": "stylized-voxel-alife-production-v1",
-  "fvr09_visual_profile": "fvr09-cute-biped-v1",
-  "mesh_material_version": "fvr09-soft-biped-materials-v1",
+  "fvr10_visual_profile": "fvr10-readable-cute-biped-rig-v1",
+  "mesh_material_version": "fvr10-soft-creature-materials-v1",
   "lod_policy": {
-    "minimum": "compact cute biped with two feet, large head, eyes, expression tint, selected hover label only",
-    "comfort": "compact cute biped, eye and face markers, expression tint, sleep/drive cues",
-    "scale_up": "additional appendages, richer species tinting, and smoother animation cadence"
+    "minimum": "generated rounded low-poly biped with two feet, large head, eyes, expression tint, selected hover label only",
+    "comfort": "generated rounded low-poly biped, eye and mouth markers, expression tint, sleep/drive cues",
+    "scale_up": "additional rounded appendages, richer species tinting, and smoother animation cadence"
   },
   "silhouette": {
     "legs": 2,
     "feet": 2,
-    "head": "large-soft-voxel",
-    "body": "compact-rounded-proportion",
+    "head": "large-rounded-low-poly",
+    "body": "compact-rounded-low-poly-proportion",
     "arms": "small-side-appendages",
     "front_orientation": "eyes-and-soft-mouth-on-negative-z-face",
     "state_source": "real creature stable IDs and read-only world/core drive snapshots"

@@ -153,7 +153,6 @@ impl ProductionAssetValidationSummary {
             || self.pack_id != FVR07_PRODUCTION_ASSET_PACK_ID
             || self.asset_count < FVR07_REQUIRED_USAGE_CATEGORIES.len()
             || !self.required_usage_categories_present
-            || self.final_art_entries != self.asset_count
             || self.placeholder_final_entries != 0
             || self.unknown_license_entries != 0
             || self.missing_or_rejected_assets != 0
@@ -413,7 +412,6 @@ fn validate_production_asset_entry(
         || entry.license_ref.trim().is_empty()
         || entry.author.trim().is_empty()
         || entry.replacement_policy.trim().is_empty()
-        || !entry.final_art
         || entry.placeholder
         || entry.generated == entry.external
     {
@@ -644,6 +642,41 @@ mod tests {
         assert!(summary.display_only_vfx);
         assert!(summary.adaptive_vfx);
         assert!(summary.no_renderer_authority);
+    }
+
+    #[test]
+    fn fvr10_descriptor_json_entries_are_not_mislabeled_as_final_visible_art() {
+        let manifest = fixture_manifest();
+        let descriptor_asset_ids = [
+            "voxel-material-atlas",
+            "terrain-materials",
+            "water-materials",
+            "decay-materials",
+            "resource-materials",
+            "hazard-materials",
+            "creatures",
+            "props",
+            "nests",
+            "corpses",
+            "food-resources",
+            "selection-hover-effects",
+            "ui-icons",
+            "environment-dressing",
+            "stylization-lighting",
+            "vfx-budget-config",
+        ];
+        for asset_id in descriptor_asset_ids {
+            let entry = manifest
+                .entries
+                .iter()
+                .find(|entry| entry.asset_id == asset_id)
+                .unwrap_or_else(|| panic!("missing descriptor asset {asset_id}"));
+            assert!(
+                !entry.final_art,
+                "descriptor-only JSON asset {asset_id} must not be marked as final visible art"
+            );
+            assert!(!entry.placeholder);
+        }
     }
 
     #[test]
