@@ -16,8 +16,8 @@
       "asset_id": "voxel-material-atlas",
       "usage_category": "voxel-material-atlas",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/palette/voxel_material_atlas.json",
-      "digest": "fnv1a64:28dc3bf032d574af",
-      "size_bytes": 2077,
+      "digest": "fnv1a64:4ea08ed273ad2fc1",
+      "size_bytes": 2205,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -26,12 +26,12 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/voxel_material_atlas.json",
-        "seed": "fvr09-natural-materials-v1",
+        "seed": "fvr10-visible-surface-variation-v1",
         "date": "2026-07-05"
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -48,12 +48,12 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/terrain_materials.json",
-        "seed": "fvr09-terrain-top-side-materials-v1",
+        "seed": "fvr10-terrain-top-side-vertex-face-v1",
         "date": "2026-07-05"
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -70,12 +70,12 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/water_materials.json",
-        "seed": "fvr09-water-wet-ground-materials-v1",
+        "seed": "fvr10-water-wet-ground-vertex-face-v1",
         "date": "2026-07-05"
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -92,12 +92,12 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/decay_materials.json",
-        "seed": "fvr09-decay-rot-duff-materials-v1",
+        "seed": "fvr10-decay-rot-duff-vertex-face-v1",
         "date": "2026-07-05"
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -114,12 +114,12 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/resource_materials.json",
-        "seed": "fvr09-resource-clover-materials-v1",
+        "seed": "fvr10-resource-clover-vertex-face-v1",
         "date": "2026-07-05"
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -136,20 +136,20 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/palette/hazard_materials.json",
-        "seed": "fvr09-hazard-thorn-fungal-materials-v1",
+        "seed": "fvr10-hazard-thorn-fungal-vertex-face-v1",
         "date": "2026-07-05"
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
       "asset_id": "creatures",
       "usage_category": "creatures",
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creatures/creature_visuals.json",
-      "digest": "fnv1a64:7514a8a994aab999",
-      "size_bytes": 970,
+      "digest": "fnv1a64:a7457ffdc74e77a7",
+      "size_bytes": 1038,
       "source": "generated:committed-procedural-config",
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
@@ -158,12 +158,12 @@
       "generator": {
         "tool": "manual-procedural-json",
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creatures/creature_visuals.json",
-        "seed": "fvr09-cute-biped-creatures-v1",
+        "seed": "fvr10-readable-cute-biped-rig-v1",
         "date": "2026-07-05"
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -185,7 +185,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -207,7 +207,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -229,7 +229,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -251,7 +251,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -273,7 +273,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -295,7 +295,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -317,7 +317,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -339,7 +339,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     },
     {
@@ -361,7 +361,7 @@
       },
       "external": false,
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
-      "final_art": true,
+      "final_art": false,
       "placeholder": false
     }
   ],
