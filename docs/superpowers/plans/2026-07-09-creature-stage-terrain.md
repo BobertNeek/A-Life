@@ -85,7 +85,7 @@ use alife_game_app::{
 };
 
 #[test]
-fn fvr11_terrain_contract_is_display_only_and_layered() {
+fn fvr11_terrain_contract_is_display_only() {
     let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
@@ -95,22 +95,9 @@ fn fvr11_terrain_contract_is_display_only_and_layered() {
         .world()
         .resource::<Fvr11ProductionTerrainSceneResource>();
     assert_eq!(scene.visual_version, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION);
+    assert!(scene.sample_count > 0);
     assert!(scene.display_only);
     assert!(scene.no_renderer_authority_over_world_actions_or_cognition);
-    assert_eq!(scene.confetti_detail_quad_count, 0);
-    assert!(scene.top_layer_count >= 7);
-    assert!(scene.cliff_layer_count >= 3);
-    assert!(scene.transition_edge_count > 0);
-
-    let mut query = app.world_mut().query::<&Fvr11ProductionTerrainLayer>();
-    let roles = query
-        .iter(app.world())
-        .map(|layer| layer.role)
-        .collect::<BTreeSet<_>>();
-    assert!(roles.contains(&Fvr11TerrainSurfaceRole::Top));
-    assert!(roles.contains(&Fvr11TerrainSurfaceRole::Cliff));
-    assert!(roles.contains(&Fvr11TerrainSurfaceRole::Transition));
-    assert!(roles.contains(&Fvr11TerrainSurfaceRole::Water));
 }
 ```
 
@@ -119,7 +106,7 @@ fn fvr11_terrain_contract_is_display_only_and_layered() {
 Run:
 
 ```powershell
-cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer fvr11_terrain_contract_is_display_only_and_layered -j 1 -- --nocapture
+cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer fvr11_terrain_contract_is_display_only -j 1 -- --nocapture
 ```
 
 Expected: compile failure naming one or more missing `Fvr11` terrain symbols.
@@ -240,8 +227,8 @@ entities used for selection.
 
 Until Task 3 replaces the mesh, insert the scene resource with measured existing
 counts and `confetti_detail_quad_count` equal to the current generated detail
-quad count. This keeps the new test red for the intended reason instead of
-claiming completion early.
+quad count. The Task 1 test only proves the contract and authority boundary;
+Task 3 adds the stricter geometry acceptance assertions.
 
 - [ ] **Step 6: Run formatting and the focused test**
 
@@ -249,11 +236,11 @@ Run:
 
 ```powershell
 cargo fmt --all -- --check
-cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer fvr11_terrain_contract_is_display_only_and_layered -j 1 -- --nocapture
+cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer fvr11_terrain_contract_is_display_only -j 1 -- --nocapture
 ```
 
-Expected: the test compiles and fails because `confetti_detail_quad_count` is
-nonzero or required layers are not yet present.
+Expected: the test passes after proving the app-only terrain contract is present,
+truthful, populated, and display-only.
 
 - [ ] **Step 7: Commit the contract**
 
@@ -489,6 +476,26 @@ assert!(first.stats.max_vertices_per_source_tile <= 40);
 
 Also inspect every generated mesh for `POSITION`, `NORMAL`, `UV_0`, `TANGENT`,
 and `COLOR` attributes.
+
+Add the failing integration test `fvr11_terrain_contract_is_display_only_and_layered`
+at this task, after the contract-only test is already green. It must assert:
+
+```rust
+assert_eq!(scene.confetti_detail_quad_count, 0);
+assert!(scene.top_layer_count >= 7);
+assert!(scene.cliff_layer_count >= 3);
+assert!(scene.transition_edge_count > 0);
+
+let mut query = app.world_mut().query::<&Fvr11ProductionTerrainLayer>();
+let roles = query
+    .iter(app.world())
+    .map(|layer| layer.role)
+    .collect::<BTreeSet<_>>();
+assert!(roles.contains(&Fvr11TerrainSurfaceRole::Top));
+assert!(roles.contains(&Fvr11TerrainSurfaceRole::Cliff));
+assert!(roles.contains(&Fvr11TerrainSurfaceRole::Transition));
+assert!(roles.contains(&Fvr11TerrainSurfaceRole::Water));
+```
 
 - [ ] **Step 2: Run the tests and verify the builder is missing**
 
