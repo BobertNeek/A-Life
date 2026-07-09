@@ -101,6 +101,7 @@ pub struct CreatureVisualSnapshot {
     pub base_rgba: [f32; 4],
     pub accent_rgba: [f32; 4],
     pub intent_rgba: [f32; 4],
+    pub appearance: CreatureAppearanceGenome,
     pub cues: CreatureVisualCueSet,
     pub endocrine: EndocrineSnapshot,
     pub debug_summary: String,
@@ -118,6 +119,7 @@ impl CreatureVisualSnapshot {
         validate_rgba(self.base_rgba)?;
         validate_rgba(self.accent_rgba)?;
         validate_rgba(self.intent_rgba)?;
+        self.appearance.validate()?;
         for cue in [
             self.cues.hunger,
             self.cues.fatigue,
@@ -202,7 +204,33 @@ pub fn creature_visual_snapshot_from_parts(
     sleep_phase: SleepPhase,
     selected_action_kind: Option<ActionKind>,
 ) -> Result<CreatureVisualSnapshot, GameAppShellError> {
+    creature_visual_snapshot_from_parts_with_appearance(
+        organism_id,
+        stable_id,
+        position,
+        target_entity,
+        target_position,
+        homeostasis,
+        sleep_phase,
+        selected_action_kind,
+        CreatureAppearanceGenome::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn creature_visual_snapshot_from_parts_with_appearance(
+    organism_id: OrganismId,
+    stable_id: WorldEntityId,
+    position: Vec3f,
+    target_entity: Option<WorldEntityId>,
+    target_position: Option<Vec3f>,
+    homeostasis: &HomeostaticSnapshot,
+    sleep_phase: SleepPhase,
+    selected_action_kind: Option<ActionKind>,
+    appearance: CreatureAppearanceGenome,
+) -> Result<CreatureVisualSnapshot, GameAppShellError> {
     homeostasis.validate_contract()?;
+    appearance.validate()?;
     position.validate()?;
     if let Some(target) = target_entity {
         target.validate()?;
@@ -236,6 +264,7 @@ pub fn creature_visual_snapshot_from_parts(
         base_rgba,
         accent_rgba,
         intent_rgba,
+        appearance,
         cues,
         endocrine: homeostasis.hormones,
         debug_summary: format!(

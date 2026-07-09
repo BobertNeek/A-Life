@@ -1492,6 +1492,7 @@ fn apply_production_population_target(
         save.creatures
             .retain(|creature| keep_organism_ids.contains(&creature.organism_id.raw()));
         retain_existing_touched_entities(save);
+        assign_production_appearance_slots(save);
         return Ok(());
     }
 
@@ -1594,7 +1595,21 @@ fn apply_production_population_target(
             + 1,
     );
     retain_existing_touched_entities(save);
+    assign_production_appearance_slots(save);
     Ok(())
+}
+
+fn assign_production_appearance_slots(save: &mut PortableSaveFile) {
+    save.creatures
+        .sort_by_key(|creature| creature.organism_id.raw());
+    for (slot, creature) in save.creatures.iter_mut().enumerate() {
+        creature.appearance = CreatureAppearanceGenome::from_ids(
+            creature.organism_id,
+            creature.genome_id,
+            slot,
+            save.deterministic_seed,
+        );
+    }
 }
 
 fn production_creature_save_for_slot(
@@ -1610,6 +1625,12 @@ fn production_creature_save_for_slot(
         genome_id,
         brain_class: template.brain_class,
         development_tick: template.development_tick,
+        appearance: CreatureAppearanceGenome::from_ids(
+            organism_id,
+            genome_id,
+            slot,
+            template.genome_id.raw() ^ template.organism_id.raw(),
+        ),
         mind: CreatureMindSaveSummary {
             tick,
             homeostasis,

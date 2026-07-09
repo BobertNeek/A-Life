@@ -249,6 +249,7 @@ pub struct LifecycleCreatureRecord {
     pub alive: bool,
     pub brain_atp: f32,
     pub reproductive_drive: f32,
+    pub appearance: CreatureAppearanceGenome,
     pub birth_weight_asset_id: Option<String>,
     pub genetic_prior_seed: u64,
     pub lamarckian_enabled: bool,
@@ -262,6 +263,7 @@ impl LifecycleCreatureRecord {
         self.stable_id.validate()?;
         self.genome_id.validate()?;
         self.lineage_id.validate()?;
+        self.appearance.validate()?;
         if self.label.is_empty()
             || !self.brain_atp.is_finite()
             || !self.reproductive_drive.is_finite()
@@ -285,7 +287,7 @@ impl LifecycleCreatureRecord {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:{}:{}:{}:{}:{}:{:.2}:{:.2}:{}:{}",
+            "{}:{}:{}:{}:{}:{}:{}:{}:{:.2}:{:.2}:{}:{}:{}",
             self.organism_id.raw(),
             self.stable_id.raw(),
             self.label,
@@ -297,7 +299,8 @@ impl LifecycleCreatureRecord {
             self.brain_atp,
             self.reproductive_drive,
             self.alive,
-            self.birth_weight_asset_id.as_deref().unwrap_or("none")
+            self.birth_weight_asset_id.as_deref().unwrap_or("none"),
+            self.appearance.signature_line()
         )
     }
 }
@@ -587,6 +590,7 @@ struct LifecycleCreatureRuntime {
     stable_id: WorldEntityId,
     mind: CreatureMind,
     genome: BrainGenome,
+    appearance: CreatureAppearanceGenome,
     generation: u32,
     age_ticks: Tick,
     alive: bool,
@@ -626,7 +630,7 @@ impl LifecycleLiveLoop {
         }
         let world = builder.build()?;
         let mut creatures = Vec::with_capacity(config.population_cap);
-        for creature in &config.creatures {
+        for (slot, creature) in config.creatures.iter().enumerate() {
             let stable_id =
                 world
                     .entity_id(creature.label)
@@ -638,6 +642,13 @@ impl LifecycleLiveLoop {
                 BrainGenome::scaffold(species_seed, creature.brain_tier.default_class_id());
             genome.lineage_id = Some(config.lineage_id);
             genome.validate_contract()?;
+            let appearance = CreatureAppearanceGenome::from_ids(
+                creature.organism_id,
+                genome.id,
+                slot,
+                config.seed,
+            );
+            appearance.validate()?;
             let mut mind = CreatureMind::scaffold(
                 creature.organism_id,
                 creature.brain_tier,
@@ -652,6 +663,7 @@ impl LifecycleLiveLoop {
                 stable_id,
                 mind,
                 genome,
+                appearance,
                 generation: creature.generation,
                 age_ticks: creature.initial_age_ticks,
                 alive: true,
@@ -896,6 +908,12 @@ impl LifecycleLiveLoop {
         ];
         genome.lineage_id = Some(self.lineage_id);
         genome.validate_contract()?;
+        let child_appearance = CreatureAppearanceGenome::offspring_from_parents(
+            self.creatures[parent_a].appearance,
+            self.creatures[parent_b].appearance,
+            child_seed,
+        );
+        child_appearance.validate()?;
 
         let mut mind = CreatureMind::scaffold(
             child_organism,
@@ -943,6 +961,7 @@ impl LifecycleLiveLoop {
             stable_id,
             mind,
             genome,
+            appearance: child_appearance,
             generation,
             age_ticks: Tick::ZERO,
             alive: true,
@@ -976,6 +995,7 @@ impl LifecycleLiveLoop {
                     alive: creature.alive,
                     brain_atp: homeostasis.drives.brain_atp,
                     reproductive_drive: homeostasis.drives.reproductive_drive,
+                    appearance: creature.appearance,
                     birth_weight_asset_id: creature.birth_weight_asset_id.clone(),
                     genetic_prior_seed: creature.genome.genetic_prior_seed,
                     lamarckian_enabled: creature.genome.inheritance.lamarckian_weights_enabled,

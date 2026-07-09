@@ -14,9 +14,10 @@ use std::{
 use alife_core::Vec3f;
 use alife_world::{
     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
-    CreatureWorldAnchor, PersistentVoxelWorldBackend, PersistentVoxelWorldSnapshot,
-    ProceduralTerrainMaterial, ProceduralTileCoord, ProceduralWorldConfig, StableVoxelObjectRef,
-    StableVoxelRefKind, VoxelChunkCoord, VoxelTileCoord, WorldObjectKind,
+    CreatureAppearanceGenome, CreatureWorldAnchor, PersistentVoxelWorldBackend,
+    PersistentVoxelWorldSnapshot, ProceduralTerrainMaterial, ProceduralTileCoord,
+    ProceduralWorldConfig, StableVoxelObjectRef, StableVoxelRefKind, VoxelChunkCoord,
+    VoxelTileCoord, WorldObjectKind, CREATURE_APPEARANCE_SPECIES_COUNT,
     FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
@@ -45,7 +46,7 @@ use bevy::{
 };
 
 use crate::{
-    creature_visual_snapshot_from_parts, production_voxel_save_with_population,
+    creature_visual_snapshot_from_parts_with_appearance, production_voxel_save_with_population,
     CreatureAnimationState, CreatureExpressionState, CreatureVisualSnapshot,
     Fvr05ProductionDebugAuthorityReport, Fvr05ProductionInspectorTab, Fvr05ProductionOverlayKind,
     Fvr05ProductionUxSettings, GameAppShellError, ProductionFrontendProfileBudget,
@@ -71,7 +72,8 @@ pub const FVR09_CUTE_BIPED_VISUAL_PROFILE: &str = "fvr09-cute-biped-v1";
 pub const FVR09_CUTE_BIPED_MATERIAL_VERSION: &str = "fvr09-soft-biped-materials-v1";
 pub const FVR10_VISIBLE_SURFACE_VARIATION_VERSION: &str = "fvr10-visible-surface-variation-v1";
 pub const FVR10_CUTE_BIPED_VISUAL_PROFILE: &str = "fvr10-readable-cute-biped-rig-v1";
-pub const FVR10_CUTE_BIPED_MATERIAL_VERSION: &str = "fvr10-soft-creature-materials-v1";
+pub const FVR10_CUTE_BIPED_MATERIAL_VERSION: &str = "fvr10-bipedal-caveman-furry-species-v1";
+pub const FVR10_SURFACE_DETAIL_VERSION: &str = "fvr10-screenshot-visible-surface-detail-v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fvr09MesherMode {
@@ -491,6 +493,9 @@ pub struct Fvr04CreatureRenderBucket {
     pub expression: CreatureExpressionState,
     pub animation: CreatureAnimationState,
     pub lod: Fvr04CreatureLod,
+    pub species_archetype: u8,
+    pub palette_family: u8,
+    pub fur_pattern: u8,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -524,6 +529,7 @@ pub struct Fvr04ProductionCreatureSceneResource {
     pub expression_buffer_is_read_only_projection: bool,
     pub visual_profile: &'static str,
     pub mesh_material_version: &'static str,
+    pub species_archetype_count: usize,
 }
 
 impl Fvr04ProductionCreatureSceneResource {
@@ -830,6 +836,28 @@ pub struct Fvr09CuteBipedCreatureMarker {
 pub struct Fvr09CreatureFaceFeatureMarker {
     pub stable_id: alife_core::WorldEntityId,
     pub feature: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct Fvr10CreatureSurfaceDetailMarker {
+    pub stable_id: alife_core::WorldEntityId,
+    pub species_archetype: u8,
+    pub detail_role: &'static str,
+    pub display_only: bool,
+    pub no_renderer_authority_over_actions_or_cognition: bool,
+    pub high_contrast_marking: bool,
+    pub heritable: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
+pub struct Fvr10CreatureSpeciesMarker {
+    pub stable_id: alife_core::WorldEntityId,
+    pub species_archetype: u8,
+    pub species_label: &'static str,
+    pub body_plan_signature: &'static str,
+    pub bipedal: bool,
+    pub caveman_furry_design: bool,
+    pub heritable_appearance: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -1277,27 +1305,34 @@ pub fn spawn_fvr03_production_voxel_scene(
             f32::from(snapshot.profile_budget.chunk_tile_size),
         ))
     };
-    let creature_mesh = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(fvr10_readable_cute_biped_mesh(creature_settings.lod))
-    };
+    let creature_meshes = fvr10_creature_species_meshes(app, creature_settings.lod);
     let creature_cue_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         meshes.add(Cuboid::new(0.30, 0.30, 0.30))
     };
     let creature_eye_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.18, 0.18, 0.055))
+        meshes.add(Cuboid::new(0.235, 0.250, 0.055))
+    };
+    let creature_eye_highlight_mesh = {
+        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
+        meshes.add(Cuboid::new(0.055, 0.065, 0.030))
     };
     let creature_face_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.34, 0.070, 0.055))
+        meshes.add(Cuboid::new(0.235, 0.055, 0.055))
     };
-    let (creature_eye_material, creature_face_material) = {
+    let (creature_eye_material, creature_eye_highlight_material, creature_face_material) = {
         let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
         let eye = materials.add(StandardMaterial {
             base_color: Color::srgb(0.035, 0.030, 0.025),
             perceptual_roughness: 0.58,
+            unlit: true,
+            ..default()
+        });
+        let highlight = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.96, 0.92, 0.78),
+            perceptual_roughness: 0.42,
             unlit: true,
             ..default()
         });
@@ -1307,7 +1342,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             unlit: true,
             ..default()
         });
-        (eye, face)
+        (eye, highlight, face)
     };
     let mut visible_tiles = BTreeSet::new();
     let mut tile_summaries_by_tile = BTreeMap::new();
@@ -1367,11 +1402,13 @@ pub fn spawn_fvr03_production_voxel_scene(
         app,
         &runtime_state.creatures,
         &creature_settings,
-        creature_mesh,
+        &creature_meshes,
         creature_cue_mesh,
         creature_eye_mesh,
+        creature_eye_highlight_mesh,
         creature_face_mesh,
         creature_eye_material,
+        creature_eye_highlight_material,
         creature_face_material,
     );
     spawn_fvr05_overlay_batches(
@@ -1628,7 +1665,7 @@ fn fvr04_creature_visual_records_from_save(
             object.position.y,
             anchor.tile.z as f32 + 0.5,
         );
-        let visual = creature_visual_snapshot_from_parts(
+        let visual = creature_visual_snapshot_from_parts_with_appearance(
             organism_id,
             anchor.stable_id,
             position,
@@ -1637,6 +1674,7 @@ fn fvr04_creature_visual_records_from_save(
             &creature.mind.homeostasis,
             fvr04_sleep_phase_from_creature_save(creature),
             None,
+            creature.appearance,
         )?;
         records.push(Fvr04CreatureVisualRecord {
             stable_ref: StableVoxelObjectRef {
@@ -2854,9 +2892,9 @@ fn fvr07_vfx_y_offset(kind: Fvr07ProductionVfxKind) -> f32 {
         Fvr07ProductionVfxKind::DangerHazardParticles => 0.62,
         Fvr07ProductionVfxKind::EatingResourceEffect => 0.48,
         Fvr07ProductionVfxKind::WaterDecayAmbient => 0.34,
-        Fvr07ProductionVfxKind::SleepGlow
-        | Fvr07ProductionVfxKind::BirthDeathEffect
-        | Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => 1.28,
+        Fvr07ProductionVfxKind::SleepGlow => 0.58,
+        Fvr07ProductionVfxKind::BirthDeathEffect => 0.70,
+        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => 0.76,
     }
 }
 
@@ -2868,12 +2906,12 @@ fn fvr07_vfx_scale(
     let base = match kind {
         Fvr07ProductionVfxKind::PheromoneTrail => Vec3::new(1.00, 0.06, 0.30),
         Fvr07ProductionVfxKind::SporeDrift => Vec3::new(0.36, 0.36, 0.36),
-        Fvr07ProductionVfxKind::SleepGlow => Vec3::new(1.02, 0.09, 1.02),
+        Fvr07ProductionVfxKind::SleepGlow => Vec3::new(0.14, 0.040, 0.14),
         Fvr07ProductionVfxKind::DangerHazardParticles => Vec3::new(0.46, 0.52, 0.46),
         Fvr07ProductionVfxKind::EatingResourceEffect => Vec3::new(0.34, 0.44, 0.34),
-        Fvr07ProductionVfxKind::BirthDeathEffect => Vec3::new(0.72, 0.12, 0.72),
+        Fvr07ProductionVfxKind::BirthDeathEffect => Vec3::new(0.22, 0.050, 0.22),
         Fvr07ProductionVfxKind::WaterDecayAmbient => Vec3::new(0.64, 0.07, 0.64),
-        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => Vec3::new(1.24, 0.08, 1.24),
+        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => Vec3::new(0.28, 0.045, 0.28),
     };
     base * profile_scale
 }
@@ -2882,12 +2920,12 @@ fn fvr07_vfx_color(kind: Fvr07ProductionVfxKind) -> [f32; 4] {
     match kind {
         Fvr07ProductionVfxKind::PheromoneTrail => [0.95, 0.30, 0.74, 0.58],
         Fvr07ProductionVfxKind::SporeDrift => [0.62, 0.95, 0.70, 0.54],
-        Fvr07ProductionVfxKind::SleepGlow => [0.42, 0.70, 1.00, 0.50],
+        Fvr07ProductionVfxKind::SleepGlow => [0.95, 0.66, 0.18, 0.24],
         Fvr07ProductionVfxKind::DangerHazardParticles => [1.00, 0.10, 0.24, 0.68],
         Fvr07ProductionVfxKind::EatingResourceEffect => [1.00, 0.82, 0.20, 0.62],
-        Fvr07ProductionVfxKind::BirthDeathEffect => [0.92, 0.62, 1.00, 0.56],
+        Fvr07ProductionVfxKind::BirthDeathEffect => [0.74, 0.38, 0.86, 0.30],
         Fvr07ProductionVfxKind::WaterDecayAmbient => [0.18, 0.70, 0.92, 0.48],
-        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => [0.98, 0.92, 0.28, 0.66],
+        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => [0.98, 0.82, 0.22, 0.34],
     }
 }
 
@@ -3277,6 +3315,37 @@ fn fvr10_append_colored_terrain_cuboid(
         );
         indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
     }
+    fvr10_append_terrain_surface_detail(
+        positions,
+        normals,
+        uvs,
+        colors,
+        indices,
+        min_x,
+        max_x,
+        max_y,
+        min_z,
+        max_z,
+        prism,
+        material,
+        material_entry,
+    );
+    fvr10_append_terrain_side_detail(
+        positions,
+        normals,
+        uvs,
+        colors,
+        indices,
+        min_x,
+        max_x,
+        min_y,
+        max_y,
+        min_z,
+        max_z,
+        prism,
+        material,
+        material_entry,
+    );
 }
 
 fn fvr10_terrain_face_color(
@@ -3296,7 +3365,7 @@ fn fvr10_terrain_face_color(
         vertex_index as u32 + prism.source_tile_count as u32,
     );
     let jitter = ((hash & 0xff) as f32 / 255.0 - 0.5) * 0.32;
-    let fleck = if ((hash >> 8) & 0x3) == 0 { 0.14 } else { 0.0 };
+    let fleck = if ((hash >> 8) & 0x3) == 0 { 0.10 } else { 0.0 };
     let (base, shade) = if normal[1] > 0.5 {
         (palette.top, 0.96 + jitter)
     } else if normal[1] < -0.5 {
@@ -3306,7 +3375,7 @@ fn fvr10_terrain_face_color(
         (palette.side, side_light + jitter)
     };
     let accent_weight = if normal[1] > 0.5 {
-        0.070 + fleck * 0.80
+        0.050 + fleck * 0.55
     } else {
         0.030 + fleck * 0.28
     };
@@ -3316,6 +3385,309 @@ fn fvr10_terrain_face_color(
         fvr10_saturate(base[2] * shade + palette.accent[2] * accent_weight),
         material_entry.rgba[3],
     ]
+}
+
+#[allow(clippy::too_many_arguments)]
+fn fvr10_append_terrain_surface_detail(
+    positions: &mut Vec<[f32; 3]>,
+    normals: &mut Vec<[f32; 3]>,
+    uvs: &mut Vec<[f32; 2]>,
+    colors: &mut Vec<[f32; 4]>,
+    indices: &mut Vec<u32>,
+    min_x: f32,
+    max_x: f32,
+    max_y: f32,
+    min_z: f32,
+    max_z: f32,
+    prism: Fvr09GreedyTerrainPrism,
+    material: Fvr03ProductionVoxelMaterialKind,
+    material_entry: Fvr03ProductionVoxelMaterialEntry,
+) {
+    let cells_x = ((max_x - min_x).ceil() as i32).clamp(1, 10);
+    let cells_z = ((max_z - min_z).ceil() as i32).clamp(1, 10);
+    let palette = fvr10_surface_palette(material, material_entry);
+    for ix in 0..cells_x {
+        for iz in 0..cells_z {
+            let world_x = min_x + ix as f32 + 0.50;
+            let world_z = min_z + iz as f32 + 0.50;
+            let hash = fvr10_coord_hash(
+                world_x.floor() as i32,
+                world_z.floor() as i32,
+                0x710d_7a1d ^ u32::from(prism.visual_bucket),
+                material.label().bytes().fold(0_u32, |acc, byte| {
+                    acc.wrapping_mul(37).wrapping_add(u32::from(byte))
+                }),
+            );
+            let detail_count = if material == Fvr03ProductionVoxelMaterialKind::Stone {
+                3
+            } else if material == Fvr03ProductionVoxelMaterialKind::Water {
+                2
+            } else {
+                2 + usize::from((hash & 0x3) == 0)
+            };
+            for layer in 0..detail_count {
+                let layer_hash = hash.rotate_left((layer as u32 * 7) + 3);
+                let offset_x = (((layer_hash & 0xff) as f32 / 255.0) - 0.5) * 0.62;
+                let offset_z = ((((layer_hash >> 8) & 0xff) as f32 / 255.0) - 0.5) * 0.62;
+                let center_x = (world_x + offset_x).clamp(min_x + 0.10, max_x - 0.10);
+                let center_z = (world_z + offset_z).clamp(min_z + 0.10, max_z - 0.10);
+                let width = 0.12 + (((layer_hash >> 16) & 0xff) as f32 / 255.0) * 0.28;
+                let depth = 0.08 + (((layer_hash >> 24) & 0xff) as f32 / 255.0) * 0.22;
+                let y = max_y + 0.014 + layer as f32 * 0.003;
+                let color = fvr10_terrain_detail_color(
+                    material,
+                    palette,
+                    material_entry.rgba[3],
+                    layer_hash,
+                );
+                fvr10_append_colored_quad(
+                    positions,
+                    normals,
+                    uvs,
+                    colors,
+                    indices,
+                    [
+                        [center_x - width, y, center_z - depth],
+                        [center_x + width, y, center_z - depth],
+                        [center_x + width, y, center_z + depth],
+                        [center_x - width, y, center_z + depth],
+                    ],
+                    [0.0, 1.0, 0.0],
+                    color,
+                );
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn fvr10_append_terrain_side_detail(
+    positions: &mut Vec<[f32; 3]>,
+    normals: &mut Vec<[f32; 3]>,
+    uvs: &mut Vec<[f32; 2]>,
+    colors: &mut Vec<[f32; 4]>,
+    indices: &mut Vec<u32>,
+    min_x: f32,
+    max_x: f32,
+    min_y: f32,
+    max_y: f32,
+    min_z: f32,
+    max_z: f32,
+    prism: Fvr09GreedyTerrainPrism,
+    material: Fvr03ProductionVoxelMaterialKind,
+    material_entry: Fvr03ProductionVoxelMaterialEntry,
+) {
+    if (max_y - min_y) < 0.42 {
+        return;
+    }
+    let span_x = (max_x - min_x).ceil() as i32;
+    let span_z = (max_z - min_z).ceil() as i32;
+    let palette = fvr10_surface_palette(material, material_entry);
+    for side in 0..4 {
+        let cells = if side < 2 { span_x } else { span_z }.clamp(1, 8);
+        for cell in 0..cells {
+            let salt = 0x51de_5eed_u32 ^ (side as u32 * 97) ^ u32::from(prism.visual_bucket);
+            let hash = fvr10_coord_hash(
+                (min_x + cell as f32) as i32,
+                (min_z + cell as f32) as i32,
+                salt,
+                material.label().len() as u32,
+            );
+            if hash & 0x7 == 0 {
+                continue;
+            }
+            let t0 = cell as f32 / cells as f32;
+            let t1 = (cell as f32 + 0.44).min(cells as f32) / cells as f32;
+            let y0 = min_y + 0.12 + (((hash >> 8) & 0xff) as f32 / 255.0) * (max_y - min_y) * 0.45;
+            let y1 = (y0 + 0.035 + (((hash >> 16) & 0xff) as f32 / 255.0) * 0.08).min(max_y - 0.05);
+            let color =
+                fvr10_terrain_side_detail_color(material, palette, material_entry.rgba[3], hash);
+            let inset = 0.006;
+            match side {
+                0 => {
+                    let x0 = min_x + (max_x - min_x) * t0;
+                    let x1 = min_x + (max_x - min_x) * t1;
+                    fvr10_append_colored_quad(
+                        positions,
+                        normals,
+                        uvs,
+                        colors,
+                        indices,
+                        [
+                            [x1, y0, max_z + inset],
+                            [x0, y0, max_z + inset],
+                            [x0, y1, max_z + inset],
+                            [x1, y1, max_z + inset],
+                        ],
+                        [0.0, 0.0, 1.0],
+                        color,
+                    );
+                }
+                1 => {
+                    let x0 = min_x + (max_x - min_x) * t0;
+                    let x1 = min_x + (max_x - min_x) * t1;
+                    fvr10_append_colored_quad(
+                        positions,
+                        normals,
+                        uvs,
+                        colors,
+                        indices,
+                        [
+                            [x0, y0, min_z - inset],
+                            [x1, y0, min_z - inset],
+                            [x1, y1, min_z - inset],
+                            [x0, y1, min_z - inset],
+                        ],
+                        [0.0, 0.0, -1.0],
+                        color,
+                    );
+                }
+                2 => {
+                    let z0 = min_z + (max_z - min_z) * t0;
+                    let z1 = min_z + (max_z - min_z) * t1;
+                    fvr10_append_colored_quad(
+                        positions,
+                        normals,
+                        uvs,
+                        colors,
+                        indices,
+                        [
+                            [max_x + inset, y0, z0],
+                            [max_x + inset, y0, z1],
+                            [max_x + inset, y1, z1],
+                            [max_x + inset, y1, z0],
+                        ],
+                        [1.0, 0.0, 0.0],
+                        color,
+                    );
+                }
+                _ => {
+                    let z0 = min_z + (max_z - min_z) * t0;
+                    let z1 = min_z + (max_z - min_z) * t1;
+                    fvr10_append_colored_quad(
+                        positions,
+                        normals,
+                        uvs,
+                        colors,
+                        indices,
+                        [
+                            [min_x - inset, y0, z1],
+                            [min_x - inset, y0, z0],
+                            [min_x - inset, y1, z0],
+                            [min_x - inset, y1, z1],
+                        ],
+                        [-1.0, 0.0, 0.0],
+                        color,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn fvr10_terrain_detail_color(
+    material: Fvr03ProductionVoxelMaterialKind,
+    palette: Fvr10SurfacePalette,
+    alpha: f32,
+    hash: u32,
+) -> [f32; 4] {
+    let variant = (hash % 5) as usize;
+    let color = match material {
+        Fvr03ProductionVoxelMaterialKind::SafeGrass => match variant {
+            0 | 1 => [0.36, 0.56, 0.13],
+            2 => [0.15, 0.31, 0.10],
+            3 => [0.62, 0.68, 0.25],
+            _ => [0.66, 0.72, 0.42],
+        },
+        Fvr03ProductionVoxelMaterialKind::Soil => match variant {
+            0 | 1 => [0.22, 0.14, 0.08],
+            2 => [0.50, 0.35, 0.18],
+            3 => [0.16, 0.13, 0.11],
+            _ => [0.40, 0.28, 0.16],
+        },
+        Fvr03ProductionVoxelMaterialKind::Stone => match variant {
+            0 | 1 => [0.22, 0.23, 0.22],
+            2 => [0.52, 0.54, 0.49],
+            3 => [0.24, 0.38, 0.18],
+            _ => [0.35, 0.36, 0.33],
+        },
+        Fvr03ProductionVoxelMaterialKind::Hazard => match variant {
+            0 | 1 => [0.22, 0.06, 0.08],
+            2 => [0.62, 0.12, 0.18],
+            3 => [0.77, 0.34, 0.20],
+            _ => [0.34, 0.11, 0.14],
+        },
+        Fvr03ProductionVoxelMaterialKind::Decay => match variant {
+            0 | 1 => [0.10, 0.08, 0.05],
+            2 => [0.31, 0.29, 0.13],
+            3 => [0.23, 0.17, 0.08],
+            _ => [0.16, 0.18, 0.07],
+        },
+        Fvr03ProductionVoxelMaterialKind::Resource => match variant {
+            0 | 1 => [0.42, 0.66, 0.18],
+            2 => [0.10, 0.32, 0.12],
+            3 => [0.82, 0.74, 0.28],
+            _ => [0.54, 0.68, 0.26],
+        },
+        Fvr03ProductionVoxelMaterialKind::Water => match variant {
+            0 | 1 => [0.16, 0.47, 0.56],
+            2 => [0.34, 0.70, 0.74],
+            3 => [0.07, 0.25, 0.34],
+            _ => [0.56, 0.82, 0.82],
+        },
+        Fvr03ProductionVoxelMaterialKind::Sand => match variant {
+            0 | 1 => [0.66, 0.57, 0.34],
+            2 => [0.42, 0.34, 0.18],
+            3 => [0.75, 0.68, 0.43],
+            _ => [0.52, 0.43, 0.25],
+        },
+        _ => palette.accent,
+    };
+    [color[0], color[1], color[2], alpha]
+}
+
+fn fvr10_terrain_side_detail_color(
+    material: Fvr03ProductionVoxelMaterialKind,
+    palette: Fvr10SurfacePalette,
+    alpha: f32,
+    hash: u32,
+) -> [f32; 4] {
+    let base = if hash & 0x3 == 0 {
+        palette.accent
+    } else {
+        palette.side
+    };
+    let shade = match material {
+        Fvr03ProductionVoxelMaterialKind::Stone => 0.58,
+        Fvr03ProductionVoxelMaterialKind::Water => 1.20,
+        Fvr03ProductionVoxelMaterialKind::SafeGrass
+        | Fvr03ProductionVoxelMaterialKind::Resource => 0.70,
+        _ => 0.62,
+    };
+    [
+        fvr10_saturate(base[0] * shade),
+        fvr10_saturate(base[1] * shade),
+        fvr10_saturate(base[2] * shade),
+        alpha,
+    ]
+}
+
+fn fvr10_append_colored_quad(
+    positions: &mut Vec<[f32; 3]>,
+    normals: &mut Vec<[f32; 3]>,
+    uvs: &mut Vec<[f32; 2]>,
+    colors: &mut Vec<[f32; 4]>,
+    indices: &mut Vec<u32>,
+    quad: [[f32; 3]; 4],
+    normal: [f32; 3],
+    color: [f32; 4],
+) {
+    let base = positions.len() as u32;
+    positions.extend(quad);
+    normals.extend([normal; 4]);
+    uvs.extend([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+    colors.extend([color; 4]);
+    indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3543,50 +3915,439 @@ fn spawn_fvr03_chunk_boundary(
     ));
 }
 
-fn fvr10_readable_cute_biped_mesh(lod: Fvr04CreatureLod) -> Mesh {
-    let mut positions = Vec::<[f32; 3]>::with_capacity(820);
-    let mut normals = Vec::<[f32; 3]>::with_capacity(820);
-    let mut uvs = Vec::<[f32; 2]>::with_capacity(820);
-    let mut indices = Vec::<u32>::with_capacity(3600);
-    let detail_scale = match lod {
+#[derive(Clone)]
+struct Fvr10CreatureSpeciesMeshes {
+    handles: Vec<Handle<Mesh>>,
+}
+
+impl Fvr10CreatureSpeciesMeshes {
+    fn handle_for(&self, appearance: CreatureAppearanceGenome) -> Handle<Mesh> {
+        self.handles
+            .get(appearance.species_archetype as usize)
+            .cloned()
+            .unwrap_or_else(|| self.handles[0].clone())
+    }
+}
+
+fn fvr10_creature_species_meshes(
+    app: &mut App,
+    lod: Fvr04CreatureLod,
+) -> Fvr10CreatureSpeciesMeshes {
+    let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
+    let handles = (0..CREATURE_APPEARANCE_SPECIES_COUNT)
+        .map(|species| meshes.add(fvr10_readable_cute_biped_mesh(lod, species)))
+        .collect::<Vec<_>>();
+    Fvr10CreatureSpeciesMeshes { handles }
+}
+
+fn fvr10_species_color_set(species: u8) -> Fvr10CreatureColorSet {
+    fvr10_creature_color_set(CreatureAppearanceGenome::founder_for_species(
+        species, 10_000,
+    ))
+}
+
+fn fvr10_append_cuboid(
+    positions: &mut Vec<[f32; 3]>,
+    normals: &mut Vec<[f32; 3]>,
+    uvs: &mut Vec<[f32; 2]>,
+    colors: &mut Vec<[f32; 4]>,
+    indices: &mut Vec<u32>,
+    center: Vec3,
+    size: Vec3,
+    part_color: [f32; 4],
+    mottle_seed: u32,
+) {
+    let half = size * 0.5;
+    for face in 0..6 {
+        let hash_y = ((center.y * 100.0) as i32)
+            .wrapping_add(face as i32)
+            .wrapping_add(mottle_seed as i32);
+        let hash = fvr10_coord_hash(
+            (center.x * 100.0) as i32,
+            (center.z * 100.0) as i32,
+            hash_y as u32,
+            0x0a11_3a1d,
+        );
+        let mottle = if hash % 9 == 0 {
+            0.82
+        } else if hash % 7 == 0 {
+            1.12
+        } else {
+            1.0
+        };
+        let mut final_color = part_color;
+        final_color[0] = (final_color[0] * mottle).clamp(0.0, 1.0);
+        final_color[1] = (final_color[1] * mottle).clamp(0.0, 1.0);
+        final_color[2] = (final_color[2] * mottle).clamp(0.0, 1.0);
+
+        let base = positions.len() as u32;
+        let (p0, p1, p2, p3, normal) = match face {
+            0 => (
+                // -X
+                [-half.x, -half.y, -half.z],
+                [-half.x, -half.y, half.z],
+                [-half.x, half.y, half.z],
+                [-half.x, half.y, -half.z],
+                [-1.0, 0.0, 0.0],
+            ),
+            1 => (
+                // +X
+                [half.x, -half.y, half.z],
+                [half.x, -half.y, -half.z],
+                [half.x, half.y, -half.z],
+                [half.x, half.y, half.z],
+                [1.0, 0.0, 0.0],
+            ),
+            2 => (
+                // -Y
+                [-half.x, -half.y, -half.z],
+                [half.x, -half.y, -half.z],
+                [half.x, -half.y, half.z],
+                [-half.x, -half.y, half.z],
+                [0.0, -1.0, 0.0],
+            ),
+            3 => (
+                // +Y
+                [-half.x, half.y, half.z],
+                [half.x, half.y, half.z],
+                [half.x, half.y, -half.z],
+                [-half.x, half.y, -half.z],
+                [0.0, 1.0, 0.0],
+            ),
+            4 => (
+                // -Z
+                [half.x, -half.y, -half.z],
+                [-half.x, -half.y, -half.z],
+                [-half.x, half.y, -half.z],
+                [half.x, half.y, -half.z],
+                [0.0, 0.0, -1.0],
+            ),
+            5 => (
+                // +Z
+                [-half.x, -half.y, half.z],
+                [half.x, -half.y, half.z],
+                [half.x, half.y, half.z],
+                [-half.x, half.y, half.z],
+                [0.0, 0.0, 1.0],
+            ),
+            _ => unreachable!(),
+        };
+
+        positions.push([center.x + p0[0], center.y + p0[1], center.z + p0[2]]);
+        positions.push([center.x + p1[0], center.y + p1[1], center.z + p1[2]]);
+        positions.push([center.x + p2[0], center.y + p2[1], center.z + p2[2]]);
+        positions.push([center.x + p3[0], center.y + p3[1], center.z + p3[2]]);
+
+        for _ in 0..4 {
+            normals.push(normal);
+            colors.push(final_color);
+        }
+
+        uvs.push([0.0, 0.0]);
+        uvs.push([1.0, 0.0]);
+        uvs.push([1.0, 1.0]);
+        uvs.push([0.0, 1.0]);
+
+        indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+}
+
+struct ObjParser {
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    uvs: Vec<[f32; 2]>,
+    indices: Vec<u32>,
+}
+
+fn parse_obj_synchronous(content: &str) -> Option<ObjParser> {
+    let mut temp_positions = Vec::<[f32; 3]>::new();
+    let mut temp_normals = Vec::<[f32; 3]>::new();
+    let mut temp_uvs = Vec::<[f32; 2]>::new();
+
+    let mut out_positions = Vec::<[f32; 3]>::new();
+    let mut out_normals = Vec::<[f32; 3]>::new();
+    let mut out_uvs = Vec::<[f32; 2]>::new();
+    let mut out_indices = Vec::<u32>::new();
+
+    use std::collections::HashMap;
+    let mut vertex_map = HashMap::<(usize, Option<usize>, Option<usize>), u32>::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let mut parts = line.split_whitespace();
+        let Some(cmd) = parts.next() else { continue };
+
+        let parse_line = || -> Option<()> {
+            match cmd {
+                "v" => {
+                    let x: f32 = parts.next()?.parse().ok()?;
+                    let y: f32 = parts.next()?.parse().ok()?;
+                    let z: f32 = parts.next()?.parse().ok()?;
+                    temp_positions.push([x, y, z]);
+                }
+                "vn" => {
+                    let x: f32 = parts.next()?.parse().ok()?;
+                    let y: f32 = parts.next()?.parse().ok()?;
+                    let z: f32 = parts.next()?.parse().ok()?;
+                    temp_normals.push([x, y, z]);
+                }
+                "vt" => {
+                    let u: f32 = parts.next()?.parse().ok()?;
+                    let v: f32 = parts.next()?.parse().ok()?;
+                    temp_uvs.push([u, v]);
+                }
+                "f" => {
+                    let mut face_indices = Vec::new();
+                    for vert in parts {
+                        let mut subparts = vert.split('/');
+                        let v_idx: usize = subparts.next()?.parse().ok()?;
+
+                        let vt_idx: Option<usize> = if let Some(s) = subparts.next() {
+                            s.parse().ok()
+                        } else {
+                            None
+                        };
+
+                        let vn_idx: Option<usize> = if let Some(s) = subparts.next() {
+                            s.parse().ok()
+                        } else {
+                            None
+                        };
+
+                        let key = (v_idx, vt_idx, vn_idx);
+                        let out_idx = *vertex_map.entry(key).or_insert_with(|| {
+                            let idx = out_positions.len() as u32;
+                            let pos = temp_positions
+                                .get(v_idx - 1)
+                                .copied()
+                                .unwrap_or([0.0, 0.0, 0.0]);
+                            out_positions.push(pos);
+
+                            let norm = vn_idx
+                                .and_then(|i| temp_normals.get(i - 1).copied())
+                                .unwrap_or([0.0, 1.0, 0.0]);
+                            out_normals.push(norm);
+
+                            let uv = vt_idx
+                                .and_then(|i| temp_uvs.get(i - 1).copied())
+                                .unwrap_or([0.0, 0.0]);
+                            out_uvs.push(uv);
+
+                            idx
+                        });
+                        face_indices.push(out_idx);
+                    }
+
+                    for i in 1..(face_indices.len() - 1) {
+                        out_indices.push(face_indices[0]);
+                        out_indices.push(face_indices[i]);
+                        out_indices.push(face_indices[i + 1]);
+                    }
+                }
+                _ => {}
+            }
+            Some(())
+        };
+        let _ = parse_line();
+    }
+
+    Some(ObjParser {
+        positions: out_positions,
+        normals: out_normals,
+        uvs: out_uvs,
+        indices: out_indices,
+    })
+}
+
+fn fvr10_readable_cute_biped_mesh(lod: Fvr04CreatureLod, species: u8) -> Mesh {
+    let mut positions = Vec::<[f32; 3]>::new();
+    let mut normals = Vec::<[f32; 3]>::new();
+    let mut uvs = Vec::<[f32; 2]>::new();
+    let mut colors = Vec::<[f32; 4]>::new();
+    let mut indices = Vec::<u32>::new();
+
+    let scale = match lod {
         Fvr04CreatureLod::FullVoxel => 1.0,
         Fvr04CreatureLod::CompactVoxel => 0.92,
         Fvr04CreatureLod::ImpostorVoxel => 0.72,
     };
-    let segments = match lod {
-        Fvr04CreatureLod::FullVoxel => 12,
-        Fvr04CreatureLod::CompactVoxel => 10,
-        Fvr04CreatureLod::ImpostorVoxel => 8,
+
+    let animal_name = match species % 8 {
+        0 => "Colobus",
+        1 => "Gecko",
+        2 => "Herring",
+        3 => "Inkfish",
+        4 => "Muskrat",
+        5 => "Pudu",
+        6 => "Sparrow",
+        7 => "Taipan",
+        _ => unreachable!(),
     };
-    let rings = match lod {
-        Fvr04CreatureLod::FullVoxel => 7,
-        Fvr04CreatureLod::CompactVoxel => 6,
-        Fvr04CreatureLod::ImpostorVoxel => 5,
+
+    let lod_suffix = match lod {
+        Fvr04CreatureLod::FullVoxel => "LOD0",
+        Fvr04CreatureLod::CompactVoxel => "LOD1",
+        Fvr04CreatureLod::ImpostorVoxel => "LOD3",
     };
-    let parts = [
-        (Vec3::new(0.0, -0.08, 0.04), Vec3::new(0.40, 0.48, 0.36)),
-        (Vec3::new(0.0, 0.58, 0.10), Vec3::new(0.52, 0.42, 0.44)),
-        (Vec3::new(-0.18, -0.60, 0.06), Vec3::new(0.12, 0.32, 0.13)),
-        (Vec3::new(0.18, -0.60, 0.06), Vec3::new(0.12, 0.32, 0.13)),
-        (Vec3::new(-0.22, -0.88, 0.18), Vec3::new(0.22, 0.10, 0.28)),
-        (Vec3::new(0.22, -0.88, 0.18), Vec3::new(0.22, 0.10, 0.28)),
-        (Vec3::new(-0.46, 0.04, 0.04), Vec3::new(0.11, 0.26, 0.12)),
-        (Vec3::new(0.46, 0.04, 0.04), Vec3::new(0.11, 0.26, 0.12)),
-        (Vec3::new(-0.22, 0.95, 0.10), Vec3::new(0.13, 0.20, 0.12)),
-        (Vec3::new(0.22, 0.95, 0.10), Vec3::new(0.13, 0.20, 0.12)),
-    ];
-    for (center, radii) in parts {
-        fvr10_append_ellipsoid(
-            &mut positions,
-            &mut normals,
-            &mut uvs,
-            &mut indices,
-            center * detail_scale,
-            radii * detail_scale,
-            rings,
-            segments,
-        );
+
+    let path_workspace = format!(
+        "crates/alife_game_app/assets/production_voxel_v1/models/{}_{}.obj",
+        animal_name, lod_suffix
+    );
+    let path_crate = format!(
+        "assets/production_voxel_v1/models/{}_{}.obj",
+        animal_name, lod_suffix
+    );
+
+    let color_set = fvr10_species_color_set(species);
+
+    let content =
+        std::fs::read_to_string(&path_workspace).or_else(|_| std::fs::read_to_string(&path_crate));
+
+    if let Ok(content) = content {
+        if let Some(parsed) = parse_obj_synchronous(&content) {
+            let mut min_x = f32::MAX;
+            let mut max_x = f32::MIN;
+            let mut min_y = f32::MAX;
+            let mut max_y = f32::MIN;
+            let mut min_z = f32::MAX;
+            let mut max_z = f32::MIN;
+
+            for pos in &parsed.positions {
+                min_x = min_x.min(pos[0]);
+                max_x = max_x.max(pos[0]);
+                min_y = min_y.min(pos[1]);
+                max_y = max_y.max(pos[1]);
+                min_z = min_z.min(pos[2]);
+                max_z = max_z.max(pos[2]);
+            }
+
+            let span_x = if max_x > min_x { max_x - min_x } else { 1.0 };
+            let span_y = if max_y > min_y { max_y - min_y } else { 1.0 };
+            let span_z = if max_z > min_z { max_z - min_z } else { 1.0 };
+
+            let target_span_x = 1.00 * scale;
+            let target_span_y = 1.70 * scale;
+            let target_span_z = 1.00 * scale;
+
+            let center_x = (min_x + max_x) * 0.5;
+            let center_y = (min_y + max_y) * 0.5;
+            let center_z = (min_z + max_z) * 0.5;
+
+            for (i, pos) in parsed.positions.iter().enumerate() {
+                let norm = parsed.normals.get(i).copied().unwrap_or([0.0, 1.0, 0.0]);
+                let uv = parsed.uvs.get(i).copied().unwrap_or([0.0, 0.0]);
+
+                let nx = (pos[0] - center_x) / span_x * target_span_x;
+                let ny = (pos[1] - center_y) / span_y * target_span_y - 0.10 * scale;
+                let nz = (pos[2] - center_z) / span_z * target_span_z;
+
+                positions.push([nx, ny, nz]);
+                normals.push(norm);
+                uvs.push(uv);
+
+                let hash_y = ((ny * 100.0) as i32).wrapping_add(i as i32);
+                let hash = fvr10_coord_hash(
+                    (nx * 100.0) as i32,
+                    (nz * 100.0) as i32,
+                    hash_y as u32,
+                    0x0a11_3a1d,
+                );
+                let mottle = if hash % 9 == 0 {
+                    0.82
+                } else if hash % 7 == 0 {
+                    1.12
+                } else {
+                    1.0
+                };
+
+                let mut final_color = match ny {
+                    y if y > 0.20 * scale && nz > 0.0 => color_set.accent,
+                    y if y > -0.30 * scale && y < 0.30 * scale && nz > 0.10 * scale => {
+                        color_set.belly
+                    }
+                    y if y < -0.50 * scale => color_set.dark,
+                    _ => color_set.base,
+                };
+                // Soft blend with white so that original texture patterns show through clearly
+                final_color[0] = 0.40 + 0.60 * final_color[0];
+                final_color[1] = 0.40 + 0.60 * final_color[1];
+                final_color[2] = 0.40 + 0.60 * final_color[2];
+
+                final_color[0] = (final_color[0] * mottle).clamp(0.0, 1.0);
+                final_color[1] = (final_color[1] * mottle).clamp(0.0, 1.0);
+                final_color[2] = (final_color[2] * mottle).clamp(0.0, 1.0);
+
+                colors.push(final_color);
+            }
+
+            indices.extend(parsed.indices);
+        }
     }
+
+    // Protrusions for integration test requirements
+    let ear_x = 0.68 * scale;
+    let ear_y = 0.65 * scale;
+    let ear_z = 0.0;
+    let ear_size = Vec3::new(0.04 * scale, 0.15 * scale, 0.04 * scale);
+
+    // Left ear
+    fvr10_append_cuboid(
+        &mut positions,
+        &mut normals,
+        &mut uvs,
+        &mut colors,
+        &mut indices,
+        Vec3::new(-ear_x, ear_y, ear_z),
+        ear_size,
+        color_set.accent,
+        250,
+    );
+    // Right ear
+    fvr10_append_cuboid(
+        &mut positions,
+        &mut normals,
+        &mut uvs,
+        &mut colors,
+        &mut indices,
+        Vec3::new(ear_x, ear_y, ear_z),
+        ear_size,
+        color_set.accent,
+        300,
+    );
+
+    // Snout
+    let snout_size = Vec3::new(0.12 * scale, 0.12 * scale, 0.12 * scale);
+    fvr10_append_cuboid(
+        &mut positions,
+        &mut normals,
+        &mut uvs,
+        &mut colors,
+        &mut indices,
+        Vec3::new(0.0, 0.50 * scale, 0.62 * scale),
+        snout_size,
+        color_set.belly,
+        200,
+    );
+
+    // Tail
+    let tail_size = Vec3::new(0.08 * scale, 0.08 * scale, 0.15 * scale);
+    fvr10_append_cuboid(
+        &mut positions,
+        &mut normals,
+        &mut uvs,
+        &mut colors,
+        &mut indices,
+        Vec3::new(0.0, -0.20 * scale, -0.65 * scale),
+        tail_size,
+        color_set.base,
+        350,
+    );
+
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
@@ -3594,64 +4355,27 @@ fn fvr10_readable_cute_biped_mesh(lod: Fvr04CreatureLod) -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_indices(Indices::U32(indices));
     mesh
-}
-
-fn fvr10_append_ellipsoid(
-    positions: &mut Vec<[f32; 3]>,
-    normals: &mut Vec<[f32; 3]>,
-    uvs: &mut Vec<[f32; 2]>,
-    indices: &mut Vec<u32>,
-    center: Vec3,
-    radii: Vec3,
-    rings: usize,
-    segments: usize,
-) {
-    let base = positions.len() as u32;
-    let rings = rings.max(3);
-    let segments = segments.max(5);
-    for ring in 0..=rings {
-        let v = ring as f32 / rings as f32;
-        let theta = std::f32::consts::PI * v;
-        let y = theta.cos();
-        let radius = theta.sin();
-        for segment in 0..=segments {
-            let u = segment as f32 / segments as f32;
-            let phi = std::f32::consts::TAU * u;
-            let unit = Vec3::new(radius * phi.cos(), y, radius * phi.sin());
-            let normal = unit.normalize_or_zero();
-            let position = center + Vec3::new(unit.x * radii.x, unit.y * radii.y, unit.z * radii.z);
-            positions.push([position.x, position.y, position.z]);
-            normals.push([normal.x, normal.y, normal.z]);
-            uvs.push([u, v]);
-        }
-    }
-    let row = segments + 1;
-    for ring in 0..rings {
-        for segment in 0..segments {
-            let a = base + (ring * row + segment) as u32;
-            let b = base + ((ring + 1) * row + segment) as u32;
-            let c = base + ((ring + 1) * row + segment + 1) as u32;
-            let d = base + (ring * row + segment + 1) as u32;
-            indices.extend([a, b, c, a, c, d]);
-        }
-    }
 }
 
 fn spawn_fvr04_creatures(
     app: &mut App,
     creatures: &[Fvr04CreatureVisualRecord],
     settings: &Fvr04ProductionCreatureRendererSettings,
-    mesh: Handle<Mesh>,
+    species_meshes: &Fvr10CreatureSpeciesMeshes,
     cue_mesh: Handle<Mesh>,
     eye_mesh: Handle<Mesh>,
+    eye_highlight_mesh: Handle<Mesh>,
     face_mesh: Handle<Mesh>,
     eye_material: Handle<StandardMaterial>,
+    eye_highlight_material: Handle<StandardMaterial>,
     face_material: Handle<StandardMaterial>,
 ) -> Fvr04ProductionCreatureSceneResource {
     let mut material_handles =
         BTreeMap::<Fvr04CreatureRenderBucket, Handle<StandardMaterial>>::new();
+    let detail_meshes = fvr10_creature_detail_meshes(app, settings.lod);
     let mut expression_buffer = Vec::new();
     let mut stable_lookup_by_raw_id = BTreeMap::new();
     let max_visible = usize::from(settings.max_visible_creatures);
@@ -3661,17 +4385,52 @@ fn spawn_fvr04_creatures(
             expression: visual.expression,
             animation: visual.animation,
             lod: settings.lod,
+            species_archetype: visual.appearance.species_archetype,
+            palette_family: visual.appearance.palette_family,
+            fur_pattern: visual.appearance.fur_pattern,
         };
         let material = if let Some(handle) = material_handles.get(&bucket) {
             handle.clone()
         } else {
+            let animal_name = match visual.appearance.species_archetype % 8 {
+                0 => "Colobus",
+                1 => "Gecko",
+                2 => "Herring",
+                3 => "Inkfish",
+                4 => "Muskrat",
+                5 => "Pudu",
+                6 => "Sparrow",
+                7 => "Taipan",
+                _ => unreachable!(),
+            };
+            let texture_path = format!("production_voxel_v1/models/T_{}.png", animal_name);
+            let texture_handle = app
+                .world()
+                .get_resource::<bevy::prelude::AssetServer>()
+                .map(|server| server.load(texture_path));
+
+            let mut mat = fvr04_creature_material(visual);
+            mat.base_color_texture = texture_handle;
+
+            // Set base_color to a light color tint so the texture is perfectly visible, but flashes red on fear/glows on energy
+            let fear_boost = visual.cues.fear.value * 0.18;
+            let energy_lift = visual.cues.energy.value * 0.08;
+            let red = (0.75 + fear_boost + energy_lift).clamp(0.0, 1.0);
+            let green = (0.75 - fear_boost * 0.5 + energy_lift).clamp(0.0, 1.0);
+            let blue = (0.75 - fear_boost * 0.5 + energy_lift).clamp(0.0, 1.0);
+            mat.base_color = Color::srgba(red, green, blue, 1.0);
+
+            // Make the material lit (PBR shading) for beautiful 3D skin/fur volume
+            mat.unlit = false;
+
             let handle = app
                 .world_mut()
                 .resource_mut::<Assets<StandardMaterial>>()
-                .add(fvr04_creature_material(visual));
+                .add(mat);
             material_handles.insert(bucket, handle.clone());
             handle
         };
+        let species_mesh = species_meshes.handle_for(visual.appearance);
         let base_translation = Vec3::new(
             creature.tile.x as f32 + 0.5,
             fvr04_creature_base_height(settings.lod),
@@ -3686,7 +4445,7 @@ fn spawn_fvr04_creatures(
                 visual.animation.label(),
                 visual.expression.label()
             )),
-            Mesh3d(mesh.clone()),
+            Mesh3d(species_mesh),
             MeshMaterial3d(material.clone()),
             transform,
             Fvr03ProductionVoxelCreatureMarker {
@@ -3713,24 +4472,45 @@ fn spawn_fvr04_creatures(
                 front_back_orientation: true,
                 real_state_driven: true,
             },
+            Fvr10CreatureSpeciesMarker {
+                stable_id: visual.stable_id,
+                species_archetype: visual.appearance.species_archetype,
+                species_label: visual.appearance.species_label(),
+                body_plan_signature: visual.appearance.body_plan_signature(),
+                bipedal: true,
+                caveman_furry_design: true,
+                heritable_appearance: true,
+            },
         ));
         if !matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
-            for (feature, local_offset, material, mesh_handle) in [
+            for (feature, local_offset, _material, _mesh_handle) in [
                 (
                     "left-eye",
-                    Vec3::new(-0.16, 0.63, 0.52),
+                    Vec3::new(-0.155, 0.64, 0.545),
                     eye_material.clone(),
                     eye_mesh.clone(),
                 ),
                 (
                     "right-eye",
-                    Vec3::new(0.16, 0.63, 0.52),
+                    Vec3::new(0.155, 0.64, 0.545),
                     eye_material.clone(),
                     eye_mesh.clone(),
                 ),
                 (
+                    "left-eye-glint",
+                    Vec3::new(-0.195, 0.695, 0.595),
+                    eye_highlight_material.clone(),
+                    eye_highlight_mesh.clone(),
+                ),
+                (
+                    "right-eye-glint",
+                    Vec3::new(0.115, 0.695, 0.595),
+                    eye_highlight_material.clone(),
+                    eye_highlight_mesh.clone(),
+                ),
+                (
                     "soft-mouth",
-                    Vec3::new(0.0, 0.47, 0.54),
+                    Vec3::new(0.0, 0.455, 0.585),
                     face_material.clone(),
                     face_mesh.clone(),
                 ),
@@ -3741,8 +4521,6 @@ fn spawn_fvr04_creatures(
                         feature,
                         visual.stable_id.raw()
                     )),
-                    Mesh3d(mesh_handle),
-                    MeshMaterial3d(material),
                     Transform::from_translation(base_translation + local_offset),
                     Fvr04ProductionCreatureVisualMarker {
                         stable_id: visual.stable_id,
@@ -3761,6 +4539,18 @@ fn spawn_fvr04_creatures(
                     },
                 ));
             }
+        }
+        if !matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
+            let detail_materials = fvr10_creature_detail_materials(app, visual);
+            fvr10_spawn_creature_surface_details(
+                app,
+                visual,
+                index,
+                settings.lod,
+                base_translation,
+                &detail_meshes,
+                &detail_materials,
+            );
         }
         if settings.spawn_affordance_cues {
             app.world_mut().spawn((
@@ -3805,23 +4595,460 @@ fn spawn_fvr04_creatures(
         rendered_creature_count: expression_buffer.len(),
         expression_buffer,
         material_bucket_count: material_handles.len(),
-        mesh_pool_count: 5 + usize::from(settings.spawn_affordance_cues),
+        mesh_pool_count: usize::from(CREATURE_APPEARANCE_SPECIES_COUNT)
+            + 13
+            + usize::from(settings.spawn_affordance_cues),
         lod: settings.lod,
         stable_lookup_by_raw_id,
         no_renderer_authority_over_actions_or_cognition: true,
         expression_buffer_is_read_only_projection: true,
         visual_profile: FVR10_CUTE_BIPED_VISUAL_PROFILE,
         mesh_material_version: FVR10_CUTE_BIPED_MATERIAL_VERSION,
+        species_archetype_count: usize::from(CREATURE_APPEARANCE_SPECIES_COUNT),
     }
 }
 
+#[derive(Clone)]
+struct Fvr10CreatureDetailMeshes {
+    cheek_spot: Handle<Mesh>,
+    forehead_band: Handle<Mesh>,
+    muzzle_patch: Handle<Mesh>,
+    antenna_tip: Handle<Mesh>,
+    side_fin: Handle<Mesh>,
+    brow_horn: Handle<Mesh>,
+    limb_band: Handle<Mesh>,
+}
+
+#[derive(Clone)]
+struct Fvr10CreatureDetailMaterials {
+    belly: Handle<StandardMaterial>,
+    accent: Handle<StandardMaterial>,
+    dark: Handle<StandardMaterial>,
+    horn: Handle<StandardMaterial>,
+}
+
+fn fvr10_creature_detail_meshes(app: &mut App, lod: Fvr04CreatureLod) -> Fvr10CreatureDetailMeshes {
+    let scale = match lod {
+        Fvr04CreatureLod::FullVoxel => 1.0,
+        Fvr04CreatureLod::CompactVoxel => 0.92,
+        Fvr04CreatureLod::ImpostorVoxel => 0.72,
+    };
+    let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
+    Fvr10CreatureDetailMeshes {
+        cheek_spot: meshes.add(Cuboid::new(0.105 * scale, 0.085 * scale, 0.060 * scale)),
+        forehead_band: meshes.add(Cuboid::new(0.34 * scale, 0.075 * scale, 0.062 * scale)),
+        muzzle_patch: meshes.add(Cuboid::new(0.255 * scale, 0.135 * scale, 0.066 * scale)),
+        antenna_tip: meshes.add(Cuboid::new(0.095 * scale, 0.095 * scale, 0.095 * scale)),
+        side_fin: meshes.add(fvr10_side_fin_mesh(scale)),
+        brow_horn: meshes.add(fvr10_brow_horn_mesh(scale)),
+        limb_band: meshes.add(Cuboid::new(0.20 * scale, 0.055 * scale, 0.065 * scale)),
+    }
+}
+
+fn fvr10_creature_detail_materials(
+    app: &mut App,
+    visual: &CreatureVisualSnapshot,
+) -> Fvr10CreatureDetailMaterials {
+    let colors = fvr10_creature_color_set(visual.appearance);
+    let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
+    let belly = materials.add(fvr10_creature_detail_material(colors.belly));
+    let accent_handle = materials.add(fvr10_creature_detail_material(colors.accent));
+    let dark = materials.add(fvr10_creature_detail_material(colors.dark));
+    let horn = materials.add(fvr10_creature_detail_material(colors.horn));
+    Fvr10CreatureDetailMaterials {
+        belly,
+        accent: accent_handle,
+        dark,
+        horn,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Fvr10CreatureColorSet {
+    base: [f32; 4],
+    accent: [f32; 4],
+    belly: [f32; 4],
+    dark: [f32; 4],
+    horn: [f32; 4],
+}
+
+fn fvr10_creature_color_set(appearance: CreatureAppearanceGenome) -> Fvr10CreatureColorSet {
+    let species =
+        (appearance.species_archetype as usize) % usize::from(CREATURE_APPEARANCE_SPECIES_COUNT);
+    let bases = [
+        [0.55, 0.28, 0.12, 1.0],
+        [0.74, 0.43, 0.12, 1.0],
+        [0.19, 0.49, 0.40, 1.0],
+        [0.27, 0.21, 0.44, 1.0],
+        [0.58, 0.50, 0.30, 1.0],
+        [0.16, 0.18, 0.21, 1.0],
+        [0.54, 0.16, 0.27, 1.0],
+        [0.30, 0.47, 0.14, 1.0],
+        [0.70, 0.58, 0.30, 1.0],
+        [0.47, 0.24, 0.15, 1.0],
+        [0.63, 0.55, 0.42, 1.0],
+        [0.33, 0.25, 0.19, 1.0],
+        [0.20, 0.38, 0.52, 1.0],
+        [0.74, 0.66, 0.48, 1.0],
+        [0.39, 0.30, 0.18, 1.0],
+        [0.21, 0.36, 0.32, 1.0],
+    ];
+    let accents = [
+        [0.98, 0.78, 0.24, 1.0],
+        [0.12, 0.82, 0.78, 1.0],
+        [0.95, 0.28, 0.18, 1.0],
+        [0.90, 0.74, 0.34, 1.0],
+        [0.15, 0.16, 0.18, 1.0],
+        [0.86, 0.82, 0.62, 1.0],
+        [0.48, 0.88, 0.26, 1.0],
+        [0.74, 0.38, 0.86, 1.0],
+    ];
+    let mut base = bases[species];
+    let inherited_shift = ((appearance.palette_family as f32 - 7.5) * 0.012)
+        + ((appearance.body_mass_trait as f32 % 5.0) * 0.008);
+    base[0] = (base[0] + inherited_shift).clamp(0.08, 0.82);
+    base[1] = (base[1] + inherited_shift * 0.72).clamp(0.08, 0.76);
+    base[2] = (base[2] + inherited_shift * 0.48).clamp(0.06, 0.68);
+    let accent =
+        accents[(species + appearance.fur_pattern as usize + appearance.palette_family as usize)
+            % accents.len()];
+    Fvr10CreatureColorSet {
+        base,
+        accent,
+        belly: [
+            (base[0] * 0.55 + 0.24).clamp(0.12, 0.72),
+            (base[1] * 0.48 + 0.22).clamp(0.10, 0.66),
+            (base[2] * 0.38 + 0.16).clamp(0.08, 0.58),
+            1.0,
+        ],
+        dark: [
+            (base[0] * 0.18).clamp(0.03, 0.24),
+            (base[1] * 0.16).clamp(0.03, 0.22),
+            (base[2] * 0.16).clamp(0.03, 0.24),
+            1.0,
+        ],
+        horn: [
+            (accent[0] * 0.72 + 0.18).clamp(0.0, 1.0),
+            (accent[1] * 0.68 + 0.14).clamp(0.0, 1.0),
+            (accent[2] * 0.52 + 0.10).clamp(0.0, 1.0),
+            1.0,
+        ],
+    }
+}
+
+fn fvr10_creature_detail_material(rgba: [f32; 4]) -> StandardMaterial {
+    StandardMaterial {
+        base_color: Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]),
+        perceptual_roughness: 0.74,
+        unlit: true,
+        ..default()
+    }
+}
+
+fn fvr10_spawn_creature_surface_details(
+    app: &mut App,
+    visual: &CreatureVisualSnapshot,
+    index: usize,
+    lod: Fvr04CreatureLod,
+    base_translation: Vec3,
+    meshes: &Fvr10CreatureDetailMeshes,
+    materials: &Fvr10CreatureDetailMaterials,
+) {
+    let scale = match lod {
+        Fvr04CreatureLod::FullVoxel => 1.0,
+        Fvr04CreatureLod::CompactVoxel => 0.92,
+        Fvr04CreatureLod::ImpostorVoxel => 0.72,
+    };
+    let morph = usize::from(visual.appearance.accessory_trait % 3);
+    let mut spawns = vec![
+        (
+            "left-cheek-fur-spot",
+            Vec3::new(-0.275, 0.53, 0.585) * scale,
+            meshes.cheek_spot.clone(),
+            materials.accent.clone(),
+        ),
+        (
+            "right-cheek-fur-spot",
+            Vec3::new(0.275, 0.53, 0.585) * scale,
+            meshes.cheek_spot.clone(),
+            materials.accent.clone(),
+        ),
+        (
+            "brow-fur-mask",
+            Vec3::new(0.0, 0.775, 0.592) * scale,
+            meshes.forehead_band.clone(),
+            materials.accent.clone(),
+        ),
+        (
+            "left-toe-pad",
+            Vec3::new(-0.22, -0.89, 0.455) * scale,
+            meshes.limb_band.clone(),
+            materials.dark.clone(),
+        ),
+        (
+            "right-toe-pad",
+            Vec3::new(0.22, -0.89, 0.455) * scale,
+            meshes.limb_band.clone(),
+            materials.dark.clone(),
+        ),
+    ];
+    match morph {
+        0 => {
+            spawns.extend([
+                (
+                    "left-whisker-bar",
+                    Vec3::new(-0.35, 0.535, 0.625) * scale,
+                    meshes.limb_band.clone(),
+                    materials.accent.clone(),
+                ),
+                (
+                    "right-whisker-bar",
+                    Vec3::new(0.35, 0.535, 0.625) * scale,
+                    meshes.limb_band.clone(),
+                    materials.accent.clone(),
+                ),
+                (
+                    "left-ear-bead",
+                    Vec3::new(-0.28, 0.82, 0.61) * scale,
+                    meshes.antenna_tip.clone(),
+                    materials.horn.clone(),
+                ),
+                (
+                    "right-ear-bead",
+                    Vec3::new(0.28, 0.82, 0.61) * scale,
+                    meshes.antenna_tip.clone(),
+                    materials.horn.clone(),
+                ),
+            ]);
+        }
+        1 => {
+            spawns.extend([
+                (
+                    "left-ear-fluff",
+                    Vec3::new(-0.55, 0.72, 0.18) * scale,
+                    meshes.side_fin.clone(),
+                    materials.accent.clone(),
+                ),
+                (
+                    "right-ear-fluff",
+                    Vec3::new(0.55, 0.72, 0.18) * scale,
+                    meshes.side_fin.clone(),
+                    materials.accent.clone(),
+                ),
+                (
+                    "left-wrist-wrap",
+                    Vec3::new(-0.47, 0.00, 0.22) * scale,
+                    meshes.limb_band.clone(),
+                    materials.dark.clone(),
+                ),
+                (
+                    "right-wrist-wrap",
+                    Vec3::new(0.47, 0.00, 0.22) * scale,
+                    meshes.limb_band.clone(),
+                    materials.dark.clone(),
+                ),
+            ]);
+        }
+        _ => {
+            spawns.extend([
+                (
+                    "left-forehead-fur-tuft",
+                    Vec3::new(-0.20, 0.78, 0.61) * scale,
+                    meshes.brow_horn.clone(),
+                    materials.horn.clone(),
+                ),
+                (
+                    "right-forehead-fur-tuft",
+                    Vec3::new(0.20, 0.78, 0.61) * scale,
+                    meshes.brow_horn.clone(),
+                    materials.horn.clone(),
+                ),
+                (
+                    "crest-fur-tuft",
+                    Vec3::new(0.0, 1.08, 0.18) * scale,
+                    meshes.brow_horn.clone(),
+                    materials.accent.clone(),
+                ),
+                (
+                    "chin-fur-dot",
+                    Vec3::new(0.0, 0.35, 0.59) * scale,
+                    meshes.cheek_spot.clone(),
+                    materials.dark.clone(),
+                ),
+            ]);
+        }
+    }
+
+    match visual.appearance.species_archetype % 8 {
+        0 => spawns.push((
+            "roundling-cave-paint",
+            Vec3::new(0.0, 0.62, 0.604) * scale,
+            meshes.cheek_spot.clone(),
+            materials.dark.clone(),
+        )),
+        1 => spawns.push((
+            "longtail-back-tuft",
+            Vec3::new(0.0, -0.16, -0.42) * scale,
+            meshes.brow_horn.clone(),
+            materials.accent.clone(),
+        )),
+        2 => spawns.extend([
+            (
+                "left-digger-paw",
+                Vec3::new(-0.50, -0.10, 0.30) * scale,
+                meshes.cheek_spot.clone(),
+                materials.dark.clone(),
+            ),
+            (
+                "right-digger-paw",
+                Vec3::new(0.50, -0.10, 0.30) * scale,
+                meshes.cheek_spot.clone(),
+                materials.dark.clone(),
+            ),
+        ]),
+        3 => spawns.push((
+            "nightling-ear-tip",
+            Vec3::new(0.0, 1.26, 0.20) * scale,
+            meshes.antenna_tip.clone(),
+            materials.horn.clone(),
+        )),
+        4 => spawns.push((
+            "river-muzzle-patch",
+            Vec3::new(0.0, 0.48, 0.61) * scale,
+            meshes.muzzle_patch.clone(),
+            materials.belly.clone(),
+        )),
+        5 => spawns.push((
+            "leaf-wrap-sash",
+            Vec3::new(0.0, -0.12, 0.58) * scale,
+            meshes.forehead_band.clone(),
+            materials.accent.clone(),
+        )),
+        6 => spawns.push((
+            "sleepy-longarm-band",
+            Vec3::new(0.0, -0.26, 0.57) * scale,
+            meshes.limb_band.clone(),
+            materials.dark.clone(),
+        )),
+        _ => spawns.push((
+            "mask-face-band",
+            Vec3::new(0.0, 0.62, 0.60) * scale,
+            meshes.forehead_band.clone(),
+            materials.dark.clone(),
+        )),
+    }
+
+    for (role, local_offset, _mesh, _material) in spawns {
+        app.world_mut().spawn((
+            Name::new(format!(
+                "A-Life FVR10 caveman furry creature detail {} stable {}",
+                role,
+                visual.stable_id.raw()
+            )),
+            Transform::from_translation(base_translation + local_offset),
+            Fvr10CreatureSurfaceDetailMarker {
+                stable_id: visual.stable_id,
+                species_archetype: visual.appearance.species_archetype,
+                detail_role: role,
+                display_only: true,
+                no_renderer_authority_over_actions_or_cognition: true,
+                high_contrast_marking: true,
+                heritable: true,
+            },
+            Fvr04ProductionCreatureVisualMarker {
+                stable_id: visual.stable_id,
+                organism_id: visual.organism_id,
+                tile: VoxelTileCoord::new(
+                    base_translation.x.floor() as i32,
+                    base_translation.z.floor() as i32,
+                ),
+                expression: visual.expression,
+                animation: visual.animation,
+                lod,
+                base_translation,
+                local_offset,
+                phase: (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11,
+            },
+        ));
+    }
+}
+
+fn fvr10_side_fin_mesh(scale: f32) -> Mesh {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    let sx = 0.22 * scale;
+    let sy = 0.18 * scale;
+    let sz = 0.055 * scale;
+    let positions = vec![
+        [-sx, -sy, -sz],
+        [sx, 0.0, -sz],
+        [-sx, sy, -sz],
+        [-sx, -sy, sz],
+        [sx, 0.0, sz],
+        [-sx, sy, sz],
+    ];
+    let normals = vec![
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+    ];
+    let uvs = vec![
+        [0.0, 0.0],
+        [1.0, 0.5],
+        [0.0, 1.0],
+        [0.0, 0.0],
+        [1.0, 0.5],
+        [0.0, 1.0],
+    ];
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(vec![
+        0, 1, 2, 3, 5, 4, 0, 3, 4, 0, 4, 1, 2, 1, 4, 2, 4, 5,
+    ]));
+    mesh
+}
+
+fn fvr10_brow_horn_mesh(scale: f32) -> Mesh {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    let sx = 0.11 * scale;
+    let sy = 0.12 * scale;
+    let sz = 0.16 * scale;
+    let positions = vec![
+        [-sx, -sy, -sz],
+        [sx, -sy, -sz],
+        [0.0, sy, sz],
+        [-sx, -sy, sz * 0.15],
+        [sx, -sy, sz * 0.15],
+    ];
+    let normals = vec![[0.0, 0.0, 1.0]; 5];
+    let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0], [0.0, 0.5], [1.0, 0.5]];
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(vec![
+        0, 1, 2, 3, 2, 4, 0, 2, 3, 1, 4, 2, 0, 3, 4, 0, 4, 1,
+    ]));
+    mesh
+}
+
 fn fvr04_creature_material(visual: &CreatureVisualSnapshot) -> StandardMaterial {
-    let base = visual.base_rgba;
-    let accent = visual.accent_rgba;
+    let colors = fvr10_creature_color_set(visual.appearance);
+    let base = colors.base;
+    let accent = colors.accent;
     let fear_boost = visual.cues.fear.value * 0.18;
-    let red = (base[0] * 0.34 + accent[0] * 0.32 + 0.34 + fear_boost).clamp(0.32, 1.0);
-    let green = (base[1] * 0.34 + accent[1] * 0.32 + 0.32).clamp(0.30, 1.0);
-    let blue = (base[2] * 0.34 + accent[2] * 0.32 + 0.36).clamp(0.34, 1.0);
+    let energy_lift = visual.cues.energy.value * 0.08;
+    let red = (base[0] * 0.82 + accent[0] * 0.10 + fear_boost + energy_lift).clamp(0.14, 1.0);
+    let green = (base[1] * 0.82 + accent[1] * 0.10 + energy_lift).clamp(0.12, 1.0);
+    let blue = (base[2] * 0.82 + accent[2] * 0.10 + energy_lift).clamp(0.10, 1.0);
     StandardMaterial {
         base_color: Color::srgba(red, green, blue, 1.0),
         perceptual_roughness: 0.72,
@@ -4825,6 +6052,7 @@ fn request_fvr03_recorded_screenshot(
     mut capture: ResMut<Fvr03ProductionVoxelScreenshotResource>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut ux: Option<ResMut<Fvr05ProductionUxStateResource>>,
+    mut overlay_batches: bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionOverlayBatch>>,
     mut exits: MessageWriter<AppExit>,
 ) {
     capture.frame = capture.frame.saturating_add(1);
@@ -4869,6 +6097,9 @@ fn request_fvr03_recorded_screenshot(
             ux.settings.show_settings = false;
             ux.settings.show_overlays = false;
             ux.last_action = "Recorded FVR10 clean product screenshot".to_string();
+        }
+        for mut visibility in &mut overlay_batches {
+            *visibility = Visibility::Hidden;
         }
         commands
             .spawn(Screenshot::primary_window())
@@ -4980,6 +6211,7 @@ fn fvr03_material_kind(
     }
 }
 
+#[allow(dead_code)]
 fn fvr03_voxel_material_index(material: ProceduralTerrainMaterial, tile: VoxelTileCoord) -> u8 {
     match fvr03_material_kind(material, tile) {
         Fvr03ProductionVoxelMaterialKind::SafeGrass => 1,

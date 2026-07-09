@@ -45,10 +45,10 @@ mod prelude {
         FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::{
-        CreatureWorldAnchor, EcologyMetrics, EcologyZoneId, HeadlessActionIds,
-        HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessSensoryReport, HeadlessWorld,
-        PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZone, TerrainZoneKind,
-        WorldEditorSpawnSpec, WorldObjectKind,
+        CreatureAppearanceGenome, CreatureWorldAnchor, EcologyMetrics, EcologyZoneId,
+        HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessSensoryReport,
+        HeadlessWorld, PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZone,
+        TerrainZoneKind, WorldEditorSpawnSpec, WorldObjectKind,
     };
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use thiserror::Error;

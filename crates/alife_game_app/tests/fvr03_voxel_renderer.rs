@@ -9,10 +9,14 @@ use alife_game_app::{
     Fvr03ProductionVoxelTerrainTile, Fvr04ProductionCreatureVisualMarker,
     Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
     Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
-    Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, ProductionFrontendProfileId,
-    ProductionVoxelLaunchConfig, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
+    Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
+    Fvr10CreatureSurfaceDetailMarker, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
 };
-use alife_world::{StableVoxelRefKind, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA};
+use alife_world::{
+    CreatureAppearanceGenome, StableVoxelRefKind, CREATURE_APPEARANCE_SPECIES_COUNT,
+    FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
+};
 use bevy::{
     mesh::VertexAttributeValues,
     prelude::{Assets, Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Transform},
@@ -152,6 +156,20 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     ] {
         assert!(vfx_kinds.contains(&required), "missing VFX {required:?}");
     }
+    assert!(
+        vfx.iter()
+            .filter(|entry| {
+                entry.stable_id.is_some()
+                    && matches!(
+                        entry.kind,
+                        Fvr07ProductionVfxKind::SleepGlow
+                            | Fvr07ProductionVfxKind::BirthDeathEffect
+                            | Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse
+                    )
+            })
+            .all(|entry| entry.base_scale.x <= 0.32 && entry.base_scale.z <= 0.32),
+        "creature-attached VFX markers must stay small enough to avoid covering body silhouettes"
+    );
 
     let mut batch_query = app.world_mut().query::<&Fvr03ProductionVoxelTerrainBatch>();
     let batches = batch_query.iter(app.world()).copied().collect::<Vec<_>>();
@@ -349,7 +367,7 @@ fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
     );
     assert_eq!(
         creature_scene.mesh_material_version,
-        "fvr10-soft-creature-materials-v1"
+        "fvr10-bipedal-caveman-furry-species-v1"
     );
     assert_eq!(
         creature_scene.rendered_creature_count,
@@ -442,7 +460,7 @@ fn fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack() {
     );
     assert_eq!(
         creature_scene.mesh_material_version,
-        "fvr10-soft-creature-materials-v1"
+        "fvr10-bipedal-caveman-furry-species-v1"
     );
     assert!(creature_scene.mesh_pool_count >= 5);
 
@@ -467,6 +485,175 @@ fn fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack() {
         positions.len() >= 320,
         "creature rig should be rounded/generated, not a cuboid stack with {} vertices",
         positions.len()
+    );
+    let (mut min_x, mut max_x) = (f32::MAX, f32::MIN);
+    let (mut min_y, mut max_y) = (f32::MAX, f32::MIN);
+    let (mut min_z, mut max_z) = (f32::MAX, f32::MIN);
+    let mut snout_vertices = 0_usize;
+    let mut tail_vertices = 0_usize;
+    let mut ear_vertices = 0_usize;
+    for position in positions {
+        min_x = min_x.min(position[0]);
+        max_x = max_x.max(position[0]);
+        min_y = min_y.min(position[1]);
+        max_y = max_y.max(position[1]);
+        min_z = min_z.min(position[2]);
+        max_z = max_z.max(position[2]);
+        if position[2] > 0.57 && (0.35..0.75).contains(&position[1]) {
+            snout_vertices += 1;
+        }
+        if position[2] < -0.55 {
+            tail_vertices += 1;
+        }
+        if position[0].abs() > 0.54 && position[1] > 0.50 {
+            ear_vertices += 1;
+        }
+    }
+    assert!(
+        max_y <= 1.08,
+        "creature mesh has a tall centered top protrusion instead of an animal head/ear silhouette: max_y={max_y:.3}"
+    );
+    assert!(
+        max_x - min_x >= 1.05 && max_z - min_z >= 1.18 && max_y - min_y >= 1.50,
+        "creature mesh needs a fuller biped mammal silhouette, spans=({:.2},{:.2},{:.2})",
+        max_x - min_x,
+        max_y - min_y,
+        max_z - min_z
+    );
+    assert!(
+        snout_vertices >= 8 && tail_vertices >= 8 && ear_vertices >= 8,
+        "creature mesh needs visible snout/tail/ear protrusions, found snout={snout_vertices} tail={tail_vertices} ears={ear_vertices}"
+    );
+}
+
+#[test]
+fn fvr10_creatures_use_all_selected_bipedal_caveman_species_not_color_swaps() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let creature_scene = app
+        .world()
+        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>()
+        .clone();
+    assert_eq!(
+        creature_scene.species_archetype_count,
+        CREATURE_APPEARANCE_SPECIES_COUNT as usize
+    );
+    assert_eq!(
+        creature_scene.mesh_material_version,
+        "fvr10-bipedal-caveman-furry-species-v1"
+    );
+    assert!(
+        creature_scene.mesh_pool_count >= CREATURE_APPEARANCE_SPECIES_COUNT as usize,
+        "selected sheet requires distinct species body-plan meshes, not one recolored rig"
+    );
+    assert!(
+        creature_scene.material_bucket_count >= CREATURE_APPEARANCE_SPECIES_COUNT as usize,
+        "selected sheet requires species-specific inherited body materials, not shared expression color buckets"
+    );
+
+    let mut query = app.world_mut().query::<&Fvr10CreatureSpeciesMarker>();
+    let markers = query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(markers.len(), creature_scene.rendered_creature_count);
+    assert!(markers.iter().all(|marker| marker.bipedal));
+    assert!(markers.iter().all(|marker| marker.caveman_furry_design));
+    assert!(markers.iter().all(|marker| marker.heritable_appearance));
+    assert!(markers
+        .iter()
+        .all(|marker| !marker.species_label.is_empty() && marker.species_label != "color-swap"));
+
+    let species = markers
+        .iter()
+        .map(|marker| marker.species_archetype)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        species.len(),
+        CREATURE_APPEARANCE_SPECIES_COUNT as usize,
+        "production population should show every picked species archetype"
+    );
+
+    let body_plans = markers
+        .iter()
+        .map(|marker| marker.body_plan_signature)
+        .collect::<BTreeSet<_>>();
+    assert!(
+        body_plans.len() >= 12,
+        "species need different silhouettes/body plans, found only {}",
+        body_plans.len()
+    );
+}
+
+#[test]
+fn fvr10_creatures_have_high_contrast_heritable_surface_markings() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let mut detail_query = app.world_mut().query::<&Fvr10CreatureSurfaceDetailMarker>();
+    let details = detail_query.iter(app.world()).copied().collect::<Vec<_>>();
+    let unique_species = details
+        .iter()
+        .map(|marker| marker.species_archetype)
+        .collect::<BTreeSet<_>>();
+    let unique_roles = details
+        .iter()
+        .map(|marker| marker.detail_role)
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        unique_species.len(),
+        CREATURE_APPEARANCE_SPECIES_COUNT as usize
+    );
+    assert!(
+        unique_roles.len() >= 10,
+        "surface detail should include species-specific markings/accessories, found {unique_roles:?}"
+    );
+    assert!(details.iter().all(|marker| marker.display_only
+        && marker.no_renderer_authority_over_actions_or_cognition
+        && marker.high_contrast_marking
+        && marker.heritable));
+}
+
+#[test]
+fn fvr10_creature_appearance_genes_cover_sixteen_species_and_mutate_offspring() {
+    let founders = (0..CREATURE_APPEARANCE_SPECIES_COUNT)
+        .map(|slot| CreatureAppearanceGenome::founder_for_species(slot, 10_000 + u64::from(slot)))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        founders
+            .iter()
+            .map(|appearance| appearance.species_archetype)
+            .collect::<BTreeSet<_>>()
+            .len(),
+        CREATURE_APPEARANCE_SPECIES_COUNT as usize
+    );
+    assert!(founders
+        .iter()
+        .all(|appearance| appearance.validate().is_ok()));
+    assert!(founders
+        .iter()
+        .all(|appearance| appearance.bipedal_caveman_furry));
+
+    let child = CreatureAppearanceGenome::offspring_from_parents(
+        founders[2],
+        founders[9],
+        0xA11F_CAFE_2026,
+    );
+    child.validate().unwrap();
+    assert!(child.inherited_from(founders[2], founders[9]));
+    assert!(child.mutation_count > founders[2].mutation_count.max(founders[9].mutation_count));
+    assert_ne!(
+        child.signature_line(),
+        founders[2].signature_line(),
+        "offspring appearance should permit mutation, not clone parent A exactly"
+    );
+    assert_ne!(
+        child.signature_line(),
+        founders[9].signature_line(),
+        "offspring appearance should permit mutation, not clone parent B exactly"
     );
 }
 
