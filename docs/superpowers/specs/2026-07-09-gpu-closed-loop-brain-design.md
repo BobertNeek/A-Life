@@ -1,7 +1,7 @@
 # GPU-Authoritative Closed-Loop Brain Design
 
 **Date:** 2026-07-09
-**Status:** Approved direction; pending written-spec review
+**Status:** Approved implementation design
 **Repository baseline:** `origin/main` at `16ba2abc`
 **Implementation branch:** `codex/brain-gpu-closed-loop`
 
@@ -113,8 +113,13 @@ The GPU backend owns:
 - sleep consolidation and safe double-buffered structural swaps;
 - compact action and diagnostic readback.
 
-The backend exposes a narrow `GpuClosedLoopBrain` service. Device and pipeline
-types never cross into `alife_core` or `alife_world`.
+The backend exposes one shared `GpuClosedLoopBackend` plus lightweight,
+backend-instance-scoped, generation-checked `GpuBrainHandle` values whose
+fields are private. A handle from another backend instance or a prior slot
+generation is rejected before any buffer access. The backend owns one
+device/queue, shared pipelines, and class-bucketed SoA pools; a per-creature
+handle never owns or duplicates those resources. Device and pipeline types
+never cross into `alife_core` or `alife_world`.
 
 ### 4.4 `alife_game_app`: scheduling and policy selection
 
@@ -133,7 +138,9 @@ It does not construct neural proposal scores.
 
 ### 5.1 Capacity is not cognition
 
-`BrainClassSpec` is migrated toward `BrainCapacityClass`. A capacity class
+`BrainClassSpec` remains only a legacy-save adapter; production uses
+`BrainCapacityClass` keyed by stable N512/N1024/N2048 `BrainClassId` values. A
+capacity class does not embed `BrainScaleTier`. A capacity class
 defines ceilings and execution alignment only:
 
 - maximum neurons;
@@ -143,6 +150,10 @@ defines ceilings and execution alignment only:
 - compute, memory, and readback budgets;
 - permitted microstep range;
 - supported GPU feature floor.
+
+Capacity records are validated constructors, not forgeable bags of public
+limits. Their canonical identity covers every execution-ABI requirement and
+bounded dimension used by admission or dispatch.
 
 It does not define semantic capability, fixed lobe meaning, or a cognitive
 claim. N512, N1024, and N2048 are the initial enabled classes.
@@ -221,11 +232,20 @@ The world emits one `PerceptionFrame` containing:
 Perception and candidates must come from the same authoritative world snapshot.
 The brain cannot advance before that frame is gathered.
 
+The causal record uses two explicit digests. `PerceptionBaseDigest` identifies
+the same-tick world, body, homeostatic, and unscored-candidate frame used to
+query episodic memory. After bounded retrieval context is attached,
+`PerceptionFrameDigest` identifies the complete ordered GPU input. Decision and
+seal validation bind both digests plus the retrieval-context digest, so memory
+can neither create a circular query nor enter neural execution outside the
+audited causal record.
+
 ### 6.2 Action candidate contract
 
 An `ActionCandidate` carries:
 
 - action ID and action kind;
+- candidate action family used for neural decoding and learning;
 - tick-local candidate index;
 - optional target entity and target position for command transport;
 - relative bearing, distance, and velocity;
@@ -302,12 +322,14 @@ microsteps.
 
 ### 8.2 Candidate-conditioned decoder
 
-For candidate `k`:
+For candidate `k`, `family_k` is the learned discriminator. `ActionKind`
+remains command-ABI metadata only because multiple opposite mechanical actions
+can share one legacy kind:
 
 ```text
 phi_k   = encode_candidate(observed candidate features)
-logit_k = decoder_bias(kind_k)
-        + dot(motor_latent, decoder_projection(kind_k, phi_k))
+logit_k = decoder_bias(family_k)
+        + dot(motor_latent, decoder_projection(family_k, phi_k))
         + bounded homeostatic modulation
 ```
 
@@ -360,9 +382,11 @@ Awake -> EnteringSleep -> Consolidating -> Waking -> Awake
 - Entering sleep emits no new action.
 - The transition into Consolidating submits exactly one GPU consolidation job
   for a unique cycle ID.
-- Consolidation promotes bounded `H_fast` content into lifetime weights,
-  replays selected episodes, prunes or grows within budgets, compacts sidecars,
-  and prepares a double-buffered structural swap.
+- Consolidation replays selected episodes through bounded replay eligibility,
+  promotes bounded `H_fast` content into lifetime weights, prunes or grows
+  within budgets, compacts sidecars, and prepares a double-buffered structural
+  swap. Replay payloads are persisted and must measurably affect the staged
+  consolidation result; replay metadata alone is not sufficient.
 - Waking restores bounded homeostatic state before actions resume.
 
 Cycle IDs and phase state are saved so load/retry cannot consolidate twice.
@@ -375,24 +399,31 @@ post-wake behavior are required tests.
 
 The 16-element prefix encoder is replaced by a versioned, stratified feature
 encoder that reserves dimensions for every supported sensory group, drives,
-hormones, action kind, and target descriptor. Queries are candidate-conditional:
+hormones, candidate action family, `Other` action ID, and target descriptor.
+Queries are candidate-conditional:
 
 ```text
-Q(state, action kind, observed target features)
+Q(state, candidate action family, action ID for `Other`, observed target features)
 ```
 
-Retrieval returns a bounded latent/context vector for the next GPU perception
-frame. It does not add one scalar to every candidate and cannot replay an action
-command.
+Retrieval returns candidate-local context for the next GPU perception frame: a
+target latent may match the same tracked target across action families, while
+an action-family value matches only the exact candidate family. Both are
+consumed by that candidate's decoder path; target-outcome context is never
+pooled into a frame-global recurrent bias that can leak onto unrelated
+candidates. Retrieval does not add one scalar to every candidate and cannot
+replay an action command.
 
 The bank uses deterministic eviction and merge rules. Capacity saturation is a
 normal degradation condition, never a terminal tick error.
 
 ### 11.2 Topology sidecar
 
-The concept/topology ledger is diagnostic and analysis-only in the action path.
-It observes sealed patches and may contribute bounded curiosity context only
-through explicit neural input channels in experiments that enable it.
+The concept/topology ledger is an organism-local diagnostic and analysis
+sidecar. It observes sealed patches and may contribute bounded curiosity
+context only through explicit neural input channels in experiments that enable
+it. Sidecar capacity or mutation failure cannot roll back an already sealed
+world transaction or prevent other organisms from advancing.
 
 Concept, edge, simplex, and gap capacities use deterministic merge, eviction,
 or summary replacement. Exhaustion never aborts cognition. Persistent raw world
@@ -426,6 +457,12 @@ GPU neural decoder or learning claims.
 
 No error path silently claims success, changes policy, or runs a second brain.
 
+Admission accounting distinguishes logical committed slot bytes from
+physically allocated class-bucket bytes, unused bucket capacity, shared backend
+bytes, and peak in-flight/growth-swap bytes. Removing a brain reclaims logical
+admission immediately; retained wgpu bucket allocation is reported honestly
+rather than claimed as physical deallocation.
+
 ### 12.3 GPU-native validation
 
 Removing CPU shadow execution does not remove validation. The GPU path uses:
@@ -452,7 +489,8 @@ Portable saves record:
 - eligibility checkpoint policy;
 - homeostasis and sleep phase/cycle ID;
 - memory/topology summaries;
-- backend requirement and provenance.
+- GPU-required policy identity plus backend provenance; the requirement is
+  derived from policy/save kind rather than serialized as a redundant boolean.
 
 Legacy supported-tier saves without a phenotype are migrated by deterministically
 compiling the saved genome and seed. A hash mismatch without a tested migration
