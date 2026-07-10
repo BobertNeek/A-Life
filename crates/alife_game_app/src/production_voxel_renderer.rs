@@ -58,6 +58,9 @@ use crate::{
     PRODUCTION_VOXEL_RENDERER_PROFILE,
 };
 use crate::{
+    terrain_dressing::{
+        create_terrain_dressing_library, plan_production_terrain_dressing, TerrainDressingTile,
+    },
     terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
     terrain_water::install_animated_water_material,
 };
@@ -903,6 +906,11 @@ pub enum Fvr07ProductionDressingKind {
     NestMarker,
     FoodResource,
     CorpseMarker,
+    FlowerPatch,
+    ReedCluster,
+    LichenRock,
+    HazardFungus,
+    DeadLeafPatch,
 }
 
 impl Fvr07ProductionDressingKind {
@@ -914,6 +922,11 @@ impl Fvr07ProductionDressingKind {
             Self::NestMarker => "nest-marker",
             Self::FoodResource => "food-resource",
             Self::CorpseMarker => "corpse-marker",
+            Self::FlowerPatch => "flower-patch",
+            Self::ReedCluster => "reed-cluster",
+            Self::LichenRock => "lichen-rock",
+            Self::HazardFungus => "hazard-fungus",
+            Self::DeadLeafPatch => "dead-leaf-patch",
         }
     }
 }
@@ -1053,15 +1066,6 @@ struct Fvr04CreatureVisualRecord {
 struct Fvr04RuntimeSceneState {
     snapshot: PersistentVoxelWorldSnapshot,
     creatures: Vec<Fvr04CreatureVisualRecord>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct Fvr07DressingSpawn {
-    kind: Fvr07ProductionDressingKind,
-    tile: VoxelTileCoord,
-    translation: Vec3,
-    scale: Vec3,
-    yaw_radians: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -2180,24 +2184,43 @@ fn spawn_fvr07_production_visual_polish(
     creatures: &[Fvr04CreatureVisualRecord],
     selected: Option<StableVoxelObjectRef>,
 ) -> Fvr07ProductionPolishSummary {
-    let dressing_spawns = fvr07_dressing_spawns(settings, tile_summaries, creatures);
+    let dressing_tiles = tile_summaries
+        .values()
+        .map(|tile| {
+            (
+                tile.tile,
+                TerrainDressingTile {
+                    tile: tile.tile,
+                    material: tile.material,
+                    height: tile.height_units,
+                    resource_bias: tile.resource_bias,
+                    hazard_pressure: tile.hazard_pressure,
+                },
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let occupied_tiles = creatures
+        .iter()
+        .map(|creature| creature.tile)
+        .collect::<BTreeSet<_>>();
+    let dressing_spawns = plan_production_terrain_dressing(
+        &dressing_tiles,
+        &occupied_tiles,
+        settings.production_dressing_cap,
+        settings.tile_stride,
+        settings.minimum_floor,
+    );
     let vfx_spawns = fvr07_vfx_spawns(settings, tile_summaries, creatures, selected);
     let unit_mesh = app
         .world_mut()
         .resource_mut::<Assets<Mesh>>()
         .add(Cuboid::new(1.0, 1.0, 1.0));
-    let dressing_meshes = fvr10_dressing_meshes(app);
-    let dressing_materials = fvr07_dressing_materials(app);
+    let dressing_library = create_terrain_dressing_library(app);
     let vfx_materials = fvr07_vfx_materials(app);
 
     for spawn in &dressing_spawns {
-        let Some(material) = dressing_materials.get(&spawn.kind).cloned() else {
-            continue;
-        };
-        let mesh = dressing_meshes
-            .get(&spawn.kind)
-            .cloned()
-            .unwrap_or_else(|| unit_mesh.clone());
+        let material = dressing_library.material(spawn.kind);
+        let mesh = dressing_library.mesh(spawn.kind);
         let mut transform = Transform::from_translation(spawn.translation);
         transform.scale = spawn.scale;
         transform.rotation = Quat::from_rotation_y(spawn.yaw_radians);
@@ -2214,8 +2237,9 @@ fn spawn_fvr07_production_visual_polish(
             Fvr07ProductionVisualDressing {
                 kind: spawn.kind,
                 tile: spawn.tile,
-                display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
+                display_only: spawn.display_only,
+                no_renderer_authority_over_actions_or_cognition: spawn
+                    .no_renderer_authority_over_actions_or_cognition,
             },
         ));
     }
@@ -2259,48 +2283,6 @@ fn spawn_fvr07_production_visual_polish(
     }
 }
 
-fn fvr07_dressing_materials(
-    app: &mut App,
-) -> BTreeMap<Fvr07ProductionDressingKind, Handle<StandardMaterial>> {
-    [
-        Fvr07ProductionDressingKind::LeafPatch,
-        Fvr07ProductionDressingKind::MushroomCluster,
-        Fvr07ProductionDressingKind::PebbleCluster,
-        Fvr07ProductionDressingKind::NestMarker,
-        Fvr07ProductionDressingKind::FoodResource,
-        Fvr07ProductionDressingKind::CorpseMarker,
-    ]
-    .into_iter()
-    .map(|kind| {
-        let material = app
-            .world_mut()
-            .resource_mut::<Assets<StandardMaterial>>()
-            .add(fvr07_dressing_material(kind));
-        (kind, material)
-    })
-    .collect()
-}
-
-fn fvr10_dressing_meshes(app: &mut App) -> BTreeMap<Fvr07ProductionDressingKind, Handle<Mesh>> {
-    [
-        Fvr07ProductionDressingKind::LeafPatch,
-        Fvr07ProductionDressingKind::MushroomCluster,
-        Fvr07ProductionDressingKind::PebbleCluster,
-        Fvr07ProductionDressingKind::NestMarker,
-        Fvr07ProductionDressingKind::FoodResource,
-        Fvr07ProductionDressingKind::CorpseMarker,
-    ]
-    .into_iter()
-    .map(|kind| {
-        let mesh = app
-            .world_mut()
-            .resource_mut::<Assets<Mesh>>()
-            .add(fvr10_composite_dressing_mesh(kind));
-        (kind, mesh)
-    })
-    .collect()
-}
-
 fn fvr07_vfx_materials(
     app: &mut App,
 ) -> BTreeMap<Fvr07ProductionVfxKind, Handle<StandardMaterial>> {
@@ -2325,24 +2307,6 @@ fn fvr07_vfx_materials(
     .collect()
 }
 
-fn fvr07_dressing_material(kind: Fvr07ProductionDressingKind) -> StandardMaterial {
-    let rgba = match kind {
-        Fvr07ProductionDressingKind::LeafPatch => [0.38, 0.82, 0.28, 1.0],
-        Fvr07ProductionDressingKind::MushroomCluster => [0.82, 0.70, 0.92, 1.0],
-        Fvr07ProductionDressingKind::PebbleCluster => [0.66, 0.67, 0.60, 1.0],
-        Fvr07ProductionDressingKind::NestMarker => [0.72, 0.48, 0.22, 1.0],
-        Fvr07ProductionDressingKind::FoodResource => [0.98, 0.78, 0.24, 1.0],
-        Fvr07ProductionDressingKind::CorpseMarker => [0.38, 0.25, 0.40, 1.0],
-    };
-    StandardMaterial {
-        base_color: Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]),
-        perceptual_roughness: 0.86,
-        metallic: 0.0,
-        unlit: true,
-        ..default()
-    }
-}
-
 fn fvr07_vfx_material(kind: Fvr07ProductionVfxKind) -> StandardMaterial {
     let rgba = fvr07_vfx_color(kind);
     StandardMaterial {
@@ -2353,394 +2317,6 @@ fn fvr07_vfx_material(kind: Fvr07ProductionVfxKind) -> StandardMaterial {
         unlit: true,
         ..default()
     }
-}
-
-fn fvr10_composite_dressing_mesh(kind: Fvr07ProductionDressingKind) -> Mesh {
-    let mut positions = Vec::<[f32; 3]>::with_capacity(240);
-    let mut normals = Vec::<[f32; 3]>::with_capacity(240);
-    let mut uvs = Vec::<[f32; 2]>::with_capacity(240);
-    let mut indices = Vec::<u32>::with_capacity(360);
-    match kind {
-        Fvr07ProductionDressingKind::LeafPatch => {
-            for (x, z, height) in [
-                (-0.30, -0.20, 0.62),
-                (-0.16, 0.18, 0.82),
-                (0.00, -0.08, 0.72),
-                (0.18, 0.20, 0.58),
-                (0.32, -0.18, 0.68),
-                (-0.34, 0.10, 0.44),
-                (0.30, 0.08, 0.48),
-            ] {
-                fvr03_append_cuboid(
-                    &mut positions,
-                    &mut normals,
-                    &mut uvs,
-                    &mut indices,
-                    Vec3::new(x, height * 0.5, z),
-                    Vec3::new(0.08, height, 0.10),
-                );
-            }
-            fvr03_append_cuboid(
-                &mut positions,
-                &mut normals,
-                &mut uvs,
-                &mut indices,
-                Vec3::new(0.0, 0.04, 0.0),
-                Vec3::new(0.78, 0.08, 0.58),
-            );
-        }
-        Fvr07ProductionDressingKind::MushroomCluster => {
-            for (x, z, height, cap) in [
-                (-0.22, -0.08, 0.42, 0.30),
-                (0.10, 0.16, 0.58, 0.36),
-                (0.28, -0.18, 0.36, 0.24),
-            ] {
-                fvr03_append_cuboid(
-                    &mut positions,
-                    &mut normals,
-                    &mut uvs,
-                    &mut indices,
-                    Vec3::new(x, height * 0.5, z),
-                    Vec3::new(0.12, height, 0.12),
-                );
-                fvr03_append_cuboid(
-                    &mut positions,
-                    &mut normals,
-                    &mut uvs,
-                    &mut indices,
-                    Vec3::new(x, height + 0.08, z),
-                    Vec3::new(cap, 0.16, cap),
-                );
-            }
-        }
-        Fvr07ProductionDressingKind::PebbleCluster => {
-            for (x, z, size) in [
-                (-0.24, -0.10, Vec3::new(0.28, 0.16, 0.22)),
-                (0.08, 0.12, Vec3::new(0.34, 0.20, 0.26)),
-                (0.30, -0.18, Vec3::new(0.18, 0.12, 0.20)),
-                (-0.04, -0.30, Vec3::new(0.22, 0.14, 0.18)),
-            ] {
-                fvr03_append_cuboid(
-                    &mut positions,
-                    &mut normals,
-                    &mut uvs,
-                    &mut indices,
-                    Vec3::new(x, size.y * 0.5, z),
-                    size,
-                );
-            }
-        }
-        Fvr07ProductionDressingKind::NestMarker => {
-            for (x, z, size) in [
-                (-0.24, -0.24, Vec3::new(0.28, 0.18, 0.16)),
-                (0.24, -0.24, Vec3::new(0.28, 0.18, 0.16)),
-                (-0.24, 0.24, Vec3::new(0.28, 0.18, 0.16)),
-                (0.24, 0.24, Vec3::new(0.28, 0.18, 0.16)),
-                (0.0, -0.34, Vec3::new(0.46, 0.16, 0.14)),
-                (0.0, 0.34, Vec3::new(0.46, 0.16, 0.14)),
-            ] {
-                fvr03_append_cuboid(
-                    &mut positions,
-                    &mut normals,
-                    &mut uvs,
-                    &mut indices,
-                    Vec3::new(x, size.y * 0.5, z),
-                    size,
-                );
-            }
-            fvr03_append_cuboid(
-                &mut positions,
-                &mut normals,
-                &mut uvs,
-                &mut indices,
-                Vec3::new(0.0, 0.07, 0.0),
-                Vec3::new(0.26, 0.14, 0.26),
-            );
-        }
-        Fvr07ProductionDressingKind::FoodResource => {
-            fvr03_append_cuboid(
-                &mut positions,
-                &mut normals,
-                &mut uvs,
-                &mut indices,
-                Vec3::new(0.0, 0.34, 0.0),
-                Vec3::new(0.10, 0.68, 0.10),
-            );
-            for (x, z, y, size) in [
-                (-0.22, 0.00, 0.62, 0.22),
-                (0.22, 0.00, 0.62, 0.22),
-                (0.0, -0.22, 0.74, 0.24),
-                (0.0, 0.22, 0.74, 0.24),
-                (0.0, 0.0, 0.88, 0.28),
-            ] {
-                fvr03_append_cuboid(
-                    &mut positions,
-                    &mut normals,
-                    &mut uvs,
-                    &mut indices,
-                    Vec3::new(x, y, z),
-                    Vec3::new(size, size, size),
-                );
-            }
-        }
-        Fvr07ProductionDressingKind::CorpseMarker => {
-            for (x, z, size) in [
-                (-0.18, -0.10, Vec3::new(0.38, 0.12, 0.22)),
-                (0.20, 0.10, Vec3::new(0.30, 0.10, 0.20)),
-                (0.02, -0.30, Vec3::new(0.18, 0.08, 0.28)),
-            ] {
-                fvr03_append_cuboid(
-                    &mut positions,
-                    &mut normals,
-                    &mut uvs,
-                    &mut indices,
-                    Vec3::new(x, size.y * 0.5, z),
-                    size,
-                );
-            }
-        }
-    }
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(indices));
-    mesh
-}
-
-fn fvr07_dressing_spawns(
-    settings: &Fvr03ProductionVoxelRendererSettings,
-    tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-    creatures: &[Fvr04CreatureVisualRecord],
-) -> Vec<Fvr07DressingSpawn> {
-    let mut spawns = Vec::with_capacity(settings.production_dressing_cap);
-    for kind in [
-        Fvr07ProductionDressingKind::LeafPatch,
-        Fvr07ProductionDressingKind::MushroomCluster,
-        Fvr07ProductionDressingKind::PebbleCluster,
-        Fvr07ProductionDressingKind::FoodResource,
-    ] {
-        if let Some(tile) = fvr07_tile_for_dressing_kind(kind, tile_summaries) {
-            spawns.push(Fvr07DressingSpawn {
-                kind,
-                tile: tile.tile,
-                translation: Vec3::new(
-                    tile.tile.x as f32 + 0.5,
-                    tile.height_units + fvr07_dressing_y_offset(kind),
-                    tile.tile.z as f32 + 0.5,
-                ),
-                scale: fvr07_dressing_scale(kind, settings),
-                yaw_radians: fvr07_hash_phase(tile.tile) * std::f32::consts::TAU,
-            });
-        }
-    }
-    fvr10_push_hero_dressing_spawns(&mut spawns, settings, tile_summaries, creatures);
-
-    let creature_prop_cap = (settings.production_dressing_cap / 4).max(2);
-    for (index, creature) in creatures.iter().enumerate().take(creature_prop_cap) {
-        if spawns.len() >= settings.production_dressing_cap {
-            return spawns;
-        }
-        let tile = creature.tile;
-        let y = tile_summaries
-            .get(&tile)
-            .map(|tile| tile.height_units + 0.26)
-            .unwrap_or(0.72);
-        let kind = if index % 11 == 7 {
-            Fvr07ProductionDressingKind::CorpseMarker
-        } else if index % 5 == 0 || creature.reproductive_drive >= 0.36 {
-            Fvr07ProductionDressingKind::NestMarker
-        } else if index % 3 == 0 {
-            Fvr07ProductionDressingKind::LeafPatch
-        } else if index % 3 == 1 {
-            Fvr07ProductionDressingKind::FoodResource
-        } else {
-            Fvr07ProductionDressingKind::MushroomCluster
-        };
-        spawns.push(Fvr07DressingSpawn {
-            kind,
-            tile,
-            translation: Vec3::new(
-                tile.x as f32 + 0.24 + ((index % 2) as f32 * 0.34),
-                y,
-                tile.z as f32 + 0.26 + (((index / 2) % 2) as f32 * 0.32),
-            ),
-            scale: fvr07_dressing_scale(kind, settings),
-            yaw_radians: fvr07_hash_phase(tile) * 1.2,
-        });
-    }
-
-    for tile in tile_summaries.values() {
-        if spawns.len() >= settings.production_dressing_cap {
-            break;
-        }
-        let hash = fvr07_tile_hash(tile.tile);
-        let kind = match tile.material {
-            Fvr03ProductionVoxelMaterialKind::Resource if hash % 2 == 0 => {
-                Fvr07ProductionDressingKind::MushroomCluster
-            }
-            Fvr03ProductionVoxelMaterialKind::Resource => Fvr07ProductionDressingKind::FoodResource,
-            Fvr03ProductionVoxelMaterialKind::Stone | Fvr03ProductionVoxelMaterialKind::Sand
-                if hash % 3 == 0 =>
-            {
-                Fvr07ProductionDressingKind::PebbleCluster
-            }
-            Fvr03ProductionVoxelMaterialKind::SafeGrass if hash % 4 == 0 => {
-                Fvr07ProductionDressingKind::LeafPatch
-            }
-            Fvr03ProductionVoxelMaterialKind::Soil if hash % 9 == 0 => {
-                Fvr07ProductionDressingKind::LeafPatch
-            }
-            _ => continue,
-        };
-        spawns.push(Fvr07DressingSpawn {
-            kind,
-            tile: tile.tile,
-            translation: Vec3::new(
-                tile.tile.x as f32 + 0.5,
-                tile.height_units + fvr07_dressing_y_offset(kind),
-                tile.tile.z as f32 + 0.5,
-            ),
-            scale: fvr07_dressing_scale(kind, settings),
-            yaw_radians: fvr07_hash_phase(tile.tile) * std::f32::consts::TAU,
-        });
-    }
-    spawns
-}
-
-fn fvr10_push_hero_dressing_spawns(
-    spawns: &mut Vec<Fvr07DressingSpawn>,
-    settings: &Fvr03ProductionVoxelRendererSettings,
-    tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-    creatures: &[Fvr04CreatureVisualRecord],
-) {
-    if creatures.is_empty() || spawns.len() >= settings.production_dressing_cap {
-        return;
-    }
-    let hero_cap = (settings.production_dressing_cap / 3).clamp(8, 24);
-    let occupied_tiles = creatures
-        .iter()
-        .map(|creature| creature.tile)
-        .collect::<BTreeSet<_>>();
-    let (center_x, center_z) = creatures.iter().fold((0.0_f32, 0.0_f32), |acc, creature| {
-        (
-            acc.0 + creature.tile.x as f32 + 0.5,
-            acc.1 + creature.tile.z as f32 + 0.5,
-        )
-    });
-    let center_x = center_x / creatures.len() as f32;
-    let center_z = center_z / creatures.len() as f32;
-    let mut candidates = tile_summaries
-        .values()
-        .filter(|tile| {
-            !occupied_tiles.contains(&tile.tile)
-                && matches!(
-                    tile.material,
-                    Fvr03ProductionVoxelMaterialKind::SafeGrass
-                        | Fvr03ProductionVoxelMaterialKind::Resource
-                        | Fvr03ProductionVoxelMaterialKind::Soil
-                        | Fvr03ProductionVoxelMaterialKind::Sand
-                        | Fvr03ProductionVoxelMaterialKind::Stone
-                )
-        })
-        .collect::<Vec<_>>();
-    candidates.sort_by(|left, right| {
-        let left_dx = left.tile.x as f32 + 0.5 - center_x;
-        let left_dz = left.tile.z as f32 + 0.5 - center_z;
-        let right_dx = right.tile.x as f32 + 0.5 - center_x;
-        let right_dz = right.tile.z as f32 + 0.5 - center_z;
-        (left_dx * left_dx + left_dz * left_dz)
-            .total_cmp(&(right_dx * right_dx + right_dz * right_dz))
-    });
-
-    for (index, tile) in candidates.into_iter().take(hero_cap).enumerate() {
-        if spawns.len() >= settings.production_dressing_cap {
-            break;
-        }
-        let hash = fvr07_tile_hash(tile.tile);
-        let kind = match (index + hash as usize) % 3 {
-            0 => Fvr07ProductionDressingKind::LeafPatch,
-            1 => Fvr07ProductionDressingKind::FoodResource,
-            _ => Fvr07ProductionDressingKind::MushroomCluster,
-        };
-        let offset = match index % 4 {
-            0 => (0.24, 0.26),
-            1 => (0.76, 0.28),
-            2 => (0.26, 0.74),
-            _ => (0.72, 0.72),
-        };
-        spawns.push(Fvr07DressingSpawn {
-            kind,
-            tile: tile.tile,
-            translation: Vec3::new(
-                tile.tile.x as f32 + offset.0,
-                tile.height_units + fvr07_dressing_y_offset(kind),
-                tile.tile.z as f32 + offset.1,
-            ),
-            scale: fvr07_dressing_scale(kind, settings),
-            yaw_radians: fvr07_hash_phase(tile.tile) * std::f32::consts::TAU,
-        });
-    }
-}
-
-fn fvr07_tile_for_dressing_kind<'a>(
-    kind: Fvr07ProductionDressingKind,
-    tile_summaries: &'a BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-) -> Option<&'a Fvr05ProductionTileSummary> {
-    tile_summaries
-        .values()
-        .find(|tile| match kind {
-            Fvr07ProductionDressingKind::LeafPatch => matches!(
-                tile.material,
-                Fvr03ProductionVoxelMaterialKind::SafeGrass
-                    | Fvr03ProductionVoxelMaterialKind::Soil
-            ),
-            Fvr07ProductionDressingKind::MushroomCluster
-            | Fvr07ProductionDressingKind::FoodResource => {
-                matches!(tile.material, Fvr03ProductionVoxelMaterialKind::Resource)
-                    || tile.resource_bias >= 0.38
-            }
-            Fvr07ProductionDressingKind::PebbleCluster => matches!(
-                tile.material,
-                Fvr03ProductionVoxelMaterialKind::Stone
-                    | Fvr03ProductionVoxelMaterialKind::Sand
-                    | Fvr03ProductionVoxelMaterialKind::Soil
-            ),
-            Fvr07ProductionDressingKind::NestMarker | Fvr07ProductionDressingKind::CorpseMarker => {
-                true
-            }
-        })
-        .or_else(|| tile_summaries.values().next())
-}
-
-fn fvr07_dressing_y_offset(kind: Fvr07ProductionDressingKind) -> f32 {
-    match kind {
-        Fvr07ProductionDressingKind::LeafPatch => 0.03,
-        Fvr07ProductionDressingKind::PebbleCluster => 0.04,
-        Fvr07ProductionDressingKind::CorpseMarker => 0.04,
-        Fvr07ProductionDressingKind::NestMarker => 0.04,
-        Fvr07ProductionDressingKind::FoodResource => 0.05,
-        Fvr07ProductionDressingKind::MushroomCluster => 0.05,
-    }
-}
-
-fn fvr07_dressing_scale(
-    kind: Fvr07ProductionDressingKind,
-    settings: &Fvr03ProductionVoxelRendererSettings,
-) -> Vec3 {
-    let profile_scale = if settings.minimum_floor { 0.92 } else { 1.0 };
-    let base = match kind {
-        Fvr07ProductionDressingKind::LeafPatch => Vec3::new(1.10, 1.34, 0.98),
-        Fvr07ProductionDressingKind::MushroomCluster => Vec3::new(1.02, 1.22, 1.02),
-        Fvr07ProductionDressingKind::PebbleCluster => Vec3::new(0.78, 0.56, 0.72),
-        Fvr07ProductionDressingKind::NestMarker => Vec3::new(0.84, 0.52, 0.78),
-        Fvr07ProductionDressingKind::FoodResource => Vec3::new(0.92, 1.26, 0.92),
-        Fvr07ProductionDressingKind::CorpseMarker => Vec3::new(0.82, 0.32, 0.62),
-    };
-    base * profile_scale
 }
 
 fn fvr07_vfx_spawns(

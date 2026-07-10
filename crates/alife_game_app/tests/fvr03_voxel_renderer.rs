@@ -848,6 +848,13 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
         .map(|(_, transform)| transform.translation)
         .collect::<Vec<_>>();
     assert!(!creature_positions.is_empty());
+    let mut creature_tile_query = app
+        .world_mut()
+        .query::<&Fvr04ProductionCreatureVisualMarker>();
+    let occupied_creature_tiles = creature_tile_query
+        .iter(app.world())
+        .map(|marker| marker.tile)
+        .collect::<BTreeSet<_>>();
     let creature_center = creature_positions
         .iter()
         .fold(bevy::prelude::Vec3::ZERO, |acc, position| acc + *position)
@@ -863,6 +870,7 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
         .iter(app.world())
         .map(|(dressing, mesh, material, transform)| {
             (
+                dressing.tile,
                 dressing.kind,
                 mesh.0.clone(),
                 material.0.clone(),
@@ -877,8 +885,13 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
     let mut composite_prop_count = 0_usize;
     let mut vertical_prop_count = 0_usize;
     let mut hero_cluster_prop_count = 0_usize;
-    let mut readable_hero_material_count = 0_usize;
-    for (kind, mesh_handle, material_handle, scale_y, translation) in dressing_entries {
+    let mut lit_material_count = 0_usize;
+    let mut new_biome_kinds = BTreeSet::new();
+    for (tile, kind, mesh_handle, material_handle, scale_y, translation) in dressing_entries {
+        assert!(
+            !occupied_creature_tiles.contains(&tile),
+            "dressing {kind:?} overlaps creature tile {tile:?}"
+        );
         let mesh = meshes
             .get(&mesh_handle)
             .expect("dressing mesh should remain resident");
@@ -899,6 +912,9 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
                 Fvr07ProductionDressingKind::LeafPatch
                     | Fvr07ProductionDressingKind::MushroomCluster
                     | Fvr07ProductionDressingKind::FoodResource
+                    | Fvr07ProductionDressingKind::FlowerPatch
+                    | Fvr07ProductionDressingKind::ReedCluster
+                    | Fvr07ProductionDressingKind::HazardFungus
             )
         {
             vertical_prop_count = vertical_prop_count.saturating_add(1);
@@ -915,12 +931,25 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
                 Fvr07ProductionDressingKind::LeafPatch
                     | Fvr07ProductionDressingKind::MushroomCluster
                     | Fvr07ProductionDressingKind::FoodResource
+                    | Fvr07ProductionDressingKind::FlowerPatch
+                    | Fvr07ProductionDressingKind::ReedCluster
+                    | Fvr07ProductionDressingKind::HazardFungus
             )
         {
             hero_cluster_prop_count = hero_cluster_prop_count.saturating_add(1);
-            if material.unlit {
-                readable_hero_material_count = readable_hero_material_count.saturating_add(1);
-            }
+        }
+        if !material.unlit {
+            lit_material_count = lit_material_count.saturating_add(1);
+        }
+        if matches!(
+            kind,
+            Fvr07ProductionDressingKind::FlowerPatch
+                | Fvr07ProductionDressingKind::ReedCluster
+                | Fvr07ProductionDressingKind::LichenRock
+                | Fvr07ProductionDressingKind::HazardFungus
+                | Fvr07ProductionDressingKind::DeadLeafPatch
+        ) {
+            new_biome_kinds.insert(kind);
         }
     }
 
@@ -937,7 +966,8 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
         "FVR10 product screenshot needs hero-scale props near creatures, found {hero_cluster_prop_count}"
     );
     assert!(
-        readable_hero_material_count >= 12,
-        "FVR10 hero props must use readable display materials, found {readable_hero_material_count}"
+        lit_material_count == composite_prop_count,
+        "FVR11 composite props must use lit materials: lit={lit_material_count} composite={composite_prop_count}"
     );
+    assert_eq!(new_biome_kinds.len(), 5);
 }
