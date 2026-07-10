@@ -10,8 +10,9 @@ use alife_game_app::{
     Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
     Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
     Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
-    Fvr10CreatureSurfaceDetailMarker, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
-    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
+    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionTerrainSceneResource,
+    ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
     CreatureAppearanceGenome, StableVoxelRefKind, CREATURE_APPEARANCE_SPECIES_COUNT,
@@ -42,6 +43,25 @@ fn quantized_rgba(color: [f32; 4]) -> [i32; 4] {
         (color[2] * 255.0).round() as i32,
         (color[3] * 255.0).round() as i32,
     ]
+}
+
+#[test]
+fn fvr11_terrain_contract_is_display_only() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let scene = app
+        .world()
+        .resource::<Fvr11ProductionTerrainSceneResource>();
+    assert_eq!(
+        scene.visual_version,
+        FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION
+    );
+    assert!(scene.sample_count > 0);
+    assert!(scene.display_only);
+    assert!(scene.no_renderer_authority_over_world_actions_or_cognition);
 }
 
 #[test]

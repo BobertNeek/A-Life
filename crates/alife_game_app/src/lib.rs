@@ -128,6 +128,14 @@ mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
 
 #[cfg(feature = "bevy-app")]
+mod production_terrain;
+#[cfg(feature = "bevy-app")]
+pub use production_terrain::{
+    Fvr11ProductionTerrainLayer, Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole,
+    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+};
+
+#[cfg(feature = "bevy-app")]
 mod production_voxel_renderer;
 #[cfg(feature = "bevy-app")]
 pub use production_voxel_renderer::*;

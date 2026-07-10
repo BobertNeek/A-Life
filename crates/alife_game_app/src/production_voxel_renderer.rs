@@ -46,11 +46,13 @@ use bevy::{
 };
 
 use crate::{
-    creature_visual_snapshot_from_parts_with_appearance, production_voxel_save_with_population,
-    CreatureAnimationState, CreatureExpressionState, CreatureVisualSnapshot,
-    Fvr05ProductionDebugAuthorityReport, Fvr05ProductionInspectorTab, Fvr05ProductionOverlayKind,
-    Fvr05ProductionUxSettings, GameAppShellError, ProductionFrontendProfileBudget,
-    ProductionFrontendProfileId, ProductionSaveMetadata, ProductionVoxelLaunchSummary,
+    creature_visual_snapshot_from_parts_with_appearance,
+    production_terrain::{ProductionTerrainSample, ProductionTerrainSampleMap},
+    production_voxel_save_with_population, CreatureAnimationState, CreatureExpressionState,
+    CreatureVisualSnapshot, Fvr05ProductionDebugAuthorityReport, Fvr05ProductionInspectorTab,
+    Fvr05ProductionOverlayKind, Fvr05ProductionUxSettings, Fvr11ProductionTerrainSceneResource,
+    GameAppShellError, ProductionFrontendProfileBudget, ProductionFrontendProfileId,
+    ProductionSaveMetadata, ProductionVoxelLaunchSummary, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
     PRODUCTION_VOXEL_RENDERER_PROFILE,
 };
 
@@ -1005,15 +1007,6 @@ pub struct Fvr05ProductionBottomOverlayToolbar;
 pub struct Fvr05ProductionFooterStatusBar;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Fvr03BatchedTerrainTile {
-    tile: VoxelTileCoord,
-    center_x: f32,
-    center_z: f32,
-    height: f32,
-    visual_bucket: u8,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
 struct Fvr09GreedyTerrainPrism {
     center_x: f32,
     center_z: f32,
@@ -1022,6 +1015,13 @@ struct Fvr09GreedyTerrainPrism {
     size_z: f32,
     source_tile_count: usize,
     visual_bucket: u8,
+}
+
+struct Fvr11TemporaryTerrainSpawnReceipt {
+    mesh_stats: Fvr09GreedyMeshStats,
+    rendered_material_count: usize,
+    water_layer_count: usize,
+    confetti_detail_quad_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1347,8 +1347,7 @@ pub fn spawn_fvr03_production_voxel_scene(
     let mut visible_tiles = BTreeSet::new();
     let mut tile_summaries_by_tile = BTreeMap::new();
     let mut material_counts = BTreeMap::new();
-    let mut terrain_batches =
-        BTreeMap::<Fvr03ProductionVoxelMaterialKind, Vec<Fvr03BatchedTerrainTile>>::new();
+    let mut terrain_samples = ProductionTerrainSampleMap::new();
     let mut tile_mesh_count = 0_usize;
     for chunk in &snapshot.visible_chunks {
         let sampled_tiles = spawn_fvr03_chunk_tiles(
@@ -1360,7 +1359,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             &mut visible_tiles,
             &mut tile_summaries_by_tile,
             &mut material_counts,
-            &mut terrain_batches,
+            &mut terrain_samples,
         )?;
         tile_mesh_count = tile_mesh_count.saturating_add(sampled_tiles);
         if settings.show_chunk_boundaries {
@@ -1389,15 +1388,29 @@ pub fn spawn_fvr03_production_voxel_scene(
         ));
     }
 
-    let mesh_stats = spawn_fvr09_greedy_terrain_meshes(
+    let terrain_receipt = spawn_fvr09_greedy_terrain_meshes(
         app,
         &materials,
         &settings,
         &palette_by_kind,
         &snapshot,
-        &terrain_batches,
+        &terrain_samples,
         tile_mesh_count,
     );
+    let mesh_stats = terrain_receipt.mesh_stats;
+    app.insert_resource(Fvr11ProductionTerrainSceneResource {
+        visual_version: FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+        sample_count: terrain_samples.len(),
+        top_layer_count: terrain_receipt
+            .rendered_material_count
+            .saturating_sub(terrain_receipt.water_layer_count),
+        cliff_layer_count: terrain_receipt.rendered_material_count,
+        transition_edge_count: 0,
+        water_layer_count: terrain_receipt.water_layer_count,
+        confetti_detail_quad_count: terrain_receipt.confetti_detail_quad_count,
+        display_only: true,
+        no_renderer_authority_over_world_actions_or_cognition: true,
+    });
     let creature_scene = spawn_fvr04_creatures(
         app,
         &runtime_state.creatures,
@@ -1739,7 +1752,7 @@ fn spawn_fvr03_chunk_tiles(
     visible_tiles: &mut BTreeSet<VoxelTileCoord>,
     tile_summaries_by_tile: &mut BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
     material_counts: &mut BTreeMap<Fvr03ProductionVoxelMaterialKind, usize>,
-    terrain_batches: &mut BTreeMap<Fvr03ProductionVoxelMaterialKind, Vec<Fvr03BatchedTerrainTile>>,
+    terrain_samples: &mut ProductionTerrainSampleMap,
 ) -> Result<usize, GameAppShellError> {
     let chunk_tile_size = i32::from(snapshot.profile_budget.chunk_tile_size);
     let base_x = chunk.x * chunk_tile_size;
@@ -1780,21 +1793,24 @@ fn spawn_fvr03_chunk_tiles(
                     stable_ref,
                 },
             );
-            terrain_batches
-                .entry(material)
-                .or_default()
-                .push(Fvr03BatchedTerrainTile {
+            terrain_samples.insert(
+                tile,
+                ProductionTerrainSample {
                     tile,
+                    material,
                     center_x: tile.x as f32 + 0.5,
                     center_z: tile.z as f32 + 0.5,
                     height: fvr09_visual_height_bucket(height),
+                    resource_bias: sample.resource_bias,
+                    hazard_pressure: sample.hazard_pressure,
                     visual_bucket: fvr10_terrain_variation_bucket(
                         material,
                         tile,
                         sample.resource_bias,
                         sample.hazard_pressure,
                     ),
-                });
+                },
+            );
             app.world_mut().spawn((
                 Name::new(format!("A-Life FVR03 voxel tile {}:{}", tile.x, tile.z)),
                 Transform::from_xyz(tile.x as f32 + 0.5, height * 0.5, tile.z as f32 + 0.5),
@@ -1821,14 +1837,26 @@ fn spawn_fvr09_greedy_terrain_meshes(
     settings: &Fvr03ProductionVoxelRendererSettings,
     palette_by_kind: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelMaterialEntry>,
     snapshot: &PersistentVoxelWorldSnapshot,
-    terrain_batches: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Vec<Fvr03BatchedTerrainTile>>,
+    terrain_samples: &ProductionTerrainSampleMap,
     tile_mesh_count: usize,
-) -> Fvr09GreedyMeshStats {
+) -> Fvr11TemporaryTerrainSpawnReceipt {
     let started = Instant::now();
     let mut emitted_quads = 0_usize;
     let mut visible_voxels = 0_usize;
+    let mut confetti_detail_quad_count = 0_usize;
     let mut variation_buckets = BTreeSet::new();
-    for (material, tiles) in terrain_batches {
+    let mut terrain_batches =
+        BTreeMap::<Fvr03ProductionVoxelMaterialKind, Vec<ProductionTerrainSample>>::new();
+    for sample in terrain_samples.values().copied() {
+        terrain_batches
+            .entry(sample.material)
+            .or_default()
+            .push(sample);
+    }
+    let water_layer_count =
+        usize::from(terrain_batches.contains_key(&Fvr03ProductionVoxelMaterialKind::Water));
+    let rendered_material_count = terrain_batches.len();
+    for (material, tiles) in &terrain_batches {
         if tiles.is_empty() {
             continue;
         }
@@ -1843,7 +1871,8 @@ fn spawn_fvr09_greedy_terrain_meshes(
             visible_voxels.saturating_add(tiles.iter().map(fvr09_visible_voxels_for_tile).sum());
         let prisms = fvr09_material_greedy_prisms(tiles, settings.tile_stride);
         emitted_quads = emitted_quads.saturating_add(prisms.len().saturating_mul(6));
-        let mesh = fvr09_greedy_prism_mesh(&prisms, *material, material_entry);
+        let (mesh, detail_quad_count) = fvr09_greedy_prism_mesh(&prisms, *material, material_entry);
+        confetti_detail_quad_count = confetti_detail_quad_count.saturating_add(detail_quad_count);
         let mesh_handle = app.world_mut().resource_mut::<Assets<Mesh>>().add(mesh);
         app.world_mut().spawn((
             Name::new(format!(
@@ -1871,26 +1900,31 @@ fn spawn_fvr09_greedy_terrain_meshes(
     let dirty_chunks = dirty_source.min(settings.remesh_budget_chunks_per_frame);
     let cached_chunks = snapshot.visible_chunks.len().saturating_sub(dirty_chunks);
     let skipped_chunks = dirty_source.saturating_sub(dirty_chunks);
-    Fvr09GreedyMeshStats {
-        mode: Fvr09MesherMode::BinaryGreedyQuads,
-        chunk_local_occupancy_masks: true,
-        six_direction_face_masks: true,
-        material_aware_merging: true,
-        neighbor_border_seams_checked: true,
-        visible_voxels,
-        naive_visible_faces,
-        emitted_quads,
-        merge_ratio,
-        remesh_time_micros: started.elapsed().as_micros(),
-        dirty_chunks,
-        cached_chunks,
-        skipped_chunks,
-        remesh_budget_chunks_per_frame: settings.remesh_budget_chunks_per_frame,
-        material_palette_version: settings.material_palette_version,
-        vertex_color_face_variation: true,
-        top_side_color_separation: true,
-        variation_bucket_count: variation_buckets.len(),
-        cache_key: fvr09_mesh_cache_key(snapshot, settings),
+    Fvr11TemporaryTerrainSpawnReceipt {
+        mesh_stats: Fvr09GreedyMeshStats {
+            mode: Fvr09MesherMode::BinaryGreedyQuads,
+            chunk_local_occupancy_masks: true,
+            six_direction_face_masks: true,
+            material_aware_merging: true,
+            neighbor_border_seams_checked: true,
+            visible_voxels,
+            naive_visible_faces,
+            emitted_quads,
+            merge_ratio,
+            remesh_time_micros: started.elapsed().as_micros(),
+            dirty_chunks,
+            cached_chunks,
+            skipped_chunks,
+            remesh_budget_chunks_per_frame: settings.remesh_budget_chunks_per_frame,
+            material_palette_version: settings.material_palette_version,
+            vertex_color_face_variation: true,
+            top_side_color_separation: true,
+            variation_bucket_count: variation_buckets.len(),
+            cache_key: fvr09_mesh_cache_key(snapshot, settings),
+        },
+        rendered_material_count,
+        water_layer_count,
+        confetti_detail_quad_count,
     }
 }
 
@@ -3084,7 +3118,7 @@ fn fvr09_greedy_prism_mesh(
     prisms: &[Fvr09GreedyTerrainPrism],
     material: Fvr03ProductionVoxelMaterialKind,
     material_entry: Fvr03ProductionVoxelMaterialEntry,
-) -> Mesh {
+) -> (Mesh, usize) {
     let mut positions = Vec::<[f32; 3]>::with_capacity(prisms.len() * 24);
     let mut normals = Vec::<[f32; 3]>::with_capacity(prisms.len() * 24);
     let mut uvs = Vec::<[f32; 2]>::with_capacity(prisms.len() * 24);
@@ -3104,6 +3138,12 @@ fn fvr09_greedy_prism_mesh(
             material_entry,
         );
     }
+    let base_vertex_count = prisms.len().saturating_mul(24);
+    let confetti_detail_quad_count = positions
+        .len()
+        .saturating_sub(base_vertex_count)
+        .checked_div(4)
+        .unwrap_or_default();
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
@@ -3113,17 +3153,17 @@ fn fvr09_greedy_prism_mesh(
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_indices(Indices::U32(indices));
-    mesh
+    (mesh, confetti_detail_quad_count)
 }
 
 fn fvr09_material_greedy_prisms(
-    tiles: &[Fvr03BatchedTerrainTile],
+    tiles: &[ProductionTerrainSample],
     tile_stride: u16,
 ) -> Vec<Fvr09GreedyTerrainPrism> {
     let stride = i32::from(tile_stride.max(1));
     let footprint = f32::from(tile_stride.max(1));
     let mut occupancy_masks = BTreeMap::<i32, u64>::new();
-    let mut columns = BTreeMap::<(i32, i32), Fvr03BatchedTerrainTile>::new();
+    let mut columns = BTreeMap::<(i32, i32), ProductionTerrainSample>::new();
     for tile in tiles {
         let grid_x = tile.tile.x.div_euclid(stride);
         let grid_z = tile.tile.z.div_euclid(stride);
@@ -3193,8 +3233,8 @@ fn fvr09_material_greedy_prisms(
 }
 
 fn fvr10_tiles_can_merge(
-    origin: &Fvr03BatchedTerrainTile,
-    candidate: &Fvr03BatchedTerrainTile,
+    origin: &ProductionTerrainSample,
+    candidate: &ProductionTerrainSample,
 ) -> bool {
     origin.visual_bucket == candidate.visual_bucket
         && (origin.height - candidate.height).abs() < 0.01
@@ -3776,7 +3816,7 @@ fn fvr10_saturate(value: f32) -> f32 {
     value.clamp(0.0, 1.0)
 }
 
-fn fvr09_visible_voxels_for_tile(tile: &Fvr03BatchedTerrainTile) -> usize {
+fn fvr09_visible_voxels_for_tile(tile: &ProductionTerrainSample) -> usize {
     (tile.height.ceil() as usize).max(1)
 }
 
