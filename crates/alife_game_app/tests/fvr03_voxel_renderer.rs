@@ -10,10 +10,11 @@ use alife_game_app::{
     Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
     Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
     Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
-    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionTerrainLayer,
-    Fvr11ProductionTerrainMaterialContract, Fvr11ProductionTerrainSceneResource,
-    Fvr11TerrainSurfaceRole, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
-    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
+    Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
+    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
+    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
     CreatureAppearanceGenome, StableVoxelRefKind, CREATURE_APPEARANCE_SPECIES_COUNT,
@@ -149,6 +150,48 @@ fn fvr11_terrain_material_contract_binds_lit_layers_and_water() {
         }
     }
     assert!(saw_water);
+}
+
+#[test]
+fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
+    let lighting = |profile_id| {
+        let launch = production_launch(profile_id);
+        let (mut app, _summary) =
+            alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+        app.update();
+        let mut marker_query = app
+            .world_mut()
+            .query::<&Fvr11ProductionTerrainLightingMarker>();
+        let marker = *marker_query
+            .iter(app.world())
+            .next()
+            .expect("terrain lighting marker");
+        let mut shadow_query = app.world_mut().query::<&Fvr11ProductionContactShadow>();
+        let contact_shadow_count = shadow_query.iter(app.world()).count();
+        (marker, contact_shadow_count)
+    };
+
+    let (minimum, minimum_contact_shadows) =
+        lighting(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (comfort, comfort_contact_shadows) =
+        lighting(ProductionFrontendProfileId::MinSpecComfort1080p);
+
+    assert_eq!(minimum.tonemapping, "tony-mc-mapface");
+    assert!(!minimum.directional_shadows);
+    assert_eq!(minimum.shadow_cascades, 0);
+    assert!(minimum.contact_grounding);
+    assert!(minimum_contact_shadows >= 30);
+    assert!(minimum.distance_fog);
+
+    assert_eq!(comfort.tonemapping, "tony-mc-mapface");
+    assert!(comfort.directional_shadows);
+    assert_eq!(comfort.shadow_cascades, 2);
+    assert!(comfort.distance_fog);
+    assert!(comfort.cool_ambient_fill);
+    assert!(comfort.contact_grounding);
+    assert_eq!(comfort_contact_shadows, 0);
+    assert!(comfort.display_only);
+    assert!(comfort.no_renderer_authority_over_world_actions_or_cognition);
 }
 
 #[test]

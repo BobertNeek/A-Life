@@ -150,6 +150,11 @@ mod terrain_water;
 mod terrain_dressing;
 
 #[cfg(feature = "bevy-app")]
+mod terrain_lighting;
+#[cfg(feature = "bevy-app")]
+pub use terrain_lighting::{Fvr11ProductionContactShadow, Fvr11ProductionTerrainLightingMarker};
+
+#[cfg(feature = "bevy-app")]
 mod production_voxel_renderer;
 #[cfg(feature = "bevy-app")]
 pub use production_voxel_renderer::*;

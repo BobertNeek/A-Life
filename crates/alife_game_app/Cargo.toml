@@ -46,7 +46,9 @@ bevy-app = [
     "bevy/mesh_picking",
     "bevy/png",
     "bevy/sprite_picking",
+    "bevy/tonemapping_luts",
     "bevy/ui_picking",
+    "bevy/zstd_rust",
     "dep:wgpu",
 ]
 gpu-runtime = ["dep:alife_gpu_backend"]

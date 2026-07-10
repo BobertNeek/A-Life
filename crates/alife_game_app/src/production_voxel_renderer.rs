@@ -24,23 +24,18 @@ use bevy::{
     app::AppExit,
     asset::RenderAssetUsages,
     camera::ScalingMode,
-    core_pipeline::tonemapping::Tonemapping,
     math::primitives::InfinitePlane3d,
     mesh::Indices,
     prelude::{
-        default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, Camera3d,
-        ClearColorConfig, Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight,
-        GlobalTransform, Handle, KeyCode, Mesh, Mesh3d, MeshMaterial3d, MessageWriter, MouseButton,
-        Name, Node, OrthographicProjection, ParamSet, PositionType, Projection, Quat, Res, ResMut,
-        Resource, StandardMaterial, Text, Text2d, TextColor, TextFont, Time, Transform, Update,
-        Val, Vec3, Visibility, Window, With,
+        default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, Color, Commands,
+        Component, Cuboid, DetectChanges, GlobalTransform, Handle, KeyCode, Mesh, Mesh3d,
+        MeshMaterial3d, MessageWriter, MouseButton, Name, Node, ParamSet, PositionType, Projection,
+        Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
+        Transform, Update, Val, Vec3, Visibility, Window, With,
     },
     render::{
         render_resource::PrimitiveTopology,
-        view::{
-            screenshot::{save_to_disk, Screenshot},
-            Msaa,
-        },
+        view::screenshot::{save_to_disk, Screenshot},
     },
     window::PrimaryWindow,
 };
@@ -60,6 +55,10 @@ use crate::{
 use crate::{
     terrain_dressing::{
         create_terrain_dressing_library, plan_production_terrain_dressing, TerrainDressingTile,
+    },
+    terrain_lighting::{
+        production_camera_transform, spawn_production_terrain_camera,
+        spawn_production_terrain_lighting,
     },
     terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
     terrain_water::install_animated_water_material,
@@ -1452,8 +1451,12 @@ pub fn spawn_fvr03_production_voxel_scene(
         &runtime_state.creatures,
         selected,
     );
-    spawn_fvr03_camera(app, &settings);
-    spawn_fvr03_lighting(app, &settings);
+    spawn_production_terrain_camera(app, &settings);
+    let tile_heights = tile_summaries_by_tile
+        .iter()
+        .map(|(tile, summary)| (*tile, summary.height_units))
+        .collect::<BTreeMap<_, _>>();
+    spawn_production_terrain_lighting(app, &settings, &tile_heights);
     if let Some(selection) = selected {
         spawn_fvr03_selection_marker(app, &materials, selection);
     }
@@ -4215,61 +4218,6 @@ fn spawn_fvr04_creature_inspector_panel(app: &mut App) {
     ));
 }
 
-fn spawn_fvr03_camera(app: &mut App, settings: &Fvr03ProductionVoxelRendererSettings) {
-    let camera_extent = match settings.profile_id {
-        ProductionFrontendProfileId::MinimumSettings30x30 => 20.0,
-        ProductionFrontendProfileId::MinSpecComfort1080p => 18.0,
-        ProductionFrontendProfileId::Balanced1080p => 30.0,
-        ProductionFrontendProfileId::HighSpecScaleUp => 40.0,
-        ProductionFrontendProfileId::ResearchScale => 34.0,
-    };
-    let transform = fvr03_camera_transform(
-        Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
-        camera_extent,
-    );
-    app.world_mut().spawn((
-        Name::new("A-Life FVR03 production voxel camera"),
-        Camera3d::default(),
-        Camera {
-            order: 0,
-            clear_color: ClearColorConfig::Custom(Color::srgb(0.065, 0.105, 0.090)),
-            ..default()
-        },
-        Projection::from(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: camera_extent,
-            },
-            scale: 1.0,
-            near: -200.0,
-            far: 500.0,
-            ..OrthographicProjection::default_3d()
-        }),
-        Tonemapping::None,
-        Msaa::Off,
-        transform,
-        Fvr03ProductionVoxelCamera {
-            mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
-        },
-    ));
-}
-
-fn spawn_fvr03_lighting(app: &mut App, settings: &Fvr03ProductionVoxelRendererSettings) {
-    app.world_mut().spawn((
-        Name::new("A-Life FVR03 warm directional sun"),
-        DirectionalLight {
-            illuminance: 4200.0,
-            shadows_enabled: !(settings.minimum_floor || settings.min_spec_comfort_default),
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(
-            bevy::prelude::EulerRot::XYZ,
-            -1.05,
-            0.62,
-            -0.42,
-        )),
-    ));
-}
-
 fn spawn_fvr03_diagnostics_ui(
     app: &mut App,
     summary: &ProductionVoxelLaunchSummary,
@@ -4848,7 +4796,7 @@ fn handle_fvr03_camera_mode_input(
     let extent = 18.0 + f32::from(scene.draw_radius_chunks) * 9.0;
     for (mut transform, mut projection, mut camera) in &mut cameras {
         camera.mode = next_mode;
-        *transform = fvr03_camera_transform(next_mode, extent);
+        *transform = production_camera_transform(next_mode, extent);
         if let Projection::Orthographic(orthographic) = &mut *projection {
             orthographic.scaling_mode = ScalingMode::FixedVertical {
                 viewport_height: extent,
@@ -5146,19 +5094,6 @@ fn fvr05_screenshot_path(base_path: &PathBuf, suffix: &str) -> PathBuf {
         .and_then(|stem| stem.to_str())
         .unwrap_or("production_voxel");
     parent.join(format!("{stem}_{suffix}.png"))
-}
-
-fn fvr03_camera_transform(mode: Fvr03ProductionVoxelCameraMode, extent: f32) -> Transform {
-    match mode {
-        Fvr03ProductionVoxelCameraMode::OrthographicIsometric => {
-            Transform::from_xyz(extent * 0.52, extent * 0.68, extent * 0.82)
-                .looking_at(Vec3::new(4.0, 0.35, 1.5), Vec3::Y)
-        }
-        Fvr03ProductionVoxelCameraMode::Orbit => {
-            Transform::from_xyz(extent * 0.72, extent * 0.52, extent * 0.94)
-                .looking_at(Vec3::new(4.0, 0.35, 1.5), Vec3::Y)
-        }
-    }
 }
 
 fn fvr03_material_kind(
