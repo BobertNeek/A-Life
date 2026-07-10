@@ -10,9 +10,10 @@ use alife_game_app::{
     Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
     Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
     Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
-    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionTerrainSceneResource,
-    ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
-    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionTerrainLayer,
+    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
+    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
     CreatureAppearanceGenome, StableVoxelRefKind, CREATURE_APPEARANCE_SPECIES_COUNT,
@@ -62,6 +63,39 @@ fn fvr11_terrain_contract_is_display_only() {
     assert!(scene.sample_count > 0);
     assert!(scene.display_only);
     assert!(scene.no_renderer_authority_over_world_actions_or_cognition);
+}
+
+#[test]
+fn fvr11_terrain_contract_is_display_only_and_layered() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let scene = app
+        .world()
+        .resource::<Fvr11ProductionTerrainSceneResource>()
+        .clone();
+    assert_eq!(scene.confetti_detail_quad_count, 0);
+    assert!(scene.top_layer_count >= 7);
+    assert!(scene.cliff_layer_count >= 3);
+    assert!(scene.transition_edge_count > 0);
+
+    let mut query = app.world_mut().query::<&Fvr11ProductionTerrainLayer>();
+    let layers = query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert!(layers.iter().all(|layer| layer.display_only));
+    assert!(layers
+        .iter()
+        .all(|layer| layer.no_renderer_authority_over_world_actions_or_cognition));
+    assert!(layers.iter().all(|layer| layer.source_tile_count > 0));
+    let roles = layers
+        .iter()
+        .map(|layer| layer.role)
+        .collect::<BTreeSet<_>>();
+    assert!(roles.contains(&Fvr11TerrainSurfaceRole::Top));
+    assert!(roles.contains(&Fvr11TerrainSurfaceRole::Cliff));
+    assert!(roles.contains(&Fvr11TerrainSurfaceRole::Transition));
+    assert!(roles.contains(&Fvr11TerrainSurfaceRole::Water));
 }
 
 #[test]

@@ -24,14 +24,12 @@ pub(crate) struct ProductionTerrainSample {
 pub(crate) type ProductionTerrainSampleMap = BTreeMap<VoxelTileCoord, ProductionTerrainSample>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[allow(dead_code)]
 pub(crate) struct TerrainAtlasUvRect {
     pub min: [f32; 2],
     pub max: [f32; 2],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) struct TerrainAtlasLayout {
     pub tile_size: u32,
     pub gutter: u32,
@@ -40,7 +38,6 @@ pub(crate) struct TerrainAtlasLayout {
 }
 
 impl TerrainAtlasLayout {
-    #[allow(dead_code)]
     pub const PRODUCTION: Self = Self {
         tile_size: 64,
         gutter: 2,
@@ -48,7 +45,6 @@ impl TerrainAtlasLayout {
         rows: 4,
     };
 
-    #[allow(dead_code)]
     pub fn slot_rect(self, slot: u8) -> TerrainAtlasUvRect {
         assert!(u32::from(slot) < self.columns * self.rows);
         let cell = self.tile_size + self.gutter * 2;

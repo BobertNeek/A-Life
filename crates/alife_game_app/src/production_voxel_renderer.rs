@@ -45,14 +45,16 @@ use bevy::{
     window::PrimaryWindow,
 };
 
+use crate::terrain_mesh::build_production_terrain_meshes;
 use crate::{
     creature_visual_snapshot_from_parts_with_appearance,
     production_terrain::{ProductionTerrainSample, ProductionTerrainSampleMap},
     production_voxel_save_with_population, CreatureAnimationState, CreatureExpressionState,
     CreatureVisualSnapshot, Fvr05ProductionDebugAuthorityReport, Fvr05ProductionInspectorTab,
-    Fvr05ProductionOverlayKind, Fvr05ProductionUxSettings, Fvr11ProductionTerrainSceneResource,
-    GameAppShellError, ProductionFrontendProfileBudget, ProductionFrontendProfileId,
-    ProductionSaveMetadata, ProductionVoxelLaunchSummary, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+    Fvr05ProductionOverlayKind, Fvr05ProductionUxSettings, Fvr11ProductionTerrainLayer,
+    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, GameAppShellError,
+    ProductionFrontendProfileBudget, ProductionFrontendProfileId, ProductionSaveMetadata,
+    ProductionVoxelLaunchSummary, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
     PRODUCTION_VOXEL_RENDERER_PROFILE,
 };
 
@@ -1006,20 +1008,11 @@ pub struct Fvr05ProductionBottomOverlayToolbar;
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Fvr05ProductionFooterStatusBar;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct Fvr09GreedyTerrainPrism {
-    center_x: f32,
-    center_z: f32,
-    height: f32,
-    size_x: f32,
-    size_z: f32,
-    source_tile_count: usize,
-    visual_bucket: u8,
-}
-
-struct Fvr11TemporaryTerrainSpawnReceipt {
+struct Fvr11TerrainSpawnReceipt {
     mesh_stats: Fvr09GreedyMeshStats,
-    rendered_material_count: usize,
+    top_layer_count: usize,
+    cliff_layer_count: usize,
+    transition_edge_count: usize,
     water_layer_count: usize,
     confetti_detail_quad_count: usize,
 }
@@ -1292,11 +1285,6 @@ pub fn spawn_fvr03_production_voxel_scene(
 
     let palette = settings.material_palette();
     let materials = create_fvr03_materials(app, &palette);
-    let palette_by_kind = palette
-        .iter()
-        .copied()
-        .map(|entry| (entry.kind, entry))
-        .collect::<BTreeMap<_, _>>();
     let boundary_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         meshes.add(Cuboid::new(
@@ -1388,11 +1376,10 @@ pub fn spawn_fvr03_production_voxel_scene(
         ));
     }
 
-    let terrain_receipt = spawn_fvr09_greedy_terrain_meshes(
+    let terrain_receipt = spawn_fvr11_layered_terrain_meshes(
         app,
         &materials,
         &settings,
-        &palette_by_kind,
         &snapshot,
         &terrain_samples,
         tile_mesh_count,
@@ -1401,11 +1388,9 @@ pub fn spawn_fvr03_production_voxel_scene(
     app.insert_resource(Fvr11ProductionTerrainSceneResource {
         visual_version: FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
         sample_count: terrain_samples.len(),
-        top_layer_count: terrain_receipt
-            .rendered_material_count
-            .saturating_sub(terrain_receipt.water_layer_count),
-        cliff_layer_count: terrain_receipt.rendered_material_count,
-        transition_edge_count: 0,
+        top_layer_count: terrain_receipt.top_layer_count,
+        cliff_layer_count: terrain_receipt.cliff_layer_count,
+        transition_edge_count: terrain_receipt.transition_edge_count,
         water_layer_count: terrain_receipt.water_layer_count,
         confetti_detail_quad_count: terrain_receipt.confetti_detail_quad_count,
         display_only: true,
@@ -1831,66 +1816,101 @@ fn spawn_fvr03_chunk_tiles(
     Ok(count)
 }
 
-fn spawn_fvr09_greedy_terrain_meshes(
+fn spawn_fvr11_layered_terrain_meshes(
     app: &mut App,
     materials: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
     settings: &Fvr03ProductionVoxelRendererSettings,
-    palette_by_kind: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelMaterialEntry>,
     snapshot: &PersistentVoxelWorldSnapshot,
     terrain_samples: &ProductionTerrainSampleMap,
     tile_mesh_count: usize,
-) -> Fvr11TemporaryTerrainSpawnReceipt {
+) -> Fvr11TerrainSpawnReceipt {
     let started = Instant::now();
-    let mut emitted_quads = 0_usize;
-    let mut visible_voxels = 0_usize;
-    let mut confetti_detail_quad_count = 0_usize;
-    let mut variation_buckets = BTreeSet::new();
-    let mut terrain_batches =
-        BTreeMap::<Fvr03ProductionVoxelMaterialKind, Vec<ProductionTerrainSample>>::new();
-    for sample in terrain_samples.values().copied() {
-        terrain_batches
-            .entry(sample.material)
-            .or_default()
-            .push(sample);
-    }
-    let water_layer_count =
-        usize::from(terrain_batches.contains_key(&Fvr03ProductionVoxelMaterialKind::Water));
-    let rendered_material_count = terrain_batches.len();
-    for (material, tiles) in &terrain_batches {
-        if tiles.is_empty() {
-            continue;
-        }
-        let Some(material_handle) = materials.get(material).cloned() else {
+    let build = build_production_terrain_meshes(
+        terrain_samples,
+        f32::from(settings.tile_stride.max(1)),
+        crate::production_terrain::TerrainAtlasLayout::PRODUCTION,
+    );
+    let terrain_stats = build.stats.clone();
+    let top_layer_count = build
+        .layers
+        .iter()
+        .filter(|layer| layer.role == Fvr11TerrainSurfaceRole::Top)
+        .count();
+    let cliff_layer_count = build
+        .layers
+        .iter()
+        .filter(|layer| layer.role == Fvr11TerrainSurfaceRole::Cliff)
+        .count();
+    let water_layer_count = build
+        .layers
+        .iter()
+        .filter(|layer| layer.role == Fvr11TerrainSurfaceRole::Water)
+        .count();
+    for layer in build.layers {
+        let Some(material_handle) = materials.get(&layer.material).cloned() else {
             continue;
         };
-        let Some(material_entry) = palette_by_kind.get(material).copied() else {
-            continue;
-        };
-        variation_buckets.extend(tiles.iter().map(|tile| (*material, tile.visual_bucket)));
-        visible_voxels =
-            visible_voxels.saturating_add(tiles.iter().map(fvr09_visible_voxels_for_tile).sum());
-        let prisms = fvr09_material_greedy_prisms(tiles, settings.tile_stride);
-        emitted_quads = emitted_quads.saturating_add(prisms.len().saturating_mul(6));
-        let (mesh, detail_quad_count) = fvr09_greedy_prism_mesh(&prisms, *material, material_entry);
-        confetti_detail_quad_count = confetti_detail_quad_count.saturating_add(detail_quad_count);
-        let mesh_handle = app.world_mut().resource_mut::<Assets<Mesh>>().add(mesh);
-        app.world_mut().spawn((
-            Name::new(format!(
-                "A-Life FVR09 greedy voxel terrain {}",
-                material.label()
-            )),
-            Mesh3d(mesh_handle),
-            MeshMaterial3d(material_handle),
-            Transform::default(),
-            Fvr03ProductionVoxelTerrainBatch {
-                material: *material,
-                tile_count: prisms.iter().map(|prism| prism.source_tile_count).sum(),
+        let role = layer.role;
+        let material = layer.material;
+        let source_tile_count = layer.source_tile_count;
+        let mesh_handle = app
+            .world_mut()
+            .resource_mut::<Assets<Mesh>>()
+            .add(layer.mesh);
+        let name = Name::new(format!(
+            "A-Life FVR11 terrain {} {}",
+            match role {
+                Fvr11TerrainSurfaceRole::Top => "top",
+                Fvr11TerrainSurfaceRole::Cliff => "cliff",
+                Fvr11TerrainSurfaceRole::Transition => "transition",
+                Fvr11TerrainSurfaceRole::Water => "water",
             },
+            material.label()
         ));
+        let marker = Fvr11ProductionTerrainLayer {
+            role,
+            material,
+            source_tile_count,
+            display_only: true,
+            no_renderer_authority_over_world_actions_or_cognition: true,
+        };
+        if matches!(
+            role,
+            Fvr11TerrainSurfaceRole::Top | Fvr11TerrainSurfaceRole::Water
+        ) {
+            app.world_mut().spawn((
+                name,
+                Mesh3d(mesh_handle),
+                MeshMaterial3d(material_handle),
+                Transform::default(),
+                marker,
+                Fvr03ProductionVoxelTerrainBatch {
+                    material,
+                    tile_count: source_tile_count,
+                },
+            ));
+        } else {
+            app.world_mut().spawn((
+                name,
+                Mesh3d(mesh_handle),
+                MeshMaterial3d(material_handle),
+                Transform::default(),
+                marker,
+            ));
+        }
     }
-    visible_voxels = visible_voxels.max(tile_mesh_count);
+    let visible_voxels = terrain_samples
+        .values()
+        .map(fvr09_visible_voxels_for_tile)
+        .sum::<usize>()
+        .max(tile_mesh_count);
     let naive_visible_faces = tile_mesh_count.saturating_mul(6);
-    let emitted_quads = emitted_quads.clamp(1, naive_visible_faces.max(1));
+    let emitted_quads = terrain_stats
+        .top_quads
+        .saturating_add(terrain_stats.cliff_quads)
+        .saturating_add(terrain_stats.transition_edges)
+        .saturating_add(terrain_stats.water_quads)
+        .clamp(1, naive_visible_faces.max(1));
     let merge_ratio = if emitted_quads == 0 {
         0.0
     } else {
@@ -1900,7 +1920,12 @@ fn spawn_fvr09_greedy_terrain_meshes(
     let dirty_chunks = dirty_source.min(settings.remesh_budget_chunks_per_frame);
     let cached_chunks = snapshot.visible_chunks.len().saturating_sub(dirty_chunks);
     let skipped_chunks = dirty_source.saturating_sub(dirty_chunks);
-    Fvr11TemporaryTerrainSpawnReceipt {
+    let variation_bucket_count = terrain_samples
+        .values()
+        .map(|sample| (sample.material, sample.visual_bucket))
+        .collect::<BTreeSet<_>>()
+        .len();
+    Fvr11TerrainSpawnReceipt {
         mesh_stats: Fvr09GreedyMeshStats {
             mode: Fvr09MesherMode::BinaryGreedyQuads,
             chunk_local_occupancy_masks: true,
@@ -1919,12 +1944,14 @@ fn spawn_fvr09_greedy_terrain_meshes(
             material_palette_version: settings.material_palette_version,
             vertex_color_face_variation: true,
             top_side_color_separation: true,
-            variation_bucket_count: variation_buckets.len(),
+            variation_bucket_count,
             cache_key: fvr09_mesh_cache_key(snapshot, settings),
         },
-        rendered_material_count,
+        top_layer_count,
+        cliff_layer_count,
+        transition_edge_count: terrain_stats.transition_edges,
         water_layer_count,
-        confetti_detail_quad_count,
+        confetti_detail_quad_count: terrain_stats.confetti_detail_quads,
     }
 }
 
@@ -3114,132 +3141,6 @@ fn fvr05_average_hazard_pressure(
     total / tile_summaries.len() as f32
 }
 
-fn fvr09_greedy_prism_mesh(
-    prisms: &[Fvr09GreedyTerrainPrism],
-    material: Fvr03ProductionVoxelMaterialKind,
-    material_entry: Fvr03ProductionVoxelMaterialEntry,
-) -> (Mesh, usize) {
-    let mut positions = Vec::<[f32; 3]>::with_capacity(prisms.len() * 24);
-    let mut normals = Vec::<[f32; 3]>::with_capacity(prisms.len() * 24);
-    let mut uvs = Vec::<[f32; 2]>::with_capacity(prisms.len() * 24);
-    let mut colors = Vec::<[f32; 4]>::with_capacity(prisms.len() * 24);
-    let mut indices = Vec::<u32>::with_capacity(prisms.len() * 36);
-    for prism in prisms {
-        fvr10_append_colored_terrain_cuboid(
-            &mut positions,
-            &mut normals,
-            &mut uvs,
-            &mut colors,
-            &mut indices,
-            Vec3::new(prism.center_x, prism.height * 0.5, prism.center_z),
-            Vec3::new(prism.size_x, prism.height, prism.size_z),
-            *prism,
-            material,
-            material_entry,
-        );
-    }
-    let base_vertex_count = prisms.len().saturating_mul(24);
-    let confetti_detail_quad_count = positions
-        .len()
-        .saturating_sub(base_vertex_count)
-        .checked_div(4)
-        .unwrap_or_default();
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-    mesh.insert_indices(Indices::U32(indices));
-    (mesh, confetti_detail_quad_count)
-}
-
-fn fvr09_material_greedy_prisms(
-    tiles: &[ProductionTerrainSample],
-    tile_stride: u16,
-) -> Vec<Fvr09GreedyTerrainPrism> {
-    let stride = i32::from(tile_stride.max(1));
-    let footprint = f32::from(tile_stride.max(1));
-    let mut occupancy_masks = BTreeMap::<i32, u64>::new();
-    let mut columns = BTreeMap::<(i32, i32), ProductionTerrainSample>::new();
-    for tile in tiles {
-        let grid_x = tile.tile.x.div_euclid(stride);
-        let grid_z = tile.tile.z.div_euclid(stride);
-        let bit = (grid_x.rem_euclid(64)) as u32;
-        *occupancy_masks.entry(grid_z).or_default() |= 1_u64 << bit;
-        columns.insert((grid_x, grid_z), *tile);
-    }
-
-    let mut visited = BTreeSet::<(i32, i32)>::new();
-    let mut prisms = Vec::new();
-    for (origin, tile) in columns.iter() {
-        if visited.contains(origin) {
-            continue;
-        }
-        let (start_x, start_z) = *origin;
-        let mut width = 1_i32;
-        while columns
-            .get(&(start_x + width, start_z))
-            .is_some_and(|candidate| {
-                !visited.contains(&(start_x + width, start_z))
-                    && fvr10_tiles_can_merge(tile, candidate)
-            })
-        {
-            width += 1;
-        }
-
-        let mut depth = 1_i32;
-        'depth: loop {
-            for dx in 0..width {
-                let key = (start_x + dx, start_z + depth);
-                if !columns.get(&key).is_some_and(|candidate| {
-                    !visited.contains(&key) && fvr10_tiles_can_merge(tile, candidate)
-                }) {
-                    break 'depth;
-                }
-            }
-            depth += 1;
-        }
-
-        let mut max_height = tile.height;
-        let mut source_tile_count = 0_usize;
-        for dz in 0..depth {
-            for dx in 0..width {
-                let key = (start_x + dx, start_z + dz);
-                if let Some(tile) = columns.get(&key) {
-                    max_height = max_height.max(tile.height);
-                    source_tile_count = source_tile_count.saturating_add(1);
-                }
-                visited.insert(key);
-            }
-        }
-        let size_x = footprint * width as f32;
-        let size_z = footprint * depth as f32;
-        prisms.push(Fvr09GreedyTerrainPrism {
-            center_x: tile.center_x
-                + (width.saturating_sub(1) as f32 * f32::from(tile_stride)) * 0.5,
-            center_z: tile.center_z
-                + (depth.saturating_sub(1) as f32 * f32::from(tile_stride)) * 0.5,
-            height: max_height,
-            size_x,
-            size_z,
-            source_tile_count,
-            visual_bucket: tile.visual_bucket,
-        });
-    }
-    prisms
-}
-
-fn fvr10_tiles_can_merge(
-    origin: &ProductionTerrainSample,
-    candidate: &ProductionTerrainSample,
-) -> bool {
-    origin.visual_bucket == candidate.visual_bucket
-        && (origin.height - candidate.height).abs() < 0.01
-}
-
 fn fvr10_terrain_variation_bucket(
     material: Fvr03ProductionVoxelMaterialKind,
     tile: VoxelTileCoord,
@@ -3256,552 +3157,6 @@ fn fvr10_terrain_variation_bucket(
     );
     (hash % 5) as u8
 }
-
-fn fvr10_append_colored_terrain_cuboid(
-    positions: &mut Vec<[f32; 3]>,
-    normals: &mut Vec<[f32; 3]>,
-    uvs: &mut Vec<[f32; 2]>,
-    colors: &mut Vec<[f32; 4]>,
-    indices: &mut Vec<u32>,
-    center: Vec3,
-    size: Vec3,
-    prism: Fvr09GreedyTerrainPrism,
-    material: Fvr03ProductionVoxelMaterialKind,
-    material_entry: Fvr03ProductionVoxelMaterialEntry,
-) {
-    let half = size * 0.5;
-    let min_x = center.x - half.x;
-    let max_x = center.x + half.x;
-    let min_y = center.y - half.y;
-    let max_y = center.y + half.y;
-    let min_z = center.z - half.z;
-    let max_z = center.z + half.z;
-    let faces = [
-        (
-            [0.0, 1.0, 0.0],
-            [
-                [min_x, max_y, min_z],
-                [max_x, max_y, min_z],
-                [max_x, max_y, max_z],
-                [min_x, max_y, max_z],
-            ],
-        ),
-        (
-            [0.0, -1.0, 0.0],
-            [
-                [min_x, min_y, max_z],
-                [max_x, min_y, max_z],
-                [max_x, min_y, min_z],
-                [min_x, min_y, min_z],
-            ],
-        ),
-        (
-            [1.0, 0.0, 0.0],
-            [
-                [max_x, min_y, min_z],
-                [max_x, min_y, max_z],
-                [max_x, max_y, max_z],
-                [max_x, max_y, min_z],
-            ],
-        ),
-        (
-            [-1.0, 0.0, 0.0],
-            [
-                [min_x, min_y, max_z],
-                [min_x, min_y, min_z],
-                [min_x, max_y, min_z],
-                [min_x, max_y, max_z],
-            ],
-        ),
-        (
-            [0.0, 0.0, 1.0],
-            [
-                [max_x, min_y, max_z],
-                [min_x, min_y, max_z],
-                [min_x, max_y, max_z],
-                [max_x, max_y, max_z],
-            ],
-        ),
-        (
-            [0.0, 0.0, -1.0],
-            [
-                [min_x, min_y, min_z],
-                [max_x, min_y, min_z],
-                [max_x, max_y, min_z],
-                [min_x, max_y, min_z],
-            ],
-        ),
-    ];
-    for (face_index, (normal, face_positions)) in faces.into_iter().enumerate() {
-        let base = positions.len() as u32;
-        positions.extend(face_positions);
-        normals.extend([normal; 4]);
-        uvs.extend([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
-        colors.extend(
-            face_positions
-                .iter()
-                .enumerate()
-                .map(|(vertex_index, position)| {
-                    fvr10_terrain_face_color(
-                        material,
-                        material_entry,
-                        prism,
-                        normal,
-                        *position,
-                        face_index,
-                        vertex_index,
-                    )
-                }),
-        );
-        indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
-    }
-    fvr10_append_terrain_surface_detail(
-        positions,
-        normals,
-        uvs,
-        colors,
-        indices,
-        min_x,
-        max_x,
-        max_y,
-        min_z,
-        max_z,
-        prism,
-        material,
-        material_entry,
-    );
-    fvr10_append_terrain_side_detail(
-        positions,
-        normals,
-        uvs,
-        colors,
-        indices,
-        min_x,
-        max_x,
-        min_y,
-        max_y,
-        min_z,
-        max_z,
-        prism,
-        material,
-        material_entry,
-    );
-}
-
-fn fvr10_terrain_face_color(
-    material: Fvr03ProductionVoxelMaterialKind,
-    material_entry: Fvr03ProductionVoxelMaterialEntry,
-    prism: Fvr09GreedyTerrainPrism,
-    normal: [f32; 3],
-    position: [f32; 3],
-    face_index: usize,
-    vertex_index: usize,
-) -> [f32; 4] {
-    let palette = fvr10_surface_palette(material, material_entry);
-    let hash = fvr10_coord_hash(
-        position[0].floor() as i32,
-        position[2].floor() as i32,
-        face_index as u32 + u32::from(prism.visual_bucket) * 13,
-        vertex_index as u32 + prism.source_tile_count as u32,
-    );
-    let jitter = ((hash & 0xff) as f32 / 255.0 - 0.5) * 0.32;
-    let fleck = if ((hash >> 8) & 0x3) == 0 { 0.10 } else { 0.0 };
-    let (base, shade) = if normal[1] > 0.5 {
-        (palette.top, 0.96 + jitter)
-    } else if normal[1] < -0.5 {
-        (palette.side, 0.46 + jitter * 0.5)
-    } else {
-        let side_light = if normal[0].abs() > 0.5 { 0.74 } else { 0.64 };
-        (palette.side, side_light + jitter)
-    };
-    let accent_weight = if normal[1] > 0.5 {
-        0.050 + fleck * 0.55
-    } else {
-        0.030 + fleck * 0.28
-    };
-    [
-        fvr10_saturate(base[0] * shade + palette.accent[0] * accent_weight),
-        fvr10_saturate(base[1] * shade + palette.accent[1] * accent_weight),
-        fvr10_saturate(base[2] * shade + palette.accent[2] * accent_weight),
-        material_entry.rgba[3],
-    ]
-}
-
-#[allow(clippy::too_many_arguments)]
-fn fvr10_append_terrain_surface_detail(
-    positions: &mut Vec<[f32; 3]>,
-    normals: &mut Vec<[f32; 3]>,
-    uvs: &mut Vec<[f32; 2]>,
-    colors: &mut Vec<[f32; 4]>,
-    indices: &mut Vec<u32>,
-    min_x: f32,
-    max_x: f32,
-    max_y: f32,
-    min_z: f32,
-    max_z: f32,
-    prism: Fvr09GreedyTerrainPrism,
-    material: Fvr03ProductionVoxelMaterialKind,
-    material_entry: Fvr03ProductionVoxelMaterialEntry,
-) {
-    let cells_x = ((max_x - min_x).ceil() as i32).clamp(1, 10);
-    let cells_z = ((max_z - min_z).ceil() as i32).clamp(1, 10);
-    let palette = fvr10_surface_palette(material, material_entry);
-    for ix in 0..cells_x {
-        for iz in 0..cells_z {
-            let world_x = min_x + ix as f32 + 0.50;
-            let world_z = min_z + iz as f32 + 0.50;
-            let hash = fvr10_coord_hash(
-                world_x.floor() as i32,
-                world_z.floor() as i32,
-                0x710d_7a1d ^ u32::from(prism.visual_bucket),
-                material.label().bytes().fold(0_u32, |acc, byte| {
-                    acc.wrapping_mul(37).wrapping_add(u32::from(byte))
-                }),
-            );
-            let detail_count = if material == Fvr03ProductionVoxelMaterialKind::Stone {
-                3
-            } else if material == Fvr03ProductionVoxelMaterialKind::Water {
-                2
-            } else {
-                2 + usize::from((hash & 0x3) == 0)
-            };
-            for layer in 0..detail_count {
-                let layer_hash = hash.rotate_left((layer as u32 * 7) + 3);
-                let offset_x = (((layer_hash & 0xff) as f32 / 255.0) - 0.5) * 0.62;
-                let offset_z = ((((layer_hash >> 8) & 0xff) as f32 / 255.0) - 0.5) * 0.62;
-                let center_x = (world_x + offset_x).clamp(min_x + 0.10, max_x - 0.10);
-                let center_z = (world_z + offset_z).clamp(min_z + 0.10, max_z - 0.10);
-                let width = 0.12 + (((layer_hash >> 16) & 0xff) as f32 / 255.0) * 0.28;
-                let depth = 0.08 + (((layer_hash >> 24) & 0xff) as f32 / 255.0) * 0.22;
-                let y = max_y + 0.014 + layer as f32 * 0.003;
-                let color = fvr10_terrain_detail_color(
-                    material,
-                    palette,
-                    material_entry.rgba[3],
-                    layer_hash,
-                );
-                fvr10_append_colored_quad(
-                    positions,
-                    normals,
-                    uvs,
-                    colors,
-                    indices,
-                    [
-                        [center_x - width, y, center_z - depth],
-                        [center_x + width, y, center_z - depth],
-                        [center_x + width, y, center_z + depth],
-                        [center_x - width, y, center_z + depth],
-                    ],
-                    [0.0, 1.0, 0.0],
-                    color,
-                );
-            }
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn fvr10_append_terrain_side_detail(
-    positions: &mut Vec<[f32; 3]>,
-    normals: &mut Vec<[f32; 3]>,
-    uvs: &mut Vec<[f32; 2]>,
-    colors: &mut Vec<[f32; 4]>,
-    indices: &mut Vec<u32>,
-    min_x: f32,
-    max_x: f32,
-    min_y: f32,
-    max_y: f32,
-    min_z: f32,
-    max_z: f32,
-    prism: Fvr09GreedyTerrainPrism,
-    material: Fvr03ProductionVoxelMaterialKind,
-    material_entry: Fvr03ProductionVoxelMaterialEntry,
-) {
-    if (max_y - min_y) < 0.42 {
-        return;
-    }
-    let span_x = (max_x - min_x).ceil() as i32;
-    let span_z = (max_z - min_z).ceil() as i32;
-    let palette = fvr10_surface_palette(material, material_entry);
-    for side in 0..4 {
-        let cells = if side < 2 { span_x } else { span_z }.clamp(1, 8);
-        for cell in 0..cells {
-            let salt = 0x51de_5eed_u32 ^ (side as u32 * 97) ^ u32::from(prism.visual_bucket);
-            let hash = fvr10_coord_hash(
-                (min_x + cell as f32) as i32,
-                (min_z + cell as f32) as i32,
-                salt,
-                material.label().len() as u32,
-            );
-            if hash & 0x7 == 0 {
-                continue;
-            }
-            let t0 = cell as f32 / cells as f32;
-            let t1 = (cell as f32 + 0.44).min(cells as f32) / cells as f32;
-            let y0 = min_y + 0.12 + (((hash >> 8) & 0xff) as f32 / 255.0) * (max_y - min_y) * 0.45;
-            let y1 = (y0 + 0.035 + (((hash >> 16) & 0xff) as f32 / 255.0) * 0.08).min(max_y - 0.05);
-            let color =
-                fvr10_terrain_side_detail_color(material, palette, material_entry.rgba[3], hash);
-            let inset = 0.006;
-            match side {
-                0 => {
-                    let x0 = min_x + (max_x - min_x) * t0;
-                    let x1 = min_x + (max_x - min_x) * t1;
-                    fvr10_append_colored_quad(
-                        positions,
-                        normals,
-                        uvs,
-                        colors,
-                        indices,
-                        [
-                            [x1, y0, max_z + inset],
-                            [x0, y0, max_z + inset],
-                            [x0, y1, max_z + inset],
-                            [x1, y1, max_z + inset],
-                        ],
-                        [0.0, 0.0, 1.0],
-                        color,
-                    );
-                }
-                1 => {
-                    let x0 = min_x + (max_x - min_x) * t0;
-                    let x1 = min_x + (max_x - min_x) * t1;
-                    fvr10_append_colored_quad(
-                        positions,
-                        normals,
-                        uvs,
-                        colors,
-                        indices,
-                        [
-                            [x0, y0, min_z - inset],
-                            [x1, y0, min_z - inset],
-                            [x1, y1, min_z - inset],
-                            [x0, y1, min_z - inset],
-                        ],
-                        [0.0, 0.0, -1.0],
-                        color,
-                    );
-                }
-                2 => {
-                    let z0 = min_z + (max_z - min_z) * t0;
-                    let z1 = min_z + (max_z - min_z) * t1;
-                    fvr10_append_colored_quad(
-                        positions,
-                        normals,
-                        uvs,
-                        colors,
-                        indices,
-                        [
-                            [max_x + inset, y0, z0],
-                            [max_x + inset, y0, z1],
-                            [max_x + inset, y1, z1],
-                            [max_x + inset, y1, z0],
-                        ],
-                        [1.0, 0.0, 0.0],
-                        color,
-                    );
-                }
-                _ => {
-                    let z0 = min_z + (max_z - min_z) * t0;
-                    let z1 = min_z + (max_z - min_z) * t1;
-                    fvr10_append_colored_quad(
-                        positions,
-                        normals,
-                        uvs,
-                        colors,
-                        indices,
-                        [
-                            [min_x - inset, y0, z1],
-                            [min_x - inset, y0, z0],
-                            [min_x - inset, y1, z0],
-                            [min_x - inset, y1, z1],
-                        ],
-                        [-1.0, 0.0, 0.0],
-                        color,
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn fvr10_terrain_detail_color(
-    material: Fvr03ProductionVoxelMaterialKind,
-    palette: Fvr10SurfacePalette,
-    alpha: f32,
-    hash: u32,
-) -> [f32; 4] {
-    let variant = (hash % 5) as usize;
-    let color = match material {
-        Fvr03ProductionVoxelMaterialKind::SafeGrass => match variant {
-            0 | 1 => [0.36, 0.56, 0.13],
-            2 => [0.15, 0.31, 0.10],
-            3 => [0.62, 0.68, 0.25],
-            _ => [0.66, 0.72, 0.42],
-        },
-        Fvr03ProductionVoxelMaterialKind::Soil => match variant {
-            0 | 1 => [0.22, 0.14, 0.08],
-            2 => [0.50, 0.35, 0.18],
-            3 => [0.16, 0.13, 0.11],
-            _ => [0.40, 0.28, 0.16],
-        },
-        Fvr03ProductionVoxelMaterialKind::Stone => match variant {
-            0 | 1 => [0.22, 0.23, 0.22],
-            2 => [0.52, 0.54, 0.49],
-            3 => [0.24, 0.38, 0.18],
-            _ => [0.35, 0.36, 0.33],
-        },
-        Fvr03ProductionVoxelMaterialKind::Hazard => match variant {
-            0 | 1 => [0.22, 0.06, 0.08],
-            2 => [0.62, 0.12, 0.18],
-            3 => [0.77, 0.34, 0.20],
-            _ => [0.34, 0.11, 0.14],
-        },
-        Fvr03ProductionVoxelMaterialKind::Decay => match variant {
-            0 | 1 => [0.10, 0.08, 0.05],
-            2 => [0.31, 0.29, 0.13],
-            3 => [0.23, 0.17, 0.08],
-            _ => [0.16, 0.18, 0.07],
-        },
-        Fvr03ProductionVoxelMaterialKind::Resource => match variant {
-            0 | 1 => [0.42, 0.66, 0.18],
-            2 => [0.10, 0.32, 0.12],
-            3 => [0.82, 0.74, 0.28],
-            _ => [0.54, 0.68, 0.26],
-        },
-        Fvr03ProductionVoxelMaterialKind::Water => match variant {
-            0 | 1 => [0.16, 0.47, 0.56],
-            2 => [0.34, 0.70, 0.74],
-            3 => [0.07, 0.25, 0.34],
-            _ => [0.56, 0.82, 0.82],
-        },
-        Fvr03ProductionVoxelMaterialKind::Sand => match variant {
-            0 | 1 => [0.66, 0.57, 0.34],
-            2 => [0.42, 0.34, 0.18],
-            3 => [0.75, 0.68, 0.43],
-            _ => [0.52, 0.43, 0.25],
-        },
-        _ => palette.accent,
-    };
-    [color[0], color[1], color[2], alpha]
-}
-
-fn fvr10_terrain_side_detail_color(
-    material: Fvr03ProductionVoxelMaterialKind,
-    palette: Fvr10SurfacePalette,
-    alpha: f32,
-    hash: u32,
-) -> [f32; 4] {
-    let base = if hash & 0x3 == 0 {
-        palette.accent
-    } else {
-        palette.side
-    };
-    let shade = match material {
-        Fvr03ProductionVoxelMaterialKind::Stone => 0.58,
-        Fvr03ProductionVoxelMaterialKind::Water => 1.20,
-        Fvr03ProductionVoxelMaterialKind::SafeGrass
-        | Fvr03ProductionVoxelMaterialKind::Resource => 0.70,
-        _ => 0.62,
-    };
-    [
-        fvr10_saturate(base[0] * shade),
-        fvr10_saturate(base[1] * shade),
-        fvr10_saturate(base[2] * shade),
-        alpha,
-    ]
-}
-
-fn fvr10_append_colored_quad(
-    positions: &mut Vec<[f32; 3]>,
-    normals: &mut Vec<[f32; 3]>,
-    uvs: &mut Vec<[f32; 2]>,
-    colors: &mut Vec<[f32; 4]>,
-    indices: &mut Vec<u32>,
-    quad: [[f32; 3]; 4],
-    normal: [f32; 3],
-    color: [f32; 4],
-) {
-    let base = positions.len() as u32;
-    positions.extend(quad);
-    normals.extend([normal; 4]);
-    uvs.extend([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
-    colors.extend([color; 4]);
-    indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Fvr10SurfacePalette {
-    top: [f32; 3],
-    side: [f32; 3],
-    accent: [f32; 3],
-}
-
-fn fvr10_surface_palette(
-    material: Fvr03ProductionVoxelMaterialKind,
-    material_entry: Fvr03ProductionVoxelMaterialEntry,
-) -> Fvr10SurfacePalette {
-    match material {
-        Fvr03ProductionVoxelMaterialKind::SafeGrass => Fvr10SurfacePalette {
-            top: [0.20, 0.43, 0.16],
-            side: [0.31, 0.20, 0.12],
-            accent: [0.38, 0.54, 0.18],
-        },
-        Fvr03ProductionVoxelMaterialKind::Soil => Fvr10SurfacePalette {
-            top: [0.36, 0.25, 0.15],
-            side: [0.25, 0.17, 0.10],
-            accent: [0.44, 0.32, 0.18],
-        },
-        Fvr03ProductionVoxelMaterialKind::Resource => Fvr10SurfacePalette {
-            top: [0.16, 0.45, 0.20],
-            side: [0.20, 0.31, 0.13],
-            accent: [0.46, 0.62, 0.22],
-        },
-        Fvr03ProductionVoxelMaterialKind::Hazard => Fvr10SurfacePalette {
-            top: [0.42, 0.13, 0.14],
-            side: [0.25, 0.10, 0.10],
-            accent: [0.58, 0.28, 0.14],
-        },
-        Fvr03ProductionVoxelMaterialKind::Decay => Fvr10SurfacePalette {
-            top: [0.18, 0.14, 0.09],
-            side: [0.12, 0.09, 0.07],
-            accent: [0.26, 0.24, 0.11],
-        },
-        Fvr03ProductionVoxelMaterialKind::Stone => Fvr10SurfacePalette {
-            top: [0.32, 0.34, 0.31],
-            side: [0.23, 0.24, 0.22],
-            accent: [0.42, 0.45, 0.38],
-        },
-        Fvr03ProductionVoxelMaterialKind::Water => Fvr10SurfacePalette {
-            top: [0.12, 0.36, 0.45],
-            side: [0.08, 0.22, 0.28],
-            accent: [0.30, 0.58, 0.62],
-        },
-        Fvr03ProductionVoxelMaterialKind::Sand => Fvr10SurfacePalette {
-            top: [0.49, 0.42, 0.25],
-            side: [0.36, 0.29, 0.18],
-            accent: [0.60, 0.53, 0.32],
-        },
-        _ => Fvr10SurfacePalette {
-            top: [
-                material_entry.rgba[0],
-                material_entry.rgba[1],
-                material_entry.rgba[2],
-            ],
-            side: [
-                material_entry.rgba[0] * 0.72,
-                material_entry.rgba[1] * 0.72,
-                material_entry.rgba[2] * 0.72,
-            ],
-            accent: [
-                material_entry.rgba[0],
-                material_entry.rgba[1],
-                material_entry.rgba[2],
-            ],
-        },
-    }
-}
-
 fn fvr10_coord_hash(x: i32, z: i32, salt_a: u32, salt_b: u32) -> u32 {
     let mut hash = 0x811c9dc5_u32;
     for value in [x as u32, z as u32, salt_a, salt_b] {
@@ -3810,10 +3165,6 @@ fn fvr10_coord_hash(x: i32, z: i32, salt_a: u32, salt_b: u32) -> u32 {
         hash ^= hash >> 13;
     }
     hash
-}
-
-fn fvr10_saturate(value: f32) -> f32 {
-    value.clamp(0.0, 1.0)
 }
 
 fn fvr09_visible_voxels_for_tile(tile: &ProductionTerrainSample) -> usize {

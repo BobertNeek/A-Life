@@ -136,6 +136,9 @@ pub use production_terrain::{
 };
 
 #[cfg(feature = "bevy-app")]
+mod terrain_mesh;
+
+#[cfg(feature = "bevy-app")]
 mod production_voxel_renderer;
 #[cfg(feature = "bevy-app")]
 pub use production_voxel_renderer::*;
