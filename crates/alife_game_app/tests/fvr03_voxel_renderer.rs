@@ -11,9 +11,9 @@ use alife_game_app::{
     Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
     Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
     Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionTerrainLayer,
-    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionFrontendProfileId,
-    ProductionVoxelLaunchConfig, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
-    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+    Fvr11ProductionTerrainMaterialContract, Fvr11ProductionTerrainSceneResource,
+    Fvr11TerrainSurfaceRole, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
     CreatureAppearanceGenome, StableVoxelRefKind, CREATURE_APPEARANCE_SPECIES_COUNT,
@@ -21,7 +21,9 @@ use alife_world::{
 };
 use bevy::{
     mesh::VertexAttributeValues,
-    prelude::{Assets, Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Transform},
+    prelude::{
+        AlphaMode, Assets, Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Transform,
+    },
 };
 
 fn production_launch(profile_id: ProductionFrontendProfileId) -> ProductionVoxelLaunchConfig {
@@ -96,6 +98,57 @@ fn fvr11_terrain_contract_is_display_only_and_layered() {
     assert!(roles.contains(&Fvr11TerrainSurfaceRole::Cliff));
     assert!(roles.contains(&Fvr11TerrainSurfaceRole::Transition));
     assert!(roles.contains(&Fvr11TerrainSurfaceRole::Water));
+}
+
+#[test]
+fn fvr11_terrain_material_contract_binds_lit_layers_and_water() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let contract = app
+        .world()
+        .resource::<Fvr11ProductionTerrainMaterialContract>();
+    assert_eq!(contract.material_count, 8);
+    assert_eq!(contract.atlas_dimensions, [272, 272]);
+    assert_eq!(
+        contract.base_color_path,
+        "production_voxel_v1/terrain/terrain_albedo_atlas.png"
+    );
+    assert_eq!(
+        contract.normal_path,
+        "production_voxel_v1/terrain/terrain_normal_atlas.png"
+    );
+    assert_eq!(
+        contract.orm_path,
+        "production_voxel_v1/terrain/terrain_orm_atlas.png"
+    );
+    assert!(!contract.real_assets_requested);
+    assert!(contract.display_only);
+
+    let mut query = app.world_mut().query::<(
+        &Fvr11ProductionTerrainLayer,
+        &MeshMaterial3d<StandardMaterial>,
+    )>();
+    let handles = query
+        .iter(app.world())
+        .map(|(layer, material)| (layer.role, material.0.clone()))
+        .collect::<Vec<_>>();
+    let materials = app.world().resource::<Assets<StandardMaterial>>();
+    let mut saw_water = false;
+    for (role, handle) in handles {
+        let material = materials
+            .get(&handle)
+            .expect("terrain material remains resident");
+        assert!(!material.unlit);
+        if role == Fvr11TerrainSurfaceRole::Water {
+            saw_water = true;
+            assert_eq!(material.alpha_mode, AlphaMode::Blend);
+            assert!(material.clearcoat > 0.0);
+        }
+    }
+    assert!(saw_water);
 }
 
 #[test]

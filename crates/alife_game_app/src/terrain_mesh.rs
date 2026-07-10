@@ -14,6 +14,7 @@ use crate::{
     production_terrain::{
         ProductionTerrainSample, ProductionTerrainSampleMap, TerrainAtlasLayout, TerrainAtlasUvRect,
     },
+    terrain_materials::production_terrain_material_spec,
     Fvr03ProductionVoxelMaterialKind, Fvr11TerrainSurfaceRole,
 };
 
@@ -555,25 +556,7 @@ fn terrain_atlas_slot(
     material: Fvr03ProductionVoxelMaterialKind,
     role: Fvr11TerrainSurfaceRole,
 ) -> u8 {
-    let top = match material {
-        Fvr03ProductionVoxelMaterialKind::SafeGrass => 0,
-        Fvr03ProductionVoxelMaterialKind::Soil => 2,
-        Fvr03ProductionVoxelMaterialKind::Resource => 4,
-        Fvr03ProductionVoxelMaterialKind::Hazard => 6,
-        Fvr03ProductionVoxelMaterialKind::Decay => 8,
-        Fvr03ProductionVoxelMaterialKind::Stone => 10,
-        Fvr03ProductionVoxelMaterialKind::Water => 12,
-        Fvr03ProductionVoxelMaterialKind::Sand => 14,
-        _ => panic!("non-terrain material in FVR11 terrain mesh: {material:?}"),
-    };
-    if matches!(
-        role,
-        Fvr11TerrainSurfaceRole::Cliff | Fvr11TerrainSurfaceRole::Transition
-    ) {
-        top + 1
-    } else {
-        top
-    }
+    production_terrain_material_spec(material).atlas_slot(role)
 }
 
 fn terrain_vertex_colors(
@@ -582,14 +565,14 @@ fn terrain_vertex_colors(
     visual_bucket: u8,
 ) -> [[f32; 4]; 4] {
     let base = match material {
-        Fvr03ProductionVoxelMaterialKind::SafeGrass => [0.47, 0.64, 0.12],
-        Fvr03ProductionVoxelMaterialKind::Soil => [0.42, 0.27, 0.12],
-        Fvr03ProductionVoxelMaterialKind::Resource => [0.57, 0.73, 0.14],
-        Fvr03ProductionVoxelMaterialKind::Hazard => [0.48, 0.045, 0.09],
-        Fvr03ProductionVoxelMaterialKind::Decay => [0.22, 0.16, 0.06],
-        Fvr03ProductionVoxelMaterialKind::Stone => [0.43, 0.45, 0.40],
-        Fvr03ProductionVoxelMaterialKind::Water => [0.07, 0.55, 0.61],
-        Fvr03ProductionVoxelMaterialKind::Sand => [0.74, 0.55, 0.20],
+        Fvr03ProductionVoxelMaterialKind::SafeGrass => [0.96, 1.00, 0.94],
+        Fvr03ProductionVoxelMaterialKind::Soil => [1.00, 0.97, 0.92],
+        Fvr03ProductionVoxelMaterialKind::Resource => [0.94, 1.00, 0.91],
+        Fvr03ProductionVoxelMaterialKind::Hazard => [1.00, 0.94, 0.96],
+        Fvr03ProductionVoxelMaterialKind::Decay => [0.96, 0.93, 0.90],
+        Fvr03ProductionVoxelMaterialKind::Stone => [0.96, 0.98, 0.95],
+        Fvr03ProductionVoxelMaterialKind::Water => [0.91, 1.00, 1.00],
+        Fvr03ProductionVoxelMaterialKind::Sand => [1.00, 0.98, 0.91],
         _ => [1.0, 1.0, 1.0],
     };
     let role_shade = match role {

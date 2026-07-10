@@ -139,6 +139,14 @@ pub use production_terrain::{
 mod terrain_mesh;
 
 #[cfg(feature = "bevy-app")]
+mod terrain_materials;
+#[cfg(feature = "bevy-app")]
+pub use terrain_materials::Fvr11ProductionTerrainMaterialContract;
+
+#[cfg(feature = "bevy-app")]
+mod terrain_water;
+
+#[cfg(feature = "bevy-app")]
 mod production_voxel_renderer;
 #[cfg(feature = "bevy-app")]
 pub use production_voxel_renderer::*;

@@ -57,6 +57,10 @@ use crate::{
     ProductionVoxelLaunchSummary, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
     PRODUCTION_VOXEL_RENDERER_PROFILE,
 };
+use crate::{
+    terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
+    terrain_water::install_animated_water_material,
+};
 
 pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA: &str = "alife.fvr03.production_voxel_renderer.v1";
 pub const FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION: u16 = 1;
@@ -1285,6 +1289,8 @@ pub fn spawn_fvr03_production_voxel_scene(
 
     let palette = settings.material_palette();
     let materials = create_fvr03_materials(app, &palette);
+    let terrain_materials = create_production_terrain_material_library(app);
+    install_animated_water_material(app, terrain_materials.water.clone());
     let boundary_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
         meshes.add(Cuboid::new(
@@ -1378,7 +1384,7 @@ pub fn spawn_fvr03_production_voxel_scene(
 
     let terrain_receipt = spawn_fvr11_layered_terrain_meshes(
         app,
-        &materials,
+        &terrain_materials,
         &settings,
         &snapshot,
         &terrain_samples,
@@ -1818,7 +1824,7 @@ fn spawn_fvr03_chunk_tiles(
 
 fn spawn_fvr11_layered_terrain_meshes(
     app: &mut App,
-    materials: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
+    materials: &TerrainMaterialLibrary,
     settings: &Fvr03ProductionVoxelRendererSettings,
     snapshot: &PersistentVoxelWorldSnapshot,
     terrain_samples: &ProductionTerrainSampleMap,
@@ -1847,11 +1853,9 @@ fn spawn_fvr11_layered_terrain_meshes(
         .filter(|layer| layer.role == Fvr11TerrainSurfaceRole::Water)
         .count();
     for layer in build.layers {
-        let Some(material_handle) = materials.get(&layer.material).cloned() else {
-            continue;
-        };
         let role = layer.role;
         let material = layer.material;
+        let material_handle = materials.handle_for(role, material);
         let source_tile_count = layer.source_tile_count;
         let mesh_handle = app
             .world_mut()
