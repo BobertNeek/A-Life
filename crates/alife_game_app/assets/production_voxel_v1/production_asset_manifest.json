@@ -363,6 +363,72 @@
       "replacement_policy": "regenerate-from-committed-config-or-replace-with-equivalent-permissive-asset",
       "final_art": false,
       "placeholder": false
+    },
+    {
+      "asset_id": "terrain-albedo-atlas",
+      "usage_category": "terrain-materials",
+      "local_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_albedo_atlas.png",
+      "digest": "fnv1a64:8ec781278356f94b",
+      "size_bytes": 163421,
+      "source": "generated:openai-imagegen-and-deterministic-atlas-builder",
+      "license": "A-Life-Generated-Source",
+      "license_ref": "LICENSE",
+      "author": "A-Life terrain asset pipeline",
+      "generated": true,
+      "generator": {
+        "tool": "terrain_atlas_builder",
+        "config_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_material_generation.json",
+        "seed": "fvr11-lush-creature-stage-terrain-v1",
+        "date": "2026-07-09"
+      },
+      "external": false,
+      "replacement_policy": "regenerate-from-committed-config-and-a-permissively-licensed-source-sheet",
+      "final_art": true,
+      "placeholder": false
+    },
+    {
+      "asset_id": "terrain-normal-atlas",
+      "usage_category": "terrain-materials",
+      "local_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_normal_atlas.png",
+      "digest": "fnv1a64:05817c3a4d7ce961",
+      "size_bytes": 111215,
+      "source": "generated:openai-imagegen-and-deterministic-atlas-builder",
+      "license": "A-Life-Generated-Source",
+      "license_ref": "LICENSE",
+      "author": "A-Life terrain asset pipeline",
+      "generated": true,
+      "generator": {
+        "tool": "terrain_atlas_builder",
+        "config_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_material_generation.json",
+        "seed": "fvr11-lush-creature-stage-terrain-v1",
+        "date": "2026-07-09"
+      },
+      "external": false,
+      "replacement_policy": "regenerate-from-committed-config-and-a-permissively-licensed-source-sheet",
+      "final_art": true,
+      "placeholder": false
+    },
+    {
+      "asset_id": "terrain-orm-atlas",
+      "usage_category": "terrain-materials",
+      "local_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_orm_atlas.png",
+      "digest": "fnv1a64:1a8855eaf63e08a9",
+      "size_bytes": 90581,
+      "source": "generated:openai-imagegen-and-deterministic-atlas-builder",
+      "license": "A-Life-Generated-Source",
+      "license_ref": "LICENSE",
+      "author": "A-Life terrain asset pipeline",
+      "generated": true,
+      "generator": {
+        "tool": "terrain_atlas_builder",
+        "config_path": "crates/alife_game_app/assets/production_voxel_v1/terrain/terrain_material_generation.json",
+        "seed": "fvr11-lush-creature-stage-terrain-v1",
+        "date": "2026-07-09"
+      },
+      "external": false,
+      "replacement_policy": "regenerate-from-committed-config-and-a-permissively-licensed-source-sheet",
+      "final_art": true,
+      "placeholder": false
     }
   ],
   "vfx_profiles": [
