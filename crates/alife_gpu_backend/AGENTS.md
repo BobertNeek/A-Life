@@ -1,7 +1,8 @@
 # alife_gpu_backend Instructions
 
 This crate controls wgpu resource planning, WGSL shader packaging, compute
-backend traits, buffer descriptors, and dispatch placeholders.
+backend traits, buffer descriptors, dispatch scheduling, and production neural
+pipelines.
 
 Rules:
 

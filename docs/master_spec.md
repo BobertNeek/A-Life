@@ -67,6 +67,12 @@ The controlling stack is Rust, Bevy, wgpu/WebGPU, and WGSL. Unity and C# are exp
 
 A-Life is not a conventional game AI planner. It is not a behavior tree system with learned parameters sprinkled on top. The organism brain is a sparse, plastic, metabolically constrained, genetically structured substrate. The world gathers current perception, enumerates unscored same-tick candidates, validates the selected structured action, and measures its outcome. GPU recurrent dynamics, candidate-conditioned selection, eligibility-gated three-factor plasticity, automatic GPU sleep consolidation, and evolution over brain topology are first-class mechanics.
 
+Candidates contain only observations and command-transport fields; they never
+contain caller-provided utilities or scores. Command-transport fields identify
+the action family and tick-local target needed to construct the selected
+structured command; they do not supply desirability, danger, reward, learned
+value, or any other decision hint.
+
 The core organism model must support scalable brains. N512, N1024, and N2048 are the only promoted production neural capacity classes. The earlier `Standard2048` name remains a reference/legacy adapter, not an invariant, and larger saved tier identifiers remain readable but research-gated until their causal, hardware, save, soak, memory, and performance evidence is accepted. Scalable means class-bucketed and profile-gated, not dynamically resizing arbitrary matrices in the hot loop.
 
 `NeuralClosedLoopGpu` is the normal neural policy. `HeuristicBaseline` remains an explicit, separately labelled comparison policy and is never selected because GPU neural execution failed. Missing required GPU support returns a typed `NeuralBackendUnavailable` result and performs no learned action; no error path silently runs a second brain or claims a neural tick occurred.
@@ -110,12 +116,17 @@ The repository is an implementation platform for the approved GPU-authoritative 
 The initial workspace should contain these crates:
 
 - `alife_core`: engine-agnostic IDs, capacity/phenotype/perception/candidate contracts, genome structures, ExperiencePatch, ActionCommand, memory profiles, and test/developer-only CPU reference helpers.
-- `alife_world`: Bevy-independent world concepts where practical: ecology, organisms, resources, drives, lesson-world APIs, and sensory extraction contracts.
+- `alife_world`: engine-neutral world concepts: ecology, organisms, resources, drives, lesson-world APIs, candidate enumeration, legality, outcomes, and sensory extraction contracts.
 - `alife_bevy_adapter`: Bevy-specific app, plugins, rendering, ECS integration, physics adapters, debug UI, and eventual demo scenes.
 - `alife_gpu_backend`: the shared `GpuClosedLoopBackend`, generation-checked brain handles, sparse class-bucketed pools, production WGSL pipelines, dispatch scheduling, bounded readback, waking plasticity, and sleep consolidation.
 - `alife_school`: external teacher LLM roles, lesson API, verifier interfaces, curriculum definitions, and in-world teaching object contracts.
 - `alife_semantic`: internal semantic prior provider interface and optional tiny local SLM provider stub.
 - `alife_tools`: developer tooling hooks, graph integration helpers, docs validation, and spec consistency checks.
+
+Both `alife_core` and `alife_world` depend on none of Bevy, wgpu, renderer
+types, or OS handles. Bevy ECS ownership belongs only to adapter/app layers.
+Those layers translate engine-local entities and components into stable IDs and
+versioned core/world contracts.
 
 The repo should include `docs/master_spec.md`, `docs/future_research_compatibility.md`, `docs/schooling_and_teacher_architecture.md`, `docs/architecture_decisions.md`, and `docs/codex_handoff_prompt.md`. These docs are not decorative. They are the source of truth for agent work.
 
@@ -128,7 +139,7 @@ Codex should be instructed to use `/goal` to hold the current implementation-sli
 
 The runtime is divided into stable layers. Layer boundaries are more important than exact module names.
 
-Layer A: Host world and ecology. The CPU owns world state, Bevy ECS entities, physics adapters, ecology, reproduction, death, lesson object placement, teacher avatars, persistence, and player interaction. From one authoritative snapshot it builds current perception and unscored action candidates. It validates the GPU-selected structured command and measures outcomes. It also schedules brain residency and chooses which organisms are hot, warm, cold, sleeping, or dormant.
+Layer A: Host world and ecology. The engine-neutral world layer owns ecology, reproduction, death, lesson-world concepts, unscored candidate enumeration, action legality, and measured outcomes through stable IDs and versioned contracts. Adapter/app layers exclusively own Bevy ECS entities, physics adapters, rendering, engine-local handles, and player interaction. From one authoritative snapshot the host builds current perception and unscored action candidates, validates the GPU-selected structured command, and measures outcomes. The app also schedules brain residency and chooses which organisms are hot, warm, cold, sleeping, or dormant.
 
 Layer B: Core cognitive contracts. This layer is pure Rust and engine-agnostic. It defines IDs, packed ABI structs, capacity classes, phenotype/perception/candidate contracts, lobe ranges, genome structures, ExperiencePatch, ActionCommand, sensory and action ABI versions, and memory profile manifests. It does not execute a production neural tick or import Bevy/wgpu types. Deterministic CPU neural calculations are test-only or developer-only.
 
@@ -143,7 +154,7 @@ Layer F: Tooling and documentation layer. Graphify maps code and docs into a que
 
 ## 5. Rust Workspace Layout
 
-The repository should use a Cargo workspace. The initial work should prefer empty modules plus strongly named structs over partial runtime algorithms. Agents should compile as much as possible, but incomplete modules may be hidden behind feature flags until later.
+The repository uses a Cargo workspace. Implement reviewed contracts and runtime algorithms as focused, strongly named, compilable modules in their owning crates. Feature flags may isolate hardware-dependent paths, but empty modules are not architectural endpoints and must not replace required production behavior.
 
 Recommended root layout:
 
@@ -182,7 +193,7 @@ Core dependencies should be conservative. `alife_core` should use `serde`, `this
 
 ## 6. Bevy World Layer
 
-Bevy is the host game framework, not the cognitive core. It provides rendering, app lifecycle, plugin structure, ECS scheduling, input, debug visualization, and later physics integration. World entities are not stored directly inside neural structs. Core contracts reference world objects by stable `WorldEntityId` wrappers.
+`alife_world` is the engine-neutral world and legality layer. It imports none of Bevy, wgpu, renderer types, or OS handles. `alife_bevy_adapter` and app layers exclusively own Bevy ECS state, rendering, app lifecycle, plugin scheduling, input, debug visualization, engine-local handles, and physics integration. They translate engine-local entities into stable `WorldEntityId` wrappers before crossing into world or core contracts; world entities are never stored directly inside neural structs.
 
 The Bevy layer should expose systems for spawning organisms, resources, hazards, lesson objects, teacher avatars, blackboards, signs, books, toys, tools, and environmental state. It should also produce sensory packets. Sensory packets are not raw Bevy components; they are packed views according to a versioned sensory ABI.
 
@@ -193,7 +204,7 @@ The Bevy adapter eventually needs debug inspectors for brain class, hot/warm/col
 
 ## 7. Engine-Agnostic Cognitive Core
 
-`alife_core` is the stable contract heart of the project. It must be usable without Bevy, wgpu, or any LLM. It defines versioned data contracts but does not execute the production neural tick. Pure CPU neural helpers are compiled only for tests or explicit developer tools. If `alife_core` starts depending on Bevy ECS, wgpu resources, rendering, or a live CPU neural policy, the architecture is drifting.
+`alife_core` is the stable contract heart of the project. It must be usable without Bevy, wgpu, renderer types, OS handles, or any LLM. It defines versioned data contracts but does not execute the production neural tick. Pure CPU neural helpers are compiled only for tests or explicit developer tools. If `alife_core` starts depending on Bevy ECS, wgpu resources, rendering, OS/window handles, or a live CPU neural policy, the architecture is drifting.
 
 Core IDs should be newtype wrappers over integers. Packed vectors and quaternions should be defined in core rather than importing Bevy math types. All structs crossing CPU/GPU boundaries need explicit representation strategy. `repr(C)` can be used where appropriate, but the spec should avoid premature bytemuck claims until fields are verified as plain-old-data.
 
@@ -237,6 +248,14 @@ Promoted production classes:
 - N2048: the largest initially promoted production class.
 
 Existing `Large4096`, `Cognitive32768`, `Student131k`, `Ascended1M`, `Ascended5M`, and `ResearchCustom` identifiers remain readable for save inspection, export, and research compatibility. They cannot enter production neural mode until each class passes the documented causal, hardware, save, soak, memory, and performance gates.
+
+Every production neural capacity request above N2048 returns a typed
+`ProductionCapacityGateError` before allocation or dispatch. The error carries
+`requested_class: BrainClassId` and
+`gate_status: ProductionCapacityGateStatus`; `gate_status` is `Unmet` and
+identifies the missing causal, hardware, save, soak, memory, and performance
+gates. The runtime does not clamp the request to N2048, change policy, allocate
+a partial brain, or dispatch until that exact class is promoted.
 
 All classes obey these invariants:
 
@@ -583,13 +602,18 @@ Migration inputs:
 
 Migration process:
 
-1. Freeze evolved core to preserve identity.
-2. Allocate target class bucket.
-3. Map old lobe ranges into target layout.
+1. Suspend production dispatch at a safe offline boundary and persist an immutable source checkpoint.
+2. Allocate the target class bucket without changing the active production handle.
+3. Map old lobe ranges into the target layout.
 4. Preserve stable sensory/action ABI mappings.
 5. Initialize expansion lobes as tabula-rasa or weakly seeded.
-6. Shadow old core behavior before control handoff.
-7. Gradually unfreeze selected pathways through gated integration.
+6. Validate the target offline with deterministic replays and fixtures; neither source nor target emits production world actions during validation.
+7. Atomically replace the active production handle only after every migration gate passes.
+8. Resume production with only the migrated brain; the source remains an offline rollback artifact.
+
+Offline deterministic replay and fixture validation exercise the migrated brain
+without producing world actions. The production handoff is atomic, and old and
+migrated neural brains never run concurrently in production.
 
 A migrated creature should still feel like the same lineage at first. Expanded cortex can later influence behavior by weighing drives, feelings, memories, and goals through normal arbitration.
 
@@ -942,7 +966,7 @@ Required scripts:
 - `scripts/graphify.sh`
 - `scripts/docs_check.sh`
 
-Required crate stubs:
+Required crates:
 
 - `crates/alife_core`
 - `crates/alife_world`
@@ -1304,7 +1328,7 @@ This appendix gives implementation sessions focused subsystem context without we
 
 ### Brain Migration Protocol
 
-**Purpose.** Migration preserves an evolved core while adding larger cortex capacity through freeze, map, shadow, and gated unfreeze steps. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
+**Purpose.** Migration preserves an evolved core while adding larger cortex capacity through an offline source checkpoint, deterministic replay/fixture validation, and atomic production handoff. Old and migrated neural brains never run concurrently in production. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
 **Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 

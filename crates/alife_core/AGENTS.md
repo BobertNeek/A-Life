@@ -6,7 +6,7 @@ ActionCommand, sensory/action ABIs, profiles, lineage, and backend traits.
 
 Rules:
 
-- Do not depend on Bevy, wgpu, renderer types, or LLM providers.
+- Do not depend on Bevy, wgpu, renderer types, OS handles, or LLM providers.
 - Do not reintroduce a fixed global 2048-neuron brain invariant.
 - `Standard2048` may appear only as one `BrainScaleTier` reference class.
 - Prefer explicit versioned structs for cross-layer contracts.
