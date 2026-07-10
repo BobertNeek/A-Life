@@ -2,13 +2,13 @@
 
 **Project:** A-Life  
 **Stack:** Rust + Bevy + wgpu/WebGPU + WGSL  
-**Spec revision:** 0.3 architecture-handoff  
-**Date:** 2026-06-10  
-**Status:** implementation scaffold target; not a complete runtime implementation  
+**Spec revision:** 0.4 GPU-authoritative closed-loop implementation
+**Date:** 2026-07-10
+**Status:** implementation target; GPU-authoritative closed-loop neural runtime
 
-This document is the controlling engineering specification for A-Life. It supersedes earlier fixed-2048, HLSL, dense-matrix, and single-pass-kernel drafts. It preserves the broad direction of the earlier Flat Sparse Tensor ALife design while correcting the implementation path: scalable brain classes instead of a fixed neuron count, class-bucketed sparse storage instead of dense `[M, N, N]` matrices, Rust/Bevy/wgpu/WebGPU/WGSL instead of Unity/HLSL, separated neural compute passes instead of fused TileSpMV+Oja passes, and explicit boundaries between internal subconscious semantic priors and external teacher agents.
+This document is the controlling engineering specification for A-Life. It supersedes earlier fixed-2048, HLSL, dense-matrix, single-pass-kernel, scaffold-only, and CPU-shadow neural drafts. It preserves scalable brain classes, class-bucketed sparse storage, Rust/Bevy/wgpu/WebGPU/WGSL, separated neural compute passes, and explicit boundaries between internal subconscious semantic priors and external teacher agents. ADR-024 and the approved GPU closed-loop design control production cognition when older milestone prose conflicts with this specification.
 
-The near-term goal is not to build the whole simulation. The near-term goal is to create a repository scaffold, documentation set, core Rust type contracts, toolchain, agent instructions, Graphify integration, DOX-style AGENTS.md hierarchy, and enough empty module structure that future coding sessions cannot accidentally hardcode the wrong architecture.
+The implementation goal is one causally closed production brain in which current perception, recurrent state, candidate scoring, action selection, measured outcome, waking plasticity, sleep consolidation, and later behavior remain connected. Production neural execution is GPU-authoritative WGSL. Pure CPU neural math is test-only or developer-only and never runs as a live shadow, parity gate, or automatic neural fallback.
 
 The long-term research direction is a grounded developmental generalist agent: an artificial organism whose world model, instincts, language, social behavior, and reasoning arise from evolved brain topology, Hebbian/Oja plasticity, neurochemistry, embodied experience, schooling, and sleep consolidation. The formal spec avoids product claims about AGI. Speculative frontier-scale ideas are quarantined in `docs/future_research_compatibility.md` and must not become v0/v1 requirements.
 
@@ -54,7 +54,7 @@ The long-term research direction is a grounded developmental generalist agent: a
 38. Future Compatibility Envelope
 39. Non-Goals for v0/v1
 40. Implementation Milestones
-41. Required Files and Scaffolding
+41. Required Files and Modules
 42. Glossary
 
 ---
@@ -65,9 +65,11 @@ A-Life is a developmental artificial-life simulation game and research sandbox. 
 
 The controlling stack is Rust, Bevy, wgpu/WebGPU, and WGSL. Unity and C# are explicitly out of scope. HLSL may appear as a downstream native backend artifact of GPU drivers, but A-Life source shaders are authored in WGSL. CUDA, Triton, Vulkan-only, DirectX-only, TPU, and cluster runtimes are future research backends behind a compute abstraction. They are not initial implementation targets.
 
-A-Life is not a conventional game AI planner. It is not a behavior tree system with learned parameters sprinkled on top. The organism brain is a sparse, plastic, metabolically constrained, genetically structured substrate. Local Hebbian/Oja updates, neurochemical modulators, sleep consolidation, and evolution over brain topology are first-class mechanics. The world exists to produce grounded sensorimotor experience, not just animation.
+A-Life is not a conventional game AI planner. It is not a behavior tree system with learned parameters sprinkled on top. The organism brain is a sparse, plastic, metabolically constrained, genetically structured substrate. The world gathers current perception, enumerates unscored same-tick candidates, validates the selected structured action, and measures its outcome. GPU recurrent dynamics, candidate-conditioned selection, eligibility-gated three-factor plasticity, automatic GPU sleep consolidation, and evolution over brain topology are first-class mechanics.
 
-The core organism model must support scalable brains. The earlier 2048-neuron map is retained only as `Standard2048`, a reference class useful for examples, tests, and early profiling. It is not an invariant. The architecture must also support Nano/Small ecosystem creatures, large companion candidates, and future ascended classes. Scalable means class-bucketed and profile-gated, not dynamically resizing arbitrary matrices in the hot loop.
+The core organism model must support scalable brains. N512, N1024, and N2048 are the only promoted production neural capacity classes. The earlier `Standard2048` name remains a reference/legacy adapter, not an invariant, and larger saved tier identifiers remain readable but research-gated until their causal, hardware, save, soak, memory, and performance evidence is accepted. Scalable means class-bucketed and profile-gated, not dynamically resizing arbitrary matrices in the hot loop.
+
+`NeuralClosedLoopGpu` is the normal neural policy. `HeuristicBaseline` remains an explicit, separately labelled comparison policy and is never selected because GPU neural execution failed. Missing required GPU support returns a typed `NeuralBackendUnavailable` result and performs no learned action; no error path silently runs a second brain or claims a neural tick occurred.
 
 The system distinguishes three sources of behavior. First, inherited instincts arise from genome-controlled structure: lobe proportions, macro-connectome masks, alpha plasticity gates, endocrine constants, morphology, sensory layout, and immutable genetic weight priors. Second, lifetime habits arise from Oja/Hebbian plasticity and sleep consolidation. Third, optional semantic priors and teachers supply language/culture scaffolding. These three sources must remain separate in data layout and scheduling so experiments can ablate them independently.
 
@@ -94,19 +96,23 @@ Superseded assumption six: direct raw CPU pointers into GPU kernels. The runtime
 
 Superseded assumption seven: language vector injection as teaching. The internal SLM can modulate Lexicon/Concept lobes. The external teacher must teach through perception.
 
+Superseded assumption eight: a scaffold-only repository that forbids production neural kernels. ADR-024 authorizes the reviewed GPU-authoritative closed loop and requires real WGSL encoding, recurrent, candidate-decoding, winner-selection, waking-plasticity, and sleep-consolidation pipelines.
+
+Superseded assumption nine: a production CPU neural oracle, live shadow, parity-gated handoff, or automatic neural fallback. CPU neural helpers are limited to tests, developer diagnostics, and offline fixture generation. Production GPU failure returns a typed unavailable result.
+
 The repository must preserve these corrections as explicit architecture decisions in `docs/architecture_decisions.md` so future agent sessions do not regress.
 
 
 ## 3. Repository and Tooling Goals
 
-The immediate Codex task is scaffolding, not runtime implementation. The repo should become a strong architecture container: workspaces, empty modules, type skeletons, docs, AGENTS.md guidance, Graphify integration notes, DOX hierarchy, and tests that assert constants and invariants. It should not attempt to implement real WGSL neural kernels yet.
+The repository is an implementation platform for the approved GPU-authoritative closed loop, not a scaffold-only container. Workspaces, versioned contracts, docs, AGENTS.md guidance, Graphify integration, and invariant tests protect the architecture while Slice A through Slice D implement and validate the production WGSL runtime.
 
 The initial workspace should contain these crates:
 
-- `alife_core`: engine-agnostic IDs, packed contracts, brain class specs, genome structures, ExperiencePatch, ActionCommand, memory profiles, and pure CPU reference math stubs.
+- `alife_core`: engine-agnostic IDs, capacity/phenotype/perception/candidate contracts, genome structures, ExperiencePatch, ActionCommand, memory profiles, and test/developer-only CPU reference helpers.
 - `alife_world`: Bevy-independent world concepts where practical: ecology, organisms, resources, drives, lesson-world APIs, and sensory extraction contracts.
 - `alife_bevy_adapter`: Bevy-specific app, plugins, rendering, ECS integration, physics adapters, debug UI, and eventual demo scenes.
-- `alife_gpu_backend`: wgpu resource planning, WGSL shader packaging, compute backend trait, buffer descriptors, and placeholder dispatch interfaces.
+- `alife_gpu_backend`: the shared `GpuClosedLoopBackend`, generation-checked brain handles, sparse class-bucketed pools, production WGSL pipelines, dispatch scheduling, bounded readback, waking plasticity, and sleep consolidation.
 - `alife_school`: external teacher LLM roles, lesson API, verifier interfaces, curriculum definitions, and in-world teaching object contracts.
 - `alife_semantic`: internal semantic prior provider interface and optional tiny local SLM provider stub.
 - `alife_tools`: developer tooling hooks, graph integration helpers, docs validation, and spec consistency checks.
@@ -115,24 +121,24 @@ The repo should include `docs/master_spec.md`, `docs/future_research_compatibili
 
 Graphify should be treated as a query-first knowledge graph layer over the repository. DOX should be treated as an AGENTS.md discipline: local instructions near every subsystem, updated when meaningful structure changes.
 
-Codex should be instructed to use `/goal` to hold the scaffold target in the active thread. Because the official Codex CLI docs limit `/goal` objectives to 4,000 characters, the `/goal` should be short and point at the docs rather than include the whole spec.
+Codex should be instructed to use `/goal` to hold the current implementation-slice target in the active thread. Because the official Codex CLI docs limit `/goal` objectives to 4,000 characters, the `/goal` should be short and point at the docs rather than include the whole spec.
 
 
 ## 4. Runtime Layer Model
 
 The runtime is divided into stable layers. Layer boundaries are more important than exact module names.
 
-Layer A: Host world and ecology. The CPU owns world state, Bevy ECS entities, physics adapters, ecology, reproduction, death, lesson object placement, teacher avatars, persistence, and player interaction. The CPU also schedules brain residency and chooses which organisms are hot, warm, cold, sleeping, or dormant.
+Layer A: Host world and ecology. The CPU owns world state, Bevy ECS entities, physics adapters, ecology, reproduction, death, lesson object placement, teacher avatars, persistence, and player interaction. From one authoritative snapshot it builds current perception and unscored action candidates. It validates the GPU-selected structured command and measures outcomes. It also schedules brain residency and chooses which organisms are hot, warm, cold, sleeping, or dormant.
 
-Layer B: Core cognitive contracts. This layer is pure Rust where possible and engine-agnostic. It defines IDs, packed ABI structs, brain class specs, lobe ranges, genome structures, ExperiencePatch, ActionCommand, sensory and action ABI versions, memory profile manifests, and deterministic CPU reference calculations. It must not import Bevy types.
+Layer B: Core cognitive contracts. This layer is pure Rust and engine-agnostic. It defines IDs, packed ABI structs, capacity classes, phenotype/perception/candidate contracts, lobe ranges, genome structures, ExperiencePatch, ActionCommand, sensory and action ABI versions, and memory profile manifests. It does not execute a production neural tick or import Bevy/wgpu types. Deterministic CPU neural calculations are test-only or developer-only.
 
-Layer C: GPU neural backend. This layer owns wgpu devices, queues, bind groups, storage buffers, staging buffers, shader modules, compute pipelines, and dispatch batches. It accelerates sparse neural math and plasticity but is not the source of game truth. It is replaceable behind `NeuralComputeBackend`.
+Layer C: GPU neural backend. This layer owns the shared wgpu device/queue, bind groups, sparse class-bucketed structure-of-arrays pools, staging buffers, shader modules, compute pipelines, generation-checked handles, and dispatch batches. It is authoritative for production encoding, recurrent neural math, candidate scoring and winner selection, waking plasticity, and sleep consolidation. It remains replaceable behind a narrow backend boundary without introducing a live CPU neural implementation. The world remains authoritative for legality and outcomes.
 
 Layer D: Semantic prior layer. This is an optional internal private system attached to a creature/species/brain class. It produces bounded `LexiconModulationPacket`s from compressed sensory summaries, drives, and limited ExperiencePatch context. It does not act externally.
 
 Layer E: School/teacher layer. This layer controls teacher avatars, curricula, verifiers, lesson APIs, blackboards, books, speech, gesture, demonstrations, praise, penalties, and assessment. It has private planning/evaluation state, but all instructional content perceived by a creature must pass through normal world channels.
 
-Layer F: Tooling and documentation layer. Graphify maps code and docs into a queryable graph. DOX/AGENTS.md provides local agent instructions. CI verifies that scaffold invariants and docs references remain coherent.
+Layer F: Tooling and documentation layer. Graphify maps code and docs into a queryable graph. DOX/AGENTS.md provides local agent instructions. CI verifies that architecture invariants and docs references remain coherent.
 
 
 ## 5. Rust Workspace Layout
@@ -182,12 +188,12 @@ The Bevy layer should expose systems for spawning organisms, resources, hazards,
 
 The world layer owns action legality. A neural backend can propose `ActionCommand`s, but it cannot teleport, eat non-existent objects, reproduce without conditions, or override physics. If the brain proposes an impossible action, the world returns a failure or frustration outcome through ExperiencePatch.
 
-The Bevy adapter eventually needs debug inspectors for brain class, hot/warm/cold residency, neurochemistry, recent ExperiencePatch entries, action arbitration, teacher lesson state, and Graphify/doc links. These are future UI features; the current scaffold only needs module boundaries.
+The Bevy adapter eventually needs debug inspectors for brain class, hot/warm/cold residency, neurochemistry, recent ExperiencePatch entries, action arbitration, teacher lesson state, and Graphify/doc links. UI implementation remains a separate reviewed surface and must preserve the module boundaries here.
 
 
 ## 7. Engine-Agnostic Cognitive Core
 
-`alife_core` is the stable heart of the project. It must be usable without Bevy, without GPU access, and without any LLM. It defines data contracts and reference math. If `alife_core` starts depending on Bevy ECS or rendering, the architecture is drifting.
+`alife_core` is the stable contract heart of the project. It must be usable without Bevy, wgpu, or any LLM. It defines versioned data contracts but does not execute the production neural tick. Pure CPU neural helpers are compiled only for tests or explicit developer tools. If `alife_core` starts depending on Bevy ECS, wgpu resources, rendering, or a live CPU neural policy, the architecture is drifting.
 
 Core IDs should be newtype wrappers over integers. Packed vectors and quaternions should be defined in core rather than importing Bevy math types. All structs crossing CPU/GPU boundaries need explicit representation strategy. `repr(C)` can be used where appropriate, but the spec should avoid premature bytemuck claims until fields are verified as plain-old-data.
 
@@ -195,9 +201,19 @@ The cognitive core should expose:
 
 - `BrainClassSpec`
 - `BrainScaleTier`
+- `BrainCapacityClass`
+- `BrainPhenotypeManifest`
+- `PhenotypeHash`
 - `LobeLayout`
 - `BrainGenome`
 - `EndocrineProfile`
+- `SensorProfile`
+- `PerceptionFrame`
+- `ActionCandidate`
+- `CandidateFeatureVector`
+- `NeuralActionSelection`
+- `NeuromodulatorSample`
+- `SleepState`
 - `ExperiencePatchHeader`
 - `ExperiencePatchView`
 - `ActionCommand`
@@ -207,24 +223,20 @@ The cognitive core should expose:
 - `NeuralComputeBackend` trait
 - `LineageExportManifest`
 
-The core should include unit tests that assert lobe alignments, legal neuron counts, motor physical stride, brain class invariants, and action command packing expectations. These tests are cheap and prevent future accidental fixed-2048 regressions.
+The core should include unit tests that assert lobe alignments, legal neuron counts, motor physical stride, brain class invariants, unscored candidate construction, causal perception digests, and action command packing expectations. These tests validate contracts; they do not act as a production neural oracle.
 
 
 ## 8. Scalable Brain Classes
 
-A-Life does not use a globally fixed neuron count. Brains are assigned to discrete classes. Discrete classes are used instead of arbitrary neuron counts because they allow efficient batching, stable shader dispatch dimensions, predictable memory planning, and meaningful performance profiles.
+A-Life does not use a globally fixed neuron count. Production brains are assigned to validated `BrainCapacityClass` records. Discrete classes allow efficient batching, stable shader dispatch dimensions, predictable memory planning, bounded candidates, and meaningful performance profiles. `BrainClassSpec`/`BrainScaleTier` remain legacy-save and reference adapters; capacity is not a cognition claim.
 
-Initial near-term classes:
+Promoted production classes:
 
-- `Nano512`: simple organisms, insects, cheap background ecology, early tests.
-- `Small1024`: small animals, early evolving creatures, memory-light agents.
-- `Standard2048`: reference creature based on earlier docs.
-- `Large4096`: focal creatures, richer association and memory.
-- `Cognitive32768`: future advanced prototype, not v0.
-- `Student131k`: first serious language/reasoning prototype target, future compatibility.
-- `Ascended1M`: first serious school candidate, future compatibility.
-- `Ascended5M`: high-end research/companion candidate, future compatibility.
-- `ResearchCustom`: explicit opt-in custom class for future labs.
+- N512: small organisms and the minimum causal/runtime acceptance class.
+- N1024: richer small organisms and the intermediate acceptance class.
+- N2048: the largest initially promoted production class.
+
+Existing `Large4096`, `Cognitive32768`, `Student131k`, `Ascended1M`, `Ascended5M`, and `ResearchCustom` identifiers remain readable for save inspection, export, and research compatibility. They cannot enter production neural mode until each class passes the documented causal, hardware, save, soak, memory, and performance gates.
 
 All classes obey these invariants:
 
@@ -234,10 +246,11 @@ All classes obey these invariants:
 - microtiles are 16x16.
 - supertiles are 128x128.
 - active-loop resizing is forbidden.
-- dispatch batches are grouped by class.
+- dispatch batches and sparse structure-of-arrays pools are grouped by class.
+- candidate and object-slot ceilings are class-bounded.
 - sparse payloads scale with active synapses, not N².
 
-`Standard2048` should exist because it is useful for continuity, not because it is privileged. Tests should include `Nano512`, `Standard2048`, and `Large4096` to prove the architecture is not fixed.
+`Standard2048` remains useful for continuity as a legacy/reference adapter, not because it is privileged. Production acceptance compiles nonempty sparse phenotypes for N512, N1024, and N2048 and proves the architecture is neither fixed at 2048 nor silently promoting larger tiers.
 
 
 ## 9. Lobe Layout Generation
@@ -361,7 +374,7 @@ Advanced learning must be staged. The school should not attempt abstract subject
 
 ## 15. ExperiencePatch Contract
 
-ExperiencePatch is the causal transaction between world and brain. It must be scalable by brain class and sensory ABI. Earlier fixed arrays like `[f32; 256]` are not acceptable as universal runtime contracts.
+ExperiencePatch is the sealed causal transaction between world and brain. It must be scalable by capacity class and sensory ABI. Earlier fixed arrays like `[f32; 256]` are not acceptable as universal runtime contracts. The decision record binds the same-tick world snapshot, unscored candidates, GPU selection, executed command, measured outcome, and post-outcome credit so no learning update can escape the reviewed causal loop.
 
 Use headers and offset/length references for packed logs. Debug views may use slices. The contract should capture:
 
@@ -369,18 +382,22 @@ Use headers and offset/length references for packed logs. Debug views may use sl
 - brain class ID,
 - sensory ABI version,
 - action ABI version,
+- sensor profile,
 - tick/time,
-- pre-action world state summary,
+- pre-action world state summary and `PerceptionBaseDigest`,
+- complete ordered GPU input and `PerceptionFrameDigest`,
 - sensory packet offsets,
 - drive/endocrine values,
-- memory/context references,
-- decision candidates,
+- bounded memory/context references and retrieval-context digest,
+- unscored decision candidates from the same world snapshot,
+- selected candidate index, logit, confidence, and bounded GPU diagnostics,
 - selected ActionCommand,
 - outcome deltas,
 - reward/frustration/success signals,
+- neuromodulator/credit packet identity,
 - teacher/school episode references when applicable.
 
-ExperiencePatch supports learning, debugging, sleep replay, curriculum assessment, and lineage export. It must record whether any hidden bootstrapping feedback was used. Clean-learning claims require logs that show what the creature actually perceived.
+ExperiencePatch supports patch-gated GPU waking plasticity, debugging, sleep replay, curriculum assessment, and lineage export. It must record whether any hidden bootstrapping feedback was used. Clean-learning claims require logs that show what the creature actually perceived. Invalid, duplicate, replayed, non-finite, or mismatched learning batches never commit.
 
 The tri-phase structure remains:
 
@@ -476,14 +493,16 @@ A-Life uses multiple memory forms. Synaptic memory stores habits and association
 
 Core memory layers:
 
-- `W_genetic_fixed`: inherited immutable priors.
-- `W_consolidated_habit`: durable lifetime learning consolidated during sleep.
-- `H_operational`: live plastic trace updated online.
-- `H_shadow`: higher-precision or staging trace for consolidation/rounding.
+- `W_genetic`: inherited immutable priors (`W_genetic_fixed` in legacy records).
+- `W_lifetime`: durable lifetime learning promoted during sleep (`W_consolidated_habit` in legacy records).
+- `H_fast`: immediately active eligibility-gated waking plasticity.
+- optional audit/rollback journals: diagnostics only, never waking authority.
 - episodic ledger: ExperiencePatch summaries and salient episodes.
 - concept ledger: compressed conceptual/memory nodes.
 - external artifacts: books, signs, maps, cultural records.
 - school mastery ledger: concept-level test outcomes.
+
+Every production dispatch uses `W_effective = W_genetic + W_lifetime + alpha * H_fast`. Candidate-conditional episodic retrieval is attached to the same-tick perception frame. Automatic GPU sleep consolidation promotes bounded fast content into lifetime weights and may prepare a safe double-buffered structural swap; no CPU H-shadow is the consolidation authority.
 
 Memory must be ablatable. To prove grounded learning, tests should turn off teacher hints, reduce or disable internal SLM, test novel speakers/material, and test delayed recall after sleep.
 
@@ -492,22 +511,24 @@ Memory must be ablatable. To prove grounded learning, tests should turn off teac
 
 Runtime storage is sparse and class-bucketed. Dense N² matrices are only conceptual and should not appear in production allocation plans.
 
-For each `BrainClassBucket`, allocate:
+For each promoted N512, N1024, or N2048 `BrainCapacityClass` bucket, allocate shared structure-of-arrays pools for:
 
 - activation ping/pong buffers sized O(N * slots),
 - accumulator buffers sized O(N * slots),
-- compact action output buffers,
+- unscored same-tick candidate descriptors and candidate feature vectors,
+- compact candidate logits, winner output, and diagnostic buffers,
 - sparse payload pools for genetic weights,
-- sparse payload pools for consolidated habits,
+- sparse payload pools for lifetime weights,
 - sparse payload pools for alpha masks,
-- sparse payload pools for operational traces,
-- sparse payload pools for shadow traces,
+- sparse payload pools for immediately active fast weights,
+- eligibility traces and post-outcome credit packets,
+- optional audit/rollback journals,
 - sparse payload pools for wear/autophagy counters,
 - microtile metadata buffers,
 - supertile masks,
 - replay/event buffers.
 
-Genetics controls sparse structure. Evolution mutates topology and density. The GPU computes active paths, not dead weight lines. Memory budgets cap active synapses per brain class and per profile.
+Genetics controls sparse structure. Evolution mutates topology and density. The GPU computes active paths, not dead weight lines. Memory budgets cap active synapses, tiles, candidates, object slots, and in-flight growth/swap storage per capacity class and profile. A lightweight `GpuBrainHandle` references shared backend-owned pools; it never duplicates device, queue, pipelines, or a complete projection schema per creature.
 
 The data model should support future payload compression, quantization, and tile format upgrades without changing high-level contracts.
 
@@ -552,9 +573,9 @@ Migration inputs:
 - brain class,
 - sensory ABI version,
 - action ABI version,
-- W_genetic_fixed sparse payloads,
-- W_consolidated_habit sparse payloads,
-- H_operational summaries,
+- `W_genetic` sparse payloads (or migrated legacy `W_genetic_fixed` assets),
+- `W_lifetime` sparse payloads (or migrated legacy consolidated-habit assets),
+- bounded `H_fast` checkpoint state according to the save policy,
 - endocrine baseline,
 - morphology/action map,
 - memory/concept ledger,
@@ -573,86 +594,98 @@ Migration process:
 A migrated creature should still feel like the same lineage at first. Expanded cortex can later influence behavior by weighing drives, feelings, memories, and goals through normal arbitration.
 
 
-## 24. Learning Rules: Hebbian, Oja, and Modulators
+## 24. Learning Rules: Eligibility, Three-Factor Credit, and Oja Normalization
 
-The baseline plasticity rule is Oja-like local Hebbian learning modulated by lobe rate, endocrine state, reward/prediction context, alpha gates, and wear. It is not backpropagation through the world. Local rules enable continuous learning and biological-style adaptation.
-
-A generic rule shape:
+Production waking plasticity is a GPU three-factor update gated by sealed `ExperiencePatch` evidence. Recurrent and decoder activity accumulate candidate/action-specific eligibility:
 
 ```text
-delta_h = eta_lobe * xi_chemical * alpha_gate * y_post * (x_pre - y_post * h)
+e_ij(t) = lambda_e * e_ij(t-1) + F(pre_i, post_j, selected_candidate)
 ```
 
-Additional terms may include anti-Hebbian inhibition, homeostatic scaling, reward modulation, novelty modulation, and sleep-only consolidation. These terms must be explicit and ablatable.
+After the world executes the selected structured command and the patch is sealed, a bounded neuromodulator combines reward prediction error, pain, frustration, novelty, homeostatic improvement, and the developmental receptor profile:
+
+```text
+delta H_fast = eta * alpha * M(t) * e_ij
+             - eta_norm * post_j^2 * W_effective
+```
+
+The first term supplies target-specific behavioral credit and the Oja term supplies normalization. Oja alone is not the behavioral credit signal. Anti-Hebbian inhibition, homeostatic scaling, novelty modulation, and other terms must remain explicit and ablatable.
 
 The internal SLM can weakly modulate attention/plasticity, but teacher evaluation cannot directly rewrite weights except under logged bootstrapping experiments. Exact verifiers grade math/logic/science; learning still happens through the creature's own sensory/action/outcome loop.
 
 
 ## 25. Weight Decomposition
 
-The final weight formula is:
+The production effective-weight formula is:
 
 ```text
-W_effective = W_genetic_fixed + W_consolidated_habit + alpha_genome * H_operational
+W_effective = W_genetic + W_lifetime + alpha * H_fast
 ```
 
-`W_genetic_fixed` is inherited and immutable during an organism's lifetime. `W_consolidated_habit` is durable learned habit. `H_operational` is live plastic trace. `H_shadow` supports higher-precision staging and stochastic rounding.
+`W_genetic` is inherited and immutable during an organism's lifetime. `W_lifetime` is durable learned habit. `H_fast` is immediately active, so a sealed outcome can affect the next neural dispatch before sleep. A shadow or higher-precision journal may exist only for audit, rollback, or rounding; it is never the sole waking learning target or consolidation authority.
 
-Sleep may consolidate stable traces into `W_consolidated_habit`. It must not silently bake lifetime learning into `W_genetic_fixed` unless an explicit experimental Lamarckian/species-prior mode is enabled. Offspring may inherit genetic predispositions, species culture, limited deja-vu priors, or experimental distillations depending on settings.
+Automatic GPU sleep consolidation may promote bounded stable fast traces into `W_lifetime`. It must not silently bake lifetime learning into `W_genetic` unless an explicit experimental Lamarckian/species-prior mode is enabled. Offspring may inherit genetic predispositions, species culture, limited deja-vu priors, or experimental distillations depending on settings.
 
 This separation is central to evolution. Genes optimize brain structure and priors; experience optimizes lifetime behavior; school/culture provides curriculum.
 
 
 ## 26. GPU Compute Pipeline
 
-The production neural tick is multi-pass:
+The production neural tick is one GPU-authoritative multi-pass causal loop:
 
-0. Clear accumulators.
-1. Sparse projection over active microtiles/supertiles.
-2. Activation finalization into ping-pong buffers.
-3. Oja/Hebbian plasticity and wear update.
-4. Optional local autophagy/pruning pass.
-5. Motor arbitration/action output pass.
+1. Gather and validate current perception and unscored candidates from one world snapshot.
+2. Upload bounded sensory, body, homeostatic, episodic, and candidate records.
+3. Encode inputs and clamp them into compiled populations.
+4. Run two through four deterministic recurrent microsteps over active sparse routes.
+5. Encode every candidate and decode a candidate-conditioned neural logit.
+6. Apply motor lateral inhibition and deterministic GPU winner selection.
+7. Read back only the selected candidate index, logit, confidence, and bounded counters.
+8. Let the world validate and execute the structured command, then seal the outcome patch.
+9. Upload the compact post-outcome credit packet and update eligibility-gated `H_fast`.
+10. During canonical sleep phases, run GPU replay, consolidation, and safe structural swap pipelines.
 
-Passes may later be fused after correctness and profiling, but initial implementation must keep them separate. This prevents write-after-read hazards, makes debugging possible, and preserves WebGPU portability.
+Passes may later be fused after correctness and profiling, but reviewed boundaries must preserve WebGPU safety and causal auditability. The GPU backend batches by promoted capacity class. A dispatch batch contains class ID, slot/generation, active tile range, perception/candidate offsets, activation buffers, sparse payload references, and bounded output offsets.
 
-The GPU backend must batch by brain class. A dispatch batch contains class spec ID, slot range, active tile range, sensory buffer offsets, activation buffers, payload pool references, and output buffer offsets.
-
-The CPU may read small action output buffers each tick. Large neural buffers should not be synchronously read back in normal play.
+The host may read the compact winner record and bounded counters each tick. Active play never synchronously reads bulk activation, eligibility, topology, or weight state. Production does not dispatch a CPU shadow, require CPU parity, or fall back automatically to CPU neural math.
 
 
 ## 27. WGSL Authoring Rules
 
 All production shaders are WGSL. Do not create HLSL source files unless explicitly labelled as non-authoritative pseudocode. WGSL modules should be small and testable.
 
-Initial placeholder modules:
+Production modules include:
 
 - `clear_accumulators.wgsl`
+- `sensory_encode.wgsl`
 - `spmv_projection.wgsl`
 - `activation_finalize.wgsl`
-- `oja_update.wgsl`
+- `candidate_encode.wgsl`
+- `candidate_decode.wgsl`
+- `winner_select.wgsl`
+- `fast_plasticity.wgsl`
 - `wear_autophagy.wgsl`
-- `motor_arbitration.wgsl`
 - `sleep_consolidation.wgsl`
 
 WebGPU limitations are design constraints. Floating-point atomics should not be assumed. Use scaled integer accumulators where needed. Subgroup features should have portable fallbacks. Workgroup sizes and buffer layouts must be explicit.
 
-Any future CUDA/Triton/TPU backend must implement the same `NeuralComputeBackend` contract and must not change organism semantics.
+Any future CUDA/Triton/TPU backend must implement the same closed-loop contract and must not change organism semantics. Pure CPU equivalents may exist only under test/developer compilation for fixtures and contract checks, never as production dispatch or fallback.
 
 
 ## 28. Sleep, Replay, and Consolidation
 
-Sleep is not a decorative animation. It is a compute and memory phase. Organisms sleep because brains need consolidation, metabolic recovery, and structural cleanup. Larger brains require more sleep.
+Sleep is not a decorative animation or an external harness operation. The canonical scheduler advances `Awake -> EnteringSleep -> Consolidating -> Waking -> Awake`, with forced recovery joining the same path. Entering sleep emits no action. The transition into `Consolidating` submits exactly one GPU consolidation job for a persisted unique cycle ID, and `Waking` restores bounded homeostatic state before actions resume.
 
 Sleep jobs:
 
-- replay salient ExperiencePatches,
-- drain shadow traces,
-- consolidate habits,
+- replay salient ExperiencePatches through bounded replay eligibility,
+- promote bounded `H_fast` content into `W_lifetime`,
+- preserve `W_genetic` immutability,
 - prune fatigued low-salience pathways,
 - update concept/episodic ledgers,
 - test memory stability,
-- prepare developmental migration if scheduled.
+- prepare a double-buffered structural swap or developmental migration if scheduled.
+
+Replay payloads must measurably affect the staged consolidation result; metadata alone is insufficient. Phase and cycle state are saved so interruption, retry, and load cannot consolidate twice. Tests cover every sleep phase, exactly-once consolidation, automatic wake, no-action phases, interruption, and retained post-wake behavior.
 
 Future dream/planning modes can run internal counterfactual simulations. They are not v0/v1 requirements. If implemented later, dream actions must not mutate world state until committed through normal action pathways.
 
@@ -706,7 +739,10 @@ The root AGENTS.md should state:
 - No HLSL production source.
 - 2048 is only `Standard2048`.
 - Use scalable brain classes.
-- Do not implement runtime kernels until docs/scaffolding are stable.
+- Production neural execution is GPU-authoritative WGSL; do not add a live CPU shadow, parity gate, or automatic CPU neural fallback.
+- Keep pure CPU neural helpers test-only or developer-only.
+- World code enumerates unscored candidates and remains authoritative for legality and outcomes.
+- Promote only N512, N1024, and N2048 until larger tiers pass the documented causal and performance gates.
 - Teacher LLM and internal SLM are separate.
 - Use Graphify for architecture queries when installed.
 - Keep docs synchronized.
@@ -718,7 +754,7 @@ Child AGENTS.md files should exist in `crates/alife_core`, `crates/alife_gpu_bac
 
 Use `/goal` to set a persistent objective for the task. Because official Codex docs state `/goal` objectives must be non-empty and no more than 4,000 characters, use a compact goal and point at `docs/codex_handoff_prompt.md` for details.
 
-Codex should begin in planning mode. It should inspect existing files, report divergences, then scaffold. It should not implement neural runtime algorithms. It should create docs, type skeletons, module stubs, scripts, and tests for invariants.
+Codex should inspect existing files, report divergences, and implement the approved integration slice. Production cognition uses reviewed GPU-authoritative WGSL pipelines; do not add a live CPU shadow, parity gate, or automatic CPU neural fallback. Keep pure CPU neural helpers test-only or developer-only, keep world candidate enumeration unscored, and preserve world authority over legality and outcomes.
 
 Codex should make small commits if working in a repo. It should run `cargo fmt`, `cargo check --workspace`, and any docs checks. It should not install random dependencies without explaining why.
 
@@ -727,7 +763,7 @@ Codex should initialize DOX hierarchy and add Graphify instructions. It should n
 
 ## 33. Testing and Validation Strategy
 
-Initial tests are structural, not behavioral. They should assert:
+Validation combines contract tests with behavioral, hardware, save, soak, and performance evidence. Contract tests should assert:
 
 - brain classes have legal neuron counts,
 - lobe ranges are aligned and non-overlapping,
@@ -738,34 +774,40 @@ Initial tests are structural, not behavioral. They should assert:
 - genome fields include topology, chemistry, morphology, plasticity, and development,
 - `NoSemanticPriorProvider` exists,
 - teacher interfaces do not use internal SLM hooks.
+- production capacity promotion is limited to N512, N1024, and N2048,
+- candidates are unscored and share the perception snapshot,
+- the production source and telemetry contain no CPU neural shadow, parity gate, or automatic neural fallback.
 
-Behavioral tests come later: food seeking, avoidance, simple word grounding, SLM-off transfer, teacher ablations, and sleep recall.
+Behavioral and causal tests perturb sensory input, lesion or zero weights, ablate neuromodulation, and verify target-conditional learning rather than comparing against a CPU oracle. Real-hardware tests name the Vulkan adapter and prove action selection, waking plasticity, and sleep consolidation dispatch through WGSL. Save tests cover every sleep phase and typed GPU-unavailable state. Bounded 10,000-plus-tick soak tests and populated-phenotype performance reports complete acceptance.
 
 
 ## 34. Determinism and Reproducibility
 
-A-Life needs deterministic seeds for credible evolution and debugging. Organism birth, genome mutation, tile initialization, lesson generation, replay selection, and stochastic rounding should be seeded and reproducible where possible.
+A-Life needs deterministic seeds for credible evolution and debugging. Organism birth, genome mutation, phenotype compilation, tile initialization, candidate ordering, lesson generation, replay selection, and stochastic rounding should be seeded and reproducible where possible.
 
-GPU determinism is difficult across devices. The architecture should define deterministic CPU reference paths for small tests and bounded acceptance metrics for GPU runs. Exact bitwise determinism across all hardware is a long-term goal, not an immediate guarantee.
+GPU replay determinism is defined for the same phenotype hash, ordered inputs, seed, backend version, adapter class, and tolerance contract. CPU reference helpers may generate fixtures or check isolated math in tests/developer tools, but they are not a live parity oracle or production acceptance gate. Cross-vendor bitwise identity is not claimed without evidence.
 
 All experiments involving hidden bootstrapping, teacher feedback, SLM support, or inherited deja-vu must be logged. Reproducing a creature requires genome, seed lineage, brain class, ABI versions, profile settings, and migration history.
 
 
 ## 35. Performance and Profiling Plan
 
-Performance scales through sparsity, residency, brain class batching, and profile caps. The initial scaffolding should not chase micro-optimizations. But the docs should define future metrics:
+Performance scales through sparsity, residency, promoted capacity-class batching, and profile caps. Reports use populated phenotypes and real production dispatches rather than empty schemas, CPU fallback data, or inferred GPU claims. Required metrics include:
 
 - hot-brain tick throughput,
 - SpMV tiles per second,
 - active synapses per class,
 - memory bandwidth,
 - action latency,
+- candidate count and winner readback bytes,
+- waking-plasticity dispatch time,
 - sleep jobs per second,
 - replay throughput,
+- committed slot bytes, physical bucket bytes, unused capacity, shared backend bytes, and peak growth/swap bytes,
 - schooling lessons per simulated hour,
 - Graphify/doc agent overhead.
 
-Large brains slow population growth. Ascended classes are special modes. A single 1M-neuron school candidate is not expected to coexist with hundreds of hot ecosystem brains on low hardware.
+N512, N1024, and N2048 must each meet their documented causal and performance gates before promotion. Larger brains remain research-gated special modes. A single 1M-neuron school candidate is not expected to coexist with hundreds of hot ecosystem brains on low hardware.
 
 
 ## 36. Data Persistence, Saves, and Lineage Export
@@ -825,7 +867,7 @@ The architecture must remain compatible with broad future ideas:
 - exact verifiers,
 - future research-scale experiments.
 
-Compatibility does not imply implementation. v0/v1 stays focused on scaffolding, core contracts, scalable brain classes, genetics/chemistry/evolution data models, and clean module boundaries.
+Compatibility does not imply production promotion. Initial production stays focused on the reviewed N512/N1024/N2048 GPU-authoritative closed loop, core contracts, genetics/chemistry/evolution data models, and clean module boundaries. Larger tiers and alternate compute backends remain research-gated.
 
 Speculative AGI language belongs only in non-requirements appendix text. Formal documents should use “grounded developmental generalist agent research direction.”
 
@@ -842,43 +884,39 @@ Do not build:
 - Internal SLM model loading.
 - D2NWG training.
 - full topological Morse implementation.
-- real neural GPU kernels.
 - AGI claims.
 - arbitrary dynamic brain resizing.
+- live CPU neural shadow execution.
+- CPU-parity-gated production handoff.
+- automatic CPU neural fallback.
+- promotion of capacity classes larger than N2048 without documented gates.
 
 Do build:
 
-- repo scaffold,
-- docs,
-- workspace crates,
-- type skeletons,
-- invariant tests,
-- scripts,
-- AGENTS.md/DOX hierarchy,
-- Graphify instructions,
-- Codex handoff prompt.
+- production GPU encoding, recurrent, candidate-decoding, winner-selection, waking-plasticity, and sleep-consolidation pipelines,
+- N512/N1024/N2048 sparse class-bucketed pools and populated phenotypes,
+- same-tick perception with unscored candidates,
+- sealed patch-gated learning and automatic sleep,
+- contract, behavioral, hardware, save, soak, and performance tests,
+- synchronized docs and AGENTS.md/DOX guidance.
 
 
 ## 40. Implementation Milestones
 
-Milestone 0: Documentation and agent rules. Add master docs, architecture decisions, future compatibility, schooling doc, Codex prompt, AGENTS.md hierarchy, and Graphify/DOX notes.
+Historical scaffold Milestones 0 through 6 are complete provenance only. Their scaffold-only, CPU-reference-authority, and placeholder-backend restrictions are superseded by ADR-024 and do not control current production work.
 
-Milestone 1: Workspace scaffold. Add Cargo workspace and empty crates. Ensure `cargo check --workspace` passes.
+Slice A: GPU causal core. Add capacity/perception/candidate/phenotype contracts, deterministic phenotype compilation, class-bucketed sparse pools, sensory encoding, recurrent microsteps, candidate-conditioned decoding, GPU winner selection, explicit policy selection, and live-bridge cutover. Prove N512 and N1024 before N2048.
 
-Milestone 2: Core type skeletons. Add IDs, packed math types, brain classes, genome structs, ExperiencePatch headers, ActionCommand, memory profiles, traits.
+Slice B: GPU causal learning and sleep. Add eligibility buffers, three-factor fast plasticity, immediate behavioral effect, canonical automatic sleep, GPU consolidation, save/load phase state, and safe structural swaps.
 
-Milestone 3: Invariant tests. Assert scalable classes and no fixed-2048 regressions.
+Slice C: memory, topology, and grounding. Add candidate-conditional memory, nonfatal topology, explicit privileged and grounded sensor profiles, tracked-object bindings, and a 10,000-plus-tick bounded cognition soak.
 
-Milestone 4: Bevy shell. Add minimal app plugin and window only.
+Slice D: scaling and cleanup. Enforce global/per-route budgets, activity-dependent BrainATP, memory ceilings, tier promotion gates, legacy save migration, documentation cleanup, and removal of superseded backend code and claims.
 
-Milestone 5: CPU reference toy brain. Later.
-
-Milestone 6: wgpu placeholder backend. Later.
-
-Milestone 7: actual WGSL neural passes. Later.
+Each slice must pass its behavioral and architectural gates before integration. Completion requires the final requirement-by-requirement audit across all four slices.
 
 
-## 41. Required Files and Scaffolding
+## 41. Required Files and Modules
 
 Required docs:
 
@@ -929,11 +967,15 @@ Each crate should have a local AGENTS.md with local rules.
 
 `ExperiencePatch`: tri-phase causal transaction between world and brain.
 
-`W_genetic_fixed`: inherited immutable weight prior.
+`W_genetic`: inherited immutable weight prior; `W_genetic_fixed` is the legacy save name.
 
-`W_consolidated_habit`: lifetime learning consolidated during sleep.
+`W_lifetime`: lifetime learning promoted during GPU sleep consolidation; `W_consolidated_habit` is the legacy save name.
 
-`H_operational`: online plastic trace.
+`H_fast`: immediately active eligibility-gated waking plastic state.
+
+`NeuralClosedLoopGpu`: normal GPU-authoritative neural policy.
+
+`HeuristicBaseline`: explicit separately labelled non-neural comparison policy.
 
 `Graphify`: developer tool that maps project files into a queryable knowledge graph.
 
@@ -1021,7 +1063,7 @@ pub struct BrainClassSpec {
 
 # Appendix B: Validation Matrix
 
-The following checks should eventually exist as tests or docs checks:
+The following checks are required acceptance evidence:
 
 1. No source file references Unity as implementation target.
 2. No production shader files use `.hlsl`.
@@ -1033,6 +1075,17 @@ The following checks should eventually exist as tests or docs checks:
 8. `NoSemanticPriorProvider` exists.
 9. Graphify instructions mention Codex uses `$graphify`.
 10. AGENTS.md says Rust + Bevy + wgpu/WebGPU + WGSL.
+11. Production capacity promotion is limited to N512, N1024, and N2048.
+12. Each promoted class compiles a nonempty sparse phenotype within class and route budgets.
+13. Perception and unscored candidates share one authoritative world snapshot and audited digest chain.
+14. Sensory perturbation, weight lesion/zeroing, and neuromodulator ablation change GPU neural behavior as expected.
+15. Painful and rewarding outcomes change the matching candidate behavior before sleep without leaking the same bias to unrelated candidates.
+16. Automatic sleep enters, consolidates exactly once on the GPU, saves/loads in every phase, wakes, and retains learned behavior.
+17. Real-hardware receipts name the Vulkan adapter and show WGSL action selection, waking plasticity, and sleep consolidation without neural fallback.
+18. GPU-unavailable paths return the typed unavailable result and do not run or claim a neural tick.
+19. Production source and telemetry contain no live CPU neural shadow, parity gate, or automatic neural fallback.
+20. A 10,000-plus-tick soak keeps memory, topology, candidates, and GPU buffers bounded without terminal capacity errors.
+21. Populated-phenotype performance reports record hardware, class, memory accounting, readback, and missed/unknown targets honestly.
 
 # Appendix C: Print/Page Estimate
 
@@ -1043,374 +1096,374 @@ This master specification is intentionally long. When rendered as a conventional
 
 # Appendix D: Subsystem Deep Dives for Codex
 
-This appendix is intentionally detailed. It gives future Codex sessions enough context to create the scaffold without inventing incompatible abstractions. These sections are not requests to implement runtime behavior now; they are contract-level notes.
+This appendix gives implementation sessions focused subsystem context without weakening ADR-024. These are production contract and ownership notes: neural behavior executes through reviewed GPU-authoritative WGSL pipelines, CPU neural helpers remain test/developer-only, the world supplies unscored same-tick candidates and owns outcomes, and only N512/N1024/N2048 are initially promoted.
 
 ### BrainScaleClass Registry
 
-**Purpose.** The registry is the authoritative table of supported brain classes, including consumer ecosystem classes and future ascension classes. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The registry is the authoritative table of supported brain classes, including consumer ecosystem classes and future ascension classes. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** BrainScaleClass Registry must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** BrainScaleClass Registry must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Lobe Ratio Genome
 
-**Purpose.** Lobe ratios let evolution allocate neural budget among perception, drives, memory, language, motor control, and future reasoning systems. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Lobe ratios let evolution allocate neural budget among perception, drives, memory, language, motor control, and future reasoning systems. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Lobe Ratio Genome must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Lobe Ratio Genome must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Macro-Connectome Genome
 
-**Purpose.** Macro-connectome genes control which lobe-to-lobe pathways exist, which supertiles are enabled, and how sparse routing capacity is distributed. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Macro-connectome genes control which lobe-to-lobe pathways exist, which supertiles are enabled, and how sparse routing capacity is distributed. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Macro-Connectome Genome must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Macro-Connectome Genome must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Sparse Payload Pools
 
-**Purpose.** Sparse payload pools store active synapse data without dense N squared allocation and allow each brain class to have its own budgets. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Sparse payload pools store active synapse data without dense N squared allocation and allow each brain class to have its own budgets. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Sparse Payload Pools must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Sparse Payload Pools must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### GPU Profile Planner
 
-**Purpose.** The profile planner maps available memory and compute into hot, warm, cold, sleep, and dormant brain residency budgets. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The profile planner maps available memory and compute into hot, warm, cold, sleep, and dormant brain residency budgets. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** GPU Profile Planner must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** GPU Profile Planner must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Brain Residency Scheduler
 
-**Purpose.** The scheduler decides which organisms receive full neural ticks and which are time-sliced, compressed, sleeping, or dormant. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The scheduler decides which organisms receive full neural ticks and which are time-sliced, compressed, sleeping, or dormant. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Brain Residency Scheduler must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Brain Residency Scheduler must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### ExperiencePatch Ledger
 
-**Purpose.** The ledger records causal pre-action, decision, and outcome phases for learning, replay, debug, and school assessment. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The ledger records causal pre-action, decision, and outcome phases for learning, replay, debug, and school assessment. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** ExperiencePatch Ledger must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** ExperiencePatch Ledger must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### ActionCommand Router
 
-**Purpose.** The action router transforms structured neural proposals into host-authoritative world actions with legality checks and failure feedback. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The action router transforms structured neural proposals into host-authoritative world actions with legality checks and failure feedback. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** ActionCommand Router must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** ActionCommand Router must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Internal Semantic Prior Provider
 
-**Purpose.** The internal semantic prior substitutes for some deep evolved instinct and language bias while remaining private, bounded, and ablatable. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The internal semantic prior substitutes for some deep evolved instinct and language bias while remaining private, bounded, and ablatable. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Internal Semantic Prior Provider must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Internal Semantic Prior Provider must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### External Teacher Controller
 
-**Purpose.** The external teacher controls avatars and lesson objects while all instructional content enters through hearing, vision, writing, gesture, or demonstration. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The external teacher controls avatars and lesson objects while all instructional content enters through hearing, vision, writing, gesture, or demonstration. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** External Teacher Controller must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** External Teacher Controller must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Lesson World API
 
-**Purpose.** The lesson API lets a curriculum planner arrange objects, boards, maps, tools, rewards, and exams without bypassing creature perception. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The lesson API lets a curriculum planner arrange objects, boards, maps, tools, rewards, and exams without bypassing creature perception. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Lesson World API must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Lesson World API must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Exact Verifier Interface
 
-**Purpose.** The verifier grades math, logic, and science tasks deterministically so LLM explanations are not confused with truth. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The verifier grades math, logic, and science tasks deterministically so LLM explanations are not confused with truth. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Exact Verifier Interface must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Exact Verifier Interface must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Speech and Hearing ABI
 
-**Purpose.** The speech ABI provides developmental progression from clean token/phoneme streams to more realistic acoustic perception. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The speech ABI provides developmental progression from clean token/phoneme streams to more realistic acoustic perception. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Speech and Hearing ABI must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Speech and Hearing ABI must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Glyph and Writing ABI
 
-**Purpose.** The writing ABI treats text as visible world symbols or simplified glyph sensors rather than hidden token injection. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The writing ABI treats text as visible world symbols or simplified glyph sensors rather than hidden token injection. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Glyph and Writing ABI must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Glyph and Writing ABI must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Neurochemistry Vector
 
-**Purpose.** The neurochemistry vector mediates fear, hunger, curiosity, social attachment, pain, fatigue, reward, and sleep pressure. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The neurochemistry vector mediates fear, hunger, curiosity, social attachment, pain, fatigue, reward, and sleep pressure. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Neurochemistry Vector must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Neurochemistry Vector must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Drive Arbitration Model
 
-**Purpose.** Drive arbitration forces advanced reasoning to weigh motivations against instincts and feelings rather than deleting those signals. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Drive arbitration forces advanced reasoning to weigh motivations against instincts and feelings rather than deleting those signals. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Drive Arbitration Model must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Drive Arbitration Model must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Sleep Replay Engine
 
-**Purpose.** Sleep replay consolidates habits, prunes wear, restores energy, tests memory stability, and can prepare safe brain migration. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Sleep replay consolidates habits, prunes wear, restores energy, tests memory stability, and can prepare safe brain migration. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Sleep Replay Engine must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Sleep Replay Engine must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Brain Migration Protocol
 
-**Purpose.** Migration preserves an evolved core while adding larger cortex capacity through freeze, map, shadow, and gated unfreeze steps. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Migration preserves an evolved core while adding larger cortex capacity through freeze, map, shadow, and gated unfreeze steps. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Brain Migration Protocol must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Brain Migration Protocol must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Ascended School Candidate
 
-**Purpose.** The first serious school candidate is a future one-million-neuron class, while 131k is the first serious prototype. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The first serious school candidate is a future one-million-neuron class, while 131k is the first serious prototype. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Ascended School Candidate must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Ascended School Candidate must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Lineage Export Manifest
 
-**Purpose.** Lineage export packages genome, memories, ABI versions, class ID, chemistry, and migration history for future ascension or analysis. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Lineage export packages genome, memories, ABI versions, class ID, chemistry, and migration history for future ascension or analysis. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Lineage Export Manifest must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Lineage Export Manifest must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Graphify Workflow
 
-**Purpose.** Graphify creates a queryable knowledge graph so agents can understand the repository without reading every file blindly. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Graphify creates a queryable knowledge graph so agents can understand the repository without reading every file blindly. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Graphify Workflow must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Graphify Workflow must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### DOX Hierarchy
 
-**Purpose.** DOX-style AGENTS.md files give agents local instructions and require docs updates after meaningful changes. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** DOX-style AGENTS.md files give agents local instructions and require docs updates after meaningful changes. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** DOX Hierarchy must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** DOX Hierarchy must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Codex Goal Workflow
 
-**Purpose.** The /goal command maintains a persistent task objective while details live in files that avoid the 4000 character goal limit. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The /goal command maintains a persistent task objective while details live in files that avoid the 4000 character goal limit. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Codex Goal Workflow must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Codex Goal Workflow must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Future Backend Interface
 
-**Purpose.** The backend trait keeps future multi-GPU, cluster, or research hardware possible without changing organism semantics. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The backend trait keeps future multi-GPU, cluster, or research hardware possible without changing organism semantics. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Future Backend Interface must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Future Backend Interface must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Ablation Framework
 
-**Purpose.** Ablations prove whether a behavior is learned internally or only appears when the teacher or internal semantic prior is active. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Ablations prove whether a behavior is learned internally or only appears when the teacher or internal semantic prior is active. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Ablation Framework must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Ablation Framework must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Curriculum Progression
 
-**Purpose.** Curriculum moves from grounded objects and actions to language, writing, math, history, science, tool use, and teaching others. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Curriculum moves from grounded objects and actions to language, writing, math, history, science, tool use, and teaching others. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Curriculum Progression must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Curriculum Progression must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Peer Teaching
 
-**Purpose.** Advanced creatures should eventually teach less advanced creatures through the same speech, writing, gesture, and demonstration channels. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Advanced creatures should eventually teach less advanced creatures through the same speech, writing, gesture, and demonstration channels. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Peer Teaching must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Peer Teaching must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Inherited Deja-Vu
 
-**Purpose.** Experimental inheritance can transmit compressed predispositions or species culture to bootstrap learning without strict biological fidelity. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Experimental inheritance can transmit compressed predispositions or species culture to bootstrap learning without strict biological fidelity. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Inherited Deja-Vu must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Inherited Deja-Vu must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Topological Concept Ledger
 
-**Purpose.** The concept ledger can later support nerve complexes, Morse-style summaries, curiosity gaps, and concept neighborhoods. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** The concept ledger can later support nerve complexes, Morse-style summaries, curiosity gaps, and concept neighborhoods. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Topological Concept Ledger must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Topological Concept Ledger must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 ### Debug and Inspector Tools
 
-**Purpose.** Debugging tools must expose brain class, residency, chemistry, recent patches, teacher state, and Graphify links without altering behavior. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. This subsystem must be named and bounded early, but it must not be over-implemented during the scaffold phase. The immediate job for Codex is to create stable modules, data structures, and tests that prevent future architectural drift.
+**Purpose.** Debugging tools must expose brain class, residency, chemistry, recent patches, teacher state, and Graphify links without altering behavior. exists so A-Life can evolve from a consumer-scale ecosystem game into a larger developmental research platform without rewriting the core contracts. Its implementation must follow ADR-024: production neural behavior is GPU-authoritative while cross-layer contracts stay explicit and versioned.
 
-**Near-term scaffold.** The near-term implementation should define IDs, traits, configuration structs, documentation, and invariant tests. Runtime algorithms should be represented by placeholder traits or `todo!()` stubs only when necessary. If a feature requires real GPU kernels, teacher LLM calls, SLM model loading, or complex simulation logic, it belongs in a later milestone. The scaffold should compile, document intent, and make wrong implementations obvious.
+**Implementation boundary.** Define focused IDs, traits, configuration structs, documentation, and invariant tests. When this subsystem participates in cognition, production neural algorithms belong in reviewed WGSL pipelines and pure CPU neural helpers remain test-only or developer-only. Teacher LLM calls and SLM model loading stay behind their explicit optional boundaries.
 
 **Data boundary.** Debug and Inspector Tools must communicate through explicit contracts rather than implicit global state. Every cross-layer message should carry version identifiers where the format may evolve. CPU world state, GPU neural buffers, semantic priors, and teacher systems should be connected through narrow interfaces. This is especially important for experiments: if a creature learns a word, we need to know whether the information came through hearing, writing, teacher feedback, internal semantic bias, inheritance, or hidden bootstrapping.
 
 **Evolution and scaling.** Debug and Inspector Tools must scale with brain class and compute profile. Nano ecosystem creatures should be able to omit advanced capacity. Ascended classes should be able to add capacity without changing the ABI. The genome should be able to tune participation in this subsystem through lobe ratios, gates, drives, developmental schedules, or feature flags. Larger versions should cost more compute, energy, sleep, and reproductive opportunity.
 
-**Testing requirement.** Each subsystem needs at least one scaffold-level test or docs check. Tests should catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, direct hidden teacher injection, or unstructured actions. Later behavioral tests should include ablations that disable internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
+**Testing requirement.** Each subsystem needs contract evidence plus the behavioral, hardware, save, soak, or performance evidence appropriate to its role. Tests must catch regression to Unity, HLSL, fixed 2048 brains, dense matrices, scored world candidates, CPU shadow/fallback execution, direct hidden teacher injection, or unstructured actions. Behavioral tests include causal perturbations and ablations of internal semantic priors, external teacher help, hidden reward injection, and curriculum hints.
 
 
 ---
 
 # Appendix E: Code Skeleton Expansion Notes
 
-The following skeletons are expected eventually. Codex should create the files and minimal types, but not fill in algorithms beyond invariants.
+The following module boundaries remain expected. Contract types belong in `alife_core`; production neural algorithms belong in focused `alife_gpu_backend` WGSL/pipeline modules. Implement each reviewed slice with invariant, behavioral, hardware, save, soak, and performance evidence rather than preserving empty stubs as architecture.
 
 ```text
 crates/alife_core/src/
@@ -1448,4 +1501,4 @@ crates/alife_semantic/src/
   providers/tiny_local_stub.rs
 ```
 
-Every file should start with a module-level comment that states whether it is v0 scaffold, future compatibility, or later runtime implementation. This prevents Codex from mistaking an interface stub for an algorithm request.
+Every file should start with a module-level comment that states whether it is contract-only, production runtime, test/developer-only, or research-gated future compatibility. This prevents Codex from mistaking a contract or research surface for production authority.
