@@ -1,16 +1,18 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionId, ActionKind, ActionProposal,
-    ActionTarget, AffordanceBits, BrainClassSpec, BrainGenome, BrainScaleTier, CognitiveEdge,
-    ConceptBindings, ConceptCell, ConceptCellId, Confidence, ContextFeatureFlags,
+    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    ActionProposal, ActionTarget, AffordanceBits, BodySnapshot, BrainClassSpec, BrainGenome,
+    BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
+    CognitiveEdge, ConceptBindings, ConceptCell, ConceptCellId, Confidence, ContextFeatureFlags,
     ContradictionType, CuriosityBias, DevelopmentState, DriveBinding, DriveChannel, DurationTicks,
     EdgeRelationKind, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
     GapResolutionStatus, GaussianClusterId, GaussianContextRef, GaussianSalienceEntry, HeardToken,
     HomeostaticDelta, HomeostaticSnapshot, Intensity, LobeKind, NormalizedScalar, OrganismId,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, ScaffoldContractError,
-    SemanticContextRef, SemanticSalienceEntry, SensoryChannels, SensorySnapshot, SignedValence,
-    SocialAgentSnapshot, TeacherFeedbackObservation, TeacherPerceptionChannel, Tick,
-    TopologicalMap, TopologicalMapConfig, Validate, Vec3f, Velocity, WeightSplitContract,
-    WorldEntityId, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+    PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
+    ScaffoldContractError, SemanticContextRef, SemanticSalienceEntry, SensorProfile,
+    SensoryChannels, SensorySnapshot, SignedValence, SocialAgentSnapshot,
+    TeacherFeedbackObservation, TeacherPerceptionChannel, Tick, TopologicalMap,
+    TopologicalMapConfig, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
+    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
 fn organism() -> OrganismId {
@@ -134,21 +136,61 @@ fn pre_action_at(
 ) -> alife_core::PreActionSnapshot {
     let spec = brain_spec();
     let genome = genome(&spec);
-    alife_core::PreActionSnapshot::new(
+    let body = BodySnapshot {
+        pose: alife_core::Pose {
+            translation: Vec3f::new(1.0, 2.0, 3.0),
+            rotation: alife_core::Quatf::IDENTITY,
+        },
+        velocity: Velocity::ZERO,
+    };
+    let homeostasis = HomeostaticSnapshot::baseline(tick);
+    let candidate_target = ActionTarget::new(Some(target), Some(Vec3f::new(0.0, 0.0, 1.0)));
+    let perception = PerceptionFrame::new(
         organism_id,
-        sequence_id,
         tick,
+        SensorProfile::PrivilegedAffordanceV1,
+        sensory(tick, organism_id, target),
+        body,
+        homeostasis,
+        vec![
+            ActionCandidate::new(
+                0,
+                ActionId(300),
+                ActionKind::Move,
+                CandidateActionFamily::Approach,
+                CandidateObservationRef::None,
+                candidate_target,
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.8).unwrap(),
+                NormalizedScalar::new(0.0).unwrap(),
+                DurationTicks::new(4),
+                DurationTicks::new(4),
+            )
+            .unwrap(),
+            ActionCandidate::new(
+                1,
+                ActionId(400),
+                ActionKind::Interact,
+                CandidateActionFamily::Contact,
+                CandidateObservationRef::None,
+                candidate_target,
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.8).unwrap(),
+                NormalizedScalar::new(0.0).unwrap(),
+                DurationTicks::new(4),
+                DurationTicks::new(4),
+            )
+            .unwrap(),
+        ],
+    )
+    .unwrap();
+    alife_core::PreActionSnapshot::from_heuristic_frame(
+        sequence_id,
+        perception,
         spec.clone(),
         genome.clone(),
         development(&genome),
         weight_split(&spec, &genome),
-        alife_core::Pose {
-            translation: Vec3f::new(1.0, 2.0, 3.0),
-            rotation: alife_core::Quatf::IDENTITY,
-        },
-        Velocity::ZERO,
-        HomeostaticSnapshot::baseline(tick),
-        sensory(tick, organism_id, target),
         alife_core::MemoryExpectancySnapshot {
             expected_valence: SignedValence::new(0.25).unwrap(),
             predicted_drive_delta: alife_core::DriveDelta::zero(),

@@ -1,12 +1,13 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionId, ActionKind, ActionProposal,
-    ActionTarget, BrainClassSpec, BrainGenome, BrainScaleTier, Confidence, DevelopmentState,
-    DriveDelta, DurationTicks, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    HomeostaticDelta, HomeostaticSnapshot, Intensity, LobeKind, MemoryBank, MemoryBankConfig,
-    MemoryExpectancy, MemoryOutcomeSummary, MemoryQuery, NormalizedScalar, OrganismId,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, ScaffoldContractError,
-    SchemaKind, SensoryChannels, SensorySnapshot, SignedValence, Tick, Validate, Vec3f, Velocity,
-    WeightSplitContract, WorldEntityId,
+    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
+    CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
+    DevelopmentState, DriveDelta, DurationTicks, ExperiencePatch, ExperiencePatchBuilder,
+    ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity, LobeKind, MemoryBank,
+    MemoryBankConfig, MemoryExpectancy, MemoryOutcomeSummary, MemoryQuery, NormalizedScalar,
+    OrganismId, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
+    ScaffoldContractError, SchemaKind, SensorProfile, SensoryChannels, SensorySnapshot,
+    SignedValence, Tick, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
 };
 
 fn organism() -> OrganismId {
@@ -82,21 +83,60 @@ fn pre_action_at(
 ) -> alife_core::PreActionSnapshot {
     let spec = brain_spec();
     let genome = genome(&spec);
-    alife_core::PreActionSnapshot::new(
+    let body = BodySnapshot {
+        pose: alife_core::Pose {
+            translation: Vec3f::new(cue, 0.0, 1.0),
+            rotation: alife_core::Quatf::IDENTITY,
+        },
+        velocity: Velocity::ZERO,
+    };
+    let homeostasis = HomeostaticSnapshot::baseline(tick);
+    let perception = PerceptionFrame::new(
         organism_id,
-        sequence_id,
         tick,
+        SensorProfile::PrivilegedAffordanceV1,
+        sensory(tick, organism_id, cue),
+        body,
+        homeostasis,
+        vec![
+            ActionCandidate::new(
+                0,
+                ActionId(300),
+                ActionKind::Move,
+                CandidateActionFamily::Approach,
+                CandidateObservationRef::None,
+                ActionTarget::new(Some(WorldEntityId(2)), Some(Vec3f::new(0.0, 0.0, 1.0))),
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.8).unwrap(),
+                NormalizedScalar::new(0.0).unwrap(),
+                DurationTicks::new(4),
+                DurationTicks::new(4),
+            )
+            .unwrap(),
+            ActionCandidate::new(
+                1,
+                ActionId(400),
+                ActionKind::Interact,
+                CandidateActionFamily::Contact,
+                CandidateObservationRef::None,
+                ActionTarget::new(Some(WorldEntityId(2)), Some(Vec3f::new(0.0, 0.0, 1.0))),
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.8).unwrap(),
+                NormalizedScalar::new(0.0).unwrap(),
+                DurationTicks::new(4),
+                DurationTicks::new(4),
+            )
+            .unwrap(),
+        ],
+    )
+    .unwrap();
+    alife_core::PreActionSnapshot::from_heuristic_frame(
+        sequence_id,
+        perception,
         spec.clone(),
         genome.clone(),
         development(&genome),
         weight_split(&spec, &genome),
-        alife_core::Pose {
-            translation: Vec3f::new(cue, 0.0, 1.0),
-            rotation: alife_core::Quatf::IDENTITY,
-        },
-        Velocity::ZERO,
-        HomeostaticSnapshot::baseline(tick),
-        sensory(tick, organism_id, cue),
         alife_core::MemoryExpectancySnapshot::neutral(),
     )
     .unwrap()
@@ -439,7 +479,7 @@ fn invalid_creature_tick_and_schema_inputs_are_rejected() {
         MemoryQuery::from_pre_action(&invalid_schema, 16),
         Err(ScaffoldContractError::IncompatibleAbi {
             kind: SchemaKind::Experience,
-            expected: 1,
+            expected: 2,
             actual: 999,
         })
     );

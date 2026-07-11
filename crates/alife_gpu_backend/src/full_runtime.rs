@@ -743,6 +743,8 @@ pub fn post_seal_delta_batch_from_plasticity_report(
     report: &FullGpuRuntimePlasticityReport,
 ) -> Result<PostSealLifetimeDeltaBatch, ScaffoldContractError> {
     patch.validate_contract()?;
+    let pre_action = patch.pre_action();
+    let baseline = pre_action.heuristic_evidence()?;
     if !report.cpu_shadow_parity_passed
         || !report.genetic_fixed_unchanged
         || !report.lifetime_consolidated_unchanged
@@ -753,11 +755,12 @@ pub fn post_seal_delta_batch_from_plasticity_report(
     }
     PostSealLifetimeDeltaBatch::new(
         patch.header().organism_id,
-        patch.pre_action().brain_class_id,
-        patch.pre_action().brain_neuron_count,
-        patch.pre_action().max_active_synapses,
+        baseline.brain_class_id,
+        baseline.brain_neuron_count,
+        baseline.max_active_synapses,
         patch.header().world_tick,
         patch.header().sequence_id,
+        pre_action.frame_digest()?,
         PostSealLifetimeDeltaSourceKind::GpuCpuShadowGuarded,
         report.cpu_shadow_parity_passed,
         report.genetic_fixed_unchanged,

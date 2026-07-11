@@ -1,16 +1,18 @@
-//! v0 scaffold: causal three-phase ExperiencePatch runtime contract.
+//! Contract-only causal three-phase ExperiencePatch and policy-evidence records.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     ensure_current_version, validate_finite, validate_optional_target, ActionArbitrationTrace,
-    ActionCommand, ActionDecision, ActionDecisionStatus, ActionProposal, BrainClassId,
-    BrainClassSpec, BrainGenome, BrainScaleTier, ConceptCellId, Confidence, DevelopmentState,
-    DriveDelta, ExperienceSequenceId, GenomeId, HomeostaticDelta, HomeostaticSnapshot, LobeLayout,
-    MemoryId, NormalizedScalar, OrganismId, Pose, RankedActionProposal, RoutingMatrix,
-    ScaffoldContractError, SchemaKind, SchemaVersions, SensoryAbiVersion, SensorySnapshot,
-    SignedValence, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity, WeightSplitContract,
-    WorldEntityId,
+    ActionCandidate, ActionCommand, ActionDecision, ActionDecisionStatus, ActionProposal,
+    BodySnapshot, BrainClassId, BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily,
+    CandidateFeatureDigest, CandidateFeatureVector, CandidateObservationRef, ConceptCellId,
+    Confidence, DevelopmentState, DriveDelta, ExperienceSequenceId, GenomeId, HomeostaticDelta,
+    HomeostaticSnapshot, LobeLayout, MemoryId, NeuralActionSelection, NormalizedScalar, OrganismId,
+    PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash, PolicyBackend,
+    Pose, RankedActionProposal, RoutingMatrix, ScaffoldContractError, SchemaKind, SchemaVersions,
+    SensorProfile, SensoryAbiVersion, SensorySnapshot, SignedValence, TeacherPerceptionChannel,
+    Tick, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,12 +110,15 @@ impl Validate for MemoryExpectancySnapshot {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EvidenceKind {
+    NeuralClosedLoopGpu,
+    HeuristicBaseline,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PreActionSnapshot {
-    pub abi_version: u16,
-    pub organism_id: OrganismId,
-    pub sequence_id: ExperienceSequenceId,
-    pub tick: Tick,
+pub struct HeuristicPreActionEvidence {
+    pub baseline_schema_version: u16,
     pub brain_class_id: BrainClassId,
     pub brain_scale_tier: BrainScaleTier,
     pub brain_neuron_count: u32,
@@ -122,81 +127,29 @@ pub struct PreActionSnapshot {
     pub routing_schema_version: u16,
     pub lobe_layout: LobeLayout,
     pub routing_matrix: RoutingMatrix,
-    pub genome_id: GenomeId,
-    pub genome_schema_version: u16,
-    pub development_state: DevelopmentState,
     pub weight_split: WeightSplitContract,
-    pub sensory_abi_version: SensoryAbiVersion,
-    pub chemistry_schema_version: u16,
-    pub body_pose: Pose,
-    pub body_velocity: Velocity,
-    pub homeostasis: HomeostaticSnapshot,
-    pub sensory: SensorySnapshot,
     pub memory_expectancy: MemoryExpectancySnapshot,
 }
 
-impl PreActionSnapshot {
-    pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        organism_id: OrganismId,
-        sequence_id: ExperienceSequenceId,
-        tick: Tick,
-        brain_class: BrainClassSpec,
-        genome: BrainGenome,
-        development_state: DevelopmentState,
-        weight_split: WeightSplitContract,
-        body_pose: Pose,
-        body_velocity: Velocity,
-        homeostasis: HomeostaticSnapshot,
-        sensory: SensorySnapshot,
-        memory_expectancy: MemoryExpectancySnapshot,
-    ) -> Result<Self, ScaffoldContractError> {
-        let snapshot = Self {
-            abi_version: Self::ABI_VERSION,
-            organism_id,
-            sequence_id,
-            tick,
-            brain_class_id: brain_class.id,
-            brain_scale_tier: brain_class.tier,
-            brain_neuron_count: brain_class.neuron_count,
-            max_active_synapses: brain_class.max_active_synapses,
-            max_active_microtiles: brain_class.max_active_microtiles,
-            routing_schema_version: brain_class.routing_schema_version,
-            lobe_layout: brain_class.lobe_layout,
-            routing_matrix: brain_class.routing_matrix,
-            genome_id: genome.id,
-            genome_schema_version: genome.schema_version,
-            development_state,
-            weight_split,
-            sensory_abi_version: sensory.abi_version,
-            chemistry_schema_version: homeostasis.schema_version,
-            body_pose,
-            body_velocity,
-            homeostasis,
-            sensory,
-            memory_expectancy,
-        };
-        snapshot.validate_contract()?;
-        Ok(snapshot)
-    }
+impl HeuristicPreActionEvidence {
+    pub const SCHEMA_VERSION: u16 = 1;
 }
 
-impl Validate for PreActionSnapshot {
+impl Validate for HeuristicPreActionEvidence {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        ensure_current_version(SchemaKind::Experience, self.abi_version)?;
-        ensure_current_version(SchemaKind::SensoryAbi, self.sensory_abi_version.raw())?;
-        ensure_current_version(SchemaKind::Chemistry, self.chemistry_schema_version)?;
-        ensure_current_version(SchemaKind::Genome, self.genome_schema_version)?;
-        ensure_current_version(SchemaKind::NeuralProjection, self.routing_schema_version)?;
-        self.organism_id.validate()?;
-        self.sequence_id.validate()?;
+        if self.baseline_schema_version != Self::SCHEMA_VERSION {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         self.brain_class_id.validate()?;
-        self.genome_id.validate()?;
-        self.development_state.validate_contract()?;
+        ensure_current_version(SchemaKind::NeuralProjection, self.routing_schema_version)?;
+        self.lobe_layout
+            .validate_for_neuron_count(self.brain_neuron_count)?;
+        self.routing_matrix.validate_for_layout(&self.lobe_layout)?;
         self.weight_split.validate_contract()?;
-        if self.weight_split.genetic_fixed.descriptor.brain_class_id != self.brain_class_id
+        self.memory_expectancy.validate_contract()?;
+        if self.max_active_synapses == 0
+            || self.max_active_microtiles == 0
+            || self.weight_split.genetic_fixed.descriptor.brain_class_id != self.brain_class_id
             || self
                 .weight_split
                 .lifetime_consolidated
@@ -206,24 +159,293 @@ impl Validate for PreActionSnapshot {
             || self.weight_split.h_operational.descriptor.brain_class_id != self.brain_class_id
             || self.weight_split.h_shadow.descriptor.brain_class_id != self.brain_class_id
         {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-        self.lobe_layout
-            .validate_for_neuron_count(self.brain_neuron_count)?;
-        self.routing_matrix.validate_for_layout(&self.lobe_layout)?;
-        self.body_pose.validate()?;
-        self.body_velocity.validate()?;
-        self.homeostasis.validate_contract()?;
-        self.sensory.validate_contract()?;
-        self.memory_expectancy.validate_contract()?;
-        if self.homeostasis.tick != self.tick || self.sensory.tick != self.tick {
-            return Err(ScaffoldContractError::NonMonotonicTick);
-        }
-        if self.sensory.organism_id != self.organism_id {
-            return Err(ScaffoldContractError::MismatchedCreatureId);
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PreActionBrainEvidence {
+    NeuralClosedLoopGpu {
+        capacity_class_id: BrainClassId,
+        phenotype_hash: PhenotypeHash,
+        sensor_profile: SensorProfile,
+        base_digest: PerceptionBaseDigest,
+        frame_digest: PerceptionFrameDigest,
+    },
+    HeuristicBaseline {
+        baseline_schema_version: u16,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PreActionSnapshot {
+    pub abi_version: u16,
+    pub organism_id: OrganismId,
+    pub sequence_id: ExperienceSequenceId,
+    pub tick: Tick,
+    pub genome_id: GenomeId,
+    pub genome_schema_version: u16,
+    pub development_state: DevelopmentState,
+    pub brain_evidence: PreActionBrainEvidence,
+    perception: PerceptionFrame,
+    pub body: BodySnapshot,
+    pub homeostasis: HomeostaticSnapshot,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    heuristic_evidence: Option<HeuristicPreActionEvidence>,
+}
+
+impl PreActionSnapshot {
+    pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_neural_frame(
+        sequence_id: ExperienceSequenceId,
+        capacity_class_id: BrainClassId,
+        phenotype_hash: PhenotypeHash,
+        genome_id: GenomeId,
+        genome_schema_version: u16,
+        development_state: DevelopmentState,
+        perception: PerceptionFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        perception.validate_contract()?;
+        let snapshot = Self {
+            abi_version: Self::ABI_VERSION,
+            organism_id: perception.organism_id(),
+            sequence_id,
+            tick: perception.tick(),
+            genome_id,
+            genome_schema_version,
+            development_state,
+            brain_evidence: PreActionBrainEvidence::NeuralClosedLoopGpu {
+                capacity_class_id,
+                phenotype_hash,
+                sensor_profile: perception.sensor_profile(),
+                base_digest: perception.base_digest(),
+                frame_digest: perception.frame_digest(),
+            },
+            body: perception.body(),
+            homeostasis: *perception.homeostasis(),
+            perception,
+            heuristic_evidence: None,
+        };
+        snapshot.validate_contract()?;
+        Ok(snapshot)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_heuristic_frame(
+        sequence_id: ExperienceSequenceId,
+        perception: PerceptionFrame,
+        brain_class: BrainClassSpec,
+        genome: BrainGenome,
+        development_state: DevelopmentState,
+        weight_split: WeightSplitContract,
+        memory_expectancy: MemoryExpectancySnapshot,
+    ) -> Result<Self, ScaffoldContractError> {
+        let heuristic_evidence = HeuristicPreActionEvidence {
+            baseline_schema_version: HeuristicPreActionEvidence::SCHEMA_VERSION,
+            brain_class_id: brain_class.id,
+            brain_scale_tier: brain_class.tier,
+            brain_neuron_count: brain_class.neuron_count,
+            max_active_synapses: brain_class.max_active_synapses,
+            max_active_microtiles: brain_class.max_active_microtiles,
+            routing_schema_version: brain_class.routing_schema_version,
+            lobe_layout: brain_class.lobe_layout,
+            routing_matrix: brain_class.routing_matrix,
+            weight_split,
+            memory_expectancy,
+        };
+        Self::from_heuristic_components(
+            sequence_id,
+            perception,
+            genome.id,
+            genome.schema_version,
+            development_state,
+            heuristic_evidence,
+        )
+    }
+
+    fn from_heuristic_components(
+        sequence_id: ExperienceSequenceId,
+        perception: PerceptionFrame,
+        genome_id: GenomeId,
+        genome_schema_version: u16,
+        development_state: DevelopmentState,
+        heuristic_evidence: HeuristicPreActionEvidence,
+    ) -> Result<Self, ScaffoldContractError> {
+        perception.validate_contract()?;
+        heuristic_evidence.validate_contract()?;
+        let baseline_schema_version = heuristic_evidence.baseline_schema_version;
+        let snapshot = Self {
+            abi_version: Self::ABI_VERSION,
+            organism_id: perception.organism_id(),
+            sequence_id,
+            tick: perception.tick(),
+            genome_id,
+            genome_schema_version,
+            development_state,
+            brain_evidence: PreActionBrainEvidence::HeuristicBaseline {
+                baseline_schema_version,
+            },
+            body: perception.body(),
+            homeostasis: *perception.homeostasis(),
+            perception,
+            heuristic_evidence: Some(heuristic_evidence),
+        };
+        snapshot.validate_contract()?;
+        Ok(snapshot)
+    }
+
+    pub const fn perception(&self) -> &PerceptionFrame {
+        &self.perception
+    }
+
+    pub const fn body(&self) -> BodySnapshot {
+        self.body
+    }
+
+    pub const fn homeostasis(&self) -> &HomeostaticSnapshot {
+        &self.homeostasis
+    }
+
+    pub fn sensory(&self) -> &SensorySnapshot {
+        self.perception.sensory()
+    }
+
+    pub fn base_digest(&self) -> Result<PerceptionBaseDigest, ScaffoldContractError> {
+        self.validate_contract()?;
+        Ok(self.perception.base_digest())
+    }
+
+    pub fn frame_digest(&self) -> Result<PerceptionFrameDigest, ScaffoldContractError> {
+        self.validate_contract()?;
+        Ok(self.perception.frame_digest())
+    }
+
+    pub const fn evidence_kind(&self) -> EvidenceKind {
+        match self.brain_evidence {
+            PreActionBrainEvidence::NeuralClosedLoopGpu { .. } => EvidenceKind::NeuralClosedLoopGpu,
+            PreActionBrainEvidence::HeuristicBaseline { .. } => EvidenceKind::HeuristicBaseline,
+        }
+    }
+
+    pub const fn policy_backend(&self) -> PolicyBackend {
+        match self.evidence_kind() {
+            EvidenceKind::NeuralClosedLoopGpu => PolicyBackend::NeuralClosedLoopGpu,
+            EvidenceKind::HeuristicBaseline => PolicyBackend::HeuristicBaseline,
+        }
+    }
+
+    pub fn heuristic_evidence(&self) -> Result<&HeuristicPreActionEvidence, ScaffoldContractError> {
+        if !matches!(
+            self.brain_evidence,
+            PreActionBrainEvidence::HeuristicBaseline { .. }
+        ) {
+            return Err(ScaffoldContractError::EvidenceKindMismatch);
+        }
+        self.heuristic_evidence
+            .as_ref()
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)
+    }
+
+    pub fn brain_class_id(&self) -> Result<BrainClassId, ScaffoldContractError> {
+        match self.brain_evidence {
+            PreActionBrainEvidence::NeuralClosedLoopGpu {
+                capacity_class_id, ..
+            } => Ok(capacity_class_id),
+            PreActionBrainEvidence::HeuristicBaseline { .. } => {
+                Ok(self.heuristic_evidence()?.brain_class_id)
+            }
+        }
+    }
+}
+
+impl Validate for PreActionSnapshot {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        ensure_current_version(SchemaKind::Experience, self.abi_version)?;
+        ensure_current_version(SchemaKind::Genome, self.genome_schema_version)?;
+        self.organism_id.validate()?;
+        self.sequence_id.validate()?;
+        self.genome_id.validate()?;
+        self.development_state.validate_contract()?;
+        self.perception.validate_contract()?;
+        self.body.validate_contract()?;
+        self.homeostasis.validate_contract()?;
+        if self.development_state.genome_id != self.genome_id
+            || self.organism_id != self.perception.organism_id()
+            || self.tick != self.perception.tick()
+            || self.body != self.perception.body()
+            || self.homeostasis != *self.perception.homeostasis()
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        match self.brain_evidence {
+            PreActionBrainEvidence::NeuralClosedLoopGpu {
+                capacity_class_id,
+                sensor_profile,
+                base_digest,
+                frame_digest,
+                ..
+            } => {
+                capacity_class_id.validate()?;
+                if self.heuristic_evidence.is_some()
+                    || sensor_profile != self.perception.sensor_profile()
+                    || base_digest != self.perception.base_digest()
+                    || frame_digest != self.perception.frame_digest()
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+            }
+            PreActionBrainEvidence::HeuristicBaseline {
+                baseline_schema_version,
+            } => {
+                let evidence = self.heuristic_evidence()?;
+                evidence.validate_contract()?;
+                if baseline_schema_version != evidence.baseline_schema_version {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HeuristicDecisionEvidence {
+    pub baseline_schema_version: u16,
+    pub proposals: Vec<ActionProposal>,
+    pub rejected_top_proposal: Option<RankedActionProposal>,
+    pub ranked_top_proposals: Vec<RankedActionProposal>,
+    pub arbitration_trace: ActionArbitrationTrace,
+    pub status: ActionDecisionStatus,
+}
+
+impl HeuristicDecisionEvidence {
+    pub const SCHEMA_VERSION: u16 = 1;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct NeuralDecisionEvidence {
+    pub phenotype_hash: PhenotypeHash,
+    pub dispatch_generation: u64,
+    pub base_digest: PerceptionBaseDigest,
+    pub frame_digest: PerceptionFrameDigest,
+    pub active_activation_side: u8,
+    pub candidate_index: u16,
+    pub action_id: crate::ActionId,
+    pub action_family: CandidateActionFamily,
+    pub candidate_feature_digest: CandidateFeatureDigest,
+    pub logit: f32,
+    pub confidence: Confidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)] // The unboxed public shape is the versioned Task 2 ABI.
+pub enum DecisionEvidence {
+    NeuralClosedLoopGpu(NeuralDecisionEvidence),
+    HeuristicBaseline(HeuristicDecisionEvidence),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -233,13 +455,9 @@ pub struct DecisionSnapshot {
     pub sequence_id: ExperienceSequenceId,
     pub decision_tick: Tick,
     pub action_abi_version: u16,
-    pub proposals: Vec<ActionProposal>,
     pub selected_action: ActionCommand,
-    pub rejected_top_proposal: Option<RankedActionProposal>,
-    pub ranked_top_proposals: Vec<RankedActionProposal>,
-    pub arbitration_trace: ActionArbitrationTrace,
     pub confidence: Confidence,
-    pub status: ActionDecisionStatus,
+    pub evidence: DecisionEvidence,
 }
 
 impl DecisionSnapshot {
@@ -257,16 +475,114 @@ impl DecisionSnapshot {
             sequence_id,
             decision_tick,
             action_abi_version: ActionCommand::ABI_VERSION,
-            proposals,
             confidence: decision.selected.confidence,
             selected_action: decision.selected,
-            rejected_top_proposal: decision.rejected_top_proposal,
-            ranked_top_proposals: decision.ranked_top_proposals,
-            arbitration_trace: decision.trace,
-            status: decision.status,
+            evidence: DecisionEvidence::HeuristicBaseline(HeuristicDecisionEvidence {
+                baseline_schema_version: HeuristicDecisionEvidence::SCHEMA_VERSION,
+                proposals,
+                rejected_top_proposal: decision.rejected_top_proposal,
+                ranked_top_proposals: decision.ranked_top_proposals,
+                arbitration_trace: decision.trace,
+                status: decision.status,
+            }),
         };
         snapshot.validate_contract()?;
         Ok(snapshot)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_neural_selection(
+        sequence_id: ExperienceSequenceId,
+        phenotype_hash: PhenotypeHash,
+        dispatch_generation: u64,
+        active_activation_side: u8,
+        frame: &PerceptionFrame,
+        selection: NeuralActionSelection,
+        command: ActionCommand,
+    ) -> Result<Self, ScaffoldContractError> {
+        frame.validate_contract()?;
+        selection.validate_contract()?;
+        sequence_id.validate()?;
+        command.validate_contract()?;
+        if dispatch_generation == 0 || active_activation_side > 1 {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let candidate = frame
+            .candidates()
+            .get(usize::from(selection.candidate_index))
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        if candidate.candidate_index != selection.candidate_index
+            || command.organism_id != frame.organism_id()
+            || command.action_id != candidate.action_id
+            || command.kind != candidate.kind
+            || command.target_entity != candidate.target.entity
+            || !same_optional_vec3_bits(command.target_position, candidate.target.position)
+            || command.intensity.raw() != 1.0
+            || command.duration_ticks != candidate.min_duration
+            || !same_f32_bits(command.confidence.raw(), selection.confidence.raw())
+            || command.source_mask != 0
+            || command.teacher_lesson.is_some()
+            || command.motor_payload.is_some()
+            || command.arbitration_trace.is_some()
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let snapshot = Self {
+            abi_version: Self::ABI_VERSION,
+            organism_id: frame.organism_id(),
+            sequence_id,
+            decision_tick: frame.tick(),
+            action_abi_version: ActionCommand::ABI_VERSION,
+            selected_action: command,
+            confidence: selection.confidence,
+            evidence: DecisionEvidence::NeuralClosedLoopGpu(NeuralDecisionEvidence {
+                phenotype_hash,
+                dispatch_generation,
+                base_digest: frame.base_digest(),
+                frame_digest: frame.frame_digest(),
+                active_activation_side,
+                candidate_index: selection.candidate_index,
+                action_id: candidate.action_id,
+                action_family: candidate.family,
+                candidate_feature_digest: candidate.feature_digest(),
+                logit: selection.logit,
+                confidence: selection.confidence,
+            }),
+        };
+        snapshot.validate_contract()?;
+        Ok(snapshot)
+    }
+
+    pub const fn evidence_kind(&self) -> EvidenceKind {
+        match self.evidence {
+            DecisionEvidence::NeuralClosedLoopGpu(_) => EvidenceKind::NeuralClosedLoopGpu,
+            DecisionEvidence::HeuristicBaseline(_) => EvidenceKind::HeuristicBaseline,
+        }
+    }
+
+    pub const fn policy_backend(&self) -> PolicyBackend {
+        match self.evidence_kind() {
+            EvidenceKind::NeuralClosedLoopGpu => PolicyBackend::NeuralClosedLoopGpu,
+            EvidenceKind::HeuristicBaseline => PolicyBackend::HeuristicBaseline,
+        }
+    }
+
+    pub fn neural_evidence(&self) -> Result<&NeuralDecisionEvidence, ScaffoldContractError> {
+        match &self.evidence {
+            DecisionEvidence::NeuralClosedLoopGpu(evidence) => Ok(evidence),
+            DecisionEvidence::HeuristicBaseline(_) => {
+                Err(ScaffoldContractError::EvidenceKindMismatch)
+            }
+        }
+    }
+
+    pub fn heuristic_evidence(&self) -> Result<&HeuristicDecisionEvidence, ScaffoldContractError> {
+        match &self.evidence {
+            DecisionEvidence::HeuristicBaseline(evidence) => Ok(evidence),
+            DecisionEvidence::NeuralClosedLoopGpu(_) => {
+                Err(ScaffoldContractError::EvidenceKindMismatch)
+            }
+        }
     }
 }
 
@@ -281,14 +597,40 @@ impl Validate for DecisionSnapshot {
             return Err(ScaffoldContractError::MismatchedCreatureId);
         }
         Confidence::new(self.confidence.raw())?;
-        validate_action_trace(&self.arbitration_trace)?;
-        validate_action_decision_consistency(self)?;
-        validate_action_proposals(&self.proposals)?;
-        if let Some(proposal) = self.rejected_top_proposal {
-            validate_ranked_proposal(proposal)?;
-        }
-        for proposal in &self.ranked_top_proposals {
-            validate_ranked_proposal(*proposal)?;
+        match &self.evidence {
+            DecisionEvidence::HeuristicBaseline(evidence) => {
+                if evidence.baseline_schema_version != HeuristicDecisionEvidence::SCHEMA_VERSION {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                validate_action_trace(&evidence.arbitration_trace)?;
+                validate_action_decision_consistency(self, evidence)?;
+                validate_action_proposals(&evidence.proposals)?;
+                if let Some(proposal) = evidence.rejected_top_proposal {
+                    validate_ranked_proposal(proposal)?;
+                }
+                for proposal in &evidence.ranked_top_proposals {
+                    validate_ranked_proposal(*proposal)?;
+                }
+            }
+            DecisionEvidence::NeuralClosedLoopGpu(evidence) => {
+                evidence.action_id.validate()?;
+                Confidence::new(evidence.confidence.raw())?;
+                if evidence.dispatch_generation == 0
+                    || evidence.active_activation_side > 1
+                    || !evidence.logit.is_finite()
+                    || evidence.action_id != self.selected_action.action_id
+                    || !evidence
+                        .action_family
+                        .is_compatible_with(self.selected_action.kind)
+                    || !same_f32_bits(evidence.confidence.raw(), self.confidence.raw())
+                    || !same_f32_bits(
+                        evidence.confidence.raw(),
+                        self.selected_action.confidence.raw(),
+                    )
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+            }
         }
         Ok(())
     }
@@ -508,6 +850,7 @@ impl ExperiencePatchBuilder {
         validate_same_sequence(self.sequence_id, decision.sequence_id)?;
         validate_same_creature(pre_action.organism_id, decision.organism_id)?;
         Tick::validate_monotonic(pre_action.tick, decision.decision_tick)?;
+        validate_decision_binding(pre_action, &decision)?;
         self.decision = Some(decision);
         self.next_phase = ExperiencePatchPhase::PostActionOutcome;
         Ok(self)
@@ -564,7 +907,7 @@ impl ExperiencePatchBuilder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ExperiencePatch {
     header: ExperiencePatchHeader,
     pre_action: PreActionSnapshot,
@@ -620,10 +963,227 @@ impl Validate for ExperiencePatch {
         validate_same_creature(self.header.organism_id, self.pre_action.organism_id)?;
         validate_same_creature(self.header.organism_id, self.decision.organism_id)?;
         validate_same_creature(self.header.organism_id, self.outcome.organism_id)?;
+        if self.header.world_tick != self.pre_action.tick {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
         Tick::validate_monotonic(self.pre_action.tick, self.decision.decision_tick)?;
         Tick::validate_monotonic(self.decision.decision_tick, self.outcome.outcome_tick)?;
+        validate_decision_binding(&self.pre_action, &self.decision)?;
         Ok(())
     }
+}
+
+#[derive(Deserialize)]
+struct CurrentExperiencePatchWire {
+    header: ExperiencePatchHeader,
+    pre_action: PreActionSnapshot,
+    decision: DecisionSnapshot,
+    outcome: PostActionOutcome,
+}
+
+#[derive(Deserialize)]
+struct LegacyPreActionSnapshotV1 {
+    abi_version: u16,
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    tick: Tick,
+    brain_class_id: BrainClassId,
+    brain_scale_tier: BrainScaleTier,
+    brain_neuron_count: u32,
+    max_active_synapses: u32,
+    max_active_microtiles: u32,
+    routing_schema_version: u16,
+    lobe_layout: LobeLayout,
+    routing_matrix: RoutingMatrix,
+    genome_id: GenomeId,
+    genome_schema_version: u16,
+    development_state: DevelopmentState,
+    weight_split: WeightSplitContract,
+    sensory_abi_version: SensoryAbiVersion,
+    chemistry_schema_version: u16,
+    body_pose: Pose,
+    body_velocity: Velocity,
+    homeostasis: HomeostaticSnapshot,
+    sensory: SensorySnapshot,
+    memory_expectancy: MemoryExpectancySnapshot,
+}
+
+#[derive(Deserialize)]
+struct LegacyDecisionSnapshotV1 {
+    abi_version: u16,
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    decision_tick: Tick,
+    action_abi_version: u16,
+    proposals: Vec<ActionProposal>,
+    selected_action: ActionCommand,
+    rejected_top_proposal: Option<RankedActionProposal>,
+    ranked_top_proposals: Vec<RankedActionProposal>,
+    arbitration_trace: ActionArbitrationTrace,
+    confidence: Confidence,
+    status: ActionDecisionStatus,
+}
+
+#[derive(Deserialize)]
+struct LegacyExperiencePatchV1 {
+    header: ExperiencePatchHeader,
+    pre_action: LegacyPreActionSnapshotV1,
+    decision: LegacyDecisionSnapshotV1,
+    outcome: PostActionOutcome,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ExperiencePatchWire {
+    Current(Box<CurrentExperiencePatchWire>),
+    LegacyV1(Box<LegacyExperiencePatchV1>),
+}
+
+impl<'de> Deserialize<'de> for ExperiencePatch {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        match ExperiencePatchWire::deserialize(deserializer)? {
+            ExperiencePatchWire::Current(wire) => Ok(Self {
+                header: wire.header,
+                pre_action: wire.pre_action,
+                decision: wire.decision,
+                outcome: wire.outcome,
+            }),
+            ExperiencePatchWire::LegacyV1(wire) => {
+                Self::migrate_legacy_baseline_v1(*wire).map_err(serde::de::Error::custom)
+            }
+        }
+    }
+}
+
+impl ExperiencePatch {
+    fn migrate_legacy_baseline_v1(
+        mut legacy: LegacyExperiencePatchV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        if legacy.header.abi_version != 1
+            || legacy.pre_action.abi_version != 1
+            || legacy.decision.abi_version != 1
+            || legacy.outcome.abi_version != 1
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        ensure_current_version(
+            SchemaKind::SensoryAbi,
+            legacy.pre_action.sensory_abi_version.raw(),
+        )?;
+        ensure_current_version(
+            SchemaKind::Chemistry,
+            legacy.pre_action.chemistry_schema_version,
+        )?;
+        ensure_current_version(SchemaKind::ActionAbi, legacy.decision.action_abi_version)?;
+
+        let candidates = legacy_candidates(&legacy.decision)?;
+        let perception = PerceptionFrame::new(
+            legacy.pre_action.organism_id,
+            legacy.pre_action.tick,
+            SensorProfile::PrivilegedAffordanceV1,
+            legacy.pre_action.sensory,
+            BodySnapshot {
+                pose: legacy.pre_action.body_pose,
+                velocity: legacy.pre_action.body_velocity,
+            },
+            legacy.pre_action.homeostasis,
+            candidates,
+        )?;
+        let heuristic_pre_action = HeuristicPreActionEvidence {
+            baseline_schema_version: HeuristicPreActionEvidence::SCHEMA_VERSION,
+            brain_class_id: legacy.pre_action.brain_class_id,
+            brain_scale_tier: legacy.pre_action.brain_scale_tier,
+            brain_neuron_count: legacy.pre_action.brain_neuron_count,
+            max_active_synapses: legacy.pre_action.max_active_synapses,
+            max_active_microtiles: legacy.pre_action.max_active_microtiles,
+            routing_schema_version: legacy.pre_action.routing_schema_version,
+            lobe_layout: legacy.pre_action.lobe_layout,
+            routing_matrix: legacy.pre_action.routing_matrix,
+            weight_split: legacy.pre_action.weight_split,
+            memory_expectancy: legacy.pre_action.memory_expectancy,
+        };
+        let pre_action = PreActionSnapshot::from_heuristic_components(
+            legacy.pre_action.sequence_id,
+            perception,
+            legacy.pre_action.genome_id,
+            legacy.pre_action.genome_schema_version,
+            legacy.pre_action.development_state,
+            heuristic_pre_action,
+        )?;
+        let decision = DecisionSnapshot {
+            abi_version: DecisionSnapshot::ABI_VERSION,
+            organism_id: legacy.decision.organism_id,
+            sequence_id: legacy.decision.sequence_id,
+            decision_tick: legacy.decision.decision_tick,
+            action_abi_version: legacy.decision.action_abi_version,
+            selected_action: legacy.decision.selected_action,
+            confidence: legacy.decision.confidence,
+            evidence: DecisionEvidence::HeuristicBaseline(HeuristicDecisionEvidence {
+                baseline_schema_version: HeuristicDecisionEvidence::SCHEMA_VERSION,
+                proposals: legacy.decision.proposals,
+                rejected_top_proposal: legacy.decision.rejected_top_proposal,
+                ranked_top_proposals: legacy.decision.ranked_top_proposals,
+                arbitration_trace: legacy.decision.arbitration_trace,
+                status: legacy.decision.status,
+            }),
+        };
+        legacy.header.abi_version = ExperiencePatchHeader::ABI_VERSION;
+        legacy.outcome.abi_version = PostActionOutcome::ABI_VERSION;
+        let patch = Self {
+            header: legacy.header,
+            pre_action,
+            decision,
+            outcome: legacy.outcome,
+        };
+        patch.validate_contract()?;
+        Ok(patch)
+    }
+}
+
+fn legacy_candidates(
+    legacy: &LegacyDecisionSnapshotV1,
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    let mut candidates = Vec::with_capacity(legacy.proposals.len().max(1));
+    for (index, proposal) in legacy.proposals.iter().enumerate() {
+        let duration = if proposal.action_id == legacy.selected_action.action_id {
+            legacy.selected_action.duration_ticks
+        } else {
+            crate::DurationTicks::new(1)
+        };
+        candidates.push(ActionCandidate::new(
+            u16::try_from(index).map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+            proposal.action_id,
+            proposal.kind,
+            CandidateActionFamily::baseline_for_kind(proposal.kind),
+            CandidateObservationRef::None,
+            proposal.target,
+            CandidateFeatureVector::zero(),
+            proposal.confidence,
+            NormalizedScalar::new(0.0)?,
+            duration,
+            duration,
+        )?);
+    }
+    if candidates.is_empty() {
+        let command = legacy.selected_action;
+        candidates.push(ActionCandidate::new(
+            0,
+            command.action_id,
+            command.kind,
+            CandidateActionFamily::baseline_for_kind(command.kind),
+            CandidateObservationRef::None,
+            crate::ActionTarget::new(command.target_entity, command.target_position),
+            CandidateFeatureVector::zero(),
+            command.confidence,
+            NormalizedScalar::new(0.0)?,
+            command.duration_ticks,
+            command.duration_ticks,
+        )?);
+    }
+    Ok(candidates)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -675,26 +1235,88 @@ fn validate_same_creature(
     }
 }
 
+fn validate_decision_binding(
+    pre_action: &PreActionSnapshot,
+    decision: &DecisionSnapshot,
+) -> Result<(), ScaffoldContractError> {
+    if pre_action.policy_backend() != decision.policy_backend() {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    match (&pre_action.brain_evidence, &decision.evidence) {
+        (
+            PreActionBrainEvidence::NeuralClosedLoopGpu {
+                phenotype_hash,
+                base_digest,
+                frame_digest,
+                ..
+            },
+            DecisionEvidence::NeuralClosedLoopGpu(evidence),
+        ) => {
+            let frame = pre_action.perception();
+            let candidate = frame
+                .candidates()
+                .get(usize::from(evidence.candidate_index))
+                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+            if pre_action.tick != decision.decision_tick
+                || phenotype_hash != &evidence.phenotype_hash
+                || base_digest != &evidence.base_digest
+                || frame_digest != &evidence.frame_digest
+                || *base_digest != frame.base_digest()
+                || *frame_digest != frame.frame_digest()
+                || candidate.candidate_index != evidence.candidate_index
+                || candidate.action_id != evidence.action_id
+                || candidate.family != evidence.action_family
+                || candidate.feature_digest() != evidence.candidate_feature_digest
+                || candidate.action_id != decision.selected_action.action_id
+                || candidate.kind != decision.selected_action.kind
+                || candidate.target.entity != decision.selected_action.target_entity
+                || !same_optional_vec3_bits(
+                    candidate.target.position,
+                    decision.selected_action.target_position,
+                )
+                || decision.selected_action.intensity.raw() != 1.0
+                || decision.selected_action.duration_ticks != candidate.min_duration
+                || decision.selected_action.source_mask != 0
+                || decision.selected_action.teacher_lesson.is_some()
+                || decision.selected_action.motor_payload.is_some()
+                || decision.selected_action.arbitration_trace.is_some()
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+        (
+            PreActionBrainEvidence::HeuristicBaseline { .. },
+            DecisionEvidence::HeuristicBaseline(_),
+        ) => {
+            pre_action.heuristic_evidence()?.validate_contract()?;
+            decision.heuristic_evidence()?;
+        }
+        _ => return Err(ScaffoldContractError::EvidenceKindMismatch),
+    }
+    Ok(())
+}
+
 fn validate_action_decision_consistency(
     snapshot: &DecisionSnapshot,
+    evidence: &HeuristicDecisionEvidence,
 ) -> Result<(), ScaffoldContractError> {
     let trace_ref = snapshot
         .selected_action
         .arbitration_trace
         .ok_or(ScaffoldContractError::InvalidActionDecision)?;
-    if trace_ref != snapshot.arbitration_trace.trace_ref {
+    if trace_ref != evidence.arbitration_trace.trace_ref {
         return Err(ScaffoldContractError::InvalidActionDecision);
     }
-    match snapshot.status {
+    match evidence.status {
         ActionDecisionStatus::Selected => {
-            if snapshot.arbitration_trace.wta_result.selected_action_id
+            if evidence.arbitration_trace.wta_result.selected_action_id
                 != Some(snapshot.selected_action.action_id)
             {
                 return Err(ScaffoldContractError::InvalidActionDecision);
             }
         }
         ActionDecisionStatus::FallbackSelected => {
-            if snapshot
+            if evidence
                 .arbitration_trace
                 .wta_result
                 .selected_action_id
@@ -705,6 +1327,22 @@ fn validate_action_decision_consistency(
         }
     }
     Ok(())
+}
+
+fn same_f32_bits(left: f32, right: f32) -> bool {
+    left.to_bits() == right.to_bits()
+}
+
+fn same_optional_vec3_bits(left: Option<Vec3f>, right: Option<Vec3f>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => {
+            same_f32_bits(left.x, right.x)
+                && same_f32_bits(left.y, right.y)
+                && same_f32_bits(left.z, right.z)
+        }
+        _ => false,
+    }
 }
 
 fn validate_action_trace(trace: &ActionArbitrationTrace) -> Result<(), ScaffoldContractError> {

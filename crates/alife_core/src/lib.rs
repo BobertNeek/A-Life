@@ -16,6 +16,8 @@ pub mod math;
 pub mod memory;
 pub mod neural;
 pub mod packed_log;
+pub mod perception;
+pub mod phenotype;
 pub mod post_seal_lifetime;
 pub mod reference_brain;
 pub mod routing;
@@ -47,10 +49,11 @@ pub use chemistry::{
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
 pub use experience::{
-    ConceptHint, DecisionSnapshot, ExperiencePatch, ExperiencePatchBuilder, ExperiencePatchHeader,
-    ExperiencePatchPhase, ExperiencePatchView, MemoryExpectancySnapshot, MemoryHint,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
-    TeacherFeedbackObservation,
+    ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
+    ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,
+    HeuristicDecisionEvidence, HeuristicPreActionEvidence, MemoryExpectancySnapshot, MemoryHint,
+    NeuralDecisionEvidence, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
+    PreActionBrainEvidence, PreActionSnapshot, TeacherFeedbackObservation,
 };
 pub use genome::{
     AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
@@ -101,6 +104,14 @@ pub use packed_log::{
     PACKED_FLAG_HAS_TEACHER_LESSON, PACKED_FLAG_SUCCESS, PACKED_HORMONE_SUMMARY_CHANNELS,
     PACKED_LOG_DEFAULT_SIDE_BUFFER_CAPACITY_RECORDS, PACKED_SIDE_BUFFER_GROUP_COUNT,
 };
+pub use perception::{
+    ActionCandidate, BodySnapshot, CandidateActionFamily, CandidateFeatureDigest,
+    CandidateFeatureVector, CandidateObservationRef, NeuralActionSelection, PerceptionBaseDigest,
+    PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind, PerceptionFrame,
+    PerceptionFrameDigest, PerceptionFrameDraft, PolicyBackend, SensorProfile,
+    CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
+};
+pub use phenotype::PhenotypeHash;
 pub use post_seal_lifetime::{
     PostSealHShadowDeltaTarget, PostSealLearningToken, PostSealLifetimeDeltaApplication,
     PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, PostSealLifetimeDeltaRecord,
