@@ -209,7 +209,7 @@ fn rich_draft() -> PerceptionFrameDraft {
 fn perception_digest_golden_vectors_are_stable() {
     let draft = rich_draft();
     assert_eq!(
-        draft.candidates()[1].feature_digest(),
+        draft.candidates()[1].feature_digest().unwrap(),
         CandidateFeatureDigest([0x4fa6_cef2_258f_c5f4, 0x01d1_f060_babb_702f])
     );
     assert_eq!(

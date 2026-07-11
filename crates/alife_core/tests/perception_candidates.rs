@@ -3,8 +3,8 @@ use alife_core::{
     CandidateFeatureVector, CandidateObservationRef, Confidence, DurationTicks,
     HomeostaticSnapshot, NormalizedScalar, OrganismId, PerceptionContextBlock,
     PerceptionContextKind, PerceptionFrame, PerceptionFrameDraft, PolicyBackend, Pose,
-    SensorProfile, SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity, WorldEntityId,
-    MAX_ACTION_CANDIDATES,
+    ScaffoldContractError, SensorProfile, SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity,
+    WorldEntityId, MAX_ACTION_CANDIDATES,
 };
 
 fn organism() -> OrganismId {
@@ -148,6 +148,20 @@ fn candidate_validation_rejects_duplicate_indices_and_non_finite_features() {
 }
 
 #[test]
+fn invalid_candidate_feature_digest_returns_typed_error_without_panicking() {
+    let mut invalid = candidate(0, 101, ActionKind::Move, CandidateActionFamily::Approach);
+    invalid.features.0[0] = f32::NAN;
+
+    let digest = std::panic::catch_unwind(|| invalid.feature_digest());
+
+    assert!(digest.is_ok(), "invalid public candidate must not panic");
+    assert!(matches!(
+        digest.unwrap(),
+        Err(ScaffoldContractError::InvalidActionCandidate)
+    ));
+}
+
+#[test]
 fn frame_validation_enforces_bounds_identity_and_family_compatibility() {
     let tick = Tick::new(7);
     let body = BodySnapshot {
@@ -287,8 +301,8 @@ fn candidate_feature_digest_excludes_transport_entity_but_frame_digest_binds_it(
     .unwrap();
 
     assert_eq!(
-        first.candidates()[1].feature_digest(),
-        changed.candidates()[1].feature_digest()
+        first.candidates()[1].feature_digest().unwrap(),
+        changed.candidates()[1].feature_digest().unwrap()
     );
     assert_ne!(first.base_digest(), changed.base_digest());
     assert_ne!(first.frame_digest(), changed.frame_digest());

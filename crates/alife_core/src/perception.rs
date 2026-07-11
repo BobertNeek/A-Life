@@ -232,11 +232,11 @@ impl ActionCandidate {
         self.validate_contract()
     }
 
-    pub fn feature_digest(self) -> CandidateFeatureDigest {
+    pub fn feature_digest(self) -> Result<CandidateFeatureDigest, ScaffoldContractError> {
+        self.validate_contract()?;
         let mut builder = CanonicalDigestBuilder::new(CANDIDATE_FEATURE_DOMAIN);
-        encode_candidate_feature(&mut builder, &self)
-            .expect("validated action candidates have canonical feature fields");
-        CandidateFeatureDigest(builder.finish128())
+        encode_candidate_feature(&mut builder, &self)?;
+        Ok(CandidateFeatureDigest(builder.finish128()))
     }
 
     pub fn to_command(

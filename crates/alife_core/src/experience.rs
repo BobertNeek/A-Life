@@ -534,7 +534,7 @@ impl DecisionSnapshot {
                 candidate_index: selection.candidate_index,
                 action_id: candidate.action_id,
                 action_family: candidate.family,
-                candidate_feature_digest: candidate.feature_digest(),
+                candidate_feature_digest: candidate.feature_digest()?,
                 logit: selection.logit,
                 confidence: selection.confidence,
             }),
@@ -1318,7 +1318,7 @@ fn validate_decision_binding(
                 || candidate.candidate_index != evidence.candidate_index
                 || candidate.action_id != evidence.action_id
                 || candidate.family != evidence.action_family
-                || candidate.feature_digest() != evidence.candidate_feature_digest
+                || candidate.feature_digest()? != evidence.candidate_feature_digest
                 || candidate.action_id != decision.selected_action.action_id
                 || candidate.kind != decision.selected_action.kind
                 || candidate.target.entity != decision.selected_action.target_entity
