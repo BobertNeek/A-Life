@@ -378,12 +378,14 @@ impl ScenarioAssertions {
             let selected = patch.decision().selected_action.action_id;
             let selected_proposal = patch
                 .decision()
+                .heuristic_evidence()
+                .expect("scenario patches use heuristic baseline decisions")
                 .proposals
                 .iter()
                 .find(|proposal| proposal.action_id == selected)
                 .expect("selected proposal exists");
-            assert!(patch.pre_action().homeostasis.drives.hunger > 0.5);
-            assert!(patch.pre_action().sensory.channels.visual_affordance[0] > 0.0);
+            assert!(patch.pre_action().homeostasis().drives.hunger > 0.5);
+            assert!(patch.pre_action().sensory().channels.visual_affordance[0] > 0.0);
             assert!(selected_proposal.salience.raw() > 0.0);
             assert!(selected_proposal
                 .score_bias
@@ -392,7 +394,7 @@ impl ScenarioAssertions {
         if let Some(token_id) = expected.patch.requires_word_token {
             assert!(patch
                 .pre_action()
-                .sensory
+                .sensory()
                 .language_context
                 .heard_tokens
                 .iter()
@@ -403,14 +405,14 @@ impl ScenarioAssertions {
             assert_eq!(
                 patch
                     .pre_action()
-                    .sensory
+                    .sensory()
                     .language_context
                     .teacher_channel_marker,
                 Some(channel)
             );
             assert!(patch
                 .pre_action()
-                .sensory
+                .sensory()
                 .language_context
                 .heard_tokens
                 .iter()
@@ -421,7 +423,7 @@ impl ScenarioAssertions {
         if expected.patch.requires_social_context {
             assert!(patch
                 .pre_action()
-                .sensory
+                .sensory()
                 .social_context
                 .nearest_agents
                 .iter()
@@ -430,8 +432,8 @@ impl ScenarioAssertions {
                 .is_some());
         }
         if expected.patch.requires_no_hidden_vectors {
-            assert!(patch.pre_action().sensory.semantic_context.is_none());
-            assert!(patch.pre_action().sensory.gaussian_context.is_none());
+            assert!(patch.pre_action().sensory().semantic_context.is_none());
+            assert!(patch.pre_action().sensory().gaussian_context.is_none());
         }
 
         Self::assert_memory_expectations(&expected.memory, run);
@@ -465,21 +467,20 @@ impl ScenarioAssertions {
     #[track_caller]
     pub fn assert_selected_action_came_from_arbitration(patch: &ExperiencePatch) {
         let selected_id = patch.decision().selected_action.action_id;
+        let evidence = patch
+            .decision()
+            .heuristic_evidence()
+            .expect("scenario patches use heuristic baseline decisions");
         assert!(
-            patch
-                .decision()
+            evidence
                 .proposals
                 .iter()
                 .any(|proposal| proposal.action_id == selected_id)
-                || patch.decision().status == alife_core::ActionDecisionStatus::FallbackSelected,
+                || evidence.status == alife_core::ActionDecisionStatus::FallbackSelected,
             "selected action must come from supplied proposals or the configured fallback"
         );
         assert_eq!(
-            patch
-                .decision()
-                .arbitration_trace
-                .wta_result
-                .selected_action_id,
+            evidence.arbitration_trace.wta_result.selected_action_id,
             Some(selected_id)
         );
     }
@@ -549,17 +550,21 @@ impl ScenarioAssertions {
                 .any(|record| record.curiosity_bias.raw() > 0.0));
         }
         if expected.require_bias_only_recall {
-            assert!(run.patches.iter().any(|patch| patch
-                .pre_action()
-                .memory_expectancy
-                .danger_bias
-                .raw()
-                > 0.0
-                || patch.pre_action().memory_expectancy.salience_hint.raw() > 0.0));
+            assert!(run.patches.iter().any(|patch| {
+                let memory = &patch
+                    .pre_action()
+                    .heuristic_evidence()
+                    .expect("scenario patches use heuristic baseline evidence")
+                    .memory_expectancy;
+                memory.danger_bias.raw() > 0.0 || memory.salience_hint.raw() > 0.0
+            }));
             for patch in &run.patches {
-                Self::assert_memory_expectancy_snapshot_is_bias_only(
-                    &patch.pre_action().memory_expectancy,
-                );
+                let memory = &patch
+                    .pre_action()
+                    .heuristic_evidence()
+                    .expect("scenario patches use heuristic baseline evidence")
+                    .memory_expectancy;
+                Self::assert_memory_expectancy_snapshot_is_bias_only(memory);
             }
         }
     }
@@ -699,6 +704,11 @@ fn run_scenario(fixture: &ScenarioFixture) -> Result<ScenarioRun, ScaffoldContra
 
 impl ScenarioPatchSummary {
     fn from_patch(patch: &ExperiencePatch) -> Self {
+        let memory = &patch
+            .pre_action()
+            .heuristic_evidence()
+            .expect("scenario patches use heuristic baseline evidence")
+            .memory_expectancy;
         Self {
             tick: patch.pre_action().tick.raw(),
             outcome_tick: patch.outcome().outcome_tick.raw(),
@@ -716,10 +726,8 @@ impl ScenarioPatchSummary {
             frustration_milli: milli_unit(patch.outcome().frustration_delta.raw()),
             prediction_error_milli: milli_unit(patch.outcome().prediction_error.raw()),
             contradiction: patch.outcome().contradiction_observed,
-            memory_danger_milli: milli_unit(patch.pre_action().memory_expectancy.danger_bias.raw()),
-            memory_salience_milli: milli_unit(
-                patch.pre_action().memory_expectancy.salience_hint.raw(),
-            ),
+            memory_danger_milli: milli_unit(memory.danger_bias.raw()),
+            memory_salience_milli: milli_unit(memory.salience_hint.raw()),
         }
     }
 }

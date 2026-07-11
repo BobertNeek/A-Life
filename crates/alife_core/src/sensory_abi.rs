@@ -392,13 +392,14 @@ impl Validate for ContextStreams {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TeacherPerceptionChannel {
-    Hearing,
-    Vision,
-    Writing,
-    Gesture,
-    Object,
+    Hearing = 0,
+    Vision = 1,
+    Writing = 2,
+    Gesture = 3,
+    Object = 4,
 }
 
 impl TeacherPerceptionChannel {
@@ -409,6 +410,21 @@ impl TeacherPerceptionChannel {
         TeacherPerceptionChannel::Gesture,
         TeacherPerceptionChannel::Object,
     ];
+
+    pub const fn raw(self) -> u8 {
+        self as u8
+    }
+
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Hearing),
+            1 => Ok(Self::Vision),
+            2 => Ok(Self::Writing),
+            3 => Ok(Self::Gesture),
+            4 => Ok(Self::Object),
+            _ => Err(ScaffoldContractError::InvalidPerceptionFrame),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

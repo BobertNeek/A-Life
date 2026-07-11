@@ -4,6 +4,7 @@ pub mod action;
 pub mod action_abi;
 pub mod adapter;
 pub mod brain_class;
+pub mod canonical_digest;
 pub mod chemistry;
 pub mod diagnostics;
 pub mod error;
@@ -40,6 +41,7 @@ pub use action::{
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
 pub use brain_class::{BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier};
+pub use canonical_digest::CanonicalDigestBuilder;
 pub use chemistry::{
     ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta, EndocrineProfile,
     EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand, HomeostaticDelta,

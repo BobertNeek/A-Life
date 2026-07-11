@@ -279,7 +279,7 @@ impl MemoryRecord {
             social_trust_bias: NormalizedScalar::new(social_bias.0)?,
             social_fear_bias: NormalizedScalar::new(social_bias.1)?,
             novelty_bias: pre_action.sensory().channels.novelty_signal,
-            curiosity_bias: NormalizedScalar::new(pre_action.homeostasis.drives.curiosity)?,
+            curiosity_bias: NormalizedScalar::new(pre_action.homeostasis().drives.curiosity)?,
             selected_action_id: Some(decision.selected_action.action_id),
             selected_action_kind: Some(decision.selected_action.kind),
         };
@@ -636,12 +636,12 @@ fn feature_vector_from_pre_action(
     );
     extend_bounded(
         &mut features,
-        &pre_action.homeostasis.drives.to_array(),
+        &pre_action.homeostasis().drives.to_array(),
         max_feature_len,
     );
     extend_bounded(
         &mut features,
-        &pre_action.homeostasis.hormones.to_array(),
+        &pre_action.homeostasis().hormones.to_array(),
         max_feature_len,
     );
     validate_feature_vector(&features)?;

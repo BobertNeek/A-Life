@@ -429,11 +429,93 @@ fn neural_patch_serialization_omits_baseline_only_payloads() {
     let value = serde_json::to_value(patch).unwrap();
 
     assert!(value["pre_action"].get("heuristic_evidence").is_none());
+    assert!(value["pre_action"].get("body").is_none());
+    assert!(value["pre_action"].get("homeostasis").is_none());
+    assert!(value["pre_action"]["perception"]["base"]
+        .get("body")
+        .is_some());
+    assert!(value["pre_action"]["perception"]["base"]
+        .get("homeostasis")
+        .is_some());
     assert!(value["decision"]["evidence"]
         .get("NeuralClosedLoopGpu")
         .is_some());
     assert!(!value["decision"].to_string().contains("proposals"));
     assert!(!value["pre_action"].to_string().contains("weight_split"));
+}
+
+#[test]
+fn pre_action_signed_zero_body_copy_cannot_override_frame() {
+    let frame = perception_fixture();
+    let decision = DecisionSnapshot::from_neural_selection(
+        sequence_id(),
+        phenotype_hash(),
+        7,
+        1,
+        &frame,
+        neural_selection_fixture(&frame, 1),
+        command_for_candidate(&frame.candidates()[1]),
+    )
+    .unwrap();
+    let patch = seal_with_decision(frame, decision).unwrap();
+    let mut value = serde_json::to_value(patch).unwrap();
+    value["pre_action"]["body"]["pose"]["translation"]["x"] =
+        serde_json::to_value(-0.0_f32).unwrap();
+
+    let tampered: ExperiencePatch = serde_json::from_value(value).unwrap();
+
+    assert!(tampered.validate_contract().is_ok());
+    assert_eq!(
+        tampered.pre_action().body().pose.translation.x.to_bits(),
+        0.0_f32.to_bits()
+    );
+    assert_eq!(
+        tampered.pre_action().body().pose.translation.x.to_bits(),
+        tampered
+            .pre_action()
+            .perception()
+            .body()
+            .pose
+            .translation
+            .x
+            .to_bits()
+    );
+}
+
+#[test]
+fn pre_action_signed_zero_homeostasis_copy_cannot_override_frame() {
+    let frame = perception_fixture();
+    let decision = DecisionSnapshot::from_neural_selection(
+        sequence_id(),
+        phenotype_hash(),
+        7,
+        1,
+        &frame,
+        neural_selection_fixture(&frame, 1),
+        command_for_candidate(&frame.candidates()[1]),
+    )
+    .unwrap();
+    let patch = seal_with_decision(frame, decision).unwrap();
+    let mut value = serde_json::to_value(patch).unwrap();
+    value["pre_action"]["homeostasis"]["drives"]["pain"] = serde_json::to_value(-0.0_f32).unwrap();
+
+    let tampered: ExperiencePatch = serde_json::from_value(value).unwrap();
+
+    assert!(tampered.validate_contract().is_ok());
+    assert_eq!(
+        tampered.pre_action().homeostasis().drives.pain.to_bits(),
+        0.0_f32.to_bits()
+    );
+    assert_eq!(
+        tampered.pre_action().homeostasis().drives.pain.to_bits(),
+        tampered
+            .pre_action()
+            .perception()
+            .homeostasis()
+            .drives
+            .pain
+            .to_bits()
+    );
 }
 
 #[test]
@@ -651,5 +733,16 @@ fn legacy_v1_patch_deserializes_as_explicit_heuristic_baseline_evidence() {
         1
     );
     assert_eq!(migrated.pre_action().perception().candidates().len(), 1);
+    assert_eq!(
+        migrated.pre_action().body().pose.translation.x.to_bits(),
+        0.0_f32.to_bits()
+    );
+    assert_eq!(
+        migrated.pre_action().homeostasis().drives.pain.to_bits(),
+        0.0_f32.to_bits()
+    );
+    let reserialized = serde_json::to_value(&migrated).unwrap();
+    assert!(reserialized["pre_action"].get("body").is_none());
+    assert!(reserialized["pre_action"].get("homeostasis").is_none());
     assert!(migrated.validate_contract().is_ok());
 }

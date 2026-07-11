@@ -21,11 +21,11 @@ fn food_seeking_scenario_links_hunger_food_salience_eating_and_reward() {
 
     assert!(patch
         .pre_action()
-        .sensory
+        .sensory()
         .channels
         .nearby_affordances
         .contains(AffordanceBits::FOOD));
-    assert!(patch.pre_action().homeostasis.drives.hunger >= 0.8);
+    assert!(patch.pre_action().homeostasis().drives.hunger >= 0.8);
     assert_eq!(patch.decision().selected_action.kind, ActionKind::Interact);
     assert_eq!(
         patch.outcome().physical.contact,
@@ -60,10 +60,13 @@ fn pain_poison_scenario_records_danger_expectancy_without_action_replay() {
     assert!(painful.outcome().reward_valence.raw() < 0.0);
 
     let repeat = run.patch_at(1);
-    assert!(repeat.pre_action().memory_expectancy.danger_bias.raw() > 0.0);
-    ScenarioAssertions::assert_memory_expectancy_snapshot_is_bias_only(
-        &repeat.pre_action().memory_expectancy,
-    );
+    let memory = &repeat
+        .pre_action()
+        .heuristic_evidence()
+        .expect("scenario patches use heuristic baseline evidence")
+        .memory_expectancy;
+    assert!(memory.danger_bias.raw() > 0.0);
+    ScenarioAssertions::assert_memory_expectancy_snapshot_is_bias_only(memory);
     assert_eq!(repeat.decision().selected_action.kind, ActionKind::Move);
     assert!(run
         .memory_records
@@ -105,7 +108,7 @@ fn fatigue_sleep_scenario_uses_p16_sleep_hooks_and_preserves_genetic_baseline() 
         .expect("sleep consolidation report");
 
     assert_eq!(patch.decision().selected_action.kind, ActionKind::Rest);
-    assert!(patch.pre_action().homeostasis.drives.fatigue >= 0.9);
+    assert!(patch.pre_action().homeostasis().drives.fatigue >= 0.9);
     assert!(patch.outcome().homeostatic_delta.drives.fatigue < 0.0);
     assert_eq!(run.sleep_phase, SleepPhase::ForcedRecoverySleep);
     assert!(run.sleep_transition_observed);
@@ -137,13 +140,13 @@ fn word_token_grounding_scenario_binds_words_through_sensory_context_without_slm
     let patch = run.first_patch();
 
     assert_eq!(
-        patch.pre_action().sensory.language_context.heard_tokens[0]
+        patch.pre_action().sensory().language_context.heard_tokens[0]
             .unwrap()
             .token_id,
         41
     );
-    assert!(patch.pre_action().sensory.semantic_context.is_none());
-    assert!(patch.pre_action().sensory.gaussian_context.is_none());
+    assert!(patch.pre_action().sensory().semantic_context.is_none());
+    assert!(patch.pre_action().sensory().gaussian_context.is_none());
     assert!(run
         .topology_concepts
         .iter()
@@ -157,7 +160,7 @@ fn social_trust_fear_scenario_records_social_context_as_bias_only() {
 
     let social_agents = patch
         .pre_action()
-        .sensory
+        .sensory()
         .social_context
         .nearest_agents
         .iter()
@@ -180,7 +183,7 @@ fn social_trust_fear_scenario_records_social_context_as_bias_only() {
 fn teacher_perception_event_is_perceptual_and_modulatory_only() {
     let run = run(ScenarioName::TeacherPerceptionEvent);
     let patch = run.first_patch();
-    let heard = patch.pre_action().sensory.language_context.heard_tokens[0].unwrap();
+    let heard = patch.pre_action().sensory().language_context.heard_tokens[0].unwrap();
 
     assert_eq!(heard.token_id, 77);
     assert_eq!(
@@ -190,13 +193,13 @@ fn teacher_perception_event_is_perceptual_and_modulatory_only() {
     assert_eq!(
         patch
             .pre_action()
-            .sensory
+            .sensory()
             .language_context
             .teacher_channel_marker,
         Some(TeacherPerceptionChannel::Hearing)
     );
     assert!(patch.decision().selected_action.teacher_lesson.is_none());
-    assert!(patch.pre_action().sensory.semantic_context.is_none());
+    assert!(patch.pre_action().sensory().semantic_context.is_none());
     ScenarioAssertions::assert_selected_action_came_from_arbitration(patch);
 }
 

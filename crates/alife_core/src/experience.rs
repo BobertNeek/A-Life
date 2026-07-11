@@ -190,8 +190,6 @@ pub struct PreActionSnapshot {
     pub development_state: DevelopmentState,
     pub brain_evidence: PreActionBrainEvidence,
     perception: PerceptionFrame,
-    pub body: BodySnapshot,
-    pub homeostasis: HomeostaticSnapshot,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     heuristic_evidence: Option<HeuristicPreActionEvidence>,
 }
@@ -225,8 +223,6 @@ impl PreActionSnapshot {
                 base_digest: perception.base_digest(),
                 frame_digest: perception.frame_digest(),
             },
-            body: perception.body(),
-            homeostasis: *perception.homeostasis(),
             perception,
             heuristic_evidence: None,
         };
@@ -289,8 +285,6 @@ impl PreActionSnapshot {
             brain_evidence: PreActionBrainEvidence::HeuristicBaseline {
                 baseline_schema_version,
             },
-            body: perception.body(),
-            homeostasis: *perception.homeostasis(),
             perception,
             heuristic_evidence: Some(heuristic_evidence),
         };
@@ -303,11 +297,11 @@ impl PreActionSnapshot {
     }
 
     pub const fn body(&self) -> BodySnapshot {
-        self.body
+        self.perception.body()
     }
 
     pub const fn homeostasis(&self) -> &HomeostaticSnapshot {
-        &self.homeostasis
+        self.perception.homeostasis()
     }
 
     pub fn sensory(&self) -> &SensorySnapshot {
@@ -371,13 +365,9 @@ impl Validate for PreActionSnapshot {
         self.genome_id.validate()?;
         self.development_state.validate_contract()?;
         self.perception.validate_contract()?;
-        self.body.validate_contract()?;
-        self.homeostasis.validate_contract()?;
         if self.development_state.genome_id != self.genome_id
             || self.organism_id != self.perception.organism_id()
             || self.tick != self.perception.tick()
-            || self.body != self.perception.body()
-            || self.homeostasis != *self.perception.homeostasis()
         {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }

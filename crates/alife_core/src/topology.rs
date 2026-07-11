@@ -1025,7 +1025,7 @@ fn bindings_from_patch(
         }
         push_unique(&mut bindings.locations, pre.body().pose.translation);
         bindings.affordances = pre.sensory().channels.nearby_affordances;
-        bindings.drives = drive_bindings(pre.homeostasis.drives);
+        bindings.drives = drive_bindings(pre.homeostasis().drives);
 
         for token in pre.sensory().context_streams.vocal_tokens.iter().flatten() {
             push_unique(&mut bindings.words, token.token_id);
@@ -1093,10 +1093,10 @@ fn patch_salience(patch: &ExperiencePatch) -> Result<NormalizedScalar, ScaffoldC
     let pre = patch.pre_action();
     let outcome = patch.outcome();
     let drive_salience = pre
-        .homeostasis
+        .homeostasis()
         .drives
         .curiosity
-        .max(pre.homeostasis.drives.fear);
+        .max(pre.homeostasis().drives.fear);
     let sensory_salience = pre
         .sensory()
         .channels

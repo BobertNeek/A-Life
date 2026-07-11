@@ -1,18 +1,17 @@
 //! Contract-only same-tick perception and unscored action-candidate records.
 
-use core::fmt;
-
 use serde::de::Error as _;
-use serde::ser::{
-    Error as _, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
-    SerializeTuple, SerializeTupleStruct, SerializeTupleVariant,
-};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    ensure_current_version, ActionCommand, ActionId, ActionKind, ActionTarget, Confidence,
-    DurationTicks, HomeostaticSnapshot, Intensity, NormalizedScalar, OrganismId, Pose,
-    ScaffoldContractError, SchemaKind, SchemaVersions, SensorySnapshot, Tick, Validate, Velocity,
+    ensure_current_version, ActionCommand, ActionId, ActionKind, ActionTarget,
+    CanonicalDigestBuilder, CompressedSemanticCode, Confidence, ContextStreams, DriveSnapshot,
+    DurationTicks, EndocrineSnapshot, EnvironmentStreamEntry, GaussianContextRef,
+    GaussianSalienceEntry, HeardToken, HomeostaticSnapshot, Intensity, LanguageContextSnapshot,
+    NormalizedScalar, OrganismId, Pose, Quatf, ScaffoldContractError, SchemaKind, SchemaVersions,
+    SemanticContextRef, SemanticSalienceEntry, SensoryChannels, SensorySnapshot,
+    SocialAgentSnapshot, SocialContextSnapshot, SocialProximityEntry, TeacherPerceptionChannel,
+    Tick, Validate, Vec3f, Velocity, VocalizedToken,
 };
 
 pub const CANDIDATE_FEATURE_COUNT: usize = 24;
@@ -234,29 +233,10 @@ impl ActionCandidate {
     }
 
     pub fn feature_digest(self) -> CandidateFeatureDigest {
-        #[derive(Serialize)]
-        struct CandidateFeatureCanonical {
-            kind: ActionKind,
-            family: CandidateActionFamily,
-            observation: CandidateObservationRef,
-            features: CandidateFeatureVector,
-            sensor_confidence: Confidence,
-            required_effort: NormalizedScalar,
-            min_duration: DurationTicks,
-            max_duration: DurationTicks,
-        }
-
-        let canonical = CandidateFeatureCanonical {
-            kind: self.kind,
-            family: self.family,
-            observation: self.observation,
-            features: self.features,
-            sensor_confidence: self.sensor_confidence,
-            required_effort: self.required_effort,
-            min_duration: self.min_duration,
-            max_duration: self.max_duration,
-        };
-        CandidateFeatureDigest(hash_canonical::<2, _>(CANDIDATE_FEATURE_DOMAIN, &canonical))
+        let mut builder = CanonicalDigestBuilder::new(CANDIDATE_FEATURE_DOMAIN);
+        encode_candidate_feature(&mut builder, &self)
+            .expect("validated action candidates have canonical feature fields");
+        CandidateFeatureDigest(builder.finish128())
     }
 
     pub fn to_command(
@@ -310,6 +290,20 @@ impl Validate for ActionCandidate {
 pub enum PerceptionContextKind {
     None = 0,
     EpisodicCandidateV1 = 1,
+}
+
+impl PerceptionContextKind {
+    pub const fn raw(self) -> u16 {
+        self as u16
+    }
+
+    pub fn try_from_raw(raw: u16) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::None),
+            1 => Ok(Self::EpisodicCandidateV1),
+            _ => Err(ScaffoldContractError::InvalidPerceptionFrame),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -656,7 +650,7 @@ impl PerceptionFrame {
         self.base.body
     }
 
-    pub fn homeostasis(&self) -> &HomeostaticSnapshot {
+    pub const fn homeostasis(&self) -> &HomeostaticSnapshot {
         &self.base.homeostasis
     }
 
@@ -787,6 +781,7 @@ fn validate_context(
 ) -> Result<(), ScaffoldContractError> {
     ensure_current_version(SchemaKind::Perception, schema_version)
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
+    PerceptionContextKind::try_from_raw(context_kind.raw())?;
     if context_kind == PerceptionContextKind::None && !values.is_empty() {
         return Err(ScaffoldContractError::InvalidPerceptionFrame);
     }
@@ -810,31 +805,23 @@ fn compute_base_digest(
     homeostasis: &HomeostaticSnapshot,
     candidates: &[ActionCandidate],
 ) -> PerceptionBaseDigest {
-    #[derive(Serialize)]
-    struct Canonical<'a> {
-        schema_version: u16,
-        organism_id: OrganismId,
-        tick: Tick,
-        sensor_profile: SensorProfile,
-        sensory: &'a SensorySnapshot,
-        body: BodySnapshot,
-        homeostasis: &'a HomeostaticSnapshot,
-        candidates: &'a [ActionCandidate],
+    let mut builder = CanonicalDigestBuilder::new(PERCEPTION_BASE_DOMAIN);
+    builder.write_u16(schema_version);
+    builder.write_u64(organism_id.raw());
+    builder.write_u64(tick.raw());
+    builder.write_u16(sensor_profile.raw());
+    encode_sensory_snapshot(&mut builder, sensory)
+        .expect("validated sensory snapshots have canonical finite fields");
+    encode_body_snapshot(&mut builder, body)
+        .expect("validated body snapshots have canonical finite fields");
+    encode_homeostatic_snapshot(&mut builder, homeostasis)
+        .expect("validated homeostatic snapshots have canonical finite fields");
+    builder.write_sequence_len(candidates.len());
+    for candidate in candidates {
+        encode_action_candidate(&mut builder, candidate)
+            .expect("validated action candidates have canonical finite fields");
     }
-
-    PerceptionBaseDigest(hash_canonical::<4, _>(
-        PERCEPTION_BASE_DOMAIN,
-        &Canonical {
-            schema_version,
-            organism_id,
-            tick,
-            sensor_profile,
-            sensory,
-            body,
-            homeostasis,
-            candidates,
-        },
-    ))
+    PerceptionBaseDigest(builder.finish256())
 }
 
 fn compute_context_digest(
@@ -842,443 +829,472 @@ fn compute_context_digest(
     context_kind: PerceptionContextKind,
     values: &[f32],
 ) -> PerceptionContextDigest {
-    #[derive(Serialize)]
-    struct Canonical<'a> {
-        schema_version: u16,
-        context_kind: PerceptionContextKind,
-        values: &'a [f32],
-    }
-
-    PerceptionContextDigest(hash_canonical::<4, _>(
-        PERCEPTION_CONTEXT_DOMAIN,
-        &Canonical {
-            schema_version,
-            context_kind,
-            values,
-        },
-    ))
+    let mut builder = CanonicalDigestBuilder::new(PERCEPTION_CONTEXT_DOMAIN);
+    encode_context_fields(&mut builder, schema_version, context_kind, values)
+        .expect("validated perception contexts have canonical finite fields");
+    PerceptionContextDigest(builder.finish256())
 }
 
 fn compute_frame_digest(
     base_digest: PerceptionBaseDigest,
     context: &PerceptionContextBlock,
 ) -> PerceptionFrameDigest {
-    #[derive(Serialize)]
-    struct Canonical<'a> {
-        base_digest: PerceptionBaseDigest,
-        context_schema_version: u16,
-        context_kind: PerceptionContextKind,
-        context_values: &'a [f32],
-    }
-
-    PerceptionFrameDigest(hash_canonical::<4, _>(
-        PERCEPTION_FRAME_DOMAIN,
-        &Canonical {
-            base_digest,
-            context_schema_version: context.schema_version,
-            context_kind: context.context_kind,
-            context_values: &context.values,
-        },
-    ))
+    let mut builder = CanonicalDigestBuilder::new(PERCEPTION_FRAME_DOMAIN);
+    encode_u64_words(&mut builder, &base_digest.0);
+    encode_context_fields(
+        &mut builder,
+        context.schema_version,
+        context.context_kind,
+        &context.values,
+    )
+    .expect("validated perception contexts have canonical finite fields");
+    PerceptionFrameDigest(builder.finish256())
 }
 
-fn hash_canonical<const N: usize, T: Serialize + ?Sized>(domain: &[u8], value: &T) -> [u64; N] {
-    let mut encoder = CanonicalEncoder::default();
-    value
-        .serialize(&mut encoder)
-        .expect("validated core contracts have canonical serde representations");
-    core::array::from_fn(|lane| {
-        let mut hash = 0xcbf2_9ce4_8422_2325u64 ^ (lane as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
-        for byte in domain.iter().chain(encoder.bytes.iter()) {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-            hash ^= hash.rotate_right(29);
+fn encode_candidate_feature(
+    builder: &mut CanonicalDigestBuilder,
+    candidate: &ActionCandidate,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u8(candidate.kind.raw());
+    builder.write_u8(candidate.family.raw());
+    encode_candidate_observation(builder, candidate.observation);
+    encode_f32_values(builder, &candidate.features.0)?;
+    builder.write_f32(candidate.sensor_confidence.raw())?;
+    builder.write_f32(candidate.required_effort.raw())?;
+    builder.write_u32(candidate.min_duration.raw());
+    builder.write_u32(candidate.max_duration.raw());
+    Ok(())
+}
+
+fn encode_action_candidate(
+    builder: &mut CanonicalDigestBuilder,
+    candidate: &ActionCandidate,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u16(candidate.candidate_index);
+    builder.write_u32(candidate.action_id.raw());
+    builder.write_u8(candidate.kind.raw());
+    builder.write_u8(candidate.family.raw());
+    encode_candidate_observation(builder, candidate.observation);
+    encode_action_target(builder, candidate.target)?;
+    encode_f32_values(builder, &candidate.features.0)?;
+    builder.write_f32(candidate.sensor_confidence.raw())?;
+    builder.write_f32(candidate.required_effort.raw())?;
+    builder.write_u32(candidate.min_duration.raw());
+    builder.write_u32(candidate.max_duration.raw());
+    Ok(())
+}
+
+fn encode_candidate_observation(
+    builder: &mut CanonicalDigestBuilder,
+    observation: CandidateObservationRef,
+) {
+    match observation {
+        CandidateObservationRef::None => builder.write_none(),
+        CandidateObservationRef::ObjectSlot(slot) => {
+            builder.write_some();
+            builder.write_u16(slot);
         }
-        hash ^ ((domain.len() as u64) << 32) ^ encoder.bytes.len() as u64
-    })
-}
-
-#[derive(Default)]
-struct CanonicalEncoder {
-    bytes: Vec<u8>,
-}
-
-#[derive(Debug)]
-struct CanonicalEncodeError(String);
-
-impl fmt::Display for CanonicalEncodeError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
     }
 }
 
-impl std::error::Error for CanonicalEncodeError {}
+fn encode_action_target(
+    builder: &mut CanonicalDigestBuilder,
+    target: ActionTarget,
+) -> Result<(), ScaffoldContractError> {
+    encode_optional_world_entity(builder, target.entity);
+    encode_optional_vec3(builder, target.position)
+}
 
-impl serde::ser::Error for CanonicalEncodeError {
-    fn custom<T: fmt::Display>(message: T) -> Self {
-        Self(message.to_string())
+fn encode_sensory_snapshot(
+    builder: &mut CanonicalDigestBuilder,
+    sensory: &SensorySnapshot,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u16(sensory.abi_version.raw());
+    builder.write_u64(sensory.organism_id.raw());
+    builder.write_u64(sensory.tick.raw());
+    encode_vec3(builder, sensory.observer_position)?;
+    encode_sensory_channels(builder, &sensory.channels)?;
+    encode_context_streams(builder, &sensory.context_streams)?;
+    encode_social_context(builder, &sensory.social_context)?;
+    encode_language_context(builder, &sensory.language_context)?;
+    encode_optional_semantic_context(builder, sensory.semantic_context.as_ref())?;
+    encode_optional_gaussian_context(builder, sensory.gaussian_context.as_ref())?;
+    Ok(())
+}
+
+fn encode_sensory_channels(
+    builder: &mut CanonicalDigestBuilder,
+    channels: &SensoryChannels,
+) -> Result<(), ScaffoldContractError> {
+    encode_f32_values(builder, &channels.visual_affordance)?;
+    encode_f32_values(builder, &channels.auditory_acoustic)?;
+    encode_f32_values(builder, &channels.smell_chemistry)?;
+    encode_f32_values(builder, &channels.tactile_contact)?;
+    builder.write_f32(channels.pain_signal.raw())?;
+    builder.write_f32(channels.novelty_signal.raw())?;
+    builder.write_u32(channels.nearby_affordances.raw());
+    Ok(())
+}
+
+fn encode_context_streams(
+    builder: &mut CanonicalDigestBuilder,
+    streams: &ContextStreams,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u16(streams.abi_version.raw());
+    builder.write_f32(streams.atmospheric_temperature_celsius)?;
+    builder.write_f32(streams.ambient_light.raw())?;
+    builder.write_f32(streams.energy_intake_trend.raw())?;
+    builder.write_f32(streams.blood_sugar_trend.raw())?;
+
+    builder.write_sequence_len(streams.vocal_tokens.len());
+    for token in &streams.vocal_tokens {
+        encode_optional_heard_token(builder, token.as_ref())?;
+    }
+    builder.write_sequence_len(streams.social_proximity.len());
+    for entry in &streams.social_proximity {
+        encode_optional_social_proximity(builder, entry.as_ref())?;
+    }
+    builder.write_sequence_len(streams.optional_environment.len());
+    for entry in &streams.optional_environment {
+        encode_optional_environment_entry(builder, entry.as_ref())?;
+    }
+    Ok(())
+}
+
+fn encode_optional_heard_token(
+    builder: &mut CanonicalDigestBuilder,
+    token: Option<&HeardToken>,
+) -> Result<(), ScaffoldContractError> {
+    let Some(token) = token else {
+        builder.write_none();
+        return Ok(());
+    };
+    builder.write_some();
+    encode_optional_organism(builder, token.speaker_id);
+    encode_optional_world_entity(builder, token.source_entity);
+    builder.write_u32(token.token_id);
+    encode_vec3(builder, token.source_position)?;
+    builder.write_f32(token.confidence.raw())?;
+    encode_optional_teacher_channel(builder, token.teacher_channel);
+    Ok(())
+}
+
+fn encode_optional_social_proximity(
+    builder: &mut CanonicalDigestBuilder,
+    entry: Option<&SocialProximityEntry>,
+) -> Result<(), ScaffoldContractError> {
+    let Some(entry) = entry else {
+        builder.write_none();
+        return Ok(());
+    };
+    builder.write_some();
+    builder.write_u64(entry.agent_id.raw());
+    builder.write_f32(entry.proximity.raw())?;
+    builder.write_f32(entry.confidence.raw())?;
+    Ok(())
+}
+
+fn encode_optional_environment_entry(
+    builder: &mut CanonicalDigestBuilder,
+    entry: Option<&EnvironmentStreamEntry>,
+) -> Result<(), ScaffoldContractError> {
+    let Some(entry) = entry else {
+        builder.write_none();
+        return Ok(());
+    };
+    builder.write_some();
+    builder.write_u16(entry.stream_id);
+    builder.write_f32(entry.value.raw())?;
+    builder.write_f32(entry.confidence.raw())?;
+    Ok(())
+}
+
+fn encode_social_context(
+    builder: &mut CanonicalDigestBuilder,
+    context: &SocialContextSnapshot,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_sequence_len(context.nearest_agents.len());
+    for agent in &context.nearest_agents {
+        encode_optional_social_agent(builder, agent.as_ref())?;
+    }
+    Ok(())
+}
+
+fn encode_optional_social_agent(
+    builder: &mut CanonicalDigestBuilder,
+    agent: Option<&SocialAgentSnapshot>,
+) -> Result<(), ScaffoldContractError> {
+    let Some(agent) = agent else {
+        builder.write_none();
+        return Ok(());
+    };
+    builder.write_some();
+    builder.write_u64(agent.agent_id.raw());
+    encode_optional_world_entity(builder, agent.body_entity);
+    encode_vec3(builder, agent.relative_position)?;
+    encode_vec3(builder, agent.gaze_direction)?;
+    encode_vec3(builder, agent.orientation_forward)?;
+    builder.write_f32(agent.affinity.raw())?;
+    builder.write_f32(agent.proximity.raw())?;
+    Ok(())
+}
+
+fn encode_language_context(
+    builder: &mut CanonicalDigestBuilder,
+    context: &LanguageContextSnapshot,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_sequence_len(context.heard_tokens.len());
+    for token in &context.heard_tokens {
+        encode_optional_heard_token(builder, token.as_ref())?;
+    }
+    encode_optional_vocalized_token(builder, context.vocalized_token.as_ref())?;
+    builder.write_f32(context.word_confidence.raw())?;
+    encode_optional_teacher_channel(builder, context.teacher_channel_marker);
+    Ok(())
+}
+
+fn encode_optional_vocalized_token(
+    builder: &mut CanonicalDigestBuilder,
+    token: Option<&VocalizedToken>,
+) -> Result<(), ScaffoldContractError> {
+    let Some(token) = token else {
+        builder.write_none();
+        return Ok(());
+    };
+    builder.write_some();
+    builder.write_u32(token.token_id);
+    builder.write_f32(token.confidence.raw())?;
+    Ok(())
+}
+
+fn encode_optional_semantic_context(
+    builder: &mut CanonicalDigestBuilder,
+    context: Option<&SemanticContextRef>,
+) -> Result<(), ScaffoldContractError> {
+    let Some(context) = context else {
+        builder.write_none();
+        return Ok(());
+    };
+    builder.write_some();
+    builder.write_u32(context.feature_flags.raw());
+    builder.write_f32(context.confidence.raw())?;
+    builder.write_sequence_len(context.compressed_codes.len());
+    for code in &context.compressed_codes {
+        encode_compressed_semantic_code(builder, code)?;
+    }
+    builder.write_sequence_len(context.salience.len());
+    for entry in &context.salience {
+        encode_semantic_salience_entry(builder, entry)?;
+    }
+    Ok(())
+}
+
+fn encode_compressed_semantic_code(
+    builder: &mut CanonicalDigestBuilder,
+    code: &CompressedSemanticCode,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u16(code.codebook_id);
+    builder.write_u32(code.code);
+    builder.write_f32(code.salience.raw())?;
+    Ok(())
+}
+
+fn encode_semantic_salience_entry(
+    builder: &mut CanonicalDigestBuilder,
+    entry: &SemanticSalienceEntry,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u64(entry.concept_id.raw());
+    builder.write_f32(entry.salience.raw())?;
+    Ok(())
+}
+
+fn encode_optional_gaussian_context(
+    builder: &mut CanonicalDigestBuilder,
+    context: Option<&GaussianContextRef>,
+) -> Result<(), ScaffoldContractError> {
+    let Some(context) = context else {
+        builder.write_none();
+        return Ok(());
+    };
+    builder.write_some();
+    builder.write_u64(context.egocentric_bin_hash);
+    builder.write_u32(context.feature_flags.raw());
+    builder.write_f32(context.confidence.raw())?;
+    builder.write_sequence_len(context.clusters.len());
+    for cluster in &context.clusters {
+        encode_gaussian_salience_entry(builder, cluster)?;
+    }
+    Ok(())
+}
+
+fn encode_gaussian_salience_entry(
+    builder: &mut CanonicalDigestBuilder,
+    cluster: &GaussianSalienceEntry,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u64(cluster.cluster_id.raw());
+    builder.write_f32(cluster.salience.raw())?;
+    builder.write_f32(cluster.distance_meters)?;
+    Ok(())
+}
+
+fn encode_body_snapshot(
+    builder: &mut CanonicalDigestBuilder,
+    body: BodySnapshot,
+) -> Result<(), ScaffoldContractError> {
+    encode_pose(builder, body.pose)?;
+    encode_velocity(builder, body.velocity)
+}
+
+fn encode_pose(
+    builder: &mut CanonicalDigestBuilder,
+    pose: Pose,
+) -> Result<(), ScaffoldContractError> {
+    encode_vec3(builder, pose.translation)?;
+    encode_quat(builder, pose.rotation)
+}
+
+fn encode_velocity(
+    builder: &mut CanonicalDigestBuilder,
+    velocity: Velocity,
+) -> Result<(), ScaffoldContractError> {
+    encode_vec3(builder, velocity.linear)?;
+    encode_vec3(builder, velocity.angular)
+}
+
+fn encode_homeostatic_snapshot(
+    builder: &mut CanonicalDigestBuilder,
+    homeostasis: &HomeostaticSnapshot,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u16(homeostasis.schema_version);
+    builder.write_u64(homeostasis.tick.raw());
+    encode_drive_snapshot(builder, &homeostasis.drives)?;
+    encode_endocrine_snapshot(builder, &homeostasis.hormones)
+}
+
+fn encode_drive_snapshot(
+    builder: &mut CanonicalDigestBuilder,
+    drives: &DriveSnapshot,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_f32(drives.hunger)?;
+    builder.write_f32(drives.fatigue)?;
+    builder.write_f32(drives.fear)?;
+    builder.write_f32(drives.pain)?;
+    builder.write_f32(drives.loneliness)?;
+    builder.write_f32(drives.curiosity)?;
+    builder.write_f32(drives.brain_atp)?;
+    builder.write_f32(drives.temperature_stress)?;
+    builder.write_f32(drives.reproductive_drive)?;
+    encode_f32_values(builder, &drives.extension)
+}
+
+fn encode_endocrine_snapshot(
+    builder: &mut CanonicalDigestBuilder,
+    hormones: &EndocrineSnapshot,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_f32(hormones.adrenaline)?;
+    builder.write_f32(hormones.cortisol)?;
+    builder.write_f32(hormones.dopamine)?;
+    builder.write_f32(hormones.oxytocin)?;
+    builder.write_f32(hormones.serotonin)?;
+    builder.write_f32(hormones.acetylcholine)?;
+    builder.write_f32(hormones.learning_modulator)?;
+    builder.write_f32(hormones.developmental_hormone)?;
+    builder.write_f32(hormones.sleep_pressure)?;
+    encode_f32_values(builder, &hormones.extension)
+}
+
+fn encode_context_fields(
+    builder: &mut CanonicalDigestBuilder,
+    schema_version: u16,
+    context_kind: PerceptionContextKind,
+    values: &[f32],
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u16(schema_version);
+    builder.write_u16(context_kind.raw());
+    encode_f32_values(builder, values)
+}
+
+fn encode_optional_organism(builder: &mut CanonicalDigestBuilder, organism: Option<OrganismId>) {
+    match organism {
+        Some(organism) => {
+            builder.write_some();
+            builder.write_u64(organism.raw());
+        }
+        None => builder.write_none(),
     }
 }
 
-struct CanonicalCompound<'a> {
-    encoder: &'a mut CanonicalEncoder,
-}
-
-impl CanonicalEncoder {
-    fn tag(&mut self, tag: u8) {
-        self.bytes.push(tag);
-    }
-
-    fn len(&mut self, len: usize) -> Result<(), CanonicalEncodeError> {
-        let len = u64::try_from(len)
-            .map_err(|_| CanonicalEncodeError("canonical length overflow".to_string()))?;
-        self.bytes.extend_from_slice(&len.to_le_bytes());
-        Ok(())
-    }
-
-    fn name(&mut self, name: &str) -> Result<(), CanonicalEncodeError> {
-        self.len(name.len())?;
-        self.bytes.extend_from_slice(name.as_bytes());
-        Ok(())
+fn encode_optional_world_entity(
+    builder: &mut CanonicalDigestBuilder,
+    entity: Option<crate::WorldEntityId>,
+) {
+    match entity {
+        Some(entity) => {
+            builder.write_some();
+            builder.write_u64(entity.raw());
+        }
+        None => builder.write_none(),
     }
 }
 
-impl<'a> Serializer for &'a mut CanonicalEncoder {
-    type Ok = ();
-    type Error = CanonicalEncodeError;
-    type SerializeSeq = CanonicalCompound<'a>;
-    type SerializeTuple = CanonicalCompound<'a>;
-    type SerializeTupleStruct = CanonicalCompound<'a>;
-    type SerializeTupleVariant = CanonicalCompound<'a>;
-    type SerializeMap = CanonicalCompound<'a>;
-    type SerializeStruct = CanonicalCompound<'a>;
-    type SerializeStructVariant = CanonicalCompound<'a>;
+fn encode_optional_vec3(
+    builder: &mut CanonicalDigestBuilder,
+    value: Option<Vec3f>,
+) -> Result<(), ScaffoldContractError> {
+    let Some(value) = value else {
+        builder.write_none();
+        return Ok(());
+    };
+    builder.write_some();
+    encode_vec3(builder, value)
+}
 
-    fn serialize_bool(self, value: bool) -> Result<Self::Ok, Self::Error> {
-        self.tag(1);
-        self.bytes.push(u8::from(value));
-        Ok(())
-    }
-
-    fn serialize_i8(self, value: i8) -> Result<Self::Ok, Self::Error> {
-        self.tag(2);
-        self.bytes.push(value as u8);
-        Ok(())
-    }
-
-    fn serialize_i16(self, value: i16) -> Result<Self::Ok, Self::Error> {
-        self.tag(3);
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_i32(self, value: i32) -> Result<Self::Ok, Self::Error> {
-        self.tag(4);
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_i64(self, value: i64) -> Result<Self::Ok, Self::Error> {
-        self.tag(5);
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_i128(self, value: i128) -> Result<Self::Ok, Self::Error> {
-        self.tag(6);
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_u8(self, value: u8) -> Result<Self::Ok, Self::Error> {
-        self.tag(7);
-        self.bytes.push(value);
-        Ok(())
-    }
-
-    fn serialize_u16(self, value: u16) -> Result<Self::Ok, Self::Error> {
-        self.tag(8);
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_u32(self, value: u32) -> Result<Self::Ok, Self::Error> {
-        self.tag(9);
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_u64(self, value: u64) -> Result<Self::Ok, Self::Error> {
-        self.tag(10);
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_u128(self, value: u128) -> Result<Self::Ok, Self::Error> {
-        self.tag(11);
-        self.bytes.extend_from_slice(&value.to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_f32(self, value: f32) -> Result<Self::Ok, Self::Error> {
-        self.tag(12);
-        self.bytes.extend_from_slice(&value.to_bits().to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_f64(self, value: f64) -> Result<Self::Ok, Self::Error> {
-        self.tag(13);
-        self.bytes.extend_from_slice(&value.to_bits().to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
-        self.tag(14);
-        self.bytes
-            .extend_from_slice(&u32::from(value).to_le_bytes());
-        Ok(())
-    }
-
-    fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
-        self.tag(15);
-        self.name(value)
-    }
-
-    fn serialize_bytes(self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
-        self.tag(16);
-        self.len(value.len())?;
-        self.bytes.extend_from_slice(value);
-        Ok(())
-    }
-
-    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        self.tag(17);
-        Ok(())
-    }
-
-    fn serialize_some<T: Serialize + ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error> {
-        self.tag(18);
-        value.serialize(self)
-    }
-
-    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        self.tag(19);
-        Ok(())
-    }
-
-    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
-        self.tag(20);
-        self.name(name)
-    }
-
-    fn serialize_unit_variant(
-        self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        self.tag(21);
-        self.name(name)?;
-        self.bytes.extend_from_slice(&variant_index.to_le_bytes());
-        self.name(variant)
-    }
-
-    fn serialize_newtype_struct<T: Serialize + ?Sized>(
-        self,
-        name: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        self.tag(22);
-        self.name(name)?;
-        value.serialize(self)
-    }
-
-    fn serialize_newtype_variant<T: Serialize + ?Sized>(
-        self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        self.tag(23);
-        self.name(name)?;
-        self.bytes.extend_from_slice(&variant_index.to_le_bytes());
-        self.name(variant)?;
-        value.serialize(self)
-    }
-
-    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        self.tag(24);
-        self.len(len.ok_or_else(|| Self::Error::custom("unknown sequence length"))?)?;
-        Ok(CanonicalCompound { encoder: self })
-    }
-
-    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        self.tag(25);
-        self.len(len)?;
-        Ok(CanonicalCompound { encoder: self })
-    }
-
-    fn serialize_tuple_struct(
-        self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        self.tag(26);
-        self.name(name)?;
-        self.len(len)?;
-        Ok(CanonicalCompound { encoder: self })
-    }
-
-    fn serialize_tuple_variant(
-        self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        self.tag(27);
-        self.name(name)?;
-        self.bytes.extend_from_slice(&variant_index.to_le_bytes());
-        self.name(variant)?;
-        self.len(len)?;
-        Ok(CanonicalCompound { encoder: self })
-    }
-
-    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        self.tag(28);
-        self.len(len.ok_or_else(|| Self::Error::custom("unknown map length"))?)?;
-        Ok(CanonicalCompound { encoder: self })
-    }
-
-    fn serialize_struct(
-        self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeStruct, Self::Error> {
-        self.tag(29);
-        self.name(name)?;
-        self.len(len)?;
-        Ok(CanonicalCompound { encoder: self })
-    }
-
-    fn serialize_struct_variant(
-        self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        self.tag(30);
-        self.name(name)?;
-        self.bytes.extend_from_slice(&variant_index.to_le_bytes());
-        self.name(variant)?;
-        self.len(len)?;
-        Ok(CanonicalCompound { encoder: self })
+fn encode_optional_teacher_channel(
+    builder: &mut CanonicalDigestBuilder,
+    channel: Option<TeacherPerceptionChannel>,
+) {
+    match channel {
+        Some(channel) => {
+            builder.write_some();
+            builder.write_u8(channel.raw());
+        }
+        None => builder.write_none(),
     }
 }
 
-impl SerializeSeq for CanonicalCompound<'_> {
-    type Ok = ();
-    type Error = CanonicalEncodeError;
-
-    fn serialize_element<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
-        value.serialize(&mut *self.encoder)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
+fn encode_vec3(
+    builder: &mut CanonicalDigestBuilder,
+    value: Vec3f,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_f32(value.x)?;
+    builder.write_f32(value.y)?;
+    builder.write_f32(value.z)
 }
 
-impl SerializeTuple for CanonicalCompound<'_> {
-    type Ok = ();
-    type Error = CanonicalEncodeError;
-
-    fn serialize_element<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
-        value.serialize(&mut *self.encoder)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
+fn encode_quat(
+    builder: &mut CanonicalDigestBuilder,
+    value: Quatf,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_f32(value.x)?;
+    builder.write_f32(value.y)?;
+    builder.write_f32(value.z)?;
+    builder.write_f32(value.w)
 }
 
-impl SerializeTupleStruct for CanonicalCompound<'_> {
-    type Ok = ();
-    type Error = CanonicalEncodeError;
-
-    fn serialize_field<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
-        value.serialize(&mut *self.encoder)
+fn encode_f32_values(
+    builder: &mut CanonicalDigestBuilder,
+    values: &[f32],
+) -> Result<(), ScaffoldContractError> {
+    builder.write_sequence_len(values.len());
+    for value in values {
+        builder.write_f32(*value)?;
     }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
+    Ok(())
 }
 
-impl SerializeTupleVariant for CanonicalCompound<'_> {
-    type Ok = ();
-    type Error = CanonicalEncodeError;
-
-    fn serialize_field<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
-        value.serialize(&mut *self.encoder)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl SerializeMap for CanonicalCompound<'_> {
-    type Ok = ();
-    type Error = CanonicalEncodeError;
-
-    fn serialize_key<T: Serialize + ?Sized>(&mut self, key: &T) -> Result<(), Self::Error> {
-        key.serialize(&mut *self.encoder)
-    }
-
-    fn serialize_value<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
-        value.serialize(&mut *self.encoder)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl SerializeStruct for CanonicalCompound<'_> {
-    type Ok = ();
-    type Error = CanonicalEncodeError;
-
-    fn serialize_field<T: Serialize + ?Sized>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error> {
-        self.encoder.name(key)?;
-        value.serialize(&mut *self.encoder)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl SerializeStructVariant for CanonicalCompound<'_> {
-    type Ok = ();
-    type Error = CanonicalEncodeError;
-
-    fn serialize_field<T: Serialize + ?Sized>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error> {
-        self.encoder.name(key)?;
-        value.serialize(&mut *self.encoder)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+fn encode_u64_words(builder: &mut CanonicalDigestBuilder, values: &[u64]) {
+    builder.write_sequence_len(values.len());
+    for value in values {
+        builder.write_u64(*value);
     }
 }
