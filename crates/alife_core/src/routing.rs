@@ -4,31 +4,85 @@ use serde::{Deserialize, Serialize};
 
 use crate::{LobeKind, LobeLayout, ScaffoldContractError, UpdateCadence};
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ProjectionType {
-    FeedForward,
-    Feedback,
-    Recurrent,
-    Modulatory,
-    MotorProposal,
-    Homeostatic,
-    LateralInhibition,
+    FeedForward = 0,
+    Feedback = 1,
+    Recurrent = 2,
+    Modulatory = 3,
+    MotorProposal = 4,
+    Homeostatic = 5,
+    LateralInhibition = 6,
 }
 
+impl ProjectionType {
+    pub const fn raw(self) -> u8 {
+        self as u8
+    }
+
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::FeedForward),
+            1 => Ok(Self::Feedback),
+            2 => Ok(Self::Recurrent),
+            3 => Ok(Self::Modulatory),
+            4 => Ok(Self::MotorProposal),
+            5 => Ok(Self::Homeostatic),
+            6 => Ok(Self::LateralInhibition),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
+}
+
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ActiveTilePolicy {
-    EssentialReservation,
-    SalienceGated,
-    Decimated,
-    SleepQueued,
+    EssentialReservation = 0,
+    SalienceGated = 1,
+    Decimated = 2,
+    SleepQueued = 3,
 }
 
+impl ActiveTilePolicy {
+    pub const fn raw(self) -> u8 {
+        self as u8
+    }
+
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::EssentialReservation),
+            1 => Ok(Self::SalienceGated),
+            2 => Ok(Self::Decimated),
+            3 => Ok(Self::SleepQueued),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
+}
+
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BiologicalPriority {
-    Essential,
-    High,
-    Normal,
-    NonEssential,
+    Essential = 0,
+    High = 1,
+    Normal = 2,
+    NonEssential = 3,
+}
+
+impl BiologicalPriority {
+    pub const fn raw(self) -> u8 {
+        self as u8
+    }
+
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Essential),
+            1 => Ok(Self::High),
+            2 => Ok(Self::Normal),
+            3 => Ok(Self::NonEssential),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -137,6 +191,14 @@ const CANONICAL_ROUTING_MASKS: &[RoutingMask] = &[
         ProjectionType::FeedForward,
         ActiveTilePolicy::EssentialReservation,
         UpdateCadence::Hot60Hz,
+        BiologicalPriority::Essential,
+    ),
+    RoutingMask::new(
+        LobeKind::MetabolicDrive,
+        LobeKind::HomeostaticRegulation,
+        ProjectionType::Homeostatic,
+        ActiveTilePolicy::EssentialReservation,
+        UpdateCadence::Hot10To30Hz,
         BiologicalPriority::Essential,
     ),
     RoutingMask::new(

@@ -40,7 +40,9 @@ pub use action::{
 };
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
-pub use brain_class::{BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier};
+pub use brain_class::{
+    BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,
+};
 pub use canonical_digest::CanonicalDigestBuilder;
 pub use chemistry::{
     ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta, EndocrineProfile,
@@ -113,7 +115,13 @@ pub use perception::{
     PerceptionFrameDigest, PerceptionFrameDraft, PolicyBackend, SensorProfile,
     CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
-pub use phenotype::PhenotypeHash;
+pub use phenotype::{
+    BrainCapacityClass, BrainExecutionBudget, BrainPhenotype, CandidateDecoderFamilyPlan,
+    CandidateDecoderPlan, CompiledBudgets, CompiledProjection, CompiledSynapse,
+    CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate, GlobalPhenotypeBudgetReceipt,
+    NeuronDynamics, PhenotypeCompiler, PhenotypeCompilerInputs, PhenotypeHash, RouteBudgetReceipt,
+    SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourceGroup,
+};
 pub use post_seal_lifetime::{
     PostSealHShadowDeltaTarget, PostSealLearningToken, PostSealLifetimeDeltaApplication,
     PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, PostSealLifetimeDeltaRecord,

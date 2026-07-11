@@ -85,6 +85,10 @@ impl Validate for BrainGenome {
         self.lobe_ratios.validate_contract()?;
         validate_all(&self.macro_connectome_masks)?;
         validate_all(&self.sparse_density_priors)?;
+        validate_connectome_density_contract(
+            &self.macro_connectome_masks,
+            &self.sparse_density_priors,
+        )?;
         self.alpha_mask.validate_contract()?;
         self.plasticity_mask.validate_contract()?;
         validate_all(&self.endocrine_constants)?;
@@ -214,6 +218,7 @@ impl MacroConnectomeMask {
             ProjectionKey::new(LobeKind::SensoryGrounding, LobeKind::CoreAssociation),
             ProjectionKey::new(LobeKind::MetabolicDrive, LobeKind::HomeostaticRegulation),
             ProjectionKey::new(LobeKind::CoreAssociation, LobeKind::MotorArbitration),
+            ProjectionKey::new(LobeKind::MotorArbitration, LobeKind::MotorArbitration),
         ]
         .into_iter()
         .map(|projection| Self {
@@ -227,6 +232,9 @@ impl MacroConnectomeMask {
 
 impl Validate for MacroConnectomeMask {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.structural_growth_allowed || !is_canonical_slice_a_projection(self.projection) {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         Ok(())
     }
 }
@@ -257,6 +265,22 @@ impl SparseDensityPrior {
                 density: NormalizedScalar(0.03),
                 max_active_synapse_share: NormalizedScalar(0.25),
             },
+            Self {
+                projection: ProjectionKey::new(
+                    LobeKind::MetabolicDrive,
+                    LobeKind::HomeostaticRegulation,
+                ),
+                density: NormalizedScalar(0.02),
+                max_active_synapse_share: NormalizedScalar(0.15),
+            },
+            Self {
+                projection: ProjectionKey::new(
+                    LobeKind::MotorArbitration,
+                    LobeKind::MotorArbitration,
+                ),
+                density: NormalizedScalar(0.05),
+                max_active_synapse_share: NormalizedScalar(0.10),
+            },
         ]
     }
 }
@@ -266,6 +290,49 @@ impl Validate for SparseDensityPrior {
         validate_normalized(self.density)?;
         validate_normalized(self.max_active_synapse_share)
     }
+}
+
+fn validate_connectome_density_contract(
+    masks: &[MacroConnectomeMask],
+    densities: &[SparseDensityPrior],
+) -> Result<(), ScaffoldContractError> {
+    for (index, mask) in masks.iter().enumerate() {
+        if masks[index + 1..]
+            .iter()
+            .any(|other| other.projection == mask.projection)
+        {
+            return Err(ScaffoldContractError::RoutingDuplicateMask);
+        }
+        let density_count = densities
+            .iter()
+            .filter(|density| density.projection == mask.projection)
+            .count();
+        if (mask.enabled && density_count != 1) || (!mask.enabled && density_count != 0) {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+    }
+    for (index, density) in densities.iter().enumerate() {
+        if densities[index + 1..]
+            .iter()
+            .any(|other| other.projection == density.projection)
+            || !masks
+                .iter()
+                .any(|mask| mask.enabled && mask.projection == density.projection)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+    }
+    Ok(())
+}
+
+const fn is_canonical_slice_a_projection(key: ProjectionKey) -> bool {
+    matches!(
+        (key.source_lobe, key.target_lobe),
+        (LobeKind::SensoryGrounding, LobeKind::CoreAssociation)
+            | (LobeKind::CoreAssociation, LobeKind::MotorArbitration)
+            | (LobeKind::MetabolicDrive, LobeKind::HomeostaticRegulation)
+            | (LobeKind::MotorArbitration, LobeKind::MotorArbitration)
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -438,16 +505,45 @@ impl Validate for ProjectionPlasticityMask {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EndocrineConstantKind {
-    DopamineBaseline,
-    SerotoninBaseline,
-    CortisolBaseline,
-    OxytocinBaseline,
-    AdrenalineBaseline,
-    AcetylcholineBaseline,
-    BrainAtpBaseline,
-    DevelopmentHormoneBaseline,
+    DopamineBaseline = 0,
+    SerotoninBaseline = 1,
+    CortisolBaseline = 2,
+    OxytocinBaseline = 3,
+    AdrenalineBaseline = 4,
+    AcetylcholineBaseline = 5,
+    BrainAtpBaseline = 6,
+    DevelopmentHormoneBaseline = 7,
+}
+
+impl EndocrineConstantKind {
+    pub const fn raw(self) -> u8 {
+        match self {
+            Self::DopamineBaseline => 0,
+            Self::SerotoninBaseline => 1,
+            Self::CortisolBaseline => 2,
+            Self::OxytocinBaseline => 3,
+            Self::AdrenalineBaseline => 4,
+            Self::AcetylcholineBaseline => 5,
+            Self::BrainAtpBaseline => 6,
+            Self::DevelopmentHormoneBaseline => 7,
+        }
+    }
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::DopamineBaseline),
+            1 => Ok(Self::SerotoninBaseline),
+            2 => Ok(Self::CortisolBaseline),
+            3 => Ok(Self::OxytocinBaseline),
+            4 => Ok(Self::AdrenalineBaseline),
+            5 => Ok(Self::AcetylcholineBaseline),
+            6 => Ok(Self::BrainAtpBaseline),
+            7 => Ok(Self::DevelopmentHormoneBaseline),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -486,15 +582,42 @@ impl Validate for EndocrineConstantGene {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DriveThresholdKind {
-    Hunger,
-    Fatigue,
-    Fear,
-    Pain,
-    Loneliness,
-    Curiosity,
-    Reproduction,
+    Hunger = 0,
+    Fatigue = 1,
+    Fear = 2,
+    Pain = 3,
+    Loneliness = 4,
+    Curiosity = 5,
+    Reproduction = 6,
+}
+
+impl DriveThresholdKind {
+    pub const fn raw(self) -> u8 {
+        match self {
+            Self::Hunger => 0,
+            Self::Fatigue => 1,
+            Self::Fear => 2,
+            Self::Pain => 3,
+            Self::Loneliness => 4,
+            Self::Curiosity => 5,
+            Self::Reproduction => 6,
+        }
+    }
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Hunger),
+            1 => Ok(Self::Fatigue),
+            2 => Ok(Self::Fear),
+            3 => Ok(Self::Pain),
+            4 => Ok(Self::Loneliness),
+            5 => Ok(Self::Curiosity),
+            6 => Ok(Self::Reproduction),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -528,16 +651,45 @@ impl Validate for DriveThresholdGene {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SensorChannelKind {
-    Vision,
-    Hearing,
-    Touch,
-    Smell,
-    Taste,
-    Proprioception,
-    Interoception,
-    GlyphVision,
+    Vision = 0,
+    Hearing = 1,
+    Touch = 2,
+    Smell = 3,
+    Taste = 4,
+    Proprioception = 5,
+    Interoception = 6,
+    GlyphVision = 7,
+}
+
+impl SensorChannelKind {
+    pub const fn raw(self) -> u8 {
+        match self {
+            Self::Vision => 0,
+            Self::Hearing => 1,
+            Self::Touch => 2,
+            Self::Smell => 3,
+            Self::Taste => 4,
+            Self::Proprioception => 5,
+            Self::Interoception => 6,
+            Self::GlyphVision => 7,
+        }
+    }
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Vision),
+            1 => Ok(Self::Hearing),
+            2 => Ok(Self::Touch),
+            3 => Ok(Self::Smell),
+            4 => Ok(Self::Taste),
+            5 => Ok(Self::Proprioception),
+            6 => Ok(Self::Interoception),
+            7 => Ok(Self::GlyphVision),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -595,17 +747,48 @@ impl Validate for SensorChannelGene {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MotorAffordanceKind {
-    Move,
-    Turn,
-    Eat,
-    Rest,
-    Interact,
-    Vocalize,
-    Write,
-    Gesture,
-    Reproduce,
+    Move = 0,
+    Turn = 1,
+    Eat = 2,
+    Rest = 3,
+    Interact = 4,
+    Vocalize = 5,
+    Write = 6,
+    Gesture = 7,
+    Reproduce = 8,
+}
+
+impl MotorAffordanceKind {
+    pub const fn raw(self) -> u8 {
+        match self {
+            Self::Move => 0,
+            Self::Turn => 1,
+            Self::Eat => 2,
+            Self::Rest => 3,
+            Self::Interact => 4,
+            Self::Vocalize => 5,
+            Self::Write => 6,
+            Self::Gesture => 7,
+            Self::Reproduce => 8,
+        }
+    }
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Move),
+            1 => Ok(Self::Turn),
+            2 => Ok(Self::Eat),
+            3 => Ok(Self::Rest),
+            4 => Ok(Self::Interact),
+            5 => Ok(Self::Vocalize),
+            6 => Ok(Self::Write),
+            7 => Ok(Self::Gesture),
+            8 => Ok(Self::Reproduce),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -722,13 +905,36 @@ impl Validate for CrossoverPolicy {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DevelopmentStage {
-    Hatchling,
-    Juvenile,
-    Adolescent,
-    Adult,
-    Elder,
+    Hatchling = 0,
+    Juvenile = 1,
+    Adolescent = 2,
+    Adult = 3,
+    Elder = 4,
+}
+
+impl DevelopmentStage {
+    pub const fn raw(self) -> u8 {
+        match self {
+            Self::Hatchling => 0,
+            Self::Juvenile => 1,
+            Self::Adolescent => 2,
+            Self::Adult => 3,
+            Self::Elder => 4,
+        }
+    }
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Hatchling),
+            1 => Ok(Self::Juvenile),
+            2 => Ok(Self::Adolescent),
+            3 => Ok(Self::Adult),
+            4 => Ok(Self::Elder),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
