@@ -701,6 +701,55 @@ fn legacy_patch_v1() -> LegacyExperiencePatchV1 {
     }
 }
 
+fn legacy_proposals(count: u32) -> Vec<ActionProposal> {
+    (0..count)
+        .map(|index| {
+            ActionProposal::new(
+                ActionId(1_000 + index),
+                ActionKind::Move,
+                index as f32 / count.max(1) as f32,
+                Confidence::new(0.8).unwrap(),
+                None,
+                0,
+                ActionTarget::new(Some(WorldEntityId(55)), Some(Vec3f::new(1.0, 0.0, 2.0))),
+                NormalizedScalar::new(0.4).unwrap(),
+            )
+            .unwrap()
+        })
+        .collect()
+}
+
+fn install_legacy_decision(
+    legacy: &mut LegacyExperiencePatchV1,
+    proposals: Vec<ActionProposal>,
+    config: ActionArbitrationConfig,
+) -> alife_core::ActionDecision {
+    let action_decision = cpu_reference_arbitrate(organism(), &proposals, config).unwrap();
+    legacy.decision.proposals = proposals;
+    legacy.decision.selected_action = action_decision.selected;
+    legacy.decision.rejected_top_proposal = action_decision.rejected_top_proposal;
+    legacy.decision.ranked_top_proposals = action_decision.ranked_top_proposals.clone();
+    legacy.decision.arbitration_trace = action_decision.trace.clone();
+    legacy.decision.confidence = action_decision.selected.confidence;
+    legacy.decision.status = action_decision.status;
+    action_decision
+}
+
+fn migrate_legacy_patch(legacy: LegacyExperiencePatchV1) -> ExperiencePatch {
+    let value = serde_json::to_value(legacy).unwrap();
+    serde_json::from_value(value).unwrap()
+}
+
+fn assert_contiguous_candidates(patch: &ExperiencePatch) {
+    assert!(patch
+        .pre_action()
+        .perception()
+        .candidates()
+        .iter()
+        .enumerate()
+        .all(|(index, candidate)| candidate.candidate_index as usize == index));
+}
+
 #[test]
 fn legacy_v1_patch_deserializes_as_explicit_heuristic_baseline_evidence() {
     let value = serde_json::to_value(legacy_patch_v1()).unwrap();
@@ -745,4 +794,154 @@ fn legacy_v1_patch_deserializes_as_explicit_heuristic_baseline_evidence() {
     assert!(reserialized["pre_action"].get("body").is_none());
     assert!(reserialized["pre_action"].get("homeostasis").is_none());
     assert!(migrated.validate_contract().is_ok());
+}
+
+#[test]
+fn legacy_v1_migration_preserves_all_33_proposals_with_bounded_selected_candidate() {
+    let mut legacy = legacy_patch_v1();
+    let proposals = legacy_proposals(33);
+    let action_decision = install_legacy_decision(
+        &mut legacy,
+        proposals.clone(),
+        ActionArbitrationConfig {
+            default_duration_ticks: DurationTicks::new(2),
+            ..ActionArbitrationConfig::default()
+        },
+    );
+    let selected_action_id = action_decision.selected.action_id;
+    assert_eq!(selected_action_id, proposals[32].action_id);
+
+    let migrated = migrate_legacy_patch(legacy);
+    let heuristic = migrated.decision().heuristic_evidence().unwrap();
+    let candidates = migrated.pre_action().perception().candidates();
+
+    assert_eq!(heuristic.proposals, proposals);
+    assert_eq!(
+        heuristic.ranked_top_proposals,
+        action_decision.ranked_top_proposals
+    );
+    assert_eq!(heuristic.arbitration_trace, action_decision.trace);
+    assert_eq!(candidates.len(), 32);
+    assert_contiguous_candidates(&migrated);
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|candidate| candidate.action_id)
+            .collect::<Vec<_>>(),
+        proposals[..31]
+            .iter()
+            .map(|proposal| proposal.action_id)
+            .chain(std::iter::once(selected_action_id))
+            .collect::<Vec<_>>()
+    );
+    assert!(candidates
+        .iter()
+        .any(|candidate| candidate.action_id == selected_action_id));
+    assert!(migrated.validate_contract().is_ok());
+}
+
+#[test]
+fn legacy_v1_migration_handles_candidate_boundaries_table() {
+    #[derive(Clone, Copy)]
+    enum SelectionCase {
+        Highest,
+        Preferred(usize),
+        Fallback,
+        NotRepresented,
+    }
+
+    let cases = [
+        ("empty", 0, SelectionCase::Fallback),
+        ("fewer", 3, SelectionCase::Highest),
+        ("exactly-32", 32, SelectionCase::Highest),
+        ("selected-in-first-32", 33, SelectionCase::Preferred(7)),
+        ("fallback", 33, SelectionCase::Fallback),
+        ("not-represented", 33, SelectionCase::NotRepresented),
+    ];
+
+    for (name, count, selection_case) in cases {
+        let mut legacy = legacy_patch_v1();
+        let unrepresented_command = legacy.decision.selected_action;
+        let mut proposals = legacy_proposals(count);
+        if let SelectionCase::Preferred(index) = selection_case {
+            proposals[index].score = 2.0;
+        }
+        let decision = install_legacy_decision(
+            &mut legacy,
+            proposals.clone(),
+            ActionArbitrationConfig {
+                min_score: if matches!(selection_case, SelectionCase::Fallback) {
+                    2.0
+                } else {
+                    ActionArbitrationConfig::default().min_score
+                },
+                ..ActionArbitrationConfig::default()
+            },
+        );
+        let selected_command = if matches!(selection_case, SelectionCase::NotRepresented) {
+            legacy.decision.selected_action = unrepresented_command;
+            legacy.decision.confidence = unrepresented_command.confidence;
+            legacy.decision.status = alife_core::ActionDecisionStatus::Selected;
+            legacy
+                .decision
+                .arbitration_trace
+                .wta_result
+                .selected_proposal_index = None;
+            legacy
+                .decision
+                .arbitration_trace
+                .wta_result
+                .selected_action_id = Some(unrepresented_command.action_id);
+            unrepresented_command
+        } else {
+            decision.selected
+        };
+
+        let expected_action_ids = match selection_case {
+            SelectionCase::Highest => proposals
+                .iter()
+                .take(32)
+                .map(|proposal| proposal.action_id)
+                .collect::<Vec<_>>(),
+            SelectionCase::Preferred(index) => {
+                assert_eq!(
+                    decision.trace.wta_result.selected_proposal_index,
+                    Some(index),
+                    "{name}"
+                );
+                proposals[..32]
+                    .iter()
+                    .map(|proposal| proposal.action_id)
+                    .collect::<Vec<_>>()
+            }
+            SelectionCase::Fallback | SelectionCase::NotRepresented => proposals
+                .iter()
+                .take(31)
+                .map(|proposal| proposal.action_id)
+                .chain(std::iter::once(selected_command.action_id))
+                .collect::<Vec<_>>(),
+        };
+
+        let migrated = migrate_legacy_patch(legacy);
+        let heuristic = migrated.decision().heuristic_evidence().unwrap();
+        let candidates = migrated.pre_action().perception().candidates();
+        assert_eq!(heuristic.proposals, proposals, "{name}");
+        assert_eq!(
+            candidates
+                .iter()
+                .map(|candidate| candidate.action_id)
+                .collect::<Vec<_>>(),
+            expected_action_ids,
+            "{name}"
+        );
+        assert!(candidates.len() <= 32, "{name}");
+        assert!(
+            candidates
+                .iter()
+                .any(|candidate| candidate.action_id == selected_command.action_id),
+            "{name}"
+        );
+        assert_contiguous_candidates(&migrated);
+        assert!(migrated.validate_contract().is_ok(), "{name}");
+    }
 }

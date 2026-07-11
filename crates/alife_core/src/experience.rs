@@ -12,7 +12,7 @@ use crate::{
     PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash, PolicyBackend,
     Pose, RankedActionProposal, RoutingMatrix, ScaffoldContractError, SchemaKind, SchemaVersions,
     SensorProfile, SensoryAbiVersion, SensorySnapshot, SignedValence, TeacherPerceptionChannel,
-    Tick, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
+    Tick, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId, MAX_ACTION_CANDIDATES,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1136,44 +1136,106 @@ impl ExperiencePatch {
 fn legacy_candidates(
     legacy: &LegacyDecisionSnapshotV1,
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
-    let mut candidates = Vec::with_capacity(legacy.proposals.len().max(1));
-    for (index, proposal) in legacy.proposals.iter().enumerate() {
-        let duration = if proposal.action_id == legacy.selected_action.action_id {
-            legacy.selected_action.duration_ticks
+    let selected_proposal_index = legacy_selected_proposal_index(legacy);
+    let proposal_limit =
+        if selected_proposal_index.is_some_and(|index| index < MAX_ACTION_CANDIDATES) {
+            MAX_ACTION_CANDIDATES
         } else {
-            crate::DurationTicks::new(1)
+            MAX_ACTION_CANDIDATES.saturating_sub(1)
         };
-        candidates.push(ActionCandidate::new(
-            u16::try_from(index).map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-            proposal.action_id,
-            proposal.kind,
-            CandidateActionFamily::baseline_for_kind(proposal.kind),
-            CandidateObservationRef::None,
-            proposal.target,
-            CandidateFeatureVector::zero(),
-            proposal.confidence,
-            NormalizedScalar::new(0.0)?,
-            duration,
-            duration,
-        )?);
+    let retained_count = legacy.proposals.len().min(proposal_limit);
+    let mut retained_indices = (0..retained_count).collect::<Vec<_>>();
+
+    match selected_proposal_index {
+        Some(index) if index >= MAX_ACTION_CANDIDATES => retained_indices.push(index),
+        Some(_) => {}
+        None => retained_indices.push(usize::MAX),
     }
-    if candidates.is_empty() {
-        let command = legacy.selected_action;
-        candidates.push(ActionCandidate::new(
-            0,
-            command.action_id,
-            command.kind,
-            CandidateActionFamily::baseline_for_kind(command.kind),
-            CandidateObservationRef::None,
-            crate::ActionTarget::new(command.target_entity, command.target_position),
-            CandidateFeatureVector::zero(),
-            command.confidence,
-            NormalizedScalar::new(0.0)?,
-            command.duration_ticks,
-            command.duration_ticks,
-        )?);
+
+    retained_indices
+        .into_iter()
+        .enumerate()
+        .map(|(candidate_index, proposal_index)| {
+            let candidate_index = u16::try_from(candidate_index)
+                .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?;
+            match legacy.proposals.get(proposal_index) {
+                Some(proposal) => legacy_candidate_from_proposal(
+                    candidate_index,
+                    *proposal,
+                    (Some(proposal_index) == selected_proposal_index)
+                        .then_some(legacy.selected_action.duration_ticks),
+                ),
+                None => legacy_candidate_from_command(candidate_index, legacy.selected_action),
+            }
+        })
+        .collect()
+}
+
+fn legacy_selected_proposal_index(legacy: &LegacyDecisionSnapshotV1) -> Option<usize> {
+    if legacy.status != ActionDecisionStatus::Selected {
+        return None;
     }
-    Ok(candidates)
+    let index = legacy
+        .arbitration_trace
+        .wta_result
+        .selected_proposal_index?;
+    legacy
+        .proposals
+        .get(index)
+        .filter(|proposal| legacy_proposal_matches_command(proposal, &legacy.selected_action))
+        .map(|_| index)
+}
+
+fn legacy_proposal_matches_command(proposal: &ActionProposal, command: &ActionCommand) -> bool {
+    proposal.action_id == command.action_id
+        && proposal.kind == command.kind
+        && proposal.target.entity == command.target_entity
+        && same_optional_vec3_bits(proposal.target.position, command.target_position)
+        && same_f32_bits(proposal.intensity.raw(), command.intensity.raw())
+        && same_f32_bits(proposal.confidence.raw(), command.confidence.raw())
+        && proposal.source_mask == command.source_mask
+        && proposal.teacher_lesson == command.teacher_lesson
+        && proposal.motor_payload == command.motor_payload
+}
+
+fn legacy_candidate_from_proposal(
+    candidate_index: u16,
+    proposal: ActionProposal,
+    selected_duration: Option<crate::DurationTicks>,
+) -> Result<ActionCandidate, ScaffoldContractError> {
+    let duration = selected_duration.unwrap_or_else(|| crate::DurationTicks::new(1));
+    ActionCandidate::new(
+        candidate_index,
+        proposal.action_id,
+        proposal.kind,
+        CandidateActionFamily::baseline_for_kind(proposal.kind),
+        CandidateObservationRef::None,
+        proposal.target,
+        CandidateFeatureVector::zero(),
+        proposal.confidence,
+        NormalizedScalar::new(0.0)?,
+        duration,
+        duration,
+    )
+}
+
+fn legacy_candidate_from_command(
+    candidate_index: u16,
+    command: ActionCommand,
+) -> Result<ActionCandidate, ScaffoldContractError> {
+    ActionCandidate::new(
+        candidate_index,
+        command.action_id,
+        command.kind,
+        CandidateActionFamily::baseline_for_kind(command.kind),
+        CandidateObservationRef::None,
+        crate::ActionTarget::new(command.target_entity, command.target_position),
+        CandidateFeatureVector::zero(),
+        command.confidence,
+        NormalizedScalar::new(0.0)?,
+        command.duration_ticks,
+        command.duration_ticks,
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
