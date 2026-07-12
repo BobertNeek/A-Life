@@ -11,6 +11,7 @@ alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_school = { path = "../alife_school" }
 alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider"], optional = true }
 alife_world = { path = "../alife_world" }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

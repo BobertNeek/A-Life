@@ -1492,6 +1492,7 @@ fn apply_production_population_target(
         save.creatures
             .retain(|creature| keep_organism_ids.contains(&creature.organism_id.raw()));
         retain_existing_touched_entities(save);
+        assign_production_appearance_slots(save);
         return Ok(());
     }
 
@@ -1594,7 +1595,33 @@ fn apply_production_population_target(
             + 1,
     );
     retain_existing_touched_entities(save);
+    assign_production_appearance_slots(save);
     Ok(())
+}
+
+fn assign_production_appearance_slots(save: &mut PortableSaveFile) {
+    let mut organism_ids = save
+        .creatures
+        .iter()
+        .map(|creature| creature.organism_id)
+        .collect::<Vec<_>>();
+    organism_ids.sort_by_key(|organism_id| organism_id.raw());
+    let slots = organism_ids
+        .into_iter()
+        .enumerate()
+        .map(|(slot, organism_id)| (organism_id.raw(), slot))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let legacy_default = CreatureAppearanceGenome::default();
+    for creature in &mut save.creatures {
+        if creature.appearance == legacy_default {
+            creature.appearance = CreatureAppearanceGenome::from_ids(
+                creature.organism_id,
+                creature.genome_id,
+                slots[&creature.organism_id.raw()],
+                save.deterministic_seed,
+            );
+        }
+    }
 }
 
 fn production_creature_save_for_slot(
@@ -1610,6 +1637,12 @@ fn production_creature_save_for_slot(
         genome_id,
         brain_class: template.brain_class,
         development_tick: template.development_tick,
+        appearance: CreatureAppearanceGenome::from_ids(
+            organism_id,
+            genome_id,
+            slot,
+            template.genome_id.raw() ^ template.organism_id.raw(),
+        ),
         mind: CreatureMindSaveSummary {
             tick,
             homeostasis,
@@ -2285,5 +2318,35 @@ mod tests {
         assert!(!lower_json.contains("bevy"));
         assert!(!lower_json.contains("wgpu"));
         assert!(!lower_json.contains("renderer"));
+    }
+
+    #[test]
+    fn production_population_backfills_legacy_appearance_without_rewriting_saved_genes() {
+        let root = gpu_alpha_fixture_root();
+        let mut save = gpu_alpha_save();
+        let preserved = CreatureAppearanceGenome::offspring_from_parents(
+            CreatureAppearanceGenome::founder_for_species(4, 11),
+            CreatureAppearanceGenome::founder_for_species(9, 17),
+            23,
+        );
+        save.creatures[0].appearance = preserved;
+        let organism_id = save.creatures[0].organism_id;
+
+        let production = production_voxel_save_with_population(
+            &save,
+            &root,
+            ProductionFrontendProfileId::MinSpecComfort1080p,
+            30,
+        )
+        .unwrap();
+        let appearance = production
+            .creatures
+            .iter()
+            .find(|creature| creature.organism_id == organism_id)
+            .unwrap()
+            .appearance;
+
+        assert_eq!(appearance, preserved);
+        assert!(appearance.mutation_count > 0);
     }
 }

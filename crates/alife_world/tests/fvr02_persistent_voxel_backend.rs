@@ -28,6 +28,7 @@ fn fixture_creature() -> CreatureSaveState {
         genome_id: GenomeId(17),
         brain_class: BrainScaleTier::Nano512,
         development_tick: Tick::new(3),
+        appearance: alife_world::CreatureAppearanceGenome::default(),
         mind: CreatureMindSaveSummary {
             tick: Tick::new(3),
             homeostasis: HomeostaticSnapshot::baseline(Tick::new(3)),

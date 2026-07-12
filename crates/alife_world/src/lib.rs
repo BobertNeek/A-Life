@@ -2,6 +2,7 @@
 
 use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
 
+pub mod appearance;
 pub mod ecology;
 pub mod headless;
 pub mod persistence;
@@ -9,6 +10,7 @@ pub mod persistent_voxel;
 pub mod procedural_chunks;
 pub mod scenario;
 
+pub use appearance::*;
 pub use ecology::*;
 pub use headless::*;
 pub use persistence::*;

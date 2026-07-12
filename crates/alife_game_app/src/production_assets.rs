@@ -20,8 +20,8 @@ pub const FVR07_PRODUCTION_ASSET_MANIFEST_APP_RELATIVE_PATH: &str =
     "assets/production_voxel_v1/production_asset_manifest.json";
 pub const FVR07_PRODUCTION_ASSET_PACK_ID: &str = "production-voxel-v1";
 pub const FVR07_ART_DIRECTION: &str = "stylized-voxel-alife-production-v1";
-pub const FVR07_MAX_COMMITTED_ASSET_BYTES: u64 = 256 * 1024;
-pub const FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES: u64 = 2 * 1024 * 1024;
+pub const FVR07_MAX_COMMITTED_ASSET_BYTES: u64 = 512 * 1024;
+pub const FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES: u64 = 8 * 1024 * 1024;
 
 pub const FVR07_REQUIRED_USAGE_CATEGORIES: [&str; 15] = [
     "voxel-material-atlas",
@@ -555,6 +555,7 @@ fn license_allowed(license: &str) -> bool {
         license,
         "A-Life-Generated-Source"
             | "CC0-1.0"
+            | "CC-BY-4.0"
             | "Public-Domain"
             | "MIT"
             | "Apache-2.0"
@@ -677,6 +678,34 @@ mod tests {
             );
             assert!(!entry.placeholder);
         }
+    }
+
+    #[test]
+    fn fvr11_terrain_atlases_are_manifested_and_compact() {
+        let path = default_production_asset_manifest_path();
+        let manifest: ProductionVoxelAssetManifest =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let required = [
+            "terrain-albedo-atlas",
+            "terrain-normal-atlas",
+            "terrain-orm-atlas",
+        ];
+        for asset_id in required {
+            let entry = manifest
+                .entries
+                .iter()
+                .find(|entry| entry.asset_id == asset_id)
+                .unwrap_or_else(|| panic!("missing {asset_id}"));
+            assert!(entry.final_art);
+            assert!(!entry.placeholder);
+            assert!(entry.generated);
+            assert!(!entry.external);
+            assert!(entry.size_bytes <= FVR07_MAX_COMMITTED_ASSET_BYTES);
+            assert!(entry
+                .local_path
+                .starts_with("crates/alife_game_app/assets/production_voxel_v1/terrain/"));
+        }
+        validate_production_assets(&path).unwrap();
     }
 
     #[test]

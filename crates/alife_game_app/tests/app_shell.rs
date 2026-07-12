@@ -5647,6 +5647,48 @@ fn lifecycle_lineage_birth_creates_valid_offspring_genome() {
 }
 
 #[test]
+fn lifecycle_lineage_birth_inherits_and_mutates_appearance_genes() {
+    let summary = run_lifecycle_lineage_smoke().unwrap();
+    let birth = &summary.lineage_records[0];
+    let offspring = summary
+        .creatures
+        .iter()
+        .find(|creature| creature.genome_id == birth.offspring_genome_id)
+        .expect("G09 smoke should create one offspring");
+    let parents = birth
+        .parent_genome_ids
+        .iter()
+        .map(|parent_genome| {
+            summary
+                .creatures
+                .iter()
+                .find(|creature| creature.genome_id == *parent_genome)
+                .expect("parent genome should stay visible in lifecycle summary")
+        })
+        .collect::<Vec<_>>();
+
+    assert!(offspring
+        .appearance
+        .inherited_from(parents[0].appearance, parents[1].appearance));
+    assert!(
+        offspring.appearance.mutation_count
+            > parents[0]
+                .appearance
+                .mutation_count
+                .max(parents[1].appearance.mutation_count),
+        "offspring appearance should allow simple mutation across generations"
+    );
+    assert_ne!(
+        offspring.appearance.signature_line(),
+        parents[0].appearance.signature_line()
+    );
+    assert_ne!(
+        offspring.appearance.signature_line(),
+        parents[1].appearance.signature_line()
+    );
+}
+
+#[test]
 fn lifecycle_lineage_keeps_genetic_baseline_immutable_by_default() {
     let summary = run_lifecycle_lineage_smoke().unwrap();
     let offspring = summary

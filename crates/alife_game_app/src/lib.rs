@@ -45,10 +45,10 @@ mod prelude {
         FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::{
-        CreatureWorldAnchor, EcologyMetrics, EcologyZoneId, HeadlessActionIds,
-        HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessSensoryReport, HeadlessWorld,
-        PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZone, TerrainZoneKind,
-        WorldEditorSpawnSpec, WorldObjectKind,
+        CreatureAppearanceGenome, CreatureWorldAnchor, EcologyMetrics, EcologyZoneId,
+        HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessSensoryReport,
+        HeadlessWorld, PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZone,
+        TerrainZoneKind, WorldEditorSpawnSpec, WorldObjectKind,
     };
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use thiserror::Error;
@@ -126,6 +126,33 @@ pub use environment_launcher::*;
 
 mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
+
+#[cfg(feature = "bevy-app")]
+mod production_terrain;
+#[cfg(feature = "bevy-app")]
+pub use production_terrain::{
+    Fvr11ProductionTerrainLayer, Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole,
+    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+};
+
+#[cfg(feature = "bevy-app")]
+mod terrain_mesh;
+
+#[cfg(feature = "bevy-app")]
+mod terrain_materials;
+#[cfg(feature = "bevy-app")]
+pub use terrain_materials::Fvr11ProductionTerrainMaterialContract;
+
+#[cfg(feature = "bevy-app")]
+mod terrain_water;
+
+#[cfg(feature = "bevy-app")]
+mod terrain_dressing;
+
+#[cfg(feature = "bevy-app")]
+mod terrain_lighting;
+#[cfg(feature = "bevy-app")]
+pub use terrain_lighting::{Fvr11ProductionContactShadow, Fvr11ProductionTerrainLightingMarker};
 
 #[cfg(feature = "bevy-app")]
 mod production_voxel_renderer;
