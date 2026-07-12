@@ -2,8 +2,8 @@
 
 use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
 
-pub mod candidate_enumerator;
 pub mod appearance;
+pub mod candidate_enumerator;
 pub mod ecology;
 pub mod headless;
 mod legacy_neural_policy_v1;
@@ -12,8 +12,8 @@ pub mod persistent_voxel;
 pub mod procedural_chunks;
 pub mod scenario;
 
-pub use candidate_enumerator::*;
 pub use appearance::*;
+pub use candidate_enumerator::*;
 pub use ecology::*;
 pub use headless::*;
 pub use persistence::*;
