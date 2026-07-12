@@ -7,7 +7,7 @@ pub const GPU_BRAIN_SLOT_RECORD_BYTES: usize = 144;
 pub const GPU_CANDIDATE_RECORD_BYTES: usize = 32;
 pub const GPU_SELECTION_RECORD_BYTES: usize = 48;
 /// Exact executable ordering/layout ABI understood by the current closed-loop shaders.
-pub const GPU_CLOSED_LOOP_LAYOUT_VERSION: u32 = 1;
+pub const GPU_CLOSED_LOOP_LAYOUT_VERSION: u32 = 2;
 pub const GPU_NO_EXTENSION_SENTINEL: u32 = u32::MAX;
 pub const CLOSED_LOOP_ABI_WGSL: &str = include_str!("../../shaders/closed_loop_abi.wgsl");
 
@@ -43,7 +43,9 @@ gpu_record!(GpuPerceptionHeader {
     sensory_offset: u32,
     candidate_offset: u32,
     brain_slot_index: u32,
-    reserved: [u32; 3]
+    dispatch_generation_lo: u32,
+    dispatch_generation_hi: u32,
+    reserved: u32
 });
 gpu_record!(GpuBrainSlotRecord {
     schema_version: u32,

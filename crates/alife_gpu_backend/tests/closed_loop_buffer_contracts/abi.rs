@@ -47,7 +47,7 @@ fn every_shader_visible_record_is_compile_time_pod_and_zeroable() {
 #[test]
 fn packed_records_decode_from_deliberately_unaligned_word_subslices() {
     let header = GpuPerceptionHeader {
-        schema_version: 1,
+        schema_version: GPU_CLOSED_LOOP_LAYOUT_VERSION,
         class_id: 512,
         slot: 3,
         slot_generation: 9,
@@ -60,7 +60,9 @@ fn packed_records_decode_from_deliberately_unaligned_word_subslices() {
         sensory_offset: 11,
         candidate_offset: 16,
         brain_slot_index: 3,
-        reserved: [0; 3],
+        dispatch_generation_lo: 17,
+        dispatch_generation_hi: 0,
+        reserved: 0,
     };
     let candidate = GpuCandidateRecord {
         action_id: 4,
@@ -97,8 +99,10 @@ fn packed_records_decode_from_deliberately_unaligned_word_subslices() {
 
 #[test]
 fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
-    assert_eq!(GPU_CLOSED_LOOP_LAYOUT_VERSION, 1);
-    assert!(CLOSED_LOOP_ABI_WGSL.contains("const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 1u;"));
+    assert_eq!(GPU_CLOSED_LOOP_LAYOUT_VERSION, 2);
+    assert!(CLOSED_LOOP_ABI_WGSL.contains("const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 2u;"));
+    assert!(CLOSED_LOOP_ABI_WGSL
+        .contains("header.dispatch_generation_lo != 0u || header.dispatch_generation_hi != 0u"));
     assert_eq!(
         std::mem::size_of::<GpuPerceptionHeader>(),
         GPU_PERCEPTION_HEADER_BYTES
@@ -147,7 +151,8 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
     assert_record_offsets!(GpuPerceptionHeader, PERCEPTION_FIELDS;
         schema_version, class_id, slot, slot_generation, neuron_count, candidate_count,
         microstep_count, active_activation_side, tick_lo, tick_hi, sensory_offset,
-        candidate_offset, brain_slot_index, reserved);
+        candidate_offset, brain_slot_index, dispatch_generation_lo, dispatch_generation_hi,
+        reserved);
     assert_record_offsets!(GpuBrainSlotRecord, BRAIN_SLOT_FIELDS;
         schema_version, class_id, slot, slot_generation, neuron_count, microstep_count,
         synapse_count, recurrent_synapse_count, encoder_plan_offset, neuron_dynamics_offset,
@@ -315,7 +320,7 @@ fn naga_reflection_matches_every_closed_loop_wgsl_record() {
     }
 }
 
-const PERCEPTION_FIELDS: [(&str, u32); 14] = sequential(&[
+const PERCEPTION_FIELDS: [(&str, u32); 16] = sequential(&[
     "schema_version",
     "class_id",
     "slot",
@@ -329,6 +334,8 @@ const PERCEPTION_FIELDS: [(&str, u32); 14] = sequential(&[
     "sensory_offset",
     "candidate_offset",
     "brain_slot_index",
+    "dispatch_generation_lo",
+    "dispatch_generation_hi",
     "reserved",
 ]);
 const BRAIN_SLOT_FIELDS: [(&str, u32); 34] = sequential(&[

@@ -2,6 +2,7 @@
 //!
 //! Host code here only compiles/uploads contracts and derives structural counts. It never
 //! executes neural math, supplies a neural oracle, or falls back from GPU authority.
+#![allow(dead_code)] // Shared by integration targets that intentionally use disjoint helpers.
 
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainCapacityClass,
@@ -30,6 +31,18 @@ pub fn n512_phenotype_at_maturation(seed: u64, maturation: f32) -> BrainPhenotyp
         SensorProfile::PrivilegedAffordanceV1,
     )
     .unwrap()
+}
+
+pub fn controlled_n512_phenotype_at_maturation(maturation: f32) -> BrainPhenotype {
+    // Seed 13 is the checked-in deterministic fixture with the required
+    // Idle/Inspect motor self-loop at every maturation used by these tests.
+    n512_phenotype_at_maturation(13, maturation)
+}
+
+pub fn controlled_sensory_n512_phenotype() -> BrainPhenotype {
+    // Seed 15 is the checked-in deterministic fixture with the required
+    // encoded two-hop sensory-to-motor path.
+    n512_phenotype_at_maturation(15, 0.35)
 }
 
 pub fn perception_frame(
@@ -99,7 +112,7 @@ mod hardware {
     use alife_core::{BrainCapacityClass, BrainPhenotype, PerceptionFrame};
     use alife_gpu_backend::{
         GpuActiveBatchEntry, GpuBrainSlot, GpuClassBucketBuffers, GpuClassBucketPlan,
-        GpuClosedLoopPipelines, GpuPhenotypeUpload,
+        GpuClosedLoopPipelines, GpuPhenotypeUpload, GpuSelectionRecord,
     };
 
     const SLOT_COUNT: usize = 3;
@@ -130,6 +143,31 @@ mod hardware {
         pub readback_bytes: u64,
     }
 
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct CompactSelection {
+        pub candidate_index: u32,
+        pub logit: f32,
+        pub confidence_q16: u32,
+        pub status: u32,
+        pub dispatch_generation: u64,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct GpuFrameResult {
+        pub adapter_identity: String,
+        pub selection: CompactSelection,
+        pub record: GpuSelectionRecord,
+        pub active_activation_side: u32,
+        pub compact_readback_bytes: u64,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct DecoderLesionReceipt {
+        pub adapter_identity: String,
+        pub changed_ranges: Vec<std::ops::Range<u32>>,
+        pub recurrent_prefixes_unchanged: bool,
+    }
+
     pub struct GpuPipelineFixture {
         adapter_name: String,
         device: wgpu::Device,
@@ -158,8 +196,8 @@ mod hardware {
             let capacity = BrainCapacityClass::n512();
             let mut plan = GpuClassBucketPlan::new(capacity, SLOT_COUNT as u32).unwrap();
             let slot0 = plan.insert_phenotype(0, 7, phenotypes[0]).unwrap();
-            let slot1 = plan.insert_phenotype(1, 11, phenotypes[1]).unwrap();
-            let slot2 = plan.insert_phenotype(2, 13, phenotypes[2]).unwrap();
+            let slot1 = plan.insert_phenotype(1, 7, phenotypes[1]).unwrap();
+            let slot2 = plan.insert_phenotype(2, 7, phenotypes[2]).unwrap();
 
             let instance = wgpu::Instance::default();
             let adapters = instance.enumerate_adapters(wgpu::Backends::all()).await;
@@ -198,9 +236,9 @@ mod hardware {
             let (sample_indices, recurrent_sample_positions, loop_sample_positions) =
                 derive_sample_indices(&upload, phenotypes[0].neuron_count());
             let mut initial_mutable_state_words = plan.mutable_state_words().to_vec();
-            for (index, slot) in [&slot0, &slot1, &slot2].into_iter().enumerate() {
-                let a = (0.125_f32 + index as f32).to_bits();
-                let b = (-0.25_f32 - index as f32).to_bits();
+            for slot in [&slot0, &slot1, &slot2] {
+                let a = 0.125_f32.to_bits();
+                let b = (-0.25_f32).to_bits();
                 initial_mutable_state_words[slot.word_ranges().activation_a_words.start as usize
                     ..slot.word_ranges().activation_a_words.end as usize]
                     .fill(a);
@@ -262,7 +300,7 @@ mod hardware {
                 empty_buffer(
                     &device,
                     "compact-readback",
-                    64,
+                    (SLOT_COUNT * 48) as u64,
                     wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 ),
             )
@@ -312,6 +350,354 @@ mod hardware {
                 self.queue
                     .write_buffer(weights, start as u64 * 4, bytemuck::cast_slice(&words));
             }
+        }
+
+        pub fn set_decoder_genetic_weights_zeroed(&self, zeroed: bool) {
+            let weights = self.buffers.neural_buffers()[3];
+            for slot in &self.slots {
+                let start = slot.word_ranges().genetic_weight_words.start as usize
+                    + slot.record().recurrent_synapse_count as usize;
+                let end = slot.word_ranges().genetic_weight_words.end as usize;
+                let words = if zeroed {
+                    vec![0_u32; end - start]
+                } else {
+                    self.immutable_weight_words[start..end].to_vec()
+                };
+                self.queue
+                    .write_buffer(weights, start as u64 * 4, bytemuck::cast_slice(&words));
+            }
+        }
+
+        pub fn lesion_decoder_genetic_weights(&self) -> DecoderLesionReceipt {
+            let mut changed_ranges = Vec::with_capacity(SLOT_COUNT);
+            for slot in &self.slots {
+                let start = slot.word_ranges().genetic_weight_words.start
+                    + slot.record().recurrent_synapse_count;
+                let end = slot.word_ranges().genetic_weight_words.end;
+                assert!(self.immutable_weight_words[start as usize..end as usize]
+                    .iter()
+                    .any(|word| *word != 0));
+                changed_ranges.push(start..end);
+            }
+            let recurrent_prefixes_unchanged =
+                changed_ranges.iter().zip(&self.slots).all(|(range, slot)| {
+                    range.start
+                        == slot.word_ranges().genetic_weight_words.start
+                            + slot.record().recurrent_synapse_count
+                });
+            self.set_decoder_genetic_weights_zeroed(true);
+            DecoderLesionReceipt {
+                adapter_identity: self.adapter_name.clone(),
+                changed_ranges,
+                recurrent_prefixes_unchanged,
+            }
+        }
+
+        pub fn set_all_genetic_weights_zeroed(&self, zeroed: bool) {
+            let weights = self.buffers.neural_buffers()[3];
+            let words = if zeroed {
+                vec![0_u32; self.immutable_weight_words.len()]
+            } else {
+                self.immutable_weight_words.clone()
+            };
+            self.queue
+                .write_buffer(weights, 0, bytemuck::cast_slice(&words));
+        }
+
+        pub fn set_decoder_genetic_weights_non_finite(&self) {
+            let weights = self.buffers.neural_buffers()[3];
+            for slot in &self.slots {
+                let start = slot.word_ranges().genetic_weight_words.start as usize
+                    + slot.record().recurrent_synapse_count as usize;
+                let end = slot.word_ranges().genetic_weight_words.end as usize;
+                let words = vec![f32::NAN.to_bits(); end - start];
+                self.queue
+                    .write_buffer(weights, start as u64 * 4, bytemuck::cast_slice(&words));
+            }
+        }
+
+        pub fn zero_all_mutable_layers_and_assert_biases(&self, phenotype: &BrainPhenotype) {
+            let upload = GpuPhenotypeUpload::try_from(phenotype).unwrap();
+            assert!(upload
+                .neuron_dynamics
+                .iter()
+                .all(|row| row.bias_bits == 0.0_f32.to_bits()));
+            assert!(upload
+                .decoder_families
+                .iter()
+                .all(|row| row.bias_bits == 0.0_f32.to_bits()));
+            let zero = vec![0_u32; self.initial_mutable_state_words.len()];
+            self.queue.write_buffer(
+                self.buffers.neural_buffers()[6],
+                0,
+                bytemuck::cast_slice(&zero),
+            );
+        }
+
+        pub fn configure_controlled_motor_loop_and_decoder(
+            &self,
+            phenotype: &BrainPhenotype,
+            inspect_on_positive: bool,
+        ) {
+            self.set_recurrent_genetic_weights_zeroed(true);
+            self.set_decoder_genetic_weights_zeroed(true);
+            let upload = GpuPhenotypeUpload::try_from(phenotype).unwrap();
+            let decoder = upload.decoder_plans[0];
+            let weights = self.buffers.neural_buffers()[3];
+            let controlled = [0_u32, 2_u32]
+                .into_iter()
+                .find_map(|family_raw| {
+                    let family = &upload.decoder_families[family_raw as usize];
+                    assert_eq!(family.family_raw, family_raw);
+                    let begin = ((family.weight_index_start
+                        - upload.decoder_weight_index_word_base)
+                        / 4) as usize;
+                    let end = begin + family.weight_index_count as usize;
+                    upload.decoder_weight_indices[begin..end]
+                        .iter()
+                        .filter(|map| map.input_lane == 0)
+                        .find_map(|map| {
+                            let target = decoder.motor_start + map.motor_index;
+                            let recurrent_begin = upload.target_offsets[target as usize] as usize;
+                            let recurrent_end = upload.target_offsets[target as usize + 1] as usize;
+                            (recurrent_begin..recurrent_end)
+                                .find(|cursor| upload.source_indices[*cursor] == target)
+                                .map(|cursor| (family_raw, *map, target, cursor))
+                        })
+                })
+                .expect("Idle or Inspect lane-zero motor has a recurrent self-loop");
+            let (family_raw, map, target, self_cursor) = controlled;
+            let dynamics = upload.neuron_dynamics[target as usize];
+            assert_eq!(dynamics.bias_bits, 0.0_f32.to_bits());
+            assert_eq!(dynamics.leak_bits, 0.25_f32.to_bits());
+            assert_eq!(dynamics.activation_raw, 2);
+            let recurrent_weight = -8.0_f32;
+            let positive_winner_sign = if family_raw == 0 { 1.0_f32 } else { -1.0_f32 };
+            let family_weight: f32 = if inspect_on_positive {
+                -positive_winner_sign
+            } else {
+                positive_winner_sign
+            };
+            for slot in &self.slots {
+                let recurrent_word =
+                    slot.word_ranges().genetic_weight_words.start + self_cursor as u32;
+                self.queue.write_buffer(
+                    weights,
+                    u64::from(recurrent_word) * 4,
+                    bytemuck::bytes_of(&recurrent_weight.to_bits()),
+                );
+                let decoder_word =
+                    slot.word_ranges().genetic_weight_words.start + map.global_synapse_id;
+                self.queue.write_buffer(
+                    weights,
+                    u64::from(decoder_word) * 4,
+                    bytemuck::bytes_of(&family_weight.to_bits()),
+                );
+            }
+            let mutable = self.buffers.neural_buffers()[6];
+            for slot in &self.slots {
+                let positive = 1.0_f32;
+                self.queue.write_buffer(
+                    mutable,
+                    u64::from(slot.word_ranges().activation_a_words.start + target) * 4,
+                    bytemuck::bytes_of(&positive),
+                );
+                self.queue.write_buffer(
+                    mutable,
+                    u64::from(slot.word_ranges().activation_b_words.start + target) * 4,
+                    bytemuck::bytes_of(&positive),
+                );
+            }
+        }
+
+        pub fn configure_controlled_sensory_path_and_decoder(&self, phenotype: &BrainPhenotype) {
+            self.set_recurrent_genetic_weights_zeroed(true);
+            self.set_decoder_genetic_weights_zeroed(true);
+            self.zero_all_mutable_layers_and_assert_biases(phenotype);
+            let upload = GpuPhenotypeUpload::try_from(phenotype).unwrap();
+            let decoder = upload.decoder_plans[0];
+            let sensory_targets = upload
+                .encoder_assignments
+                .iter()
+                .filter(|row| row.source_group_raw == 1 && row.source_index == 0)
+                .map(|row| row.target_neuron)
+                .collect::<Vec<_>>();
+            assert!(!sensory_targets.is_empty());
+            let path = [0_u32, 2_u32]
+                .into_iter()
+                .find_map(|family_raw| {
+                    let family = &upload.decoder_families[family_raw as usize];
+                    let map_begin = ((family.weight_index_start
+                        - upload.decoder_weight_index_word_base)
+                        / 4) as usize;
+                    let map_end = map_begin + family.weight_index_count as usize;
+                    upload.decoder_weight_indices[map_begin..map_end]
+                        .iter()
+                        .filter(|map| map.input_lane == 0)
+                        .find_map(|map| {
+                            let motor = decoder.motor_start + map.motor_index;
+                            let motor_begin = upload.target_offsets[motor as usize] as usize;
+                            let motor_end = upload.target_offsets[motor as usize + 1] as usize;
+                            (motor_begin..motor_end).find_map(|association_to_motor| {
+                                let association = upload.source_indices[association_to_motor];
+                                let association_begin =
+                                    upload.target_offsets[association as usize] as usize;
+                                let association_end =
+                                    upload.target_offsets[association as usize + 1] as usize;
+                                (association_begin..association_end)
+                                    .find(|sensory_to_association| {
+                                        sensory_targets.contains(
+                                            &upload.source_indices[*sensory_to_association],
+                                        )
+                                    })
+                                    .map(|sensory_to_association| {
+                                        (*map, sensory_to_association, association_to_motor)
+                                    })
+                            })
+                        })
+                })
+                .expect("compiled encoder and recurrent CSR expose a two-hop sensory-motor path");
+            let (map, sensory_to_association, association_to_motor) = path;
+            let weights = self.buffers.neural_buffers()[3];
+            for slot in &self.slots {
+                for cursor in [sensory_to_association, association_to_motor] {
+                    let word = slot.word_ranges().genetic_weight_words.start + cursor as u32;
+                    self.queue.write_buffer(
+                        weights,
+                        u64::from(word) * 4,
+                        bytemuck::bytes_of(&4.0_f32.to_bits()),
+                    );
+                }
+                let decoder_word =
+                    slot.word_ranges().genetic_weight_words.start + map.global_synapse_id;
+                self.queue.write_buffer(
+                    weights,
+                    u64::from(decoder_word) * 4,
+                    bytemuck::bytes_of(&2.0_f32.to_bits()),
+                );
+            }
+        }
+
+        pub fn adapter_identity(&self) -> &str {
+            &self.adapter_name
+        }
+
+        pub async fn run_frame(&mut self, frame: &PerceptionFrame) -> GpuFrameResult {
+            let entries = [GpuActiveBatchEntry::new(frame, &self.slots[0])];
+            let batch = self
+                .pipelines
+                .build_active_batch(&self.plan, &entries, FRAME_BASE_WORDS)
+                .unwrap();
+            // Task 6 production must add this atomic encode -> recurrent ->
+            // decode -> select submission, including upload and exact compact
+            // readback. The fixture intentionally has no CPU neural or
+            // winner-selection implementation.
+            let (records, actual_readback_bytes): (Vec<GpuSelectionRecord>, u64) = self
+                .pipelines
+                .submit_closed_loop_frame(&self.device, &self.queue, &self.buffers, &batch)
+                .await
+                .unwrap();
+            assert_eq!(records.len(), 1);
+            assert_eq!(actual_readback_bytes, 48);
+            let record = records[0];
+            assert_eq!(record.slot, self.slots[0].record().slot);
+            assert_eq!(
+                record.slot_generation,
+                self.slots[0].record().slot_generation
+            );
+            assert!(record.active_activation_side <= 1);
+            GpuFrameResult {
+                adapter_identity: self.adapter_name.clone(),
+                selection: CompactSelection {
+                    candidate_index: record.candidate_index,
+                    logit: f32::from_bits(record.logit_bits),
+                    confidence_q16: record.confidence_q16,
+                    status: record.status,
+                    dispatch_generation: u64::from(record.dispatch_generation_lo)
+                        | (u64::from(record.dispatch_generation_hi) << 32),
+                },
+                record,
+                active_activation_side: record.active_activation_side,
+                compact_readback_bytes: actual_readback_bytes,
+            }
+        }
+
+        pub async fn run_frame_pair(
+            &mut self,
+            frames: [&PerceptionFrame; 2],
+        ) -> [GpuFrameResult; 2] {
+            let entries = [
+                GpuActiveBatchEntry::new(frames[0], &self.slots[0]),
+                GpuActiveBatchEntry::new(frames[1], &self.slots[1]),
+            ];
+            let batch = self
+                .pipelines
+                .build_active_batch(&self.plan, &entries, FRAME_BASE_WORDS)
+                .unwrap();
+            assert_eq!(batch.headers().len(), 2);
+            for (row, header) in batch.headers().iter().enumerate() {
+                let row_base = row * alife_gpu_backend::GPU_ACTIVE_DISPATCH_ROW_WORDS;
+                assert_eq!(header.candidate_offset as usize, row_base + 16);
+                assert!(header.sensory_offset >= FRAME_BASE_WORDS);
+                assert_eq!(header.candidate_count, 2);
+            }
+            assert!(batch.headers()[1].sensory_offset > batch.headers()[0].sensory_offset);
+            let first_candidate = alife_gpu_backend::GpuCandidateRecord::from_words(
+                &batch.dispatch_header_words()[16..24],
+            )
+            .unwrap();
+            let first_candidate_one = alife_gpu_backend::GpuCandidateRecord::from_words(
+                &batch.dispatch_header_words()[24..32],
+            )
+            .unwrap();
+            let second_row = alife_gpu_backend::GPU_ACTIVE_DISPATCH_ROW_WORDS;
+            let second_row_candidate = alife_gpu_backend::GpuCandidateRecord::from_words(
+                &batch.dispatch_header_words()[second_row + 16..second_row + 24],
+            )
+            .unwrap();
+            let second_row_candidate_one = alife_gpu_backend::GpuCandidateRecord::from_words(
+                &batch.dispatch_header_words()[second_row + 24..second_row + 32],
+            )
+            .unwrap();
+            assert!(first_candidate.feature_offset > 0);
+            assert_eq!(
+                first_candidate_one.feature_offset,
+                first_candidate.feature_offset + 24
+            );
+            assert!(second_row_candidate.feature_offset > first_candidate.feature_offset);
+            assert_eq!(
+                second_row_candidate_one.feature_offset,
+                second_row_candidate.feature_offset + 24
+            );
+            let (records, actual_readback_bytes): (Vec<GpuSelectionRecord>, u64) = self
+                .pipelines
+                .submit_closed_loop_frame(&self.device, &self.queue, &self.buffers, &batch)
+                .await
+                .unwrap();
+            assert_eq!(records.len(), 2);
+            assert_eq!(actual_readback_bytes, 96);
+            std::array::from_fn(|index| {
+                let record = records[index];
+                assert_eq!(record.slot, self.slots[index].record().slot);
+                assert_eq!(
+                    record.slot_generation,
+                    self.slots[index].record().slot_generation
+                );
+                GpuFrameResult {
+                    adapter_identity: self.adapter_name.clone(),
+                    selection: CompactSelection {
+                        candidate_index: record.candidate_index,
+                        logit: f32::from_bits(record.logit_bits),
+                        confidence_q16: record.confidence_q16,
+                        status: record.status,
+                        dispatch_generation: u64::from(record.dispatch_generation_lo)
+                            | (u64::from(record.dispatch_generation_hi) << 32),
+                    },
+                    record,
+                    active_activation_side: record.active_activation_side,
+                    compact_readback_bytes: actual_readback_bytes / 2,
+                }
+            })
         }
 
         pub fn poison_activation_bank(&self, slot_index: usize, side: u32, value: f32) {
@@ -794,4 +1180,8 @@ mod hardware {
 }
 
 #[cfg(feature = "gpu-tests")]
-pub use hardware::{expected_cadence_counts, BatchReadback, GpuPipelineFixture, SlotReadback};
+#[allow(unused_imports)]
+pub use hardware::{
+    expected_cadence_counts, BatchReadback, CompactSelection, DecoderLesionReceipt, GpuFrameResult,
+    GpuPipelineFixture, SlotReadback,
+};

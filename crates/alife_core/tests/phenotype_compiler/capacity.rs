@@ -75,7 +75,7 @@ mod task3_capacity_budget_red_tests {
                 execution.candidate_feature_count(),
                 execution.max_decoder_input_lanes(),
             ),
-            (1, 1, 32, 16, 16, (2, 4), 64, 16, 128, 24, 64),
+            (1, 2, 32, 16, 16, (2, 4), 64, 16, 128, 24, 64),
             "wrong common logical ABI tuple for {:?}",
             expected.id,
         );
@@ -240,7 +240,7 @@ mod task3_capacity_budget_red_tests {
     fn forged_execution_field_cases() -> Vec<(&'static str, Value)> {
         vec![
             ("schema_version", json!(2)),
-            ("gpu_layout_version", json!(2)),
+            ("gpu_layout_version", json!(3)),
             ("max_neurons", json!(640)),
             ("max_total_synapses", json!(8_193)),
             ("max_recurrent_synapses", json!(6_145)),

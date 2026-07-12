@@ -6,13 +6,14 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     num::NonZeroU64,
+    sync::mpsc,
 };
 
 use alife_core::{PerceptionFrame, MAX_ACTION_CANDIDATES};
 
 use crate::{
-    GpuBrainSlot, GpuClassBucketBuffers, GpuClosedLoopError, GpuPerceptionHeader,
-    GpuPerceptionUpload,
+    GpuBrainSlot, GpuCandidateRecord, GpuClassBucketBuffers, GpuClosedLoopError,
+    GpuPerceptionHeader, GpuPerceptionUpload, GpuSelectionRecord,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,6 +21,7 @@ enum BatchLifecycleStage {
     Built,
     EncodeRecorded,
     RecurrentRecorded,
+    SelectionRecorded,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,7 +76,10 @@ impl BatchAuthority {
 
     fn submission_indeterminate(&mut self, nonce: u64) -> Result<(), GpuClosedLoopError> {
         let pending = self.pending_mut(nonce)?;
-        if pending.stage != BatchLifecycleStage::RecurrentRecorded {
+        if !matches!(
+            pending.stage,
+            BatchLifecycleStage::RecurrentRecorded | BatchLifecycleStage::SelectionRecorded
+        ) {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         self.poisoned_nonce = Some(nonce);
@@ -91,6 +96,32 @@ impl BatchAuthority {
     }
 
     fn submission_succeeded(
+        &mut self,
+        nonce: u64,
+        final_sides: &[(u32, u32, u32)],
+    ) -> Result<(), GpuClosedLoopError> {
+        let pending = self.pending_mut(nonce)?;
+        if pending.stage != BatchLifecycleStage::SelectionRecorded {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        for &(slot, generation, side) in final_sides {
+            self.active_sides.insert((slot, generation), side);
+        }
+        self.pending = None;
+        Ok(())
+    }
+
+    fn record_selection(&mut self, nonce: u64) -> Result<(), GpuClosedLoopError> {
+        let pending = self.pending_mut(nonce)?;
+        if pending.stage != BatchLifecycleStage::RecurrentRecorded {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        pending.stage = BatchLifecycleStage::SelectionRecorded;
+        Ok(())
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    fn recurrent_diagnostic_succeeded(
         &mut self,
         nonce: u64,
         final_sides: &[(u32, u32, u32)],
@@ -145,6 +176,10 @@ pub const CLOSED_LOOP_RECURRENT_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
     include_str!("../shaders/closed_loop_recurrent.wgsl")
 );
+pub const CLOSED_LOOP_DECODE_WGSL: &str = concat!(
+    include_str!("../shaders/closed_loop_abi.wgsl"),
+    include_str!("../shaders/closed_loop_decode.wgsl")
+);
 
 #[derive(Debug, Clone, Copy)]
 pub struct GpuActiveBatchEntry<'a> {
@@ -165,6 +200,7 @@ pub struct GpuActiveBatchUpload {
     frame_payload_words: Vec<u32>,
     bucket_ownership_token: u64,
     authority_nonce: u64,
+    selection_offsets: Vec<u32>,
 }
 
 impl GpuActiveBatchUpload {
@@ -257,6 +293,10 @@ impl GpuActiveBatchUpload {
                 return Err(GpuClosedLoopError::CapacityExceeded);
             }
             frame_payload_words.extend_from_slice(&upload.frame_payload_words);
+            upload.header.dispatch_generation_lo = authority_nonce as u32;
+            upload.header.dispatch_generation_hi = (authority_nonce >> 32) as u32;
+            dispatch_header_words[row_base..row_base + GPU_PERCEPTION_HEADER_WORDS]
+                .copy_from_slice(upload.header.words());
             headers.push(upload.header);
         }
 
@@ -266,6 +306,10 @@ impl GpuActiveBatchUpload {
             frame_payload_words,
             bucket_ownership_token,
             authority_nonce,
+            selection_offsets: entries
+                .iter()
+                .map(|entry| entry.slot.record().selection_offset)
+                .collect(),
         })
     }
 
@@ -313,7 +357,10 @@ pub struct GpuClosedLoopPipelines {
     encode_pipeline: wgpu::ComputePipeline,
     recurrent_pipelines: [wgpu::ComputePipeline; 4],
     clear_diagnostics_pipeline: wgpu::ComputePipeline,
+    decode_pipeline: wgpu::ComputePipeline,
+    select_pipeline: wgpu::ComputePipeline,
     bucket_ownership_token: u64,
+    buffer_set_token: u64,
     max_neurons: u32,
     max_compute_workgroups_per_dimension: u32,
     authority: BatchAuthority,
@@ -355,6 +402,10 @@ impl GpuClosedLoopPipelines {
             label: Some("closed-loop-clear-diagnostics-wgsl"),
             source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.into()),
         });
+        let decode_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("closed-loop-decode-wgsl"),
+            source: wgpu::ShaderSource::Wgsl(CLOSED_LOOP_DECODE_WGSL.into()),
+        });
         let encode_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
@@ -378,12 +429,29 @@ impl GpuClosedLoopPipelines {
             "clear_diagnostics",
             &[],
         );
+        let decode_pipeline = create_compute_pipeline(
+            device,
+            &pipeline_layout,
+            &decode_shader,
+            "decode_candidates",
+            &[],
+        );
+        let select_pipeline = create_compute_pipeline(
+            device,
+            &pipeline_layout,
+            &decode_shader,
+            "select_candidate",
+            &[],
+        );
         Ok(Self {
             bind_group,
             encode_pipeline,
             recurrent_pipelines,
             clear_diagnostics_pipeline,
+            decode_pipeline,
+            select_pipeline,
             bucket_ownership_token: buffers.ownership_token(),
+            buffer_set_token: buffers.buffer_set_token(),
             max_neurons: buffers.max_neurons(),
             max_compute_workgroups_per_dimension: device
                 .limits()
@@ -425,8 +493,7 @@ impl GpuClosedLoopPipelines {
                 .or_insert(0);
         }
         let authority_nonce = self.next_authority_nonce;
-        self.next_authority_nonce = self
-            .next_authority_nonce
+        let next_authority_nonce = authority_nonce
             .checked_add(1)
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let batch = GpuActiveBatchUpload::try_from_entries(
@@ -439,6 +506,7 @@ impl GpuClosedLoopPipelines {
             authority_nonce,
         )?;
         self.authority.begin(authority_nonce)?;
+        self.next_authority_nonce = next_authority_nonce;
         Ok(batch)
     }
 
@@ -492,6 +560,7 @@ impl GpuClosedLoopPipelines {
         Ok(initial_side ^ (microsteps & 1))
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub fn submit_encode_and_microsteps(
         &mut self,
         device: &wgpu::Device,
@@ -542,8 +611,207 @@ impl GpuClosedLoopPipelines {
             })
             .collect::<Result<Vec<_>, GpuClosedLoopError>>()?;
         self.authority
-            .submission_succeeded(batch.authority_nonce, &final_sides)?;
+            .recurrent_diagnostic_succeeded(batch.authority_nonce, &final_sides)?;
         Ok(receipt)
+    }
+
+    pub async fn submit_closed_loop_frame(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        buffers: &GpuClassBucketBuffers,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(Vec<GpuSelectionRecord>, u64), GpuClosedLoopError> {
+        self.validate_dispatch(batch)?;
+        if buffers.ownership_token() != self.bucket_ownership_token
+            || buffers.buffer_set_token() != self.buffer_set_token
+        {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+        let readback_bytes = batch
+            .row_count()
+            .checked_mul(48)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        if readback_bytes == 0 || readback_bytes as u64 > buffers.compact_readback_capacity_bytes()
+        {
+            return Err(GpuClosedLoopError::CapacityExceeded);
+        }
+        let neural = buffers.neural_buffers();
+        queue.write_buffer(
+            neural[4],
+            0,
+            bytemuck::cast_slice(batch.dispatch_header_words()),
+        );
+        queue.write_buffer(
+            neural[5],
+            0,
+            bytemuck::cast_slice(batch.frame_payload_words()),
+        );
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("closed-loop-authoritative-frame"),
+        });
+        self.authority.record_encode(batch.authority_nonce)?;
+        if let Err(error) = self.record_encode(&mut encoder, batch) {
+            self.authority.recording_failed(batch.authority_nonce)?;
+            return Err(error);
+        }
+        if let Err(error) = self.record_microsteps(&mut encoder, batch) {
+            self.authority.recording_failed(batch.authority_nonce)?;
+            return Err(error);
+        }
+        self.authority.record_recurrent(batch.authority_nonce)?;
+        if let Err(error) = self.record_decode_select(&mut encoder, batch) {
+            self.authority.recording_failed(batch.authority_nonce)?;
+            return Err(error);
+        }
+        self.authority.record_selection(batch.authority_nonce)?;
+        for (row, selection_offset) in batch.selection_offsets.iter().enumerate() {
+            encoder.copy_buffer_to_buffer(
+                neural[6],
+                u64::from(*selection_offset) * 4,
+                buffers.compact_readback(),
+                row as u64 * 48,
+                48,
+            );
+        }
+        let command_buffer = encoder.finish();
+        let (sender, receiver) = mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            buffers.compact_readback(),
+            wgpu::MapMode::Read,
+            0..readback_bytes as u64,
+            move |result| {
+                let _ = sender.send(result);
+            },
+        );
+        let submission = queue.submit(Some(command_buffer));
+        let poll_result = device.poll(wgpu::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: None,
+        });
+        if poll_result.is_err() || receiver.recv().ok().and_then(Result::ok).is_none() {
+            self.authority
+                .submission_indeterminate(batch.authority_nonce)?;
+            buffers.compact_readback().unmap();
+            return Err(GpuClosedLoopError::SubmissionFailed);
+        }
+        let mapped = buffers
+            .compact_readback()
+            .slice(..readback_bytes as u64)
+            .get_mapped_range();
+        let words: Vec<u32> = bytemuck::cast_slice(&mapped).to_vec();
+        drop(mapped);
+        buffers.compact_readback().unmap();
+        let records = words
+            .chunks_exact(12)
+            .map(GpuSelectionRecord::from_words)
+            .collect::<Result<Vec<_>, _>>();
+        let records = match records {
+            Ok(records) => records,
+            Err(_) => {
+                self.authority
+                    .submission_indeterminate(batch.authority_nonce)?;
+                return Err(GpuClosedLoopError::SubmissionFailed);
+            }
+        };
+        if !self.validate_selection_records(batch, &records) {
+            self.authority
+                .submission_indeterminate(batch.authority_nonce)?;
+            return Err(GpuClosedLoopError::SubmissionFailed);
+        }
+        let final_sides = batch
+            .headers
+            .iter()
+            .zip(&records)
+            .map(|(header, record)| {
+                (
+                    header.brain_slot_index,
+                    header.slot_generation,
+                    record.active_activation_side,
+                )
+            })
+            .collect::<Vec<_>>();
+        self.authority
+            .submission_succeeded(batch.authority_nonce, &final_sides)?;
+        Ok((records, readback_bytes as u64))
+    }
+
+    fn record_decode_select(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.validate_dispatch(batch)?;
+        let rows =
+            u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("closed-loop-decode-pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.decode_pipeline);
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.dispatch_workgroups(1, rows, 1);
+        }
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("closed-loop-select-pass"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&self.select_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(1, rows, 1);
+        Ok(())
+    }
+
+    fn validate_selection_records(
+        &self,
+        batch: &GpuActiveBatchUpload,
+        records: &[GpuSelectionRecord],
+    ) -> bool {
+        records.len() == batch.headers.len()
+            && records.iter().zip(&batch.headers).all(|(record, header)| {
+                let generation = u64::from(record.dispatch_generation_lo)
+                    | (u64::from(record.dispatch_generation_hi) << 32);
+                let expected_generation = u64::from(header.dispatch_generation_lo)
+                    | (u64::from(header.dispatch_generation_hi) << 32);
+                let expected_side = Self::final_activation_side(
+                    header.active_activation_side,
+                    header.microstep_count,
+                )
+                .ok();
+                if record.slot != header.slot
+                    || record.slot_generation != header.slot_generation
+                    || generation == 0
+                    || generation != expected_generation
+                    || Some(record.active_activation_side) != expected_side
+                    || record.active_tiles == 0
+                    || record.active_synapses == 0
+                {
+                    return false;
+                }
+                match record.status {
+                    1 => {
+                        if record.candidate_index >= header.candidate_count
+                            || !f32::from_bits(record.logit_bits).is_finite()
+                        {
+                            return false;
+                        }
+                        let base = header.candidate_offset as usize
+                            + record.candidate_index as usize * GPU_CANDIDATE_RECORD_WORDS;
+                        GpuCandidateRecord::from_words(
+                            &batch.dispatch_header_words[base..base + GPU_CANDIDATE_RECORD_WORDS],
+                        )
+                        .is_ok_and(|candidate| candidate.confidence_q16 == record.confidence_q16)
+                    }
+                    2 => {
+                        record.candidate_index == u32::MAX
+                            && record.logit_bits == 0
+                            && record.confidence_q16 == 0
+                    }
+                    _ => false,
+                }
+            })
     }
 
     fn record_encode(
@@ -772,6 +1040,7 @@ mod lifecycle_tests {
 
         authority.record_encode(53).unwrap();
         authority.record_recurrent(53).unwrap();
+        authority.record_selection(53).unwrap();
         authority.submission_succeeded(53, &[(3, 7, 0)]).unwrap();
         assert_eq!(authority.active_sides.get(&(3, 7)), Some(&0));
         assert_eq!(authority.pending, None);

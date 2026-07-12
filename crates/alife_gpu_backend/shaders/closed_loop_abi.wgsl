@@ -1,10 +1,10 @@
-const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 1u;
+const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 2u;
 
 struct GpuPerceptionHeader {
   schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
   neuron_count:u32, candidate_count:u32, microstep_count:u32, active_activation_side:u32,
   tick_lo:u32, tick_hi:u32, sensory_offset:u32, candidate_offset:u32,
-  brain_slot_index:u32, reserved:array<u32,3>,
+  brain_slot_index:u32, dispatch_generation_lo:u32, dispatch_generation_hi:u32, reserved:u32,
 }
 struct GpuBrainSlotRecord {
   schema_version:u32, class_id:u32, slot:u32, slot_generation:u32,
@@ -93,7 +93,7 @@ fn load_decoder_weight_index(base:u32) -> GpuDecoderWeightIndexRecord {
   return GpuDecoderWeightIndexRecord(immutable_plan_words[base],immutable_plan_words[base+1u],immutable_plan_words[base+2u],immutable_plan_words[base+3u]);
 }
 fn load_perception_header(base:u32) -> GpuPerceptionHeader {
-  return GpuPerceptionHeader(dispatch_header_words[base],dispatch_header_words[base+1u],dispatch_header_words[base+2u],dispatch_header_words[base+3u],dispatch_header_words[base+4u],dispatch_header_words[base+5u],dispatch_header_words[base+6u],dispatch_header_words[base+7u],dispatch_header_words[base+8u],dispatch_header_words[base+9u],dispatch_header_words[base+10u],dispatch_header_words[base+11u],dispatch_header_words[base+12u],array<u32,3>(dispatch_header_words[base+13u],dispatch_header_words[base+14u],dispatch_header_words[base+15u]));
+  return GpuPerceptionHeader(dispatch_header_words[base],dispatch_header_words[base+1u],dispatch_header_words[base+2u],dispatch_header_words[base+3u],dispatch_header_words[base+4u],dispatch_header_words[base+5u],dispatch_header_words[base+6u],dispatch_header_words[base+7u],dispatch_header_words[base+8u],dispatch_header_words[base+9u],dispatch_header_words[base+10u],dispatch_header_words[base+11u],dispatch_header_words[base+12u],dispatch_header_words[base+13u],dispatch_header_words[base+14u],dispatch_header_words[base+15u]);
 }
 fn load_candidate(base:u32) -> GpuCandidateRecord {
   return GpuCandidateRecord(dispatch_header_words[base],dispatch_header_words[base+1u],dispatch_header_words[base+2u],dispatch_header_words[base+3u],dispatch_header_words[base+4u],dispatch_header_words[base+5u],dispatch_header_words[base+6u],dispatch_header_words[base+7u]);
@@ -115,5 +115,6 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
     && header.active_activation_side <= 1u
     && slot.extension_record_offset == 0xffffffffu
     && slot.reserved[0] == 0u && slot.reserved[1] == 0u && slot.reserved[2] == 0u
-    && header.reserved[0] == 0u && header.reserved[1] == 0u && header.reserved[2] == 0u;
+    && (header.dispatch_generation_lo != 0u || header.dispatch_generation_hi != 0u)
+    && header.reserved == 0u;
 }

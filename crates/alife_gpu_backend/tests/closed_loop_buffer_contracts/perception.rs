@@ -2,7 +2,7 @@ use alife_core::{BrainCapacityClass, CandidateObservationRef, MAX_ACTION_CANDIDA
 use alife_gpu_backend::{
     GpuBufferAccess, GpuCandidateRecord, GpuClassBucketBufferRole, GpuClassBucketBuffers,
     GpuClassBucketPlan, GpuClosedLoopError, GpuOffsetDomain, GpuPerceptionHeader,
-    GpuPerceptionUpload, GPU_CLOSED_LOOP_LAYOUT_VERSION,
+    GpuPerceptionUpload,
 };
 
 use super::support::{compile, perception_fixture};
@@ -46,7 +46,9 @@ fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
     assert_eq!(upload.header.sensory_offset, 0);
     assert_eq!(upload.header.candidate_offset, 16);
     assert_eq!(upload.header.brain_slot_index, slot.brain_slot_index());
-    assert_eq!(upload.header.reserved, [0; 3]);
+    assert_eq!(upload.header.dispatch_generation_lo, 0);
+    assert_eq!(upload.header.dispatch_generation_hi, 0);
+    assert_eq!(upload.header.reserved, 0);
 
     assert_eq!(upload.dispatch_header_words.len(), 16 + 2 * 8);
     assert_eq!(
@@ -148,7 +150,7 @@ fn dynamic_upload_validation_rejects_activation_side_offsets_counts_and_reserved
     assert!(count.validate_against(&frame, &slot).is_err());
 
     let mut reserved = valid;
-    reserved.header.reserved[0] = 1;
+    reserved.header.reserved = 1;
     assert!(reserved.validate_against(&frame, &slot).is_err());
 
     let mut packed_candidate = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
@@ -189,7 +191,7 @@ fn dynamic_upload_rebases_once_and_validates_in_its_explicit_offset_domain() {
 }
 
 #[test]
-fn matching_slot_and_header_with_unsupported_layout_version_are_rejected() {
+fn matching_slot_and_header_with_stale_v1_layout_are_rejected() {
     let capacity = BrainCapacityClass::n512();
     let phenotype = compile(capacity.id(), 41);
     let mut bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
@@ -198,8 +200,8 @@ fn matching_slot_and_header_with_unsupported_layout_version_are_rejected() {
     let upload = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
     let mut slot_record = *slot.record();
     let mut header = upload.header;
-    slot_record.schema_version = GPU_CLOSED_LOOP_LAYOUT_VERSION + 1;
-    header.schema_version = GPU_CLOSED_LOOP_LAYOUT_VERSION + 1;
+    slot_record.schema_version = 1;
+    header.schema_version = 1;
     assert_eq!(
         header.validate_layout_for_slot(&slot_record).unwrap_err(),
         GpuClosedLoopError::LayoutMismatch

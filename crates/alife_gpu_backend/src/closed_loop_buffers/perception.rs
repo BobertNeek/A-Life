@@ -62,7 +62,9 @@ impl GpuPerceptionUpload {
             sensory_offset: 0,
             candidate_offset: 16,
             brain_slot_index: slot.brain_slot_index(),
-            reserved: [0; 3],
+            dispatch_generation_lo: 0,
+            dispatch_generation_hi: 0,
+            reserved: 0,
         };
         let mut candidates = Vec::with_capacity(frame.candidates().len());
         for (index, candidate) in frame.candidates().iter().enumerate() {
@@ -136,7 +138,7 @@ impl GpuPerceptionUpload {
         slot: &GpuBrainSlot,
     ) -> Result<(), GpuClosedLoopError> {
         self.header.validate_layout_for_slot(slot.record())?;
-        if self.header.active_activation_side > 1 || self.header.reserved != [0; 3] {
+        if self.header.active_activation_side > 1 || self.header.reserved != 0 {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         let mut expected = Self::try_from_frame(frame, slot, self.header.active_activation_side)?;

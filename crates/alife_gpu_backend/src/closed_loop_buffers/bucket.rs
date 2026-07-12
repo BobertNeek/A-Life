@@ -10,6 +10,7 @@ use super::{
 };
 
 static NEXT_BUCKET_OWNERSHIP_TOKEN: AtomicU64 = AtomicU64::new(1);
+static NEXT_BUFFER_SET_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuTypedCounts {
@@ -561,6 +562,7 @@ pub struct GpuClassBucketBuffers {
     max_neurons: u32,
     dispatch_capacity_words: usize,
     frame_payload_capacity_words: usize,
+    buffer_set_token: u64,
 }
 impl GpuClassBucketBuffers {
     #[allow(clippy::too_many_arguments)]
@@ -581,6 +583,11 @@ impl GpuClassBucketBuffers {
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         let frame_payload_capacity_words = usize::try_from(frame_payload_words.size() / 4)
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+        let buffer_set_token = NEXT_BUFFER_SET_TOKEN
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         let buffers = Self {
             brain_slots,
             phenotype_identities,
@@ -595,6 +602,7 @@ impl GpuClassBucketBuffers {
             max_neurons: plan.capacity().execution().max_neurons(),
             dispatch_capacity_words,
             frame_payload_capacity_words,
+            buffer_set_token,
         };
         for (buffer, manifest) in buffers
             .neural_buffers()
@@ -719,5 +727,11 @@ impl GpuClassBucketBuffers {
     }
     pub(crate) const fn frame_payload_capacity_words(&self) -> usize {
         self.frame_payload_capacity_words
+    }
+    pub(crate) fn compact_readback_capacity_bytes(&self) -> u64 {
+        self.compact_readback.size()
+    }
+    pub(crate) const fn buffer_set_token(&self) -> u64 {
+        self.buffer_set_token
     }
 }
