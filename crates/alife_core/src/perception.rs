@@ -51,6 +51,12 @@ pub enum PolicyBackend {
     HeuristicBaseline,
 }
 
+impl PolicyBackend {
+    pub const fn requires_gpu(self) -> bool {
+        matches!(self, Self::NeuralClosedLoopGpu)
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CandidateActionFamily {

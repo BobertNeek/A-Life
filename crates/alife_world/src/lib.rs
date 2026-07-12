@@ -5,6 +5,7 @@ use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
 pub mod candidate_enumerator;
 pub mod ecology;
 pub mod headless;
+mod legacy_neural_policy_v1;
 pub mod persistence;
 pub mod persistent_voxel;
 pub mod procedural_chunks;

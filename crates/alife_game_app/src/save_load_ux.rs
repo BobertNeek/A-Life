@@ -448,7 +448,7 @@ impl AutosavePolicy {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConfigMenuState {
     pub schema_version: u16,
-    pub requested_backend: BackendSelection,
+    pub requested_backend: PolicyBackend,
     pub deterministic_seed: u64,
     pub brain_class: BrainScaleTier,
     pub benchmark_population_tier: u16,
@@ -465,14 +465,14 @@ impl ConfigMenuState {
     pub fn from_config(config: &RuntimeConfig, scenario_id: impl Into<String>) -> Self {
         Self {
             schema_version: config.schema_version,
-            requested_backend: config.backend.requested,
+            requested_backend: config.brain_policy.policy,
             deterministic_seed: config.deterministic_seed,
             brain_class: config.brain_class,
             benchmark_population_tier: config.benchmark_population_tier,
             school_enabled: config.features.school_enabled,
             semantic_enabled: config.features.semantic_adapter_enabled,
             gpu_enabled: config.features.gpu_backend_enabled,
-            cpu_fallback_required: config.backend.fallback_to_cpu,
+            cpu_fallback_required: false,
             no_active_readback: config.gpu_limits.no_active_gameplay_readback,
             scenario_id: scenario_id.into(),
             validation_messages: Vec::new(),
@@ -792,7 +792,7 @@ impl SaveLoadUxSmokeSummary {
             || !self.engine_local_token_absent
             || !self.deterministic_autosave_due
             || self.config_menu.deterministic_seed == 0
-            || !self.config_menu.cpu_fallback_required
+            || self.config_menu.cpu_fallback_required
             || !self.config_menu.no_active_readback
             || self.menu.schema != G15_SAVE_LOAD_UX_SCHEMA
         {

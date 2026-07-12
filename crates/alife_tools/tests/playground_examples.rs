@@ -24,7 +24,7 @@ fn headless_cpu_playground_smoke_loads_p34_config_and_emits_patch_log_summary() 
     let report = run_headless_cpu_demo(config).unwrap();
 
     assert_eq!(report.seed, 4242);
-    assert_eq!(report.backend_selected, "CpuReference");
+    assert_eq!(report.backend_selected, "HeuristicBaseline");
     assert!(report.sealed_patch_count >= 1);
     assert!(report.packed_log_count >= 1);
     assert!(report

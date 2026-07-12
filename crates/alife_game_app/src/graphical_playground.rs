@@ -5,7 +5,6 @@
 
 use crate::prelude::*;
 use crate::*;
-
 pub const S01_GRAPHICAL_WINDOW_TITLE: &str = "A-Life GPU Alpha Playground";
 pub const S01_DEFAULT_FIXTURE_ROOT: &str = "crates/alife_world/tests/fixtures/gpu_alpha";
 
@@ -182,6 +181,8 @@ impl GraphicalPlayerViewAcceptanceSummary {
 pub struct GraphicalPlaygroundLaunchConfig {
     pub app_launch: AppShellLaunchConfig,
     pub mode: GraphicalPlaygroundMode,
+    pub brain_policy: PolicyBackend,
+    /// Temporary compatibility input retained until the legacy runtime CLI is removed.
     pub gpu_mode: GraphicalGpuRuntimeMode,
     pub view_mode: GraphicalPlaygroundViewMode,
     pub window_title: String,
@@ -191,8 +192,10 @@ pub struct GraphicalPlaygroundLaunchConfig {
 impl GraphicalPlaygroundLaunchConfig {
     pub fn interactive(fixture_root: impl AsRef<Path>) -> Self {
         Self {
-            app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
+            app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root)
+                .with_brain_policy(PolicyBackend::NeuralClosedLoopGpu),
             mode: GraphicalPlaygroundMode::Interactive,
+            brain_policy: PolicyBackend::NeuralClosedLoopGpu,
             gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
             view_mode: GraphicalPlaygroundViewMode::Player,
             window_title: S01_GRAPHICAL_WINDOW_TITLE.to_string(),
@@ -202,8 +205,10 @@ impl GraphicalPlaygroundLaunchConfig {
 
     pub fn smoke(fixture_root: impl AsRef<Path>, seconds: u32) -> Self {
         Self {
-            app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
+            app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root)
+                .with_brain_policy(PolicyBackend::NeuralClosedLoopGpu),
             mode: GraphicalPlaygroundMode::Smoke { seconds },
+            brain_policy: PolicyBackend::NeuralClosedLoopGpu,
             gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
             view_mode: GraphicalPlaygroundViewMode::Player,
             window_title: format!("{S01_GRAPHICAL_WINDOW_TITLE} - smoke {seconds}s"),
@@ -213,6 +218,18 @@ impl GraphicalPlaygroundLaunchConfig {
 
     pub const fn with_gpu_mode(mut self, gpu_mode: GraphicalGpuRuntimeMode) -> Self {
         self.gpu_mode = gpu_mode;
+        self.brain_policy = if matches!(gpu_mode, GraphicalGpuRuntimeMode::CpuReference) {
+            PolicyBackend::HeuristicBaseline
+        } else {
+            PolicyBackend::NeuralClosedLoopGpu
+        };
+        self.app_launch.brain_policy = self.brain_policy;
+        self
+    }
+
+    pub const fn with_brain_policy(mut self, brain_policy: PolicyBackend) -> Self {
+        self.brain_policy = brain_policy;
+        self.app_launch.brain_policy = brain_policy;
         self
     }
 
@@ -258,7 +275,8 @@ pub struct GraphicalPlaygroundLaunchSummary {
     pub persistent_window: bool,
     pub fixture_root: PathBuf,
     pub seed: u64,
-    pub selected_backend: BackendSelection,
+    pub selected_backend: PolicyBackend,
+    pub brain_policy: PolicyBackend,
     pub requested_gpu_mode: GraphicalGpuRuntimeMode,
     pub view_mode: GraphicalPlaygroundViewMode,
     pub require_gpu: bool,
@@ -276,7 +294,7 @@ pub struct GraphicalPlaygroundLaunchSummary {
 impl GraphicalPlaygroundLaunchSummary {
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:objects={}:creatures={}:food={}:hazards={}:backend={:?}:gpu_mode={}:view_mode={}:require_gpu={}:persistent={}:timeout={:?}:{}",
+            "{}:{}:{}:objects={}:creatures={}:food={}:hazards={}:backend={:?}:brain_policy={:?}:gpu_mode={}:view_mode={}:require_gpu={}:persistent={}:timeout={:?}:{}",
             self.schema,
             self.schema_version,
             self.mode_label,
@@ -285,6 +303,7 @@ impl GraphicalPlaygroundLaunchSummary {
             self.food_marker_count,
             self.hazard_marker_count,
             self.selected_backend,
+            self.brain_policy,
             self.requested_gpu_mode.label(),
             self.view_mode.label(),
             self.require_gpu,
@@ -313,6 +332,7 @@ pub fn validate_graphical_playground_launch(
         fixture_root: launch.app_launch.fixture_root.clone(),
         seed: startup.seed,
         selected_backend: startup.requested_backend,
+        brain_policy: launch.brain_policy,
         requested_gpu_mode: launch.gpu_mode,
         view_mode: launch.view_mode,
         require_gpu: launch.require_gpu,

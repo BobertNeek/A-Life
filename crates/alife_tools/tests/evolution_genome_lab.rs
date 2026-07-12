@@ -16,7 +16,7 @@ fn standard_spec() -> BrainClassSpec {
 }
 
 #[test]
-fn mutation_touches_all_genome_field_families_and_keeps_child_valid() {
+fn mutation_touches_only_causal_genome_field_families_and_keeps_child_valid() {
     let spec = standard_spec();
     let parent = BrainGenome::scaffold(42, spec.id);
 
@@ -42,12 +42,8 @@ fn mutation_touches_all_genome_field_families_and_keeps_child_valid() {
             MutationField::MacroConnectomeMasks,
             MutationField::SparseDensityPriors,
             MutationField::AlphaMask,
-            MutationField::EndocrineConstants,
-            MutationField::DriveThresholds,
             MutationField::SensorLayout,
             MutationField::MotorAffordances,
-            MutationField::MutationRates,
-            MutationField::DevelopmentalSchedule,
         ]
     );
 

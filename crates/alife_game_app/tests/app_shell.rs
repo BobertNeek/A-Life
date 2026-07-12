@@ -1,6 +1,7 @@
 use alife_core::{
     ActionKind, ActionProposal, ActionTarget, BrainTickInput, BrainTickStatus, Confidence,
-    CreatureMind, DurationTicks, NormalizedScalar, OrganismId, Tick, Validate, WorldEntityId,
+    CreatureMind, DurationTicks, NormalizedScalar, OrganismId, PolicyBackend, Tick, Validate,
+    WorldEntityId,
 };
 use alife_game_app::{
     ca18_creature_selection_ids, ca18_cycle_selected_creature, ca39_drive_audio_vfx_summary,
@@ -94,7 +95,7 @@ use alife_semantic::{
     CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS, CA27_DEFAULT_LLAMA_CPP_SLM_PORT,
     CA27_SLM_PRIOR_OUTPUT_SCHEMA, CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION,
 };
-use alife_world::persistence::{BackendSelection, PortableSaveFile, RuntimeConfig};
+use alife_world::persistence::{PortableSaveFile, RuntimeConfig};
 use alife_world::WorldObjectKind;
 use alife_world::{
     EcologyZoneId, HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, TerrainZone,
@@ -474,7 +475,7 @@ fn ci_headless_app_shell_smoke_uses_p34_config_without_graphics() {
     let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     let summary = run_headless_app_shell_smoke(&launch).unwrap();
     assert_eq!(summary.seed, 4242);
-    assert_eq!(summary.requested_backend, BackendSelection::CpuReference);
+    assert_eq!(summary.requested_backend, PolicyBackend::HeuristicBaseline);
     assert!(!summary.gpu_backend_enabled);
     assert!(!summary.semantic_enabled);
     assert!(!summary.school_enabled);
@@ -2193,6 +2194,11 @@ fn graphical_gpu_launch_config_defaults_gpu_first_and_preserves_cpu_choice() {
         gpu_default.gpu_mode,
         GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
     );
+    assert_eq!(gpu_default.brain_policy, PolicyBackend::NeuralClosedLoopGpu);
+    assert_eq!(
+        gpu_default.app_launch.brain_policy,
+        PolicyBackend::NeuralClosedLoopGpu
+    );
     let default_summary =
         alife_game_app::validate_graphical_playground_launch(&gpu_default).unwrap();
     assert!(default_summary.gpu_mode_visible);
@@ -2208,6 +2214,15 @@ fn graphical_gpu_launch_config_defaults_gpu_first_and_preserves_cpu_choice() {
     assert_eq!(
         cpu_summary.requested_gpu_mode,
         GraphicalGpuRuntimeMode::CpuReference
+    );
+    assert_eq!(cpu.brain_policy, PolicyBackend::HeuristicBaseline);
+    assert_eq!(
+        cpu.app_launch.brain_policy,
+        PolicyBackend::HeuristicBaseline
+    );
+    assert_eq!(
+        cpu_summary.selected_backend,
+        PolicyBackend::HeuristicBaseline
     );
     assert!(
         alife_game_app::GraphicalPlaygroundLaunchConfig::interactive(p34_fixture_root())
@@ -7194,20 +7209,19 @@ fn config_menu_defaults_are_deterministic_and_keep_optional_features_safe() {
     let menu = ConfigMenuState::validate_config(&config).unwrap();
 
     assert_eq!(menu.schema_version, 1);
-    assert_eq!(menu.requested_backend, BackendSelection::CpuReference);
+    assert_eq!(menu.requested_backend, PolicyBackend::NeuralClosedLoopGpu);
     assert_eq!(menu.deterministic_seed, 4242);
     assert!(!menu.school_enabled);
     assert!(!menu.semantic_enabled);
     assert!(!menu.gpu_enabled);
-    assert!(menu.cpu_fallback_required);
+    assert!(!menu.cpu_fallback_required);
     assert!(menu.no_active_readback);
 
     let mut invalid = config;
-    invalid.backend.requested = BackendSelection::GpuStatic;
-    invalid.backend.gpu_feature_enabled = false;
+    invalid.brain_policy.schema_version += 1;
     let error = ConfigMenuState::validate_config(&invalid).unwrap_err();
-    assert_eq!(error.code, "invalid-config");
-    assert!(error.message.contains("GPU backend selection"));
+    assert_eq!(error.code, "schema-version");
+    assert!(error.message.contains("alife.brain_policy_config.v1"));
 }
 
 #[test]
@@ -7229,8 +7243,8 @@ fn save_load_menu_text_exposes_player_flows_and_readable_errors() {
     assert!(text.contains("digest=digest-mismatch"));
     assert!(text.contains("config=invalid-config"));
     assert!(text.contains("partial_load_after_error=false"));
-    assert!(text.contains("Settings: backend=CpuReference"));
-    assert!(text.contains("cpu_fallback=true"));
+    assert!(text.contains("Settings: backend=NeuralClosedLoopGpu"));
+    assert!(text.contains("cpu_fallback=false"));
     assert!(text.contains("no_active_readback=true"));
     assert!(text.contains("Stable IDs: [1, 2]"));
     assert!(text.contains("engine-local tokens=false"));

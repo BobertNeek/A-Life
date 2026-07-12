@@ -342,6 +342,19 @@ impl HeadlessWorld {
             .collect()
     }
 
+    pub fn remove_organism(
+        &mut self,
+        organism_id: OrganismId,
+    ) -> Result<WorldObject, ScaffoldContractError> {
+        organism_id.validate()?;
+        let entity_id = self
+            .organism_entity_ids()
+            .into_iter()
+            .find_map(|(candidate, entity_id)| (candidate == organism_id).then_some(entity_id))
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        self.remove_agent_entity(entity_id)
+    }
+
     pub fn spawn_social_agent(
         &mut self,
         label: &str,

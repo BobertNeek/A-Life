@@ -47,6 +47,31 @@
   ],
   "shader_assets": [
     {
+      "id": "closed-loop-abi",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_abi.wgsl",
+      "required": true
+    },
+    {
+      "id": "closed-loop-clear-diagnostics",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_clear_diagnostics.wgsl",
+      "required": true
+    },
+    {
+      "id": "closed-loop-decode",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_decode.wgsl",
+      "required": true
+    },
+    {
+      "id": "closed-loop-encode",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_encode.wgsl",
+      "required": true
+    },
+    {
+      "id": "closed-loop-recurrent",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_recurrent.wgsl",
+      "required": true
+    },
+    {
       "id": "p24-contract",
       "relative_path": "crates/alife_gpu_backend/shaders/p24_contract.wgsl",
       "required": true

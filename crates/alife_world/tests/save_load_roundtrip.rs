@@ -1,12 +1,13 @@
 use std::{fs, path::PathBuf};
 
 use alife_core::{
-    BrainScaleTier, GenomeId, HomeostaticSnapshot, OrganismId, Tick, Vec3f, WorldEntityId,
+    BrainScaleTier, GenomeId, HomeostaticSnapshot, OrganismId, PolicyBackend, Tick, Vec3f,
+    WorldEntityId,
 };
 use alife_world::{
     persistence::{
         AdapterRemapEntry, AdapterRemapTable, AssetKind, AssetManifest, AssetManifestEntry,
-        AssetPresence, BackendSelection, CreatureMindSaveSummary, CreatureSaveState,
+        AssetPresence, BrainPolicyConfig, CreatureMindSaveSummary, CreatureSaveState,
         FeatureFlagConfig, LearningTraceSaveSummary, MigrationHook, PersistenceError,
         PortableAssetDigest, PortableSaveFile, RuntimeConfig, SchoolConfig, WeightLayerSaveSummary,
         P34_ASSET_MANIFEST_SCHEMA, P34_ASSET_MANIFEST_SCHEMA_VERSION, P34_SAVE_FILE_SCHEMA,
@@ -85,6 +86,70 @@ fn temp_root(test_name: &str) -> PathBuf {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("create temp root");
     root
+}
+
+fn assert_no_runtime_fallback_keys(value: &serde_json::Value) {
+    match value {
+        serde_json::Value::Object(fields) => {
+            for forbidden in ["fallback_to_cpu", "gpu_feature_enabled", "require_gpu"] {
+                assert!(
+                    !fields.contains_key(forbidden),
+                    "serialized policy intent contains forbidden runtime field {forbidden}"
+                );
+            }
+            for child in fields.values() {
+                assert_no_runtime_fallback_keys(child);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for child in values {
+                assert_no_runtime_fallback_keys(child);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn load_runtime_config_value(test_name: &str, value: &serde_json::Value) -> RuntimeConfig {
+    let root = temp_root(test_name);
+    let path = root.join("runtime_config.json");
+    fs::write(&path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
+    RuntimeConfig::from_json_file(path).unwrap()
+}
+
+fn legacy_runtime_config(
+    requested: &str,
+    gpu_feature_enabled: bool,
+    fallback_to_cpu: bool,
+) -> serde_json::Value {
+    let mut value: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/p34/tiny_config.json")).unwrap();
+    let object = value.as_object_mut().unwrap();
+    replace_brain_policy_with_legacy_backend(
+        object,
+        requested,
+        gpu_feature_enabled,
+        fallback_to_cpu,
+    );
+    value
+}
+
+fn replace_brain_policy_with_legacy_backend(
+    config: &mut serde_json::Map<String, serde_json::Value>,
+    requested: &str,
+    gpu_feature_enabled: bool,
+    fallback_to_cpu: bool,
+) {
+    config.remove("brain_policy");
+    config.insert(
+        "backend".to_string(),
+        serde_json::json!({
+            "requested": requested,
+            "gpu_feature_enabled": gpu_feature_enabled,
+            "fallback_to_cpu": fallback_to_cpu,
+            "validation_required": true
+        }),
+    );
 }
 
 #[test]
@@ -208,13 +273,8 @@ fn runtime_config_defaults_are_deterministic_and_invalid_combinations_reject() {
     assert_eq!(left, right);
     left.validate().unwrap();
 
-    let mut invalid_backend = left.clone();
-    invalid_backend.backend.requested = BackendSelection::GpuFull;
-    invalid_backend.backend.gpu_feature_enabled = false;
-    assert!(matches!(
-        invalid_backend.validate(),
-        Err(PersistenceError::InvalidConfig { .. })
-    ));
+    assert_eq!(left.brain_policy.policy, PolicyBackend::NeuralClosedLoopGpu);
+    assert!(left.brain_policy.policy.requires_gpu());
 
     let mut invalid_brain = left.clone();
     invalid_brain.brain_class = BrainScaleTier::ResearchCustom;
@@ -236,6 +296,100 @@ fn runtime_config_defaults_are_deterministic_and_invalid_combinations_reject() {
         invalid_school.validate(),
         Err(PersistenceError::InvalidConfig { .. })
     ));
+}
+
+#[test]
+fn brain_policy_config_vnext_round_trips_without_runtime_fallback_state() {
+    for policy in [
+        PolicyBackend::NeuralClosedLoopGpu,
+        PolicyBackend::HeuristicBaseline,
+    ] {
+        let expected = BrainPolicyConfig {
+            schema_version: 1,
+            policy,
+        };
+        let value = serde_json::to_value(expected).unwrap();
+        assert_no_runtime_fallback_keys(&value);
+        assert_eq!(
+            serde_json::from_value::<BrainPolicyConfig>(value).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn requires_gpu_is_derived_only_from_the_explicit_policy() {
+    assert!(PolicyBackend::NeuralClosedLoopGpu.requires_gpu());
+    assert!(!PolicyBackend::HeuristicBaseline.requires_gpu());
+}
+
+#[test]
+fn current_runtime_config_serializes_only_explicit_policy_intent() {
+    let config = RuntimeConfig::deterministic_default(99, BrainScaleTier::Nano512);
+    let value = serde_json::to_value(&config).unwrap();
+    assert_no_runtime_fallback_keys(&value);
+    assert_eq!(
+        value.pointer("/brain_policy/policy"),
+        Some(&serde_json::Value::String(
+            "NeuralClosedLoopGpu".to_string()
+        ))
+    );
+}
+
+#[test]
+fn legacy_cpu_reference_migrates_to_explicit_heuristic_policy() {
+    let legacy = legacy_runtime_config("CpuReference", true, false);
+    let migrated = load_runtime_config_value("legacy_cpu_policy", &legacy);
+
+    assert_eq!(
+        migrated.brain_policy.policy,
+        PolicyBackend::HeuristicBaseline
+    );
+    assert!(!migrated.brain_policy.policy.requires_gpu());
+    assert_no_runtime_fallback_keys(&serde_json::to_value(migrated).unwrap());
+}
+
+#[test]
+fn legacy_gpu_selections_migrate_to_neural_without_runtime_switching() {
+    for requested in ["GpuStatic", "GpuPlastic", "GpuFull"] {
+        let legacy = legacy_runtime_config(requested, false, true);
+        let migrated = load_runtime_config_value(&format!("legacy_{requested}"), &legacy);
+
+        assert_eq!(
+            migrated.brain_policy.policy,
+            PolicyBackend::NeuralClosedLoopGpu,
+            "legacy selection {requested}"
+        );
+        assert!(migrated.brain_policy.policy.requires_gpu());
+        assert_no_runtime_fallback_keys(&serde_json::to_value(migrated).unwrap());
+    }
+}
+
+#[test]
+fn legacy_policy_nested_in_portable_save_migrates_without_runtime_switching() {
+    for (requested, expected) in [
+        ("CpuReference", PolicyBackend::HeuristicBaseline),
+        ("GpuFull", PolicyBackend::NeuralClosedLoopGpu),
+    ] {
+        let mut value: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/p34/tiny_save.json")).unwrap();
+        let config = value
+            .get_mut("config")
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap();
+        replace_brain_policy_with_legacy_backend(config, requested, false, true);
+
+        let migrated = PortableSaveFile::from_json_str(&value.to_string()).unwrap();
+        assert_eq!(
+            migrated.config.brain_policy.policy, expected,
+            "legacy nested selection {requested}"
+        );
+        assert_eq!(
+            migrated.config.brain_policy.policy.requires_gpu(),
+            expected == PolicyBackend::NeuralClosedLoopGpu
+        );
+        assert_no_runtime_fallback_keys(&serde_json::to_value(migrated).unwrap());
+    }
 }
 
 #[test]
@@ -342,6 +496,17 @@ fn committed_p34_fixture_files_load_and_validate() {
     save.validate_with_asset_root(&root).unwrap();
     let config = RuntimeConfig::from_json_file(root.join("tiny_config.json")).unwrap();
     config.validate().unwrap();
+    assert_eq!(
+        config.brain_policy.policy,
+        PolicyBackend::NeuralClosedLoopGpu
+    );
+    assert_no_runtime_fallback_keys(&serde_json::to_value(&config).unwrap());
+    let fixture_config: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/p34/tiny_config.json")).unwrap();
+    let fixture_save: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/p34/tiny_save.json")).unwrap();
+    assert_no_runtime_fallback_keys(&fixture_config);
+    assert_no_runtime_fallback_keys(&fixture_save);
     let manifest = AssetManifest::from_json_file(root.join("tiny_asset_manifest.json")).unwrap();
     manifest.validate_with_root(&root).unwrap();
 }

@@ -73,6 +73,7 @@ fn run() -> Result<String, String> {
                 save_path: PathBuf::from(asset_root).join("tiny_save.json"),
                 asset_root: PathBuf::from(asset_root),
                 start_paused: false,
+                brain_policy: alife_core::PolicyBackend::HeuristicBaseline,
             };
             let summary = validate_app_shell_config(&launch).map_err(|err| err.to_string())?;
             Ok(format_summary("G01 validated app config", &summary))
@@ -3457,6 +3458,14 @@ fn run_legacy_alpha_graphical_playground_cli(args: &[String]) -> Result<String, 
     let launch = alife_game_app::GraphicalPlaygroundLaunchConfig {
         app_launch,
         mode,
+        brain_policy: if matches!(
+            gpu_mode,
+            alife_game_app::GraphicalGpuRuntimeMode::CpuReference
+        ) {
+            alife_core::PolicyBackend::HeuristicBaseline
+        } else {
+            alife_core::PolicyBackend::NeuralClosedLoopGpu
+        },
         gpu_mode,
         view_mode,
         window_title,

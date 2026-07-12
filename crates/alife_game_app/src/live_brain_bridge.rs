@@ -43,6 +43,7 @@ impl LiveBrainTickControl {
 pub enum LiveBrainCausalStage {
     GatherSensory,
     CpuBrainTick,
+    GpuBrainTick,
     ExecuteAction,
     MeasureOutcome,
     SealPatch,

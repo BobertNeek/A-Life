@@ -12,7 +12,7 @@ use std::{
 
 #[cfg(feature = "semantic-demo")]
 use alife_core::{ConceptCellId, GaussianClusterId, Vec3f};
-use alife_core::{ScaffoldContractError, TeacherPerceptionChannel};
+use alife_core::{PolicyBackend, ScaffoldContractError, TeacherPerceptionChannel};
 use alife_gpu_backend::{
     GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuRuntimeBoundary, GpuRuntimeReadbackGuard,
 };
@@ -154,7 +154,7 @@ pub fn run_headless_cpu_demo(
     );
     Ok(HeadlessPlaygroundReport {
         seed: config.runtime_config.deterministic_seed,
-        backend_selected: format!("{:?}", config.runtime_config.backend.requested),
+        backend_selected: format!("{:?}", PolicyBackend::HeuristicBaseline),
         sealed_patch_count: run.patches.len(),
         packed_log_count,
         world_signature: run.world_signature,

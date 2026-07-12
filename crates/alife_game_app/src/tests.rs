@@ -18,7 +18,7 @@ fn headless_app_shell_loads_p34_config_and_manifest() {
     assert_eq!(summary.schema_version, G01_APP_SHELL_SCHEMA_VERSION);
     assert_eq!(summary.seed, 4242);
     assert_eq!(summary.brain_class, "Nano512");
-    assert_eq!(summary.requested_backend, BackendSelection::CpuReference);
+    assert_eq!(summary.requested_backend, PolicyBackend::HeuristicBaseline);
     assert_eq!(summary.asset_count, 2);
     assert!(!summary.graphics_required_for_default_path);
     assert_eq!(
@@ -148,8 +148,8 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
     );
     assert_eq!(summary.environment_scenarios, 3);
     assert_eq!(summary.config_entries, 6);
-    assert_eq!(summary.shader_assets, 6);
-    assert_eq!(summary.discovered_shader_assets, 6);
+    assert_eq!(summary.shader_assets, 11);
+    assert_eq!(summary.discovered_shader_assets, 11);
     assert_eq!(summary.placeholder_art_entries, 10);
     assert_eq!(summary.alpha_art_entries, 36);
     assert!(summary.alpha_art_required_roles_present);
@@ -268,7 +268,7 @@ fn s01_graphical_playground_launch_plan_validates_without_graphics() {
     assert_eq!(summary.mode_label, "interactive");
     assert!(summary.persistent_window);
     assert_eq!(summary.seed, 4242);
-    assert_eq!(summary.selected_backend, BackendSelection::CpuReference);
+    assert_eq!(summary.selected_backend, PolicyBackend::NeuralClosedLoopGpu);
     assert_eq!(
         summary.requested_gpu_mode,
         GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded

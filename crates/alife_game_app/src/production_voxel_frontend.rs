@@ -1195,6 +1195,7 @@ fn fvr06_production_gpu_gameplay_receipt(
         save_path: production_save_path.clone(),
         asset_root: launch.app_launch.asset_root.clone(),
         start_paused: launch.app_launch.start_paused,
+        brain_policy: PolicyBackend::HeuristicBaseline,
     };
     let batched = run_batched_gpu_runtime_smoke(
         &runtime_launch,
