@@ -31,10 +31,7 @@ pub(crate) struct ProductionTerrainMaterialSpec {
 
 impl ProductionTerrainMaterialSpec {
     pub fn atlas_slot(self, role: Fvr11TerrainSurfaceRole) -> u8 {
-        if matches!(
-            role,
-            Fvr11TerrainSurfaceRole::Cliff | Fvr11TerrainSurfaceRole::Transition
-        ) {
+        if role == Fvr11TerrainSurfaceRole::Cliff {
             self.side_slot
         } else {
             self.top_slot
@@ -107,7 +104,7 @@ pub(crate) fn production_terrain_material_specs() -> [ProductionTerrainMaterialS
             Fvr03ProductionVoxelMaterialKind::SafeGrass,
             0,
             1,
-            [0.98, 1.00, 0.96, 1.0],
+            [0.99, 1.00, 0.96, 1.0],
             0.86,
         ),
         spec(
@@ -121,7 +118,7 @@ pub(crate) fn production_terrain_material_specs() -> [ProductionTerrainMaterialS
             Fvr03ProductionVoxelMaterialKind::Resource,
             4,
             5,
-            [0.96, 1.00, 0.94, 1.0],
+            [0.98, 1.00, 0.93, 1.0],
             0.78,
         ),
         spec(
@@ -135,14 +132,14 @@ pub(crate) fn production_terrain_material_specs() -> [ProductionTerrainMaterialS
             Fvr03ProductionVoxelMaterialKind::Decay,
             8,
             9,
-            [0.98, 0.95, 0.92, 1.0],
+            [0.98, 0.95, 0.90, 1.0],
             0.90,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Stone,
             10,
             11,
-            [0.97, 0.99, 0.96, 1.0],
+            [0.98, 1.00, 0.97, 1.0],
             0.92,
         ),
         spec(
@@ -205,7 +202,7 @@ pub(crate) fn create_production_terrain_material_library(app: &mut App) -> Terra
             );
             transition.insert(
                 spec.kind,
-                materials.add(opaque_terrain_material(spec, textures.as_ref(), 0.985)),
+                materials.add(opaque_terrain_material(spec, textures.as_ref(), 1.0)),
             );
         }
         let water_spec = specs
@@ -316,6 +313,20 @@ mod tests {
                 .starts_with("production_voxel_v1/terrain/"));
             assert!(spec.normal_path.starts_with("production_voxel_v1/terrain/"));
             assert!(spec.orm_path.starts_with("production_voxel_v1/terrain/"));
+        }
+    }
+
+    #[test]
+    fn transition_layers_use_surface_texture_while_cliffs_keep_rooted_side_texture() {
+        for spec in production_terrain_material_specs() {
+            assert_eq!(
+                spec.atlas_slot(Fvr11TerrainSurfaceRole::Transition),
+                spec.top_slot
+            );
+            assert_eq!(
+                spec.atlas_slot(Fvr11TerrainSurfaceRole::Cliff),
+                spec.side_slot
+            );
         }
     }
 }

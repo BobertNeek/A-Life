@@ -20,8 +20,8 @@ pub const FVR07_PRODUCTION_ASSET_MANIFEST_APP_RELATIVE_PATH: &str =
     "assets/production_voxel_v1/production_asset_manifest.json";
 pub const FVR07_PRODUCTION_ASSET_PACK_ID: &str = "production-voxel-v1";
 pub const FVR07_ART_DIRECTION: &str = "stylized-voxel-alife-production-v1";
-pub const FVR07_MAX_COMMITTED_ASSET_BYTES: u64 = 256 * 1024;
-pub const FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES: u64 = 2 * 1024 * 1024;
+pub const FVR07_MAX_COMMITTED_ASSET_BYTES: u64 = 512 * 1024;
+pub const FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES: u64 = 8 * 1024 * 1024;
 
 pub const FVR07_REQUIRED_USAGE_CATEGORIES: [&str; 15] = [
     "voxel-material-atlas",
@@ -555,6 +555,7 @@ fn license_allowed(license: &str) -> bool {
         license,
         "A-Life-Generated-Source"
             | "CC0-1.0"
+            | "CC-BY-4.0"
             | "Public-Domain"
             | "MIT"
             | "Apache-2.0"

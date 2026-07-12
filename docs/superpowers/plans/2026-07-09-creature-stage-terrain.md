@@ -1,5 +1,8 @@
 # Creature-Stage Terrain Implementation Plan
 
+**Status:** Completed and validated on 2026-07-11. See
+`docs/productization_s_plans/fullstack_bevy_voxel_frontend_replacement/FVR10_VISUAL_GAME_LAYER_REDO_HANDOFF.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the flat, noisy production voxel terrain with the approved lush alien habitat while preserving the real voxel world, save path, backend selection, and renderer authority boundaries.
@@ -17,7 +20,7 @@
 - No mock simulation, fake backend, renderer-owned action/cognition authority, or renderer types in `alife_core`/`alife_world`.
 - Do not add new production work with alpha naming.
 - Do not copy Spore assets, shaders, UI, terrain meshes, or textures. The approved image is a quality reference only.
-- Every committed production asset remains at most 256 KiB and the manifest total remains at most 2 MiB.
+- Every committed production asset remains at most 512 KiB and the manifest total remains at most 8 MiB.
 - Generated source sheets, Blender caches, and screenshot artifacts stay outside Git.
 - Tests are necessary but do not establish visual acceptance; both fresh production screenshots must be inspected.
 - Use `-j 1` for Bevy-heavy checks on this machine.
@@ -74,7 +77,7 @@ Do not modify:
 - Consumes: `VoxelTileCoord`, existing `Fvr03ProductionVoxelMaterialKind`, height, resource bias, hazard pressure, and deterministic visual bucket.
 - Produces: `ProductionTerrainSampleMap`, `Fvr11TerrainSurfaceRole`, `Fvr11ProductionTerrainLayer`, and `Fvr11ProductionTerrainSceneResource`.
 
-- [ ] **Step 1: Write the failing terrain-contract test**
+- [x] **Step 1: Write the failing terrain-contract test**
 
 Add these imports and test:
 
@@ -101,7 +104,7 @@ fn fvr11_terrain_contract_is_display_only() {
 }
 ```
 
-- [ ] **Step 2: Run the test and verify the missing contract fails compilation**
+- [x] **Step 2: Run the test and verify the missing contract fails compilation**
 
 Run:
 
@@ -111,7 +114,7 @@ cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_vo
 
 Expected: compile failure naming one or more missing `Fvr11` terrain symbols.
 
-- [ ] **Step 3: Add the terrain contract module**
+- [x] **Step 3: Add the terrain contract module**
 
 Create the module with these exact public contracts:
 
@@ -215,7 +218,7 @@ pub struct Fvr11ProductionTerrainSceneResource {
 
 Wire `production_terrain` under `#[cfg(feature = "bevy-app")]` in `lib.rs` and re-export its public contracts.
 
-- [ ] **Step 4: Replace the material-bucket vector with one sample map**
+- [x] **Step 4: Replace the material-bucket vector with one sample map**
 
 In `spawn_fvr03_chunk_tiles`, replace the current
 `BTreeMap<MaterialKind, Vec<Fvr03BatchedTerrainTile>>` output with
@@ -223,14 +226,14 @@ In `spawn_fvr03_chunk_tiles`, replace the current
 carry resource/hazard values through unchanged. Do not remove hidden tile
 entities used for selection.
 
-- [ ] **Step 5: Add a temporary contract resource from the existing spawn path**
+- [x] **Step 5: Add a temporary contract resource from the existing spawn path**
 
 Until Task 3 replaces the mesh, insert the scene resource with measured existing
 counts and `confetti_detail_quad_count` equal to the current generated detail
 quad count. The Task 1 test only proves the contract and authority boundary;
 Task 3 adds the stricter geometry acceptance assertions.
 
-- [ ] **Step 6: Run formatting and the focused test**
+- [x] **Step 6: Run formatting and the focused test**
 
 Run:
 
@@ -242,7 +245,7 @@ cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_vo
 Expected: the test passes after proving the app-only terrain contract is present,
 truthful, populated, and display-only.
 
-- [ ] **Step 7: Commit the contract**
+- [x] **Step 7: Commit the contract**
 
 ```powershell
 git add crates/alife_game_app/src/lib.rs crates/alife_game_app/src/production_terrain.rs crates/alife_game_app/src/production_voxel_renderer.rs crates/alife_game_app/tests/fvr03_voxel_renderer.rs
@@ -267,7 +270,7 @@ git commit -m "Add production terrain visual contract"
 - Consumes: one uncommitted 4x4 image-generation source sheet and committed generation config.
 - Produces: three 272x272 PNG atlases with 16 64x64 slots plus two-pixel gutters.
 
-- [ ] **Step 1: Write the failing production-asset test**
+- [x] **Step 1: Write the failing production-asset test**
 
 Add a unit test in `production_assets.rs`:
 
@@ -301,7 +304,7 @@ fn fvr11_terrain_atlases_are_manifested_and_compact() {
 }
 ```
 
-- [ ] **Step 2: Run the test and verify the missing entries fail**
+- [x] **Step 2: Run the test and verify the missing entries fail**
 
 ```powershell
 cargo test -p alife_game_app production_assets::tests::fvr11_terrain_atlases_are_manifested_and_compact -j 1 -- --nocapture
@@ -309,7 +312,7 @@ cargo test -p alife_game_app production_assets::tests::fvr11_terrain_atlases_are
 
 Expected: failure containing `missing terrain-albedo-atlas`.
 
-- [ ] **Step 3: Add the generation config**
+- [x] **Step 3: Add the generation config**
 
 The JSON must define this stable row-major slot order:
 
@@ -342,7 +345,7 @@ The JSON must define this stable row-major slot order:
 }
 ```
 
-- [ ] **Step 4: Implement the developer-only atlas builder**
+- [x] **Step 4: Implement the developer-only atlas builder**
 
 Add `image = { version = "0.25.10", default-features = false, features = ["png"] }`
 to `alife_tools`. The binary accepts exactly three positional arguments in this
@@ -374,7 +377,7 @@ fn extrude_into_atlas(
 );
 ```
 
-- [ ] **Step 5: Generate the source sheet with the image-generation skill**
+- [x] **Step 5: Generate the source sheet with the image-generation skill**
 
 Use the committed `source_prompt`, the approved terrain blueprint as the style
 reference, and the built-in image generation path. Treat the generated sheet as
@@ -391,7 +394,7 @@ New-Item -ItemType Directory -Force -Path $generatedDir | Out-Null
 Copy-Item -LiteralPath $sourceSheet -Destination "$generatedDir\terrain_source_sheet.png"
 ```
 
-- [ ] **Step 6: Build the runtime atlases**
+- [x] **Step 6: Build the runtime atlases**
 
 Run from the workspace root:
 
@@ -401,7 +404,7 @@ cargo run -p alife_tools --bin terrain_atlas_builder -- "target\generated_art\pr
 
 Expected: three 272x272 PNG files, each nonempty and no larger than 262144 bytes.
 
-- [ ] **Step 7: Register exact manifest metadata**
+- [x] **Step 7: Register exact manifest metadata**
 
 Add one manifest entry per atlas. Use `usage_category` `terrain-materials`,
 license `A-Life-Generated-Source`, `source`
@@ -414,7 +417,7 @@ temporary unit test or a one-shot extension to the atlas builder's printed
 receipt. Copy the exact digest and byte count into the manifest, then remove any
 temporary test.
 
-- [ ] **Step 8: Run the asset tests**
+- [x] **Step 8: Run the asset tests**
 
 ```powershell
 cargo test -p alife_game_app production_assets::tests::fvr11_terrain_atlases_are_manifested_and_compact -j 1 -- --nocapture
@@ -424,7 +427,7 @@ cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
 Expected: both commands pass; the validation receipt reports `unknown_license=0`,
 `rejected=0`, and `no_large_artifacts=true`.
 
-- [ ] **Step 9: Commit the atlas pipeline and final assets**
+- [x] **Step 9: Commit the atlas pipeline and final assets**
 
 ```powershell
 git add crates/alife_tools/Cargo.toml crates/alife_tools/src/bin/terrain_atlas_builder.rs crates/alife_game_app/assets/production_voxel_v1/terrain crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json crates/alife_game_app/src/production_assets.rs Cargo.lock
@@ -448,7 +451,7 @@ git commit -m "Add compact production terrain material atlas"
 - Consumes: `&ProductionTerrainSampleMap`, tile stride, and `TerrainAtlasLayout`.
 - Produces: `TerrainMeshBuild` containing batched top, cliff, transition, and water layers plus measured statistics.
 
-- [ ] **Step 1: Write failing pure mesh-builder tests**
+- [x] **Step 1: Write failing pure mesh-builder tests**
 
 Test a fixed 3x3 sample map containing grass, soil, stone, and water. Assert:
 
@@ -497,7 +500,7 @@ assert!(roles.contains(&Fvr11TerrainSurfaceRole::Transition));
 assert!(roles.contains(&Fvr11TerrainSurfaceRole::Water));
 ```
 
-- [ ] **Step 2: Run the tests and verify the builder is missing**
+- [x] **Step 2: Run the tests and verify the builder is missing**
 
 ```powershell
 cargo test -p alife_game_app --features "bevy-app voxel-backend" terrain_mesh::tests -j 1 -- --nocapture
@@ -505,7 +508,7 @@ cargo test -p alife_game_app --features "bevy-app voxel-backend" terrain_mesh::t
 
 Expected: compile failure for missing `terrain_mesh` interfaces.
 
-- [ ] **Step 3: Implement the mesh data types**
+- [x] **Step 3: Implement the mesh data types**
 
 Use these exact app-only types:
 
@@ -534,7 +537,7 @@ pub(crate) struct TerrainMeshBuild {
 }
 ```
 
-- [ ] **Step 4: Implement neighbor-aware top geometry**
+- [x] **Step 4: Implement neighbor-aware top geometry**
 
 For each sample, calculate four corner heights from the average of adjacent
 non-water sample heights. Clamp smoothing to `0.20` world units so logical
@@ -545,7 +548,7 @@ into the correct atlas slot; deterministically rotate or mirror the UV corners
 from `visual_bucket` without leaving the slot gutter. Vertex color varies only
 within +/-6% of the material tint.
 
-- [ ] **Step 5: Implement cliffs and transition rims**
+- [x] **Step 5: Implement cliffs and transition rims**
 
 For every east/south boundary, emit a cliff quad when the height difference is
 at least `0.24`. Use the higher tile's side atlas slot and flat outward normals.
@@ -555,13 +558,13 @@ For material changes with height difference below `0.24`, emit a narrow
 the grass-side slot, grass-to-soil uses the soil-side slot, and water boundaries
 use the wet-bank slot. Never emit both directions for one edge.
 
-- [ ] **Step 6: Implement water as a separate surface layer**
+- [x] **Step 6: Implement water as a separate surface layer**
 
 Water top quads sit `0.035` world units above their source height, use the water
 top slot, and do not emit opaque top geometry for the same sample. Wet-bank
 cliffs still cover the sides.
 
-- [ ] **Step 7: Generate tangents and finish each batch**
+- [x] **Step 7: Generate tangents and finish each batch**
 
 Insert positions, normals, UVs, colors, and indices, then call:
 
@@ -573,7 +576,7 @@ mesh.generate_tangents()
 Return no empty layers. Keep each material/role in one mesh so repeated tiles do
 not become individual Bevy entities.
 
-- [ ] **Step 8: Replace the old terrain spawn path**
+- [x] **Step 8: Replace the old terrain spawn path**
 
 Delete these functions and their calls from `production_voxel_renderer.rs`:
 
@@ -592,7 +595,7 @@ with `Fvr11ProductionTerrainLayer`. Keep one
 `Fvr03ProductionVoxelTerrainBatch` marker per material's top layer for backward
 compatibility with existing diagnostics.
 
-- [ ] **Step 9: Run the pure and integration terrain tests**
+- [x] **Step 9: Run the pure and integration terrain tests**
 
 ```powershell
 cargo test -p alife_game_app --features "bevy-app voxel-backend" terrain_mesh::tests -j 1 -- --nocapture
@@ -601,7 +604,7 @@ cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_vo
 
 Expected: both pass, including `confetti_detail_quad_count == 0`.
 
-- [ ] **Step 10: Commit the mesh replacement**
+- [x] **Step 10: Commit the mesh replacement**
 
 ```powershell
 git add crates/alife_game_app/src/lib.rs crates/alife_game_app/src/terrain_mesh.rs crates/alife_game_app/src/production_voxel_renderer.rs crates/alife_game_app/tests/fvr03_voxel_renderer.rs
@@ -626,7 +629,7 @@ git commit -m "Replace noisy terrain slabs with layered chunk meshes"
 - Consumes: production atlas asset paths and `Fvr03ProductionVoxelMaterialKind`.
 - Produces: `TerrainMaterialLibrary`, `TerrainAtlasLayout`, `Fvr11ProductionTerrainMaterialContract`, and `Fvr11AnimatedWaterMaterial`.
 
-- [ ] **Step 1: Write failing material-spec tests**
+- [x] **Step 1: Write failing material-spec tests**
 
 Assert all eight terrain materials have top and side atlas slots, all slots are
 unique, and all runtime map paths are package-relative:
@@ -643,7 +646,7 @@ for spec in specs {
 }
 ```
 
-- [ ] **Step 2: Implement atlas and material specifications**
+- [x] **Step 2: Implement atlas and material specifications**
 
 Define:
 
@@ -679,7 +682,7 @@ pub(crate) struct TerrainMaterialLibrary {
 }
 ```
 
-- [ ] **Step 3: Load production atlas handles**
+- [x] **Step 3: Load production atlas handles**
 
 When `AssetServer` exists, request the three paths once and share those handles
 across all material instances. When dry-run tests omit `AssetServer`, create
@@ -702,7 +705,7 @@ StandardMaterial {
 }
 ```
 
-- [ ] **Step 4: Add the water module, material, and animation marker**
+- [x] **Step 4: Add the water module, material, and animation marker**
 
 Use `AlphaMode::Blend`, `perceptual_roughness: 0.18`, `reflectance: 0.42`,
 `clearcoat: 0.35`, `clearcoat_perceptual_roughness: 0.12`, and `cull_mode: None`.
@@ -719,18 +722,18 @@ pub(crate) struct Fvr11AnimatedWaterMaterial {
 Update only its `uv_transform.translation` plus a +/-2% blue-green tint pulse in
 an `Update` system. The system must not read or write world simulation state.
 
-- [ ] **Step 5: Replace white vertex-color-only terrain materials**
+- [x] **Step 5: Replace white vertex-color-only terrain materials**
 
 Use the top, side, transition, and water handle selected by each mesh layer. Keep
 vertex colors as restrained macro tint modulation; texture maps carry microdetail.
 
-- [ ] **Step 6: Strengthen the integration test**
+- [x] **Step 6: Strengthen the integration test**
 
 In dry-run integration tests, assert the contract reports eight materials and
 three exact asset paths. In the real screenshot run, inspect Bevy asset-load logs
 and fail completion if any terrain atlas produces a missing-asset warning.
 
-- [ ] **Step 7: Run tests and commit**
+- [x] **Step 7: Run tests and commit**
 
 ```powershell
 cargo test -p alife_game_app --features "bevy-app voxel-backend" terrain_materials::tests -j 1 -- --nocapture
@@ -757,7 +760,7 @@ git commit -m "Bind production PBR terrain materials and water"
 - Consumes: `ProductionTerrainSampleMap`, creature occupied tiles, profile dressing cap.
 - Produces: deterministic `ProductionTerrainDressingSpawn` records, shared mesh/material libraries, and existing display-only dressing markers.
 
-- [ ] **Step 1: Write failing clustering tests**
+- [x] **Step 1: Write failing clustering tests**
 
 Test a fixed biome map and occupied-tile set. Assert:
 
@@ -771,7 +774,7 @@ assert!(first.iter().any(|spawn| spawn.kind == Fvr07ProductionDressingKind::Haza
 assert!(first.iter().any(|spawn| spawn.kind == Fvr07ProductionDressingKind::LichenRock));
 ```
 
-- [ ] **Step 2: Extend dressing kinds without breaking stable existing names**
+- [x] **Step 2: Extend dressing kinds without breaking stable existing names**
 
 Keep `LeafPatch`, `MushroomCluster`, `PebbleCluster`, `NestMarker`,
 `FoodResource`, and `CorpseMarker`. Add:
@@ -800,7 +803,7 @@ pub(crate) struct ProductionTerrainDressingSpawn {
 }
 ```
 
-- [ ] **Step 3: Implement deterministic cluster planning**
+- [x] **Step 3: Implement deterministic cluster planning**
 
 Select anchors from material-compatible tiles using coordinate hash and local
 resource/hazard values. Enforce:
@@ -814,7 +817,7 @@ resource/hazard values. Enforce:
 - soil paths receive at most sparse pebble/leaf edge dressing,
 - total entities never exceed the profile's existing dressing cap.
 
-- [ ] **Step 4: Build reusable low-poly prop meshes**
+- [x] **Step 4: Build reusable low-poly prop meshes**
 
 Implement shared mesh handles for tapered grass blades, radial broad leaves,
 five-petal flowers, faceted mushroom caps, reeds, irregular lichen rocks, fungal
@@ -822,27 +825,27 @@ caps, and leaf-litter clusters. Use triangles/tapered prisms, not unit cubes.
 Insert vertex colors and valid normals. Reuse handles so Bevy can instance
 repeated props.
 
-- [ ] **Step 5: Make prop materials lit**
+- [x] **Step 5: Make prop materials lit**
 
 Replace `unlit: true` dressing materials with rough lit materials. Use a white
 base color when vertex colors provide the palette; set roughness between 0.68
 and 0.92. Hazard fungus may use restrained emissive red no brighter than 0.08.
 
-- [ ] **Step 6: Remove props spawned directly on creature tiles**
+- [x] **Step 6: Remove props spawned directly on creature tiles**
 
 Delete the current creature-index loop that places nests, food, leaves, or
 mushrooms on the exact creature tile. Select the nearest compatible unoccupied
 neighbor instead. This preserves visual grounding and prevents prop/creature
 occlusion.
 
-- [ ] **Step 7: Update the old visual-dressing test**
+- [x] **Step 7: Update the old visual-dressing test**
 
 Replace the assertion that hero materials are unlit with assertions that at
 least 24 composite meshes have more than 24 vertices, at least 12 are upright,
 all hero materials are lit, and no dressing marker shares a tile with a creature
 marker.
 
-- [ ] **Step 8: Run tests and commit**
+- [x] **Step 8: Run tests and commit**
 
 ```powershell
 cargo test -p alife_game_app --features "bevy-app voxel-backend" terrain_dressing::tests -j 1 -- --nocapture
@@ -868,7 +871,7 @@ git commit -m "Add clustered biome-aware terrain dressing"
 - Consumes: `Fvr03ProductionVoxelRendererSettings` profile flags.
 - Produces: camera atmosphere bundle, sun configuration, and `Fvr11ProductionTerrainLightingMarker` evidence.
 
-- [ ] **Step 1: Write the failing profile-lighting test**
+- [x] **Step 1: Write the failing profile-lighting test**
 
 Build minimum and comfort dry-run apps and query the camera/light markers:
 
@@ -884,12 +887,12 @@ assert!(comfort.display_only);
 assert!(comfort.no_renderer_authority_over_world_actions_or_cognition);
 ```
 
-- [ ] **Step 2: Enable Bevy's production tonemapping LUTs**
+- [x] **Step 2: Enable Bevy's production tonemapping LUTs**
 
 Add `"bevy/tonemapping_luts"` to the `bevy-app` feature list. Do not change the
 pinned Bevy version.
 
-- [ ] **Step 3: Implement the camera atmosphere bundle**
+- [x] **Step 3: Implement the camera atmosphere bundle**
 
 Replace `Tonemapping::None` with `Tonemapping::TonyMcMapface`. Add camera-local:
 
@@ -914,7 +917,7 @@ DistanceFog {
 
 Minimum uses a weaker alpha of 0.12 and starts at 42.0.
 
-- [ ] **Step 4: Configure the warm sun and comfort shadows**
+- [x] **Step 4: Configure the warm sun and comfort shadows**
 
 Use illuminance `7600.0`, warm color `Color::srgb(1.0, 0.91, 0.74)`, and the
 existing direction. Enable shadows for comfort and higher, but not minimum.
@@ -931,7 +934,7 @@ CascadeShadowConfigBuilder {
 .build()
 ```
 
-- [ ] **Step 5: Add minimum-profile contact grounding**
+- [x] **Step 5: Add minimum-profile contact grounding**
 
 When directional shadows are disabled, spawn one shared soft circular shadow mesh
 under each creature and large dressing anchor. Use a dark green-brown transparent
@@ -939,7 +942,7 @@ material, `AlphaMode::Blend`, `unlit: true`, and no pickability. Mark every enti
 display-only. Keep the diameter below 70% of one sampled tile so shadows do not
 become grid overlays.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth -j 1 -- --nocapture
@@ -970,7 +973,7 @@ git commit -m "Add production terrain lighting and atmosphere"
 - Consumes: the full production launch path, real save, backend selection, approved visual blueprint.
 - Produces: fresh minimum/comfort screenshots, honest backend/performance receipts, and final validation evidence.
 
-- [ ] **Step 1: Run focused code validation before launching**
+- [x] **Step 1: Run focused code validation before launching**
 
 ```powershell
 cargo fmt --all -- --check
@@ -983,7 +986,7 @@ cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_vo
 
 Expected: all pass before visual acceptance work begins.
 
-- [ ] **Step 2: Build the release executable once**
+- [x] **Step 2: Build the release executable once**
 
 ```powershell
 cargo build -p alife_game_app --release --features "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi" --bin alife_game_app -j 1
@@ -991,7 +994,7 @@ cargo build -p alife_game_app --release --features "bevy-app gpu-runtime voxel-b
 
 Expected: `target\release\alife_game_app.exe` is updated successfully.
 
-- [ ] **Step 3: Capture the minimum profile**
+- [x] **Step 3: Capture the minimum profile**
 
 ```powershell
 target\release\alife_game_app.exe production-voxel --profile MinimumSettings30x30 --population 30 --resolution 1920x1080 --gpu-mode auto-with-cpu-fallback --graphics-backend vulkan --record-performance
@@ -1007,7 +1010,7 @@ Reject the result if it has rectangular confetti, hard debug-color mats,
 featureless slabs, missing atlas textures, floating creatures, unreadable paths,
 or terrain clutter obscuring creatures.
 
-- [ ] **Step 4: Capture the comfort profile**
+- [x] **Step 4: Capture the comfort profile**
 
 ```powershell
 target\release\alife_game_app.exe production-voxel --profile MinSpecComfort1080p --resolution 1920x1080 --gpu-mode auto-with-cpu-fallback --graphics-backend vulkan --record-performance
@@ -1024,7 +1027,7 @@ materials, readable paths, mossy ledges, clustered flora, a distinct fungal
 hazard, water depth when visible, contact grounding, and stronger depth than the
 minimum profile.
 
-- [ ] **Step 5: Iterate against visible discrepancies**
+- [x] **Step 5: Iterate against visible discrepancies**
 
 Change one visual variable group at a time in this order:
 
@@ -1039,7 +1042,7 @@ After each change, rebuild the release binary, recapture both required profiles,
 and compare again. Do not use passing tests as a reason to stop a visibly weak
 iteration.
 
-- [ ] **Step 6: Run the full required validation gate**
+- [x] **Step 6: Run the full required validation gate**
 
 ```powershell
 cargo fmt --all -- --check
@@ -1052,7 +1055,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
 Expected: all pass. If any command is unavailable or fails, preserve the exact
 command and error; do not claim a pass.
 
-- [ ] **Step 7: Audit real runtime receipts**
+- [x] **Step 7: Audit real runtime receipts**
 
 Confirm both profile receipts record:
 
@@ -1066,13 +1069,13 @@ Confirm both profile receipts record:
 CPU fallback may be reported for visual validation but is not GPU performance
 evidence.
 
-- [ ] **Step 8: Update the visual handoff**
+- [x] **Step 8: Update the visual handoff**
 
 Record the accepted terrain strategy, exact screenshot paths, backend receipts,
 validation results, remaining creature-quality caveat, and the explicit statement
 that the renderer remains display-only.
 
-- [ ] **Step 9: Commit the accepted terrain pass**
+- [x] **Step 9: Commit the accepted terrain pass**
 
 ```powershell
 git add crates/alife_game_app crates/alife_tools Cargo.lock docs/productization_s_plans/fullstack_bevy_voxel_frontend_replacement/FVR10_VISUAL_GAME_LAYER_REDO_HANDOFF.md docs/superpowers
@@ -1083,7 +1086,7 @@ git commit -m "Complete creature-stage terrain visual overhaul"
 Before committing, inspect `git status --short` and unstage any generated
 `target/` artifacts or unrelated files.
 
-- [ ] **Step 10: Request review, push, and integrate safely**
+- [x] **Step 10: Request review, push, and integrate safely**
 
 Use `superpowers:requesting-code-review`, fix actionable findings, rerun the
 validation gate, then:

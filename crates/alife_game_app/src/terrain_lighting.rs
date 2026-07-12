@@ -59,7 +59,7 @@ pub(crate) fn spawn_production_terrain_camera(
         Camera3d::default(),
         Camera {
             order: 0,
-            clear_color: ClearColorConfig::Custom(Color::srgb(0.070, 0.125, 0.105)),
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.035, 0.145, 0.155)),
             ..default()
         },
         Projection::from(OrthographicProjection {
@@ -75,7 +75,7 @@ pub(crate) fn spawn_production_terrain_camera(
         Msaa::Off,
         AmbientLight {
             color: Color::srgb(0.56, 0.68, 0.78),
-            brightness: 105.0,
+            brightness: if settings.minimum_floor { 400.0 } else { 650.0 },
             affects_lightmapped_meshes: true,
         },
         DistanceFog {
@@ -115,7 +115,7 @@ pub(crate) fn spawn_production_terrain_lighting(
     let directional_shadows = !settings.minimum_floor;
     let light = DirectionalLight {
         color: Color::srgb(1.0, 0.91, 0.74),
-        illuminance: 7600.0,
+        illuminance: 5200.0,
         shadows_enabled: directional_shadows,
         ..default()
     };
@@ -167,8 +167,8 @@ pub(crate) fn production_camera_transform(
 
 fn production_camera_extent(profile_id: ProductionFrontendProfileId) -> f32 {
     match profile_id {
-        ProductionFrontendProfileId::MinimumSettings30x30 => 20.0,
-        ProductionFrontendProfileId::MinSpecComfort1080p => 18.0,
+        ProductionFrontendProfileId::MinimumSettings30x30 => 18.8,
+        ProductionFrontendProfileId::MinSpecComfort1080p => 17.2,
         ProductionFrontendProfileId::Balanced1080p => 30.0,
         ProductionFrontendProfileId::HighSpecScaleUp => 40.0,
         ProductionFrontendProfileId::ResearchScale => 34.0,

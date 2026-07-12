@@ -25,6 +25,8 @@ struct TerrainGenerationConfig {
 #[derive(Debug, Deserialize)]
 struct TerrainMaterialSlot {
     id: String,
+    albedo_detail: f32,
+    albedo_blur_sigma: f32,
     normal_strength: f32,
     roughness: f32,
 }
@@ -60,7 +62,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         let y0 = source.height() * row / config.grid_rows;
         let y1 = source.height() * (row + 1) / config.grid_rows;
         let crop = image::imageops::crop_imm(&source, x0, y0, x1 - x0, y1 - y0).to_image();
-        let tile = make_wrapped_tile(&crop, config.tile_size, 8.min(config.tile_size / 4));
+        let edge_blend = 8.min(config.tile_size / 4);
+        let wrapped = make_wrapped_tile(&crop, config.tile_size, edge_blend);
+        let tile = soften_wrapped_tile(
+            &wrapped,
+            slot.albedo_detail,
+            slot.albedo_blur_sigma,
+            edge_blend,
+        );
         let normal_tile = derive_normal_map(&tile, slot.normal_strength);
         let orm_tile = derive_orm_map(&tile, slot.roughness);
 
@@ -119,6 +128,8 @@ fn validate_config(
     }
     for slot in &config.slots {
         if slot.id.trim().is_empty()
+            || !(0.0..=1.0).contains(&slot.albedo_detail)
+            || !(0.0..=4.0).contains(&slot.albedo_blur_sigma)
             || !(0.0..=2.0).contains(&slot.normal_strength)
             || !(0.0..=1.0).contains(&slot.roughness)
         {
@@ -156,6 +167,30 @@ fn make_wrapped_tile(source: &RgbaImage, size: u32, blend: u32) -> RgbaImage {
         }
     }
     tile
+}
+
+fn soften_wrapped_tile(
+    source: &RgbaImage,
+    detail_mix: f32,
+    blur_sigma: f32,
+    edge_blend: u32,
+) -> RgbaImage {
+    if blur_sigma <= f32::EPSILON || detail_mix >= 1.0 - f32::EPSILON {
+        return source.clone();
+    }
+    let blurred = image::imageops::blur(source, blur_sigma);
+    let softened = RgbaImage::from_fn(source.width(), source.height(), |x, y| {
+        mix_rgba(
+            *blurred.get_pixel(x, y),
+            *source.get_pixel(x, y),
+            detail_mix,
+        )
+    });
+    make_wrapped_tile(
+        &softened,
+        source.width(),
+        edge_blend.min(source.width() / 2),
+    )
 }
 
 fn derive_normal_map(source: &RgbaImage, strength: f32) -> RgbaImage {
@@ -257,12 +292,46 @@ mod tests {
         })
     }
 
+    fn adjacent_color_energy(tile: &RgbaImage) -> u64 {
+        let mut energy = 0_u64;
+        for y in 0..tile.height() {
+            for x in 0..tile.width() {
+                let current = tile.get_pixel(x, y);
+                let right = tile.get_pixel((x + 1) % tile.width(), y);
+                let down = tile.get_pixel(x, (y + 1) % tile.height());
+                for channel in 0..3 {
+                    energy += u64::from(current[channel].abs_diff(right[channel]));
+                    energy += u64::from(current[channel].abs_diff(down[channel]));
+                }
+            }
+        }
+        energy
+    }
+
     #[test]
     fn wrapped_tile_matches_opposite_outer_edges() {
         let tile = make_wrapped_tile(&striped_tile(8), 8, 2);
         for offset in 0..8 {
             assert_eq!(tile.get_pixel(0, offset), tile.get_pixel(7, offset));
             assert_eq!(tile.get_pixel(offset, 0), tile.get_pixel(offset, 7));
+        }
+    }
+
+    #[test]
+    fn painterly_softening_reduces_microcontrast_and_preserves_wrapping() {
+        let wrapped = make_wrapped_tile(&striped_tile(64), 64, 8);
+        let softened = soften_wrapped_tile(&wrapped, 0.42, 1.25, 8);
+
+        assert!(adjacent_color_energy(&softened) < adjacent_color_energy(&wrapped));
+        for offset in 0..64 {
+            assert_eq!(
+                softened.get_pixel(0, offset),
+                softened.get_pixel(63, offset)
+            );
+            assert_eq!(
+                softened.get_pixel(offset, 0),
+                softened.get_pixel(offset, 63)
+            );
         }
     }
 

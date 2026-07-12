@@ -263,11 +263,11 @@ impl Fvr03ProductionVoxelRendererSettings {
             .div_ceil(usize::from(tile_stride))
             .pow(2);
         let (production_dressing_cap, production_vfx_marker_cap) = match profile_id {
-            ProductionFrontendProfileId::MinimumSettings30x30 => (48, 32),
-            ProductionFrontendProfileId::MinSpecComfort1080p => (128, 96),
-            ProductionFrontendProfileId::Balanced1080p => (140, 192),
-            ProductionFrontendProfileId::HighSpecScaleUp => (240, 320),
-            ProductionFrontendProfileId::ResearchScale => (96, 128),
+            ProductionFrontendProfileId::MinimumSettings30x30 => (64, 32),
+            ProductionFrontendProfileId::MinSpecComfort1080p => (224, 96),
+            ProductionFrontendProfileId::Balanced1080p => (288, 192),
+            ProductionFrontendProfileId::HighSpecScaleUp => (384, 320),
+            ProductionFrontendProfileId::ResearchScale => (160, 128),
         };
         let remesh_budget_chunks_per_frame = match profile_id {
             ProductionFrontendProfileId::MinimumSettings30x30 => 4,
@@ -910,6 +910,9 @@ pub enum Fvr07ProductionDressingKind {
     LichenRock,
     HazardFungus,
     DeadLeafPatch,
+    AlienFern,
+    CrimsonSpire,
+    GlowBulbCluster,
 }
 
 impl Fvr07ProductionDressingKind {
@@ -926,6 +929,9 @@ impl Fvr07ProductionDressingKind {
             Self::LichenRock => "lichen-rock",
             Self::HazardFungus => "hazard-fungus",
             Self::DeadLeafPatch => "dead-leaf-patch",
+            Self::AlienFern => "alien-fern",
+            Self::CrimsonSpire => "crimson-spire",
+            Self::GlowBulbCluster => "glow-bulb-cluster",
         }
     }
 }
@@ -2220,6 +2226,11 @@ fn spawn_fvr07_production_visual_polish(
         .add(Cuboid::new(1.0, 1.0, 1.0));
     let dressing_library = create_terrain_dressing_library(app);
     let vfx_materials = fvr07_vfx_materials(app);
+    let vfx_marker_visibility = if cfg!(feature = "vfx-hanabi") {
+        Visibility::Hidden
+    } else {
+        Visibility::Inherited
+    };
 
     for spawn in &dressing_spawns {
         let material = dressing_library.material(spawn.kind);
@@ -2261,6 +2272,7 @@ fn spawn_fvr07_production_visual_polish(
             Mesh3d(unit_mesh.clone()),
             MeshMaterial3d(material),
             transform,
+            vfx_marker_visibility,
             Fvr07ProductionGpuVfxMarker {
                 kind: spawn.kind,
                 tile: spawn.tile,
@@ -2585,6 +2597,57 @@ fn fvr07_hash_phase(tile: VoxelTileCoord) -> f32 {
     (fvr07_tile_hash(tile) % 10_000) as f32 / 10_000.0
 }
 
+#[cfg(any(test, feature = "vfx-hanabi"))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Fvr07HanabiBudget {
+    emitter_cap: usize,
+    capacity: u32,
+    rate: f32,
+    alpha_scale: f32,
+    particle_size: f32,
+}
+
+#[cfg(any(test, feature = "vfx-hanabi"))]
+fn fvr07_hanabi_budget(profile_id: ProductionFrontendProfileId) -> Fvr07HanabiBudget {
+    match profile_id {
+        ProductionFrontendProfileId::MinimumSettings30x30 => Fvr07HanabiBudget {
+            emitter_cap: 2,
+            capacity: 64,
+            rate: 2.5,
+            alpha_scale: 0.42,
+            particle_size: 0.085,
+        },
+        ProductionFrontendProfileId::MinSpecComfort1080p => Fvr07HanabiBudget {
+            emitter_cap: 4,
+            capacity: 128,
+            rate: 5.0,
+            alpha_scale: 0.45,
+            particle_size: 0.10,
+        },
+        ProductionFrontendProfileId::Balanced1080p => Fvr07HanabiBudget {
+            emitter_cap: 6,
+            capacity: 192,
+            rate: 8.0,
+            alpha_scale: 0.48,
+            particle_size: 0.11,
+        },
+        ProductionFrontendProfileId::HighSpecScaleUp => Fvr07HanabiBudget {
+            emitter_cap: 8,
+            capacity: 256,
+            rate: 12.0,
+            alpha_scale: 0.50,
+            particle_size: 0.12,
+        },
+        ProductionFrontendProfileId::ResearchScale => Fvr07HanabiBudget {
+            emitter_cap: 4,
+            capacity: 128,
+            rate: 4.0,
+            alpha_scale: 0.44,
+            particle_size: 0.095,
+        },
+    }
+}
+
 #[cfg(feature = "vfx-hanabi")]
 fn spawn_fvr07_hanabi_gpu_vfx_emitters(
     app: &mut App,
@@ -2593,29 +2656,9 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
 ) -> usize {
     use bevy_hanabi::prelude::*;
 
-    let emitter_cap = match settings.profile_id {
-        ProductionFrontendProfileId::MinimumSettings30x30 => 3,
-        ProductionFrontendProfileId::MinSpecComfort1080p => 8,
-        ProductionFrontendProfileId::Balanced1080p => 12,
-        ProductionFrontendProfileId::HighSpecScaleUp => 16,
-        ProductionFrontendProfileId::ResearchScale => 8,
-    };
-    let capacity = match settings.profile_id {
-        ProductionFrontendProfileId::MinimumSettings30x30 => 96,
-        ProductionFrontendProfileId::MinSpecComfort1080p => 192,
-        ProductionFrontendProfileId::Balanced1080p => 320,
-        ProductionFrontendProfileId::HighSpecScaleUp => 512,
-        ProductionFrontendProfileId::ResearchScale => 192,
-    };
-    let rate = match settings.profile_id {
-        ProductionFrontendProfileId::MinimumSettings30x30 => 8.0,
-        ProductionFrontendProfileId::MinSpecComfort1080p => 18.0,
-        ProductionFrontendProfileId::Balanced1080p => 26.0,
-        ProductionFrontendProfileId::HighSpecScaleUp => 36.0,
-        ProductionFrontendProfileId::ResearchScale => 14.0,
-    };
+    let budget = fvr07_hanabi_budget(settings.profile_id);
     let mut emitted = 0_usize;
-    for spawn in vfx_spawns.iter().take(emitter_cap) {
+    for spawn in vfx_spawns.iter().take(budget.emitter_cap) {
         let writer = ExprWriter::new();
         let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
         let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, writer.lit(1.85).expr());
@@ -2635,7 +2678,7 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
                 spawn.color[0],
                 spawn.color[1],
                 spawn.color[2],
-                spawn.color[3],
+                spawn.color[3] * budget.alpha_scale,
             ),
         );
         gradient.add_key(
@@ -2644,18 +2687,18 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
                 spawn.color[0],
                 spawn.color[1],
                 spawn.color[2],
-                spawn.color[3] * 0.62,
+                spawn.color[3] * budget.alpha_scale * 0.62,
             ),
         );
         gradient.add_key(1.0, bevy::prelude::Vec4::splat(0.0));
         let size_gradient =
-            bevy_hanabi::Gradient::constant(bevy::prelude::Vec3::splat(spawn.scale.x.max(0.12)));
+            bevy_hanabi::Gradient::constant(bevy::prelude::Vec3::splat(budget.particle_size));
         let effect = {
             let mut effects = app.world_mut().resource_mut::<Assets<EffectAsset>>();
             effects.add(
                 EffectAsset::new(
-                    capacity,
-                    SpawnerSettings::rate(rate.into()),
+                    budget.capacity,
+                    SpawnerSettings::rate(budget.rate.into()),
                     writer.finish(),
                 )
                 .with_name(format!("fvr07-{}", spawn.kind.label()))
@@ -5437,5 +5480,38 @@ mod tests {
         assert_eq!(scene.stable_sim_signature(), before);
         assert!(scene.no_renderer_authority_over_world_truth);
         assert!(scene.production_visuals_display_only);
+    }
+
+    #[test]
+    fn ambient_gpu_vfx_budget_stays_subtle_at_floor_profiles() {
+        let minimum = fvr07_hanabi_budget(ProductionFrontendProfileId::MinimumSettings30x30);
+        let comfort = fvr07_hanabi_budget(ProductionFrontendProfileId::MinSpecComfort1080p);
+
+        assert!(minimum.emitter_cap <= 2);
+        assert!(minimum.rate <= 3.0);
+        assert!(comfort.emitter_cap <= 4);
+        assert!(comfort.rate <= 6.0);
+        assert!(minimum.alpha_scale <= 0.50);
+        assert!(comfort.alpha_scale <= 0.50);
+        assert!(minimum.particle_size <= 0.10);
+        assert!(comfort.particle_size <= 0.11);
+    }
+
+    #[test]
+    fn floor_profiles_allocate_a_lush_but_bounded_dressing_budget() {
+        let minimum = Fvr03ProductionVoxelRendererSettings::for_profile(
+            ProductionFrontendProfileId::MinimumSettings30x30,
+        );
+        let comfort = Fvr03ProductionVoxelRendererSettings::for_profile(
+            ProductionFrontendProfileId::MinSpecComfort1080p,
+        );
+        let high = Fvr03ProductionVoxelRendererSettings::for_profile(
+            ProductionFrontendProfileId::HighSpecScaleUp,
+        );
+
+        assert_eq!(minimum.production_dressing_cap, 64);
+        assert_eq!(comfort.production_dressing_cap, 224);
+        assert!(comfort.production_dressing_cap < high.production_dressing_cap);
+        assert!(high.production_dressing_cap <= 384);
     }
 }

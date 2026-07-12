@@ -23,7 +23,8 @@ use alife_world::{
 use bevy::{
     mesh::VertexAttributeValues,
     prelude::{
-        AlphaMode, Assets, Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Transform,
+        AlphaMode, AmbientLight, Assets, DirectionalLight, Mesh, Mesh3d, MeshMaterial3d,
+        Projection, StandardMaterial, Transform,
     },
 };
 
@@ -159,22 +160,52 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
         let (mut app, _summary) =
             alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
         app.update();
-        let mut marker_query = app
-            .world_mut()
-            .query::<&Fvr11ProductionTerrainLightingMarker>();
-        let marker = *marker_query
+        let (marker, ambient_brightness, vertical_area) = {
+            let mut marker_query = app.world_mut().query::<(
+                &Fvr11ProductionTerrainLightingMarker,
+                &AmbientLight,
+                &Projection,
+            )>();
+            let (marker, ambient, projection) = marker_query
+                .iter(app.world())
+                .next()
+                .expect("terrain lighting marker");
+            let Projection::Orthographic(orthographic) = projection else {
+                panic!("production terrain camera should stay orthographic");
+            };
+            (*marker, ambient.brightness, orthographic.area.height())
+        };
+        let mut light_query = app.world_mut().query::<&DirectionalLight>();
+        let sun_illuminance = light_query
             .iter(app.world())
             .next()
-            .expect("terrain lighting marker");
+            .expect("production terrain sun")
+            .illuminance;
         let mut shadow_query = app.world_mut().query::<&Fvr11ProductionContactShadow>();
         let contact_shadow_count = shadow_query.iter(app.world()).count();
-        (marker, contact_shadow_count)
+        (
+            marker,
+            contact_shadow_count,
+            ambient_brightness,
+            vertical_area,
+            sun_illuminance,
+        )
     };
 
-    let (minimum, minimum_contact_shadows) =
-        lighting(ProductionFrontendProfileId::MinimumSettings30x30);
-    let (comfort, comfort_contact_shadows) =
-        lighting(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (
+        minimum,
+        minimum_contact_shadows,
+        minimum_ambient_brightness,
+        minimum_vertical_area,
+        minimum_sun_illuminance,
+    ) = lighting(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (
+        comfort,
+        comfort_contact_shadows,
+        comfort_ambient_brightness,
+        comfort_vertical_area,
+        comfort_sun_illuminance,
+    ) = lighting(ProductionFrontendProfileId::MinSpecComfort1080p);
 
     assert_eq!(minimum.tonemapping, "tony-mc-mapface");
     assert!(!minimum.directional_shadows);
@@ -182,6 +213,9 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
     assert!(minimum.contact_grounding);
     assert!(minimum_contact_shadows >= 30);
     assert!(minimum.distance_fog);
+    assert!(minimum_ambient_brightness >= 260.0);
+    assert!(minimum_vertical_area <= 19.0);
+    assert!(minimum_sun_illuminance <= 6_000.0);
 
     assert_eq!(comfort.tonemapping, "tony-mc-mapface");
     assert!(comfort.directional_shadows);
@@ -192,6 +226,9 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
     assert_eq!(comfort_contact_shadows, 0);
     assert!(comfort.display_only);
     assert!(comfort.no_renderer_authority_over_world_actions_or_cognition);
+    assert!(comfort_ambient_brightness >= 360.0);
+    assert!(comfort_vertical_area <= 17.5);
+    assert!(comfort_sun_illuminance <= 6_000.0);
 }
 
 #[test]
@@ -224,7 +261,7 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     assert_eq!(scene.production_vfx_budget_state, "conservative");
     assert!(scene.production_visuals_display_only);
     assert!(scene.production_dressing_count >= 8);
-    assert!(scene.production_dressing_count <= 48);
+    assert!(scene.production_dressing_count <= 64);
     assert!(scene.production_vfx_marker_count >= 8);
     assert!(scene.production_vfx_marker_count <= 32);
 
@@ -958,6 +995,9 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
                     | Fvr07ProductionDressingKind::FlowerPatch
                     | Fvr07ProductionDressingKind::ReedCluster
                     | Fvr07ProductionDressingKind::HazardFungus
+                    | Fvr07ProductionDressingKind::AlienFern
+                    | Fvr07ProductionDressingKind::CrimsonSpire
+                    | Fvr07ProductionDressingKind::GlowBulbCluster
             )
         {
             vertical_prop_count = vertical_prop_count.saturating_add(1);
@@ -977,6 +1017,9 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
                     | Fvr07ProductionDressingKind::FlowerPatch
                     | Fvr07ProductionDressingKind::ReedCluster
                     | Fvr07ProductionDressingKind::HazardFungus
+                    | Fvr07ProductionDressingKind::AlienFern
+                    | Fvr07ProductionDressingKind::CrimsonSpire
+                    | Fvr07ProductionDressingKind::GlowBulbCluster
             )
         {
             hero_cluster_prop_count = hero_cluster_prop_count.saturating_add(1);
@@ -991,6 +1034,9 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
                 | Fvr07ProductionDressingKind::LichenRock
                 | Fvr07ProductionDressingKind::HazardFungus
                 | Fvr07ProductionDressingKind::DeadLeafPatch
+                | Fvr07ProductionDressingKind::AlienFern
+                | Fvr07ProductionDressingKind::CrimsonSpire
+                | Fvr07ProductionDressingKind::GlowBulbCluster
         ) {
             new_biome_kinds.insert(kind);
         }
@@ -1012,5 +1058,5 @@ fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
         lit_material_count == composite_prop_count,
         "FVR11 composite props must use lit materials: lit={lit_material_count} composite={composite_prop_count}"
     );
-    assert_eq!(new_biome_kinds.len(), 5);
+    assert_eq!(new_biome_kinds.len(), 8);
 }
