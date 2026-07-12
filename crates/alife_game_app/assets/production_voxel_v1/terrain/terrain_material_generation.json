@@ -1,0 +1,26 @@
+{
+  "schema": "alife.fvr11.terrain_material_generation.v1",
+  "tile_size": 64,
+  "gutter": 2,
+  "grid_columns": 4,
+  "grid_rows": 4,
+  "source_prompt": "Create a strict 4x4 orthographic swatch sheet of original seamless stylized alien game-terrain materials. Slots in row-major order: moss grass top, rooted grass side, worn soil top, clay soil side, rich resource ground top, rooted resource side, dark crimson fungal hazard top, hazard earth side, humus leaf-litter top, dark decay side, lichen stone top, layered stone side, turquoise shallow water top, wet bank side, warm sand top, compact sand side. Each cell is edge-to-edge material only, flat neutral lighting, no objects crossing cells, no text, no borders, no logos, no watermark.",
+  "slots": [
+    { "id": "safe-grass-top", "albedo_detail": 0.36, "albedo_blur_sigma": 1.45, "normal_strength": 0.45, "roughness": 0.86 },
+    { "id": "safe-grass-side", "albedo_detail": 0.52, "albedo_blur_sigma": 1.00, "normal_strength": 0.55, "roughness": 0.92 },
+    { "id": "soil-top", "albedo_detail": 0.55, "albedo_blur_sigma": 1.00, "normal_strength": 0.52, "roughness": 0.94 },
+    { "id": "soil-side", "albedo_detail": 0.62, "albedo_blur_sigma": 0.80, "normal_strength": 0.62, "roughness": 0.96 },
+    { "id": "resource-top", "albedo_detail": 0.38, "albedo_blur_sigma": 1.40, "normal_strength": 0.50, "roughness": 0.78 },
+    { "id": "resource-side", "albedo_detail": 0.52, "albedo_blur_sigma": 1.00, "normal_strength": 0.56, "roughness": 0.86 },
+    { "id": "hazard-top", "albedo_detail": 0.55, "albedo_blur_sigma": 0.90, "normal_strength": 0.58, "roughness": 0.72 },
+    { "id": "hazard-side", "albedo_detail": 0.62, "albedo_blur_sigma": 0.75, "normal_strength": 0.64, "roughness": 0.82 },
+    { "id": "decay-top", "albedo_detail": 0.50, "albedo_blur_sigma": 1.00, "normal_strength": 0.48, "roughness": 0.90 },
+    { "id": "decay-side", "albedo_detail": 0.60, "albedo_blur_sigma": 0.80, "normal_strength": 0.54, "roughness": 0.94 },
+    { "id": "stone-top", "albedo_detail": 0.56, "albedo_blur_sigma": 0.90, "normal_strength": 0.72, "roughness": 0.92 },
+    { "id": "stone-side", "albedo_detail": 0.65, "albedo_blur_sigma": 0.70, "normal_strength": 0.84, "roughness": 0.96 },
+    { "id": "water-top", "albedo_detail": 0.55, "albedo_blur_sigma": 1.00, "normal_strength": 0.30, "roughness": 0.18 },
+    { "id": "water-side", "albedo_detail": 0.60, "albedo_blur_sigma": 0.80, "normal_strength": 0.36, "roughness": 0.26 },
+    { "id": "sand-top", "albedo_detail": 0.50, "albedo_blur_sigma": 1.10, "normal_strength": 0.46, "roughness": 0.88 },
+    { "id": "sand-side", "albedo_detail": 0.62, "albedo_blur_sigma": 0.80, "normal_strength": 0.52, "roughness": 0.92 }
+  ]
+}

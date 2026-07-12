@@ -4770,7 +4770,7 @@ pub fn build_production_voxel_frontend_app_shell(
         app.add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {
-                    file_path: "assets".to_string(),
+                    file_path: production_voxel_asset_root(),
                     ..default()
                 })
                 .set(production_voxel_render_plugin(launch.record_performance))
@@ -4816,6 +4816,26 @@ fn production_voxel_render_plugin(record_performance: bool) -> RenderPlugin {
         render_creation: RenderCreation::Automatic(wgpu_settings),
         synchronous_pipeline_compilation: false,
         debug_flags: default(),
+    }
+}
+
+fn production_voxel_asset_root() -> String {
+    graphical_playground_asset_root()
+}
+
+#[cfg(test)]
+mod fvr11_asset_root_tests {
+    use std::path::PathBuf;
+
+    use super::production_voxel_asset_root;
+
+    #[test]
+    fn production_voxel_asset_root_contains_the_terrain_atlas() {
+        let root = PathBuf::from(production_voxel_asset_root());
+        assert!(root.ends_with("crates/alife_game_app/assets"));
+        assert!(root
+            .join("production_voxel_v1/terrain/terrain_albedo_atlas.png")
+            .is_file());
     }
 }
 

@@ -7,3 +7,4 @@ Makefile text eol=lf
 crates/alife_world/tests/fixtures/p34/**/*.json text eol=lf
 crates/alife_game_app/app_bundle_manifest.json text eol=lf
 crates/alife_game_app/assets/production_voxel_v1/**/*.json text eol=lf
+crates/alife_game_app/assets/production_voxel_v1/models/*.obj text eol=lf

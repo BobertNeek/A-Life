@@ -18,6 +18,7 @@ use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::{
+    appearance::CreatureAppearanceGenome,
     ecology::EcologyState,
     headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
     legacy_neural_policy_v1::LegacyBackendConfigV1,
@@ -809,6 +810,8 @@ pub struct CreatureSaveState {
     pub genome_id: GenomeId,
     pub brain_class: BrainScaleTier,
     pub development_tick: Tick,
+    #[serde(default)]
+    pub appearance: CreatureAppearanceGenome,
     pub mind: CreatureMindSaveSummary,
     pub weights: WeightLayerSaveSummary,
     pub learning: LearningTraceSaveSummary,
@@ -1106,6 +1109,7 @@ impl CreatureSaveState {
                 message: "creature save requires canonical brain class",
             });
         }
+        self.appearance.validate()?;
         self.mind.validate()?;
         self.weights.validate(assets)?;
         if self.learning.lamarckian_mode_enabled {
