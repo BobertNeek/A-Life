@@ -6,14 +6,14 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     num::NonZeroU64,
-    sync::mpsc,
+    sync::{mpsc, Arc},
 };
 
 use alife_core::{PerceptionFrame, MAX_ACTION_CANDIDATES};
 
 use crate::{
     GpuBrainSlot, GpuCandidateRecord, GpuClassBucketBuffers, GpuClosedLoopError,
-    GpuPerceptionHeader, GpuPerceptionUpload, GpuSelectionRecord,
+    GpuFixedClassArenaBuffers, GpuPerceptionHeader, GpuPerceptionUpload, GpuSelectionRecord,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,6 +111,10 @@ impl BatchAuthority {
         Ok(())
     }
 
+    fn prevalidate_submission_succeeded(&self, nonce: u64) -> Result<(), GpuClosedLoopError> {
+        self.require_stage(nonce, BatchLifecycleStage::SelectionRecorded)
+    }
+
     fn record_selection(&mut self, nonce: u64) -> Result<(), GpuClosedLoopError> {
         let pending = self.pending_mut(nonce)?;
         if pending.stage != BatchLifecycleStage::RecurrentRecorded {
@@ -148,12 +152,34 @@ impl BatchAuthority {
             .ok_or(GpuClosedLoopError::StaleOrForeignHandle)
     }
 
+    fn require_stage(
+        &self,
+        nonce: u64,
+        stage: BatchLifecycleStage,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.ensure_healthy()?;
+        if self.pending == Some(PendingBatchAuthority { nonce, stage }) {
+            Ok(())
+        } else {
+            Err(GpuClosedLoopError::MalformedUpload)
+        }
+    }
+
     fn ensure_healthy(&self) -> Result<(), GpuClosedLoopError> {
         if self.poisoned_nonce.is_some() {
             Err(GpuClosedLoopError::SubmissionFailed)
         } else {
             Ok(())
         }
+    }
+
+    fn retire_active_side(&mut self, slot: u32, generation: u32) -> Result<(), GpuClosedLoopError> {
+        self.ensure_healthy()?;
+        if self.pending.is_some() {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        self.active_sides.remove(&(slot, generation));
+        Ok(())
     }
 }
 
@@ -193,6 +219,25 @@ impl<'a> GpuActiveBatchEntry<'a> {
     }
 }
 
+/// Borrowed fixed-arena row used by the live runtime. It carries no packed
+/// append-plan state and binds the physical arena index explicitly.
+pub(crate) struct GpuFixedActiveBatchEntry<'a> {
+    frame: &'a PerceptionFrame,
+    slot: &'a GpuBrainSlot,
+}
+
+impl<'a> GpuFixedActiveBatchEntry<'a> {
+    pub(crate) const fn new(frame: &'a PerceptionFrame, slot: &'a GpuBrainSlot) -> Self {
+        Self { frame, slot }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct GpuBatchEntryView<'a> {
+    frame: &'a PerceptionFrame,
+    slot: &'a GpuBrainSlot,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuActiveBatchUpload {
     headers: Vec<GpuPerceptionHeader>,
@@ -204,13 +249,15 @@ pub struct GpuActiveBatchUpload {
 }
 
 impl GpuActiveBatchUpload {
-    fn try_from_entries(
-        entries: &[GpuActiveBatchEntry<'_>],
+    #[allow(clippy::too_many_arguments)]
+    fn try_from_views(
+        entries: &[GpuBatchEntryView<'_>],
         frame_base_words: u32,
         bucket_ownership_token: u64,
         active_sides: &BTreeMap<(u32, u32), u32>,
         dispatch_capacity_words: usize,
         frame_payload_capacity_words: usize,
+        dispatch_generation: NonZeroU64,
         authority_nonce: u64,
     ) -> Result<Self, GpuClosedLoopError> {
         if entries.is_empty() {
@@ -246,12 +293,13 @@ impl GpuActiveBatchUpload {
             let mut upload = GpuPerceptionUpload::try_from_frame(
                 entry.frame,
                 entry.slot,
-                *active_sides
+                active_sides
                     .get(&(
                         entry.slot.brain_slot_index(),
                         entry.slot.record().slot_generation,
                     ))
-                    .ok_or(GpuClosedLoopError::StaleOrForeignHandle)?,
+                    .copied()
+                    .unwrap_or(0),
             )?;
             let row_base = row
                 .checked_mul(GPU_ACTIVE_DISPATCH_ROW_WORDS)
@@ -293,8 +341,8 @@ impl GpuActiveBatchUpload {
                 return Err(GpuClosedLoopError::CapacityExceeded);
             }
             frame_payload_words.extend_from_slice(&upload.frame_payload_words);
-            upload.header.dispatch_generation_lo = authority_nonce as u32;
-            upload.header.dispatch_generation_hi = (authority_nonce >> 32) as u32;
+            upload.header.dispatch_generation_lo = dispatch_generation.get() as u32;
+            upload.header.dispatch_generation_hi = (dispatch_generation.get() >> 32) as u32;
             dispatch_header_words[row_base..row_base + GPU_PERCEPTION_HEADER_WORDS]
                 .copy_from_slice(upload.header.words());
             headers.push(upload.header);
@@ -325,9 +373,107 @@ impl GpuActiveBatchUpload {
     pub fn frame_payload_words(&self) -> &[u32] {
         &self.frame_payload_words
     }
+    #[allow(dead_code)]
+    pub(crate) fn dispatch_generation(&self) -> u64 {
+        self.headers.first().map_or(0, |header| {
+            u64::from(header.dispatch_generation_lo)
+                | (u64::from(header.dispatch_generation_hi) << 32)
+        })
+    }
+    #[cfg(test)]
+    fn authority_nonce_for_test(&self) -> u64 {
+        self.authority_nonce
+    }
     #[cfg(any(test, feature = "gpu-tests"))]
     pub fn zero_frame_payload_for_hardware_diagnostic(&mut self) {
         self.frame_payload_words.fill(0);
+    }
+}
+
+pub(crate) struct GpuPreparedActiveBatch {
+    batch: GpuActiveBatchUpload,
+}
+
+pub(crate) struct GpuCompactMapTicket {
+    receiver: mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>,
+}
+
+impl GpuCompactMapTicket {
+    pub(crate) fn mapping_succeeded(self) -> bool {
+        self.receiver.recv().ok().and_then(Result::ok).is_some()
+    }
+}
+
+pub(crate) struct GpuValidatedClassBatch {
+    bucket_ownership_token: u64,
+    authority_nonce: u64,
+    records: Vec<GpuSelectionRecord>,
+    final_sides: Vec<(u32, u32, u32)>,
+    readback_bytes: u64,
+}
+
+pub(crate) trait ClosedLoopBufferSet {
+    fn neural_buffers(&self) -> [&wgpu::Buffer; 7];
+    fn compact_readback(&self) -> &wgpu::Buffer;
+    fn ownership_token(&self) -> u64;
+    fn buffer_set_token(&self) -> u64;
+    fn max_neurons(&self) -> u32;
+    fn dispatch_capacity_words(&self) -> usize;
+    fn frame_payload_capacity_words(&self) -> usize;
+    fn compact_readback_capacity_bytes(&self) -> u64;
+}
+
+impl ClosedLoopBufferSet for GpuClassBucketBuffers {
+    fn neural_buffers(&self) -> [&wgpu::Buffer; 7] {
+        self.neural_buffers()
+    }
+    fn compact_readback(&self) -> &wgpu::Buffer {
+        self.compact_readback()
+    }
+    fn ownership_token(&self) -> u64 {
+        self.ownership_token()
+    }
+    fn buffer_set_token(&self) -> u64 {
+        self.buffer_set_token()
+    }
+    fn max_neurons(&self) -> u32 {
+        self.max_neurons()
+    }
+    fn dispatch_capacity_words(&self) -> usize {
+        self.dispatch_capacity_words()
+    }
+    fn frame_payload_capacity_words(&self) -> usize {
+        self.frame_payload_capacity_words()
+    }
+    fn compact_readback_capacity_bytes(&self) -> u64 {
+        self.compact_readback_capacity_bytes()
+    }
+}
+
+impl ClosedLoopBufferSet for GpuFixedClassArenaBuffers {
+    fn neural_buffers(&self) -> [&wgpu::Buffer; 7] {
+        self.neural_buffers()
+    }
+    fn compact_readback(&self) -> &wgpu::Buffer {
+        self.compact_readback()
+    }
+    fn ownership_token(&self) -> u64 {
+        self.ownership_token()
+    }
+    fn buffer_set_token(&self) -> u64 {
+        self.buffer_set_token()
+    }
+    fn max_neurons(&self) -> u32 {
+        self.max_neurons()
+    }
+    fn dispatch_capacity_words(&self) -> usize {
+        self.dispatch_capacity_words()
+    }
+    fn frame_payload_capacity_words(&self) -> usize {
+        self.frame_payload_capacity_words()
+    }
+    fn compact_readback_capacity_bytes(&self) -> u64 {
+        self.compact_readback_capacity_bytes()
     }
 }
 
@@ -352,39 +498,19 @@ impl GpuRecurrentDispatchReceipt {
     }
 }
 
-pub struct GpuClosedLoopPipelines {
-    bind_group: wgpu::BindGroup,
+/// Device-owned immutable WGSL kernels shared by every class arena.
+pub(crate) struct GpuClosedLoopKernelSet {
+    bind_group_layout: wgpu::BindGroupLayout,
     encode_pipeline: wgpu::ComputePipeline,
     recurrent_pipelines: [wgpu::ComputePipeline; 4],
     clear_diagnostics_pipeline: wgpu::ComputePipeline,
     decode_pipeline: wgpu::ComputePipeline,
     select_pipeline: wgpu::ComputePipeline,
-    bucket_ownership_token: u64,
-    buffer_set_token: u64,
-    max_neurons: u32,
-    max_compute_workgroups_per_dimension: u32,
-    authority: BatchAuthority,
-    dispatch_capacity_words: usize,
-    frame_payload_capacity_words: usize,
-    next_authority_nonce: u64,
 }
 
-impl GpuClosedLoopPipelines {
-    pub fn new(
-        device: &wgpu::Device,
-        buffers: &GpuClassBucketBuffers,
-    ) -> Result<Self, GpuClosedLoopError> {
+impl GpuClosedLoopKernelSet {
+    pub(crate) fn new(device: &wgpu::Device) -> Result<Arc<Self>, GpuClosedLoopError> {
         let layout = create_neural_bind_group_layout(device);
-        let neural = buffers.neural_buffers();
-        let entries = std::array::from_fn::<_, 7, _>(|index| wgpu::BindGroupEntry {
-            binding: index as u32,
-            resource: neural[index].as_entire_binding(),
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("closed-loop-neural-bind-group"),
-            layout: &layout,
-            entries: &entries,
-        });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("closed-loop-neural-pipeline-layout"),
             bind_group_layouts: &[Some(&layout)],
@@ -443,13 +569,75 @@ impl GpuClosedLoopPipelines {
             "select_candidate",
             &[],
         );
-        Ok(Self {
-            bind_group,
+        Ok(Arc::new(Self {
+            bind_group_layout: layout,
             encode_pipeline,
             recurrent_pipelines,
             clear_diagnostics_pipeline,
             decode_pipeline,
             select_pipeline,
+        }))
+    }
+}
+
+pub struct GpuClosedLoopPipelines {
+    kernels: Arc<GpuClosedLoopKernelSet>,
+    bind_group: wgpu::BindGroup,
+    bucket_ownership_token: u64,
+    buffer_set_token: u64,
+    max_neurons: u32,
+    max_compute_workgroups_per_dimension: u32,
+    authority: BatchAuthority,
+    dispatch_capacity_words: usize,
+    frame_payload_capacity_words: usize,
+    next_authority_nonce: u64,
+    #[cfg(feature = "gpu-tests")]
+    force_all_invalid_slot: Option<(u32, u32)>,
+}
+
+impl GpuClosedLoopPipelines {
+    pub fn new(
+        device: &wgpu::Device,
+        buffers: &GpuClassBucketBuffers,
+    ) -> Result<Self, GpuClosedLoopError> {
+        let kernels = GpuClosedLoopKernelSet::new(device)?;
+        Self::from_shared_kernel_set(device, buffers, kernels)
+    }
+
+    pub(crate) fn from_shared_kernel_set(
+        device: &wgpu::Device,
+        buffers: &GpuClassBucketBuffers,
+        kernels: Arc<GpuClosedLoopKernelSet>,
+    ) -> Result<Self, GpuClosedLoopError> {
+        Self::from_buffer_set(device, buffers, kernels)
+    }
+
+    pub(crate) fn from_shared_kernel_set_for_fixed_arena(
+        device: &wgpu::Device,
+        buffers: &GpuFixedClassArenaBuffers,
+        kernels: Arc<GpuClosedLoopKernelSet>,
+    ) -> Result<Self, GpuClosedLoopError> {
+        Self::from_buffer_set(device, buffers, kernels)
+    }
+
+    fn from_buffer_set(
+        device: &wgpu::Device,
+        buffers: &impl ClosedLoopBufferSet,
+        kernels: Arc<GpuClosedLoopKernelSet>,
+    ) -> Result<Self, GpuClosedLoopError> {
+        let neural = buffers.neural_buffers();
+        let entries = std::array::from_fn::<_, 7, _>(|index| wgpu::BindGroupEntry {
+            binding: index as u32,
+            resource: neural[index].as_entire_binding(),
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("closed-loop-neural-bind-group"),
+            layout: &kernels.bind_group_layout,
+            entries: &entries,
+        });
+        Ok(Self {
+            kernels,
+            bind_group,
             bucket_ownership_token: buffers.ownership_token(),
             buffer_set_token: buffers.buffer_set_token(),
             max_neurons: buffers.max_neurons(),
@@ -460,6 +648,8 @@ impl GpuClosedLoopPipelines {
             dispatch_capacity_words: buffers.dispatch_capacity_words(),
             frame_payload_capacity_words: buffers.frame_payload_capacity_words(),
             next_authority_nonce: 1,
+            #[cfg(feature = "gpu-tests")]
+            force_all_invalid_slot: None,
         })
     }
 
@@ -469,6 +659,22 @@ impl GpuClosedLoopPipelines {
         entries: &[GpuActiveBatchEntry<'_>],
         frame_base_words: u32,
     ) -> Result<GpuActiveBatchUpload, GpuClosedLoopError> {
+        let dispatch_generation = NonZeroU64::new(self.next_authority_nonce)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let prepared =
+            self.preflight_active_batch(plan, entries, frame_base_words, dispatch_generation)?;
+        self.begin_prepared_batch(prepared)
+    }
+
+    /// Performs the complete class-local host preflight without reserving a
+    /// private nonce or mutating persistent active-side authority.
+    pub(crate) fn preflight_active_batch(
+        &self,
+        plan: &crate::GpuClassBucketPlan,
+        entries: &[GpuActiveBatchEntry<'_>],
+        frame_base_words: u32,
+        dispatch_generation: NonZeroU64,
+    ) -> Result<GpuPreparedActiveBatch, GpuClosedLoopError> {
         self.authority.ensure_healthy()?;
         if self.authority.pending.is_some() {
             return Err(GpuClosedLoopError::MalformedUpload);
@@ -487,27 +693,101 @@ impl GpuClosedLoopPipelines {
             {
                 return Err(GpuClosedLoopError::MalformedUpload);
             }
-            self.authority
-                .active_sides
-                .entry((entry.slot.brain_slot_index(), record.slot_generation))
-                .or_insert(0);
         }
-        let authority_nonce = self.next_authority_nonce;
-        let next_authority_nonce = authority_nonce
-            .checked_add(1)
-            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-        let batch = GpuActiveBatchUpload::try_from_entries(
-            entries,
+        let views = entries
+            .iter()
+            .map(|entry| GpuBatchEntryView {
+                frame: entry.frame,
+                slot: entry.slot,
+            })
+            .collect::<Vec<_>>();
+        let batch = GpuActiveBatchUpload::try_from_views(
+            &views,
             frame_base_words,
             self.bucket_ownership_token,
             &self.authority.active_sides,
             self.dispatch_capacity_words,
             self.frame_payload_capacity_words,
-            authority_nonce,
+            dispatch_generation,
+            0,
         )?;
+        Ok(GpuPreparedActiveBatch { batch })
+    }
+
+    pub(crate) fn preflight_fixed_active_batch(
+        &self,
+        entries: &[GpuFixedActiveBatchEntry<'_>],
+        frame_base_words: u32,
+        dispatch_generation: NonZeroU64,
+    ) -> Result<GpuPreparedActiveBatch, GpuClosedLoopError> {
+        self.authority.ensure_healthy()?;
+        if self.authority.pending.is_some() || entries.is_empty() {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        let views = entries
+            .iter()
+            .map(|entry| GpuBatchEntryView {
+                frame: entry.frame,
+                slot: entry.slot,
+            })
+            .collect::<Vec<_>>();
+        if views.iter().any(|entry| {
+            entry.slot.record().slot != entry.slot.brain_slot_index()
+                || entry.slot.record().neuron_count != self.max_neurons
+                || !(2..=4).contains(&entry.slot.record().microstep_count)
+        }) {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        let batch = GpuActiveBatchUpload::try_from_views(
+            &views,
+            frame_base_words,
+            self.bucket_ownership_token,
+            &self.authority.active_sides,
+            self.dispatch_capacity_words,
+            self.frame_payload_capacity_words,
+            dispatch_generation,
+            0,
+        )?;
+        Ok(GpuPreparedActiveBatch { batch })
+    }
+
+    /// Reserves the class-private authority nonce only after every class in a
+    /// backend-global transaction has passed preflight.
+    pub(crate) fn begin_prepared_batch(
+        &mut self,
+        mut prepared: GpuPreparedActiveBatch,
+    ) -> Result<GpuActiveBatchUpload, GpuClosedLoopError> {
+        self.authority.ensure_healthy()?;
+        if self.authority.pending.is_some()
+            || prepared.batch.bucket_ownership_token != self.bucket_ownership_token
+        {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+        for header in &prepared.batch.headers {
+            let side = self
+                .authority
+                .active_sides
+                .get(&(header.brain_slot_index, header.slot_generation))
+                .copied()
+                .unwrap_or(0);
+            if side != header.active_activation_side {
+                return Err(GpuClosedLoopError::StaleOrForeignHandle);
+            }
+        }
+        let authority_nonce = self.next_authority_nonce;
+        let next_authority_nonce = authority_nonce
+            .checked_add(1)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         self.authority.begin(authority_nonce)?;
+        for header in &prepared.batch.headers {
+            self.authority
+                .active_sides
+                .entry((header.brain_slot_index, header.slot_generation))
+                .or_insert(0);
+        }
+        prepared.batch.authority_nonce = authority_nonce;
         self.next_authority_nonce = next_authority_nonce;
-        Ok(batch)
+        Ok(prepared.batch)
     }
 
     /// Explicitly releases a built batch that will not be submitted. The
@@ -521,6 +801,31 @@ impl GpuClosedLoopPipelines {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
         self.authority.abandon_unsubmitted(batch.authority_nonce)
+    }
+
+    pub(crate) fn rollback_recorded_batch(
+        &mut self,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.validate_batch_identity(batch)?;
+        self.authority.recording_failed(batch.authority_nonce)
+    }
+
+    pub(crate) fn mark_post_submit_poison(
+        &mut self,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.validate_batch_identity(batch)?;
+        self.authority
+            .submission_indeterminate(batch.authority_nonce)
+    }
+
+    pub(crate) fn retire_slot_active_side(
+        &mut self,
+        slot: u32,
+        generation: u32,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.authority.retire_active_side(slot, generation)
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -558,6 +863,174 @@ impl GpuClosedLoopPipelines {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         Ok(initial_side ^ (microsteps & 1))
+    }
+
+    pub(crate) fn write_staged_uploads(
+        &self,
+        queue: &wgpu::Queue,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.validate_buffers_and_dispatch(buffers, batch)?;
+        let neural = buffers.neural_buffers();
+        queue.write_buffer(
+            neural[4],
+            0,
+            bytemuck::cast_slice(batch.dispatch_header_words()),
+        );
+        queue.write_buffer(
+            neural[5],
+            0,
+            bytemuck::cast_slice(batch.frame_payload_words()),
+        );
+        Ok(())
+    }
+
+    /// Records this class's complete closed-loop work and compact 48-byte row
+    /// copies into a caller-owned encoder. It never submits or commits sides.
+    pub(crate) fn record_staged_closed_loop(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<u64, GpuClosedLoopError> {
+        self.validate_buffers_and_dispatch(buffers, batch)?;
+        let readback_bytes = self.readback_bytes(buffers, batch)?;
+        self.authority.record_encode(batch.authority_nonce)?;
+        let result = (|| {
+            self.record_encode(encoder, batch)?;
+            self.record_microsteps(encoder, batch)?;
+            self.authority.record_recurrent(batch.authority_nonce)?;
+            self.record_decode_select(encoder, batch)?;
+            self.authority.record_selection(batch.authority_nonce)?;
+            let neural = buffers.neural_buffers();
+            for (row, selection_offset) in batch.selection_offsets.iter().enumerate() {
+                encoder.copy_buffer_to_buffer(
+                    neural[6],
+                    u64::from(*selection_offset) * 4,
+                    buffers.compact_readback(),
+                    row as u64 * 48,
+                    48,
+                );
+            }
+            Ok(readback_bytes)
+        })();
+        if result.is_err() {
+            self.authority.recording_failed(batch.authority_nonce)?;
+        }
+        result
+    }
+
+    pub(crate) fn register_compact_mapping(
+        &self,
+        command_buffer: &wgpu::CommandBuffer,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<GpuCompactMapTicket, GpuClosedLoopError> {
+        self.validate_buffers_and_dispatch(buffers, batch)?;
+        self.authority.require_stage(
+            batch.authority_nonce,
+            BatchLifecycleStage::SelectionRecorded,
+        )?;
+        let readback_bytes = self.readback_bytes(buffers, batch)?;
+        let (sender, receiver) = mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            buffers.compact_readback(),
+            wgpu::MapMode::Read,
+            0..readback_bytes,
+            move |result| {
+                let _ = sender.send(result);
+            },
+        );
+        Ok(GpuCompactMapTicket { receiver })
+    }
+
+    /// Copies and validates compact GPU records but deliberately leaves the
+    /// class active-side authority unchanged until `commit_validated_batch`.
+    pub(crate) fn decode_validate_mapped_records(
+        &mut self,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<GpuValidatedClassBatch, GpuClosedLoopError> {
+        self.validate_buffers_and_dispatch(buffers, batch)?;
+        self.authority.require_stage(
+            batch.authority_nonce,
+            BatchLifecycleStage::SelectionRecorded,
+        )?;
+        let readback_bytes = self.readback_bytes(buffers, batch)?;
+        let mapped = buffers
+            .compact_readback()
+            .slice(..readback_bytes)
+            .get_mapped_range();
+        let words: Vec<u32> = bytemuck::cast_slice(&mapped).to_vec();
+        drop(mapped);
+        buffers.compact_readback().unmap();
+        #[allow(unused_mut)]
+        let mut records = words
+            .chunks_exact(12)
+            .map(GpuSelectionRecord::from_words)
+            .collect::<Result<Vec<_>, _>>()?;
+        #[cfg(feature = "gpu-tests")]
+        if let Some((slot, generation)) = self.force_all_invalid_slot.take() {
+            let record = records
+                .iter_mut()
+                .find(|record| record.slot == slot && record.slot_generation == generation)
+                .ok_or(GpuClosedLoopError::StaleOrForeignHandle)?;
+            record.candidate_index = u32::MAX;
+            record.logit_bits = 0;
+            record.confidence_q16 = 0;
+            record.status = 2;
+        }
+        if !self.validate_selection_records(batch, &records) {
+            return Err(GpuClosedLoopError::SubmissionFailed);
+        }
+        let final_sides = batch
+            .headers
+            .iter()
+            .zip(&records)
+            .map(|(header, record)| {
+                (
+                    header.brain_slot_index,
+                    header.slot_generation,
+                    record.active_activation_side,
+                )
+            })
+            .collect();
+        Ok(GpuValidatedClassBatch {
+            bucket_ownership_token: self.bucket_ownership_token,
+            authority_nonce: batch.authority_nonce,
+            records,
+            final_sides,
+            readback_bytes,
+        })
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn force_all_invalid_record_for_test(&mut self, slot: u32, generation: u32) {
+        self.force_all_invalid_slot = Some((slot, generation));
+    }
+
+    pub(crate) fn commit_validated_batch(
+        &mut self,
+        validated: GpuValidatedClassBatch,
+    ) -> Result<(Vec<GpuSelectionRecord>, u64), GpuClosedLoopError> {
+        if validated.bucket_ownership_token != self.bucket_ownership_token {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+        self.authority
+            .submission_succeeded(validated.authority_nonce, &validated.final_sides)?;
+        Ok((validated.records, validated.readback_bytes))
+    }
+
+    pub(crate) fn prevalidate_commit_validated_batch(
+        &self,
+        validated: &GpuValidatedClassBatch,
+    ) -> Result<(), GpuClosedLoopError> {
+        if validated.bucket_ownership_token != self.bucket_ownership_token {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+        self.authority
+            .prevalidate_submission_succeeded(validated.authority_nonce)
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -622,119 +1095,31 @@ impl GpuClosedLoopPipelines {
         buffers: &GpuClassBucketBuffers,
         batch: &GpuActiveBatchUpload,
     ) -> Result<(Vec<GpuSelectionRecord>, u64), GpuClosedLoopError> {
-        self.validate_dispatch(batch)?;
-        if buffers.ownership_token() != self.bucket_ownership_token
-            || buffers.buffer_set_token() != self.buffer_set_token
-        {
-            return Err(GpuClosedLoopError::StaleOrForeignHandle);
-        }
-        let readback_bytes = batch
-            .row_count()
-            .checked_mul(48)
-            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-        if readback_bytes == 0 || readback_bytes as u64 > buffers.compact_readback_capacity_bytes()
-        {
-            return Err(GpuClosedLoopError::CapacityExceeded);
-        }
-        let neural = buffers.neural_buffers();
-        queue.write_buffer(
-            neural[4],
-            0,
-            bytemuck::cast_slice(batch.dispatch_header_words()),
-        );
-        queue.write_buffer(
-            neural[5],
-            0,
-            bytemuck::cast_slice(batch.frame_payload_words()),
-        );
-
+        self.write_staged_uploads(queue, buffers, batch)?;
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("closed-loop-authoritative-frame"),
         });
-        self.authority.record_encode(batch.authority_nonce)?;
-        if let Err(error) = self.record_encode(&mut encoder, batch) {
-            self.authority.recording_failed(batch.authority_nonce)?;
-            return Err(error);
-        }
-        if let Err(error) = self.record_microsteps(&mut encoder, batch) {
-            self.authority.recording_failed(batch.authority_nonce)?;
-            return Err(error);
-        }
-        self.authority.record_recurrent(batch.authority_nonce)?;
-        if let Err(error) = self.record_decode_select(&mut encoder, batch) {
-            self.authority.recording_failed(batch.authority_nonce)?;
-            return Err(error);
-        }
-        self.authority.record_selection(batch.authority_nonce)?;
-        for (row, selection_offset) in batch.selection_offsets.iter().enumerate() {
-            encoder.copy_buffer_to_buffer(
-                neural[6],
-                u64::from(*selection_offset) * 4,
-                buffers.compact_readback(),
-                row as u64 * 48,
-                48,
-            );
-        }
+        self.record_staged_closed_loop(&mut encoder, buffers, batch)?;
         let command_buffer = encoder.finish();
-        let (sender, receiver) = mpsc::channel();
-        command_buffer.map_buffer_on_submit(
-            buffers.compact_readback(),
-            wgpu::MapMode::Read,
-            0..readback_bytes as u64,
-            move |result| {
-                let _ = sender.send(result);
-            },
-        );
+        let map_ticket = self.register_compact_mapping(&command_buffer, buffers, batch)?;
         let submission = queue.submit(Some(command_buffer));
         let poll_result = device.poll(wgpu::PollType::Wait {
             submission_index: Some(submission),
             timeout: None,
         });
-        if poll_result.is_err() || receiver.recv().ok().and_then(Result::ok).is_none() {
-            self.authority
-                .submission_indeterminate(batch.authority_nonce)?;
+        if poll_result.is_err() || !map_ticket.mapping_succeeded() {
+            self.mark_post_submit_poison(batch)?;
             buffers.compact_readback().unmap();
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
-        let mapped = buffers
-            .compact_readback()
-            .slice(..readback_bytes as u64)
-            .get_mapped_range();
-        let words: Vec<u32> = bytemuck::cast_slice(&mapped).to_vec();
-        drop(mapped);
-        buffers.compact_readback().unmap();
-        let records = words
-            .chunks_exact(12)
-            .map(GpuSelectionRecord::from_words)
-            .collect::<Result<Vec<_>, _>>();
-        let records = match records {
-            Ok(records) => records,
+        let validated = match self.decode_validate_mapped_records(buffers, batch) {
+            Ok(validated) => validated,
             Err(_) => {
-                self.authority
-                    .submission_indeterminate(batch.authority_nonce)?;
+                self.mark_post_submit_poison(batch)?;
                 return Err(GpuClosedLoopError::SubmissionFailed);
             }
         };
-        if !self.validate_selection_records(batch, &records) {
-            self.authority
-                .submission_indeterminate(batch.authority_nonce)?;
-            return Err(GpuClosedLoopError::SubmissionFailed);
-        }
-        let final_sides = batch
-            .headers
-            .iter()
-            .zip(&records)
-            .map(|(header, record)| {
-                (
-                    header.brain_slot_index,
-                    header.slot_generation,
-                    record.active_activation_side,
-                )
-            })
-            .collect::<Vec<_>>();
-        self.authority
-            .submission_succeeded(batch.authority_nonce, &final_sides)?;
-        Ok((records, readback_bytes as u64))
+        self.commit_validated_batch(validated)
     }
 
     fn record_decode_select(
@@ -750,7 +1135,7 @@ impl GpuClosedLoopPipelines {
                 label: Some("closed-loop-decode-pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&self.decode_pipeline);
+            pass.set_pipeline(&self.kernels.decode_pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.dispatch_workgroups(1, rows, 1);
         }
@@ -758,7 +1143,7 @@ impl GpuClosedLoopPipelines {
             label: Some("closed-loop-select-pass"),
             timestamp_writes: None,
         });
-        pass.set_pipeline(&self.select_pipeline);
+        pass.set_pipeline(&self.kernels.select_pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(1, rows, 1);
         Ok(())
@@ -824,7 +1209,7 @@ impl GpuClosedLoopPipelines {
                 label: Some("closed-loop-clear-diagnostics-pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&self.clear_diagnostics_pipeline);
+            pass.set_pipeline(&self.kernels.clear_diagnostics_pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.dispatch_workgroups(
                 1,
@@ -837,7 +1222,7 @@ impl GpuClosedLoopPipelines {
             label: Some("closed-loop-encode-pass"),
             timestamp_writes: None,
         });
-        pass.set_pipeline(&self.encode_pipeline);
+        pass.set_pipeline(&self.kernels.encode_pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(
             self.max_neurons.div_ceil(WORKGROUP_SIZE),
@@ -867,7 +1252,7 @@ impl GpuClosedLoopPipelines {
                 label: Some("closed-loop-recurrent-pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&self.recurrent_pipelines[step]);
+            pass.set_pipeline(&self.kernels.recurrent_pipelines[step]);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.dispatch_workgroups(
                 self.max_neurons.div_ceil(WORKGROUP_SIZE),
@@ -893,20 +1278,57 @@ impl GpuClosedLoopPipelines {
         })
     }
 
-    fn validate_dispatch(&self, batch: &GpuActiveBatchUpload) -> Result<(), GpuClosedLoopError> {
+    fn validate_batch_identity(
+        &self,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
         self.authority.ensure_healthy()?;
-        if batch.bucket_ownership_token != self.bucket_ownership_token {
+        if batch.bucket_ownership_token != self.bucket_ownership_token
+            || self.authority.pending.map(|pending| pending.nonce) != Some(batch.authority_nonce)
+        {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
-        if self.authority.pending.map(|pending| pending.nonce) != Some(batch.authority_nonce)
-            || batch.headers.iter().any(|header| {
-                self.authority
-                    .active_sides
-                    .get(&(header.brain_slot_index, header.slot_generation))
-                    .copied()
-                    != Some(header.active_activation_side)
-            })
+        Ok(())
+    }
+
+    fn validate_buffers_and_dispatch(
+        &self,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        if buffers.ownership_token() != self.bucket_ownership_token
+            || buffers.buffer_set_token() != self.buffer_set_token
         {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+        self.validate_dispatch(batch)
+    }
+
+    fn readback_bytes(
+        &self,
+        buffers: &impl ClosedLoopBufferSet,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<u64, GpuClosedLoopError> {
+        let bytes = batch
+            .row_count()
+            .checked_mul(48)
+            .and_then(|value| u64::try_from(value).ok())
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        if bytes == 0 || bytes > buffers.compact_readback_capacity_bytes() {
+            return Err(GpuClosedLoopError::CapacityExceeded);
+        }
+        Ok(bytes)
+    }
+
+    fn validate_dispatch(&self, batch: &GpuActiveBatchUpload) -> Result<(), GpuClosedLoopError> {
+        self.validate_batch_identity(batch)?;
+        if batch.headers.iter().any(|header| {
+            self.authority
+                .active_sides
+                .get(&(header.brain_slot_index, header.slot_generation))
+                .copied()
+                != Some(header.active_activation_side)
+        }) {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
         validate_dispatch_dimensions(
@@ -995,7 +1417,60 @@ fn create_compute_pipeline(
 
 #[cfg(test)]
 mod lifecycle_tests {
+    use bytemuck::Zeroable;
+
     use super::*;
+
+    #[test]
+    fn backend_dispatch_generation_is_distinct_from_private_class_nonce() {
+        let mut header = GpuPerceptionHeader::zeroed();
+        header.dispatch_generation_lo = 0x5566_7788;
+        header.dispatch_generation_hi = 0x1122_3344;
+        let batch = GpuActiveBatchUpload {
+            headers: vec![header],
+            dispatch_header_words: header.words().to_vec(),
+            frame_payload_words: Vec::new(),
+            bucket_ownership_token: 1,
+            authority_nonce: 7,
+            selection_offsets: vec![0],
+        };
+
+        assert_eq!(batch.authority_nonce_for_test(), 7);
+        assert_eq!(batch.dispatch_generation(), 0x1122_3344_5566_7788);
+    }
+
+    #[test]
+    fn validated_sides_remain_staged_until_explicit_commit() {
+        let mut authority = BatchAuthority::default();
+        authority.active_sides.insert((3, 7), 0);
+        authority.begin(17).unwrap();
+        authority.record_encode(17).unwrap();
+        authority.record_recurrent(17).unwrap();
+        authority.record_selection(17).unwrap();
+        let validated_sides = [(3, 7, 1)];
+
+        assert_eq!(authority.active_sides.get(&(3, 7)), Some(&0));
+        authority
+            .submission_succeeded(17, &validated_sides)
+            .unwrap();
+        assert_eq!(authority.active_sides.get(&(3, 7)), Some(&1));
+    }
+
+    #[test]
+    fn retiring_slot_side_is_exact_and_forbidden_while_a_batch_is_pending() {
+        let mut authority = BatchAuthority::default();
+        authority.active_sides.insert((5, 11), 1);
+        authority.active_sides.insert((5, 12), 0);
+        authority.begin(23).unwrap();
+        assert_eq!(
+            authority.retire_active_side(5, 11),
+            Err(GpuClosedLoopError::MalformedUpload)
+        );
+        authority.abandon_unsubmitted(23).unwrap();
+        authority.retire_active_side(5, 11).unwrap();
+        assert!(!authority.active_sides.contains_key(&(5, 11)));
+        assert_eq!(authority.active_sides.get(&(5, 12)), Some(&0));
+    }
 
     #[test]
     fn recurrent_recording_before_same_batch_encode_is_rejected() {

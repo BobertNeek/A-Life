@@ -8,8 +8,9 @@ use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainCapacityClass,
     BrainGenome, BrainPhenotype, CandidateActionFamily, CandidateFeatureVector,
     CandidateObservationRef, Confidence, DevelopmentState, DurationTicks, HomeostaticSnapshot,
-    NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeCompiler, Pose, SensorProfile,
-    SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity,
+    LobeKind, NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeCompiler, Pose,
+    SensorChannelGene, SensorChannelKind, SensorProfile, SensoryChannels, SensorySnapshot, Tick,
+    Vec3f, Velocity,
 };
 
 pub fn n512_phenotype(seed: u64) -> BrainPhenotype {
@@ -17,20 +18,35 @@ pub fn n512_phenotype(seed: u64) -> BrainPhenotype {
 }
 
 pub fn n512_phenotype_at_maturation(seed: u64, maturation: f32) -> BrainPhenotype {
+    n512_phenotype_for_profile_at_maturation(
+        seed,
+        maturation,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+}
+
+pub fn n512_phenotype_for_profile_at_maturation(
+    seed: u64,
+    maturation: f32,
+    sensor_profile: SensorProfile,
+) -> BrainPhenotype {
     let capacity = BrainCapacityClass::n512();
+    phenotype_for_capacity_at_maturation(capacity, seed, maturation, sensor_profile)
+}
+
+pub fn phenotype_for_capacity_at_maturation(
+    capacity: BrainCapacityClass,
+    seed: u64,
+    maturation: f32,
+    sensor_profile: SensorProfile,
+) -> BrainPhenotype {
     let genome = BrainGenome::scaffold(seed, capacity.id());
     let development = DevelopmentState::new(
         genome.id,
         Tick::ZERO,
         NormalizedScalar::new(maturation).unwrap(),
     );
-    PhenotypeCompiler::compile(
-        &genome,
-        &capacity,
-        &development,
-        SensorProfile::PrivilegedAffordanceV1,
-    )
-    .unwrap()
+    PhenotypeCompiler::compile(&genome, &capacity, &development, sensor_profile).unwrap()
 }
 
 pub fn controlled_n512_phenotype_at_maturation(maturation: f32) -> BrainPhenotype {
@@ -45,14 +61,100 @@ pub fn controlled_sensory_n512_phenotype() -> BrainPhenotype {
     n512_phenotype_at_maturation(15, 0.35)
 }
 
+pub fn heterogeneous_n512_phenotypes() -> [BrainPhenotype; 2] {
+    let capacity = BrainCapacityClass::n512();
+    let baseline_genome = BrainGenome::scaffold(9, capacity.id());
+    let development = DevelopmentState::new(
+        baseline_genome.id,
+        Tick::ZERO,
+        NormalizedScalar::new(0.35).unwrap(),
+    );
+    let baseline = PhenotypeCompiler::compile(
+        &baseline_genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+
+    let mut changed_genome = baseline_genome;
+    changed_genome.sparse_density_priors[0].density = NormalizedScalar::new(0.08).unwrap();
+    changed_genome
+        .sensor_layout
+        .channels
+        .push(SensorChannelGene {
+            kind: SensorChannelKind::Hearing,
+            receptor_count: 8,
+            target_lobe: LobeKind::AuditorySpeech,
+            enabled_at_maturation: 0,
+        });
+    let changed = PhenotypeCompiler::compile(
+        &changed_genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+
+    assert_ne!(baseline.phenotype_hash(), changed.phenotype_hash());
+    assert_ne!(
+        baseline.sensor_encoder().assignments(),
+        changed.sensor_encoder().assignments()
+    );
+    assert_ne!(
+        baseline
+            .projections()
+            .iter()
+            .map(|projection| projection.synapse_range())
+            .collect::<Vec<_>>(),
+        changed
+            .projections()
+            .iter()
+            .map(|projection| projection.synapse_range())
+            .collect::<Vec<_>>()
+    );
+    assert_ne!(baseline.candidate_decoder(), changed.candidate_decoder());
+    [baseline, changed]
+}
+
 pub fn perception_frame(
     organism_raw: u64,
     nonzero: bool,
     candidate_count: usize,
 ) -> PerceptionFrame {
+    perception_frame_for_profile(
+        organism_raw,
+        SensorProfile::PrivilegedAffordanceV1,
+        nonzero,
+        candidate_count,
+    )
+}
+
+pub fn perception_frame_for_profile(
+    organism_raw: u64,
+    sensor_profile: SensorProfile,
+    nonzero: bool,
+    candidate_count: usize,
+) -> PerceptionFrame {
+    perception_frame_for_profile_at_tick(
+        organism_raw,
+        77 + organism_raw,
+        sensor_profile,
+        nonzero,
+        candidate_count,
+    )
+}
+
+pub fn perception_frame_for_profile_at_tick(
+    organism_raw: u64,
+    tick_raw: u64,
+    sensor_profile: SensorProfile,
+    nonzero: bool,
+    candidate_count: usize,
+) -> PerceptionFrame {
     assert!((1..=2).contains(&candidate_count));
     let organism_id = OrganismId(organism_raw);
-    let tick = Tick::new(77 + organism_raw);
+    let tick = Tick::new(tick_raw);
     let mut channels = SensoryChannels::ZERO;
     let translation = if nonzero {
         channels.visual_affordance[0] = 0.75;
@@ -90,7 +192,7 @@ pub fn perception_frame(
     PerceptionFrame::new(
         organism_id,
         tick,
-        SensorProfile::PrivilegedAffordanceV1,
+        sensor_profile,
         sensory,
         BodySnapshot {
             pose: Pose {
@@ -103,6 +205,35 @@ pub fn perception_frame(
         candidates,
     )
     .unwrap()
+}
+
+#[cfg(feature = "gpu-tests")]
+pub struct GpuTestBrain {
+    pub backend: alife_gpu_backend::GpuClosedLoopBackend,
+    pub handle: alife_gpu_backend::GpuBrainHandle,
+}
+
+#[cfg(feature = "gpu-tests")]
+impl GpuTestBrain {
+    pub fn from_phenotype(
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+    ) -> Result<Self, alife_core::ScaffoldContractError> {
+        let mut backend = alife_gpu_backend::GpuClosedLoopBackend::new_required()?;
+        let handle = backend.insert_brain(organism_id, phenotype)?;
+        Ok(Self { backend, handle })
+    }
+
+    pub fn tick(
+        &mut self,
+        frame: &PerceptionFrame,
+    ) -> Result<alife_gpu_backend::GpuClosedLoopTick, alife_core::ScaffoldContractError> {
+        self.backend
+            .tick_batch(&[(self.handle, frame.clone())])?
+            .into_iter()
+            .next()
+            .ok_or(alife_core::ScaffoldContractError::InvalidDecisionEvidence)
+    }
 }
 
 #[cfg(feature = "gpu-tests")]

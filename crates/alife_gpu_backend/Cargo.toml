@@ -9,6 +9,7 @@ repository.workspace = true
 alife_core.workspace = true
 bytemuck.workspace = true
 pollster.workspace = true
+serde.workspace = true
 wgpu.workspace = true
 
 [features]

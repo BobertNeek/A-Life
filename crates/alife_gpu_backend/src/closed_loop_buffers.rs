@@ -7,6 +7,7 @@ mod upload;
 
 pub use abi::*;
 pub use bucket::*;
+pub(crate) use bucket::{GpuFixedClassArenaBuffers, GpuFixedClassArenaPlan, GpuFixedSlotRanges};
 pub use perception::*;
 pub use upload::*;
 
