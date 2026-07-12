@@ -81,11 +81,16 @@ pub(super) fn compile(
     let dynamics = (0..execution.max_neurons())
         .map(|_| NeuronDynamics::new(0.0, 0.25, ActivationFunction::Tanh, 0.95, 0.01, 1.0))
         .collect();
+    let microstep_count = match development.maturation.raw() {
+        value if value < 1.0 / 3.0 => 2,
+        value if value < 2.0 / 3.0 => 3,
+        _ => 4,
+    };
     BrainPhenotype::try_new(
         inputs,
         capacity,
         execution.max_neurons(),
-        execution.microstep_range().0,
+        microstep_count,
         layout,
         projections,
         synapses,

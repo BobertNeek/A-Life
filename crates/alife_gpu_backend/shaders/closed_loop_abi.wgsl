@@ -66,7 +66,7 @@ struct GpuDecoderWeightIndexRecord {
 @group(0) @binding(3) var<storage, read> immutable_weight_words: array<u32>;
 @group(0) @binding(4) var<storage, read> dispatch_header_words: array<u32>;
 @group(0) @binding(5) var<storage, read> frame_payload_words: array<u32>;
-@group(0) @binding(6) var<storage, read_write> mutable_state_words: array<u32>;
+@group(0) @binding(6) var<storage, read_write> mutable_state_words: array<atomic<u32>>;
 
 fn load_encoder_plan(base:u32) -> GpuEncoderPlanRecord {
   return GpuEncoderPlanRecord(immutable_plan_words[base],immutable_plan_words[base+1u],immutable_plan_words[base+2u],immutable_plan_words[base+3u],immutable_plan_words[base+4u],immutable_plan_words[base+5u],immutable_plan_words[base+6u],immutable_plan_words[base+7u]);
@@ -98,7 +98,10 @@ fn load_perception_header(base:u32) -> GpuPerceptionHeader {
 fn load_candidate(base:u32) -> GpuCandidateRecord {
   return GpuCandidateRecord(dispatch_header_words[base],dispatch_header_words[base+1u],dispatch_header_words[base+2u],dispatch_header_words[base+3u],dispatch_header_words[base+4u],dispatch_header_words[base+5u],dispatch_header_words[base+6u],dispatch_header_words[base+7u]);
 }
-fn load_state_f32(base:u32) -> f32 { return bitcast<f32>(mutable_state_words[base]); }
+fn load_state_u32(base:u32) -> u32 { return atomicLoad(&mutable_state_words[base]); }
+fn store_state_u32(base:u32, value:u32) { atomicStore(&mutable_state_words[base], value); }
+fn load_state_f32(base:u32) -> f32 { return bitcast<f32>(load_state_u32(base)); }
+fn store_state_f32(base:u32, value:f32) { store_state_u32(base, bitcast<u32>(value)); }
 fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
   let slot = brain_slots[slot_index];
   return header.brain_slot_index == slot_index

@@ -113,6 +113,45 @@ fn candidate_decoder_plan_covers_exactly_the_action_decoder_synapses() {
     assert_eq!(decoder.feature_count(), CANDIDATE_FEATURE_COUNT as u16);
 }
 
+#[test]
+fn maturation_compiles_the_immutable_two_three_four_microstep_schedule() {
+    let capacity = BrainCapacityClass::n512();
+    let genome = BrainGenome::scaffold(0x5ced_u64, capacity.id());
+    let mut hashes = Vec::new();
+    for (maturation, expected) in [(0.2_f32, 2_u8), (0.5, 3), (0.8, 4)] {
+        let development = DevelopmentState::new(
+            genome.id,
+            Tick::ZERO,
+            NormalizedScalar::new(maturation).unwrap(),
+        );
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .unwrap();
+        let replay = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .unwrap();
+        assert_eq!(
+            phenotype.microstep_count(),
+            expected,
+            "maturation={maturation}"
+        );
+        assert_eq!(phenotype.phenotype_hash(), replay.phenotype_hash());
+        assert_eq!(phenotype, replay);
+        hashes.push(phenotype.phenotype_hash());
+    }
+    assert_ne!(hashes[0], hashes[1]);
+    assert_ne!(hashes[1], hashes[2]);
+    assert_ne!(hashes[0], hashes[2]);
+}
+
 #[path = "phenotype_compiler/capacity.rs"]
 mod capacity;
 #[path = "phenotype_compiler/causal_routing.rs"]

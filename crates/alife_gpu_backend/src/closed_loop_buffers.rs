@@ -20,6 +20,7 @@ pub enum GpuClosedLoopError {
     MalformedUpload,
     NonFinitePayload,
     InvalidOffsetDomain,
+    SubmissionFailed,
 }
 
 impl std::fmt::Display for GpuClosedLoopError {

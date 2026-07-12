@@ -411,6 +411,18 @@ impl GpuClassBucketPlan {
         }
         Ok(())
     }
+    pub(crate) const fn ownership_token(&self) -> u64 {
+        self.bucket_ownership_token
+    }
+    pub(crate) const fn capacity(&self) -> &BrainCapacityClass {
+        &self.capacity
+    }
+    pub(crate) fn validate_slot_handle(
+        &self,
+        slot: &GpuBrainSlot,
+    ) -> Result<(), GpuClosedLoopError> {
+        self.check_slot(slot)
+    }
     fn check_slot(&self, slot: &GpuBrainSlot) -> Result<(), GpuClosedLoopError> {
         let stored = self
             .slots
@@ -531,6 +543,7 @@ pub struct GpuClassBucketBufferManifestEntry {
     pub role: GpuClassBucketBufferRole,
     pub access: GpuBufferAccess,
     pub neural_pipeline_bindable: bool,
+    pub minimum_binding_size_bytes: u64,
 }
 
 /// Owns the seven fixed neural heap buffers. Staging/readback resources are auxiliary only.
@@ -544,10 +557,15 @@ pub struct GpuClassBucketBuffers {
     mutable_state_words: wgpu::Buffer,
     upload_staging: wgpu::Buffer,
     compact_readback: wgpu::Buffer,
+    bucket_ownership_token: u64,
+    max_neurons: u32,
+    dispatch_capacity_words: usize,
+    frame_payload_capacity_words: usize,
 }
 impl GpuClassBucketBuffers {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        plan: &GpuClassBucketPlan,
         brain_slots: wgpu::Buffer,
         phenotype_identities: wgpu::Buffer,
         immutable_plan_words: wgpu::Buffer,
@@ -557,8 +575,13 @@ impl GpuClassBucketBuffers {
         mutable_state_words: wgpu::Buffer,
         upload_staging: wgpu::Buffer,
         compact_readback: wgpu::Buffer,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, GpuClosedLoopError> {
+        plan.validate()?;
+        let dispatch_capacity_words = usize::try_from(dispatch_header_words.size() / 4)
+            .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+        let frame_payload_capacity_words = usize::try_from(frame_payload_words.size() / 4)
+            .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+        let buffers = Self {
             brain_slots,
             phenotype_identities,
             immutable_plan_words,
@@ -568,7 +591,21 @@ impl GpuClassBucketBuffers {
             mutable_state_words,
             upload_staging,
             compact_readback,
+            bucket_ownership_token: plan.ownership_token(),
+            max_neurons: plan.capacity().execution().max_neurons(),
+            dispatch_capacity_words,
+            frame_payload_capacity_words,
+        };
+        for (buffer, manifest) in buffers
+            .neural_buffers()
+            .into_iter()
+            .zip(Self::neural_binding_manifest())
+        {
+            if buffer.size() < manifest.minimum_binding_size_bytes {
+                return Err(GpuClosedLoopError::CapacityExceeded);
+            }
         }
+        Ok(buffers)
     }
     pub const fn neural_binding_manifest() -> [GpuClassBucketBufferManifestEntry; 7] {
         use GpuBufferAccess::*;
@@ -580,6 +617,7 @@ impl GpuClassBucketBuffers {
                 role: BrainSlots,
                 access: ReadOnly,
                 neural_pipeline_bindable: true,
+                minimum_binding_size_bytes: 144,
             },
             GpuClassBucketBufferManifestEntry {
                 group: 0,
@@ -587,6 +625,7 @@ impl GpuClassBucketBuffers {
                 role: PhenotypeIdentities,
                 access: ReadOnly,
                 neural_pipeline_bindable: true,
+                minimum_binding_size_bytes: 32,
             },
             GpuClassBucketBufferManifestEntry {
                 group: 0,
@@ -594,6 +633,7 @@ impl GpuClassBucketBuffers {
                 role: ImmutablePlanWords,
                 access: ReadOnly,
                 neural_pipeline_bindable: true,
+                minimum_binding_size_bytes: 4,
             },
             GpuClassBucketBufferManifestEntry {
                 group: 0,
@@ -601,6 +641,7 @@ impl GpuClassBucketBuffers {
                 role: ImmutableWeightWords,
                 access: ReadOnly,
                 neural_pipeline_bindable: true,
+                minimum_binding_size_bytes: 4,
             },
             GpuClassBucketBufferManifestEntry {
                 group: 0,
@@ -608,6 +649,7 @@ impl GpuClassBucketBuffers {
                 role: DispatchHeaderWords,
                 access: ReadOnly,
                 neural_pipeline_bindable: true,
+                minimum_binding_size_bytes: 4,
             },
             GpuClassBucketBufferManifestEntry {
                 group: 0,
@@ -615,6 +657,7 @@ impl GpuClassBucketBuffers {
                 role: FramePayloadWords,
                 access: ReadOnly,
                 neural_pipeline_bindable: true,
+                minimum_binding_size_bytes: 4,
             },
             GpuClassBucketBufferManifestEntry {
                 group: 0,
@@ -622,6 +665,7 @@ impl GpuClassBucketBuffers {
                 role: MutableStateWords,
                 access: ReadWrite,
                 neural_pipeline_bindable: true,
+                minimum_binding_size_bytes: 4,
             },
         ]
     }
@@ -635,6 +679,7 @@ impl GpuClassBucketBuffers {
                 role: UploadStaging,
                 access: ReadWrite,
                 neural_pipeline_bindable: false,
+                minimum_binding_size_bytes: 0,
             },
             GpuClassBucketBufferManifestEntry {
                 group: u32::MAX,
@@ -642,6 +687,7 @@ impl GpuClassBucketBuffers {
                 role: CompactReadback,
                 access: ReadWrite,
                 neural_pipeline_bindable: false,
+                minimum_binding_size_bytes: 0,
             },
         ]
     }
@@ -661,5 +707,17 @@ impl GpuClassBucketBuffers {
     }
     pub const fn compact_readback(&self) -> &wgpu::Buffer {
         &self.compact_readback
+    }
+    pub(crate) const fn ownership_token(&self) -> u64 {
+        self.bucket_ownership_token
+    }
+    pub(crate) const fn max_neurons(&self) -> u32 {
+        self.max_neurons
+    }
+    pub(crate) const fn dispatch_capacity_words(&self) -> usize {
+        self.dispatch_capacity_words
+    }
+    pub(crate) const fn frame_payload_capacity_words(&self) -> usize {
+        self.frame_payload_capacity_words
     }
 }

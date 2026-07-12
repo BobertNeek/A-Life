@@ -4,6 +4,7 @@ use alife_core::NeuralComputeBackend;
 
 pub mod buffers;
 pub mod closed_loop_buffers;
+pub mod closed_loop_pipeline;
 pub mod full_runtime;
 pub mod plasticity;
 pub mod recompaction;
@@ -24,6 +25,7 @@ pub use buffers::{
     GPU_TILE_METADATA_BYTES,
 };
 pub use closed_loop_buffers::*;
+pub use closed_loop_pipeline::*;
 pub use full_runtime::{
     full_gpu_runtime_live_plasticity_schema, post_seal_delta_batch_from_plasticity_report,
     run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
