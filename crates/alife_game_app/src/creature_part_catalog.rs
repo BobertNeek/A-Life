@@ -235,6 +235,39 @@ pub struct CreaturePartCatalog {
 }
 
 impl CreaturePartCatalog {
+    pub fn from_json_str(text: &str) -> Result<Self, CreaturePartCatalogError> {
+        let mut catalog: Self = serde_json::from_str(text)?;
+        catalog.expand_templates()?;
+        catalog.validate()?;
+        Ok(catalog)
+    }
+
+    fn expand_templates(&mut self) -> Result<(), CreaturePartCatalogError> {
+        let templates = self
+            .families
+            .iter()
+            .map(|family| (family.id, family.clone()))
+            .collect::<BTreeMap<_, _>>();
+        for family in &mut self.families {
+            let Some(template_id) = family.template_family else {
+                continue;
+            };
+            let template = templates
+                .get(&template_id)
+                .ok_or(CreaturePartCatalogError::UnknownTemplateFamily(template_id))?;
+            if family.cuts.is_empty() {
+                family.cuts = template.cuts.clone();
+            }
+            if family.sockets.is_empty() {
+                family.sockets = template.sockets.clone();
+            }
+            if family.join_covers.is_empty() {
+                family.join_covers = template.join_covers.clone();
+            }
+        }
+        Ok(())
+    }
+
     pub fn validate(&self) -> Result<(), CreaturePartCatalogError> {
         if self.schema != CREATURE_PART_CATALOG_SCHEMA || self.schema_version != 1 {
             return Err(CreaturePartCatalogError::Schema);
@@ -341,31 +374,7 @@ pub enum CreaturePartCatalogError {
 
 pub fn load_production_creature_part_catalog(
 ) -> Result<CreaturePartCatalog, CreaturePartCatalogError> {
-    let mut catalog: CreaturePartCatalog = serde_json::from_str(PRODUCTION_CATALOG_JSON)?;
-    let templates = catalog
-        .families
-        .iter()
-        .map(|family| (family.id, family.clone()))
-        .collect::<BTreeMap<_, _>>();
-    for family in &mut catalog.families {
-        let Some(template_id) = family.template_family else {
-            continue;
-        };
-        let template = templates
-            .get(&template_id)
-            .ok_or(CreaturePartCatalogError::UnknownTemplateFamily(template_id))?;
-        if family.cuts.is_empty() {
-            family.cuts = template.cuts.clone();
-        }
-        if family.sockets.is_empty() {
-            family.sockets = template.sockets.clone();
-        }
-        if family.join_covers.is_empty() {
-            family.join_covers = template.join_covers.clone();
-        }
-    }
-    catalog.validate()?;
-    Ok(catalog)
+    CreaturePartCatalog::from_json_str(PRODUCTION_CATALOG_JSON)
 }
 
 fn validate_relative_path(path: &str) -> Result<(), CreaturePartCatalogError> {
