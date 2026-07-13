@@ -5670,6 +5670,20 @@ fn lifecycle_lineage_birth_inherits_and_mutates_appearance_genes() {
     assert!(offspring
         .appearance
         .inherited_from(parents[0].appearance, parents[1].appearance));
+    for ((slot, child_family), (_, parent_a_family), (_, parent_b_family)) in offspring
+        .appearance
+        .part_sources
+        .iter_slots()
+        .into_iter()
+        .zip(parents[0].appearance.part_sources.iter_slots())
+        .zip(parents[1].appearance.part_sources.iter_slots())
+        .map(|((child, parent_a), parent_b)| (child, parent_a, parent_b))
+    {
+        assert!(
+            child_family == parent_a_family || child_family == parent_b_family,
+            "offspring {slot:?} source must be inherited from a parent"
+        );
+    }
     assert!(
         offspring.appearance.mutation_count
             > parents[0]

@@ -127,6 +127,53 @@ fn tiny_save_load_round_trip_restores_stable_world_and_summaries() {
 }
 
 #[test]
+fn appearance_schema_v1_migrates_and_schema_v2_roundtrips_in_saves() {
+    let mut save = PortableSaveFile::from_headless_world(
+        "appearance-migration",
+        &fixture_world(),
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+        fixture_manifest(),
+        vec![fixture_creature()],
+    )
+    .unwrap();
+    let legacy = serde_json::json!({
+        "schema_version": 1,
+        "species_archetype": 5,
+        "palette_family": 3,
+        "fur_pattern": 4,
+        "marking_density": 8,
+        "accessory_trait": 2,
+        "ear_muzzle_trait": 6,
+        "tail_trait": 7,
+        "body_mass_trait": 9,
+        "mutation_count": 0,
+        "bipedal_caveman_furry": true
+    });
+    let mut value = serde_json::to_value(&save).unwrap();
+    value["creatures"][0]["appearance"] = legacy;
+
+    let loaded = PortableSaveFile::from_json_str(&value.to_string()).unwrap();
+    assert_eq!(
+        loaded.creatures[0].appearance.part_sources,
+        alife_world::CreaturePartSources::coherent(alife_world::CreaturePartFamilyId(5))
+    );
+
+    save.creatures[0].appearance.part_sources = alife_world::CreaturePartSources {
+        head: alife_world::CreaturePartFamilyId(1),
+        torso: alife_world::CreaturePartFamilyId(5),
+        arms: alife_world::CreaturePartFamilyId(6),
+        legs: alife_world::CreaturePartFamilyId(5),
+        tail: alife_world::CreaturePartFamilyId(7),
+    };
+    let roundtrip =
+        PortableSaveFile::from_json_str(&save.to_json_string_pretty().unwrap()).unwrap();
+    assert_eq!(
+        roundtrip.creatures[0].appearance,
+        save.creatures[0].appearance
+    );
+}
+
+#[test]
 fn incompatible_schemas_reject_without_silent_migration() {
     let world = fixture_world();
     let mut save = PortableSaveFile::from_headless_world(
