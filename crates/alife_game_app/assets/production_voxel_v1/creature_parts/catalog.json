@@ -1,0 +1,103 @@
+{
+  "schema": "alife.creature_part_catalog.v1",
+  "schema_version": 1,
+  "families": [
+    {
+      "id": 0,
+      "label": "colobus",
+      "texture_asset": "production_voxel_v1/models/T_Colobus.png",
+      "compatibility_tags": ["mammalian", "long-arm", "plume-tail"],
+      "ordinary_substitutions": {"head":["mammalian"],"torso":["mammalian"],"left-arm":["mammalian"],"right-arm":["mammalian"],"left-leg":["mammalian"],"right-leg":["mammalian"],"tail-back":["plume-tail"]},
+      "source_to_canonical": {"translation":[0.0,0.0,0.0],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},
+      "cuts": {
+        "head":{"planes":[{"normal":[1.0,0.0,0.0],"offset":0.55},{"normal":[-1.0,0.0,0.0],"offset":0.55},{"normal":[0.0,0.0,1.0],"offset":1.2},{"normal":[0.0,0.0,-1.0],"offset":-0.62}]},
+        "torso":{"planes":[{"normal":[1.0,0.0,0.0],"offset":0.5},{"normal":[-1.0,0.0,0.0],"offset":0.5},{"normal":[0.0,0.0,1.0],"offset":0.68},{"normal":[0.0,0.0,-1.0],"offset":-0.08}]},
+        "left-arm":{"planes":[{"normal":[1.0,0.0,0.0],"offset":-0.28},{"normal":[-1.0,0.0,0.0],"offset":1.2},{"normal":[0.0,0.0,1.0],"offset":0.68},{"normal":[0.0,0.0,-1.0],"offset":0.35}]},
+        "right-arm":{"planes":[{"normal":[-1.0,0.0,0.0],"offset":-0.28},{"normal":[1.0,0.0,0.0],"offset":1.2},{"normal":[0.0,0.0,1.0],"offset":0.68},{"normal":[0.0,0.0,-1.0],"offset":0.35}]},
+        "left-leg":{"planes":[{"normal":[1.0,0.0,0.0],"offset":0.02},{"normal":[-1.0,0.0,0.0],"offset":0.58},{"normal":[0.0,0.0,1.0],"offset":0.18},{"normal":[0.0,0.0,-1.0],"offset":1.1}]},
+        "right-leg":{"planes":[{"normal":[-1.0,0.0,0.0],"offset":0.02},{"normal":[1.0,0.0,0.0],"offset":0.58},{"normal":[0.0,0.0,1.0],"offset":0.18},{"normal":[0.0,0.0,-1.0],"offset":1.1}]},
+        "tail-back":{"planes":[{"normal":[1.0,0.0,0.0],"offset":0.8},{"normal":[-1.0,0.0,0.0],"offset":0.8},{"normal":[0.0,1.0,0.0],"offset":1.4},{"normal":[0.0,-1.0,0.0],"offset":-0.15}]}
+      },
+      "sockets": {"neck":{"translation":[0.0,0.0,0.64],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"left-shoulder":{"translation":[-0.38,0.0,0.52],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"right-shoulder":{"translation":[0.38,0.0,0.52],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"left-hip":{"translation":[-0.2,0.0,0.1],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"right-hip":{"translation":[0.2,0.0,0.1],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"tail-base":{"translation":[0.0,0.2,0.24],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]}},
+      "join_covers": [{"slot":"head","socket":"neck","cover_kind":"ruff","overlap_depth":0.06},{"slot":"left-arm","socket":"left-shoulder","cover_kind":"shoulder-tuft","overlap_depth":0.05},{"slot":"right-arm","socket":"right-shoulder","cover_kind":"shoulder-tuft","overlap_depth":0.05},{"slot":"left-leg","socket":"left-hip","cover_kind":"hip-fur","overlap_depth":0.06},{"slot":"right-leg","socket":"right-hip","cover_kind":"hip-fur","overlap_depth":0.06},{"slot":"tail-back","socket":"tail-base","cover_kind":"tail-ruff","overlap_depth":0.05}],
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Colobus_LOD0.obj","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Colobus_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Colobus_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_impostor_sockets.json"}]
+    },
+    {
+      "id": 1,
+      "label": "gecko",
+      "template_family": 0,
+      "texture_asset": "production_voxel_v1/models/T_Gecko.png",
+      "compatibility_tags": ["compact", "scaled", "long-tail"],
+      "ordinary_substitutions": {"head":["scaled"],"torso":["scaled"],"left-arm":["scaled"],"right-arm":["scaled"],"left-leg":["scaled"],"right-leg":["scaled"],"tail-back":["long-tail"]},
+      "source_to_canonical": {"translation":[0.0,0.0,0.0],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},
+      "cuts": {}, "sockets": {}, "join_covers": [],
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Gecko_LOD0.obj","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Gecko_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Gecko_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_impostor_sockets.json"}]
+    },
+    {
+      "id": 2,
+      "label": "herring",
+      "template_family": 0,
+      "texture_asset": "production_voxel_v1/models/T_Herring.png",
+      "compatibility_tags": ["aquatic", "fin-arm", "tailless"],
+      "ordinary_substitutions": {"head":["aquatic"],"torso":["aquatic"],"left-arm":["aquatic"],"right-arm":["aquatic"],"left-leg":["aquatic"],"right-leg":["aquatic"],"tail-back":["tailless"]},
+      "source_to_canonical": {"translation":[0.0,0.0,0.0],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},
+      "cuts": {}, "sockets": {}, "join_covers": [],
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Herring_LOD0.obj","generated_obj":"production_voxel_v1/creature_parts/generated/herring_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Herring_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/herring_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Herring_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/herring_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_impostor_sockets.json"}]
+    },
+    {
+      "id": 3,
+      "label": "inkfish",
+      "template_family": 0,
+      "texture_asset": "production_voxel_v1/models/T_Inkfish.png",
+      "compatibility_tags": ["aquatic", "tentacle-arm", "soft-body"],
+      "ordinary_substitutions": {"head":["aquatic"],"torso":["aquatic"],"left-arm":["aquatic"],"right-arm":["aquatic"],"left-leg":["aquatic"],"right-leg":["aquatic"],"tail-back":["soft-body"]},
+      "source_to_canonical": {"translation":[0.0,0.0,0.0],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},
+      "cuts": {}, "sockets": {}, "join_covers": [],
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Inkfish_LOD0.obj","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Inkfish_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Inkfish_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_impostor_sockets.json"}]
+    },
+    {
+      "id": 4,
+      "label": "muskrat",
+      "template_family": 0,
+      "texture_asset": "production_voxel_v1/models/T_Muskrat.png",
+      "compatibility_tags": ["mammalian", "compact", "aquatic"],
+      "ordinary_substitutions": {"head":["mammalian"],"torso":["mammalian"],"left-arm":["mammalian"],"right-arm":["mammalian"],"left-leg":["mammalian"],"right-leg":["mammalian"],"tail-back":["aquatic"]},
+      "source_to_canonical": {"translation":[0.0,0.0,0.0],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},
+      "cuts": {}, "sockets": {}, "join_covers": [],
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Muskrat_LOD0.obj","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Muskrat_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Muskrat_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_impostor_sockets.json"}]
+    },
+    {
+      "id": 5,
+      "label": "pudu",
+      "template_family": 0,
+      "texture_asset": "production_voxel_v1/models/T_Pudu.png",
+      "compatibility_tags": ["mammalian", "heavy-torso", "short-tail"],
+      "ordinary_substitutions": {"head":["mammalian"],"torso":["mammalian"],"left-arm":["mammalian"],"right-arm":["mammalian"],"left-leg":["mammalian"],"right-leg":["mammalian"],"tail-back":["short-tail"]},
+      "source_to_canonical": {"translation":[0.0,0.0,0.0],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},
+      "cuts": {}, "sockets": {}, "join_covers": [],
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Pudu_LOD0.obj","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Pudu_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Pudu_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_impostor_sockets.json"}]
+    },
+    {
+      "id": 6,
+      "label": "sparrow",
+      "template_family": 0,
+      "texture_asset": "production_voxel_v1/models/T_Sparrow.png",
+      "compatibility_tags": ["compact", "wing-arm", "plume-tail"],
+      "ordinary_substitutions": {"head":["compact"],"torso":["compact"],"left-arm":["compact"],"right-arm":["compact"],"left-leg":["compact"],"right-leg":["compact"],"tail-back":["plume-tail"]},
+      "source_to_canonical": {"translation":[0.0,0.0,0.0],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},
+      "cuts": {}, "sockets": {}, "join_covers": [],
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Sparrow_LOD0.obj","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Sparrow_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Sparrow_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_impostor_sockets.json"}]
+    },
+    {
+      "id": 7,
+      "label": "taipan",
+      "template_family": 0,
+      "texture_asset": "production_voxel_v1/models/T_Taipan.png",
+      "compatibility_tags": ["scaled", "long-body", "tailless"],
+      "ordinary_substitutions": {"head":["scaled"],"torso":["scaled"],"left-arm":["scaled"],"right-arm":["scaled"],"left-leg":["scaled"],"right-leg":["scaled"],"tail-back":["tailless"]},
+      "source_to_canonical": {"translation":[0.0,0.0,0.0],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},
+      "cuts": {}, "sockets": {}, "join_covers": [],
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Taipan_LOD0.obj","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Taipan_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Taipan_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_impostor_sockets.json"}]
+    }
+  ]
+}
