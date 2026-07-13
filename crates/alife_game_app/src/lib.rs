@@ -72,6 +72,9 @@ pub use creature_visuals::*;
 mod creature_part_catalog;
 pub use creature_part_catalog::*;
 
+mod creature_part_genetics;
+pub use creature_part_genetics::*;
+
 mod live_brain_bridge;
 pub(crate) use live_brain_bridge::proposal;
 pub use live_brain_bridge::*;

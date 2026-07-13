@@ -908,11 +908,26 @@ impl LifecycleLiveLoop {
         ];
         genome.lineage_id = Some(self.lineage_id);
         genome.validate_contract()?;
-        let child_appearance = CreatureAppearanceGenome::offspring_from_parents(
+        let mut child_appearance = CreatureAppearanceGenome::offspring_from_parents(
             self.creatures[parent_a].appearance,
             self.creatures[parent_b].appearance,
             child_seed,
         );
+        let part_catalog = load_production_creature_part_catalog().map_err(|error| {
+            GameAppShellError::InvalidProductionFrontend {
+                message: format!("creature part catalog failed during birth finalization: {error}"),
+            }
+        })?;
+        child_appearance.part_sources = mutate_creature_part_sources(
+            child_appearance.part_sources,
+            child_appearance.mutation_count,
+            child_seed,
+            &part_catalog,
+        )
+        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+            message: format!("creature part mutation failed during birth finalization: {error}"),
+        })?
+        .sources;
         child_appearance.validate()?;
 
         let mut mind = CreatureMind::scaffold(
