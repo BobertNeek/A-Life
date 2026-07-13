@@ -7,6 +7,7 @@ repository.workspace = true
 
 [dependencies]
 alife_core.workspace = true
+alife_game_app = { path = "../alife_game_app", default-features = false }
 alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_school = { path = "../alife_school" }
 alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider"], optional = true }

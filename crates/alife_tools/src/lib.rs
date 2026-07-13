@@ -1,6 +1,7 @@
 //! v0 scaffold: developer tooling contracts.
 
 pub mod benchmark;
+pub mod creature_part_builder;
 pub mod g16_content_authoring;
 pub mod p30_bundle;
 pub mod p30_cluster;
