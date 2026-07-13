@@ -82,17 +82,31 @@ impl CreaturePartAssetLibrary {
     pub fn mesh_handle_count(&self) -> usize {
         self.meshes.len()
     }
+
+    pub fn material_handle_count(&self) -> usize {
+        self.materials.len()
+    }
 }
 
 #[cfg(feature = "bevy-app")]
 impl PartMeshData {
     fn into_mesh(self) -> Mesh {
+        let positions = self
+            .positions
+            .into_iter()
+            .map(|[x, depth, height]| [x, height, -depth])
+            .collect::<Vec<_>>();
+        let normals = self
+            .normals
+            .into_iter()
+            .map(|[x, depth, height]| [x, height, -depth])
+            .collect::<Vec<_>>();
         let mut mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
         );
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, self.positions);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs);
         mesh.insert_indices(Indices::U32(self.indices));
         mesh

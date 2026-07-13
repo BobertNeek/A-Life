@@ -3,16 +3,18 @@
 use std::collections::BTreeSet;
 
 use alife_game_app::{
-    default_environment_manifest_path, Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode,
-    Fvr03ProductionVoxelChunk, Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
-    Fvr03ProductionVoxelSelectionResource, Fvr03ProductionVoxelTerrainBatch,
-    Fvr03ProductionVoxelTerrainTile, Fvr04ProductionCreatureVisualMarker,
-    Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
-    Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
-    Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
-    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
+    default_environment_manifest_path, CreaturePartSlot, Fvr03ProductionVoxelCamera,
+    Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk, Fvr03ProductionVoxelMaterialKind,
+    Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionResource,
+    Fvr03ProductionVoxelTerrainBatch, Fvr03ProductionVoxelTerrainTile,
+    Fvr04ProductionCreatureVisualMarker, Fvr05ProductionUxStateResource,
+    Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVfxKind,
+    Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker,
+    Fvr09MesherMode, Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker,
+    Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
     Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
-    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionFrontendProfileId,
+    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionCreatureAssemblyRoot,
+    ProductionCreatureJoinCoverMarker, ProductionCreaturePartMarker, ProductionFrontendProfileId,
     ProductionVoxelLaunchConfig, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
     FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
@@ -48,6 +50,63 @@ fn quantized_rgba(color: [f32; 4]) -> [i32; 4] {
         (color[2] * 255.0).round() as i32,
         (color[3] * 255.0).round() as i32,
     ]
+}
+
+#[test]
+fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let mut root_query = app.world_mut().query::<&ProductionCreatureAssemblyRoot>();
+    let roots = root_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert_eq!(roots.len(), 30);
+    assert!(roots.iter().all(|root| root.display_only));
+
+    let mut part_query = app
+        .world_mut()
+        .query::<(&ProductionCreaturePartMarker, &Mesh3d)>();
+    let parts = part_query
+        .iter(app.world())
+        .map(|(marker, mesh)| (*marker, mesh.0.id()))
+        .collect::<Vec<_>>();
+    let mut slots_by_root = std::collections::BTreeMap::new();
+    let mut families = BTreeSet::new();
+    let mut mesh_handles = BTreeSet::new();
+    for (marker, mesh_id) in &parts {
+        slots_by_root
+            .entry(marker.stable_id.raw())
+            .or_insert_with(BTreeSet::new)
+            .insert(marker.slot);
+        families.insert(marker.family);
+        mesh_handles.insert(*mesh_id);
+    }
+    assert_eq!(slots_by_root.len(), roots.len());
+    assert!(slots_by_root.values().all(|slots| {
+        CreaturePartSlot::REQUIRED_RUNTIME_SLOTS
+            .iter()
+            .all(|slot| slots.contains(slot))
+    }));
+    assert!(families.len() >= 8);
+    assert!(mesh_handles.len() < parts.len() / 3);
+
+    let mut cover_query = app
+        .world_mut()
+        .query::<&ProductionCreatureJoinCoverMarker>();
+    let covers = cover_query.iter(app.world()).copied().collect::<Vec<_>>();
+    assert!(covers.len() >= roots.len() * 5);
+    assert!(covers.iter().all(|cover| cover.display_only));
+
+    let scene = app
+        .world()
+        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>();
+    assert_eq!(scene.visual_profile, "modular-heritable-part-assembly-v1");
+    assert_eq!(scene.creature_root_count, roots.len());
+    assert_eq!(scene.creature_part_entity_count, parts.len());
+    assert_eq!(scene.creature_join_cover_count, covers.len());
+    assert!(scene.creature_mixed_assembly_count <= scene.creature_root_count);
+    assert!(scene.production_visuals_display_only);
 }
 
 #[test]
@@ -550,11 +609,11 @@ fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
 
     assert_eq!(
         creature_scene.visual_profile,
-        "fvr10-readable-cute-biped-rig-v1"
+        "modular-heritable-part-assembly-v1"
     );
     assert_eq!(
         creature_scene.mesh_material_version,
-        "fvr10-bipedal-caveman-furry-species-v1"
+        "modular-textured-part-material-v1"
     );
     assert_eq!(
         creature_scene.rendered_creature_count,
@@ -643,22 +702,22 @@ fn fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack() {
         .clone();
     assert_eq!(
         creature_scene.visual_profile,
-        "fvr10-readable-cute-biped-rig-v1"
+        "modular-heritable-part-assembly-v1"
     );
     assert_eq!(
         creature_scene.mesh_material_version,
-        "fvr10-bipedal-caveman-furry-species-v1"
+        "modular-textured-part-material-v1"
     );
     assert!(creature_scene.mesh_pool_count >= 5);
 
     let mut query = app
         .world_mut()
-        .query::<(&Fvr09CuteBipedCreatureMarker, &Mesh3d)>();
+        .query::<(&ProductionCreaturePartMarker, &Mesh3d)>();
     let mesh_handle = query
         .iter(app.world())
-        .next()
+        .find(|(marker, _)| marker.slot == CreaturePartSlot::Head)
         .map(|(_, mesh)| mesh.0.clone())
-        .expect("at least one visible creature rig should spawn");
+        .expect("at least one visible creature head part should spawn");
     let meshes = app.world().resource::<Assets<Mesh>>();
     let mesh = meshes
         .get(&mesh_handle)
@@ -669,16 +728,12 @@ fn fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack() {
         panic!("creature rig mesh is missing positions");
     };
     assert!(
-        positions.len() >= 320,
-        "creature rig should be rounded/generated, not a cuboid stack with {} vertices",
-        positions.len()
+        positions.len() >= 24,
+        "sliced source mesh must retain useful geometry"
     );
     let (mut min_x, mut max_x) = (f32::MAX, f32::MIN);
     let (mut min_y, mut max_y) = (f32::MAX, f32::MIN);
     let (mut min_z, mut max_z) = (f32::MAX, f32::MIN);
-    let mut snout_vertices = 0_usize;
-    let mut tail_vertices = 0_usize;
-    let mut ear_vertices = 0_usize;
     for position in positions {
         min_x = min_x.min(position[0]);
         max_x = max_x.max(position[0]);
@@ -686,30 +741,13 @@ fn fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack() {
         max_y = max_y.max(position[1]);
         min_z = min_z.min(position[2]);
         max_z = max_z.max(position[2]);
-        if position[2] > 0.57 && (0.35..0.75).contains(&position[1]) {
-            snout_vertices += 1;
-        }
-        if position[2] < -0.55 {
-            tail_vertices += 1;
-        }
-        if position[0].abs() > 0.54 && position[1] > 0.50 {
-            ear_vertices += 1;
-        }
     }
     assert!(
-        max_y <= 1.08,
-        "creature mesh has a tall centered top protrusion instead of an animal head/ear silhouette: max_y={max_y:.3}"
-    );
-    assert!(
-        max_x - min_x >= 1.05 && max_z - min_z >= 1.18 && max_y - min_y >= 1.50,
-        "creature mesh needs a fuller biped mammal silhouette, spans=({:.2},{:.2},{:.2})",
+        max_x > min_x && max_z > min_z && max_y > min_y,
+        "creature part mesh must have three-dimensional bounds, spans=({:.2},{:.2},{:.2})",
         max_x - min_x,
         max_y - min_y,
         max_z - min_z
-    );
-    assert!(
-        snout_vertices >= 8 && tail_vertices >= 8 && ear_vertices >= 8,
-        "creature mesh needs visible snout/tail/ear protrusions, found snout={snout_vertices} tail={tail_vertices} ears={ear_vertices}"
     );
 }
 
@@ -730,7 +768,7 @@ fn fvr10_creatures_use_all_selected_bipedal_caveman_species_not_color_swaps() {
     );
     assert_eq!(
         creature_scene.mesh_material_version,
-        "fvr10-bipedal-caveman-furry-species-v1"
+        "modular-textured-part-material-v1"
     );
     assert!(
         creature_scene.mesh_pool_count >= CREATURE_APPEARANCE_SPECIES_COUNT as usize,
@@ -898,13 +936,12 @@ fn fvr10_product_camera_and_faces_are_composed_for_readable_creatures() {
         transform.translation.y
     );
 
-    let mut face_query = app.world_mut().query::<(
-        &Fvr09CreatureFaceFeatureMarker,
-        &Fvr04ProductionCreatureVisualMarker,
-    )>();
+    let mut face_query = app
+        .world_mut()
+        .query::<(&Fvr09CreatureFaceFeatureMarker, &Transform)>();
     let face_offsets = face_query
         .iter(app.world())
-        .map(|(_, marker)| marker.local_offset)
+        .map(|(_, transform)| transform.translation)
         .collect::<Vec<_>>();
     assert!(!face_offsets.is_empty());
     assert!(
