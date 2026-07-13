@@ -5667,14 +5667,16 @@ fn lifecycle_lineage_birth_inherits_and_mutates_appearance_genes() {
         })
         .collect::<Vec<_>>();
 
-    assert!(offspring
-        .appearance
-        .inherited_from(parents[0].appearance, parents[1].appearance));
     let part_catalog = alife_game_app::load_production_creature_part_catalog().unwrap();
     assert!(alife_game_app::part_sources_are_ordinary_compatible(
         &offspring.appearance.part_sources,
         &part_catalog
     ));
+    assert!(
+        offspring.appearance.part_sources.torso == parents[0].appearance.part_sources.torso
+            || offspring.appearance.part_sources.torso == parents[1].appearance.part_sources.torso,
+        "the inherited torso remains the assembly compatibility frame"
+    );
     for ((slot, child_family), (_, parent_a_family), (_, parent_b_family)) in offspring
         .appearance
         .part_sources
@@ -5684,10 +5686,13 @@ fn lifecycle_lineage_birth_inherits_and_mutates_appearance_genes() {
         .zip(parents[1].appearance.part_sources.iter_slots())
         .map(|((child, parent_a), parent_b)| (child, parent_a, parent_b))
     {
-        assert!(
-            child_family == parent_a_family || child_family == parent_b_family,
-            "offspring {slot:?} source must be inherited from a parent"
-        );
+        if child_family != parent_a_family && child_family != parent_b_family {
+            assert_ne!(
+                slot,
+                alife_world::CreaturePartSlotKey::Torso,
+                "catalog normalization may only substitute attached parts"
+            );
+        }
     }
     assert!(
         offspring.appearance.mutation_count

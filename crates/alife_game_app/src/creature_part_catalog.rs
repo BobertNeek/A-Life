@@ -332,6 +332,11 @@ pub enum CreaturePartCatalogError {
     InvalidPath(String),
     #[error("unknown template family {0:?}")]
     UnknownTemplateFamily(CreaturePartFamilyId),
+    #[error("no compatible family for torso {torso:?} slot {slot:?}")]
+    NoCompatibleFamily {
+        torso: CreaturePartFamilyId,
+        slot: CreaturePartSlot,
+    },
 }
 
 pub fn load_production_creature_part_catalog(

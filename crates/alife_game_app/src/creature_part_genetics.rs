@@ -22,6 +22,7 @@ pub fn mutate_creature_part_sources(
     if catalog.family(torso).is_none() {
         return Err(CreaturePartCatalogError::UnknownFamily(torso));
     }
+    let normalized = normalize_ordinary_compatibility(inherited, mutation_seed, catalog)?;
 
     let rare_cross_family = mutation_count >= RARE_PART_MUTATION_THRESHOLD
         && ((mutation_seed ^ u64::from(mutation_count)) & 0x7) == 0x5;
@@ -43,7 +44,7 @@ pub fn mutate_creature_part_sources(
         .as_slice()
     };
     let slot = slots[deterministic_index(mutation_seed, 0x51A7, slots.len())];
-    let current = family_for_slot(inherited, slot);
+    let current = family_for_slot(normalized, slot);
     let mut candidates = catalog
         .families
         .iter()
@@ -60,11 +61,11 @@ pub fn mutate_creature_part_sources(
     candidates.sort_unstable();
 
     let (sources, changed_slot) = if candidates.is_empty() {
-        (inherited, None)
+        (normalized, None)
     } else {
         let candidate = candidates[deterministic_index(mutation_seed, 0xFA11, candidates.len())];
         (
-            with_family_for_slot(inherited, slot, candidate),
+            with_family_for_slot(normalized, slot, candidate),
             Some(runtime_slot(slot)),
         )
     };
@@ -75,6 +76,47 @@ pub fn mutate_creature_part_sources(
         rare_cross_family,
         incompatible_slot_count,
     })
+}
+
+fn normalize_ordinary_compatibility(
+    inherited: CreaturePartSources,
+    mutation_seed: u64,
+    catalog: &CreaturePartCatalog,
+) -> Result<CreaturePartSources, CreaturePartCatalogError> {
+    let mut normalized = inherited;
+    for (index, slot) in [
+        CreaturePartSlotKey::Head,
+        CreaturePartSlotKey::Arms,
+        CreaturePartSlotKey::Legs,
+        CreaturePartSlotKey::Tail,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let current = family_for_slot(normalized, slot);
+        if slot_is_ordinary_compatible(inherited.torso, slot, current, catalog) {
+            continue;
+        }
+        let mut candidates = catalog
+            .families
+            .iter()
+            .map(|family| family.id)
+            .filter(|candidate| {
+                slot_is_ordinary_compatible(inherited.torso, slot, *candidate, catalog)
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_unstable();
+        if candidates.is_empty() {
+            return Err(CreaturePartCatalogError::NoCompatibleFamily {
+                torso: inherited.torso,
+                slot: runtime_slot(slot),
+            });
+        }
+        let salt = 0xC011_u64.wrapping_add(index as u64);
+        let candidate = candidates[deterministic_index(mutation_seed, salt, candidates.len())];
+        normalized = with_family_for_slot(normalized, slot, candidate);
+    }
+    Ok(normalized)
 }
 
 pub fn part_sources_are_ordinary_compatible(
