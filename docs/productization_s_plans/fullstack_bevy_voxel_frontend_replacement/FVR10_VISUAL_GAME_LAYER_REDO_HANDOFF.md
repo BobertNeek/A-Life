@@ -116,14 +116,14 @@ D:\A life\target\artifacts\fvr03\MinimumSettings30x30_runtime_screenshot.png
 D:\A life\target\artifacts\fvr03\MinSpecComfort1080p_runtime_screenshot.png
 ```
 
-The minimum capture is dated 2026-07-14 04:44:43 local time. It preserves 30
+The minimum capture is dated 2026-07-14 06:31:09 local time. It preserves 30
 textured modular creatures across active and prone simulation poses, coherent
 paths and ledges, textured material regions, a distinct fungal biome, and
 sparse ecology at the 30 FPS floor. Upright creatures have bounded torsos and
 layered sclera/iris/pupil eyes; the former oversized triangle sheets and black
 bead eyes are absent.
 
-The comfort capture is dated 2026-07-14 04:44:48 local time. It adds denser
+The comfort capture is dated 2026-07-14 06:31:15 local time. It adds denser
 clustered flora, directional shadows, and stronger depth while preserving
 separated biped limbs, source textures, and the same readable world composition.
 
@@ -153,8 +153,8 @@ The fresh renderer diagnostics report:
 
 | Profile | Measured local smoke FPS | Target | Dressing | GPU VFX emitters |
 |---|---:|---:|---:|---:|
-| `MinimumSettings30x30` | 198.12 | 30 | 64 | 2 |
-| `MinSpecComfort1080p` | 132.91 | 60 | 224 | 4 |
+| `MinimumSettings30x30` | 190.31 | 30 | 64 | 2 |
+| `MinSpecComfort1080p` | 151.19 | 60 | 224 | 4 |
 
 Both renderer diagnostics report 30 assembly roots, 210 part entities, 180
 join covers, eight represented source families, 56 shared mesh handles,
@@ -239,6 +239,14 @@ set. The full FVR03 renderer integration suite passed 19 of 19 tests under the
 low-debug, non-incremental test profile. The nine GPU policy tests, the no-CPU-
 shadow boundary test, and the lineage appearance inheritance/mutation test also
 passed.
+
+After the no-conflict merge, `main` was verified byte-identical to the reviewed
+feature tree and passed fmt, workspace check, core/docs gates, GPU policy,
+lineage, no-CPU-shadow, part-pack validation, production-asset validation, the
+release build, and both GPU-required profile launches. A redundant post-merge
+rerun of the 19-test FVR03 renderer binary timed out after 1,204 seconds while
+rebuilding the identical main-checkout target and returned no test result; it
+is not represented as a second pass.
 
 ## Maintenance Guidance
 
