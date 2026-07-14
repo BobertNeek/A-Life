@@ -2,10 +2,10 @@
 
 use alife_core::PolicyBackend;
 
-use crate::{
-    GameAppShellError, GraphicalPlaygroundLaunchConfig, LiveBrainLoop, LiveBrainTickControl,
-    LiveBrainTickSummary,
-};
+use crate::{GameAppShellError, LiveBrainLoop, LiveBrainTickControl, LiveBrainTickSummary};
+
+#[cfg(feature = "gpu-runtime")]
+use crate::GraphicalPlaygroundLaunchConfig;
 
 pub enum BrainPolicyRuntime {
     #[cfg(feature = "gpu-runtime")]

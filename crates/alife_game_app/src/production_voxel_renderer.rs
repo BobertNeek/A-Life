@@ -785,6 +785,7 @@ pub struct Fvr03ProductionVoxelScreenshotResource {
     pub fvr05_capture_index: usize,
     pub fvr05_next_capture_frame: u32,
     pub fvr05_sequence_complete: bool,
+    pub developer_overlay: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Component)]
@@ -1109,7 +1110,7 @@ pub struct Fvr05ProductionUxStateResource {
     pub adapter_name: String,
     pub backend_api: String,
     pub graphics_backend: String,
-    pub fallback_reason: String,
+    pub unavailable_reason: String,
     pub renderer_profile: String,
     pub state_trace: String,
     pub authority: Fvr05ProductionDebugAuthorityReport,
@@ -1120,8 +1121,15 @@ pub struct Fvr05ProductionUxStateResource {
 
 impl Fvr05ProductionUxStateResource {
     pub fn from_summary(summary: &ProductionVoxelLaunchSummary) -> Self {
+        let mut settings = summary.ui_settings.clone();
+        settings.show_menu = summary.developer_overlay;
+        settings.show_settings = false;
+        settings.show_overlays = false;
+        if summary.developer_overlay {
+            settings.active_inspector_tab = Fvr05ProductionInspectorTab::GpuRuntime;
+        }
         Self {
-            settings: summary.ui_settings.clone(),
+            settings,
             ui_settings_path: summary.ui_settings_path.clone(),
             source_save_path: summary.save_path.clone(),
             asset_root: summary.asset_root.clone(),
@@ -1142,9 +1150,9 @@ impl Fvr05ProductionUxStateResource {
                 .clone()
                 .unwrap_or_else(|| "unknown".to_string()),
             graphics_backend: summary.diagnostics.graphics_backend.clone(),
-            fallback_reason: summary
+            unavailable_reason: summary
                 .diagnostics
-                .fallback_reason
+                .unavailable_reason
                 .clone()
                 .unwrap_or_else(|| "None".to_string()),
             renderer_profile: summary.renderer_profile.clone(),
@@ -1586,6 +1594,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             fvr05_capture_index: 0,
             fvr05_next_capture_frame: 0,
             fvr05_sequence_complete: false,
+            developer_overlay: summary.developer_overlay,
         })
         .add_systems(Update, request_fvr03_recorded_screenshot);
     }
@@ -4284,7 +4293,7 @@ fn spawn_fvr03_diagnostics_ui(
             summary.diagnostics.selected_backend,
             summary
                 .diagnostics
-                .fallback_reason
+                .unavailable_reason
                 .as_deref()
                 .unwrap_or("None"),
             summary
@@ -4716,9 +4725,16 @@ fn sync_fvr05_right_inspector_panel(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
+    authority: Option<Res<crate::bevy_shell::ProductionGpuBrainAuthorityResource>>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionRightInspectorPanel>>,
 ) {
-    if !ux.is_changed() && !scene.is_changed() && !selection.is_changed() && !creatures.is_changed()
+    if !ux.is_changed()
+        && !scene.is_changed()
+        && !selection.is_changed()
+        && !creatures.is_changed()
+        && authority
+            .as_ref()
+            .is_none_or(|authority| !authority.is_changed())
     {
         return;
     }
@@ -4743,19 +4759,9 @@ fn sync_fvr05_right_inspector_panel(
             scene.tile_panel_text(selection.selected.or(selection.hovered))
         }
         Fvr05ProductionInspectorTab::World => scene.world_panel_text(),
-        Fvr05ProductionInspectorTab::GpuRuntime => format!(
-            "GPU / Runtime\nselected backend: {}\nrequested API: {}\nadapter: {}\nbackend API: {}\nfallback: {}\nrenderer: {}\nreadback: compact/manual only\nsave backend schema: {}\nvalidation: {}",
-            ux.selected_backend,
-            ux.graphics_backend,
-            ux.adapter_name,
-            ux.backend_api,
-            ux.fallback_reason,
-            ux.renderer_profile,
-            ux.save_metadata
-                .voxel_backend_schema
-                .as_deref()
-                .unwrap_or("none"),
-            ux.save_metadata.voxel_roundtrip_signatures_match
+        Fvr05ProductionInspectorTab::GpuRuntime => authority.as_ref().map_or_else(
+            || "GPU neural: unavailable\nFailure policy: stop learned actions".to_string(),
+            |authority| authority.telemetry.overlay_text(),
         ),
     };
     let text = format!("{tabs}\n\n{body}");
@@ -5068,6 +5074,9 @@ fn request_fvr03_recorded_screenshot(
             .observe(save_to_disk(capture.path.clone()));
         capture.product_screenshot_captured = true;
         capture.fvr05_next_capture_frame = capture.frame.saturating_add(24);
+        if !capture.developer_overlay {
+            capture.fvr05_sequence_complete = true;
+        }
         return;
     }
     if capture.fvr05_sequence_complete {

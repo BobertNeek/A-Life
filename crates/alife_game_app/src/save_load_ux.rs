@@ -455,7 +455,7 @@ pub struct ConfigMenuState {
     pub school_enabled: bool,
     pub semantic_enabled: bool,
     pub gpu_enabled: bool,
-    pub cpu_fallback_required: bool,
+    pub failure_stops_learned_actions: bool,
     pub no_active_readback: bool,
     pub scenario_id: String,
     pub validation_messages: Vec<String>,
@@ -472,7 +472,7 @@ impl ConfigMenuState {
             school_enabled: config.features.school_enabled,
             semantic_enabled: config.features.semantic_adapter_enabled,
             gpu_enabled: config.features.gpu_backend_enabled,
-            cpu_fallback_required: false,
+            failure_stops_learned_actions: true,
             no_active_readback: config.gpu_limits.no_active_gameplay_readback,
             scenario_id: scenario_id.into(),
             validation_messages: Vec::new(),
@@ -792,7 +792,7 @@ impl SaveLoadUxSmokeSummary {
             || !self.engine_local_token_absent
             || !self.deterministic_autosave_due
             || self.config_menu.deterministic_seed == 0
-            || self.config_menu.cpu_fallback_required
+            || !self.config_menu.failure_stops_learned_actions
             || !self.config_menu.no_active_readback
             || self.menu.schema != G15_SAVE_LOAD_UX_SCHEMA
         {
@@ -933,7 +933,7 @@ pub fn player_save_load_menu_text(summary: &SaveLoadUxSmokeSummary) -> String {
             "        digest={} config={} partial_load_after_error={}\n",
             "Settings: backend={:?} brain={:?}\n",
             "          school={} semantic={} gpu={}\n",
-            "          cpu_fallback={} no_active_readback={}\n",
+            "          stop_learned_actions={} no_active_readback={}\n",
             "Boundary: stable IDs only; engine-local tokens={}"
         ),
         summary.config_menu.deterministic_seed,
@@ -958,7 +958,7 @@ pub fn player_save_load_menu_text(summary: &SaveLoadUxSmokeSummary) -> String {
         summary.config_menu.school_enabled,
         summary.config_menu.semantic_enabled,
         summary.config_menu.gpu_enabled,
-        summary.config_menu.cpu_fallback_required,
+        summary.config_menu.failure_stops_learned_actions,
         summary.config_menu.no_active_readback,
         !summary.engine_local_token_absent
     )

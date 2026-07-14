@@ -111,10 +111,10 @@ pub struct SemanticDemoReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GpuFallbackDemoReport {
+pub struct GpuAuthorityDemoReport {
     pub requested_backend: String,
     pub selected_backend: String,
-    pub cpu_fallback: bool,
+    pub unavailable_is_fail_closed: bool,
     pub active_bulk_readback_allowed: bool,
     pub diagnostic_export_boundary_allowed: bool,
 }
@@ -269,16 +269,18 @@ pub fn run_semantic_fake_provider_demo() -> Result<SemanticDemoReport, Playgroun
     }
 }
 
-pub fn run_gpu_fallback_demo() -> Result<GpuFallbackDemoReport, PlaygroundError> {
-    let status = GpuRuntimeBackendConfig::request(GpuRuntimeBackendKind::GpuStatic)
+pub fn run_gpu_authority_demo() -> Result<GpuAuthorityDemoReport, PlaygroundError> {
+    let requested = GpuRuntimeBackendKind::GpuAuthoritative;
+    let unavailable = GpuRuntimeBackendConfig::request(requested)
         .with_hardware_available(false)
-        .select_backend()?;
+        .select_backend()
+        .is_err();
     let active_guard = GpuRuntimeReadbackGuard::active_tick();
     let export_guard = GpuRuntimeReadbackGuard::after_frame_boundary();
-    Ok(GpuFallbackDemoReport {
-        requested_backend: format!("{:?}", status.requested),
-        selected_backend: format!("{:?}", status.selected),
-        cpu_fallback: status.selected == GpuRuntimeBackendKind::CpuReference,
+    Ok(GpuAuthorityDemoReport {
+        requested_backend: format!("{requested:?}"),
+        selected_backend: "Unavailable".to_string(),
+        unavailable_is_fail_closed: unavailable,
         active_bulk_readback_allowed: active_guard.permits_bulk_neural_readback(),
         diagnostic_export_boundary_allowed: export_guard
             .validate_export_request(GpuRuntimeBoundary::DiagnosticExport)

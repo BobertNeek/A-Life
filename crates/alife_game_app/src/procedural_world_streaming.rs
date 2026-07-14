@@ -79,7 +79,7 @@ pub struct True25dHeadlessChunkContinuitySummary {
     pub can_rewrite_weights: bool,
     pub no_action_authority: bool,
     pub no_weight_authority: bool,
-    pub cpu_shadow_parity_preserved: bool,
+    pub gpu_authority_preserved: bool,
     pub full_action_authoritative_claim: bool,
 }
 
@@ -112,7 +112,7 @@ impl True25dHeadlessChunkContinuitySummary {
             || self.can_rewrite_weights
             || !self.no_action_authority
             || !self.no_weight_authority
-            || !self.cpu_shadow_parity_preserved
+            || !self.gpu_authority_preserved
             || self.full_action_authoritative_claim
         {
             return Err(GameAppShellError::VisibleWorldMismatch {
@@ -124,7 +124,7 @@ impl True25dHeadlessChunkContinuitySummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:seed={}:stable={}:steps={}:unique_chunks={}:max_active={}:no_render={}:zero_draw_budget={}:ticks={}/{}:mind_delta={}:world_delta={}:sealed={}:packed={}:first_invalid={:?}:action={:?}:target={:?}:auth_hz={}:present_hz={}:goal_hz={}:claim_60hz_sim={}:action_auth={}:weight_auth={}:cpu_shadow={}",
+            "{}:{}:seed={}:stable={}:steps={}:unique_chunks={}:max_active={}:no_render={}:zero_draw_budget={}:ticks={}/{}:mind_delta={}:world_delta={}:sealed={}:packed={}:first_invalid={:?}:action={:?}:target={:?}:auth_hz={}:present_hz={}:goal_hz={}:claim_60hz_sim={}:action_auth={}:weight_auth={}:gpu_authority={}",
             self.schema,
             self.schema_version,
             self.seed,
@@ -149,7 +149,7 @@ impl True25dHeadlessChunkContinuitySummary {
             self.sixty_hz_sim_claim,
             self.can_emit_actions,
             self.can_rewrite_weights,
-            self.cpu_shadow_parity_preserved
+            self.gpu_authority_preserved
         )
     }
 }
@@ -294,7 +294,7 @@ pub fn run_true25d_headless_chunk_continuity_smoke(
         can_rewrite_weights: travel.can_rewrite_weights,
         no_action_authority: true,
         no_weight_authority: true,
-        cpu_shadow_parity_preserved: stability.cpu_shadow_parity_preserved,
+        gpu_authority_preserved: stability.gpu_authority_preserved,
         full_action_authoritative_claim: false,
     };
     summary.validate()?;

@@ -1,3 +1,5 @@
+#![cfg(feature = "gpu-runtime")]
+
 use alife_game_app::{
     default_environment_manifest_path, run_production_voxel_frontend_dry_run,
     ProductionFrontendProfileId, ProductionVoxelLaunchConfig,

@@ -1,9 +1,4 @@
-//! P29 runtime integration contracts for optional GPU execution.
-//!
-//! This module does not replace the CPU reference oracle and does not perform
-//! active gameplay readback. It records selectable backend modes, fallback
-//! reasons, boundary-scoped diagnostics, throttling decisions, and honest
-//! performance-tier report shells for hardware/manual runs.
+//! P29 runtime integration contracts for required GPU execution.
 
 use alife_core::{validate_finite, LobeKind, ScaffoldContractError};
 
@@ -16,18 +11,7 @@ pub const P29_RUNTIME_SCHEMA_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuRuntimeBackendKind {
-    CpuReference,
-    GpuStatic,
-    GpuPlastic,
-    GpuFull,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuRuntimeFallbackReason {
-    FeatureDisabled,
-    HardwareUnavailable,
-    ValidationFailed,
-    UnsupportedBackend,
+    GpuAuthoritative,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,29 +103,9 @@ pub struct GpuRuntimeBackendStatus {
     pub schema_version: u16,
     pub requested: GpuRuntimeBackendKind,
     pub selected: GpuRuntimeBackendKind,
-    pub fallback_reason: Option<GpuRuntimeFallbackReason>,
-    pub cpu_oracle_authoritative: bool,
-    pub static_forward_parity_checked: bool,
-    pub plasticity_parity_checked: bool,
+    pub authoritative: bool,
+    pub unavailable_reason: Option<&'static str>,
     pub no_active_gameplay_readback: bool,
-}
-
-impl GpuRuntimeBackendStatus {
-    fn cpu_fallback(
-        requested: GpuRuntimeBackendKind,
-        fallback_reason: GpuRuntimeFallbackReason,
-    ) -> Self {
-        Self {
-            schema_version: P29_RUNTIME_SCHEMA_VERSION,
-            requested,
-            selected: GpuRuntimeBackendKind::CpuReference,
-            fallback_reason: Some(fallback_reason),
-            cpu_oracle_authoritative: true,
-            static_forward_parity_checked: false,
-            plasticity_parity_checked: false,
-            no_active_gameplay_readback: true,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,25 +114,15 @@ pub struct GpuRuntimeBackendConfig {
     pub gpu_feature_enabled: bool,
     pub hardware_available: bool,
     pub validation_passed: bool,
-    pub static_forward_available: bool,
-    pub plasticity_available: bool,
-    pub routing_masks_available: bool,
-    pub sleep_recompaction_available: bool,
-    pub full_runtime_available: bool,
 }
 
 impl Default for GpuRuntimeBackendConfig {
     fn default() -> Self {
         Self {
-            requested: GpuRuntimeBackendKind::CpuReference,
-            gpu_feature_enabled: false,
+            requested: GpuRuntimeBackendKind::GpuAuthoritative,
+            gpu_feature_enabled: true,
             hardware_available: false,
             validation_passed: true,
-            static_forward_available: true,
-            plasticity_available: true,
-            routing_masks_available: true,
-            sleep_recompaction_available: true,
-            full_runtime_available: false,
         }
     }
 }
@@ -177,7 +131,6 @@ impl GpuRuntimeBackendConfig {
     pub fn request(requested: GpuRuntimeBackendKind) -> Self {
         Self {
             requested,
-            gpu_feature_enabled: requested != GpuRuntimeBackendKind::CpuReference,
             ..Self::default()
         }
     }
@@ -197,75 +150,23 @@ impl GpuRuntimeBackendConfig {
         self
     }
 
-    pub const fn with_full_runtime_available(mut self, full_runtime_available: bool) -> Self {
-        self.full_runtime_available = full_runtime_available;
-        self
-    }
-
     pub fn select_backend(self) -> Result<GpuRuntimeBackendStatus, ScaffoldContractError> {
-        if self.requested == GpuRuntimeBackendKind::CpuReference {
-            return Ok(GpuRuntimeBackendStatus {
-                schema_version: P29_RUNTIME_SCHEMA_VERSION,
-                requested: self.requested,
-                selected: GpuRuntimeBackendKind::CpuReference,
-                fallback_reason: None,
-                cpu_oracle_authoritative: true,
-                static_forward_parity_checked: false,
-                plasticity_parity_checked: false,
-                no_active_gameplay_readback: true,
-            });
-        }
         if !self.gpu_feature_enabled {
-            return Ok(GpuRuntimeBackendStatus::cpu_fallback(
-                self.requested,
-                GpuRuntimeFallbackReason::FeatureDisabled,
-            ));
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
         if !self.hardware_available {
-            return Ok(GpuRuntimeBackendStatus::cpu_fallback(
-                self.requested,
-                GpuRuntimeFallbackReason::HardwareUnavailable,
-            ));
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
         if !self.validation_passed {
-            return Ok(GpuRuntimeBackendStatus::cpu_fallback(
-                self.requested,
-                GpuRuntimeFallbackReason::ValidationFailed,
-            ));
-        }
-
-        let supported = match self.requested {
-            GpuRuntimeBackendKind::CpuReference => true,
-            GpuRuntimeBackendKind::GpuStatic => self.static_forward_available,
-            GpuRuntimeBackendKind::GpuPlastic => {
-                self.static_forward_available && self.plasticity_available
-            }
-            GpuRuntimeBackendKind::GpuFull => {
-                self.static_forward_available
-                    && self.plasticity_available
-                    && self.routing_masks_available
-                    && self.sleep_recompaction_available
-                    && self.full_runtime_available
-            }
-        };
-        if !supported {
-            return Ok(GpuRuntimeBackendStatus::cpu_fallback(
-                self.requested,
-                GpuRuntimeFallbackReason::UnsupportedBackend,
-            ));
+            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
 
         Ok(GpuRuntimeBackendStatus {
             schema_version: P29_RUNTIME_SCHEMA_VERSION,
             requested: self.requested,
             selected: self.requested,
-            fallback_reason: None,
-            cpu_oracle_authoritative: true,
-            static_forward_parity_checked: true,
-            plasticity_parity_checked: matches!(
-                self.requested,
-                GpuRuntimeBackendKind::GpuPlastic | GpuRuntimeBackendKind::GpuFull
-            ),
+            authoritative: true,
+            unavailable_reason: None,
             no_active_gameplay_readback: true,
         })
     }
@@ -301,25 +202,6 @@ async fn probe_local_wgpu_runtime_async(
     requested_backend: GpuRuntimeBackendKind,
     backends: Option<wgpu::Backends>,
 ) -> GpuRuntimeHardwareProbe {
-    if requested_backend == GpuRuntimeBackendKind::CpuReference {
-        return GpuRuntimeHardwareProbe {
-            schema_version: P29_RUNTIME_SCHEMA_VERSION,
-            requested_backend,
-            adapter_available: false,
-            device_request_succeeded: false,
-            adapter_name: None,
-            backend_api: None,
-            adapter_type: None,
-            vendor_id: None,
-            device_id: None,
-            driver: None,
-            driver_info: None,
-            required_storage_buffers_per_shader_stage: 0,
-            adapter_storage_buffers_per_shader_stage: None,
-            error: None,
-        };
-    }
-
     let instance = if let Some(backends) = backends {
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         descriptor.backends = backends;
@@ -392,9 +274,7 @@ async fn probe_local_wgpu_runtime_async(
 
 pub const fn required_storage_buffers(backend: GpuRuntimeBackendKind) -> u32 {
     match backend {
-        GpuRuntimeBackendKind::CpuReference => 0,
-        GpuRuntimeBackendKind::GpuStatic => P27_STATIC_FORWARD_STORAGE_BINDINGS,
-        GpuRuntimeBackendKind::GpuPlastic | GpuRuntimeBackendKind::GpuFull => {
+        GpuRuntimeBackendKind::GpuAuthoritative => {
             if P27_STATIC_FORWARD_STORAGE_BINDINGS > P27_PLASTICITY_STORAGE_BINDINGS {
                 P27_STATIC_FORWARD_STORAGE_BINDINGS
             } else {
@@ -666,11 +546,10 @@ impl GpuRuntimeDiagnosticExport {
 pub struct GpuRuntimeCapabilityManifest {
     pub schema_version: u16,
     pub gpu_buffer_schema_version: u16,
-    pub static_forward_parity_available: bool,
-    pub plasticity_parity_available: bool,
+    pub authoritative_closed_loop_available: bool,
     pub routing_masks_available: bool,
     pub sleep_recompaction_available: bool,
-    pub product_gpu_full_runtime_default: bool,
+    pub product_gpu_required_default: bool,
     pub static_forward_storage_bindings: u32,
     pub plasticity_storage_bindings: u32,
     pub no_active_gameplay_neural_readback: bool,
@@ -681,11 +560,10 @@ impl GpuRuntimeCapabilityManifest {
         Self {
             schema_version: P29_RUNTIME_SCHEMA_VERSION,
             gpu_buffer_schema_version: GPU_BUFFER_CONTRACT_SCHEMA_VERSION,
-            static_forward_parity_available: true,
-            plasticity_parity_available: true,
+            authoritative_closed_loop_available: true,
             routing_masks_available: true,
             sleep_recompaction_available: true,
-            product_gpu_full_runtime_default: false,
+            product_gpu_required_default: true,
             static_forward_storage_bindings: P27_STATIC_FORWARD_STORAGE_BINDINGS,
             plasticity_storage_bindings: P27_PLASTICITY_STORAGE_BINDINGS,
             no_active_gameplay_neural_readback: true,
@@ -755,7 +633,7 @@ pub struct GpuTierMeasurement {
 }
 
 impl GpuTierMeasurement {
-    pub fn cpu_fallback_report(
+    pub fn unavailable_report(
         backend: GpuRuntimeBackendStatus,
         notes: impl Into<String>,
     ) -> GpuTierPerformanceReport {
@@ -764,7 +642,7 @@ impl GpuTierMeasurement {
             schema_version: P29_RUNTIME_SCHEMA_VERSION,
             backend,
             hardware_identifier: None,
-            feature_flags: vec!["cpu-fallback".to_string()],
+            feature_flags: vec!["gpu-unavailable".to_string()],
             measurements: GpuTierPopulation::required()
                 .into_iter()
                 .map(|population| Self {
@@ -831,10 +709,10 @@ impl GpuTierPerformanceReport {
         let mut out = String::new();
         out.push_str("# P29 GPU runtime performance report\n\n");
         out.push_str(&format!(
-            "- Backend requested: {:?}\n- Backend selected: {:?}\n- Fallback reason: {:?}\n- Hardware: {}\n- Feature flags/evidence: {}\n- No active gameplay neural readback: {}\n\n",
+            "- Backend requested: {:?}\n- Backend selected: {:?}\n- Unavailable reason: {:?}\n- Hardware: {}\n- Feature flags/evidence: {}\n- No active gameplay neural readback: {}\n\n",
             self.backend.requested,
             self.backend.selected,
-            self.backend.fallback_reason,
+            self.backend.unavailable_reason,
             self.hardware_identifier.as_deref().unwrap_or("unknown"),
             if self.feature_flags.is_empty() {
                 "none".to_string()

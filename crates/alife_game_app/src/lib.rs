@@ -39,7 +39,7 @@ mod prelude {
     };
     pub(crate) use alife_world::persistence::{
         AssetManifest, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
-        GpuRuntimeClassBucketAllocation, GpuRuntimeCpuShadowParityState, GpuRuntimeResidencySlots,
+        GpuRuntimeAuthorityState, GpuRuntimeClassBucketAllocation, GpuRuntimeResidencySlots,
         GpuRuntimeSafeCheckpoint, GpuRuntimeSaveState, GpuRuntimeShaderAbiVersions,
         PersistenceError, PortableSaveFile, RuntimeConfig, SchoolSaveState, WorldObjectSaveState,
         FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
@@ -264,8 +264,8 @@ pub use content_tutorial_authoring::*;
 mod gpu_product_telemetry;
 pub use gpu_product_telemetry::*;
 
-mod legacy_gpu_live_runtime;
-pub use legacy_gpu_live_runtime::*;
+mod gpu_authority_telemetry;
+pub use gpu_authority_telemetry::*;
 
 #[cfg(feature = "gpu-runtime")]
 mod gpu_live_runtime;

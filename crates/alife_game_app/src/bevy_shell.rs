@@ -78,10 +78,10 @@ use crate::{
     Ca37WorldArtStyleSummary, Ca38CreatureAnimationSummary, CameraNavigationState,
     CreatureAnimationState, CreatureExpressionState, CreatureInspectorSnapshot,
     CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
-    GraphicalGpuRuntimeController, GraphicalGpuRuntimeMode, GraphicalGpuRuntimeTelemetry,
-    GraphicalPlaygroundLaunchConfig, GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode,
-    GraphicalPlaygroundViewMode, LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand,
-    RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
+    GraphicalGpuRuntimeController, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
+    GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, GraphicalPlaygroundViewMode,
+    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
     VisibleWorldObjectPresentation, VisibleWorldPresentation, CA13_FIXED_SIM_TICK_HZ,
     CA13_TARGET_RENDER_FRAME_HZ, S02_MAX_SMOKE_TICKS,
 };
@@ -527,7 +527,11 @@ impl GraphicalPlaygroundRunSummary {
             self.launch.signature_line(),
             self.runtime.signature_line(),
             self.gpu.requested_mode.label(),
-            self.gpu.product_runtime_claim
+            if self.gpu.authoritative {
+                "GpuAuthoritative"
+            } else {
+                "Unavailable"
+            }
         )
     }
 }
@@ -553,6 +557,31 @@ struct GraphicalRuntimeCaptureSink(
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct GraphicalGpuTelemetryResource {
     pub telemetry: GraphicalGpuRuntimeTelemetry,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub(crate) struct ProductionGpuBrainAuthorityResource {
+    pub telemetry: crate::GpuBrainAuthorityTelemetry,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Resource)]
+struct ProductionGpuBrainRuntimeResource {
+    runtime: crate::GpuLiveBrainRuntime,
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn tick_production_gpu_brain(
+    mut runtime: ResMut<ProductionGpuBrainRuntimeResource>,
+    mut authority: ResMut<ProductionGpuBrainAuthorityResource>,
+) {
+    match runtime.runtime.tick() {
+        Ok(_) => authority.telemetry = runtime.runtime.authority_telemetry(),
+        Err(error) => {
+            authority.telemetry.authoritative = false;
+            authority.telemetry.unavailable_reason = Some(error.to_string());
+        }
+    }
 }
 
 impl GraphicalRuntimeControlsResource {
@@ -592,7 +621,7 @@ fn graphical_runtime_resources(
             .map(|seconds| seconds.min(S02_MAX_SMOKE_TICKS).max(1)),
         smoke_ticks_done: 0,
     };
-    let gpu = GraphicalGpuRuntimeController::new(launch.gpu_mode);
+    let gpu = GraphicalGpuRuntimeController::new(&launch)?;
     let telemetry = GraphicalGpuTelemetryResource {
         telemetry: gpu.telemetry().clone(),
     };
@@ -788,7 +817,7 @@ pub struct GraphicalTrue25dNeurochemicalFeedbackResource {
     pub display_only: bool,
     pub no_action_authority: bool,
     pub no_weight_authority: bool,
-    pub cpu_shadow_gate_preserved: bool,
+    pub gpu_authority_preserved: bool,
     pub no_active_bulk_readback: bool,
 }
 
@@ -831,7 +860,7 @@ pub struct GraphicalTrue25dEndocrineAssetFeedbackResource {
     pub no_weight_authority: bool,
     pub tensor_action_authority: bool,
     pub tensor_weight_authority: bool,
-    pub cpu_shadow_gate_preserved: bool,
+    pub gpu_authority_preserved: bool,
     pub no_active_bulk_readback: bool,
 }
 
@@ -887,15 +916,15 @@ pub struct GraphicalTrue25dLaunchBaselineSummary {
     pub stylization_shader_embedded: bool,
     pub no_action_authority: bool,
     pub no_weight_authority: bool,
-    pub cpu_fallback_preserved: bool,
-    pub cpu_shadow_parity_preserved: bool,
+    pub headless_path_preserved: bool,
+    pub gpu_authority_preserved: bool,
     pub full_action_authoritative_claim: bool,
 }
 
 impl GraphicalTrue25dLaunchBaselineSummary {
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:v{}:scope={}:elapsed_ms={:.3}:under_50ms={}:window={}:cold_process_measured={}:camera={}:ground={}x{}:repeat={}:sync_noise={}:sync_texture={}:ledger_only={}:no_action_authority={}:no_weight_authority={}:cpu_shadow={}:full_auth={}",
+            "{}:v{}:scope={}:elapsed_ms={:.3}:under_50ms={}:window={}:cold_process_measured={}:camera={}:ground={}x{}:repeat={}:sync_noise={}:sync_texture={}:ledger_only={}:no_action_authority={}:no_weight_authority={}:gpu_authority={}:full_auth={}",
             self.schema,
             self.schema_version,
             self.scope,
@@ -912,7 +941,7 @@ impl GraphicalTrue25dLaunchBaselineSummary {
             self.procedural_chunk_data_ledger_only,
             self.no_action_authority,
             self.no_weight_authority,
-            self.cpu_shadow_parity_preserved,
+            self.gpu_authority_preserved,
             self.full_action_authoritative_claim,
         )
     }
@@ -937,8 +966,8 @@ impl GraphicalTrue25dLaunchBaselineSummary {
             && self.stylization_shader_embedded
             && self.no_action_authority
             && self.no_weight_authority
-            && self.cpu_fallback_preserved
-            && self.cpu_shadow_parity_preserved
+            && self.headless_path_preserved
+            && self.gpu_authority_preserved
             && !self.full_action_authoritative_claim
     }
 }
@@ -3513,8 +3542,7 @@ fn true_25d_endocrine_asset_feedback_from_snapshot(
         no_weight_authority: true,
         tensor_action_authority: false,
         tensor_weight_authority: false,
-        cpu_shadow_gate_preserved: gpu.no_active_bulk_readback
-            && !gpu.full_action_authoritative_claim,
+        gpu_authority_preserved: gpu.authoritative && gpu.no_active_bulk_readback,
         no_active_bulk_readback: gpu.no_active_bulk_readback,
     }
 }
@@ -3594,8 +3622,7 @@ fn true_25d_neurochemical_feedback_from_snapshot(
         display_only: true,
         no_action_authority: true,
         no_weight_authority: true,
-        cpu_shadow_gate_preserved: gpu.no_active_bulk_readback
-            && !gpu.full_action_authoritative_claim,
+        gpu_authority_preserved: gpu.authoritative && gpu.no_active_bulk_readback,
         no_active_bulk_readback: gpu.no_active_bulk_readback,
     }
 }
@@ -3635,10 +3662,10 @@ fn true_25d_neurochemical_stress(visual: &CreatureVisualSnapshot) -> f32 {
 }
 
 fn true_25d_learning_cue_intensity(gpu: &GraphicalGpuRuntimeTelemetry) -> f32 {
-    if gpu.h_shadow_applications == 0 {
+    if gpu.learning_updates == 0 {
         0.0
     } else {
-        (0.35 + gpu.last_h_shadow_delta.abs() * 18.0).clamp(0.35, 1.0)
+        (0.35_f32 + gpu.last_learning_delta.abs() * 18.0).clamp(0.35, 1.0)
     }
 }
 
@@ -4277,7 +4304,7 @@ pub fn build_graphical_playground_preview_app_shell(
     let local_entity =
         inspector_local_entity(&mut app, &presentation, inspector.selection.stable_id)?;
     if summary.view_mode == GraphicalPlaygroundViewMode::Player {
-        let gpu = GraphicalGpuRuntimeTelemetry::cpu_reference(launch.gpu_mode, 0);
+        let gpu = GraphicalGpuRuntimeTelemetry::pending("N2048");
         spawn_true_25d_neurochemical_visual_feedback(&mut app, &inspector, &gpu);
     }
     app.insert_resource(SelectionResource {
@@ -4507,8 +4534,8 @@ pub fn run_true25d_launch_baseline_smoke(
             && stylization.depth_sobel_outline,
         no_action_authority: presentation.no_action_authority,
         no_weight_authority: true,
-        cpu_fallback_preserved: true,
-        cpu_shadow_parity_preserved: true,
+        headless_path_preserved: true,
+        gpu_authority_preserved: true,
         full_action_authoritative_claim: false,
     };
     Ok(summary)
@@ -4736,7 +4763,7 @@ pub fn run_graphical_playground_window_with_controls(
         .ok_or(GameAppShellError::VisibleWorldMismatch {
             message: "graphical runtime exited before telemetry could be captured",
         })?;
-    if launch.require_gpu && gpu.fallback_reason.is_some() {
+    if launch.require_gpu && !gpu.authoritative {
         return Err(GameAppShellError::InvalidGraphicalLaunch {
             message: "RequireGpu requested a real GPU path, but graphical runtime fell back to CPU",
         });
@@ -4796,6 +4823,28 @@ pub fn build_production_voxel_frontend_app_shell(
         .insert_resource(ProductionVoxelFrontendResource {
             summary: summary.clone(),
         });
+    let initial_authority = crate::GpuBrainAuthorityTelemetry::pending(
+        summary
+            .gpu_runtime_state
+            .class_bucket_allocations
+            .first()
+            .and_then(|allocation| allocation.brain_class.neuron_count())
+            .map_or_else(|| "unknown".to_string(), |count| format!("N{count}")),
+    );
+    app.insert_resource(ProductionGpuBrainAuthorityResource {
+        telemetry: initial_authority,
+    });
+    #[cfg(feature = "gpu-runtime")]
+    {
+        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required().map_err(|error| {
+            GameAppShellError::NeuralBackendUnavailable {
+                message: error.to_string(),
+            }
+        })?;
+        let runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &launch.app_launch)?;
+        app.insert_resource(ProductionGpuBrainRuntimeResource { runtime })
+            .add_systems(Update, tick_production_gpu_brain);
+    }
     crate::spawn_fvr03_production_voxel_scene(&mut app, &summary)?;
     if let Some(seconds) = launch.smoke_seconds {
         app.insert_resource(GraphicalPlaygroundSmokeTimer {
@@ -9730,7 +9779,15 @@ fn apply_graphical_runtime_command(
         }
         RuntimeControlCommand::RestartAlphaFixture => {
             live_loop.live = LiveBrainLoop::from_p34_launch(&live_loop.launch)?;
-            live_loop.gpu = GraphicalGpuRuntimeController::new(live_loop.gpu.mode());
+            live_loop.gpu = GraphicalGpuRuntimeController::new(&GraphicalPlaygroundLaunchConfig {
+                app_launch: live_loop.launch.clone(),
+                mode: GraphicalPlaygroundMode::Interactive,
+                brain_policy: live_loop.launch.brain_policy,
+                gpu_mode: live_loop.gpu.mode(),
+                view_mode: GraphicalPlaygroundViewMode::Player,
+                window_title: crate::S01_GRAPHICAL_WINDOW_TITLE.to_string(),
+                require_gpu: live_loop.launch.brain_policy.requires_gpu(),
+            })?;
             panel.reset_to_alpha_fixture(&live_loop.live);
             panel.validate()?;
             Ok(Vec::new())
@@ -9750,7 +9807,15 @@ fn reset_graphical_runtime(
     gpu_telemetry: &mut GraphicalGpuTelemetryResource,
 ) -> Result<(), GameAppShellError> {
     live_loop.live = LiveBrainLoop::from_p34_launch(&live_loop.launch)?;
-    live_loop.gpu = GraphicalGpuRuntimeController::new(live_loop.gpu.mode());
+    live_loop.gpu = GraphicalGpuRuntimeController::new(&GraphicalPlaygroundLaunchConfig {
+        app_launch: live_loop.launch.clone(),
+        mode: GraphicalPlaygroundMode::Interactive,
+        brain_policy: live_loop.launch.brain_policy,
+        gpu_mode: live_loop.gpu.mode(),
+        view_mode: GraphicalPlaygroundViewMode::Player,
+        window_title: crate::S01_GRAPHICAL_WINDOW_TITLE.to_string(),
+        require_gpu: live_loop.launch.brain_policy.requires_gpu(),
+    })?;
     runtime.panel.reset_to_alpha_fixture(&live_loop.live);
     runtime.smoke_ticks_done = 0;
     gpu_telemetry.telemetry = live_loop.gpu.telemetry().clone();
@@ -10042,11 +10107,11 @@ fn update_graphical_gpu_visual_cues(
         Option<&GraphicalAlphaArtBackedSprite>,
     )>,
 ) {
-    let agent_color = if gpu.telemetry.fallback_reason.is_some() {
+    let agent_color = if !gpu.telemetry.authoritative {
         Color::srgb(0.78, 0.78, 0.72)
-    } else if gpu.telemetry.h_shadow_applications > 0 {
+    } else if gpu.telemetry.learning_updates > 0 {
         Color::srgb(0.42, 1.0, 0.72)
-    } else if gpu.telemetry.gpu_scores_used_for_proposals && gpu.telemetry.cpu_shadow_parity {
+    } else if gpu.telemetry.authoritative {
         Color::srgb(0.35, 0.86, 1.0)
     } else {
         Color::srgb(1.0, 0.88, 0.35)
@@ -10061,7 +10126,7 @@ fn update_graphical_gpu_visual_cues(
                     if let Some(handles) = alpha_art.as_deref() {
                         sprite.image = ca44a_creature_art_handle_for_pose(handles, pose);
                     }
-                    sprite.color = if gpu.telemetry.fallback_reason.is_some() {
+                    sprite.color = if !gpu.telemetry.authoritative {
                         Color::srgba(0.72, 0.72, 0.68, 1.0)
                     } else {
                         Color::WHITE
@@ -10133,7 +10198,7 @@ fn ca38_pose_from_runtime(
             CreatureAnimationState::Signaling
         }
         Some(ActionKind::Idle) | None => {
-            if gpu.fallback_reason.is_some() {
+            if !gpu.authoritative {
                 CreatureAnimationState::Resting
             } else {
                 CreatureAnimationState::Idle
@@ -10146,9 +10211,9 @@ fn ca38_pose_from_runtime(
         CreatureExpressionState::Afraid
     } else if panel.target_entity == Some(2) {
         CreatureExpressionState::Hungry
-    } else if gpu.fallback_reason.is_some() {
+    } else if !gpu.authoritative {
         CreatureExpressionState::Tired
-    } else if gpu.h_shadow_applications > 0 {
+    } else if gpu.learning_updates > 0 {
         CreatureExpressionState::Energized
     } else {
         CreatureExpressionState::Neutral
@@ -10164,11 +10229,7 @@ fn ca38_graphical_creature_scale(
     pose: crate::Ca38CreaturePose,
     gpu: &GraphicalGpuRuntimeTelemetry,
 ) -> f32 {
-    let learning = if gpu.h_shadow_applications > 0 {
-        1.045
-    } else {
-        1.0
-    };
+    let learning = if gpu.learning_updates > 0 { 1.045 } else { 1.0 };
     1.0 + pose.pulse * 0.020 * learning
 }
 
@@ -10320,7 +10381,7 @@ fn ca08_pulse_active(
         }
         Ca08SensoryCueKind::Pain => runtime.target_entity == Some(3),
         Ca08SensoryCueKind::Sleep => matches!(runtime.selected_action_kind, Some(ActionKind::Rest)),
-        Ca08SensoryCueKind::Learning => gpu.h_shadow_applications > 0,
+        Ca08SensoryCueKind::Learning => gpu.learning_updates > 0,
     }
 }
 
@@ -10471,7 +10532,7 @@ fn update_graphical_feedback_overlay(
         .unwrap_or_else(|_| {
             format!(
                 "Drive Audio/VFX\nCues unavailable; H_shadow apps={}\nBoundary: display-only",
-                gpu.telemetry.h_shadow_applications
+                gpu.telemetry.learning_updates
             )
         });
         text.0 = format!("{}\n{}", runtime.panel.event_feed_panel_text(), cue_panel);
@@ -10538,7 +10599,10 @@ pub fn graphical_inspector_overlay_text(
     let tech = ca07_compact_technical_summary(&gpu.telemetry);
     let pose = crate::ca38_animation_label_line(&snapshot.visual);
     let fallback = compact_overlay_line(
-        gpu.telemetry.fallback_reason.as_deref().unwrap_or("none"),
+        gpu.telemetry
+            .unavailable_reason
+            .as_deref()
+            .unwrap_or("none"),
         22,
     );
     format!(
@@ -10591,7 +10655,7 @@ pub fn graphical_player_status_overlay_text(
         panel.run_speed_ticks,
         panel.mind_tick,
         ca42a_gpu_status_chip(gpu),
-        gpu.h_shadow_applications,
+        gpu.learning_updates,
     )
 }
 
@@ -10609,10 +10673,10 @@ pub fn graphical_full_debug_status_overlay_text(
     let world = panel
         .world_tick
         .map_or_else(|| "pending".to_string(), |tick| tick.to_string());
-    let fallback = if let Some(reason) = gpu.fallback_reason.as_deref() {
-        format!("CPU fallback: {reason}")
+    let availability = if let Some(reason) = gpu.unavailable_reason.as_deref() {
+        format!("GPU unavailable: {reason}")
     } else {
-        "fallback: none".to_string()
+        "GPU authority: available".to_string()
     };
     let pose = ca38_pose_from_runtime(panel, gpu);
     let status = panel.terminal_recovery_cause.as_ref().map_or_else(
@@ -10637,7 +10701,7 @@ pub fn graphical_full_debug_status_overlay_text(
         panel.mind_tick,
         world,
         gpu.selected_backend,
-        fallback,
+        availability,
         goal,
         action,
         target,
@@ -10645,8 +10709,8 @@ pub fn graphical_full_debug_status_overlay_text(
         pose.pose_id,
         panel.last_patch_sealed,
         panel.sealed_patch_count,
-        gpu.h_shadow_applications,
-        gpu.last_h_shadow_delta,
+        gpu.learning_updates,
+        gpu.last_learning_delta,
     )
 }
 
@@ -10690,8 +10754,8 @@ pub fn graphical_player_inspector_overlay_text(
 }
 
 fn ca42a_gpu_status_chip(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
-    if let Some(reason) = gpu.fallback_reason.as_deref() {
-        format!("CPU fallback ({})", compact_overlay_line(reason, 18))
+    if let Some(reason) = gpu.unavailable_reason.as_deref() {
+        format!("unavailable ({})", compact_overlay_line(reason, 18))
     } else if gpu.selected_backend == "PendingFirstTick" {
         "arming".to_string()
     } else if gpu.selected_backend.to_ascii_lowercase().contains("gpu") {
@@ -10715,7 +10779,7 @@ fn ca42a_collapsed_event_chip_text(
         .unwrap_or_else(|| "waiting for first tick".to_string());
     format!(
         "Events: tick {} | {} | H_shadow {}",
-        panel.mind_tick, last_event, gpu.h_shadow_applications
+        panel.mind_tick, last_event, gpu.learning_updates
     )
 }
 
@@ -10784,7 +10848,7 @@ fn ca07_awake_sleep_status(snapshot: &CreatureInspectorSnapshot) -> &'static str
 fn ca07_learning_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
     format!(
         "H_shadow={} last={:.4}",
-        gpu.h_shadow_applications, gpu.last_h_shadow_delta
+        gpu.learning_updates, gpu.last_learning_delta
     )
 }
 
@@ -10853,8 +10917,13 @@ pub fn alpha_controls_help_text() -> &'static str {
 
 pub fn ca05_boundary_footer_text(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
     format!(
-        "Boundary: CPU shadow gate | Claim: {} | no full action-authoritative | no bulk readback={}",
-        gpu.product_runtime_claim, gpu.no_active_bulk_readback
+        "GPU neural: {} | failure policy: stop learned actions | no bulk readback={}",
+        if gpu.authoritative {
+            "authoritative"
+        } else {
+            "unavailable"
+        },
+        gpu.no_active_bulk_readback
     )
 }
 
@@ -10864,14 +10933,12 @@ pub fn feedback_cue_overlay_text(
 ) -> String {
     let snapshot = &inspector.snapshot;
     let evidence = crate::Ca39RuntimeCueEvidence {
-        selected_backend: "CpuReference".to_string(),
-        fallback_reason: None,
-        product_runtime_claim: "None".to_string(),
+        selected_backend: "GpuAuthoritative".to_string(),
+        unavailable_reason: None,
+        authoritative: true,
         sealed_patches: feedback.sealed_outcome_event_count,
-        h_shadow_applications: 0,
-        cpu_shadow_gate_preserved: true,
+        learning_updates: 0,
         no_active_bulk_readback: true,
-        full_action_authoritative_claim: false,
     };
     let drive_panel = crate::ca39_drive_audio_vfx_panel_text(feedback, &evidence)
         .unwrap_or_else(|_| "Drive Audio/VFX unavailable".to_string());
@@ -10885,10 +10952,7 @@ pub fn feedback_cue_overlay_text(
             "Creature: {}/{} curiosity={:.2}\n",
             "Boundary: cues cannot act or mutate weights"
         ),
-        ca08_sensory_cue_panel_text(
-            feedback,
-            &GraphicalGpuRuntimeTelemetry::cpu_reference(GraphicalGpuRuntimeMode::CpuReference, 0),
-        ),
+        ca08_sensory_cue_panel_text(feedback, &GraphicalGpuRuntimeTelemetry::pending("N2048"),),
         drive_panel,
         feedback.event_labels().join(">"),
         feedback
@@ -10947,7 +11011,7 @@ pub fn ca08_sensory_feedback_cues(
         Ca08SensoryCueRow {
             kind: Ca08SensoryCueKind::Learning,
             target: Some(WorldEntityId(1)),
-            active: gpu.h_shadow_applications > 0,
+            active: gpu.learning_updates > 0,
         },
     ]
 }
@@ -10991,8 +11055,8 @@ pub fn alpha_playtest_status_note_text(summary: &AdvancedGameplayUxSummary) -> S
     format!(
         concat!(
             "Alpha Playtest Focus\n",
-            "GPU-first creature loop visible; advanced systems optional={}. CPU fallback is degraded safety mode.\n",
-            "Record: window, controls, inspector, fallback warning, confusing text."
+            "GPU-authoritative creature loop visible; advanced systems optional={}. Unavailability stops learned actions.\n",
+            "Record: window, controls, inspector, unavailable warning, confusing text."
         ),
         summary.optional_modes,
     )

@@ -6,7 +6,6 @@ pub mod buffers;
 pub mod closed_loop_buffers;
 pub mod closed_loop_pipeline;
 pub mod closed_loop_runtime;
-pub mod full_runtime;
 pub mod plasticity;
 pub mod recompaction;
 pub mod routing_masks;
@@ -28,14 +27,6 @@ pub use buffers::{
 pub use closed_loop_buffers::*;
 pub use closed_loop_pipeline::*;
 pub use closed_loop_runtime::*;
-pub use full_runtime::{
-    full_gpu_runtime_live_plasticity_schema, post_seal_delta_batch_from_plasticity_report,
-    run_full_gpu_runtime_post_seal_plasticity_diagnostic, run_full_gpu_runtime_static_tick,
-    FullGpuRuntimeBackendReport, FullGpuRuntimeMode, FullGpuRuntimePlasticityReport,
-    FullGpuRuntimeProductClaim, FullGpuRuntimeReadbackReport, FullGpuRuntimeRoutingReport,
-    FullGpuRuntimeSession, FullGpuRuntimeStaticTickInput, FullGpuRuntimeStaticTickReport,
-    FullGpuRuntimeTimingReport, FULL_GPU_RUNTIME_SCHEMA_VERSION,
-};
 pub use plasticity::{
     run_plasticity_gpu_diagnostic, run_plasticity_gpu_diagnostic_timed, GpuOjaFixedPointConfig,
     GpuPlasticityDiagnostics, GpuPlasticityDispatch, GpuPlasticityPlan, GpuPlasticityResult,
@@ -59,11 +50,10 @@ pub use runtime::{
     probe_local_wgpu_runtime, probe_local_wgpu_runtime_for_graphics_backend,
     probe_local_wgpu_runtime_with_backends, required_storage_buffers, GpuPerformanceTargetStatus,
     GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuRuntimeBackendStatus, GpuRuntimeBoundary,
-    GpuRuntimeCapabilityManifest, GpuRuntimeDiagnosticExport, GpuRuntimeFallbackReason,
-    GpuRuntimeHardwareProbe, GpuRuntimeReadbackGuard, GpuRuntimeThrottleDecision,
-    GpuRuntimeThrottlingPolicy, GpuRuntimeTimingBudget, GpuRuntimeTimingSample, GpuThrottleLevel,
-    GpuThrottleReason, GpuTierMeasurement, GpuTierPerformanceReport, GpuTierPopulation,
-    P29_RUNTIME_SCHEMA_VERSION,
+    GpuRuntimeCapabilityManifest, GpuRuntimeDiagnosticExport, GpuRuntimeHardwareProbe,
+    GpuRuntimeReadbackGuard, GpuRuntimeThrottleDecision, GpuRuntimeThrottlingPolicy,
+    GpuRuntimeTimingBudget, GpuRuntimeTimingSample, GpuThrottleLevel, GpuThrottleReason,
+    GpuTierMeasurement, GpuTierPerformanceReport, GpuTierPopulation, P29_RUNTIME_SCHEMA_VERSION,
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
 pub use static_forward::{

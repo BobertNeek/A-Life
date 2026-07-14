@@ -16,8 +16,9 @@ use alife_world::{
 };
 
 use crate::{
-    AppShellLaunchConfig, GameAppShellError, LiveBrainCausalStage, LiveBrainTickSummary,
-    G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+    AppShellLaunchConfig, GameAppShellError, GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode,
+    GraphicalPlaygroundLaunchConfig, LiveBrainCausalStage, LiveBrainLoop, LiveBrainTickSummary,
+    MotorRingPresentation, G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
 
 #[derive(Debug, Clone)]
@@ -196,6 +197,27 @@ impl GpuLiveBrainRuntime {
         &self.sealed_patches
     }
 
+    pub fn authority_telemetry(&self) -> GpuBrainAuthorityTelemetry {
+        let mut telemetry = GpuBrainAuthorityTelemetry::pending(
+            self.brain_class
+                .neuron_count()
+                .map_or_else(|| "unknown".to_string(), |count| format!("N{count}")),
+        );
+        telemetry.authoritative = true;
+        telemetry.adapter = self.backend.hardware_receipt().adapter_name.clone();
+        telemetry.compact_readback_bytes = self.handles.len().saturating_mul(48);
+        telemetry.sealed_patches = self.sealed_patches.len();
+        telemetry.active_ticks = u32::try_from(self.sealed_patches.len()).unwrap_or(u32::MAX);
+        if let Some(patch) = self.sealed_patches.last() {
+            if let Ok(evidence) = patch.decision().neural_evidence() {
+                telemetry.selected_candidate = Some(evidence.candidate_index);
+                telemetry.selected_logit = Some(evidence.logit);
+                telemetry.phenotype_hash_prefix = format!("{:08x}", evidence.phenotype_hash.0[0]);
+            }
+        }
+        telemetry
+    }
+
     fn compile_birth(
         &self,
         organism_id: OrganismId,
@@ -355,6 +377,84 @@ impl GpuLiveBrainRuntime {
         frame: PerceptionFrame,
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         self.backend.tick_batch(&[(handle, frame)])
+    }
+}
+
+pub struct GraphicalGpuRuntimeController {
+    mode: GraphicalBrainPolicyMode,
+    neural: Option<GpuLiveBrainRuntime>,
+    telemetry: GpuBrainAuthorityTelemetry,
+}
+
+impl GraphicalGpuRuntimeController {
+    pub fn new(launch: &GraphicalPlaygroundLaunchConfig) -> Result<Self, GameAppShellError> {
+        let mode = if launch.brain_policy == alife_core::PolicyBackend::NeuralClosedLoopGpu {
+            GraphicalBrainPolicyMode::GpuRequired
+        } else {
+            GraphicalBrainPolicyMode::HeuristicBaseline
+        };
+        let neural = if mode == GraphicalBrainPolicyMode::GpuRequired {
+            let backend = GpuClosedLoopBackend::new_required().map_err(|error| {
+                GameAppShellError::NeuralBackendUnavailable {
+                    message: error.to_string(),
+                }
+            })?;
+            Some(GpuLiveBrainRuntime::from_p34_launch(
+                backend,
+                &launch.app_launch,
+            )?)
+        } else {
+            None
+        };
+        let telemetry = neural.as_ref().map_or_else(
+            || GpuBrainAuthorityTelemetry::pending("heuristic-baseline"),
+            GpuLiveBrainRuntime::authority_telemetry,
+        );
+        Ok(Self {
+            mode,
+            neural,
+            telemetry,
+        })
+    }
+
+    pub const fn mode(&self) -> GraphicalBrainPolicyMode {
+        self.mode
+    }
+
+    pub const fn telemetry(&self) -> &GpuBrainAuthorityTelemetry {
+        &self.telemetry
+    }
+
+    pub fn tick_with_motor_ring(
+        &mut self,
+        live: &mut LiveBrainLoop,
+    ) -> Result<(LiveBrainTickSummary, MotorRingPresentation), GameAppShellError> {
+        let summary = match &mut self.neural {
+            Some(runtime) => {
+                let summary = runtime.tick()?.into_iter().next().ok_or(
+                    GameAppShellError::VisibleWorldMismatch {
+                        message: "GPU neural policy produced no organism tick",
+                    },
+                )?;
+                self.telemetry = runtime.authority_telemetry();
+                summary
+            }
+            None => live
+                .update(crate::LiveBrainTickControl::step_once())?
+                .into_iter()
+                .next()
+                .ok_or(GameAppShellError::VisibleWorldMismatch {
+                    message: "heuristic baseline produced no organism tick",
+                })?,
+        };
+        let mut motor_ring = MotorRingPresentation::pending();
+        motor_ring.selected_action_id = summary.selected_action_id;
+        motor_ring.selected_label = summary
+            .selected_action_kind
+            .map_or_else(|| "Pending".to_string(), |kind| format!("{kind:?}"));
+        motor_ring.source = "GPU candidate decoder";
+        motor_ring.validate()?;
+        Ok((summary, motor_ring))
     }
 }
 

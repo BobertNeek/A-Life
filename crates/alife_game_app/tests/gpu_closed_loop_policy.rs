@@ -1,3 +1,5 @@
+#![cfg(feature = "gpu-runtime")]
+
 use alife_core::{PolicyBackend, ScaffoldContractError};
 use alife_game_app::{
     run_gpu_closed_loop_smoke_with_factory, AppShellLaunchConfig, BrainPolicyRuntime,

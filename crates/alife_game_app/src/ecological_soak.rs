@@ -186,7 +186,7 @@ pub struct EcologicalSoakSummary {
     pub config_first_tuning: bool,
     pub full_emergent_ecology_claim: bool,
     pub gpu_product_claim: &'static str,
-    pub cpu_shadow_parity_preserved: bool,
+    pub gpu_authority_preserved: bool,
     pub manual_10k_command: String,
     pub graphical_bounded_command: String,
     pub report_markdown: String,
@@ -202,8 +202,8 @@ impl EcologicalSoakSummary {
             || self.findings.len() != CA21_REQUIRED_DETECTOR_COUNT
             || !self.config_first_tuning
             || self.full_emergent_ecology_claim
-            || self.gpu_product_claim != "CpuShadowGuardedStaticPlusLiveHShadow"
-            || !self.cpu_shadow_parity_preserved
+            || self.gpu_product_claim != "GpuAuthoritative"
+            || !self.gpu_authority_preserved
             || !self
                 .manual_10k_command
                 .contains("ca22_manual_10k_ecological_soak")
@@ -283,7 +283,7 @@ pub fn run_ecological_soak_with_config(
     let metrics = ecological_soak_metrics(&config, &balance, &graphical, &tick_soak)?;
     let findings = ecological_soak_findings(&behavior, &metrics);
     let manual_10k_command = "cargo test -p alife_game_app --test app_shell ca22_manual_10k_ecological_soak -- --ignored --nocapture".to_string();
-    let graphical_bounded_command = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 30 -GpuMode auto-with-cpu-fallback -RecordPerformance".to_string();
+    let graphical_bounded_command = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 30 -BrainPolicy gpu-required -RecordPerformance".to_string();
     let mut summary = EcologicalSoakSummary {
         schema: CA22_ECOLOGICAL_SOAK_SCHEMA,
         schema_version: CA22_ECOLOGICAL_SOAK_SCHEMA_VERSION,
@@ -295,8 +295,8 @@ pub fn run_ecological_soak_with_config(
         findings,
         config_first_tuning: true,
         full_emergent_ecology_claim: false,
-        gpu_product_claim: "CpuShadowGuardedStaticPlusLiveHShadow",
-        cpu_shadow_parity_preserved: true,
+        gpu_product_claim: "GpuAuthoritative",
+        gpu_authority_preserved: true,
         manual_10k_command,
         graphical_bounded_command,
         report_markdown: String::new(),
@@ -482,7 +482,7 @@ pub fn ecological_soak_report_markdown(summary: &EcologicalSoakSummary) -> Strin
         "- GPU product claim remains `{}`.\n",
         summary.gpu_product_claim
     ));
-    report.push_str("- CPU shadow parity and CPU fallback remain preserved.\n");
+    report.push_str("- GPU neural authority fails closed without a learned-policy substitute.\n");
     report.push_str(
         "- Full emergent ecology and full action-authoritative GPU runtime are not claimed.\n",
     );

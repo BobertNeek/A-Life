@@ -111,7 +111,7 @@ require_all_text docs/master_spec.md 'WGSL-only production shader authority' \
   'All production shaders are WGSL. Do not create HLSL source files unless explicitly labelled as non-authoritative pseudocode.'
 require_all_text docs/architecture_decisions.md 'ADR-024 presence and explicit supersession clause' \
   '## ADR-024: Closed-Loop Neural Cognition Is GPU-Authoritative' \
-  'This decision supersedes the CPU consolidation authority in ADR-014, the P14 CPU-schema ownership clause in ADR-015, GPU parity gating in ADR-016, CPU fallback in ADR-019 and ADR-021, and the CPU-shadow/parity authority clauses in ADR-023. Their save-safety, sparse-layout, world-authority, and sealed-patch boundaries remain in force where they do not conflict with ADR-024.'
+  'This decision supersedes the CPU consolidation authority in ADR-014, the P14 CPU-schema ownership clause in ADR-015, GPU parity ''gating in ADR-016, CPU fallback in ADR-019 and ADR-021, and the CPU-''shadow/parity authority clauses in ADR-023. Their save-safety, sparse-layout, world-authority, and sealed-patch boundaries remain in force where they do not conflict with ADR-024.'
 
 if (( semantic_failures > 0 )); then
   printf 'TASK_1_SEMANTIC_ASSERTIONS=FAIL (%d/%d failed)\n' "${semantic_failures}" "${semantic_checks}" >&2

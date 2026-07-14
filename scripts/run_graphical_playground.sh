@@ -61,7 +61,7 @@ printf 'FVR08 compatibility alias: scripts/run_graphical_playground.sh now route
 printf 'A-Life production voxel frontend command:\n'
 printf '%q ' "${COMMAND[@]}"
 printf '\n'
-printf 'Manual graphics path: requires local windowing/graphics support. CPU fallback is explicit in production diagnostics.\n'
+printf 'Manual graphics path: requires local windowing/graphics support. Required GPU unavailability stops learned actions.\n'
 
 cd "${ROOT}"
 "${COMMAND[@]}"

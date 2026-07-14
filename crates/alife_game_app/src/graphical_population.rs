@@ -27,7 +27,7 @@ pub struct Ca18GraphicalPopulationSummary {
     pub bounded_performance: bool,
     pub stable_id_selection_only: bool,
     pub no_bevy_entity_ids_in_player_text: bool,
-    pub cpu_shadow_gate_preserved: bool,
+    pub gpu_authority_preserved: bool,
     pub product_runtime_claim: &'static str,
 }
 
@@ -64,7 +64,7 @@ impl Ca18GraphicalPopulationSummary {
         if !self.bounded_performance
             || !self.stable_id_selection_only
             || !self.no_bevy_entity_ids_in_player_text
-            || !self.cpu_shadow_gate_preserved
+            || !self.gpu_authority_preserved
         {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message: "CA18 population invariant flags must remain true",
@@ -150,8 +150,8 @@ pub fn ca18_graphical_population_summary(
         bounded_performance: true,
         stable_id_selection_only: true,
         no_bevy_entity_ids_in_player_text: true,
-        cpu_shadow_gate_preserved: true,
-        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow",
+        gpu_authority_preserved: true,
+        product_runtime_claim: "GpuAuthoritative",
     };
     summary.validate()?;
     Ok(summary)

@@ -27,7 +27,7 @@ cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/test
 ```
 
 This exercises save/load, school verifier, semantic optional-provider handling,
-GPU fallback, and docs-manifest validation without requiring a renderer or GPU
+GPU authority failure handling, and docs-manifest validation without requiring a renderer or GPU
 device. The fake semantic provider is covered by the feature-gated command
 below.
 
@@ -83,7 +83,7 @@ simulated unavailable hardware, verifies CPU fallback, and keeps diagnostic
 readback boundary scoped.
 
 ```bash
-cargo run -p alife_tools --bin p35_playground -- gpu-fallback
+cargo run -p alife_tools --bin p35_playground -- gpu-authority
 ```
 
 ### GPU hardware diagnostics

@@ -271,11 +271,11 @@ fn s01_graphical_playground_launch_plan_validates_without_graphics() {
     assert_eq!(summary.selected_backend, PolicyBackend::NeuralClosedLoopGpu);
     assert_eq!(
         summary.requested_gpu_mode,
-        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded
+        GraphicalBrainPolicyMode::GpuRequired
     );
     assert!(!summary.require_gpu);
     assert!(summary.gpu_mode_visible);
-    assert!(summary.cpu_fallback_visible);
+    assert!(summary.gpu_unavailability_visible);
     assert_eq!(summary.view_mode, GraphicalPlaygroundViewMode::Player);
     assert!(!summary.stable_id_overlay_visible);
     assert!(summary.player_view_acceptance.dev_overlay_hidden);
@@ -317,7 +317,7 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
 
     assert!(script.contains("[switch]$DryRun"));
     assert!(script.contains("[int]$SmokeSeconds"));
-    assert!(script.contains("[string]$GpuMode"));
+    assert!(script.contains("[string]$BrainPolicy"));
     assert!(script.contains("[string]$Scenario"));
     assert!(script.contains("[string]$EnvironmentManifest"));
     assert!(script.contains("[string]$GraphicsBackend"));
@@ -330,7 +330,8 @@ fn s01_graphical_launcher_script_uses_persistent_window_commands() {
     assert!(production.contains("MinSpecComfort1080p"));
     assert!(production.contains("MinimumSettings30x30"));
     assert!(production.contains("bevy-app gpu-runtime voxel-backend"));
-    assert!(production.contains("--gpu-mode"));
+    assert!(production.contains("--brain-policy"));
+    assert!(production.contains("[switch]$DeveloperOverlay"));
     assert!(production.contains("--smoke-seconds"));
     assert!(production.contains("Format-CommandArgument"));
     assert!(production.contains("-DryRun"));

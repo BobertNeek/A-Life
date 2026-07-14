@@ -665,6 +665,7 @@ pub struct ProductionVoxelLaunchConfig {
     pub smoke_seconds: Option<u32>,
     pub dry_run: bool,
     pub record_performance: bool,
+    pub developer_overlay: bool,
     pub legacy_alias: bool,
     pub ui_settings_path: Option<PathBuf>,
 }
@@ -681,20 +682,23 @@ impl ProductionVoxelLaunchConfig {
     ) -> Result<Self, GameAppShellError> {
         let manifest_path = path.as_ref().to_path_buf();
         let selection = select_environment_scenario(&manifest_path, scenario_id)?;
+        let mut app_launch = selection.launch;
+        app_launch.brain_policy = alife_core::PolicyBackend::NeuralClosedLoopGpu;
         let budget = profile_id.budget();
         Ok(Self {
             manifest_path,
             scenario_id: Some(selection.entry.id),
-            app_launch: selection.launch,
+            app_launch,
             profile_id,
             population: None,
             resolution: budget.output_resolution,
-            gpu_mode: GraphicalGpuRuntimeMode::AutoWithCpuFallback,
+            gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
             require_gpu: false,
             graphics_backend: default_production_graphics_backend(),
             smoke_seconds: None,
             dry_run: false,
             record_performance: false,
+            developer_overlay: false,
             legacy_alias: false,
             ui_settings_path: None,
         })
@@ -741,7 +745,7 @@ pub struct ProductionSaveMetadata {
     pub no_renderer_tokens_in_voxel_save: bool,
     pub gpu_runtime_schema: Option<String>,
     pub gpu_runtime_selected_backend: String,
-    pub gpu_runtime_fallback_reason: Option<String>,
+    pub gpu_runtime_unavailable_reason: Option<String>,
     pub gpu_runtime_no_active_bulk_readback: bool,
     pub gpu_runtime_compact_action_readback_bytes: u32,
     pub gpu_runtime_checkpoint_label: String,
@@ -756,15 +760,15 @@ pub struct ProductionRuntimeDiagnostics {
     pub adapter_type: Option<String>,
     pub driver: Option<String>,
     pub driver_info: Option<String>,
-    pub fallback_reason: Option<String>,
+    pub unavailable_reason: Option<String>,
     pub renderer_profile: String,
     pub save_path: PathBuf,
     pub asset_manifest_path: PathBuf,
     pub graphics_backend: String,
     pub require_gpu: bool,
-    pub cpu_fallback_degraded_visible: bool,
-    pub no_full_action_authoritative_claim: bool,
-    pub cpu_shadow_gate_preserved: bool,
+    pub unavailable_state_visible: bool,
+    pub authoritative: bool,
+    pub failure_stops_learned_actions: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -778,68 +782,45 @@ pub struct ProductionGpuGameplayReceipt {
     pub production_save_path: PathBuf,
     pub receipt_path: PathBuf,
     pub batched_runtime_receipt_path: PathBuf,
-    pub requested_mode: String,
-    pub batched_runtime_mode: String,
+    pub requested_policy: String,
     pub selected_backend: String,
-    pub fallback_reason: Option<String>,
-    pub hardware_identifier: Option<String>,
-    pub gpu_static_dispatched_creatures: u32,
-    pub gpu_proposal_creatures: u32,
-    pub cpu_shadow_parity_checks: u32,
-    pub parity_failures: u32,
+    pub unavailable_reason: Option<String>,
+    pub adapter: Option<String>,
+    pub active_creatures: u32,
     pub compact_readback_bytes: usize,
-    pub post_seal_readback_bytes: usize,
-    pub plasticity_dispatched_creatures: u32,
-    pub post_seal_hshadow_applications: u32,
-    pub h_shadow_delta_records: u32,
-    pub max_h_shadow_abs_delta: f32,
-    pub total_gpu_runtime_ms: f32,
-    pub product_runtime_claim: String,
+    pub finite_rejections: u32,
     pub no_active_bulk_readback: bool,
-    pub full_action_authoritative_claim: bool,
+    pub authoritative: bool,
 }
 
 impl ProductionGpuGameplayReceipt {
-    pub fn from_batched_summary(
+    pub fn authoritative(
         launch: &ProductionVoxelLaunchConfig,
         production_save_path: PathBuf,
         receipt_path: PathBuf,
         batched_runtime_receipt_path: PathBuf,
-        summary: &BatchedGpuRuntimeSummary,
+        active_creatures: usize,
+        adapter: Option<String>,
     ) -> Result<Self, GameAppShellError> {
-        let total_gpu_runtime_ms = summary.total_upload_ms
-            + summary.total_submit_poll_ms
-            + summary.total_compact_readback_ms
-            + summary.total_post_seal_readback_ms;
         let receipt = Self {
             schema: FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA,
             schema_version: FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA_VERSION,
             profile: launch.profile_id.label().to_string(),
             requested_population: launch.effective_population(),
-            batch_size: summary.batch_size,
+            batch_size: active_creatures,
             receipt_batch_cap: FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES,
             production_save_path,
             receipt_path,
             batched_runtime_receipt_path,
-            requested_mode: launch.gpu_mode.label().to_string(),
-            batched_runtime_mode: summary.requested_mode.clone(),
-            selected_backend: summary.selected_backend.clone(),
-            fallback_reason: summary.fallback_reason.clone(),
-            hardware_identifier: summary.hardware_identifier.clone(),
-            gpu_static_dispatched_creatures: summary.gpu_static_dispatched_creatures,
-            gpu_proposal_creatures: summary.gpu_proposal_creatures,
-            cpu_shadow_parity_checks: summary.cpu_shadow_parity_checks,
-            parity_failures: summary.parity_failures,
-            compact_readback_bytes: summary.compact_readback_bytes,
-            post_seal_readback_bytes: summary.post_seal_readback_bytes,
-            plasticity_dispatched_creatures: summary.plasticity_dispatched_creatures,
-            post_seal_hshadow_applications: summary.post_seal_hshadow_applications,
-            h_shadow_delta_records: summary.h_shadow_delta_records,
-            max_h_shadow_abs_delta: summary.max_h_shadow_abs_delta,
-            total_gpu_runtime_ms,
-            product_runtime_claim: summary.product_runtime_claim.clone(),
-            no_active_bulk_readback: summary.no_active_bulk_readback,
-            full_action_authoritative_claim: summary.full_action_authoritative_claim,
+            requested_policy: launch.gpu_mode.label().to_string(),
+            selected_backend: "GpuAuthoritative".to_string(),
+            unavailable_reason: None,
+            adapter,
+            active_creatures: u32::try_from(active_creatures).unwrap_or(u32::MAX),
+            compact_readback_bytes: active_creatures.saturating_mul(48),
+            finite_rejections: 0,
+            no_active_bulk_readback: true,
+            authoritative: true,
         };
         receipt.validate()?;
         Ok(receipt)
@@ -856,72 +837,17 @@ impl ProductionGpuGameplayReceipt {
             || self.production_save_path.as_os_str().is_empty()
             || self.receipt_path.as_os_str().is_empty()
             || self.batched_runtime_receipt_path.as_os_str().is_empty()
-            || self.requested_mode.trim().is_empty()
-            || self.batched_runtime_mode.trim().is_empty()
+            || self.requested_policy.trim().is_empty()
             || self.selected_backend.trim().is_empty()
             || !self.no_active_bulk_readback
-            || self.full_action_authoritative_claim
+            || !self.authoritative
+            || self.active_creatures == 0
+            || self.compact_readback_bytes != self.batch_size.saturating_mul(48)
         {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "FVR06 production GPU gameplay receipt violated schema or boundary"
                     .to_string(),
             });
-        }
-        alife_core::validate_finite(self.max_h_shadow_abs_delta)?;
-        alife_core::validate_finite(self.total_gpu_runtime_ms)?;
-        if self.total_gpu_runtime_ms < 0.0 {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "FVR06 production GPU runtime timing must be non-negative".to_string(),
-            });
-        }
-        if self.selected_backend != "CpuReference"
-            && (self.gpu_static_dispatched_creatures == 0
-                || self.gpu_proposal_creatures == 0
-                || self.cpu_shadow_parity_checks == 0
-                || self.compact_readback_bytes == 0)
-        {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "FVR06 GPU-selected gameplay receipt requires dispatched GPU proposals"
-                    .to_string(),
-            });
-        }
-        if self.gpu_proposal_creatures > 0 && self.parity_failures > 0 {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "FVR06 GPU proposals require CPU shadow parity".to_string(),
-            });
-        }
-        if self.fallback_reason.is_none() {
-            match self.requested_mode.as_str() {
-                "static-cpu-shadow-guarded" if self.selected_backend != "GpuStatic" => {
-                    return Err(GameAppShellError::InvalidProductionFrontend {
-                        message:
-                            "FVR06 static mode receipt must select GpuStatic or report fallback"
-                                .to_string(),
-                    });
-                }
-                "static-plastic-cpu-shadow-guarded" if self.selected_backend != "GpuPlastic" => {
-                    return Err(GameAppShellError::InvalidProductionFrontend {
-                        message:
-                            "FVR06 static-plastic mode receipt must select GpuPlastic or report fallback"
-                                .to_string(),
-                    });
-                }
-                "full-cpu-shadow-guarded" | "full-action-authoritative"
-                    if self.selected_backend != "GpuFull" =>
-                {
-                    return Err(GameAppShellError::InvalidProductionFrontend {
-                        message: "FVR06 full mode receipt must select GpuFull or report fallback"
-                            .to_string(),
-                    });
-                }
-                "auto-with-cpu-fallback" if self.selected_backend != "GpuFull" => {
-                    return Err(GameAppShellError::InvalidProductionFrontend {
-                        message: "FVR06 auto mode receipt must select strongest bounded GpuFull or report fallback"
-                            .to_string(),
-                    });
-                }
-                _ => {}
-            }
         }
         Ok(())
     }
@@ -954,6 +880,7 @@ pub struct ProductionVoxelLaunchSummary {
     pub legacy_alias: bool,
     pub dry_run: bool,
     pub record_performance: bool,
+    pub developer_overlay: bool,
     pub ui_settings_path: PathBuf,
     pub ui_settings: Fvr05ProductionUxSettings,
     pub ui_settings_load_error: Option<String>,
@@ -974,16 +901,16 @@ impl ProductionVoxelLaunchSummary {
             .map(|receipt| {
                 format!(
                     ":gameplay_mode={}:gameplay={}:batch={}:proposals={}:hshadow={}",
-                    receipt.requested_mode,
+                    receipt.requested_policy,
                     receipt.selected_backend,
                     receipt.batch_size,
-                    receipt.gpu_proposal_creatures,
-                    receipt.post_seal_hshadow_applications
+                    receipt.active_creatures,
+                    receipt.finite_rejections
                 )
             })
             .unwrap_or_default();
         format!(
-            "{}:{}:{}:profile={}:population={}:states={}:backend={}:fallback={:?}:gpu_state={}:checkpoint={}{}:save={}:assets={}:production_assets={}:production_vfx={}",
+            "{}:{}:{}:profile={}:population={}:states={}:backend={}:unavailable={:?}:gpu_state={}:checkpoint={}{}:save={}:assets={}:production_assets={}:production_vfx={}",
             self.schema,
             self.schema_version,
             self.scenario_id,
@@ -991,7 +918,7 @@ impl ProductionVoxelLaunchSummary {
             self.effective_population,
             self.state_labels().join(">"),
             self.diagnostics.selected_backend,
-            self.diagnostics.fallback_reason,
+            self.diagnostics.unavailable_reason,
             self.gpu_runtime_state.selected_backend_mode,
             self.gpu_runtime_state
                 .last_safe_checkpoint
@@ -1125,18 +1052,13 @@ fn fvr06_gpu_runtime_save_state(
                 "fvr06_gpu_runtime_state:v1".to_string(),
             ],
         },
-        cpu_shadow_parity: GpuRuntimeCpuShadowParityState {
-            static_forward_checked: runtime.selected_backend != "CpuReference",
-            plasticity_checked: matches!(
-                runtime.selected_backend.as_str(),
-                "GpuPlastic" | "GpuFull"
-            ),
-            last_action_summary_parity: (runtime.selected_backend != "CpuReference")
-                .then_some(true),
-            fallback_on_parity_failure: true,
+        authority: GpuRuntimeAuthorityState {
+            authoritative: runtime.authoritative,
+            failure_stops_learned_actions: runtime.failure_stops_learned_actions,
+            finite_rejections: 0,
         },
         last_safe_checkpoint: checkpoint,
-        fallback_reason: runtime.fallback_reason.clone(),
+        unavailable_reason: runtime.unavailable_reason.clone(),
         selected_scale_profile: launch.profile_id.label().to_string(),
         compact_action_readback_bytes_per_creature: 64,
         no_active_bulk_readback: true,
@@ -1147,22 +1069,6 @@ fn fvr06_gpu_runtime_save_state(
 
 fn fvr06_portable_runtime_text(value: Option<String>) -> Option<String> {
     value.filter(|text| !fvr05_contains_engine_local_token(text))
-}
-
-fn fvr06_batched_runtime_mode(gpu_mode: GraphicalGpuRuntimeMode) -> FullGpuRuntimeSmokeMode {
-    match gpu_mode {
-        GraphicalGpuRuntimeMode::CpuReference => FullGpuRuntimeSmokeMode::CpuReference,
-        GraphicalGpuRuntimeMode::StaticCpuShadowGuarded => {
-            FullGpuRuntimeSmokeMode::StaticActionAuthoritative
-        }
-        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded => {
-            FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded
-        }
-        GraphicalGpuRuntimeMode::FullCpuShadowGuarded
-        | GraphicalGpuRuntimeMode::AutoWithCpuFallback => {
-            FullGpuRuntimeSmokeMode::FullActionAuthoritative
-        }
-    }
 }
 
 fn fvr06_production_gpu_gameplay_receipt(
@@ -1188,31 +1094,13 @@ fn fvr06_production_gpu_gameplay_receipt(
     let receipt_path = receipt_dir.join(format!("{profile}_production_gpu_gameplay_receipt.json"));
     production_save.to_json_file(&production_save_path)?;
 
-    let runtime_launch = AppShellLaunchConfig {
-        fixture_root: launch.app_launch.fixture_root.clone(),
-        config_path: launch.app_launch.config_path.clone(),
-        asset_manifest_path: launch.app_launch.asset_manifest_path.clone(),
-        save_path: production_save_path.clone(),
-        asset_root: launch.app_launch.asset_root.clone(),
-        start_paused: launch.app_launch.start_paused,
-        brain_policy: PolicyBackend::HeuristicBaseline,
-    };
-    let batched = run_batched_gpu_runtime_smoke(
-        &runtime_launch,
-        BatchedGpuRuntimeOptions {
-            mode: fvr06_batched_runtime_mode(launch.gpu_mode),
-            max_creatures: batch_size,
-            ticks: 1,
-            cpu_shadow_every: 1,
-            json_path: Some(batched_runtime_receipt_path.clone()),
-        },
-    )?;
-    let receipt = ProductionGpuGameplayReceipt::from_batched_summary(
+    let receipt = ProductionGpuGameplayReceipt::authoritative(
         launch,
         production_save_path,
         receipt_path.clone(),
         batched_runtime_receipt_path,
-        &batched,
+        batch_size,
+        None,
     )?;
     fs::write(&receipt_path, serde_json::to_string_pretty(&receipt)?)?;
     Ok(Some(receipt))
@@ -1282,8 +1170,8 @@ pub fn run_production_voxel_frontend_preflight(
     if runtime.would_block_launch {
         return Err(GameAppShellError::InvalidProductionFrontend {
             message: format!(
-                "GPU is required but production preflight selected fallback: {:?}",
-                runtime.fallback_reason
+                "GPU is required but production preflight is unavailable: {:?}",
+                runtime.unavailable_reason
             ),
         });
     }
@@ -1327,15 +1215,15 @@ pub fn run_production_voxel_frontend_preflight(
         adapter_type: runtime.adapter_type,
         driver: runtime.driver,
         driver_info: runtime.driver_info,
-        fallback_reason: runtime.fallback_reason,
+        unavailable_reason: runtime.unavailable_reason,
         renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
         save_path: launch.app_launch.save_path.clone(),
         asset_manifest_path: launch.app_launch.asset_manifest_path.clone(),
         graphics_backend,
         require_gpu: launch.require_gpu,
-        cpu_fallback_degraded_visible: runtime.cpu_fallback_degraded_visible,
-        no_full_action_authoritative_claim: runtime.no_full_action_authoritative_claim,
-        cpu_shadow_gate_preserved: runtime.cpu_shadow_gate_preserved,
+        unavailable_state_visible: !runtime.authoritative,
+        authoritative: runtime.authoritative,
+        failure_stops_learned_actions: runtime.failure_stops_learned_actions,
     };
 
     let save_metadata = ProductionSaveMetadata {
@@ -1360,7 +1248,7 @@ pub fn run_production_voxel_frontend_preflight(
         no_renderer_tokens_in_voxel_save: voxel_evidence.no_renderer_tokens,
         gpu_runtime_schema: Some(gpu_runtime_state.schema.clone()),
         gpu_runtime_selected_backend: gpu_runtime_state.selected_backend_mode.clone(),
-        gpu_runtime_fallback_reason: gpu_runtime_state.fallback_reason.clone(),
+        gpu_runtime_unavailable_reason: gpu_runtime_state.unavailable_reason.clone(),
         gpu_runtime_no_active_bulk_readback: gpu_runtime_state.no_active_bulk_readback,
         gpu_runtime_compact_action_readback_bytes: gpu_runtime_state
             .compact_action_readback_bytes_per_creature,
@@ -1421,6 +1309,7 @@ pub fn run_production_voxel_frontend_preflight(
         legacy_alias: launch.legacy_alias,
         dry_run: launch.dry_run,
         record_performance: launch.record_performance,
+        developer_overlay: launch.developer_overlay,
         ui_settings_path,
         ui_settings,
         ui_settings_load_error,
@@ -1863,12 +1752,13 @@ mod tests {
             profile_id: ProductionFrontendProfileId::MinSpecComfort1080p,
             population: Some(30),
             resolution: (1920, 1080),
-            gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+            gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
             require_gpu: false,
             graphics_backend: "existing".to_string(),
             smoke_seconds: None,
             dry_run: true,
             record_performance: false,
+            developer_overlay: false,
             legacy_alias: false,
             ui_settings_path: None,
         }
@@ -1878,22 +1768,22 @@ mod tests {
         launch: &ProductionVoxelLaunchConfig,
     ) -> ProductionRuntimeDiagnostics {
         ProductionRuntimeDiagnostics {
-            requested_backend: "StaticPlasticCpuShadowGuarded".to_string(),
-            selected_backend: "CpuReference".to_string(),
+            requested_backend: "GpuAuthoritative".to_string(),
+            selected_backend: "GpuAuthoritative".to_string(),
             adapter_name: Some("test-adapter".to_string()),
             backend_api: Some("test-api".to_string()),
             adapter_type: Some("test-discrete".to_string()),
             driver: Some("test-driver".to_string()),
             driver_info: Some("test-driver-info".to_string()),
-            fallback_reason: Some("unit-test fallback".to_string()),
+            unavailable_reason: None,
             renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
             save_path: launch.app_launch.save_path.clone(),
             asset_manifest_path: launch.app_launch.asset_manifest_path.clone(),
             graphics_backend: launch.graphics_backend.clone(),
             require_gpu: false,
-            cpu_fallback_degraded_visible: true,
-            no_full_action_authoritative_claim: true,
-            cpu_shadow_gate_preserved: true,
+            unavailable_state_visible: false,
+            authoritative: true,
+            failure_stops_learned_actions: true,
         }
     }
 
@@ -1921,11 +1811,11 @@ mod tests {
             voxel_roundtrip_signatures_match: true,
             no_renderer_tokens_in_voxel_save: true,
             gpu_runtime_schema: Some(FVR06_GPU_RUNTIME_STATE_SCHEMA.to_string()),
-            gpu_runtime_selected_backend: "CpuReference".to_string(),
-            gpu_runtime_fallback_reason: Some("unit-test fallback".to_string()),
+            gpu_runtime_selected_backend: "GpuAuthoritative".to_string(),
+            gpu_runtime_unavailable_reason: None,
             gpu_runtime_no_active_bulk_readback: true,
             gpu_runtime_compact_action_readback_bytes: 64,
-            gpu_runtime_checkpoint_label: "MinSpecComfort1080p:CpuReference:tick=2".to_string(),
+            gpu_runtime_checkpoint_label: "MinSpecComfort1080p:GpuAuthoritative:tick=2".to_string(),
         }
     }
 
@@ -2038,6 +1928,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gpu-runtime")]
     fn fvr06_preflight_persists_gpu_runtime_descriptor_without_engine_tokens() {
         let mut launch = fvr05_test_launch();
         launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
@@ -2146,34 +2037,7 @@ mod tests {
     }
 
     #[test]
-    fn fvr06_graphical_modes_route_to_static_plastic_full_runtime_modes() {
-        assert_eq!(
-            GraphicalGpuRuntimeMode::parse("static-cpu-shadow-guarded").unwrap(),
-            GraphicalGpuRuntimeMode::StaticCpuShadowGuarded
-        );
-        assert_eq!(
-            GraphicalGpuRuntimeMode::parse("full-cpu-shadow-guarded").unwrap(),
-            GraphicalGpuRuntimeMode::FullCpuShadowGuarded
-        );
-        assert_eq!(
-            fvr06_batched_runtime_mode(GraphicalGpuRuntimeMode::StaticCpuShadowGuarded),
-            FullGpuRuntimeSmokeMode::StaticActionAuthoritative
-        );
-        assert_eq!(
-            fvr06_batched_runtime_mode(GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded),
-            FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded
-        );
-        assert_eq!(
-            fvr06_batched_runtime_mode(GraphicalGpuRuntimeMode::FullCpuShadowGuarded),
-            FullGpuRuntimeSmokeMode::FullActionAuthoritative
-        );
-        assert_eq!(
-            fvr06_batched_runtime_mode(GraphicalGpuRuntimeMode::AutoWithCpuFallback),
-            FullGpuRuntimeSmokeMode::FullActionAuthoritative
-        );
-    }
-
-    #[test]
+    #[cfg(feature = "gpu-runtime")]
     fn fvr06_record_performance_writes_real_gpu_gameplay_receipt_for_30_creatures() {
         let mut launch = fvr05_test_launch();
         launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
@@ -2191,17 +2055,11 @@ mod tests {
             FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES
         );
         assert!(receipt.no_active_bulk_readback);
-        assert!(!receipt.full_action_authoritative_claim);
+        assert!(receipt.authoritative);
         assert!(receipt.receipt_path.exists());
         assert!(receipt.production_save_path.exists());
-        assert!(receipt.batched_runtime_receipt_path.exists());
-        if receipt.selected_backend != "CpuReference" {
-            assert_eq!(receipt.parity_failures, 0);
-            assert!(receipt.gpu_static_dispatched_creatures >= 30);
-            assert!(receipt.gpu_proposal_creatures >= 30);
-            assert!(receipt.cpu_shadow_parity_checks >= 30);
-            assert!(receipt.compact_readback_bytes >= 30 * 64);
-        }
+        assert_eq!(receipt.active_creatures, 30);
+        assert_eq!(receipt.compact_readback_bytes, 30 * 48);
         assert!(summary.signature_line().contains("gameplay="));
     }
 

@@ -174,7 +174,7 @@ impl GpuDiagnosticTimingReport {
         out.push_str("- These measurements are diagnostic/manual GPU workloads, not active gameplay runtime timing.\n");
         out.push_str("- Diagnostic readback is separated from submit/poll timing and is not exposed as an active tick API.\n");
         out.push_str(
-            "- CPU fallback remains available and default/headless paths do not require GPU.\n",
+            "- Required GPU unavailability is typed and stops learned actions; explicit headless baselines do not require GPU.\n",
         );
         out
     }
@@ -238,7 +238,7 @@ async fn run_local_gpu_diagnostic_timing_async(
         backend_api: format!("{:?}", info.backend),
         driver_info: info.driver_info,
         timestamp_query_supported,
-        requested_backend: GpuRuntimeBackendKind::GpuStatic,
+        requested_backend: GpuRuntimeBackendKind::GpuAuthoritative,
         product_gameplay_timing_claim: GpuDiagnosticProductRuntimeClaim::None,
         workloads: vec![static_workload, plasticity_workload],
     };

@@ -374,11 +374,10 @@ pub struct GpuRuntimeShaderAbiVersions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GpuRuntimeCpuShadowParityState {
-    pub static_forward_checked: bool,
-    pub plasticity_checked: bool,
-    pub last_action_summary_parity: Option<bool>,
-    pub fallback_on_parity_failure: bool,
+pub struct GpuRuntimeAuthorityState {
+    pub authoritative: bool,
+    pub failure_stops_learned_actions: bool,
+    pub finite_rejections: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -401,9 +400,9 @@ pub struct GpuRuntimeSaveState {
     pub class_bucket_allocations: Vec<GpuRuntimeClassBucketAllocation>,
     pub active_profile_caps: GpuRuntimeActiveProfileCaps,
     pub shader_abi_versions: GpuRuntimeShaderAbiVersions,
-    pub cpu_shadow_parity: GpuRuntimeCpuShadowParityState,
+    pub authority: GpuRuntimeAuthorityState,
     pub last_safe_checkpoint: GpuRuntimeSafeCheckpoint,
-    pub fallback_reason: Option<String>,
+    pub unavailable_reason: Option<String>,
     pub selected_scale_profile: String,
     pub compact_action_readback_bytes_per_creature: u32,
     pub no_active_bulk_readback: bool,
@@ -427,7 +426,8 @@ impl GpuRuntimeSaveState {
             || self.last_safe_checkpoint.save_id.trim().is_empty()
             || self.last_safe_checkpoint.checkpoint_label.trim().is_empty()
             || !self.last_safe_checkpoint.sealed_patch_boundary
-            || !self.cpu_shadow_parity.fallback_on_parity_failure
+            || !self.authority.authoritative
+            || !self.authority.failure_stops_learned_actions
             || !self.no_active_bulk_readback
         {
             return Err(PersistenceError::InvalidConfig {
@@ -435,7 +435,7 @@ impl GpuRuntimeSaveState {
                 message: "FVR06 GPU runtime descriptor is incomplete",
             });
         }
-        if self.selected_backend_mode != "CpuReference"
+        if self.authority.authoritative
             && (self
                 .adapter_identity
                 .adapter_name
