@@ -2,8 +2,7 @@ use std::time::Duration;
 
 use alife_core::{BrainScaleTier, LobeKind};
 use alife_gpu_backend::{
-    GpuPerformanceTargetStatus, GpuRuntimeBackendConfig, GpuRuntimeBackendKind,
-    GpuRuntimeFallbackReason, GpuTierPopulation,
+    GpuPerformanceTargetStatus, GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuTierPopulation,
 };
 use alife_tools::benchmark::{
     BenchmarkHarness, BenchmarkHarnessConfig, BenchmarkMetricKind, BenchmarkTier,
@@ -142,8 +141,8 @@ fn gpu_runtime_bridge_reuses_p20_smoke_without_fabricating_gpu_results() {
             .with_iteration_count(1),
     )
     .unwrap();
-    let backend = GpuRuntimeBackendConfig::request(GpuRuntimeBackendKind::GpuStatic)
-        .with_hardware_available(false)
+    let backend = GpuRuntimeBackendConfig::request(GpuRuntimeBackendKind::GpuAuthoritative)
+        .with_hardware_available(true)
         .select_backend()
         .unwrap();
     let gpu_report = GpuRuntimeBenchmarkBridge::from_cpu_smoke(
@@ -155,12 +154,9 @@ fn gpu_runtime_bridge_reuses_p20_smoke_without_fabricating_gpu_results() {
 
     assert_eq!(
         gpu_report.backend.selected,
-        GpuRuntimeBackendKind::CpuReference
+        GpuRuntimeBackendKind::GpuAuthoritative
     );
-    assert_eq!(
-        gpu_report.backend.fallback_reason,
-        Some(GpuRuntimeFallbackReason::HardwareUnavailable)
-    );
+    assert!(gpu_report.backend.authoritative);
     assert!(gpu_report.feature_flags.contains(&"p20-smoke".to_string()));
     assert_eq!(
         gpu_report

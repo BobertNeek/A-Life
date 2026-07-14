@@ -2,8 +2,8 @@ param(
     [switch]$DryRun,
     [ValidateRange(0, 120)]
     [int]$SmokeSeconds = 0,
-    [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
-    [string]$GpuMode = "static-plastic-cpu-shadow-guarded",
+    [ValidateSet("gpu-required", "heuristic-baseline")]
+    [string]$BrainPolicy = "gpu-required",
     [ValidateSet("player", "dev-overlay", "full-debug")]
     [string]$ViewMode = "player",
     [ValidateSet("gpu-alpha", "p34", "production-voxel")]
@@ -68,7 +68,7 @@ Write-Host "Requested legacy view mode '$ViewMode' and scenario '$Scenario' are 
 
 $ForwardArgs = @(
     "-Profile", $Profile,
-    "-GpuMode", $GpuMode,
+    "-BrainPolicy", $BrainPolicy,
     "-GraphicsBackend", $GraphicsBackend
 )
 

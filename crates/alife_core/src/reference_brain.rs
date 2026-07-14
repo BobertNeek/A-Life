@@ -1,7 +1,8 @@
-//! v0 runtime scaffold: deterministic pure Rust CPU reference brain tick loop.
+//! Temporary explicit `HeuristicBaseline` comparison runtime in pure Rust.
 //!
-//! This module orchestrates existing core contracts. It does not own world
-//! simulation, adapters, rendering, neural acceleration, or offline tooling.
+//! This separately labelled baseline never shadows, gates, or replaces the
+//! GPU-authoritative production neural policy. It orchestrates existing core
+//! contracts and owns no world simulation, adapters, rendering, or GPU runtime.
 
 use serde::{Deserialize, Serialize};
 
@@ -9,20 +10,22 @@ use crate::LifetimeTraitLedger;
 use crate::{
     cpu_reference_arbitrate, cpu_spmv_projection, finalize_cpu_activations,
     update_oja_shadow_traces, validate_finite_slice, ActionArbitrationConfig,
-    ActionArbitrationTraceRef, ActionBiasSource, ActionCommand, ActionDecisionStatus, ActionKind,
-    ActionProposal, ActionScoreBias, BrainClassSpec, BrainGenome, BrainScaleTier,
-    ChemistryModulation, Confidence, ContractDiagnostic, CpuNeuralState, DecisionSnapshot,
-    DevelopmentState, DurationTicks, ExperiencePacker, ExperiencePatch, ExperiencePatchBuilder,
-    ExperienceSequenceId, HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, Intensity,
-    LobeKind, MemoryBank, MemoryBankConfig, MemoryExpectancy, MemoryExpectancySnapshot, MemoryId,
-    MemoryQuery, NeuralActivationConfig, NeuralDiagnostics, NeuralProjectionSchema,
-    NeuralUpdateReport, NormalizedScalar, OjaUpdateConfig, OrganismId, PackedExperienceRecord,
-    PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PostSealLearningToken,
-    PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, PreActionSnapshot,
-    ScaffoldContractError, SensorySnapshot, SignedValence, SleepConsolidationConfig,
-    SleepConsolidationReport, SleepConsolidator, SleepController, SleepPhase, SleepState,
-    SleepTransition, SleepTrigger, StructuralEditBatch, Tick, TopologicalMap, TopologicalMapConfig,
-    TopologyUpdate, Validate, Vec3f, Velocity, WeightSplitContract,
+    ActionArbitrationTraceRef, ActionBiasSource, ActionCandidate, ActionCommand,
+    ActionDecisionStatus, ActionKind, ActionProposal, ActionScoreBias, BodySnapshot,
+    BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateFeatureVector,
+    CandidateObservationRef, ChemistryModulation, Confidence, ContractDiagnostic, CpuNeuralState,
+    DecisionSnapshot, DevelopmentState, DurationTicks, ExperiencePacker, ExperiencePatch,
+    ExperiencePatchBuilder, ExperienceSequenceId, HomeostaticDelta, HomeostaticParameters,
+    HomeostaticSnapshot, Intensity, LobeKind, MemoryBank, MemoryBankConfig, MemoryExpectancy,
+    MemoryExpectancySnapshot, MemoryId, MemoryQuery, NeuralActivationConfig, NeuralDiagnostics,
+    NeuralProjectionSchema, NeuralUpdateReport, NormalizedScalar, OjaUpdateConfig, OrganismId,
+    PackedExperienceRecord, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, Pose,
+    PostActionOutcome, PostSealLearningToken, PostSealLifetimeDeltaBatch,
+    PostSealLifetimeDeltaReceipt, PreActionSnapshot, ScaffoldContractError, SensorProfile,
+    SensorySnapshot, SignedValence, SleepConsolidationConfig, SleepConsolidationReport,
+    SleepConsolidator, SleepController, SleepPhase, SleepState, SleepTransition, SleepTrigger,
+    StructuralEditBatch, Tick, TopologicalMap, TopologicalMapConfig, TopologyUpdate, Validate,
+    Vec3f, Velocity, WeightSplitContract,
 };
 
 const DEFAULT_MEMORY_CAPACITY: usize = 64;
@@ -558,7 +561,7 @@ impl CreatureMind {
         self.apply_validated_post_seal_hshadow_deltas(token, deltas)
     }
 
-    pub fn apply_validated_post_seal_hshadow_deltas(
+    fn apply_validated_post_seal_hshadow_deltas(
         &mut self,
         token: PostSealLearningToken,
         deltas: PostSealLifetimeDeltaBatch,
@@ -593,6 +596,7 @@ impl CreatureMind {
             originating_tick: token.originating_tick(),
             outcome_tick: token.outcome_tick(),
             sealed_sequence_id: token.sealed_sequence_id(),
+            frame_digest: token.frame_digest(),
             source_kind: deltas.source_kind,
             applied_records: stats.applied_records,
             changed_records: stats.changed_records,
@@ -746,6 +750,9 @@ impl CreatureMind {
                 sequence_id,
                 input.tick,
                 sensory.clone(),
+                &input.proposals,
+                input.action_duration,
+                input.fallback_kind,
                 MemoryExpectancySnapshot::neutral(),
             ),
         )?;
@@ -756,7 +763,15 @@ impl CreatureMind {
         )?;
         let pre_action = fallible(
             &mut diagnostics,
-            self.build_pre_action(sequence_id, input.tick, sensory, memory_snapshot),
+            self.build_pre_action(
+                sequence_id,
+                input.tick,
+                sensory,
+                &input.proposals,
+                input.action_duration,
+                input.fallback_kind,
+                memory_snapshot,
+            ),
         )?;
 
         let biased_proposals = fallible(
@@ -958,11 +973,15 @@ impl CreatureMind {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_pre_action(
         &self,
         sequence_id: ExperienceSequenceId,
         tick: Tick,
         sensory: SensorySnapshot,
+        proposals: &[ActionProposal],
+        action_duration: DurationTicks,
+        fallback_kind: ActionKind,
         memory_expectancy: MemoryExpectancySnapshot,
     ) -> Result<PreActionSnapshot, ScaffoldContractError> {
         let weight_split = WeightSplitContract::for_brain_class(
@@ -971,18 +990,60 @@ impl CreatureMind {
             self.brain_class.max_active_microtiles,
             self.genome.genetic_prior_seed,
         )?;
-        PreActionSnapshot::new(
+        let mut candidates = proposals
+            .iter()
+            .enumerate()
+            .map(|(index, proposal)| {
+                ActionCandidate::new(
+                    u16::try_from(index)
+                        .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+                    proposal.action_id,
+                    proposal.kind,
+                    CandidateActionFamily::baseline_for_kind(proposal.kind),
+                    CandidateObservationRef::None,
+                    proposal.target,
+                    CandidateFeatureVector::zero(),
+                    proposal.confidence,
+                    NormalizedScalar::new(0.0)?,
+                    action_duration,
+                    action_duration,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if candidates.is_empty() {
+            candidates.push(ActionCandidate::new(
+                0,
+                fallback_kind.canonical_id(),
+                fallback_kind,
+                CandidateActionFamily::baseline_for_kind(fallback_kind),
+                CandidateObservationRef::None,
+                crate::ActionTarget::NONE,
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.25)?,
+                NormalizedScalar::new(0.0)?,
+                action_duration,
+                action_duration,
+            )?);
+        }
+        let perception = PerceptionFrame::new(
             self.organism_id,
-            sequence_id,
             tick,
+            SensorProfile::PrivilegedAffordanceV1,
+            sensory,
+            BodySnapshot {
+                pose: self.body.pose,
+                velocity: self.body.velocity,
+            },
+            self.homeostasis,
+            candidates,
+        )?;
+        PreActionSnapshot::from_heuristic_frame(
+            sequence_id,
+            perception,
             self.brain_class.clone(),
             self.genome.clone(),
             self.development_state.clone(),
             weight_split,
-            self.body.pose,
-            self.body.velocity,
-            self.homeostasis,
-            sensory,
             memory_expectancy,
         )
     }

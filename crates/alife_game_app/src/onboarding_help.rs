@@ -165,7 +165,7 @@ pub fn run_onboarding_help_smoke() -> Result<OnboardingHelpSummary, GameAppShell
         docs_path,
         content_authoring_docs_path: root.join("docs/playable_sim_spec/content_authoring.md"),
         optional_systems_remain_optional: docs.contains("optional")
-            && docs.contains("CPU fallback")
+            && docs.contains("typed GPU unavailability")
             && docs.contains("manual"),
         windows_wrappers_documented: docs.contains("scripts/check.ps1")
             && docs.contains("scripts/check_core_boundaries.ps1")
@@ -215,7 +215,7 @@ pub fn troubleshooting_reference() -> Vec<TroubleshootingReference> {
     vec![
         TroubleshootingReference {
             symptom: "GPU unavailable or unvalidated",
-            diagnostic: "The playable sim should select CPU fallback and avoid GPU performance claims",
+            diagnostic: "The playable sim should stop learned actions on typed GPU unavailability and avoid GPU performance claims",
             command: "cargo run -p alife_tools --bin p35_playground -- gpu-fallback",
         },
         TroubleshootingReference {

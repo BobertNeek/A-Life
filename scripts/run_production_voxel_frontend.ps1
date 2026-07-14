@@ -7,11 +7,12 @@ param(
     [ValidateRange(0, 500)]
     [int]$Population = 0,
     [string]$Resolution = "1920x1080",
-    [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
-    [string]$GpuMode = "auto-with-cpu-fallback",
+    [ValidateSet("gpu-required")]
+    [string]$BrainPolicy = "gpu-required",
     [ValidateSet("auto", "dx12", "vulkan", "existing")]
     [string]$GraphicsBackend = "auto",
     [switch]$RequireGpu,
+    [switch]$DeveloperOverlay,
     [switch]$RecordPerformance
 )
 
@@ -34,7 +35,7 @@ $AppArgs = @(
     "production-voxel",
     "--profile", $Profile,
     "--resolution", $Resolution,
-    "--gpu-mode", $GpuMode,
+    "--brain-policy", $BrainPolicy,
     "--graphics-backend", $GraphicsBackend
 )
 
@@ -54,6 +55,10 @@ if ($RequireGpu) {
     $AppArgs += "--require-gpu"
 }
 
+if ($DeveloperOverlay) {
+    $AppArgs += "--developer-overlay"
+}
+
 if ($RecordPerformance) {
     $AppArgs += "--record-performance"
 }
@@ -70,10 +75,10 @@ $CommandPreview = "cargo " + (($CargoArgs | ForEach-Object { Format-CommandArgum
 
 Write-Host "A-Life Voxel Frontend"
 Write-Host "Profile: $Profile"
-Write-Host "Minimum fallback profile: MinimumSettings30x30"
+Write-Host "Minimum profile: MinimumSettings30x30"
 Write-Host "Features: $FeatureList"
 Write-Host "Save directory policy: fixture saves stay under the selected environment; UI/profile settings are written under target/artifacts/fvr05 unless --ui-settings overrides them."
-Write-Host "GPU fallback diagnostics: $GpuMode with explicit production-voxel preflight output."
+Write-Host "Brain policy: $BrainPolicy; GPU failure stops learned actions."
 Write-Host "Command: $CommandPreview"
 
 if ($DryRun) {

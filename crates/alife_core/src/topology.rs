@@ -979,7 +979,7 @@ fn primary_signature(patch: &ExperiencePatch) -> ConceptSignature {
 fn first_heard_word(patch: &ExperiencePatch) -> Option<u32> {
     patch
         .pre_action()
-        .sensory
+        .sensory()
         .context_streams
         .vocal_tokens
         .iter()
@@ -988,7 +988,7 @@ fn first_heard_word(patch: &ExperiencePatch) -> Option<u32> {
         .chain(
             patch
                 .pre_action()
-                .sensory
+                .sensory()
                 .language_context
                 .heard_tokens
                 .iter()
@@ -1023,11 +1023,11 @@ fn bindings_from_patch(
         if let Some(target) = outcome.physical.target_entity {
             push_unique(&mut bindings.objects, target);
         }
-        push_unique(&mut bindings.locations, pre.body_pose.translation);
-        bindings.affordances = pre.sensory.channels.nearby_affordances;
-        bindings.drives = drive_bindings(pre.homeostasis.drives);
+        push_unique(&mut bindings.locations, pre.body().pose.translation);
+        bindings.affordances = pre.sensory().channels.nearby_affordances;
+        bindings.drives = drive_bindings(pre.homeostasis().drives);
 
-        for token in pre.sensory.context_streams.vocal_tokens.iter().flatten() {
+        for token in pre.sensory().context_streams.vocal_tokens.iter().flatten() {
             push_unique(&mut bindings.words, token.token_id);
             if let Some(entity) = token.source_entity {
                 push_unique(&mut bindings.objects, entity);
@@ -1036,7 +1036,7 @@ fn bindings_from_patch(
                 push_unique(&mut bindings.agents, speaker);
             }
         }
-        for token in pre.sensory.language_context.heard_tokens.iter().flatten() {
+        for token in pre.sensory().language_context.heard_tokens.iter().flatten() {
             push_unique(&mut bindings.words, token.token_id);
             if let Some(entity) = token.source_entity {
                 push_unique(&mut bindings.objects, entity);
@@ -1045,21 +1045,21 @@ fn bindings_from_patch(
                 push_unique(&mut bindings.agents, speaker);
             }
         }
-        if let Some(token) = pre.sensory.language_context.vocalized_token {
+        if let Some(token) = pre.sensory().language_context.vocalized_token {
             push_unique(&mut bindings.words, token.token_id);
         }
-        for social in pre.sensory.social_context.nearest_agents.iter().flatten() {
+        for social in pre.sensory().social_context.nearest_agents.iter().flatten() {
             push_unique(&mut bindings.agents, social.agent_id);
             if let Some(entity) = social.body_entity {
                 push_unique(&mut bindings.objects, entity);
             }
         }
-        if let Some(semantic) = &pre.sensory.semantic_context {
+        if let Some(semantic) = &pre.sensory().semantic_context {
             for entry in &semantic.salience {
                 push_unique(&mut bindings.semantic_refs, entry.concept_id);
             }
         }
-        if let Some(gaussian) = &pre.sensory.gaussian_context {
+        if let Some(gaussian) = &pre.sensory().gaussian_context {
             for entry in &gaussian.clusters {
                 push_unique(&mut bindings.cluster_refs, entry.cluster_id);
             }
@@ -1093,16 +1093,16 @@ fn patch_salience(patch: &ExperiencePatch) -> Result<NormalizedScalar, ScaffoldC
     let pre = patch.pre_action();
     let outcome = patch.outcome();
     let drive_salience = pre
-        .homeostasis
+        .homeostasis()
         .drives
         .curiosity
-        .max(pre.homeostasis.drives.fear);
+        .max(pre.homeostasis().drives.fear);
     let sensory_salience = pre
-        .sensory
+        .sensory()
         .channels
         .novelty_signal
         .raw()
-        .max(pre.sensory.channels.pain_signal.raw());
+        .max(pre.sensory().channels.pain_signal.raw());
     let outcome_salience = outcome
         .prediction_error
         .raw()

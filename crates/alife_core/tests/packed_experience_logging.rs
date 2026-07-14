@@ -1,18 +1,20 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionId, ActionKind, ActionProposal,
-    ActionTarget, BrainClassSpec, BrainGenome, BrainScaleTier, ConceptCellId, Confidence,
-    ContextFeatureFlags, DevelopmentState, DurationTicks, ExperiencePacker, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, GaussianClusterId, GaussianContextRef,
-    GaussianSalienceEntry, HeardToken, HomeostaticDelta, HomeostaticSnapshot,
+    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
+    CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, ConceptCellId,
+    Confidence, ContextFeatureFlags, DevelopmentState, DurationTicks, ExperiencePacker,
+    ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId, GaussianClusterId,
+    GaussianContextRef, GaussianSalienceEntry, HeardToken, HomeostaticDelta, HomeostaticSnapshot,
     InMemoryPackedExperienceLog, Intensity, LobeKind, MemoryId, MotorPayloadKind, MotorPayloadRef,
     NormalizedScalar, OrganismId, PackedExperienceFrame, PackedExperienceRecord,
     PackedExperienceSink, PackedLogEntryRef, PackedSideBufferKind, PackedSideBufferRecord,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, ScaffoldContractError,
-    SchemaKind, SemanticContextRef, SemanticSalienceEntry, SensoryChannels, SensorySnapshot,
-    SignedValence, SocialAgentSnapshot, TeacherFeedbackObservation, TeacherLessonMetadata,
-    TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
-    VocalizedToken, WeightSplitContract, WorldEntityId, PACKED_EXPERIENCE_SCHEMA_VERSION,
-    PACKED_FLAG_HAS_GAUSSIAN_CONTEXT, PACKED_FLAG_HAS_SEMANTIC_CONTEXT, PACKED_FLAG_SUCCESS,
+    PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
+    ScaffoldContractError, SchemaKind, SemanticContextRef, SemanticSalienceEntry, SensorProfile,
+    SensoryChannels, SensorySnapshot, SignedValence, SocialAgentSnapshot,
+    TeacherFeedbackObservation, TeacherLessonMetadata, TeacherLessonResponseChannel,
+    TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity, VocalizedToken, WeightSplitContract,
+    WorldEntityId, PACKED_EXPERIENCE_SCHEMA_VERSION, PACKED_FLAG_HAS_GAUSSIAN_CONTEXT,
+    PACKED_FLAG_HAS_SEMANTIC_CONTEXT, PACKED_FLAG_SUCCESS,
 };
 
 fn organism() -> OrganismId {
@@ -127,25 +129,64 @@ fn rich_sensory(tick: Tick, organism_id: OrganismId) -> SensorySnapshot {
 fn pre_action_at(tick: Tick, organism_id: OrganismId, rich: bool) -> alife_core::PreActionSnapshot {
     let spec = brain_spec();
     let genome = genome(&spec);
-    alife_core::PreActionSnapshot::new(
-        organism_id,
-        sequence(),
-        tick,
-        spec.clone(),
-        genome.clone(),
-        development(&genome),
-        weight_split(&spec, &genome),
-        alife_core::Pose {
+    let body = BodySnapshot {
+        pose: alife_core::Pose {
             translation: Vec3f::new(1.0, 2.0, 3.0),
             rotation: alife_core::Quatf::IDENTITY,
         },
-        Velocity::ZERO,
-        HomeostaticSnapshot::baseline(tick),
+        velocity: Velocity::ZERO,
+    };
+    let homeostasis = HomeostaticSnapshot::baseline(tick);
+    let perception = PerceptionFrame::new(
+        organism_id,
+        tick,
+        SensorProfile::PrivilegedAffordanceV1,
         if rich {
             rich_sensory(tick, organism_id)
         } else {
             sensory(tick, organism_id)
         },
+        body,
+        homeostasis,
+        vec![
+            ActionCandidate::new(
+                0,
+                ActionId(300),
+                ActionKind::Move,
+                CandidateActionFamily::Approach,
+                CandidateObservationRef::None,
+                ActionTarget::new(Some(WorldEntityId(1)), Some(Vec3f::new(0.0, 0.0, 1.0))),
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.8).unwrap(),
+                NormalizedScalar::new(0.0).unwrap(),
+                DurationTicks::new(4),
+                DurationTicks::new(4),
+            )
+            .unwrap(),
+            ActionCandidate::new(
+                1,
+                ActionId(400),
+                ActionKind::Interact,
+                CandidateActionFamily::Contact,
+                CandidateObservationRef::None,
+                ActionTarget::new(Some(WorldEntityId(2)), Some(Vec3f::new(0.0, 0.0, 1.0))),
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.8).unwrap(),
+                NormalizedScalar::new(0.0).unwrap(),
+                DurationTicks::new(4),
+                DurationTicks::new(4),
+            )
+            .unwrap(),
+        ],
+    )
+    .unwrap();
+    alife_core::PreActionSnapshot::from_heuristic_frame(
+        sequence(),
+        perception,
+        spec.clone(),
+        genome.clone(),
+        development(&genome),
+        weight_split(&spec, &genome),
         alife_core::MemoryExpectancySnapshot {
             expected_valence: SignedValence::new(0.15).unwrap(),
             predicted_drive_delta: alife_core::DriveDelta::zero(),
@@ -365,6 +406,17 @@ fn unsupported_embedded_action_abi_version_is_rejected() {
             actual: 999,
         })
     );
+}
+
+#[test]
+fn unchanged_packed_v1_layout_accepts_legacy_experience_v1_records() {
+    let mut frame = ExperiencePacker::default()
+        .pack(&patch(false))
+        .unwrap()
+        .frame;
+    frame.experience_schema_version = 1;
+
+    assert!(frame.validate_contract().is_ok());
 }
 
 #[test]

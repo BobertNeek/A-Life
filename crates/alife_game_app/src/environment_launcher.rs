@@ -162,6 +162,7 @@ impl EnvironmentManifest {
             asset_root: fixture_root.clone(),
             fixture_root,
             start_paused: false,
+            brain_policy: PolicyBackend::HeuristicBaseline,
         };
         validate_app_shell_config(&launch)?;
         Ok(EnvironmentScenarioSelection {

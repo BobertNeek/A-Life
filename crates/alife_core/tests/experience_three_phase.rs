@@ -1,11 +1,13 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionId, ActionKind, ActionProposal,
-    ActionTarget, BrainClassSpec, BrainGenome, BrainScaleTier, Confidence, DevelopmentState,
-    DurationTicks, ExperiencePatchBuilder, ExperiencePatchPhase, ExperienceSequenceId,
-    HomeostaticDelta, HomeostaticSnapshot, Intensity, LobeKind, MemoryExpectancySnapshot,
-    NormalizedScalar, OrganismId, PhysicalActionOutcome, PhysicalContactKind, Pose,
-    PostActionOutcome, ScaffoldContractError, SchemaKind, SensoryChannels, SensorySnapshot,
-    SignedValence, Tick, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
+    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
+    CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
+    DecisionEvidence, DevelopmentState, DurationTicks, ExperiencePatchBuilder,
+    ExperiencePatchPhase, ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity,
+    LobeKind, MemoryExpectancySnapshot, NormalizedScalar, OrganismId, PerceptionFrame,
+    PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, ScaffoldContractError,
+    SchemaKind, SensorProfile, SensoryChannels, SensorySnapshot, SignedValence, Tick, Validate,
+    Vec3f, Velocity, WeightSplitContract, WorldEntityId,
 };
 
 fn organism() -> OrganismId {
@@ -61,18 +63,57 @@ fn sensory(tick: Tick, organism_id: OrganismId) -> SensorySnapshot {
 fn pre_action_at(tick: Tick, organism_id: OrganismId) -> alife_core::PreActionSnapshot {
     let spec = brain_spec();
     let genome = genome(&spec);
-    alife_core::PreActionSnapshot::new(
+    let body = BodySnapshot {
+        pose: Pose::IDENTITY,
+        velocity: Velocity::ZERO,
+    };
+    let homeostasis = HomeostaticSnapshot::baseline(tick);
+    let perception = PerceptionFrame::new(
         organism_id,
-        sequence(),
         tick,
+        SensorProfile::PrivilegedAffordanceV1,
+        sensory(tick, organism_id),
+        body,
+        homeostasis,
+        vec![
+            ActionCandidate::new(
+                0,
+                ActionId(300),
+                ActionKind::Move,
+                CandidateActionFamily::Approach,
+                CandidateObservationRef::None,
+                ActionTarget::new(Some(WorldEntityId(1)), Some(Vec3f::new(0.0, 0.0, 1.0))),
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.8).unwrap(),
+                NormalizedScalar::new(0.0).unwrap(),
+                DurationTicks::new(4),
+                DurationTicks::new(4),
+            )
+            .unwrap(),
+            ActionCandidate::new(
+                1,
+                ActionId(400),
+                ActionKind::Interact,
+                CandidateActionFamily::Contact,
+                CandidateObservationRef::None,
+                ActionTarget::new(Some(WorldEntityId(2)), Some(Vec3f::new(0.0, 0.0, 1.0))),
+                CandidateFeatureVector::zero(),
+                Confidence::new(0.8).unwrap(),
+                NormalizedScalar::new(0.0).unwrap(),
+                DurationTicks::new(4),
+                DurationTicks::new(4),
+            )
+            .unwrap(),
+        ],
+    )
+    .unwrap();
+    alife_core::PreActionSnapshot::from_heuristic_frame(
+        sequence(),
+        perception,
         spec.clone(),
         genome.clone(),
         development(&genome),
         weight_split(&spec, &genome),
-        Pose::IDENTITY,
-        Velocity::ZERO,
-        HomeostaticSnapshot::baseline(tick),
-        sensory(tick, organism_id),
         MemoryExpectancySnapshot::neutral(),
     )
     .unwrap()
@@ -165,10 +206,17 @@ fn valid_three_phase_patch_seals_and_exposes_learning_view() {
 
     let view = patch.as_learning_view();
     assert_eq!(view.pre_action().organism_id, organism());
-    assert_eq!(view.pre_action().sensory.semantic_context, None);
-    assert_eq!(view.pre_action().sensory.gaussian_context, None);
+    assert_eq!(view.pre_action().sensory().semantic_context, None);
+    assert_eq!(view.pre_action().sensory().gaussian_context, None);
     assert_eq!(view.decision().selected_action.action_id, ActionId(400));
-    assert_eq!(view.decision().proposals.len(), 2);
+    assert_eq!(
+        view.decision()
+            .heuristic_evidence()
+            .unwrap()
+            .proposals
+            .len(),
+        2
+    );
     assert!(view.outcome().success);
     assert_eq!(view.outcome().reward_valence.raw(), 0.25);
     assert!(patch.validate_contract().is_ok());
@@ -223,7 +271,7 @@ fn incompatible_versions_and_invalid_learning_values_are_rejected() {
         ExperiencePatchBuilder::new(sequence()).record_pre_action(pre),
         Err(ScaffoldContractError::IncompatibleAbi {
             kind: SchemaKind::Experience,
-            expected: 1,
+            expected: 2,
             actual: 999,
         })
     );
@@ -258,7 +306,10 @@ fn incompatible_versions_and_invalid_learning_values_are_rejected() {
 #[test]
 fn invalid_action_decisions_are_rejected_before_sealing() {
     let mut decision = decision_at(Tick::new(10), organism());
-    decision.arbitration_trace.wta_result.selected_action_id = Some(ActionId(999));
+    let DecisionEvidence::HeuristicBaseline(evidence) = &mut decision.evidence else {
+        panic!("fixture must use heuristic evidence");
+    };
+    evidence.arbitration_trace.wta_result.selected_action_id = Some(ActionId(999));
 
     assert_eq!(
         ExperiencePatchBuilder::new(sequence())

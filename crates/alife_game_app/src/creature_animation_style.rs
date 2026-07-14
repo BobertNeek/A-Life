@@ -108,7 +108,7 @@ impl Ca38CreatureAnimationSummary {
             || !self.display_only
             || !self.no_action_authority
             || !self.no_cognition_mutation
-            || self.product_runtime_claim != "CpuShadowGuardedStaticPlusLiveHShadow"
+            || self.product_runtime_claim != "GpuAuthoritative"
         {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message: "CA38 animation summary must preserve product boundaries",
@@ -348,7 +348,7 @@ pub fn ca38_creature_animation_summary() -> Result<Ca38CreatureAnimationSummary,
         display_only: true,
         no_action_authority: true,
         no_cognition_mutation: true,
-        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow",
+        product_runtime_claim: "GpuAuthoritative",
     };
     summary.validate()?;
     Ok(summary)

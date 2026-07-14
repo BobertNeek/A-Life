@@ -101,7 +101,7 @@ impl Ca37WorldArtStyleSummary {
             || !self.stable_ids_only
             || !self.no_runtime_tile_encoding
             || !self.no_physics_or_sensory_changes
-            || self.product_runtime_claim != "CpuShadowGuardedStaticPlusLiveHShadow"
+            || self.product_runtime_claim != "GpuAuthoritative"
         {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message: "CA37 world-art style summary violates presentation-only contract",
@@ -212,7 +212,7 @@ pub fn ca37_world_art_style_summary(
         stable_ids_only: true,
         no_runtime_tile_encoding: true,
         no_physics_or_sensory_changes: true,
-        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow",
+        product_runtime_claim: "GpuAuthoritative",
     };
     summary.validate()?;
     Ok(summary)

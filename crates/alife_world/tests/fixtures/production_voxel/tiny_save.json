@@ -9,16 +9,14 @@
     "deterministic_seed": 4242,
     "brain_class": "Nano512",
     "benchmark_population_tier": 1,
-    "backend": {
-      "requested": "CpuReference",
-      "gpu_feature_enabled": false,
-      "fallback_to_cpu": true,
-      "validation_required": true
+    "brain_policy": {
+      "schema_version": 1,
+      "policy": "NeuralClosedLoopGpu"
     },
     "features": {
       "school_enabled": false,
       "semantic_adapter_enabled": false,
-      "gpu_backend_enabled": false,
+      "gpu_backend_enabled": true,
       "offline_tools_required": false
     },
     "school": {

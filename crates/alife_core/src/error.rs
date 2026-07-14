@@ -68,4 +68,24 @@ pub enum ScaffoldContractError {
     UnsupportedSparseTileFormat,
     #[error("backend parity check failed")]
     BackendParity,
+    #[error("perception frame failed identity, timing, bounds, or digest validation")]
+    InvalidPerceptionFrame,
+    #[error("action candidate failed index, family, feature, target, or duration validation")]
+    InvalidActionCandidate,
+    #[error("decision evidence does not bind to the selected candidate and command")]
+    InvalidDecisionEvidence,
+    #[error("requested evidence accessor does not match the recorded policy kind")]
+    EvidenceKindMismatch,
+    #[error("phenotype compilation failed")]
+    PhenotypeCompile,
+    #[error("brain class is not promoted for production neural execution")]
+    UnsupportedProductionBrainClass,
+    #[error("GPU buffer layout does not match the compiled phenotype")]
+    GpuLayoutMismatch,
+    #[error("sensor profile does not match the compiled phenotype or perception")]
+    SensorProfileMismatch,
+    #[error("brain handle or evidence belongs to a different organism")]
+    BrainOwnershipMismatch,
+    #[error("the GPU-authoritative neural backend is unavailable")]
+    NeuralBackendUnavailable,
 }

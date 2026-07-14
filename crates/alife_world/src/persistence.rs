@@ -11,16 +11,17 @@ use std::{
 
 use alife_core::{
     require_version, BrainScaleTier, GenomeId, HomeostaticSnapshot, OrganismId,
-    PackedExperienceFrame, ScaffoldContractError, SchemaKind, SchemaVersions,
+    PackedExperienceFrame, PolicyBackend, ScaffoldContractError, SchemaKind, SchemaVersions,
     TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::{
     appearance::CreatureAppearanceGenome,
     ecology::EcologyState,
     headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
+    legacy_neural_policy_v1::LegacyBackendConfigV1,
     persistent_voxel::{
         migrated_voxel_backend_for_world, PersistentVoxelProfileId, PersistentVoxelWorldSaveState,
     },
@@ -33,6 +34,7 @@ pub const P34_RUNTIME_CONFIG_SCHEMA_VERSION: u16 = 1;
 pub const P34_ASSET_MANIFEST_SCHEMA: &str = "alife.p34.asset_manifest.v1";
 pub const P34_ASSET_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const P34_MIGRATION_HOOK_SCHEMA_VERSION: u16 = 1;
+pub const BRAIN_POLICY_CONFIG_SCHEMA_VERSION: u16 = 1;
 pub const P34_MAX_INLINE_SAVE_BYTES: u64 = 64 * 1024;
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA: &str = "alife.fvr06.gpu_runtime_state.v1";
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION: u16 = 1;
@@ -279,19 +281,22 @@ impl AssetManifestEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BackendSelection {
-    CpuReference,
-    GpuStatic,
-    GpuPlastic,
-    GpuFull,
+pub struct BrainPolicyConfig {
+    pub schema_version: u16,
+    pub policy: PolicyBackend,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BackendConfig {
-    pub requested: BackendSelection,
-    pub gpu_feature_enabled: bool,
-    pub fallback_to_cpu: bool,
-    pub validation_required: bool,
+impl BrainPolicyConfig {
+    fn validate(self) -> Result<(), PersistenceError> {
+        if self.schema_version != BRAIN_POLICY_CONFIG_SCHEMA_VERSION {
+            return Err(PersistenceError::SchemaVersion {
+                schema: "alife.brain_policy_config.v1",
+                expected: BRAIN_POLICY_CONFIG_SCHEMA_VERSION,
+                actual: self.schema_version,
+            });
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -369,11 +374,10 @@ pub struct GpuRuntimeShaderAbiVersions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GpuRuntimeCpuShadowParityState {
-    pub static_forward_checked: bool,
-    pub plasticity_checked: bool,
-    pub last_action_summary_parity: Option<bool>,
-    pub fallback_on_parity_failure: bool,
+pub struct GpuRuntimeAuthorityState {
+    pub authoritative: bool,
+    pub failure_stops_learned_actions: bool,
+    pub finite_rejections: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -396,9 +400,9 @@ pub struct GpuRuntimeSaveState {
     pub class_bucket_allocations: Vec<GpuRuntimeClassBucketAllocation>,
     pub active_profile_caps: GpuRuntimeActiveProfileCaps,
     pub shader_abi_versions: GpuRuntimeShaderAbiVersions,
-    pub cpu_shadow_parity: GpuRuntimeCpuShadowParityState,
+    pub authority: GpuRuntimeAuthorityState,
     pub last_safe_checkpoint: GpuRuntimeSafeCheckpoint,
-    pub fallback_reason: Option<String>,
+    pub unavailable_reason: Option<String>,
     pub selected_scale_profile: String,
     pub compact_action_readback_bytes_per_creature: u32,
     pub no_active_bulk_readback: bool,
@@ -422,7 +426,8 @@ impl GpuRuntimeSaveState {
             || self.last_safe_checkpoint.save_id.trim().is_empty()
             || self.last_safe_checkpoint.checkpoint_label.trim().is_empty()
             || !self.last_safe_checkpoint.sealed_patch_boundary
-            || !self.cpu_shadow_parity.fallback_on_parity_failure
+            || !self.authority.authoritative
+            || !self.authority.failure_stops_learned_actions
             || !self.no_active_bulk_readback
         {
             return Err(PersistenceError::InvalidConfig {
@@ -430,7 +435,7 @@ impl GpuRuntimeSaveState {
                 message: "FVR06 GPU runtime descriptor is incomplete",
             });
         }
-        if self.selected_backend_mode != "CpuReference"
+        if self.authority.authoritative
             && (self
                 .adapter_identity
                 .adapter_name
@@ -549,14 +554,14 @@ pub struct LoggingConfig {
     pub relative_log_path: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RuntimeConfig {
     pub schema: String,
     pub schema_version: u16,
     pub deterministic_seed: u64,
     pub brain_class: BrainScaleTier,
     pub benchmark_population_tier: u16,
-    pub backend: BackendConfig,
+    pub brain_policy: BrainPolicyConfig,
     pub features: FeatureFlagConfig,
     pub school: SchoolConfig,
     pub semantic: SemanticAdapterConfig,
@@ -564,6 +569,68 @@ pub struct RuntimeConfig {
     pub logging: LoggingConfig,
     pub asset_root: String,
     pub save_root: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RuntimeConfigWire {
+    schema: String,
+    schema_version: u16,
+    deterministic_seed: u64,
+    brain_class: BrainScaleTier,
+    benchmark_population_tier: u16,
+    #[serde(default)]
+    brain_policy: Option<BrainPolicyConfig>,
+    #[serde(default)]
+    backend: Option<LegacyBackendConfigV1>,
+    features: FeatureFlagConfig,
+    school: SchoolConfig,
+    semantic: SemanticAdapterConfig,
+    gpu_limits: GpuLimitsConfig,
+    logging: LoggingConfig,
+    asset_root: String,
+    save_root: String,
+}
+
+impl<'de> Deserialize<'de> for RuntimeConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = RuntimeConfigWire::deserialize(deserializer)?;
+        let brain_policy = match (wire.brain_policy, wire.backend) {
+            (Some(policy), None) => policy,
+            (None, Some(legacy)) => BrainPolicyConfig {
+                schema_version: BRAIN_POLICY_CONFIG_SCHEMA_VERSION,
+                policy: legacy.migrate_policy(),
+            },
+            (Some(_), Some(_)) => {
+                return Err(D::Error::custom(
+                    "runtime config cannot contain both brain_policy and legacy backend",
+                ));
+            }
+            (None, None) => {
+                return Err(D::Error::custom(
+                    "runtime config requires brain_policy or legacy backend",
+                ));
+            }
+        };
+        Ok(Self {
+            schema: wire.schema,
+            schema_version: wire.schema_version,
+            deterministic_seed: wire.deterministic_seed,
+            brain_class: wire.brain_class,
+            benchmark_population_tier: wire.benchmark_population_tier,
+            brain_policy,
+            features: wire.features,
+            school: wire.school,
+            semantic: wire.semantic,
+            gpu_limits: wire.gpu_limits,
+            logging: wire.logging,
+            asset_root: wire.asset_root,
+            save_root: wire.save_root,
+        })
+    }
 }
 
 impl RuntimeConfig {
@@ -574,11 +641,9 @@ impl RuntimeConfig {
             deterministic_seed,
             brain_class,
             benchmark_population_tier: 1,
-            backend: BackendConfig {
-                requested: BackendSelection::CpuReference,
-                gpu_feature_enabled: false,
-                fallback_to_cpu: true,
-                validation_required: true,
+            brain_policy: BrainPolicyConfig {
+                schema_version: BRAIN_POLICY_CONFIG_SCHEMA_VERSION,
+                policy: PolicyBackend::NeuralClosedLoopGpu,
             },
             features: FeatureFlagConfig {
                 school_enabled: false,
@@ -648,21 +713,7 @@ impl RuntimeConfig {
                 message: "benchmark tier population must be nonzero",
             });
         }
-        if self.backend.requested != BackendSelection::CpuReference
-            && !self.backend.gpu_feature_enabled
-        {
-            return Err(PersistenceError::InvalidConfig {
-                field: "backend",
-                message: "GPU backend selection requires gpu_feature_enabled",
-            });
-        }
-        if self.backend.requested != BackendSelection::CpuReference && !self.backend.fallback_to_cpu
-        {
-            return Err(PersistenceError::InvalidConfig {
-                field: "backend",
-                message: "GPU backend configs must preserve CPU fallback",
-            });
-        }
+        self.brain_policy.validate()?;
         if self.features.offline_tools_required {
             return Err(PersistenceError::InvalidConfig {
                 field: "features.offline_tools_required",

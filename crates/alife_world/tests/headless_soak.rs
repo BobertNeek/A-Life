@@ -146,9 +146,12 @@ fn assert_memory_and_topology_stay_bias_only(run: &ScenarioRun) {
         run.name
     );
     for patch in &run.patches {
-        ScenarioAssertions::assert_memory_expectancy_snapshot_is_bias_only(
-            &patch.pre_action().memory_expectancy,
-        );
+        let memory_expectancy = &patch
+            .pre_action()
+            .heuristic_evidence()
+            .expect("scenario patches use heuristic baseline evidence")
+            .memory_expectancy;
+        ScenarioAssertions::assert_memory_expectancy_snapshot_is_bias_only(memory_expectancy);
     }
 }
 

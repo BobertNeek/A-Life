@@ -144,7 +144,7 @@ pub struct ProductQaOptionalFeatureEvidence {
     pub semantic_absence_nonfatal: bool,
     pub semantic_fake_provider_non_authoritative: bool,
     pub school_verifier_uses_sealed_patches: bool,
-    pub gpu_default_falls_back_to_cpu: bool,
+    pub gpu_required_default: bool,
     pub gpu_no_active_readback: bool,
     pub graphical_smoke_manual: bool,
 }
@@ -155,7 +155,7 @@ impl ProductQaOptionalFeatureEvidence {
             || !self.semantic_absence_nonfatal
             || !self.semantic_fake_provider_non_authoritative
             || !self.school_verifier_uses_sealed_patches
-            || !self.gpu_default_falls_back_to_cpu
+            || !self.gpu_required_default
             || !self.gpu_no_active_readback
             || !self.graphical_smoke_manual
         {
@@ -305,7 +305,7 @@ pub fn run_product_qa_hardening_smoke() -> Result<ProductQaSummary, GameAppShell
         school_verifier_uses_sealed_patches: school.verifier_panel.passed
             && school.verifier_panel.sealed_patch_count > 0
             && school.teacher_metadata_bypass_blocked,
-        gpu_default_falls_back_to_cpu: gpu.cpu_fallback_default,
+        gpu_required_default: gpu.gpu_required_default,
         gpu_no_active_readback: gpu.telemetry_overlay.no_active_gameplay_readback,
         graphical_smoke_manual: packaging
             .commands
