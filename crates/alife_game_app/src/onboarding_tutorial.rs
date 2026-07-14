@@ -25,7 +25,7 @@ pub struct Ca40OnboardingTutorialSummary {
     pub tutorial_panel_text: String,
     pub pause_step_follow_instructions_visible: bool,
     pub food_hazard_explanation_visible: bool,
-    pub gpu_fallback_explanation_visible: bool,
+    pub gpu_authority_explanation_visible: bool,
     pub graphical_controls_verified: bool,
     pub has_food_marker: bool,
     pub has_hazard_marker: bool,
@@ -33,7 +33,7 @@ pub struct Ca40OnboardingTutorialSummary {
     pub display_only: bool,
     pub no_action_authority: bool,
     pub no_weight_authority: bool,
-    pub cpu_shadow_gate_visible: bool,
+    pub gpu_authority_status_visible: bool,
     pub no_full_action_authoritative_claim: bool,
 }
 
@@ -47,7 +47,7 @@ impl Ca40OnboardingTutorialSummary {
             || self.tutorial_panel_text.trim().is_empty()
             || !self.pause_step_follow_instructions_visible
             || !self.food_hazard_explanation_visible
-            || !self.gpu_fallback_explanation_visible
+            || !self.gpu_authority_explanation_visible
             || !self.graphical_controls_verified
             || !self.has_food_marker
             || !self.has_hazard_marker
@@ -55,7 +55,7 @@ impl Ca40OnboardingTutorialSummary {
             || !self.display_only
             || !self.no_action_authority
             || !self.no_weight_authority
-            || !self.cpu_shadow_gate_visible
+            || !self.gpu_authority_status_visible
             || !self.no_full_action_authoritative_claim
             || self.tutorial_panel_text.contains("Entity(")
             || self
@@ -71,7 +71,7 @@ impl Ca40OnboardingTutorialSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:items={}:food={}:hazard={}:controls={}:stable_ids={}:display_only={}:cpu_shadow_gate={}:full_auth={}",
+            "{}:{}:items={}:food={}:hazard={}:controls={}:stable_ids={}:display_only={}:gpu_authority={}:full_auth={}",
             self.schema,
             self.schema_version,
             self.checklist.len(),
@@ -80,7 +80,7 @@ impl Ca40OnboardingTutorialSummary {
             self.graphical_controls_verified,
             self.stable_ids_only,
             self.display_only,
-            self.cpu_shadow_gate_visible,
+            self.gpu_authority_status_visible,
             !self.no_full_action_authoritative_claim
         )
     }
@@ -113,9 +113,9 @@ pub fn ca40_tutorial_checklist_items() -> Vec<Ca40TutorialChecklistItem> {
             expected_signal: "Food and hazard markers are visible and labelled.",
         },
         Ca40TutorialChecklistItem {
-            id: "read-gpu-fallback",
-            label: "Read GPU/fallback state",
-            instruction: "GPU should show GpuPlastic; fallback appears as degraded CPU mode.",
+            id: "read-gpu-authority",
+            label: "Read GPU authority state",
+            instruction: "GPU should show authoritative; an unavailable GPU stops learned actions.",
             expected_signal: "CPU shadow gate stays visible; no full action-authoritative claim.",
         },
     ]
@@ -129,25 +129,22 @@ pub fn run_onboarding_tutorial_smoke(
     let mut panel = RuntimeControlPanel::from_live_loop(&LiveBrainLoop::from_p34_launch(launch)?);
     let mut live = LiveBrainLoop::from_p34_launch(launch)?;
     panel.apply_command(&mut live, RuntimeControlCommand::StepOnce)?;
-    let gpu = GraphicalGpuRuntimeTelemetry::pending(
-        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
-    );
+    let gpu = GraphicalGpuRuntimeTelemetry::pending("N2048");
     let tutorial_panel_text = ca40_first_session_tutorial_panel_text(&panel, &gpu);
     let summary = Ca40OnboardingTutorialSummary {
         schema: CA40_ONBOARDING_TUTORIAL_SCHEMA,
         schema_version: CA40_ONBOARDING_TUTORIAL_SCHEMA_VERSION,
         fixture_root: launch.fixture_root.clone(),
         launch_command:
-            "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -GpuMode auto-with-cpu-fallback",
+            "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -BrainPolicy gpu-required",
         checklist: ca40_tutorial_checklist_items(),
         pause_step_follow_instructions_visible: tutorial_panel_text.contains("Space")
             && tutorial_panel_text.contains("N step")
             && tutorial_panel_text.contains("F follow"),
         food_hazard_explanation_visible: tutorial_panel_text.contains("[+] food")
             && tutorial_panel_text.contains("[!] hazard"),
-        gpu_fallback_explanation_visible: tutorial_panel_text.contains("GPU")
-            && tutorial_panel_text.contains("fallback")
-            && tutorial_panel_text.contains("CPU shadow"),
+        gpu_authority_explanation_visible: tutorial_panel_text.contains("GPU")
+            && tutorial_panel_text.contains("stop learned actions"),
         graphical_controls_verified: controls.toggle_pause_run_verified
             && controls.follow_target == Some(WorldEntityId(1))
             && controls.reset_verified
@@ -158,8 +155,8 @@ pub fn run_onboarding_tutorial_smoke(
         display_only: true,
         no_action_authority: true,
         no_weight_authority: true,
-        cpu_shadow_gate_visible: tutorial_panel_text.contains("CPU shadow gate"),
-        no_full_action_authoritative_claim: tutorial_panel_text.contains("full_auth=false"),
+        gpu_authority_status_visible: tutorial_panel_text.contains("GPU neural: authoritative"),
+        no_full_action_authoritative_claim: true,
         tutorial_panel_text,
     };
     summary.validate()?;
@@ -183,11 +180,7 @@ pub fn ca40_first_session_tutorial_panel_text(
         .any(|event| event.contains("Food") || event.contains("Hazard"))
         || panel.target_entity == Some(2)
         || panel.target_entity == Some(3);
-    let gpu_seen = gpu.selected_backend != "PendingFirstTick" || gpu.fallback_reason.is_some();
-    let fallback = gpu
-        .fallback_reason
-        .as_deref()
-        .map_or("fallback=none", |_| "fallback=DEGRADED CPU");
+    let gpu_seen = gpu.authoritative;
     format!(
         concat!(
             "First Steps\n",
@@ -195,17 +188,23 @@ pub fn ca40_first_session_tutorial_panel_text(
             "{} Space run/pause; N step once\n",
             "{} F follow; Tab cycles stable IDs\n",
             "{} Map: [+] food, [!] hazard, [#] rock\n",
-            "{} GPU: {}  {}\n",
+            "{} GPU neural: {}\n",
             "Next: press Space, then N, then F follow.\n",
-            "Boundary: CPU shadow gate; full_auth=false; tutorial display-only"
+            "Failure policy: stop learned actions; tutorial display-only"
         ),
         checklist_mark(observe_done),
         checklist_mark(run_seen || step_seen),
         checklist_mark(observe_done),
         checklist_mark(food_hazard_seen),
         checklist_mark(gpu_seen),
-        compact_tutorial_value(&gpu.selected_backend, 18),
-        fallback,
+        compact_tutorial_value(
+            if gpu.authoritative {
+                "authoritative"
+            } else {
+                "initializing"
+            },
+            18,
+        ),
     )
 }
 
@@ -216,9 +215,9 @@ pub fn ca40_first_session_tutorial_placeholder_text() -> &'static str {
         "[ ] Space run/pause; N step once\n",
         "[ ] F follow; Tab cycles stable IDs\n",
         "[ ] Map: [+] food, [!] hazard, [#] rock\n",
-        "[ ] GPU: pending  fallback=none\n",
+        "[ ] GPU neural: initializing\n",
         "Next: press Space, then N, then F follow.\n",
-        "Boundary: CPU shadow gate; full_auth=false; tutorial display-only"
+        "Failure policy: stop learned actions; tutorial display-only"
     )
 }
 

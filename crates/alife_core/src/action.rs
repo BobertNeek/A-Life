@@ -14,20 +14,40 @@ const DEFAULT_ACTION_DURATION_TICKS: DurationTicks = DurationTicks(1);
 const DEFAULT_MIN_SCORE: f32 = 0.25;
 const DEFAULT_MIN_CONFIDENCE: f32 = 0.01;
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActionKind {
-    Idle,
-    Hold,
-    Rest,
-    Inspect,
-    Move,
-    Interact,
-    Vocalize,
-    Write,
-    Gesture,
+    Idle = 0,
+    Hold = 1,
+    Rest = 2,
+    Inspect = 3,
+    Move = 4,
+    Interact = 5,
+    Vocalize = 6,
+    Write = 7,
+    Gesture = 8,
 }
 
 impl ActionKind {
+    pub const fn raw(self) -> u8 {
+        self as u8
+    }
+
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Idle),
+            1 => Ok(Self::Hold),
+            2 => Ok(Self::Rest),
+            3 => Ok(Self::Inspect),
+            4 => Ok(Self::Move),
+            5 => Ok(Self::Interact),
+            6 => Ok(Self::Vocalize),
+            7 => Ok(Self::Write),
+            8 => Ok(Self::Gesture),
+            _ => Err(ScaffoldContractError::InvalidActionCandidate),
+        }
+    }
+
     pub const fn canonical_id(self) -> ActionId {
         match self {
             Self::Idle => ActionId(1),

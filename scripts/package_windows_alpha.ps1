@@ -2,8 +2,8 @@ param(
     [switch]$DryRun,
     [switch]$SkipBuild,
     [switch]$NoZip,
-    [ValidateSet("static-plastic-cpu-shadow-guarded", "cpu-reference", "auto-with-cpu-fallback")]
-    [string]$GpuMode = "static-plastic-cpu-shadow-guarded",
+    [ValidateSet("gpu-required")]
+    [string]$BrainPolicy = "gpu-required",
     [ValidateSet("gpu-alpha", "p34")]
     [string]$Scenario = "gpu-alpha",
     [string]$OutputRoot = "target/artifacts/ca41_windows_alpha",
@@ -124,7 +124,7 @@ Write-Host "A-Life CA41 Windows alpha package builder"
 Write-Host "Legacy regression package: use scripts/package_windows_production_voxel.ps1 for the finished production voxel package."
 Write-Host "Package root: $PackageRoot"
 Write-Host "Zip path: $ZipPath"
-Write-Host "GPU mode default: $GpuMode"
+Write-Host "Brain policy default: $BrainPolicy"
 Write-Host "Scenario default: $Scenario"
 Write-Host "Release tag: not created"
 Write-Host "Cargo build command: $($BuildCommand -join ' ')"
@@ -196,11 +196,10 @@ try {
         alpha_art = "crates/alife_game_app/assets/alpha_art_v1"
         true_25d_alpha = "crates/alife_game_app/assets/true_25d_alpha_v1"
         default_scenario = $Scenario
-        default_gpu_mode = $GpuMode
-        product_runtime_claim = "CpuShadowGuardedStaticPlusLiveHShadow"
-        cpu_shadow_parity_required = $true
-        cpu_fallback_available = $true
-        full_action_authoritative_claim = $false
+        default_brain_policy = $BrainPolicy
+        product_runtime_claim = "GpuAuthoritative"
+        gpu_authority_required = $true
+        failure_stops_learned_actions = $true
         release_tag_created = $false
         artifacts_must_remain_untracked = $true
         packaged_paths = @(
@@ -231,7 +230,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run_windows_alpha_package.
 ```
 
 This package is GPU-first and requests `static-plastic-cpu-shadow-guarded` by
-default. CPU fallback remains available and is visibly degraded/safety mode.
+default. GPU unavailability stops learned actions.
 This is not a full action-authoritative GPU runtime claim and no release tag is
 created by the package builder.
 

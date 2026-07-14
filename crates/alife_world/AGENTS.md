@@ -5,8 +5,10 @@ resources, drives, lesson-world APIs, and sensory extraction contracts.
 
 Rules:
 
+- Do not depend on Bevy, wgpu, renderer types, or OS handles.
+- Bevy ECS ownership belongs only to adapter/app layers.
 - Keep the world layer authoritative for action legality and outcomes.
 - Use stable IDs and core ABI types rather than Bevy ECS internals.
 - Do not store renderer, GPU backend, or teacher-private state here.
 - Do not let neural outputs bypass world validation.
-- Keep scaffold code minimal until the spec asks for runtime behavior.
+- Implement reviewed world behavior through focused modules and stable contracts.

@@ -4,25 +4,26 @@ use serde::{Deserialize, Serialize};
 
 use crate::{LobeIndex, ScaffoldContractError};
 
+#[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LobeKind {
-    SensoryGrounding,
-    MetabolicDrive,
-    AuditorySpeech,
-    GlyphVision,
-    LexiconConcept,
-    CoreAssociation,
-    EpisodicMemory,
-    WorkingMemory,
-    MotorArbitration,
-    HomeostaticRegulation,
-    LanguageExpansion,
-    MathQuantity,
-    NarrativeHistory,
-    SocialReasoning,
-    SelfCriticUncertainty,
-    PlanningDream,
-    SpeechWritingMotor,
+    SensoryGrounding = 1,
+    MetabolicDrive = 2,
+    AuditorySpeech = 3,
+    GlyphVision = 4,
+    LexiconConcept = 5,
+    CoreAssociation = 6,
+    EpisodicMemory = 7,
+    WorkingMemory = 8,
+    MotorArbitration = 9,
+    HomeostaticRegulation = 10,
+    LanguageExpansion = 11,
+    MathQuantity = 12,
+    NarrativeHistory = 13,
+    SocialReasoning = 14,
+    SelfCriticUncertainty = 15,
+    PlanningDream = 16,
+    SpeechWritingMotor = 17,
 }
 
 impl LobeKind {
@@ -60,25 +61,34 @@ impl LobeKind {
     ];
 
     pub const fn stable_id(self) -> LobeIndex {
-        LobeIndex(match self {
-            LobeKind::SensoryGrounding => 1,
-            LobeKind::MetabolicDrive => 2,
-            LobeKind::AuditorySpeech => 3,
-            LobeKind::GlyphVision => 4,
-            LobeKind::LexiconConcept => 5,
-            LobeKind::CoreAssociation => 6,
-            LobeKind::EpisodicMemory => 7,
-            LobeKind::WorkingMemory => 8,
-            LobeKind::MotorArbitration => 9,
-            LobeKind::HomeostaticRegulation => 10,
-            LobeKind::LanguageExpansion => 11,
-            LobeKind::MathQuantity => 12,
-            LobeKind::NarrativeHistory => 13,
-            LobeKind::SocialReasoning => 14,
-            LobeKind::SelfCriticUncertainty => 15,
-            LobeKind::PlanningDream => 16,
-            LobeKind::SpeechWritingMotor => 17,
-        })
+        LobeIndex(self.raw())
+    }
+
+    pub const fn raw(self) -> u16 {
+        self as u16
+    }
+
+    pub fn try_from_raw(raw: u16) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            1 => Ok(Self::SensoryGrounding),
+            2 => Ok(Self::MetabolicDrive),
+            3 => Ok(Self::AuditorySpeech),
+            4 => Ok(Self::GlyphVision),
+            5 => Ok(Self::LexiconConcept),
+            6 => Ok(Self::CoreAssociation),
+            7 => Ok(Self::EpisodicMemory),
+            8 => Ok(Self::WorkingMemory),
+            9 => Ok(Self::MotorArbitration),
+            10 => Ok(Self::HomeostaticRegulation),
+            11 => Ok(Self::LanguageExpansion),
+            12 => Ok(Self::MathQuantity),
+            13 => Ok(Self::NarrativeHistory),
+            14 => Ok(Self::SocialReasoning),
+            15 => Ok(Self::SelfCriticUncertainty),
+            16 => Ok(Self::PlanningDream),
+            17 => Ok(Self::SpeechWritingMotor),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
     }
 
     pub const fn purpose(self) -> &'static str {
@@ -199,15 +209,35 @@ impl LobeKind {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum UpdateCadence {
-    Hot60Hz,
-    Hot15To60Hz,
-    Hot10To30Hz,
-    Hot5To15Hz,
-    Hot1To5Hz,
-    SleepOrOffline,
-    Disabled,
+    Hot60Hz = 0,
+    Hot15To60Hz = 1,
+    Hot10To30Hz = 2,
+    Hot5To15Hz = 3,
+    Hot1To5Hz = 4,
+    SleepOrOffline = 5,
+    Disabled = 6,
+}
+
+impl UpdateCadence {
+    pub const fn raw(self) -> u8 {
+        self as u8
+    }
+
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Hot60Hz),
+            1 => Ok(Self::Hot15To60Hz),
+            2 => Ok(Self::Hot10To30Hz),
+            3 => Ok(Self::Hot5To15Hz),
+            4 => Ok(Self::Hot1To5Hz),
+            5 => Ok(Self::SleepOrOffline),
+            6 => Ok(Self::Disabled),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

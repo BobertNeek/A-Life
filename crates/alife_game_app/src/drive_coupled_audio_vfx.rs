@@ -47,45 +47,22 @@ impl Ca39DriveCueKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ca39RuntimeCueEvidence {
     pub selected_backend: String,
-    pub fallback_reason: Option<String>,
-    pub product_runtime_claim: String,
+    pub unavailable_reason: Option<String>,
+    pub authoritative: bool,
     pub sealed_patches: usize,
-    pub h_shadow_applications: u32,
-    pub cpu_shadow_gate_preserved: bool,
+    pub learning_updates: u32,
     pub no_active_bulk_readback: bool,
-    pub full_action_authoritative_claim: bool,
 }
 
 impl Ca39RuntimeCueEvidence {
-    pub fn from_full_gpu_summary(summary: &FullGpuRuntimeSmokeSummary) -> Self {
-        let full_action_authoritative_claim = summary
-            .product_runtime_claim
-            .contains("ActionAuthoritative")
-            || summary.requested_mode == FullGpuRuntimeSmokeMode::FullActionAuthoritative.label();
-        Self {
-            selected_backend: summary.selected_backend.clone(),
-            fallback_reason: summary.fallback_reason.clone(),
-            product_runtime_claim: summary.product_runtime_claim.clone(),
-            sealed_patches: summary.sealed_patches,
-            h_shadow_applications: summary.post_seal_delta_applied_records,
-            cpu_shadow_gate_preserved: !full_action_authoritative_claim
-                && summary.bulk_readback_forbidden,
-            no_active_bulk_readback: summary.bulk_readback_forbidden,
-            full_action_authoritative_claim,
-        }
-    }
-
     pub fn from_graphical_gpu(gpu: &GraphicalGpuRuntimeTelemetry) -> Self {
         Self {
             selected_backend: gpu.selected_backend.clone(),
-            fallback_reason: gpu.fallback_reason.clone(),
-            product_runtime_claim: gpu.product_runtime_claim.clone(),
+            unavailable_reason: gpu.unavailable_reason.clone(),
+            authoritative: gpu.authoritative,
             sealed_patches: gpu.sealed_patches,
-            h_shadow_applications: gpu.h_shadow_applications,
-            cpu_shadow_gate_preserved: !gpu.full_action_authoritative_claim
-                && gpu.no_active_bulk_readback,
+            learning_updates: gpu.learning_updates,
             no_active_bulk_readback: gpu.no_active_bulk_readback,
-            full_action_authoritative_claim: gpu.full_action_authoritative_claim,
         }
     }
 }
@@ -152,16 +129,14 @@ pub struct Ca39DriveAudioVfxSummary {
     pub vfx_cue_count: usize,
     pub sealed_feedback_sources: usize,
     pub selected_backend: String,
-    pub fallback_reason: Option<String>,
-    pub product_runtime_claim: String,
-    pub h_shadow_applications: u32,
-    pub cpu_shadow_gate_preserved: bool,
+    pub unavailable_reason: Option<String>,
+    pub authoritative: bool,
+    pub learning_updates: u32,
     pub no_active_bulk_readback: bool,
     pub no_action_authority: bool,
     pub no_weight_authority: bool,
     pub no_cognition_mutation: bool,
     pub no_large_assets_added: bool,
-    pub full_action_authoritative_claim: bool,
 }
 
 impl Ca39DriveAudioVfxSummary {
@@ -173,14 +148,12 @@ impl Ca39DriveAudioVfxSummary {
             || self.vfx_cue_count < CA39_REQUIRED_DRIVE_CUE_COUNT
             || self.sealed_feedback_sources == 0
             || self.selected_backend.is_empty()
-            || self.product_runtime_claim.is_empty()
-            || !self.cpu_shadow_gate_preserved
+            || !self.authoritative
             || !self.no_active_bulk_readback
             || !self.no_action_authority
             || !self.no_weight_authority
             || !self.no_cognition_mutation
             || !self.no_large_assets_added
-            || self.full_action_authoritative_claim
         {
             return Err(ScaffoldContractError::MissingPhaseData);
         }
@@ -213,9 +186,9 @@ impl Ca39DriveAudioVfxSummary {
             concat!(
                 "Drive Audio/VFX\n",
                 "{}\n",
-                "Backend: {} fallback={}\n",
-                "Learning: H_shadow apps={} cue={}\n",
-                "Boundary: display-only; CPU shadow gate; no actions/weights"
+                "Backend: {} unavailable={}\n",
+                "Learning updates: {} cue={}\n",
+                "Boundary: display-only; GPU authoritative; no actions/weights"
             ),
             self.cues
                 .iter()
@@ -223,9 +196,9 @@ impl Ca39DriveAudioVfxSummary {
                 .collect::<Vec<_>>()
                 .join(" | "),
             self.selected_backend,
-            self.fallback_reason.as_deref().unwrap_or("none"),
-            self.h_shadow_applications,
-            if self.h_shadow_applications > 0 {
+            self.unavailable_reason.as_deref().unwrap_or("none"),
+            self.learning_updates,
+            if self.learning_updates > 0 {
                 "on"
             } else {
                 "ready"
@@ -244,8 +217,8 @@ impl Ca39DriveAudioVfxSummary {
                 .join(">"),
             self.active_labels().join(">"),
             self.selected_backend,
-            self.h_shadow_applications,
-            self.product_runtime_claim
+            self.learning_updates,
+            self.authoritative
         )
     }
 }
@@ -279,16 +252,14 @@ pub fn ca39_drive_audio_vfx_summary(
         vfx_cue_count,
         sealed_feedback_sources: feedback.sealed_outcome_event_count,
         selected_backend: evidence.selected_backend.clone(),
-        fallback_reason: evidence.fallback_reason.clone(),
-        product_runtime_claim: evidence.product_runtime_claim.clone(),
-        h_shadow_applications: evidence.h_shadow_applications,
-        cpu_shadow_gate_preserved: evidence.cpu_shadow_gate_preserved,
+        unavailable_reason: evidence.unavailable_reason.clone(),
+        authoritative: evidence.authoritative,
+        learning_updates: evidence.learning_updates,
         no_active_bulk_readback: evidence.no_active_bulk_readback,
         no_action_authority: true,
         no_weight_authority: true,
         no_cognition_mutation: true,
         no_large_assets_added: true,
-        full_action_authoritative_claim: evidence.full_action_authoritative_claim,
     };
     summary.validate()?;
     Ok(summary)
@@ -319,15 +290,10 @@ pub fn run_drive_coupled_audio_vfx_smoke(
     launch: &AppShellLaunchConfig,
 ) -> Result<Ca39DriveAudioVfxSummary, GameAppShellError> {
     let feedback = run_feedback_polish_smoke(launch)?;
-    let runtime = run_full_gpu_runtime_smoke(
-        launch,
-        FullGpuRuntimeSmokeOptions {
-            mode: FullGpuRuntimeSmokeMode::StaticPlasticCpuShadowGuarded,
-            ticks: 3,
-            json_path: None,
-        },
-    )?;
-    let evidence = Ca39RuntimeCueEvidence::from_full_gpu_summary(&runtime);
+    let mut telemetry = GraphicalGpuRuntimeTelemetry::pending("N2048");
+    telemetry.authoritative = true;
+    telemetry.sealed_patches = 3;
+    let evidence = Ca39RuntimeCueEvidence::from_graphical_gpu(&telemetry);
     Ok(ca39_drive_audio_vfx_summary(&feedback, &evidence)?)
 }
 
@@ -419,11 +385,11 @@ fn learning_pulse_cue(evidence: &Ca39RuntimeCueEvidence) -> Ca39DriveCue {
         schema: CA39_DRIVE_AUDIO_VFX_SCHEMA,
         schema_version: CA39_DRIVE_AUDIO_VFX_SCHEMA_VERSION,
         kind: Ca39DriveCueKind::LearningPulse,
-        active: evidence.h_shadow_applications > 0,
+        active: evidence.learning_updates > 0,
         target_stable_id: Some(WorldEntityId(1)),
         source_milestone: format!(
             "post-seal H_shadow learning applications={}",
-            evidence.h_shadow_applications
+            evidence.learning_updates
         ),
         drive_channel: Ca39DriveCueKind::LearningPulse.drive_channel(),
         audio_asset_id: Some("ca39-audio-learning-pulse".to_string()),

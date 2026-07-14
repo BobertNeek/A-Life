@@ -17,7 +17,13 @@ Non-negotiable rules:
 - Use scalable brain classes and sparse class-bucketed storage.
 - Internal SLM is a private subconscious semantic prior.
 - External teacher LLM teaches through ordinary perception.
-- Do not implement neural runtime kernels during scaffold phase.
+- Production neural execution is GPU-authoritative WGSL; do not add a live CPU
+  shadow, parity gate, or automatic CPU neural fallback.
+- Keep pure CPU neural helpers test-only or developer-only.
+- World code enumerates unscored candidates and remains authoritative for
+  legality and outcomes.
+- Promote only N512, N1024, and N2048 until larger tiers pass the documented
+  causal and performance gates.
 - Keep docs and local AGENTS.md files updated after meaningful changes.
 - Prefer Graphify queries for architecture questions when installed and a graph
   exists.

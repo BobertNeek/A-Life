@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     fs::create_dir_all(&output_directory)?;
-    for (file_name, atlas) in OUTPUT_FILES.iter().zip([albedo, normal, orm].into_iter()) {
+    for (file_name, atlas) in OUTPUT_FILES.iter().zip([albedo, normal, orm]) {
         let output_path = output_directory.join(file_name);
         DynamicImage::ImageRgba8(atlas).save_with_format(&output_path, ImageFormat::Png)?;
         let size = fs::metadata(&output_path)?.len();

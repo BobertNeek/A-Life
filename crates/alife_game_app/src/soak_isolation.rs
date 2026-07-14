@@ -40,8 +40,8 @@ pub struct SoakIsolationSummary {
     pub monitoring_instructions: Vec<String>,
     pub precision_drift_counters: Vec<SoakIsolationCounter>,
     pub report_artifacts_untracked: bool,
-    pub cpu_fallback_preserved: bool,
-    pub cpu_shadow_parity_preserved: bool,
+    pub failure_stop_preserved: bool,
+    pub gpu_authority_preserved: bool,
     pub no_active_bulk_readback: bool,
     pub full_action_authoritative_claim: bool,
     pub release_tag_created: bool,
@@ -55,8 +55,8 @@ impl SoakIsolationSummary {
             || !self.artifact_root.starts_with("target/")
             || !self.default_report_path.starts_with("target/")
             || !self.report_artifacts_untracked
-            || !self.cpu_fallback_preserved
-            || !self.cpu_shadow_parity_preserved
+            || !self.failure_stop_preserved
+            || !self.gpu_authority_preserved
             || !self.no_active_bulk_readback
             || self.full_action_authoritative_claim
             || self.release_tag_created
@@ -89,8 +89,8 @@ impl SoakIsolationSummary {
             "Get-Process",
             "WorkingSet64",
             "PrivateMemorySize64",
-            "cpu_shadow_parity_checks",
-            "parity_failures",
+            "gpu_authority_ticks",
+            "finite_rejections",
             "h_shadow",
             "target/ca36_soak_isolation",
             "not full action-authoritative",
@@ -157,15 +157,15 @@ pub fn run_multi_hour_soak_isolation_smoke() -> Result<SoakIsolationSummary, Gam
     let graphical_commands = vec![
         SoakIsolationCommand {
             name: "production_voxel_gpu_30s_smoke".to_string(),
-            command: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 30 -GpuMode auto-with-cpu-fallback -RecordPerformance".to_string(),
+            command: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 30 -BrainPolicy gpu-required -RecordPerformance".to_string(),
             manual: false,
             min_ticks: None,
             expected_artifact: None,
             evidence_boundary: "Bounded graphical smoke; dry-run is not graphical evidence.".to_string(),
         },
         SoakIsolationCommand {
-            name: "production_voxel_forced_cpu_fallback_10s_smoke".to_string(),
-            command: "$env:ALIFE_GPU_RUNTIME_AVAILABLE=\"0\"; powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 10 -GpuMode auto-with-cpu-fallback -RecordPerformance; Remove-Item Env:\\ALIFE_GPU_RUNTIME_AVAILABLE -ErrorAction SilentlyContinue".to_string(),
+            name: "production_voxel_gpu_unavailable_preflight".to_string(),
+            command: "$env:ALIFE_GPU_RUNTIME_AVAILABLE=\"0\"; powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -SmokeSeconds 10 -BrainPolicy gpu-required -RecordPerformance; Remove-Item Env:\\ALIFE_GPU_RUNTIME_AVAILABLE -ErrorAction SilentlyContinue".to_string(),
             manual: false,
             min_ticks: None,
             expected_artifact: None,
@@ -179,9 +179,9 @@ pub fn run_multi_hour_soak_isolation_smoke() -> Result<SoakIsolationSummary, Gam
     ];
     let precision_drift_counters = vec![
         SoakIsolationCounter {
-            name: "cpu_shadow_parity_checks".to_string(),
-            source: "gpu-longrun-soak and gpu-sustained-learning-soak summaries".to_string(),
-            pass_condition: "checks equal completed GPU proposal ticks and parity_failures remains 0".to_string(),
+            name: "gpu_authority_ticks".to_string(),
+            source: "GPU closed-loop soak summaries".to_string(),
+            pass_condition: "authority ticks equal completed neural ticks and finite rejections remain 0".to_string(),
         },
         SoakIsolationCounter {
             name: "first_parity_failure_tick".to_string(),
@@ -230,8 +230,8 @@ pub fn run_multi_hour_soak_isolation_smoke() -> Result<SoakIsolationSummary, Gam
         monitoring_instructions,
         precision_drift_counters,
         report_artifacts_untracked: true,
-        cpu_fallback_preserved: true,
-        cpu_shadow_parity_preserved: true,
+        failure_stop_preserved: true,
+        gpu_authority_preserved: true,
         no_active_bulk_readback: true,
         full_action_authoritative_claim: false,
         release_tag_created: false,
@@ -294,14 +294,14 @@ Status: CI-safe protocol smoke only. Manual long-run reports belong under `{arti
 ## CI Smoke\n\n`{ci_smoke_command}`\n\n\
 ## Manual 10k+ Commands\n\n{}\
 ## Optional Multi-Hour Commands\n\nMinimum optional duration: `{}` hours.\n\n{}\
-## Graphical/Fallback Checks\n\n{}\
+## Graphical Authority Checks\n\n{}\
 ## Memory And Process Monitoring\n\n{}\
 ## Precision/Drift Counters\n\n{}\
 ## Boundaries\n\n\
-- CPU fallback remains available and visibly degraded where applicable.\n\
-- CPU shadow parity remains the gate; `cpu_shadow_parity_checks` and `parity_failures` must be recorded.\n\
+- GPU unavailability stops learned actions.\n\
+- `gpu_authority_ticks` and `finite_rejections` must be recorded.\n\
 - H_shadow deltas apply only through the post-seal core contract; `h_shadow_delta_max` must be finite.\n\
-- This is not full action-authoritative GPU runtime evidence.\n\
+- GPU execution is authoritative for neural actions.\n\
 - No active bulk neural readback is allowed.\n\
 - No release tag, S12, G25, or P37 is created.\n\
 - Verify report artifacts with `git ls-files {artifact_root}` before commit.\n",

@@ -628,12 +628,29 @@ impl CpuNeuralState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActivationFunction {
-    Identity,
-    Relu,
-    Tanh,
-    Logistic,
+    Identity = 0,
+    Relu = 1,
+    Tanh = 2,
+    Logistic = 3,
+}
+
+impl ActivationFunction {
+    pub const fn raw(self) -> u8 {
+        self as u8
+    }
+
+    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            0 => Ok(Self::Identity),
+            1 => Ok(Self::Relu),
+            2 => Ok(Self::Tanh),
+            3 => Ok(Self::Logistic),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

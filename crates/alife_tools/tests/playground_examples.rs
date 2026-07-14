@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use alife_tools::p35_playground::{
-    run_gpu_fallback_demo, run_headless_cpu_demo, run_save_load_demo, run_school_teacher_demo,
+    run_gpu_authority_demo, run_headless_cpu_demo, run_save_load_demo, run_school_teacher_demo,
     run_semantic_fake_provider_demo, validate_playground_manifest, PlaygroundExampleConfig,
 };
 
@@ -24,7 +24,7 @@ fn headless_cpu_playground_smoke_loads_p34_config_and_emits_patch_log_summary() 
     let report = run_headless_cpu_demo(config).unwrap();
 
     assert_eq!(report.seed, 4242);
-    assert_eq!(report.backend_selected, "CpuReference");
+    assert_eq!(report.backend_selected, "HeuristicBaseline");
     assert!(report.sealed_patch_count >= 1);
     assert!(report.packed_log_count >= 1);
     assert!(report
@@ -69,12 +69,12 @@ fn semantic_demo_tolerates_missing_provider_and_uses_fake_provider_when_enabled(
 }
 
 #[test]
-fn gpu_demo_falls_back_to_cpu_and_keeps_diagnostics_boundary_scoped() {
-    let report = run_gpu_fallback_demo().unwrap();
+fn gpu_demo_fails_closed_and_keeps_diagnostics_boundary_scoped() {
+    let report = run_gpu_authority_demo().unwrap();
 
-    assert_eq!(report.requested_backend, "GpuStatic");
-    assert_eq!(report.selected_backend, "CpuReference");
-    assert!(report.cpu_fallback);
+    assert_eq!(report.requested_backend, "GpuAuthoritative");
+    assert_eq!(report.selected_backend, "Unavailable");
+    assert!(report.unavailable_is_fail_closed);
     assert!(!report.active_bulk_readback_allowed);
     assert!(report.diagnostic_export_boundary_allowed);
 }

@@ -104,7 +104,7 @@ impl Ca19GraphicalEcologySummary {
                 message: "CA19 ecology invariant flags must remain true",
             });
         }
-        if self.product_runtime_claim != "CpuShadowGuardedStaticPlusLiveHShadow" {
+        if self.product_runtime_claim != "GpuAuthoritative" {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message: "CA19 must not change the GPU product claim",
             });
@@ -269,7 +269,7 @@ pub fn ca19_graphical_ecology_summary(
         save_load_roundtrip_preserved,
         stable_ids_only: true,
         display_only: true,
-        product_runtime_claim: "CpuShadowGuardedStaticPlusLiveHShadow",
+        product_runtime_claim: "GpuAuthoritative",
     };
     summary.validate()?;
     Ok(summary)

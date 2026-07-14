@@ -2,8 +2,8 @@ param(
     [switch]$DryRun,
     [ValidateRange(0, 120)]
     [int]$SmokeSeconds = 0,
-    [ValidateSet("static-plastic-cpu-shadow-guarded", "cpu-reference", "auto-with-cpu-fallback")]
-    [string]$GpuMode = "static-plastic-cpu-shadow-guarded",
+    [ValidateSet("gpu-required")]
+    [string]$BrainPolicy = "gpu-required",
     [ValidateSet("gpu-alpha", "p34")]
     [string]$Scenario = "gpu-alpha",
     [ValidateSet("auto", "dx12", "vulkan", "existing")]
@@ -52,7 +52,7 @@ Record external media paths or links only.
 - Display resolution:
 - Exact command:
 - Window opened:
-- GPU status visible: GPU / CPU fallback / unavailable
+- GPU authority and unavailable status visible
 - Crash summary path, if any:
 - Screenshot/video external reference, if manually captured:
 - Creature/food/hazard visible:
@@ -112,8 +112,8 @@ $Args = @(
     $Manifest,
     "--scenario",
     $Scenario,
-    "--gpu-mode",
-    $GpuMode
+    "--brain-policy",
+    $BrainPolicy
 )
 
 if ($SmokeSeconds -gt 0) {
@@ -127,9 +127,9 @@ Write-Host "Starting A-Life GPU Alpha Playground from package"
 Write-Host "Executable: $Exe"
 Write-Host "Manifest: $Manifest"
 Write-Host "Scenario requested: $Scenario"
-Write-Host "GPU mode requested: $GpuMode"
-Write-Host "CPU fallback is safety fallback, not the target alpha path."
-Write-Host "Product claim: CpuShadowGuardedStaticPlusLiveHShadow"
+Write-Host "Brain policy requested: $BrainPolicy"
+Write-Host "GPU unavailability stops learned actions."
+Write-Host "Product claim: GpuAuthoritative"
 Write-Host "Full action-authoritative GPU runtime claim: false"
 Write-Host "Release tag: not created"
 Write-Host "Controls: left click select, Space pause/run, N step once, R reset, 1/2/3 speed, F follow, Esc quit."
@@ -158,8 +158,8 @@ if ($IsWindowsHost) {
 
 $PreflightArgs = @(
     "runtime-prereq-smoke",
-    "--gpu-mode",
-    $GpuMode,
+    "--brain-policy",
+    $BrainPolicy,
     "--graphics-backend",
     $EffectiveGraphicsBackend,
     "--log",

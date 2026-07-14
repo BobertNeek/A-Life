@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf, process::ExitCode};
 
 use alife_tools::p35_playground::{
-    run_gpu_fallback_demo, run_headless_cpu_demo, run_save_load_demo, run_school_teacher_demo,
+    run_gpu_authority_demo, run_headless_cpu_demo, run_save_load_demo, run_school_teacher_demo,
     run_semantic_fake_provider_demo, validate_playground_manifest, PlaygroundExampleConfig,
 };
 
@@ -64,13 +64,13 @@ fn run() -> Result<String, String> {
                 report.provider_required_for_core_path
             ))
         }
-        [command] if command == "gpu-fallback" => {
-            let report = run_gpu_fallback_demo().map_err(|err| err.to_string())?;
+        [command] if command == "gpu-authority" => {
+            let report = run_gpu_authority_demo().map_err(|err| err.to_string())?;
             Ok(format!(
-                "P35 GPU fallback demo requested={} selected={} cpu_fallback={} active_bulk_readback={}",
+                "P35 GPU authority demo requested={} selected={} fail_closed={} active_bulk_readback={}",
                 report.requested_backend,
                 report.selected_backend,
-                report.cpu_fallback,
+                report.unavailable_is_fail_closed,
                 report.active_bulk_readback_allowed
             ))
         }
@@ -91,7 +91,7 @@ fn run() -> Result<String, String> {
             let save = run_save_load_demo(&fixture_root).map_err(|err| err.to_string())?;
             let school = run_school_teacher_demo().map_err(|err| err.to_string())?;
             let semantic = run_semantic_fake_provider_demo().map_err(|err| err.to_string())?;
-            let gpu = run_gpu_fallback_demo().map_err(|err| err.to_string())?;
+            let gpu = run_gpu_authority_demo().map_err(|err| err.to_string())?;
             let manifest = validate_playground_manifest(manifest).map_err(|err| err.to_string())?;
             Ok(format!(
                 "P35 run-all seed={} save={} sealed_patches={} school={} semantic={} gpu_selected={} sample_paths={}",
@@ -104,6 +104,6 @@ fn run() -> Result<String, String> {
                 manifest.checked_paths
             ))
         }
-        _ => Err("usage: p35_playground run-headless <p34-fixture-root> | save-load <p34-fixture-root> | school-demo | semantic-demo | gpu-fallback | validate-manifest <manifest> | run-all <p34-fixture-root> <manifest>".to_string()),
+        _ => Err("usage: p35_playground run-headless <p34-fixture-root> | save-load <p34-fixture-root> | school-demo | semantic-demo | gpu-authority | validate-manifest <manifest> | run-all <p34-fixture-root> <manifest>".to_string()),
     }
 }

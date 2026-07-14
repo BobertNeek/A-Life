@@ -343,7 +343,7 @@ pub fn creature_inspector_snapshot(
         None => "sealed=false sequence=None success=None contact=None packed_logs=0".to_string(),
     };
     let mut troubleshooting_messages = vec![
-        "backend=CpuReference fallback=not-required-for-headless-smoke".to_string(),
+        "backend=HeuristicBaseline explicit-headless-smoke".to_string(),
         "semantic_provider=optional missing_provider=nonfatal".to_string(),
         "gpu_runtime=optional no-active-neural-readback".to_string(),
     ];

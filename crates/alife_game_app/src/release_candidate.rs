@@ -392,7 +392,7 @@ fn validate_release_candidate_report(
         "cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke",
         "cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke",
         "No release tag was created",
-        "CPU fallback is not GPU performance",
+        "unavailable GPU is not GPU performance",
     ] {
         if !report.contains(required) {
             return Err(GameAppShellError::VisibleWorldMismatch {

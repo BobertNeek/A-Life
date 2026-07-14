@@ -452,9 +452,7 @@ pub fn behavior_tuning_report_markdown(summary: &BehaviorTuningSummary) -> Strin
     report.push_str("\n## No hidden overfitting\n\n");
     report.push_str("- CA21 reuses deterministic G19/G06-G09/G18 signatures rather than retuning fixture data to pass.\n");
     report.push_str("- Watch statuses are retained in the report instead of hidden or converted into pass claims.\n");
-    report.push_str(
-        "- CPU fallback and CPU shadow parity remain separate from product GPU claims.\n",
-    );
+    report.push_str("- Required GPU unavailability is typed and stops learned actions.\n");
     report.push_str("- CA22 owns broader long-run ecological soak evidence.\n");
     report.push_str("\n## Reproduction command\n\n");
     report.push_str(&format!("`{}`\n", summary.manual_extended_command));

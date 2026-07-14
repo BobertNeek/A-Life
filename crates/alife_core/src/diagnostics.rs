@@ -35,6 +35,16 @@ pub enum DiagnosticCode {
     InvalidSparseProjectionSchema,
     UnsupportedSparseTileFormat,
     BackendParity,
+    InvalidPerceptionFrame,
+    InvalidActionCandidate,
+    InvalidDecisionEvidence,
+    EvidenceKindMismatch,
+    PhenotypeCompile,
+    UnsupportedProductionBrainClass,
+    GpuLayoutMismatch,
+    SensorProfileMismatch,
+    BrainOwnershipMismatch,
+    NeuralBackendUnavailable,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -140,6 +150,34 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
                 Self::new(DiagnosticCode::UnsupportedSparseTileFormat)
             }
             ScaffoldContractError::BackendParity => Self::new(DiagnosticCode::BackendParity),
+            ScaffoldContractError::InvalidPerceptionFrame => {
+                Self::new(DiagnosticCode::InvalidPerceptionFrame)
+            }
+            ScaffoldContractError::InvalidActionCandidate => {
+                Self::new(DiagnosticCode::InvalidActionCandidate)
+            }
+            ScaffoldContractError::InvalidDecisionEvidence => {
+                Self::new(DiagnosticCode::InvalidDecisionEvidence)
+            }
+            ScaffoldContractError::EvidenceKindMismatch => {
+                Self::new(DiagnosticCode::EvidenceKindMismatch)
+            }
+            ScaffoldContractError::PhenotypeCompile => Self::new(DiagnosticCode::PhenotypeCompile),
+            ScaffoldContractError::UnsupportedProductionBrainClass => {
+                Self::new(DiagnosticCode::UnsupportedProductionBrainClass)
+            }
+            ScaffoldContractError::GpuLayoutMismatch => {
+                Self::new(DiagnosticCode::GpuLayoutMismatch)
+            }
+            ScaffoldContractError::SensorProfileMismatch => {
+                Self::new(DiagnosticCode::SensorProfileMismatch)
+            }
+            ScaffoldContractError::BrainOwnershipMismatch => {
+                Self::new(DiagnosticCode::BrainOwnershipMismatch)
+            }
+            ScaffoldContractError::NeuralBackendUnavailable => {
+                Self::new(DiagnosticCode::NeuralBackendUnavailable)
+            }
         }
     }
 }

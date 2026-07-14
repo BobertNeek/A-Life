@@ -13,7 +13,7 @@ fn gpu_timing_report_marks_diagnostic_evidence_not_product_runtime() {
         backend_api: "Vulkan".to_string(),
         driver_info: "test-driver".to_string(),
         timestamp_query_supported: false,
-        requested_backend: GpuRuntimeBackendKind::GpuStatic,
+        requested_backend: GpuRuntimeBackendKind::GpuAuthoritative,
         product_gameplay_timing_claim: GpuDiagnosticProductRuntimeClaim::None,
         workloads: vec![GpuDiagnosticWorkloadTiming {
             schema_version: GPU_DIAGNOSTIC_TIMING_SCHEMA_VERSION,
@@ -40,7 +40,7 @@ fn gpu_timing_report_marks_diagnostic_evidence_not_product_runtime() {
     assert!(markdown.contains("HostObservedDiagnostic"));
     assert!(markdown.contains("DiagnosticOnly"));
     assert!(markdown.contains("not active gameplay runtime timing"));
-    assert!(markdown.contains("CPU fallback remains available"));
+    assert!(markdown.contains("Required GPU unavailability is typed"));
 }
 
 #[test]

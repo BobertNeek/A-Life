@@ -17,4 +17,11 @@ Rules:
 - Do not describe `Standard2048` as the global brain shape; it is only a reference tier.
 - Keep internal SLM and external teacher LLM boundaries separate.
 - Keep Graphify and DOX as developer tooling, not runtime dependencies.
+- Production neural execution is GPU-authoritative WGSL; do not add a live CPU
+  shadow, parity gate, or automatic CPU neural fallback.
+- Keep pure CPU neural helpers test-only or developer-only.
+- World code enumerates unscored candidates and remains authoritative for
+  legality and outcomes.
+- Promote only N512, N1024, and N2048 until larger tiers pass the documented
+  causal and performance gates.
 - When docs change architecture, update `architecture_decisions.md` or explain why no ADR change is needed.

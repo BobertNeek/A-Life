@@ -1,7 +1,13 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionKind, ActionProposal, ActionTarget,
-    Confidence, NormalizedScalar, OrganismId, TeacherLessonResponseChannel,
-    TeacherPerceptionChannel, WorldEntityId,
+    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand, ActionId,
+    ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome,
+    BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
+    Confidence, DecisionSnapshot, DevelopmentState, DurationTicks, ExperiencePatch,
+    ExperiencePatchBuilder, ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity,
+    LobeKind, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeHash,
+    PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PreActionSnapshot,
+    ScaffoldContractError, SensorProfile, SensoryChannels, SensorySnapshot, SignedValence,
+    TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, Vec3f, Velocity, WorldEntityId,
 };
 use alife_school::{
     Curriculum, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -32,6 +38,149 @@ fn proposal(
         NormalizedScalar::new(0.7).unwrap(),
     )
     .unwrap()
+}
+
+fn neural_patch() -> ExperiencePatch {
+    let tick = Tick::new(7);
+    let sequence_id = ExperienceSequenceId(991);
+    let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
+    let genome = BrainGenome::scaffold(42, spec.id);
+    let sensory = SensorySnapshot::new(
+        organism(),
+        tick,
+        Vec3f::ZERO,
+        SensoryChannels::ZERO,
+        Default::default(),
+    )
+    .unwrap();
+    let candidate = ActionCandidate::new(
+        0,
+        ActionId(810),
+        ActionKind::Inspect,
+        CandidateActionFamily::Inspect,
+        CandidateObservationRef::None,
+        ActionTarget::NONE,
+        CandidateFeatureVector::zero(),
+        Confidence::new(0.9).unwrap(),
+        NormalizedScalar::new(0.1).unwrap(),
+        DurationTicks::new(1),
+        DurationTicks::new(1),
+    )
+    .unwrap();
+    let frame = PerceptionFrame::new(
+        organism(),
+        tick,
+        SensorProfile::PrivilegedAffordanceV1,
+        sensory,
+        BodySnapshot {
+            pose: Pose::IDENTITY,
+            velocity: Velocity::ZERO,
+        },
+        HomeostaticSnapshot::baseline(tick),
+        vec![candidate],
+    )
+    .unwrap();
+    let selection = NeuralActionSelection {
+        candidate_index: 0,
+        logit: 0.75,
+        confidence: Confidence::new(0.8).unwrap(),
+        active_tiles: 12,
+        active_synapses: 144,
+    };
+    let phenotype_hash = PhenotypeHash([11, 22, 33, 44]);
+    let teacher_metadata = LessonResponse::new(
+        LessonId::new(2_311).unwrap(),
+        LessonResponseKind::CreatureVocalized,
+        TeacherLessonResponseChannel::Speech,
+    )
+    .with_teacher_entity(WorldEntityId(42))
+    .to_action_metadata()
+    .unwrap();
+    let teacher_bypass = ActionCommand::structured(
+        organism(),
+        candidate.action_id,
+        candidate.kind,
+        candidate.target,
+        Intensity::new(1.0).unwrap(),
+        candidate.min_duration,
+        selection.confidence,
+        0,
+        Some(teacher_metadata),
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(matches!(
+        DecisionSnapshot::from_neural_selection(
+            sequence_id,
+            phenotype_hash,
+            7,
+            1,
+            &frame,
+            selection,
+            teacher_bypass,
+        ),
+        Err(ScaffoldContractError::InvalidDecisionEvidence)
+    ));
+
+    let decision = DecisionSnapshot::from_neural_selection(
+        sequence_id,
+        phenotype_hash,
+        7,
+        1,
+        &frame,
+        selection,
+        candidate
+            .to_command(organism(), selection.confidence)
+            .unwrap(),
+    )
+    .unwrap();
+    let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35).unwrap())
+        .with_enabled_lobes([
+            LobeKind::SensoryGrounding,
+            LobeKind::CoreAssociation,
+            LobeKind::MotorArbitration,
+        ]);
+    let pre_action = PreActionSnapshot::from_neural_frame(
+        sequence_id,
+        spec.id,
+        phenotype_hash,
+        genome.id,
+        genome.schema_version,
+        development,
+        frame,
+    )
+    .unwrap();
+    let outcome = PostActionOutcome::new(
+        organism(),
+        sequence_id,
+        Tick::new(8),
+        true,
+        PhysicalActionOutcome {
+            contact: PhysicalContactKind::None,
+            target_entity: None,
+            displacement: Vec3f::ZERO,
+            collision_normal: None,
+            energy_cost: NormalizedScalar::new(0.0).unwrap(),
+        },
+        HomeostaticDelta::zero(),
+        SignedValence::new(0.25).unwrap(),
+        NormalizedScalar::new(0.0).unwrap(),
+        NormalizedScalar::new(0.0).unwrap(),
+        SignedValence::new(-0.1).unwrap(),
+        NormalizedScalar::new(0.2).unwrap(),
+    )
+    .unwrap();
+
+    ExperiencePatchBuilder::new(sequence_id)
+        .record_pre_action(pre_action)
+        .unwrap()
+        .record_decision(decision)
+        .unwrap()
+        .record_outcome(outcome)
+        .unwrap()
+        .seal()
+        .unwrap()
 }
 
 #[test]
@@ -212,6 +361,29 @@ fn patch_log_verifier_passes_and_fails_using_sealed_patch_memory_and_topology_ev
         .unwrap();
     assert!(!fail.passed);
     assert_eq!(fail.failed_checks.len(), 1);
+}
+
+#[test]
+fn neural_patch_is_audited_from_typed_candidate_evidence_without_a_heuristic_trace() {
+    let patch = neural_patch();
+    assert!(patch.decision().selected_action.arbitration_trace.is_none());
+    assert!(matches!(
+        patch.decision().heuristic_evidence(),
+        Err(ScaffoldContractError::EvidenceKindMismatch)
+    ));
+
+    let verification = PatchLogLessonVerifier
+        .verify_checks(
+            &[
+                VerifierCheck::NoDirectTeacherActionSelection,
+                VerifierCheck::SelectedByArbitration,
+            ],
+            &SchoolEvidence::new(std::slice::from_ref(&patch)),
+        )
+        .unwrap();
+
+    assert!(verification.passed);
+    assert!(verification.failed_checks.is_empty());
 }
 
 #[test]

@@ -1,7 +1,7 @@
 //! v0 scaffold: lesson verifiers over sealed experience evidence.
 
 use alife_core::{
-    validate_finite, ActionDecisionStatus, ExperiencePatch, ScaffoldContractError,
+    validate_finite, ActionDecisionStatus, EvidenceKind, ExperiencePatch, ScaffoldContractError,
     TeacherPerceptionChannel, Validate,
 };
 
@@ -150,8 +150,8 @@ fn check_passes(check: VerifierCheck, evidence: &SchoolEvidence<'_>) -> bool {
             .iter()
             .any(|patch| patch.outcome().reward_valence.raw() >= threshold),
         VerifierCheck::NoHiddenSemanticContext => evidence.patches.iter().all(|patch| {
-            patch.pre_action().sensory.semantic_context.is_none()
-                && patch.pre_action().sensory.gaussian_context.is_none()
+            patch.pre_action().sensory().semantic_context.is_none()
+                && patch.pre_action().sensory().gaussian_context.is_none()
         }),
         VerifierCheck::NoDirectTeacherActionSelection => evidence
             .patches
@@ -175,14 +175,14 @@ fn heard_token_matches(
 ) -> bool {
     patch
         .pre_action()
-        .sensory
+        .sensory()
         .language_context
         .heard_tokens
         .iter()
         .chain(
             patch
                 .pre_action()
-                .sensory
+                .sensory()
                 .context_streams
                 .vocal_tokens
                 .iter(),
@@ -194,18 +194,67 @@ fn heard_token_matches(
 fn selected_action_came_from_arbitration(patch: &ExperiencePatch) -> bool {
     let decision = patch.decision();
     let selected_id = decision.selected_action.action_id;
-    match decision.status {
-        ActionDecisionStatus::Selected => {
-            decision
-                .proposals
-                .iter()
-                .any(|proposal| proposal.action_id == selected_id)
-                && decision.arbitration_trace.wta_result.selected_action_id == Some(selected_id)
+    match decision.evidence_kind() {
+        EvidenceKind::HeuristicBaseline => {
+            let Ok(evidence) = decision.heuristic_evidence() else {
+                return false;
+            };
+            match evidence.status {
+                ActionDecisionStatus::Selected => {
+                    evidence
+                        .proposals
+                        .iter()
+                        .any(|proposal| proposal.action_id == selected_id)
+                        && evidence.arbitration_trace.wta_result.selected_action_id
+                            == Some(selected_id)
+                }
+                ActionDecisionStatus::FallbackSelected => evidence
+                    .arbitration_trace
+                    .wta_result
+                    .selected_action_id
+                    .is_none(),
+            }
         }
-        ActionDecisionStatus::FallbackSelected => decision
-            .arbitration_trace
-            .wta_result
-            .selected_action_id
-            .is_none(),
+        EvidenceKind::NeuralClosedLoopGpu => {
+            let Ok(evidence) = decision.neural_evidence() else {
+                return false;
+            };
+            let Some(candidate) = patch
+                .pre_action()
+                .perception()
+                .candidates()
+                .get(usize::from(evidence.candidate_index))
+            else {
+                return false;
+            };
+            candidate.candidate_index == evidence.candidate_index
+                && candidate.action_id == evidence.action_id
+                && candidate.family == evidence.action_family
+                && candidate.action_id == selected_id
+                && candidate.kind == decision.selected_action.kind
+                && candidate.target.entity == decision.selected_action.target_entity
+                && same_optional_vec3_bits(
+                    candidate.target.position,
+                    decision.selected_action.target_position,
+                )
+                && candidate.min_duration == decision.selected_action.duration_ticks
+                && decision.selected_action.teacher_lesson.is_none()
+                && decision.selected_action.arbitration_trace.is_none()
+        }
+    }
+}
+
+fn same_optional_vec3_bits(
+    left: Option<alife_core::Vec3f>,
+    right: Option<alife_core::Vec3f>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => {
+            left.x.to_bits() == right.x.to_bits()
+                && left.y.to_bits() == right.y.to_bits()
+                && left.z.to_bits() == right.z.to_bits()
+        }
+        _ => false,
     }
 }
