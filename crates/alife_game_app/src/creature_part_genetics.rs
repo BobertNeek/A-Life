@@ -5,11 +5,20 @@ use crate::{CreaturePartCatalog, CreaturePartCatalogError, CreaturePartSlot};
 pub const RARE_PART_MUTATION_THRESHOLD: u16 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreaturePartMutationWarning {
+    UnknownFamilyFallback {
+        requested: CreaturePartFamilyId,
+        fallback: CreaturePartFamilyId,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CreaturePartMutationResult {
     pub sources: CreaturePartSources,
     pub changed_slot: Option<CreaturePartSlot>,
     pub rare_cross_family: bool,
     pub incompatible_slot_count: u8,
+    pub warning: Option<CreaturePartMutationWarning>,
 }
 
 pub fn mutate_creature_part_sources(
@@ -18,11 +27,8 @@ pub fn mutate_creature_part_sources(
     mutation_seed: u64,
     catalog: &CreaturePartCatalog,
 ) -> Result<CreaturePartMutationResult, CreaturePartCatalogError> {
-    let torso = inherited.torso;
-    if catalog.family(torso).is_none() {
-        return Err(CreaturePartCatalogError::UnknownFamily(torso));
-    }
-    let normalized = normalize_ordinary_compatibility(inherited, mutation_seed, catalog)?;
+    let (normalized, warning) = normalize_sources(inherited, mutation_seed, catalog)?;
+    let torso = normalized.torso;
 
     let rare_cross_family = mutation_count >= RARE_PART_MUTATION_THRESHOLD
         && ((mutation_seed ^ u64::from(mutation_count)) & 0x7) == 0x5;
@@ -75,7 +81,53 @@ pub fn mutate_creature_part_sources(
         changed_slot,
         rare_cross_family,
         incompatible_slot_count,
+        warning,
     })
+}
+
+fn normalize_sources(
+    inherited: CreaturePartSources,
+    mutation_seed: u64,
+    catalog: &CreaturePartCatalog,
+) -> Result<(CreaturePartSources, Option<CreaturePartMutationWarning>), CreaturePartCatalogError> {
+    let mut normalized = inherited;
+    let mut warning = None;
+    if catalog.family(normalized.torso).is_none() {
+        let fallback = catalog
+            .families
+            .iter()
+            .min_by_key(|family| family.id)
+            .map(|family| family.id)
+            .ok_or(CreaturePartCatalogError::Empty)?;
+        normalized = CreaturePartSources::coherent(fallback);
+        warning = Some(CreaturePartMutationWarning::UnknownFamilyFallback {
+            requested: inherited.torso,
+            fallback,
+        });
+    } else {
+        for slot in [
+            CreaturePartSlotKey::Head,
+            CreaturePartSlotKey::Arms,
+            CreaturePartSlotKey::Legs,
+            CreaturePartSlotKey::Tail,
+        ] {
+            let current = family_for_slot(normalized, slot);
+            if catalog.family(current).is_some() {
+                continue;
+            }
+            normalized = with_family_for_slot(normalized, slot, normalized.torso);
+            if warning.is_none() {
+                warning = Some(CreaturePartMutationWarning::UnknownFamilyFallback {
+                    requested: current,
+                    fallback: normalized.torso,
+                });
+            }
+        }
+    }
+    Ok((
+        normalize_ordinary_compatibility(normalized, mutation_seed, catalog)?,
+        warning,
+    ))
 }
 
 fn normalize_ordinary_compatibility(
@@ -94,7 +146,7 @@ fn normalize_ordinary_compatibility(
     .enumerate()
     {
         let current = family_for_slot(normalized, slot);
-        if slot_is_ordinary_compatible(inherited.torso, slot, current, catalog) {
+        if slot_is_ordinary_compatible(normalized.torso, slot, current, catalog) {
             continue;
         }
         let mut candidates = catalog
@@ -102,13 +154,13 @@ fn normalize_ordinary_compatibility(
             .iter()
             .map(|family| family.id)
             .filter(|candidate| {
-                slot_is_ordinary_compatible(inherited.torso, slot, *candidate, catalog)
+                slot_is_ordinary_compatible(normalized.torso, slot, *candidate, catalog)
             })
             .collect::<Vec<_>>();
         candidates.sort_unstable();
         if candidates.is_empty() {
             return Err(CreaturePartCatalogError::NoCompatibleFamily {
-                torso: inherited.torso,
+                torso: normalized.torso,
                 slot: runtime_slot(slot),
             });
         }
@@ -255,5 +307,50 @@ mod tests {
         let right = mutate_creature_part_sources(inherited, 11, 44, &catalog).unwrap();
 
         assert_eq!(left, right);
+    }
+
+    #[test]
+    fn unknown_attached_part_falls_back_to_saved_torso_before_mutation() {
+        let catalog = load_production_creature_part_catalog().unwrap();
+        let torso = CreaturePartFamilyId(4);
+        let inherited = CreaturePartSources {
+            head: CreaturePartFamilyId(999),
+            torso,
+            arms: torso,
+            legs: torso,
+            tail: torso,
+        };
+
+        let result = mutate_creature_part_sources(inherited, 0, 1, &catalog).unwrap();
+
+        assert_eq!(result.sources.head, torso);
+        assert_eq!(
+            result.warning,
+            Some(CreaturePartMutationWarning::UnknownFamilyFallback {
+                requested: CreaturePartFamilyId(999),
+                fallback: torso,
+            })
+        );
+    }
+
+    #[test]
+    fn unknown_torso_falls_back_to_catalog_minimum_before_mutation() {
+        let catalog = load_production_creature_part_catalog().unwrap();
+        let result = mutate_creature_part_sources(
+            CreaturePartSources::coherent(CreaturePartFamilyId(999)),
+            0,
+            1,
+            &catalog,
+        )
+        .unwrap();
+
+        assert_eq!(result.sources.torso, CreaturePartFamilyId(0));
+        assert_eq!(
+            result.warning,
+            Some(CreaturePartMutationWarning::UnknownFamilyFallback {
+                requested: CreaturePartFamilyId(999),
+                fallback: CreaturePartFamilyId(0),
+            })
+        );
     }
 }

@@ -102,21 +102,37 @@ pub fn resolve_creature_assembly(
         .min_by_key(|family| family.id)
         .map(|family| family.id)
         .ok_or(CreatureAssemblyError::EmptyCatalog)?;
-    let unknown = requested_sources
-        .iter_slots()
-        .into_iter()
-        .map(|(_, family)| family)
-        .find(|family| catalog.family(*family).is_none());
-    let (sources, warning) = if let Some(requested) = unknown {
+    let unknown = requested_sources.torso;
+    let (sources, warning) = if catalog.family(unknown).is_none() {
         (
             CreaturePartSources::coherent(fallback),
             Some(CreatureAssemblyWarning::UnknownFamilyFallback {
-                requested,
+                requested: unknown,
                 fallback,
             }),
         )
     } else {
-        (requested_sources, None)
+        let mut normalized = requested_sources;
+        let mut warning = None;
+        for slot in [
+            CreaturePartSlot::Head,
+            CreaturePartSlot::LeftArm,
+            CreaturePartSlot::LeftLeg,
+            CreaturePartSlot::TailBack,
+        ] {
+            let current = family_for_slot(normalized, slot);
+            if catalog.family(current).is_some() {
+                continue;
+            }
+            normalized = with_family_for_slot(normalized, slot, normalized.torso);
+            if warning.is_none() {
+                warning = Some(CreatureAssemblyWarning::UnknownFamilyFallback {
+                    requested: current,
+                    fallback: normalized.torso,
+                });
+            }
+        }
+        (normalized, warning)
     };
     let torso = catalog
         .family(sources.torso)
@@ -271,6 +287,21 @@ fn family_for_slot(sources: CreaturePartSources, slot: CreaturePartSlot) -> Crea
     }
 }
 
+fn with_family_for_slot(
+    mut sources: CreaturePartSources,
+    slot: CreaturePartSlot,
+    family: CreaturePartFamilyId,
+) -> CreaturePartSources {
+    match slot {
+        CreaturePartSlot::Head => sources.head = family,
+        CreaturePartSlot::Torso => sources.torso = family,
+        CreaturePartSlot::LeftArm | CreaturePartSlot::RightArm => sources.arms = family,
+        CreaturePartSlot::LeftLeg | CreaturePartSlot::RightLeg => sources.legs = family,
+        CreaturePartSlot::TailBack => sources.tail = family,
+    }
+    sources
+}
+
 fn socket_name(slot: CreaturePartSlot) -> Option<&'static str> {
     match slot {
         CreaturePartSlot::Head => Some("neck"),
@@ -343,7 +374,13 @@ mod tests {
         )
         .unwrap();
 
-        assert!(recipe.warning.is_some());
+        assert_eq!(
+            recipe.warning,
+            Some(CreatureAssemblyWarning::UnknownFamilyFallback {
+                requested: CreaturePartFamilyId(999),
+                fallback: CreaturePartFamilyId(0),
+            })
+        );
         assert_eq!(
             recipe
                 .parts
@@ -352,6 +389,37 @@ mod tests {
                 .collect::<BTreeSet<_>>()
                 .len(),
             1
+        );
+    }
+
+    #[test]
+    fn unknown_attached_family_falls_back_to_saved_torso() {
+        let torso = CreaturePartFamilyId(3);
+        let recipe = resolve_creature_assembly(
+            CreaturePartSources {
+                head: CreaturePartFamilyId(999),
+                torso,
+                arms: CreaturePartFamilyId(6),
+                legs: CreaturePartFamilyId(0),
+                tail: CreaturePartFamilyId(7),
+            },
+            CreaturePartLodId::Compact,
+            &load_production_creature_part_catalog().unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(recipe.root_family, torso);
+        assert_eq!(recipe.parts[&CreaturePartSlot::Head].family, torso);
+        assert_eq!(
+            recipe.parts[&CreaturePartSlot::LeftArm].family,
+            CreaturePartFamilyId(6)
+        );
+        assert_eq!(
+            recipe.warning,
+            Some(CreatureAssemblyWarning::UnknownFamilyFallback {
+                requested: CreaturePartFamilyId(999),
+                fallback: torso,
+            })
         );
     }
 
