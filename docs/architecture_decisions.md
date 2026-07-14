@@ -152,3 +152,21 @@ organism/tick/sequence, replay, NaN/Inf, out-of-range values, duplicate targets,
 failed CPU shadow parity, non-H_shadow layers, and any claimed mutation of
 `W_genetic_fixed`, lifetime-consolidated weights, or H_operational. CPU fallback
 and CPU shadow parity remain authoritative.
+
+## ADR-024: Closed-Loop Neural Cognition Is GPU-Authoritative
+
+Decision: The production neural policy gathers current perception and unscored
+world candidates before dispatch, then performs encoding, recurrent dynamics,
+candidate scoring, winner selection, waking plasticity, and sleep
+consolidation through WGSL pipelines. Production does not run a live CPU neural
+shadow, parity-gated duplicate brain, or automatic CPU neural fallback.
+
+`HeuristicBaseline` remains explicit and separately labelled. GPU unavailability
+returns a typed unavailable result. N512, N1024, and N2048 are the initial
+production neural capacity classes; larger classes remain research-gated.
+
+This decision supersedes the CPU consolidation authority in ADR-014, the P14
+CPU-schema ownership clause in ADR-015, GPU parity gating in ADR-016, CPU
+fallback in ADR-019 and ADR-021, and the CPU-shadow/parity authority clauses in
+ADR-023. Their save-safety, sparse-layout, world-authority, and sealed-patch
+boundaries remain in force where they do not conflict with ADR-024.

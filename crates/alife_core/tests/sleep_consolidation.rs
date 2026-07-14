@@ -1,15 +1,17 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionId, ActionKind, ActionProposal,
-    ActionTarget, BrainClassSpec, BrainScaleTier, Confidence, CreatureMind, DenseTile, DriveDelta,
-    DurationTicks, EndocrineDelta, HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot,
-    Intensity, LobeKind, MemoryBank, MemoryBankConfig, MemoryExpectancy, MemoryOutcomeSummary,
-    MemoryRecord, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalActionOutcome,
-    PhysicalContactKind, PostActionOutcome, ProjectionRoutingRef, ProjectionTile,
-    ScaffoldContractError, SensoryChannels, SensorySnapshot, SignedValence,
-    SleepConsolidationConfig, SleepConsolidator, SleepController, SleepPhase, SleepTrigger,
-    SparseTileCoord, SparseTilePayload, StableLifetimeTraitKind, StructuralEditBatch,
-    StructuralEditCandidate, StructuralEditKind, StructuralEditReason, SynapseWeightSplit, Tick,
-    TopologicalMap, TopologicalMapConfig, Vec3f, Velocity, WorldEntityId, MICROTILE_CELLS,
+    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainScaleTier,
+    CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
+    CreatureMind, DenseTile, DriveDelta, DurationTicks, EndocrineDelta, HomeostaticDelta,
+    HomeostaticParameters, HomeostaticSnapshot, Intensity, LobeKind, MemoryBank, MemoryBankConfig,
+    MemoryExpectancy, MemoryOutcomeSummary, MemoryRecord, NeuralProjectionSchema, NormalizedScalar,
+    OrganismId, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
+    ProjectionRoutingRef, ProjectionTile, ScaffoldContractError, SensorProfile, SensoryChannels,
+    SensorySnapshot, SignedValence, SleepConsolidationConfig, SleepConsolidator, SleepController,
+    SleepPhase, SleepTrigger, SparseTileCoord, SparseTilePayload, StableLifetimeTraitKind,
+    StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
+    SynapseWeightSplit, Tick, TopologicalMap, TopologicalMapConfig, Vec3f, Velocity, WorldEntityId,
+    MICROTILE_CELLS,
 };
 
 fn organism() -> OrganismId {
@@ -159,10 +161,41 @@ fn sealed_patch(
     let sequence_id = alife_core::ExperienceSequenceId(sequence_raw);
     let spec = spec();
     let genome = alife_core::BrainGenome::scaffold(42, spec.id);
-    let pre = alife_core::PreActionSnapshot::new(
+    let body = BodySnapshot {
+        pose: alife_core::Pose {
+            translation: Vec3f::new(1.0, 0.0, 0.0),
+            rotation: alife_core::Quatf::IDENTITY,
+        },
+        velocity: Velocity::ZERO,
+    };
+    let homeostasis = HomeostaticSnapshot::baseline(Tick::new(tick_raw));
+    let candidate_target = ActionTarget::new(Some(target), Some(Vec3f::new(0.0, 0.0, 1.0)));
+    let perception = PerceptionFrame::new(
         organism(),
-        sequence_id,
         Tick::new(tick_raw),
+        SensorProfile::PrivilegedAffordanceV1,
+        sensory(Tick::new(tick_raw), target),
+        body,
+        homeostasis,
+        vec![ActionCandidate::new(
+            0,
+            ActionId(400),
+            ActionKind::Interact,
+            CandidateActionFamily::Contact,
+            CandidateObservationRef::None,
+            candidate_target,
+            CandidateFeatureVector::zero(),
+            Confidence::new(0.8).unwrap(),
+            NormalizedScalar::new(0.0).unwrap(),
+            DurationTicks::new(4),
+            DurationTicks::new(4),
+        )
+        .unwrap()],
+    )
+    .unwrap();
+    let pre = alife_core::PreActionSnapshot::from_heuristic_frame(
+        sequence_id,
+        perception,
         spec.clone(),
         genome.clone(),
         alife_core::DevelopmentState::new(
@@ -182,13 +215,6 @@ fn sealed_patch(
             genome.genetic_prior_seed,
         )
         .unwrap(),
-        alife_core::Pose {
-            translation: Vec3f::new(1.0, 0.0, 0.0),
-            rotation: alife_core::Quatf::IDENTITY,
-        },
-        Velocity::ZERO,
-        HomeostaticSnapshot::baseline(Tick::new(tick_raw)),
-        sensory(Tick::new(tick_raw), target),
         alife_core::MemoryExpectancySnapshot::neutral(),
     )
     .unwrap();

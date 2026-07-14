@@ -4,6 +4,7 @@ pub mod action;
 pub mod action_abi;
 pub mod adapter;
 pub mod brain_class;
+pub mod canonical_digest;
 pub mod chemistry;
 pub mod diagnostics;
 pub mod error;
@@ -16,6 +17,8 @@ pub mod math;
 pub mod memory;
 pub mod neural;
 pub mod packed_log;
+pub mod perception;
+pub mod phenotype;
 pub mod post_seal_lifetime;
 pub mod reference_brain;
 pub mod routing;
@@ -37,7 +40,10 @@ pub use action::{
 };
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
-pub use brain_class::{BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier};
+pub use brain_class::{
+    BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,
+};
+pub use canonical_digest::CanonicalDigestBuilder;
 pub use chemistry::{
     ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta, EndocrineProfile,
     EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand, HomeostaticDelta,
@@ -47,10 +53,11 @@ pub use chemistry::{
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
 pub use experience::{
-    ConceptHint, DecisionSnapshot, ExperiencePatch, ExperiencePatchBuilder, ExperiencePatchHeader,
-    ExperiencePatchPhase, ExperiencePatchView, MemoryExpectancySnapshot, MemoryHint,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionSnapshot,
-    TeacherFeedbackObservation,
+    ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
+    ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,
+    HeuristicDecisionEvidence, HeuristicPreActionEvidence, MemoryExpectancySnapshot, MemoryHint,
+    NeuralDecisionEvidence, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
+    PreActionBrainEvidence, PreActionSnapshot, TeacherFeedbackObservation,
 };
 pub use genome::{
     AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
@@ -100,6 +107,20 @@ pub use packed_log::{
     PACKED_FLAG_HAS_TARGET_POSITION, PACKED_FLAG_HAS_TEACHER_FEEDBACK,
     PACKED_FLAG_HAS_TEACHER_LESSON, PACKED_FLAG_SUCCESS, PACKED_HORMONE_SUMMARY_CHANNELS,
     PACKED_LOG_DEFAULT_SIDE_BUFFER_CAPACITY_RECORDS, PACKED_SIDE_BUFFER_GROUP_COUNT,
+};
+pub use perception::{
+    ActionCandidate, BodySnapshot, CandidateActionFamily, CandidateFeatureDigest,
+    CandidateFeatureVector, CandidateObservationRef, NeuralActionSelection, PerceptionBaseDigest,
+    PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind, PerceptionFrame,
+    PerceptionFrameDigest, PerceptionFrameDraft, PolicyBackend, SensorProfile,
+    CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
+};
+pub use phenotype::{
+    BrainCapacityClass, BrainExecutionBudget, BrainPhenotype, CandidateDecoderFamilyPlan,
+    CandidateDecoderPlan, CompiledBudgets, CompiledProjection, CompiledSynapse,
+    CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate, GlobalPhenotypeBudgetReceipt,
+    NeuronDynamics, PhenotypeCompiler, PhenotypeCompilerInputs, PhenotypeHash, RouteBudgetReceipt,
+    SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourceGroup,
 };
 pub use post_seal_lifetime::{
     PostSealHShadowDeltaTarget, PostSealLearningToken, PostSealLifetimeDeltaApplication,

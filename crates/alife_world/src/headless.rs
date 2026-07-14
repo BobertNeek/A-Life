@@ -11,20 +11,24 @@ use std::{
 };
 
 use alife_core::{
-    ActionCommand, ActionId, ActionKind, AffordanceBits, BrainTickInput, BrainTickOutput,
-    Confidence, ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch, HeardToken,
-    HomeostaticDelta, Intensity, LanguageContextSnapshot, NormalizedScalar, OrganismId,
-    PhysicalActionOutcome, PhysicalContactKind, ReferenceActionExecution, ReferenceActionExecutor,
-    ReferenceActionFailure, ReferenceOutcomeObservation, ReferenceOutcomeObserver,
-    ReferenceOutcomeRequest, ReferenceSensoryAdapter, ReferenceSensoryRequest,
-    ScaffoldContractError, SensoryChannels, SensorySnapshot, SignedValence,
-    SleepConsolidationReport, SleepTransition, SleepTrigger, SocialAgentSnapshot,
-    SocialProximityEntry, TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
-    MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
+    ActionCommand, ActionId, ActionKind, AffordanceBits, BodySnapshot, BrainTickInput,
+    BrainTickOutput, Confidence, ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch,
+    HeardToken, HomeostaticDelta, HomeostaticSnapshot, Intensity, LanguageContextSnapshot,
+    NormalizedScalar, OrganismId, PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft,
+    PhysicalActionOutcome, PhysicalContactKind, Pose, Quatf, ReferenceActionExecution,
+    ReferenceActionExecutor, ReferenceActionFailure, ReferenceOutcomeObservation,
+    ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
+    ReferenceSensoryRequest, ScaffoldContractError, SensorProfile, SensoryChannels,
+    SensorySnapshot, SignedValence, SleepConsolidationReport, SleepTransition, SleepTrigger,
+    SocialAgentSnapshot, SocialProximityEntry, TeacherPerceptionChannel, Tick, Validate, Vec3f,
+    Velocity, WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
     SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
+use crate::candidate_enumerator::{
+    CandidateEnumerator, HeadlessCandidateEnumerator, HEADLESS_VISION_RADIUS,
+};
 use crate::ecology::{
     deterministic_zone_position, EcologyConfig, EcologyMetrics, EcologySensorySummary,
     EcologyState, EcologyStepReport, EcologyZoneId, ResourceLifecycle, ResourceSpawnPolicy,
@@ -32,9 +36,8 @@ use crate::ecology::{
 };
 
 const DEFAULT_ENTITY_ID_START: u64 = 1;
-const DEFAULT_VISION_RADIUS: f32 = 8.0;
 const DEFAULT_HEARING_RADIUS: f32 = 6.0;
-const CONTACT_RADIUS: f32 = 0.75;
+pub(crate) const HEADLESS_CONTACT_RADIUS: f32 = 0.75;
 const EAT_RADIUS: f32 = 1.25;
 const MOVE_STEP: f32 = 1.0;
 const MAX_VISIBLE_ENTITIES: usize = 16;
@@ -89,14 +92,20 @@ impl WorldObject {
             WorldObjectKind::Food => AffordanceBits::FOOD,
             WorldObjectKind::Hazard => AffordanceBits::HAZARD,
             WorldObjectKind::Obstacle => AffordanceBits::RESOURCE,
-            WorldObjectKind::Token => AffordanceBits::GLYPH_OR_WRITING,
+            WorldObjectKind::Token => {
+                let mut affordances = AffordanceBits::GLYPH_OR_WRITING;
+                if self.teacher_channel.is_some() {
+                    affordances |= AffordanceBits::TEACHER_OBJECT;
+                }
+                affordances
+            }
         }
     }
 
     fn blocks_position(&self, position: Vec3f) -> bool {
         self.kind == WorldObjectKind::Obstacle
             && !self.consumed
-            && distance(self.position, position) <= self.radius.max(CONTACT_RADIUS)
+            && distance(self.position, position) <= self.radius.max(HEADLESS_CONTACT_RADIUS)
     }
 }
 
@@ -333,6 +342,19 @@ impl HeadlessWorld {
             .collect()
     }
 
+    pub fn remove_organism(
+        &mut self,
+        organism_id: OrganismId,
+    ) -> Result<WorldObject, ScaffoldContractError> {
+        organism_id.validate()?;
+        let entity_id = self
+            .organism_entity_ids()
+            .into_iter()
+            .find_map(|(candidate, entity_id)| (candidate == organism_id).then_some(entity_id))
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        self.remove_agent_entity(entity_id)
+    }
+
     pub fn spawn_social_agent(
         &mut self,
         label: &str,
@@ -519,6 +541,50 @@ impl HeadlessWorld {
         })
     }
 
+    pub fn perception_frame_draft(
+        &self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+    ) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
+        homeostasis
+            .validate_contract()
+            .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
+        if homeostasis.tick != tick {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        let report = self.sensory_report(organism_id, tick)?;
+        let candidates = HeadlessCandidateEnumerator.enumerate_candidates(&report, profile)?;
+        let body = BodySnapshot {
+            pose: Pose {
+                translation: report.core_snapshot.observer_position,
+                rotation: Quatf::IDENTITY,
+            },
+            velocity: Velocity::ZERO,
+        };
+        PerceptionFrameDraft::new(
+            organism_id,
+            tick,
+            profile,
+            report.core_snapshot,
+            body,
+            homeostasis,
+            candidates,
+        )
+    }
+
+    pub fn perception_frame(
+        &self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+    ) -> Result<PerceptionFrame, ScaffoldContractError> {
+        self.perception_frame_draft(organism_id, tick, profile, homeostasis)?
+            .finalize(PerceptionContextBlock::empty())
+    }
+
     pub fn sensory_report(
         &self,
         organism_id: OrganismId,
@@ -529,7 +595,7 @@ impl HeadlessWorld {
         let visible_entities = self.visible_entities_from(agent);
         let contact_entities = visible_entities
             .iter()
-            .filter(|visible| visible.distance <= CONTACT_RADIUS)
+            .filter(|visible| visible.distance <= HEADLESS_CONTACT_RADIUS)
             .map(|visible| visible.id)
             .collect::<Vec<_>>();
 
@@ -547,7 +613,7 @@ impl HeadlessWorld {
 
         for visible in &visible_entities {
             affordances |= visible.affordances;
-            let salience = proximity_salience(visible.distance, DEFAULT_VISION_RADIUS);
+            let salience = proximity_salience(visible.distance, HEADLESS_VISION_RADIUS);
             match visible.kind {
                 WorldObjectKind::Food => {
                     visual[0] = visual[0].max(salience);
@@ -556,11 +622,14 @@ impl HeadlessWorld {
                 WorldObjectKind::Hazard => {
                     visual[1] = visual[1].max(salience);
                     smell[1] = smell[1].max(salience);
-                    pain = pain.max(proximity_salience(visible.distance, CONTACT_RADIUS * 2.0));
+                    pain = pain.max(proximity_salience(
+                        visible.distance,
+                        HEADLESS_CONTACT_RADIUS * 2.0,
+                    ));
                 }
                 WorldObjectKind::Obstacle => {
                     visual[2] = visual[2].max(salience);
-                    tactile[0] = tactile[0].max(if visible.distance <= CONTACT_RADIUS {
+                    tactile[0] = tactile[0].max(if visible.distance <= HEADLESS_CONTACT_RADIUS {
                         1.0
                     } else {
                         0.0
@@ -702,7 +771,7 @@ impl HeadlessWorld {
             kind: spec.kind,
             organism_id: spec.organism_id,
             position: spec.position,
-            radius: CONTACT_RADIUS,
+            radius: HEADLESS_CONTACT_RADIUS,
             nutrition: spec.nutrition.clamp(0.0, 1.0),
             hazard_pain: spec.hazard_pain.clamp(0.0, 1.0),
             token_id: spec.token_id,
@@ -936,7 +1005,7 @@ impl HeadlessWorld {
             .filter(|(id, object)| {
                 **id != agent_id.raw()
                     && !object.consumed
-                    && distance(object.position, destination) <= CONTACT_RADIUS
+                    && distance(object.position, destination) <= HEADLESS_CONTACT_RADIUS
             })
             .map(|(id, _)| WorldEntityId(*id))
             .collect::<Vec<_>>();
@@ -1099,7 +1168,7 @@ impl HeadlessWorld {
             .filter(|object| object.id != observer.id && !object.consumed)
             .filter_map(|object| {
                 let distance = distance(observer.position, object.position);
-                (distance <= DEFAULT_VISION_RADIUS).then_some(VisibleWorldEntity {
+                (distance <= HEADLESS_VISION_RADIUS).then_some(VisibleWorldEntity {
                     id: object.id,
                     kind: object.kind,
                     relative_position: subtract(object.position, observer.position),

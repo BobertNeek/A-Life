@@ -296,6 +296,15 @@ impl BrainComputeBudget {
 
 pub struct BrainClassRegistry;
 
+/// Compatibility boundary from legacy named tiers to stable capacity IDs.
+pub struct LegacyBrainClassAdapter;
+
+impl LegacyBrainClassAdapter {
+    pub const fn capacity_id_for_tier(tier: BrainScaleTier) -> BrainClassId {
+        tier.default_class_id()
+    }
+}
+
 impl BrainClassRegistry {
     const CANONICAL_TIERS: [BrainScaleTier; 8] = [
         BrainScaleTier::Nano512,

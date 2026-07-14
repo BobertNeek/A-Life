@@ -796,7 +796,7 @@ assert!(unique_mesh_handles < total_part_entities / 3);
 - [ ] **Step 2: Run the modular renderer tests red**
 
 ```powershell
-cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer modular -j 1 -- --nocapture
+cargo test -p alife_game_app --features "bevy-app gpu-runtime voxel-backend" --test fvr03_voxel_renderer modular -j 1 -- --nocapture
 ```
 
 Expected: old renderer spawns one whole mesh and no part hierarchy.
@@ -831,7 +831,7 @@ production_visuals_display_only=true
 - [ ] **Step 7: Run complete renderer and lineage suites**
 
 ```powershell
-cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
+cargo test -p alife_game_app --features "bevy-app gpu-runtime voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
 cargo test -p alife_game_app --test app_shell lifecycle_lineage_birth_inherits_and_mutates_appearance_genes -j 1 -- --nocapture
 ```
 
@@ -868,7 +868,7 @@ cargo test -p alife_tools creature_part_builder -- --nocapture
 cargo test -p alife_game_app creature_part_catalog -j 1 -- --nocapture
 cargo test -p alife_game_app creature_part_genetics -j 1 -- --nocapture
 cargo test -p alife_game_app creature_assembly -j 1 -- --nocapture
-cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
+cargo test -p alife_game_app --features "bevy-app gpu-runtime voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
 ```
 
 Expected: all pass before visual iteration.
@@ -882,8 +882,8 @@ cargo build -p alife_game_app --release --features "bevy-app gpu-runtime voxel-b
 - [ ] **Step 3: Capture minimum and comfort profiles**
 
 ```powershell
-target\release\alife_game_app.exe production-voxel --profile MinimumSettings30x30 --population 30 --resolution 1920x1080 --gpu-mode auto-with-cpu-fallback --graphics-backend vulkan --record-performance
-target\release\alife_game_app.exe production-voxel --profile MinSpecComfort1080p --resolution 1920x1080 --gpu-mode auto-with-cpu-fallback --graphics-backend vulkan --record-performance
+target\release\alife_game_app.exe production-voxel --profile MinimumSettings30x30 --population 30 --resolution 1920x1080 --brain-policy gpu-required --graphics-backend vulkan --record-performance
+target\release\alife_game_app.exe production-voxel --profile MinSpecComfort1080p --resolution 1920x1080 --brain-policy gpu-required --graphics-backend vulkan --record-performance
 ```
 
 Inspect at original resolution:
@@ -904,7 +904,7 @@ Iterate one variable group at a time: socket translation, socket scale, cut prof
 ```powershell
 cargo fmt --all -- --check
 cargo check --workspace --all-targets -j 1
-cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
+cargo test -p alife_game_app --features "bevy-app gpu-runtime voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
 cargo test -p alife_game_app --test app_shell lifecycle_lineage_birth_inherits_and_mutates_appearance_genes -j 1 -- --nocapture
 cargo run -p alife_tools --bin creature_part_builder -- validate --catalog crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json
 cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets

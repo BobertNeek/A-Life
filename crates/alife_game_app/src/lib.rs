@@ -14,9 +14,9 @@ mod prelude {
         CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch, GapResolutionStatus,
         GaussianClusterId, GenomeId, HomeostaticParameters, HomeostaticSnapshot, Intensity,
         LineageId, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
-        PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, ReferenceActionFailure,
-        ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel, TeacherPerceptionChannel,
-        Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
+        PolicyBackend, PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt,
+        ReferenceActionFailure, ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel,
+        TeacherPerceptionChannel, Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
         Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -38,8 +38,8 @@ mod prelude {
         G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::persistence::{
-        AssetManifest, BackendSelection, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
-        GpuRuntimeClassBucketAllocation, GpuRuntimeCpuShadowParityState, GpuRuntimeResidencySlots,
+        AssetManifest, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
+        GpuRuntimeAuthorityState, GpuRuntimeClassBucketAllocation, GpuRuntimeResidencySlots,
         GpuRuntimeSafeCheckpoint, GpuRuntimeSaveState, GpuRuntimeShaderAbiVersions,
         PersistenceError, PortableSaveFile, RuntimeConfig, SchoolSaveState, WorldObjectSaveState,
         FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
@@ -59,6 +59,9 @@ pub use schema::*;
 
 mod app_shell;
 pub use app_shell::*;
+
+mod brain_policy;
+pub use brain_policy::*;
 
 mod app_bundle_ingestion;
 pub use app_bundle_ingestion::*;
@@ -273,7 +276,15 @@ pub use content_tutorial_authoring::*;
 mod gpu_product_telemetry;
 pub use gpu_product_telemetry::*;
 
+mod gpu_authority_telemetry;
+pub use gpu_authority_telemetry::*;
+
+mod graphical_gpu_runtime_controller;
+pub use graphical_gpu_runtime_controller::*;
+
+#[cfg(feature = "gpu-runtime")]
 mod gpu_live_runtime;
+#[cfg(feature = "gpu-runtime")]
 pub use gpu_live_runtime::*;
 
 mod soak_isolation;

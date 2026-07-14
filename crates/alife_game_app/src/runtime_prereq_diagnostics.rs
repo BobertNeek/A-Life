@@ -1,8 +1,4 @@
-//! CA42 runtime prerequisite diagnostics for the Windows alpha launcher.
-//!
-//! This module is app/tooling policy. It probes optional GPU/windowing
-//! prerequisites and reports clear fallback/blocking state without changing
-//! simulation authority or making GPU mandatory for CI.
+//! Required-GPU runtime prerequisite diagnostics for product launch.
 
 use crate::prelude::*;
 use crate::*;
@@ -33,12 +29,12 @@ impl RuntimePrereqDiagnosticsOptions {
 
 impl Default for RuntimePrereqDiagnosticsOptions {
     fn default() -> Self {
-        Self {
-            gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
-            require_gpu: false,
-            graphics_backend: "dx12".to_string(),
-            log_path: PathBuf::from("target/artifacts/ca42_runtime_prereq/runtime_prereq.log"),
-        }
+        Self::new(
+            GraphicalBrainPolicyMode::GpuRequired,
+            true,
+            "vulkan",
+            "target/artifacts/ca42_runtime_prereq/runtime_prereq.log",
+        )
     }
 }
 
@@ -49,11 +45,9 @@ pub struct RuntimePrereqDiagnosticsSummary {
     pub requested_gpu_mode: GraphicalGpuRuntimeMode,
     pub requested_backend: String,
     pub selected_backend: String,
-    pub fallback_reason: Option<String>,
+    pub unavailable_reason: Option<String>,
     pub require_gpu: bool,
     pub would_block_launch: bool,
-    pub cpu_fallback_available: bool,
-    pub cpu_fallback_degraded_visible: bool,
     pub gpu_probe_attempted: bool,
     pub adapter_available: bool,
     pub device_request_succeeded: bool,
@@ -65,8 +59,8 @@ pub struct RuntimePrereqDiagnosticsSummary {
     pub graphics_backend: String,
     pub log_path: PathBuf,
     pub missing_driver_guidance: String,
-    pub no_full_action_authoritative_claim: bool,
-    pub cpu_shadow_gate_preserved: bool,
+    pub authoritative: bool,
+    pub failure_stops_learned_actions: bool,
 }
 
 impl RuntimePrereqDiagnosticsSummary {
@@ -78,28 +72,10 @@ impl RuntimePrereqDiagnosticsSummary {
             || self.graphics_backend.trim().is_empty()
             || self.log_path.as_os_str().is_empty()
             || self.missing_driver_guidance.trim().is_empty()
-            || !self.cpu_shadow_gate_preserved
-            || !self.no_full_action_authoritative_claim
+            || !self.failure_stops_learned_actions
+            || (self.authoritative && !self.device_request_succeeded)
+            || (self.would_block_launch && !self.require_gpu)
         {
-            return Err(ScaffoldContractError::MissingPhaseData.into());
-        }
-        if self.require_gpu && self.requested_gpu_mode == GraphicalGpuRuntimeMode::CpuReference {
-            return Err(GameAppShellError::InvalidGraphicalLaunch {
-                message: "RequireGpu cannot be paired with cpu-reference mode",
-            });
-        }
-        if self.would_block_launch && !self.require_gpu {
-            return Err(GameAppShellError::InvalidGraphicalLaunch {
-                message: "runtime preflight can only block when RequireGpu is enabled",
-            });
-        }
-        if self.selected_backend == "CpuReference"
-            && self.requested_gpu_mode.requests_gpu()
-            && self.fallback_reason.is_none()
-        {
-            return Err(ScaffoldContractError::MissingPhaseData.into());
-        }
-        if self.fallback_reason.is_some() && !self.cpu_fallback_degraded_visible {
             return Err(ScaffoldContractError::MissingPhaseData.into());
         }
         Ok(())
@@ -107,16 +83,7 @@ impl RuntimePrereqDiagnosticsSummary {
 
     pub fn hardware_line(&self) -> String {
         match (&self.adapter_name, &self.backend_api) {
-            (Some(name), Some(api)) => {
-                let driver = self
-                    .driver_info
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                    .or(self.driver.as_deref().filter(|value| !value.is_empty()))
-                    .unwrap_or("driver-unknown");
-                format!("{name} api={api} driver={driver}")
-            }
-            (Some(name), None) => format!("{name} api=unknown driver=unknown"),
+            (Some(name), Some(api)) => format!("{name} api={api}"),
             _ => "unavailable".to_string(),
         }
     }
@@ -127,7 +94,7 @@ impl RuntimePrereqDiagnosticsSummary {
             self.schema_version,
             self.requested_gpu_mode.label(),
             self.selected_backend,
-            self.fallback_reason,
+            self.unavailable_reason,
             self.gpu_probe_attempted,
             self.adapter_available,
             self.device_request_succeeded,
@@ -142,12 +109,6 @@ impl RuntimePrereqDiagnosticsSummary {
 pub fn run_runtime_prereq_diagnostics(
     options: &RuntimePrereqDiagnosticsOptions,
 ) -> Result<RuntimePrereqDiagnosticsSummary, GameAppShellError> {
-    if options.require_gpu && !options.gpu_mode.requests_gpu() {
-        return Err(GameAppShellError::InvalidGraphicalLaunch {
-            message: "RequireGpu needs a GPU runtime mode, not cpu-reference",
-        });
-    }
-
     let summary = runtime_prereq_diagnostics_impl(options);
     summary.validate()?;
     Ok(summary)
@@ -157,72 +118,14 @@ pub fn run_runtime_prereq_diagnostics(
 fn runtime_prereq_diagnostics_impl(
     options: &RuntimePrereqDiagnosticsOptions,
 ) -> RuntimePrereqDiagnosticsSummary {
-    use alife_gpu_backend::{
-        probe_local_wgpu_runtime_for_graphics_backend, GpuRuntimeBackendConfig,
-        GpuRuntimeBackendKind, GpuRuntimeFallbackReason,
-    };
-
-    let requested_backend = gpu_mode_to_backend(options.gpu_mode);
-    if requested_backend == GpuRuntimeBackendKind::CpuReference {
-        return build_runtime_prereq_summary(
-            options,
-            "CpuReference".to_string(),
-            "CpuReference".to_string(),
-            None,
-            false,
-            false,
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
-    }
-
-    if std::env::var("ALIFE_GPU_RUNTIME_AVAILABLE").ok().as_deref() == Some("0") {
-        return build_runtime_prereq_summary(
-            options,
-            format!("{requested_backend:?}"),
-            "CpuReference".to_string(),
-            Some(format!(
-                "{:?}",
-                GpuRuntimeFallbackReason::HardwareUnavailable
-            )),
-            false,
-            false,
-            false,
-            None,
-            None,
-            None,
-            None,
-            Some("ALIFE_GPU_RUNTIME_AVAILABLE=0 forced GPU unavailable".to_string()),
-        );
-    }
-
-    let probe =
-        probe_local_wgpu_runtime_for_graphics_backend(requested_backend, &options.graphics_backend);
-    let status = GpuRuntimeBackendConfig::request(requested_backend)
-        .with_gpu_feature_enabled(true)
-        .with_hardware_available(probe.hardware_available())
-        .with_validation_passed(probe.error.is_none())
-        .with_full_runtime_available(requested_backend == GpuRuntimeBackendKind::GpuFull)
-        .select_backend();
-    let (selected_backend, fallback_reason) = match status {
-        Ok(status) => (
-            format!("{:?}", status.selected),
-            status.fallback_reason.map(|reason| format!("{reason:?}")),
-        ),
-        Err(_) => (
-            "CpuReference".to_string(),
-            Some(format!("{:?}", GpuRuntimeFallbackReason::ValidationFailed)),
-        ),
-    };
-    build_runtime_prereq_summary(
+    let probe = alife_gpu_backend::probe_local_wgpu_runtime_for_graphics_backend(
+        alife_gpu_backend::GpuRuntimeBackendKind::GpuAuthoritative,
+        &options.graphics_backend,
+    );
+    let available = probe.hardware_available() && probe.error.is_none();
+    build_summary(
         options,
-        format!("{requested_backend:?}"),
-        selected_backend,
-        fallback_reason,
+        available,
         true,
         probe.adapter_available,
         probe.device_request_succeeded,
@@ -238,27 +141,9 @@ fn runtime_prereq_diagnostics_impl(
 fn runtime_prereq_diagnostics_impl(
     options: &RuntimePrereqDiagnosticsOptions,
 ) -> RuntimePrereqDiagnosticsSummary {
-    let requested_backend = match options.gpu_mode {
-        GraphicalGpuRuntimeMode::CpuReference => "CpuReference",
-        GraphicalGpuRuntimeMode::StaticCpuShadowGuarded => "GpuStatic",
-        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded => "GpuPlastic",
-        GraphicalGpuRuntimeMode::FullCpuShadowGuarded
-        | GraphicalGpuRuntimeMode::AutoWithCpuFallback => "GpuFull",
-    };
-    let fallback_reason = options
-        .gpu_mode
-        .requests_gpu()
-        .then(|| "FeatureDisabled".to_string());
-    let selected_backend = if fallback_reason.is_some() {
-        "CpuReference".to_string()
-    } else {
-        requested_backend.to_string()
-    };
-    build_runtime_prereq_summary(
+    build_summary(
         options,
-        requested_backend.to_string(),
-        selected_backend,
-        fallback_reason,
+        false,
         false,
         false,
         false,
@@ -270,34 +155,11 @@ fn runtime_prereq_diagnostics_impl(
     )
 }
 
-#[cfg(feature = "gpu-runtime")]
-const fn gpu_mode_to_backend(
-    mode: GraphicalGpuRuntimeMode,
-) -> alife_gpu_backend::GpuRuntimeBackendKind {
-    match mode {
-        GraphicalGpuRuntimeMode::CpuReference => {
-            alife_gpu_backend::GpuRuntimeBackendKind::CpuReference
-        }
-        GraphicalGpuRuntimeMode::StaticCpuShadowGuarded => {
-            alife_gpu_backend::GpuRuntimeBackendKind::GpuStatic
-        }
-        GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded => {
-            alife_gpu_backend::GpuRuntimeBackendKind::GpuPlastic
-        }
-        GraphicalGpuRuntimeMode::FullCpuShadowGuarded
-        | GraphicalGpuRuntimeMode::AutoWithCpuFallback => {
-            alife_gpu_backend::GpuRuntimeBackendKind::GpuFull
-        }
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
-fn build_runtime_prereq_summary(
+fn build_summary(
     options: &RuntimePrereqDiagnosticsOptions,
-    requested_backend: String,
-    selected_backend: String,
-    fallback_reason: Option<String>,
-    gpu_probe_attempted: bool,
+    available: bool,
+    probe_attempted: bool,
     adapter_available: bool,
     device_request_succeeded: bool,
     adapter_name: Option<String>,
@@ -306,19 +168,20 @@ fn build_runtime_prereq_summary(
     driver: Option<String>,
     driver_info: Option<String>,
 ) -> RuntimePrereqDiagnosticsSummary {
-    let fallback_active = fallback_reason.is_some();
     RuntimePrereqDiagnosticsSummary {
         schema: CA42_RUNTIME_PREREQ_SCHEMA,
         schema_version: CA42_RUNTIME_PREREQ_SCHEMA_VERSION,
         requested_gpu_mode: options.gpu_mode,
-        requested_backend,
-        selected_backend,
-        fallback_reason,
+        requested_backend: "GpuAuthoritative".to_string(),
+        selected_backend: if available { "GpuAuthoritative" } else { "Unavailable" }.to_string(),
+        unavailable_reason: (!available).then(|| {
+            driver_info
+                .clone()
+                .unwrap_or_else(|| "required GPU unavailable".to_string())
+        }),
         require_gpu: options.require_gpu,
-        would_block_launch: options.require_gpu && fallback_active,
-        cpu_fallback_available: true,
-        cpu_fallback_degraded_visible: fallback_active,
-        gpu_probe_attempted,
+        would_block_launch: options.require_gpu && !available,
+        gpu_probe_attempted: probe_attempted,
         adapter_available,
         device_request_succeeded,
         adapter_name,
@@ -328,10 +191,8 @@ fn build_runtime_prereq_summary(
         driver_info,
         graphics_backend: options.graphics_backend.clone(),
         log_path: options.log_path.clone(),
-        missing_driver_guidance:
-            "If GPU is unavailable, update NVIDIA/AMD/Intel drivers, verify DirectX 12 or Vulkan support, try -GraphicsBackend dx12 or vulkan, and rerun with -RequireGpu only when testing GPU hardware."
-                .to_string(),
-        no_full_action_authoritative_claim: true,
-        cpu_shadow_gate_preserved: true,
+        missing_driver_guidance: "Update the GPU driver, verify Vulkan support, and retry; learned actions remain stopped while unavailable.".to_string(),
+        authoritative: available,
+        failure_stops_learned_actions: true,
     }
 }

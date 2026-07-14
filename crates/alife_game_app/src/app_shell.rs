@@ -22,6 +22,8 @@ pub enum GameAppShellError {
     VisibleWorldMismatch { message: &'static str },
     #[error("invalid graphical playground launch: {message}")]
     InvalidGraphicalLaunch { message: &'static str },
+    #[error("required neural GPU backend unavailable: {message}")]
+    NeuralBackendUnavailable { message: String },
     #[error("invalid production voxel frontend launch: {message}")]
     InvalidProductionFrontend { message: String },
     #[error("environment launcher error: {message}")]
@@ -98,6 +100,7 @@ pub struct AppShellLaunchConfig {
     pub save_path: PathBuf,
     pub asset_root: PathBuf,
     pub start_paused: bool,
+    pub brain_policy: PolicyBackend,
 }
 
 impl AppShellLaunchConfig {
@@ -110,7 +113,13 @@ impl AppShellLaunchConfig {
             asset_root: root.clone(),
             fixture_root: root,
             start_paused: false,
+            brain_policy: PolicyBackend::HeuristicBaseline,
         }
+    }
+
+    pub const fn with_brain_policy(mut self, brain_policy: PolicyBackend) -> Self {
+        self.brain_policy = brain_policy;
+        self
     }
 }
 
@@ -120,7 +129,7 @@ pub struct AppStartupSummary {
     pub schema_version: u16,
     pub seed: u64,
     pub brain_class: String,
-    pub requested_backend: BackendSelection,
+    pub requested_backend: PolicyBackend,
     pub gpu_feature_enabled: bool,
     pub gpu_backend_enabled: bool,
     pub semantic_enabled: bool,
@@ -161,8 +170,8 @@ pub fn run_headless_app_shell_smoke(
         schema_version: G01_APP_SHELL_SCHEMA_VERSION,
         seed: config.deterministic_seed,
         brain_class: format!("{:?}", config.brain_class),
-        requested_backend: config.backend.requested,
-        gpu_feature_enabled: config.backend.gpu_feature_enabled,
+        requested_backend: launch.brain_policy,
+        gpu_feature_enabled: launch.brain_policy.requires_gpu(),
         gpu_backend_enabled: config.features.gpu_backend_enabled,
         semantic_enabled: config.features.semantic_adapter_enabled,
         school_enabled: config.features.school_enabled,

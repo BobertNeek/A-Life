@@ -74,7 +74,7 @@ fn existing_headers_and_manifests_validate_versions_and_ids() {
     assert!(header.validate_contract().is_ok());
 
     let mut bad_header = header;
-    bad_header.abi_version = 2;
+    bad_header.abi_version = 1;
     assert!(bad_header.validate_contract().is_err());
 
     let manifest = LineageExportManifest {

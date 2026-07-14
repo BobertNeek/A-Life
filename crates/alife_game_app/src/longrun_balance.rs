@@ -280,7 +280,7 @@ pub fn run_longrun_balance_with_config(
         "CPU/headless path remains the correctness oracle".to_string(),
         "G18 LOD policy preserves sensory, motor, homeostasis, and action arbitration priority"
             .to_string(),
-        "GPU fallback reports are not converted into product GPU performance claims".to_string(),
+        "GPU unavailable reports are not converted into product GPU performance claims".to_string(),
         "population and resource caps are finite and validated".to_string(),
     ];
     let manual_extended_command = "cargo test -p alife_game_app --test app_shell g19_manual_extended_balance_run -- --ignored --nocapture".to_string();

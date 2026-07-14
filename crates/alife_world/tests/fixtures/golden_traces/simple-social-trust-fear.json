@@ -11,7 +11,7 @@
     "key": "simple-social-trust-fear",
     "label": "simple social trust/fear",
     "seed": 18007,
-    "experience_schema_version": 1,
+    "experience_schema_version": 2,
     "action_abi_version": 2,
     "sensory_abi_version": 1,
     "chemistry_schema_version": 1

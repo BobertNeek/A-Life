@@ -26,6 +26,10 @@ fn valid_post_seal_hshadow_delta_applies_after_sealed_patch() {
     assert!(receipt.h_operational_unchanged);
     assert!(receipt.post_seal_only);
     assert!(receipt.replay_protected);
+    assert_eq!(
+        receipt.frame_digest,
+        patch.pre_action().frame_digest().unwrap()
+    );
     let weights = first_weight(&mind);
     assert!((weights.h_shadow - 0.25).abs() < 1.0e-6);
     assert_eq!(weights.genetic_fixed, 1.0);
@@ -82,6 +86,35 @@ fn wrong_tick_or_sequence_rejects() {
         mind.apply_post_seal_lifetime_deltas(&patch, wrong_sequence),
         Err(ScaffoldContractError::InvalidId)
     ));
+}
+
+#[test]
+fn wrong_final_perception_digest_rejects() {
+    let (mut mind, patch) = prepared_mind_and_patch();
+    let mut batch = batch_for_patch(&mind, &patch, 0.1, 0.2, 0).unwrap();
+    batch.frame_digest.0[0] ^= 1;
+
+    assert!(matches!(
+        mind.apply_post_seal_lifetime_deltas(&patch, batch),
+        Err(ScaffoldContractError::InvalidDecisionEvidence)
+    ));
+}
+
+#[test]
+fn post_seal_token_capability_has_no_deserialization_or_public_bypass() {
+    let contract_source = include_str!("../src/post_seal_lifetime.rs");
+    let source = include_str!("../src/reference_brain.rs");
+    assert!(!contract_source.contains("impl<'de> Deserialize<'de> for PostSealLearningToken"));
+    let application = contract_source
+        .split("pub struct PostSealLifetimeDeltaApplication")
+        .next()
+        .unwrap()
+        .rsplit("#[derive(")
+        .next()
+        .unwrap();
+    assert!(!application.contains("Deserialize"));
+    assert!(source.contains("pub fn apply_post_seal_lifetime_deltas"));
+    assert!(!source.contains("pub fn apply_validated_post_seal_hshadow_deltas"));
 }
 
 #[test]
@@ -145,6 +178,7 @@ fn duplicate_target_index_rejects() {
         mind.brain_class().max_active_synapses,
         patch.header().world_tick,
         patch.header().sequence_id,
+        patch.pre_action().frame_digest().unwrap(),
         PostSealLifetimeDeltaSourceKind::GpuCpuShadowGuarded,
         true,
         true,
@@ -195,6 +229,7 @@ fn batch_size_cap_is_enforced() {
         mind.brain_class().max_active_synapses,
         patch.header().world_tick,
         patch.header().sequence_id,
+        patch.pre_action().frame_digest().unwrap(),
         PostSealLifetimeDeltaSourceKind::GpuCpuShadowGuarded,
         true,
         true,
@@ -266,6 +301,7 @@ fn batch_for_patch(
         mind.brain_class().max_active_synapses,
         patch.header().world_tick,
         patch.header().sequence_id,
+        patch.pre_action().frame_digest()?,
         PostSealLifetimeDeltaSourceKind::GpuCpuShadowGuarded,
         true,
         true,

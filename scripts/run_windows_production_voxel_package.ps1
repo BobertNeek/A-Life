@@ -7,8 +7,8 @@ param(
     [ValidateRange(0, 500)]
     [int]$Population = 0,
     [string]$Resolution = "1920x1080",
-    [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
-    [string]$GpuMode = "auto-with-cpu-fallback",
+    [ValidateSet("gpu-required")]
+    [string]$BrainPolicy = "gpu-required",
     [ValidateSet("auto", "dx12", "vulkan", "existing")]
     [string]$GraphicsBackend = "auto",
     [switch]$RequireGpu,
@@ -54,7 +54,7 @@ Exit code: $ExitCode
 Commit media/log artifacts: false
 Default profile: MinSpecComfort1080p
 Minimum fallback profile: MinimumSettings30x30
-GPU fallback diagnostics: enabled
+GPU authority diagnostics: failure stops learned actions
 
 ## Command
 
@@ -80,8 +80,8 @@ $Args = @(
     $Profile,
     "--resolution",
     $Resolution,
-    "--gpu-mode",
-    $GpuMode,
+    "--brain-policy",
+    $BrainPolicy,
     "--graphics-backend",
     $EffectiveGraphicsBackend
 )
@@ -104,8 +104,8 @@ Write-Host "Executable: $Exe"
 Write-Host "Manifest: $Manifest"
 Write-Host "Profile: $Profile"
 Write-Host "Minimum fallback profile: MinimumSettings30x30"
-Write-Host "GPU mode requested: $GpuMode"
-Write-Host "GPU fallback diagnostics: production-voxel preflight output"
+Write-Host "Brain policy requested: $BrainPolicy"
+Write-Host "GPU authority diagnostics: failure stops learned actions"
 Write-Host "Save directory policy: package-local fixture saves plus runtime/user settings under package diagnostics or app-managed artifacts."
 Write-Host "Crash summary path on failure: $CrashSummaryPath"
 Write-Host "Package command:"

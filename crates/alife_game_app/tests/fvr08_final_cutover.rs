@@ -16,12 +16,13 @@ fn fvr08_production_launcher_uses_finished_feature_stack() {
 
     assert!(launcher.contains("A-Life Voxel Frontend"));
     assert!(launcher.contains("[string]$Profile = \"MinSpecComfort1080p\""));
-    assert!(launcher.contains("[string]$GpuMode = \"auto-with-cpu-fallback\""));
+    assert!(launcher.contains("[string]$BrainPolicy = \"gpu-required\""));
     assert!(launcher.contains(
         "$FeatureList = \"bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi\""
     ));
     assert!(launcher.contains("MinimumSettings30x30"));
     assert!(launcher.contains("--record-performance"));
+    assert!(!launcher.contains("auto-with-cpu-fallback"));
     assert!(!launcher.contains("gpu-alpha"));
 
     assert!(legacy_shell.contains("FVR08 compatibility alias"));
@@ -57,8 +58,9 @@ fn fvr08_windows_production_package_script_is_product_path() {
     assert!(package.contains("README_PACKAGE.md"));
     assert!(package.contains("MinSpecComfort1080p"));
     assert!(package.contains("MinimumSettings30x30"));
-    assert!(package.contains("auto-with-cpu-fallback"));
-    assert!(package.contains("gpu_fallback_diagnostics"));
+    assert!(package.contains("gpu-required"));
+    assert!(package.contains("gpu_authority_diagnostics"));
+    assert!(!package.contains("auto-with-cpu-fallback"));
     assert!(package.contains("crash_summary.md"));
     assert!(!package.contains("alife-gpu-alpha-windows"));
     assert!(!package.contains("run_windows_alpha_package.ps1"));

@@ -226,7 +226,7 @@ model files, or caches to git. Record external media paths or links only.\n\n\
 ## Launch\n\n\
 - Exact command:\n\
 - Window opened: yes/no\n\
-- GPU status visible: GPU / CPU fallback / unavailable\n\
+- GPU status visible: authoritative / unavailable\n\
 - Crash summary path, if any:\n\
 - App exited cleanly without leaving a process: yes/no\n\n\
 ## Playability\n\n\

@@ -57,6 +57,7 @@ pub struct SlicedCreaturePartPack {
     pub parts: BTreeMap<CreaturePartSlot, GeneratedPartMesh>,
     pub source_triangle_count: usize,
     pub source_triangle_owners: BTreeMap<usize, BTreeSet<CreaturePartSlot>>,
+    pub source_triangle_fragment_slots: BTreeMap<usize, BTreeSet<CreaturePartSlot>>,
     pub sockets: BTreeMap<String, SocketFrame>,
     pub canonical_source_bounds: [[f64; 3]; 2],
     pub minimum_join_overlap: f32,
@@ -90,6 +91,15 @@ pub enum CreaturePartBuilderError {
     InvalidPack(&'static str),
     #[error("generated part {0:?} is invalid: {1}")]
     InvalidPart(CreaturePartSlot, &'static str),
+    #[error(
+        "family {family:?} LOD {lod:?} generated files exceed 512 KiB: OBJ {obj_bytes} bytes, sockets {socket_bytes} bytes"
+    )]
+    GeneratedFileTooLarge {
+        family: alife_world::CreaturePartFamilyId,
+        lod: CreaturePartLodId,
+        obj_bytes: usize,
+        socket_bytes: usize,
+    },
     #[error("socket manifest serialization failed: {0}")]
     SocketJson(#[from] serde_json::Error),
 }
@@ -175,7 +185,9 @@ pub fn slice_creature_mesh(
         .map(|slot| (slot, BTreeMap::<VertexKey, u32>::new()))
         .collect::<BTreeMap<_, _>>();
     let mut owners = BTreeMap::<usize, BTreeSet<CreaturePartSlot>>::new();
+    let mut fragment_slots = BTreeMap::<usize, BTreeSet<CreaturePartSlot>>::new();
     let mut bounds = [[f64::INFINITY; 3], [f64::NEG_INFINITY; 3]];
+    let partition_planes = unique_partition_planes(family);
 
     for triangle in &source.triangles {
         let transformed = triangle.vertices.map(|vertex| {
@@ -205,22 +217,46 @@ pub fn slice_creature_mesh(
             .entry(triangle.source_index)
             .or_default()
             .insert(slot);
-        for vertex in transformed {
-            let local = to_socket_local(vertex, slot, family)?;
-            let key = VertexKey::from(local);
-            let part = parts.get_mut(&slot).expect("all output slots initialized");
-            let index = if let Some(index) = vertex_indices[&slot].get(&key) {
-                *index
-            } else {
-                let index = part.vertices.len() as u32;
-                part.vertices.push(local);
-                vertex_indices
-                    .get_mut(&slot)
-                    .expect("all output slots initialized")
-                    .insert(key, index);
-                index
-            };
-            part.indices.push(index);
+        for polygon in partition_triangle(transformed, &partition_planes) {
+            let fragment_centroid = polygon_centroid(&polygon);
+            let fragment_slot = SLOT_PRIORITY
+                .into_iter()
+                .find(|slot| {
+                    family
+                        .cuts
+                        .get(slot)
+                        .is_some_and(|volume| point_in_volume(fragment_centroid, volume))
+                })
+                .ok_or(CreaturePartBuilderError::UnownedTriangle {
+                    family: family.id,
+                    lod,
+                    triangle: triangle.source_index,
+                })?;
+            fragment_slots
+                .entry(triangle.source_index)
+                .or_default()
+                .insert(fragment_slot);
+            for index in 1..polygon.len() - 1 {
+                for vertex in [polygon[0], polygon[index], polygon[index + 1]] {
+                    let local = to_socket_local(vertex, fragment_slot, family)?;
+                    let key = VertexKey::from(local);
+                    let part = parts
+                        .get_mut(&fragment_slot)
+                        .expect("all output slots initialized");
+                    let index = if let Some(index) = vertex_indices[&fragment_slot].get(&key) {
+                        *index
+                    } else {
+                        let index = part.vertices.len() as u32;
+                        part.vertices.push(local);
+                        vertex_indices
+                            .get_mut(&fragment_slot)
+                            .expect("all output slots initialized")
+                            .insert(key, index);
+                        index
+                    };
+                    part.indices.push(index);
+                }
+            }
         }
     }
 
@@ -235,6 +271,7 @@ pub fn slice_creature_mesh(
         parts,
         source_triangle_count: source.triangles.len(),
         source_triangle_owners: owners,
+        source_triangle_fragment_slots: fragment_slots,
         sockets: family.sockets.clone(),
         canonical_source_bounds: bounds,
         minimum_join_overlap,
@@ -250,13 +287,19 @@ pub fn slice_creature_mesh(
 pub fn validate_sliced_pack(pack: &SlicedCreaturePartPack) -> Result<(), CreaturePartBuilderError> {
     if pack.source_triangle_count == 0
         || pack.source_triangle_owners.len() != pack.source_triangle_count
+        || pack.source_triangle_fragment_slots.len() != pack.source_triangle_count
         || pack
             .source_triangle_owners
             .values()
             .any(|owner| owner.len() != 1)
+        || pack.source_triangle_owners.iter().any(|(source, owner)| {
+            pack.source_triangle_fragment_slots
+                .get(source)
+                .is_none_or(|slots| slots.is_empty() || !owner.is_subset(slots))
+        })
     {
         return Err(CreaturePartBuilderError::InvalidPack(
-            "every source triangle must have exactly one owner",
+            "every source triangle must have one primary owner represented in its fragment slots",
         ));
     }
     for slot in CreaturePartSlot::REQUIRED_RUNTIME_SLOTS {
@@ -345,9 +388,12 @@ pub fn validate_sliced_pack(pack: &SlicedCreaturePartPack) -> Result<(), Creatur
         ));
     }
     if pack.obj_bytes.len() > 512 * 1024 || pack.socket_json_bytes.len() > 512 * 1024 {
-        return Err(CreaturePartBuilderError::InvalidPack(
-            "generated file exceeds 512 KiB",
-        ));
+        return Err(CreaturePartBuilderError::GeneratedFileTooLarge {
+            family: pack.family_id,
+            lod: pack.lod,
+            obj_bytes: pack.obj_bytes.len(),
+            socket_bytes: pack.socket_json_bytes.len(),
+        });
     }
     Ok(())
 }
@@ -495,6 +541,88 @@ fn point_in_volume(point: [f64; 3], volume: &CutVolume) -> bool {
         .all(|plane| signed_plane_distance(point, *plane) <= 1.0e-9)
 }
 
+fn unique_partition_planes(family: &CreaturePartFamilyDefinition) -> Vec<CutPlane> {
+    let mut keys = BTreeSet::new();
+    let mut planes = Vec::new();
+    for plane in family.cuts.values().flat_map(|volume| &volume.planes) {
+        let key = [
+            plane.normal[0].to_bits(),
+            plane.normal[1].to_bits(),
+            plane.normal[2].to_bits(),
+            plane.offset.to_bits(),
+        ];
+        if keys.insert(key) {
+            planes.push(*plane);
+        }
+    }
+    planes
+}
+
+fn partition_triangle(triangle: [ObjVertex; 3], planes: &[CutPlane]) -> Vec<Vec<ObjVertex>> {
+    let mut polygons = vec![triangle.to_vec()];
+    for plane in planes {
+        let mut next = Vec::with_capacity(polygons.len() + 1);
+        for polygon in polygons {
+            let (inside, outside) = split_polygon(&polygon, *plane);
+            if inside.len() >= 3 {
+                next.push(inside);
+            }
+            if outside.len() >= 3 {
+                next.push(outside);
+            }
+        }
+        polygons = next;
+    }
+    polygons
+}
+
+fn split_polygon(polygon: &[ObjVertex], plane: CutPlane) -> (Vec<ObjVertex>, Vec<ObjVertex>) {
+    let mut inside = Vec::new();
+    let mut outside = Vec::new();
+    for index in 0..polygon.len() {
+        let current = polygon[index];
+        let next = polygon[(index + 1) % polygon.len()];
+        let current_distance = signed_plane_distance(current.position, plane);
+        let next_distance = signed_plane_distance(next.position, plane);
+        let current_inside = current_distance <= 1.0e-9;
+        if current_inside {
+            inside.push(current);
+        } else {
+            outside.push(current);
+        }
+        if current_inside != (next_distance <= 1.0e-9) {
+            let denominator = current_distance - next_distance;
+            if denominator.abs() > 1.0e-12 {
+                let intersection =
+                    interpolate_vertex(current, next, current_distance / denominator);
+                inside.push(intersection);
+                outside.push(intersection);
+            }
+        }
+    }
+    (inside, outside)
+}
+
+fn interpolate_vertex(start: ObjVertex, end: ObjVertex, t: f64) -> ObjVertex {
+    let lerp = |a: f64, b: f64| a + (b - a) * t;
+    let normal = std::array::from_fn(|axis| lerp(start.normal[axis], end.normal[axis]));
+    ObjVertex {
+        position: std::array::from_fn(|axis| lerp(start.position[axis], end.position[axis])),
+        uv: std::array::from_fn(|axis| lerp(start.uv[axis], end.uv[axis])),
+        normal: normalize(normal).unwrap_or(start.normal),
+    }
+}
+
+fn polygon_centroid(polygon: &[ObjVertex]) -> [f64; 3] {
+    std::array::from_fn(|axis| {
+        polygon
+            .iter()
+            .map(|vertex| vertex.position[axis])
+            .sum::<f64>()
+            / polygon.len() as f64
+    })
+}
+
 fn signed_plane_distance(point: [f64; 3], plane: CutPlane) -> f64 {
     dot(point, plane.normal.map(f64::from)) - f64::from(plane.offset)
 }
@@ -527,19 +655,19 @@ fn emit_named_obj(pack: &SlicedCreaturePartPack) -> Vec<u8> {
         output.push('\n');
         for vertex in &part.vertices {
             output.push_str(&format!(
-                "v {:.9} {:.9} {:.9}\n",
+                "v {:.6} {:.6} {:.6}\n",
                 vertex.position[0] as f32, vertex.position[1] as f32, vertex.position[2] as f32
             ));
         }
         for vertex in &part.vertices {
             output.push_str(&format!(
-                "vt {:.9} {:.9}\n",
+                "vt {:.6} {:.6}\n",
                 vertex.uv[0] as f32, vertex.uv[1] as f32
             ));
         }
         for vertex in &part.vertices {
             output.push_str(&format!(
-                "vn {:.9} {:.9} {:.9}\n",
+                "vn {:.6} {:.6} {:.6}\n",
                 vertex.normal[0] as f32, vertex.normal[1] as f32, vertex.normal[2] as f32
             ));
         }
@@ -734,7 +862,7 @@ f 22/1/1 23/2/1 24/3/1
     }
 
     #[test]
-    fn slicing_preserves_each_transformed_source_triangle_intact() {
+    fn slicing_partitions_crossing_triangles_without_surface_loss() {
         let source = SourceObjMesh::parse(TEST_BIPED_OBJ).unwrap();
         let family = canonical_test_family();
         let pack = slice_creature_mesh(&source, &family, CreaturePartLodId::Compact).unwrap();
@@ -742,46 +870,74 @@ f 22/1/1 23/2/1 24/3/1
             pack.source_triangle_owners[&7],
             BTreeSet::from([CreaturePartSlot::Head])
         );
-        assert!(pack.parts[&CreaturePartSlot::Head]
-            .vertices
+        let source_area = source
+            .triangles
             .iter()
-            .any(|vertex| {
-                vertex
-                    .position
-                    .into_iter()
-                    .zip([-0.08, 0.0, 0.45])
-                    .all(|(actual, expected)| (actual - expected).abs() < 1.0e-6)
-            }));
-        let mut expected_by_slot = BTreeMap::<CreaturePartSlot, Vec<[ObjVertex; 3]>>::new();
+            .map(|triangle| {
+                triangle_area(triangle.vertices.map(|vertex| {
+                    transform_source_vertex(vertex, family.source_to_canonical).position
+                }))
+            })
+            .sum::<f64>();
+        let output_triangle_count = pack
+            .parts
+            .values()
+            .map(|part| part.indices.len() / 3)
+            .sum::<usize>();
+        let output_area = pack
+            .parts
+            .iter()
+            .flat_map(|(slot, part)| {
+                part.indices.chunks_exact(3).map(|triangle| {
+                    triangle_area(std::array::from_fn(|corner| {
+                        from_socket_local_position(
+                            *slot,
+                            part.vertices[triangle[corner] as usize].position,
+                            &family,
+                        )
+                    }))
+                })
+            })
+            .sum::<f64>();
 
-        for triangle in &source.triangles {
-            let slot = *pack.source_triangle_owners[&triangle.source_index]
-                .iter()
-                .next()
-                .expect("source triangle has one owner");
-            let transformed = triangle
-                .vertices
-                .map(|vertex| transform_source_vertex(vertex, family.source_to_canonical));
-            let local = transformed.map(|vertex| to_socket_local(vertex, slot, &family).unwrap());
-            expected_by_slot.entry(slot).or_default().push(local);
-        }
+        assert!(output_triangle_count > source.triangles.len());
+        assert!((source_area - output_area).abs() <= source_area * 1.0e-8);
+        assert!(pack
+            .source_triangle_fragment_slots
+            .values()
+            .any(|slots| slots.len() > 1));
+        assert!(pack.source_triangle_owners.iter().all(|(source, owner)| {
+            owner.is_subset(&pack.source_triangle_fragment_slots[source])
+        }));
+    }
 
-        for slot in OUTPUT_SLOT_ORDER {
-            let part = &pack.parts[&slot];
-            let expected = expected_by_slot.get(&slot).map_or(&[][..], Vec::as_slice);
-            assert_eq!(part.indices.len(), expected.len() * 3, "slot {slot:?}");
-            for (actual_triangle, expected_triangle) in
-                part.indices.chunks_exact(3).zip(expected.iter())
-            {
-                for (actual_index, expected_vertex) in actual_triangle.iter().zip(expected_triangle)
-                {
-                    assert_eq!(
-                        part.vertices[*actual_index as usize], *expected_vertex,
-                        "slot {slot:?} lost source triangle geometry"
-                    );
-                }
-            }
-        }
+    fn from_socket_local_position(
+        slot: CreaturePartSlot,
+        position: [f64; 3],
+        family: &CreaturePartFamilyDefinition,
+    ) -> [f64; 3] {
+        let Some(socket_name) = socket_name_for_slot(slot) else {
+            return position;
+        };
+        let socket = family.sockets[socket_name];
+        add(
+            rotate(
+                std::array::from_fn(|axis| position[axis] * f64::from(socket.scale[axis])),
+                socket.rotation_xyzw,
+            ),
+            socket.translation.map(f64::from),
+        )
+    }
+
+    fn triangle_area([a, b, c]: [[f64; 3]; 3]) -> f64 {
+        let ab = sub(b, a);
+        let ac = sub(c, a);
+        let cross = [
+            ab[1] * ac[2] - ab[2] * ac[1],
+            ab[2] * ac[0] - ab[0] * ac[2],
+            ab[0] * ac[1] - ab[1] * ac[0],
+        ];
+        dot(cross, cross).sqrt() * 0.5
     }
 
     #[test]

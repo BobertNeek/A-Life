@@ -4,9 +4,13 @@ use std::{
 };
 
 use alife_game_app::{
-    default_environment_manifest_path, run_production_voxel_frontend_dry_run,
-    select_environment_scenario, ProductionAppState, ProductionFrontendProfileId,
-    ProductionVoxelLaunchConfig, FVR01_PRODUCTION_FRONTEND_SCHEMA,
+    default_environment_manifest_path, select_environment_scenario, ProductionFrontendProfileId,
+};
+
+#[cfg(feature = "gpu-runtime")]
+use alife_game_app::{
+    run_production_voxel_frontend_dry_run, ProductionAppState, ProductionVoxelLaunchConfig,
+    FVR01_PRODUCTION_FRONTEND_SCHEMA,
 };
 
 fn workspace_root() -> PathBuf {
@@ -90,6 +94,7 @@ fn fvr01_default_environment_selects_production_voxel_not_alpha() {
 }
 
 #[test]
+#[cfg(feature = "gpu-runtime")]
 fn fvr01_dry_run_uses_real_save_and_production_state_pipeline() {
     let launch =
         ProductionVoxelLaunchConfig::default_from_manifest(default_environment_manifest_path())
@@ -153,6 +158,7 @@ fn fvr01_dry_run_uses_real_save_and_production_state_pipeline() {
 }
 
 #[test]
+#[cfg(feature = "gpu-runtime")]
 fn fvr01_minimum_profile_is_available_as_hard_fallback_floor() {
     let mut launch =
         ProductionVoxelLaunchConfig::default_from_manifest(default_environment_manifest_path())
@@ -234,6 +240,7 @@ fn fvr01_cli_help_names_production_command_and_profiles() {
 }
 
 #[test]
+#[cfg(feature = "gpu-runtime")]
 fn fvr01_legacy_graphical_command_is_alias_not_product_path() {
     let output = Command::new(env!("CARGO_BIN_EXE_alife_game_app"))
         .args(["graphical-playground", "--dry-run"])

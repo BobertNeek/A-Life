@@ -27,19 +27,14 @@ pub struct NeuralLobeActivityRow {
 pub struct NeuralRouteStatusSummary {
     pub requested_mode: String,
     pub selected_backend: String,
-    pub fallback_reason: Option<String>,
-    pub cpu_shadow_gate: bool,
-    pub cpu_shadow_parity: bool,
-    pub gpu_scores_used_for_proposals: bool,
+    pub unavailable_reason: Option<String>,
+    pub authoritative: bool,
     pub compact_readback_bytes: usize,
-    pub post_seal_readback_bytes: usize,
     pub wgsl_timing_available: bool,
     pub wgsl_upload_ms: f32,
     pub wgsl_compute_ms: f32,
     pub wgsl_readback_ms: f32,
     pub no_active_bulk_readback: bool,
-    pub product_runtime_claim: String,
-    pub full_action_authoritative_claim: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,19 +123,14 @@ impl NeuralActivityProfilerSnapshot {
             route_status: NeuralRouteStatusSummary {
                 requested_mode: "pending".to_string(),
                 selected_backend: "PendingFirstTick".to_string(),
-                fallback_reason: None,
-                cpu_shadow_gate: true,
-                cpu_shadow_parity: false,
-                gpu_scores_used_for_proposals: false,
+                unavailable_reason: None,
+                authoritative: false,
                 compact_readback_bytes: 0,
-                post_seal_readback_bytes: 0,
                 wgsl_timing_available: false,
                 wgsl_upload_ms: 0.0,
                 wgsl_compute_ms: 0.0,
                 wgsl_readback_ms: 0.0,
                 no_active_bulk_readback: true,
-                product_runtime_claim: "PendingTick".to_string(),
-                full_action_authoritative_claim: false,
             },
             read_only: true,
             compact_summary_only: true,
@@ -164,8 +154,6 @@ impl NeuralActivityProfilerSnapshot {
             || !self.offline_export_boundary
             || self.can_emit_actions
             || self.can_mutate_weights
-            || self.route_status.full_action_authoritative_claim
-            || !self.route_status.cpu_shadow_gate
             || !self.route_status.no_active_bulk_readback
         {
             return Err(ScaffoldContractError::MissingPhaseData);
@@ -182,7 +170,6 @@ impl NeuralActivityProfilerSnapshot {
         }
         validate_ca30_display_line(&self.route_status.requested_mode)?;
         validate_ca30_display_line(&self.route_status.selected_backend)?;
-        validate_ca30_display_line(&self.route_status.product_runtime_claim)?;
         for value in [
             self.route_status.wgsl_upload_ms,
             self.route_status.wgsl_compute_ms,
@@ -193,7 +180,7 @@ impl NeuralActivityProfilerSnapshot {
                 return Err(ScaffoldContractError::ScalarOutOfRange);
             }
         }
-        if let Some(reason) = &self.route_status.fallback_reason {
+        if let Some(reason) = &self.route_status.unavailable_reason {
             validate_ca30_display_line(reason)?;
         }
         Ok(())
@@ -217,9 +204,9 @@ impl NeuralActivityProfilerSnapshot {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        let fallback = self
+        let unavailable = self
             .route_status
-            .fallback_reason
+            .unavailable_reason
             .as_deref()
             .unwrap_or("none");
         format!(
@@ -228,8 +215,8 @@ impl NeuralActivityProfilerSnapshot {
                 "brain={} neurons={} tick={}\n",
                 "{}\n",
                 "tiles {}/{} skip={} syn {}/{}\n",
-                "route {} backend={} fallback={}\n",
-                "scores={} parity={} readback={}B post={}B\n",
+                "route {} backend={} unavailable={}\n",
+                "authoritative={} readback={}B\n",
                 "wgsl available={} up={:.2}ms compute={:.2}ms read={:.2}ms\n",
                 "Boundary: compact summary; offline export only"
             ),
@@ -244,11 +231,9 @@ impl NeuralActivityProfilerSnapshot {
             self.tile_summary.max_active_synapses,
             self.route_status.requested_mode,
             self.route_status.selected_backend,
-            fallback,
-            self.route_status.gpu_scores_used_for_proposals,
-            self.route_status.cpu_shadow_parity,
+            unavailable,
+            self.route_status.authoritative,
             self.route_status.compact_readback_bytes,
-            self.route_status.post_seal_readback_bytes,
             self.route_status.wgsl_timing_available,
             self.route_status.wgsl_upload_ms,
             self.route_status.wgsl_compute_ms,
@@ -368,36 +353,26 @@ pub(crate) fn route_status_from_gpu(
         Some(gpu) => NeuralRouteStatusSummary {
             requested_mode: gpu.requested_mode.label().to_string(),
             selected_backend: gpu.selected_backend.clone(),
-            fallback_reason: gpu.fallback_reason.clone(),
-            cpu_shadow_gate: true,
-            cpu_shadow_parity: gpu.cpu_shadow_parity,
-            gpu_scores_used_for_proposals: gpu.gpu_scores_used_for_proposals,
+            unavailable_reason: gpu.unavailable_reason.clone(),
+            authoritative: gpu.authoritative,
             compact_readback_bytes: gpu.compact_readback_bytes,
-            post_seal_readback_bytes: gpu.post_seal_readback_bytes,
             wgsl_timing_available: gpu.wgsl.timing_available,
             wgsl_upload_ms: gpu.wgsl.upload_ms,
             wgsl_compute_ms: gpu.wgsl.compute_submit_poll_ms,
             wgsl_readback_ms: gpu.wgsl.compact_readback_ms,
             no_active_bulk_readback: gpu.no_active_bulk_readback,
-            product_runtime_claim: gpu.product_runtime_claim.clone(),
-            full_action_authoritative_claim: gpu.full_action_authoritative_claim,
         },
         None => NeuralRouteStatusSummary {
-            requested_mode: "cpu-reference-summary".to_string(),
-            selected_backend: "CpuReference".to_string(),
-            fallback_reason: None,
-            cpu_shadow_gate: true,
-            cpu_shadow_parity: false,
-            gpu_scores_used_for_proposals: false,
+            requested_mode: "heuristic-baseline-summary".to_string(),
+            selected_backend: "HeuristicBaseline".to_string(),
+            unavailable_reason: None,
+            authoritative: false,
             compact_readback_bytes: 0,
-            post_seal_readback_bytes: 0,
             wgsl_timing_available: false,
             wgsl_upload_ms: 0.0,
             wgsl_compute_ms: 0.0,
             wgsl_readback_ms: 0.0,
             no_active_bulk_readback: true,
-            product_runtime_claim: "None".to_string(),
-            full_action_authoritative_claim: false,
         },
     }
 }
@@ -416,8 +391,8 @@ fn tile_summary_from(
     if let Some(gpu) = gpu {
         let active = if gpu.wgsl.timing_available {
             max_active_tiles.min(gpu.wgsl.routing_active_tiles)
-        } else if gpu.gpu_static_dispatched_ticks > 0 {
-            max_active_tiles.min(gpu.gpu_static_dispatched_ticks.saturating_mul(4).max(1))
+        } else if gpu.active_ticks > 0 {
+            max_active_tiles.min(gpu.active_ticks.saturating_mul(4).max(1))
         } else {
             0
         };
@@ -504,13 +479,7 @@ fn activity_for_lobe(
         .iter()
         .filter(|summary| summary.physical_contact.is_some())
         .count() as f32;
-    let gpu_score = gpu.map_or(0.0, |gpu| {
-        if gpu.gpu_scores_used_for_proposals && gpu.cpu_shadow_parity {
-            1.0
-        } else {
-            0.0
-        }
-    });
+    let gpu_score = gpu.map_or(0.0, |gpu| if gpu.authoritative { 1.0 } else { 0.0 });
     let learning = gpu.map_or_else(
         || {
             recent_summaries
@@ -518,7 +487,7 @@ fn activity_for_lobe(
                 .map(|summary| summary.learning_updates)
                 .sum::<u32>() as f32
         },
-        |gpu| gpu.h_shadow_applications as f32,
+        |gpu| gpu.learning_updates as f32,
     );
     let value = match lobe {
         alife_core::LobeKind::SensoryGrounding => {

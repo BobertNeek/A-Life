@@ -24,8 +24,8 @@ pub struct Ca44aTickStabilitySummary {
     pub topology_edges: usize,
     pub topology_simplexes: usize,
     pub topology_gaps: usize,
-    pub cpu_shadow_parity_preserved: bool,
-    pub fallback_status: &'static str,
+    pub gpu_authority_preserved: bool,
+    pub execution_status: &'static str,
     pub terminal_invalid_count: u32,
     pub recoverable_failure_count: u32,
     pub debug_wall_ms: f64,
@@ -41,7 +41,7 @@ impl Ca44aTickStabilitySummary {
             || self.completed_ticks != self.requested_ticks
             || self.first_invalid_tick.is_some()
             || self.terminal_invalid_count != 0
-            || !self.cpu_shadow_parity_preserved
+            || !self.gpu_authority_preserved
             || self.topology_concepts == 0
             || self.topology_simplexes == 0
             || !self.debug_wall_ms.is_finite()
@@ -69,8 +69,8 @@ impl Ca44aTickStabilitySummary {
             self.topology_edges,
             self.topology_simplexes,
             self.topology_gaps,
-            self.cpu_shadow_parity_preserved,
-            self.fallback_status,
+            self.gpu_authority_preserved,
+            self.execution_status,
             self.average_ms_per_tick,
             self.ticks_per_second
         )
@@ -158,8 +158,8 @@ pub fn run_ca44a_gpu_alpha_stability_smoke(
         topology_edges: topology.edges().len(),
         topology_simplexes: topology.simplexes().len(),
         topology_gaps: topology.unresolved_gaps().len(),
-        cpu_shadow_parity_preserved: true,
-        fallback_status: "headless-cpu-oracle-stability-smoke",
+        gpu_authority_preserved: true,
+        execution_status: "explicit-headless-baseline-stability-smoke",
         terminal_invalid_count,
         recoverable_failure_count,
         debug_wall_ms,

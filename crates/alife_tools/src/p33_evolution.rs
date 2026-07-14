@@ -8,11 +8,10 @@
 use std::cmp::Ordering;
 
 use alife_core::{
-    AlphaStoragePolicy, BrainClassSpec, BrainGenome, CriticalPeriod, DevelopmentalMilestone,
-    DriveThresholdGene, EndocrineConstantGene, GenomeId, GenomeSeedSet, LobeRatioOverride,
-    LobeRatioPlan, MacroConnectomeMask, MotorAffordanceGene, MutationRates, NormalizedScalar,
+    AlphaStoragePolicy, BrainClassSpec, BrainGenome, GenomeId, GenomeSeedSet, LobeRatioOverride,
+    LobeRatioPlan, MacroConnectomeMask, MotorAffordanceGene, NormalizedScalar,
     PackedExperienceRecord, PackedSideBufferKind, ProjectionAlphaOverride, SensorChannelGene,
-    SparseDensityPrior, Tick, Validate,
+    SparseDensityPrior, Validate,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -83,15 +82,15 @@ pub fn mutate_genome(
     child.parent_genome_ids = vec![parent.id];
     child.brain_class_id = spec.id;
     child.lobe_ratios = mutate_lobe_ratios(spec, &mut rng, config.intensity)?;
-    mutate_macro_masks(&mut child.macro_connectome_masks, &mut rng);
+    mutate_macro_masks(
+        &mut child.macro_connectome_masks,
+        &mut child.sparse_density_priors,
+        &mut rng,
+    );
     mutate_density_priors(&mut child.sparse_density_priors, &mut rng, config.intensity)?;
     mutate_alpha_mask(&mut child, &mut rng, config.intensity)?;
-    mutate_endocrine(&mut child.endocrine_constants, &mut rng, config.intensity)?;
-    mutate_drive_thresholds(&mut child.drive_thresholds, &mut rng, config.intensity)?;
     mutate_sensor_layout(&mut child.sensor_layout.channels, &mut rng);
     mutate_motor_affordances(&mut child.motor_affordances, &mut rng);
-    child.mutation_rates = mutate_mutation_rates(child.mutation_rates, &mut rng, config.intensity)?;
-    mutate_developmental_schedule(&mut child, &mut rng, config.intensity)?;
     child.inheritance.inherit_lifetime_consolidation = false;
     child.inheritance.lamarckian_weights_enabled = false;
 
@@ -573,14 +572,24 @@ fn normalize_lobe_weights(weights: &mut [(alife_core::LobeKind, f32)], min_ratio
     }
 }
 
-fn mutate_macro_masks(masks: &mut [MacroConnectomeMask], rng: &mut LabRng) {
-    for mask in masks {
-        if rng.next_fraction() < 0.5 {
-            mask.structural_growth_allowed = !mask.structural_growth_allowed;
-        } else if mask.structural_growth_allowed {
-            mask.enabled = true;
-        }
+fn mutate_macro_masks(
+    masks: &mut [MacroConnectomeMask],
+    priors: &mut Vec<SparseDensityPrior>,
+    rng: &mut LabRng,
+) {
+    let enabled = masks
+        .iter()
+        .enumerate()
+        .filter_map(|(index, mask)| mask.enabled.then_some(index))
+        .collect::<Vec<_>>();
+    if enabled.is_empty() {
+        return;
     }
+    let selected = enabled[(rng.next_u64() as usize) % enabled.len()];
+    let projection = masks[selected].projection;
+    masks[selected].enabled = false;
+    masks[selected].structural_growth_allowed = false;
+    priors.retain(|prior| prior.projection != projection);
 }
 
 fn mutate_density_priors(
@@ -621,30 +630,6 @@ fn mutate_alpha_mask(
     Ok(())
 }
 
-fn mutate_endocrine(
-    constants: &mut [EndocrineConstantGene],
-    rng: &mut LabRng,
-    intensity: NormalizedScalar,
-) -> Result<(), EvolutionLabError> {
-    for constant in constants {
-        let delta = rng.signed_unit() * 0.15 * intensity.raw();
-        constant.value = (constant.value + delta).clamp(0.0, 4.0);
-        alife_core::validate_finite(constant.value)?;
-    }
-    Ok(())
-}
-
-fn mutate_drive_thresholds(
-    thresholds: &mut [DriveThresholdGene],
-    rng: &mut LabRng,
-    intensity: NormalizedScalar,
-) -> Result<(), EvolutionLabError> {
-    for threshold in thresholds {
-        threshold.threshold = bounded_delta(threshold.threshold, rng, 0.12, intensity)?;
-    }
-    Ok(())
-}
-
 fn mutate_sensor_layout(channels: &mut [SensorChannelGene], rng: &mut LabRng) {
     for channel in channels {
         let delta = if rng.next_bool() { 8_i32 } else { -8 };
@@ -661,59 +646,6 @@ fn mutate_motor_affordances(affordances: &mut [MotorAffordanceGene], rng: &mut L
         }
         affordance.enabled_at_maturation = bounded_u8(affordance.enabled_at_maturation, rng, 100);
     }
-}
-
-fn mutate_mutation_rates(
-    rates: MutationRates,
-    rng: &mut LabRng,
-    intensity: NormalizedScalar,
-) -> Result<MutationRates, EvolutionLabError> {
-    Ok(MutationRates {
-        point: bounded_delta(rates.point, rng, 0.02, intensity)?,
-        structural: bounded_delta(rates.structural, rng, 0.01, intensity)?,
-        lobe_ratio: bounded_delta(rates.lobe_ratio, rng, 0.02, intensity)?,
-        density: bounded_delta(rates.density, rng, 0.02, intensity)?,
-        alpha: bounded_delta(rates.alpha, rng, 0.02, intensity)?,
-        endocrine: bounded_delta(rates.endocrine, rng, 0.02, intensity)?,
-        developmental_schedule: bounded_delta(rates.developmental_schedule, rng, 0.02, intensity)?,
-    })
-}
-
-fn mutate_developmental_schedule(
-    genome: &mut BrainGenome,
-    rng: &mut LabRng,
-    intensity: NormalizedScalar,
-) -> Result<(), EvolutionLabError> {
-    let tick_delta = (rng.signed_unit() * 60.0 * intensity.raw()).round() as i64;
-    for DevelopmentalMilestone { begins_at, .. } in
-        genome.developmental_schedule.milestones.iter_mut().skip(1)
-    {
-        begins_at.0 = (begins_at.0 as i64 + tick_delta).max(1) as u64;
-    }
-    genome
-        .developmental_schedule
-        .milestones
-        .sort_by_key(|milestone| milestone.begins_at.raw());
-    for CriticalPeriod {
-        opens_at,
-        closes_at,
-        plasticity_bias,
-        ..
-    } in &mut genome.developmental_schedule.critical_periods
-    {
-        let opens = (opens_at.raw() as i64 + tick_delta).max(0) as u64;
-        let closes = (closes_at.raw() as i64 + tick_delta).max(opens as i64 + 1) as u64;
-        *opens_at = Tick(opens);
-        *closes_at = Tick(closes);
-        *plasticity_bias = bounded_delta(*plasticity_bias, rng, 0.08, intensity)?;
-    }
-    genome.developmental_schedule.sleep_pressure_maturation_gate = bounded_delta(
-        genome.developmental_schedule.sleep_pressure_maturation_gate,
-        rng,
-        0.05,
-        intensity,
-    )?;
-    Ok(())
 }
 
 fn compare_candidates(a: &SelectionCandidate, b: &SelectionCandidate) -> Ordering {
@@ -775,12 +707,8 @@ fn all_mutation_fields() -> Vec<MutationField> {
         MutationField::MacroConnectomeMasks,
         MutationField::SparseDensityPriors,
         MutationField::AlphaMask,
-        MutationField::EndocrineConstants,
-        MutationField::DriveThresholds,
         MutationField::SensorLayout,
         MutationField::MotorAffordances,
-        MutationField::MutationRates,
-        MutationField::DevelopmentalSchedule,
     ]
 }
 

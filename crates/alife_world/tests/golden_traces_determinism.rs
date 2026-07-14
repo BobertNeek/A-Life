@@ -391,38 +391,43 @@ impl GoldenTrace {
                 .patches
                 .iter()
                 .enumerate()
-                .map(|(index, patch)| GoldenPatch {
-                    index,
-                    phase_sequence: patch
-                        .phase_sequence()
-                        .into_iter()
-                        .map(|phase| format!("{phase:?}"))
-                        .collect(),
-                    tick: patch.pre_action().tick.raw(),
-                    outcome_tick: patch.outcome().outcome_tick.raw(),
-                    status: format!("{:?}", run.statuses[index]),
-                    failure: run.failures[index].map(|failure| format!("{failure:?}")),
-                    selected_action_id: patch.decision().selected_action.action_id.raw(),
-                    selected_action_kind: action_kind_name(patch.decision().selected_action.kind)
+                .map(|(index, patch)| {
+                    let memory_expectancy = &patch
+                        .pre_action()
+                        .heuristic_evidence()
+                        .expect("scenario patches use heuristic baseline evidence")
+                        .memory_expectancy;
+                    GoldenPatch {
+                        index,
+                        phase_sequence: patch
+                            .phase_sequence()
+                            .into_iter()
+                            .map(|phase| format!("{phase:?}"))
+                            .collect(),
+                        tick: patch.pre_action().tick.raw(),
+                        outcome_tick: patch.outcome().outcome_tick.raw(),
+                        status: format!("{:?}", run.statuses[index]),
+                        failure: run.failures[index].map(|failure| format!("{failure:?}")),
+                        selected_action_id: patch.decision().selected_action.action_id.raw(),
+                        selected_action_kind: action_kind_name(
+                            patch.decision().selected_action.kind,
+                        )
                         .to_string(),
-                    target_entity: patch
-                        .decision()
-                        .selected_action
-                        .target_entity
-                        .map(WorldEntityId::raw),
-                    success: patch.outcome().success,
-                    contact: format!("{:?}", patch.outcome().physical.contact),
-                    reward_milli: milli_signed(patch.outcome().reward_valence.raw()),
-                    pain_milli: milli_unit(patch.outcome().pain_delta.raw()),
-                    frustration_milli: milli_unit(patch.outcome().frustration_delta.raw()),
-                    prediction_error_milli: milli_unit(patch.outcome().prediction_error.raw()),
-                    contradiction: patch.outcome().contradiction_observed,
-                    memory_danger_milli: milli_unit(
-                        patch.pre_action().memory_expectancy.danger_bias.raw(),
-                    ),
-                    memory_salience_milli: milli_unit(
-                        patch.pre_action().memory_expectancy.salience_hint.raw(),
-                    ),
+                        target_entity: patch
+                            .decision()
+                            .selected_action
+                            .target_entity
+                            .map(WorldEntityId::raw),
+                        success: patch.outcome().success,
+                        contact: format!("{:?}", patch.outcome().physical.contact),
+                        reward_milli: milli_signed(patch.outcome().reward_valence.raw()),
+                        pain_milli: milli_unit(patch.outcome().pain_delta.raw()),
+                        frustration_milli: milli_unit(patch.outcome().frustration_delta.raw()),
+                        prediction_error_milli: milli_unit(patch.outcome().prediction_error.raw()),
+                        contradiction: patch.outcome().contradiction_observed,
+                        memory_danger_milli: milli_unit(memory_expectancy.danger_bias.raw()),
+                        memory_salience_milli: milli_unit(memory_expectancy.salience_hint.raw()),
+                    }
                 })
                 .collect(),
             state: GoldenState {

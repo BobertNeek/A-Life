@@ -249,7 +249,15 @@ impl PackedExperienceFrame {
 impl Validate for PackedExperienceFrame {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         Self::require_schema_version(self.schema_version)?;
-        ensure_current_version(SchemaKind::Experience, self.experience_schema_version)?;
+        if self.experience_schema_version != 1
+            && self.experience_schema_version != SchemaVersions::CURRENT.experience.raw()
+        {
+            return Err(ScaffoldContractError::IncompatibleAbi {
+                kind: SchemaKind::Experience,
+                expected: SchemaVersions::CURRENT.experience.raw(),
+                actual: self.experience_schema_version,
+            });
+        }
         ensure_current_version(SchemaKind::SensoryAbi, self.sensory_abi_version)?;
         ensure_current_version(SchemaKind::ActionAbi, self.action_abi_version)?;
         if self.flags & !PACKED_KNOWN_FLAGS != 0 {
@@ -456,6 +464,10 @@ impl ExperiencePacker {
         let decision = view.decision();
         let outcome = view.outcome();
         let selected = decision.selected_action;
+        let heuristic_pre = match pre.evidence_kind() {
+            crate::EvidenceKind::HeuristicBaseline => Some(pre.heuristic_evidence()?),
+            crate::EvidenceKind::NeuralClosedLoopGpu => None,
+        };
 
         let mut builder = SideBufferBuilder::new(self.max_side_buffer_records);
         let visible_entities = builder.capture(|builder| append_visible_entities(builder, pre))?;
@@ -502,7 +514,7 @@ impl ExperiencePacker {
         let frame = PackedExperienceFrame {
             schema_version: PACKED_EXPERIENCE_SCHEMA_VERSION,
             experience_schema_version: patch.header().abi_version,
-            sensory_abi_version: pre.sensory_abi_version.raw(),
+            sensory_abi_version: pre.sensory().abi_version.raw(),
             action_abi_version: decision.action_abi_version,
             flags,
             reserved_header: 0,
@@ -511,24 +523,26 @@ impl ExperiencePacker {
             pre_action_tick: pre.tick.raw(),
             decision_tick: decision.decision_tick.raw(),
             outcome_tick: outcome.outcome_tick.raw(),
-            brain_class_id: pre.brain_class_id.raw(),
-            brain_scale_tier_code: brain_scale_tier_code(pre.brain_scale_tier),
+            brain_class_id: pre.brain_class_id()?.raw(),
+            brain_scale_tier_code: heuristic_pre.map_or(0, |evidence| {
+                brain_scale_tier_code(evidence.brain_scale_tier)
+            }),
             selected_action_kind_code: action_kind_code(selected.kind),
             reserved_kind: 0,
             selected_action_id: selected.action_id.raw(),
             action_duration_ticks: selected.duration_ticks.raw(),
             action_source_mask: selected.source_mask,
             target_entity_id,
-            position: pre.body_pose.translation.to_array(),
+            position: pre.body().pose.translation.to_array(),
             heading_quat: [
-                pre.body_pose.rotation.x,
-                pre.body_pose.rotation.y,
-                pre.body_pose.rotation.z,
-                pre.body_pose.rotation.w,
+                pre.body().pose.rotation.x,
+                pre.body().pose.rotation.y,
+                pre.body().pose.rotation.z,
+                pre.body().pose.rotation.w,
             ],
             target_position,
-            drive_summary: pre.homeostasis.drives.to_array(),
-            hormone_summary: pre.homeostasis.hormones.to_array(),
+            drive_summary: pre.homeostasis().drives.to_array(),
+            hormone_summary: pre.homeostasis().hormones.to_array(),
             action_intensity: selected.intensity.raw(),
             action_confidence: selected.confidence.raw(),
             decision_confidence: decision.confidence.raw(),
@@ -538,8 +552,12 @@ impl ExperiencePacker {
             energy_delta: outcome.energy_delta.raw(),
             prediction_error: outcome.prediction_error.raw(),
             salience_summary: salience_summary(patch)?,
-            memory_expected_valence: pre.memory_expectancy.expected_valence.raw(),
-            memory_salience_hint: pre.memory_expectancy.salience_hint.raw(),
+            memory_expected_valence: heuristic_pre.map_or(0.0, |evidence| {
+                evidence.memory_expectancy.expected_valence.raw()
+            }),
+            memory_salience_hint: heuristic_pre.map_or(0.0, |evidence| {
+                evidence.memory_expectancy.salience_hint.raw()
+            }),
             side_buffer_spans,
             reserved: [0; PACKED_EXPERIENCE_FRAME_RESERVED_U32S],
         };
@@ -678,7 +696,7 @@ fn append_visible_entities(
     builder: &mut SideBufferBuilder,
     pre: &crate::PreActionSnapshot,
 ) -> Result<(), ScaffoldContractError> {
-    for agent in pre.sensory.social_context.nearest_agents.iter().flatten() {
+    for agent in pre.sensory().social_context.nearest_agents.iter().flatten() {
         let (primary_id, flags) = if let Some(entity) = agent.body_entity {
             (entity.raw(), SIDE_RECORD_FLAG_ENTITY_ID)
         } else {
@@ -728,10 +746,10 @@ fn append_heard_tokens(
     builder: &mut SideBufferBuilder,
     pre: &crate::PreActionSnapshot,
 ) -> Result<(), ScaffoldContractError> {
-    for token in pre.sensory.context_streams.vocal_tokens.iter().flatten() {
+    for token in pre.sensory().context_streams.vocal_tokens.iter().flatten() {
         append_heard_token(builder, *token)?;
     }
-    for token in pre.sensory.language_context.heard_tokens.iter().flatten() {
+    for token in pre.sensory().language_context.heard_tokens.iter().flatten() {
         append_heard_token(builder, *token)?;
     }
     Ok(())
@@ -773,7 +791,7 @@ fn append_salience_clusters(
     builder: &mut SideBufferBuilder,
     pre: &crate::PreActionSnapshot,
 ) -> Result<(), ScaffoldContractError> {
-    if let Some(context) = &pre.sensory.semantic_context {
+    if let Some(context) = &pre.sensory().semantic_context {
         for entry in &context.salience {
             builder.push(PackedSideBufferRecord::new(
                 PackedSideBufferKind::SalienceCluster,
@@ -784,7 +802,7 @@ fn append_salience_clusters(
             )?)?;
         }
     }
-    if let Some(context) = &pre.sensory.gaussian_context {
+    if let Some(context) = &pre.sensory().gaussian_context {
         for cluster in &context.clusters {
             builder.push(PackedSideBufferRecord::new(
                 PackedSideBufferKind::SalienceCluster,
@@ -844,10 +862,14 @@ fn append_ranked_action_proposals(
     builder: &mut SideBufferBuilder,
     decision: &crate::DecisionSnapshot,
 ) -> Result<(), ScaffoldContractError> {
-    for ranked in &decision.ranked_top_proposals {
+    let evidence = match decision.evidence_kind() {
+        crate::EvidenceKind::HeuristicBaseline => decision.heuristic_evidence()?,
+        crate::EvidenceKind::NeuralClosedLoopGpu => return Ok(()),
+    };
+    for ranked in &evidence.ranked_top_proposals {
         builder.push(ranked_action_record(*ranked, 0)?)?;
     }
-    if let Some(rejected) = decision.rejected_top_proposal {
+    if let Some(rejected) = evidence.rejected_top_proposal {
         builder.push(ranked_action_record(rejected, SIDE_RECORD_FLAG_REJECTED)?)?;
     }
     Ok(())
@@ -875,7 +897,10 @@ fn append_arbitration_details(
     builder: &mut SideBufferBuilder,
     decision: &crate::DecisionSnapshot,
 ) -> Result<(), ScaffoldContractError> {
-    let trace = &decision.arbitration_trace;
+    let trace = match decision.evidence_kind() {
+        crate::EvidenceKind::HeuristicBaseline => &decision.heuristic_evidence()?.arbitration_trace,
+        crate::EvidenceKind::NeuralClosedLoopGpu => return Ok(()),
+    };
     builder.push(PackedSideBufferRecord::new(
         PackedSideBufferKind::ArbitrationDetail,
         trace.trace_ref.raw(),
@@ -916,7 +941,7 @@ fn append_semantic_codes(
     builder: &mut SideBufferBuilder,
     pre: &crate::PreActionSnapshot,
 ) -> Result<(), ScaffoldContractError> {
-    if let Some(context) = &pre.sensory.semantic_context {
+    if let Some(context) = &pre.sensory().semantic_context {
         for code in &context.compressed_codes {
             builder.push(PackedSideBufferRecord::new(
                 PackedSideBufferKind::SemanticCode,
@@ -934,7 +959,7 @@ fn append_gaussian_refs(
     builder: &mut SideBufferBuilder,
     pre: &crate::PreActionSnapshot,
 ) -> Result<(), ScaffoldContractError> {
-    if let Some(context) = &pre.sensory.gaussian_context {
+    if let Some(context) = &pre.sensory().gaussian_context {
         builder.push(PackedSideBufferRecord::new(
             PackedSideBufferKind::GaussianRef,
             context.egocentric_bin_hash,
@@ -1001,13 +1026,17 @@ fn append_diagnostic_extras(
     decision: &crate::DecisionSnapshot,
     outcome: &crate::PostActionOutcome,
 ) -> Result<(), ScaffoldContractError> {
+    let trace = match decision.evidence_kind() {
+        crate::EvidenceKind::HeuristicBaseline => &decision.heuristic_evidence()?.arbitration_trace,
+        crate::EvidenceKind::NeuralClosedLoopGpu => return Ok(()),
+    };
     builder.push(PackedSideBufferRecord::new(
         PackedSideBufferKind::DiagnosticExtra,
-        decision.arbitration_trace.trace_ref.raw(),
+        trace.trace_ref.raw(),
         0,
         [
-            decision.arbitration_trace.suppressed_proposals.len() as f32,
-            decision.arbitration_trace.tied_proposal_indices.len() as f32,
+            trace.suppressed_proposals.len() as f32,
+            trace.tied_proposal_indices.len() as f32,
             outcome.prediction_error.raw(),
             if outcome.contradiction_observed {
                 1.0
@@ -1047,10 +1076,10 @@ fn build_flags(patch: &ExperiencePatch) -> u32 {
     if outcome.contradiction_observed {
         flags |= PACKED_FLAG_CONTRADICTION_OBSERVED;
     }
-    if pre.sensory.semantic_context.is_some() {
+    if pre.sensory().semantic_context.is_some() {
         flags |= PACKED_FLAG_HAS_SEMANTIC_CONTEXT;
     }
-    if pre.sensory.gaussian_context.is_some() {
+    if pre.sensory().gaussian_context.is_some() {
         flags |= PACKED_FLAG_HAS_GAUSSIAN_CONTEXT;
     }
     if selected.motor_payload.is_some() {
@@ -1064,14 +1093,25 @@ fn build_flags(patch: &ExperiencePatch) -> u32 {
 
 fn salience_summary(patch: &ExperiencePatch) -> Result<f32, ScaffoldContractError> {
     let view = patch.as_learning_view();
-    let mut sum = view.pre_action().sensory.channels.novelty_signal.raw()
-        + view.pre_action().sensory.channels.pain_signal.raw()
-        + view.pre_action().memory_expectancy.salience_hint.raw();
-    let mut count = 3.0f32;
+    let pre = view.pre_action();
+    let mut sum =
+        pre.sensory().channels.novelty_signal.raw() + pre.sensory().channels.pain_signal.raw();
+    let mut count = 2.0f32;
 
-    for proposal in &view.decision().proposals {
-        sum += proposal.salience.raw();
+    if pre.evidence_kind() == crate::EvidenceKind::HeuristicBaseline {
+        sum += pre
+            .heuristic_evidence()?
+            .memory_expectancy
+            .salience_hint
+            .raw();
         count += 1.0;
+    }
+
+    if view.decision().evidence_kind() == crate::EvidenceKind::HeuristicBaseline {
+        for proposal in &view.decision().heuristic_evidence()?.proposals {
+            sum += proposal.salience.raw();
+            count += 1.0;
+        }
     }
     for hint in &view.outcome().concept_hints {
         sum += hint.salience.raw();
@@ -1081,13 +1121,13 @@ fn salience_summary(patch: &ExperiencePatch) -> Result<f32, ScaffoldContractErro
         sum += hint.salience.raw();
         count += 1.0;
     }
-    if let Some(context) = &view.pre_action().sensory.semantic_context {
+    if let Some(context) = &view.pre_action().sensory().semantic_context {
         for entry in &context.salience {
             sum += entry.salience.raw();
             count += 1.0;
         }
     }
-    if let Some(context) = &view.pre_action().sensory.gaussian_context {
+    if let Some(context) = &view.pre_action().sensory().gaussian_context {
         for cluster in &context.clusters {
             sum += cluster.salience.raw();
             count += 1.0;

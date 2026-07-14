@@ -5,57 +5,10 @@
 
 use crate::prelude::*;
 use crate::*;
-
 pub const S01_GRAPHICAL_WINDOW_TITLE: &str = "A-Life GPU Alpha Playground";
 pub const S01_DEFAULT_FIXTURE_ROOT: &str = "crates/alife_world/tests/fixtures/gpu_alpha";
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum GraphicalGpuRuntimeMode {
-    #[default]
-    CpuReference,
-    StaticCpuShadowGuarded,
-    StaticPlasticCpuShadowGuarded,
-    FullCpuShadowGuarded,
-    AutoWithCpuFallback,
-}
-
-impl GraphicalGpuRuntimeMode {
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::CpuReference => "cpu-reference",
-            Self::StaticCpuShadowGuarded => "static-cpu-shadow-guarded",
-            Self::StaticPlasticCpuShadowGuarded => "static-plastic-cpu-shadow-guarded",
-            Self::FullCpuShadowGuarded => "full-cpu-shadow-guarded",
-            Self::AutoWithCpuFallback => "auto-with-cpu-fallback",
-        }
-    }
-
-    pub const fn requests_gpu(self) -> bool {
-        !matches!(self, Self::CpuReference)
-    }
-
-    pub const fn requests_plasticity(self) -> bool {
-        matches!(
-            self,
-            Self::StaticPlasticCpuShadowGuarded
-                | Self::FullCpuShadowGuarded
-                | Self::AutoWithCpuFallback
-        )
-    }
-
-    pub fn parse(value: &str) -> Result<Self, GameAppShellError> {
-        match value {
-            "cpu-reference" => Ok(Self::CpuReference),
-            "static-cpu-shadow-guarded" => Ok(Self::StaticCpuShadowGuarded),
-            "static-plastic-cpu-shadow-guarded" => Ok(Self::StaticPlasticCpuShadowGuarded),
-            "full-cpu-shadow-guarded" => Ok(Self::FullCpuShadowGuarded),
-            "auto-with-cpu-fallback" => Ok(Self::AutoWithCpuFallback),
-            _ => Err(GameAppShellError::InvalidGraphicalLaunch {
-                message: "graphical GPU mode must be cpu-reference, static-cpu-shadow-guarded, static-plastic-cpu-shadow-guarded, full-cpu-shadow-guarded, or auto-with-cpu-fallback",
-            }),
-        }
-    }
-}
+pub type GraphicalGpuRuntimeMode = GraphicalBrainPolicyMode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicalPlaygroundMode {
@@ -182,6 +135,8 @@ impl GraphicalPlayerViewAcceptanceSummary {
 pub struct GraphicalPlaygroundLaunchConfig {
     pub app_launch: AppShellLaunchConfig,
     pub mode: GraphicalPlaygroundMode,
+    pub brain_policy: PolicyBackend,
+    /// Temporary compatibility input retained until the legacy runtime CLI is removed.
     pub gpu_mode: GraphicalGpuRuntimeMode,
     pub view_mode: GraphicalPlaygroundViewMode,
     pub window_title: String,
@@ -191,9 +146,11 @@ pub struct GraphicalPlaygroundLaunchConfig {
 impl GraphicalPlaygroundLaunchConfig {
     pub fn interactive(fixture_root: impl AsRef<Path>) -> Self {
         Self {
-            app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
+            app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root)
+                .with_brain_policy(PolicyBackend::NeuralClosedLoopGpu),
             mode: GraphicalPlaygroundMode::Interactive,
-            gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+            brain_policy: PolicyBackend::NeuralClosedLoopGpu,
+            gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
             view_mode: GraphicalPlaygroundViewMode::Player,
             window_title: S01_GRAPHICAL_WINDOW_TITLE.to_string(),
             require_gpu: false,
@@ -202,9 +159,11 @@ impl GraphicalPlaygroundLaunchConfig {
 
     pub fn smoke(fixture_root: impl AsRef<Path>, seconds: u32) -> Self {
         Self {
-            app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root),
+            app_launch: AppShellLaunchConfig::from_p34_fixture_root(fixture_root)
+                .with_brain_policy(PolicyBackend::NeuralClosedLoopGpu),
             mode: GraphicalPlaygroundMode::Smoke { seconds },
-            gpu_mode: GraphicalGpuRuntimeMode::StaticPlasticCpuShadowGuarded,
+            brain_policy: PolicyBackend::NeuralClosedLoopGpu,
+            gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
             view_mode: GraphicalPlaygroundViewMode::Player,
             window_title: format!("{S01_GRAPHICAL_WINDOW_TITLE} - smoke {seconds}s"),
             require_gpu: false,
@@ -213,6 +172,14 @@ impl GraphicalPlaygroundLaunchConfig {
 
     pub const fn with_gpu_mode(mut self, gpu_mode: GraphicalGpuRuntimeMode) -> Self {
         self.gpu_mode = gpu_mode;
+        self.brain_policy = gpu_mode.policy();
+        self.app_launch.brain_policy = self.brain_policy;
+        self
+    }
+
+    pub const fn with_brain_policy(mut self, brain_policy: PolicyBackend) -> Self {
+        self.brain_policy = brain_policy;
+        self.app_launch.brain_policy = brain_policy;
         self
     }
 
@@ -239,9 +206,9 @@ impl GraphicalPlaygroundLaunchConfig {
                 });
             }
         }
-        if self.require_gpu && !self.gpu_mode.requests_gpu() {
+        if self.require_gpu && self.gpu_mode != GraphicalBrainPolicyMode::GpuRequired {
             return Err(GameAppShellError::InvalidGraphicalLaunch {
-                message: "RequireGpu needs a GPU runtime mode, not cpu-reference",
+                message: "RequireGpu needs the gpu-required brain policy",
             });
         }
         Ok(())
@@ -258,12 +225,13 @@ pub struct GraphicalPlaygroundLaunchSummary {
     pub persistent_window: bool,
     pub fixture_root: PathBuf,
     pub seed: u64,
-    pub selected_backend: BackendSelection,
+    pub selected_backend: PolicyBackend,
+    pub brain_policy: PolicyBackend,
     pub requested_gpu_mode: GraphicalGpuRuntimeMode,
     pub view_mode: GraphicalPlaygroundViewMode,
     pub require_gpu: bool,
     pub gpu_mode_visible: bool,
-    pub cpu_fallback_visible: bool,
+    pub gpu_unavailability_visible: bool,
     pub stable_id_overlay_visible: bool,
     pub player_view_acceptance: GraphicalPlayerViewAcceptanceSummary,
     pub object_count: usize,
@@ -276,7 +244,7 @@ pub struct GraphicalPlaygroundLaunchSummary {
 impl GraphicalPlaygroundLaunchSummary {
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:objects={}:creatures={}:food={}:hazards={}:backend={:?}:gpu_mode={}:view_mode={}:require_gpu={}:persistent={}:timeout={:?}:{}",
+            "{}:{}:{}:objects={}:creatures={}:food={}:hazards={}:backend={:?}:brain_policy={:?}:gpu_mode={}:view_mode={}:require_gpu={}:persistent={}:timeout={:?}:{}",
             self.schema,
             self.schema_version,
             self.mode_label,
@@ -285,6 +253,7 @@ impl GraphicalPlaygroundLaunchSummary {
             self.food_marker_count,
             self.hazard_marker_count,
             self.selected_backend,
+            self.brain_policy,
             self.requested_gpu_mode.label(),
             self.view_mode.label(),
             self.require_gpu,
@@ -313,11 +282,12 @@ pub fn validate_graphical_playground_launch(
         fixture_root: launch.app_launch.fixture_root.clone(),
         seed: startup.seed,
         selected_backend: startup.requested_backend,
+        brain_policy: launch.brain_policy,
         requested_gpu_mode: launch.gpu_mode,
         view_mode: launch.view_mode,
         require_gpu: launch.require_gpu,
         gpu_mode_visible: true,
-        cpu_fallback_visible: true,
+        gpu_unavailability_visible: true,
         stable_id_overlay_visible: launch.view_mode.world_labels_visible(),
         player_view_acceptance: GraphicalPlayerViewAcceptanceSummary::for_view_mode(
             launch.view_mode,

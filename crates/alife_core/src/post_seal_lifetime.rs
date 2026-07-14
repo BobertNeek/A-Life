@@ -10,10 +10,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     validate_finite, BrainClassId, ExperiencePatch, ExperiencePatchPhase, ExperienceSequenceId,
-    NeuralProjectionSchema, OrganismId, ScaffoldContractError, SparseTilePayload, Tick, Validate,
+    NeuralProjectionSchema, OrganismId, PerceptionFrameDigest, ScaffoldContractError,
+    SparseTilePayload, Tick, Validate,
 };
 
-pub const POST_SEAL_LIFETIME_DELTA_SCHEMA_VERSION: u16 = 1;
+pub const POST_SEAL_LIFETIME_DELTA_SCHEMA_VERSION: u16 = 2;
 pub const POST_SEAL_LIFETIME_DELTA_MAX_RECORDS: usize = 1024;
 pub const POST_SEAL_HSHADOW_ABS_LIMIT: f32 = 4.0;
 pub const POST_SEAL_HSHADOW_VALUE_EPSILON: f32 = 1.0e-3;
@@ -128,6 +129,7 @@ pub struct PostSealLifetimeDeltaBatch {
     pub max_active_synapses: u32,
     pub originating_tick: Tick,
     pub sealed_sequence_id: ExperienceSequenceId,
+    pub frame_digest: PerceptionFrameDigest,
     pub source_kind: PostSealLifetimeDeltaSourceKind,
     pub cpu_shadow_parity_passed: bool,
     pub genetic_fixed_unchanged: bool,
@@ -145,6 +147,7 @@ impl PostSealLifetimeDeltaBatch {
         max_active_synapses: u32,
         originating_tick: Tick,
         sealed_sequence_id: ExperienceSequenceId,
+        frame_digest: PerceptionFrameDigest,
         source_kind: PostSealLifetimeDeltaSourceKind,
         cpu_shadow_parity_passed: bool,
         genetic_fixed_unchanged: bool,
@@ -160,6 +163,7 @@ impl PostSealLifetimeDeltaBatch {
             max_active_synapses,
             originating_tick,
             sealed_sequence_id,
+            frame_digest,
             source_kind,
             cpu_shadow_parity_passed,
             genetic_fixed_unchanged,
@@ -183,6 +187,9 @@ impl PostSealLifetimeDeltaBatch {
         {
             return Err(ScaffoldContractError::InvalidId);
         }
+        if self.frame_digest != token.frame_digest() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         Ok(())
     }
 }
@@ -203,6 +210,7 @@ impl Validate for PostSealLifetimeDeltaBatch {
             || !self.genetic_fixed_unchanged
             || !self.lifetime_consolidated_unchanged
             || !self.h_operational_unchanged
+            || self.frame_digest == PerceptionFrameDigest([0; 4])
         {
             return Err(ScaffoldContractError::BackendParity);
         }
@@ -217,13 +225,22 @@ impl Validate for PostSealLifetimeDeltaBatch {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// A post-seal learning capability minted only from a validated sealed patch.
+///
+/// The capability is intentionally not deserializable:
+///
+/// ```compile_fail
+/// fn requires_deserialize<T: for<'de> serde::Deserialize<'de>>() {}
+/// requires_deserialize::<alife_core::PostSealLearningToken>();
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct PostSealLearningToken {
     organism_id: OrganismId,
     brain_class_id: BrainClassId,
     originating_tick: Tick,
     outcome_tick: Tick,
     sealed_sequence_id: ExperienceSequenceId,
+    frame_digest: PerceptionFrameDigest,
 }
 
 impl PostSealLearningToken {
@@ -232,13 +249,16 @@ impl PostSealLearningToken {
         if patch.header().phase != ExperiencePatchPhase::Sealed {
             return Err(ScaffoldContractError::UnorderedExperiencePhase);
         }
-        Ok(Self {
+        let token = Self {
             organism_id: patch.header().organism_id,
-            brain_class_id: patch.pre_action().brain_class_id,
+            brain_class_id: patch.pre_action().brain_class_id()?,
             originating_tick: patch.header().world_tick,
             outcome_tick: patch.outcome().outcome_tick,
             sealed_sequence_id: patch.header().sequence_id,
-        })
+            frame_digest: patch.pre_action().frame_digest()?,
+        };
+        token.validate_contract()?;
+        Ok(token)
     }
 
     pub fn from_optional_sealed_patch(
@@ -266,9 +286,34 @@ impl PostSealLearningToken {
     pub const fn sealed_sequence_id(self) -> ExperienceSequenceId {
         self.sealed_sequence_id
     }
+
+    pub const fn frame_digest(self) -> PerceptionFrameDigest {
+        self.frame_digest
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+impl Validate for PostSealLearningToken {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.organism_id.validate()?;
+        self.brain_class_id.validate()?;
+        self.sealed_sequence_id.validate()?;
+        Tick::validate_monotonic(self.originating_tick, self.outcome_tick)?;
+        if self.frame_digest == PerceptionFrameDigest([0; 4]) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
+}
+
+/// An audit record assembled from an in-process sealed-patch capability.
+///
+/// The wrapper cannot be used to deserialize a synthetic capability:
+///
+/// ```compile_fail
+/// fn requires_deserialize<T: for<'de> serde::Deserialize<'de>>() {}
+/// requires_deserialize::<alife_core::PostSealLifetimeDeltaApplication>();
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PostSealLifetimeDeltaApplication {
     pub token: PostSealLearningToken,
     pub batch: PostSealLifetimeDeltaBatch,
@@ -306,6 +351,7 @@ pub struct PostSealLifetimeDeltaReceipt {
     pub originating_tick: Tick,
     pub outcome_tick: Tick,
     pub sealed_sequence_id: ExperienceSequenceId,
+    pub frame_digest: PerceptionFrameDigest,
     pub source_kind: PostSealLifetimeDeltaSourceKind,
     pub applied_records: u32,
     pub changed_records: u32,
@@ -327,6 +373,7 @@ impl Validate for PostSealLifetimeDeltaReceipt {
             || !self.h_operational_unchanged
             || !self.post_seal_only
             || !self.replay_protected
+            || self.frame_digest == PerceptionFrameDigest([0; 4])
         {
             return Err(ScaffoldContractError::BackendParity);
         }

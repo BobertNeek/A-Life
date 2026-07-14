@@ -59,28 +59,46 @@ fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
 
-    let mut root_query = app.world_mut().query::<&ProductionCreatureAssemblyRoot>();
-    let roots = root_query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert_eq!(roots.len(), 30);
-    assert!(roots.iter().all(|root| root.display_only));
-
-    let mut part_query = app
+    let mut root_query = app
         .world_mut()
-        .query::<(&ProductionCreaturePartMarker, &Mesh3d)>();
+        .query::<(&ProductionCreatureAssemblyRoot, &bevy::prelude::Visibility)>();
+    let roots = root_query
+        .iter(app.world())
+        .map(|(root, visibility)| (*root, *visibility))
+        .collect::<Vec<_>>();
+    assert_eq!(roots.len(), 30);
+    assert!(roots.iter().all(|(root, visibility)| root.display_only
+        && *visibility == bevy::prelude::Visibility::Inherited));
+
+    let mut part_query = app.world_mut().query::<(
+        &ProductionCreaturePartMarker,
+        &Mesh3d,
+        &MeshMaterial3d<StandardMaterial>,
+        &Transform,
+    )>();
     let parts = part_query
         .iter(app.world())
-        .map(|(marker, mesh)| (*marker, mesh.0.id()))
+        .map(|(marker, mesh, material, transform)| {
+            (*marker, mesh.0.id(), material.0.id(), transform.translation)
+        })
         .collect::<Vec<_>>();
     let mut slots_by_root = std::collections::BTreeMap::new();
+    let mut translations_by_root = std::collections::BTreeMap::new();
     let mut families = BTreeSet::new();
     let mut mesh_handles = BTreeSet::new();
-    for (marker, mesh_id) in &parts {
+    let mut material_handles = BTreeSet::new();
+    for (marker, mesh_id, material_id, translation) in &parts {
         slots_by_root
             .entry(marker.stable_id.raw())
             .or_insert_with(BTreeSet::new)
             .insert(marker.slot);
+        translations_by_root
+            .entry(marker.stable_id.raw())
+            .or_insert_with(std::collections::BTreeMap::new)
+            .insert(marker.slot, *translation);
         families.insert(marker.family);
         mesh_handles.insert(*mesh_id);
+        material_handles.insert(*material_id);
     }
     assert_eq!(slots_by_root.len(), roots.len());
     assert!(slots_by_root.values().all(|slots| {
@@ -88,8 +106,15 @@ fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
             .iter()
             .all(|slot| slots.contains(slot))
     }));
+    assert!(translations_by_root.values().all(|translations| {
+        translations[&CreaturePartSlot::LeftArm].x < -0.30
+            && translations[&CreaturePartSlot::RightArm].x > 0.30
+            && translations[&CreaturePartSlot::LeftLeg].x < -0.12
+            && translations[&CreaturePartSlot::RightLeg].x > 0.12
+    }));
     assert!(families.len() >= 8);
     assert!(mesh_handles.len() < parts.len() / 3);
+    assert!(material_handles.len() < parts.len() / 3);
 
     let mut cover_query = app
         .world_mut()
@@ -939,15 +964,33 @@ fn fvr10_product_camera_and_faces_are_composed_for_readable_creatures() {
     let mut face_query = app
         .world_mut()
         .query::<(&Fvr09CreatureFaceFeatureMarker, &Transform)>();
-    let face_offsets = face_query
+    let face_features = face_query
         .iter(app.world())
-        .map(|(_, transform)| transform.translation)
+        .map(|(marker, transform)| (marker.feature, transform.translation))
         .collect::<Vec<_>>();
-    assert!(!face_offsets.is_empty());
+    assert!(!face_features.is_empty());
     assert!(
-        face_offsets.iter().all(|offset| offset.z >= 0.36),
+        face_features.iter().all(|(_, offset)| offset.z >= 0.24),
         "creature face markers must sit on the camera-facing side for the default screenshot"
     );
+    for required in [
+        "left-eye-sclera",
+        "right-eye-sclera",
+        "left-eye-iris",
+        "right-eye-iris",
+        "left-eye-pupil",
+        "right-eye-pupil",
+        "left-eye-glint",
+        "right-eye-glint",
+        "soft-mouth",
+    ] {
+        assert!(
+            face_features
+                .iter()
+                .any(|(feature, _)| *feature == required),
+            "layered expressive face should include {required}"
+        );
+    }
 }
 
 #[test]

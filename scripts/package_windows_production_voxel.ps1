@@ -6,8 +6,8 @@ param(
     [string]$Profile = "MinSpecComfort1080p",
     [ValidateSet("MinimumSettings30x30", "MinSpecComfort1080p", "Balanced1080p", "HighSpecScaleUp", "ResearchScale")]
     [string]$FallbackProfile = "MinimumSettings30x30",
-    [ValidateSet("cpu-reference", "static-plastic-cpu-shadow-guarded", "auto-with-cpu-fallback")]
-    [string]$GpuMode = "auto-with-cpu-fallback",
+    [ValidateSet("gpu-required")]
+    [string]$BrainPolicy = "gpu-required",
     [string]$OutputRoot = "target/artifacts/fvr08_windows_production",
     [string]$PackageName = "alife-production-voxel-windows"
 )
@@ -140,10 +140,10 @@ Write-Host "Package root: $PackageRoot"
 Write-Host "Zip path: $ZipPath"
 Write-Host "Default profile: $Profile"
 Write-Host "Minimum fallback profile: $FallbackProfile"
-Write-Host "GPU mode default: $GpuMode"
+Write-Host "Brain policy default: $BrainPolicy"
 Write-Host "Features: $ProductionFeatures"
 Write-Host "License bundle: LICENSE plus crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json"
-Write-Host "GPU fallback diagnostics: gpu_fallback_diagnostics metadata and production-voxel preflight output"
+Write-Host "GPU authority diagnostics: failure stops learned actions"
 Write-Host "Crash summary path: $PackageCrashSummary"
 Write-Host "Cargo build command: $($BuildCommand -join ' ')"
 
@@ -220,14 +220,14 @@ try {
         license_bundle = @("LICENSE", "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json")
         default_profile = $Profile
         minimum_fallback_profile = $FallbackProfile
-        default_gpu_mode = $GpuMode
+        default_brain_policy = $BrainPolicy
         default_resolution = "1920x1080"
         save_directory_policy = "Package carries clean fixture saves; user/runtime settings and diagnostics are app-managed and kept out of git."
-        gpu_fallback_diagnostics = [ordered]@{
-            mode = $GpuMode
+        gpu_authority_diagnostics = [ordered]@{
+            policy = $BrainPolicy
             visible = $true
             require_gpu_supported = $true
-            cpu_fallback_available = $true
+            failure_stops_learned_actions = $true
         }
         crash_summary = "diagnostics/fvr08_acceptance/crash_summary.md"
         release_tag_created = $false
@@ -262,7 +262,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run_windows_production_vox
 
 Default profile: `MinSpecComfort1080p`.
 Minimum fallback profile: `MinimumSettings30x30`.
-GPU fallback diagnostics: `auto-with-cpu-fallback` with visible production
+GPU authority diagnostics: `gpu-required` with learned actions stopped on
 preflight output and crash summary at `diagnostics/fvr08_acceptance/crash_summary.md`.
 Save directory policy: clean package fixture saves ship with the package;
 runtime diagnostics and generated receipts stay package-local or under
