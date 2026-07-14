@@ -1,9 +1,12 @@
 use std::path::PathBuf;
 
 use alife_game_app::{
-    default_environment_manifest_path, run_production_voxel_frontend_dry_run,
-    ProductionFrontendProfileId, ProductionVoxelLaunchConfig, PRODUCTION_VOXEL_COMMAND,
+    default_environment_manifest_path, default_production_asset_manifest_path,
+    run_production_voxel_frontend_dry_run, validate_production_assets, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig, PRODUCTION_VOXEL_COMMAND,
 };
+
+const VALIDATE_PRODUCTION_ASSETS_COMMAND: &str = "validate-production-assets";
 
 fn main() {
     if let Err(error) = run(std::env::args().skip(1).collect()) {
@@ -18,6 +21,16 @@ fn run(args: Vec<String>) -> Result<(), String> {
     };
     if command == "--help" || command == "-h" {
         println!("{}", help());
+        return Ok(());
+    }
+    if command == VALIDATE_PRODUCTION_ASSETS_COMMAND {
+        if !rest.is_empty() {
+            return Err(format!(
+                "{VALIDATE_PRODUCTION_ASSETS_COMMAND} does not accept options\n{}",
+                help()
+            ));
+        }
+        println!("{}", production_asset_validation_receipt()?);
         return Ok(());
     }
     if command != PRODUCTION_VOXEL_COMMAND && command != "graphical-playground" {
@@ -50,6 +63,42 @@ fn run(args: Vec<String>) -> Result<(), String> {
         println!("legacy_alias=true routed_to={PRODUCTION_VOXEL_COMMAND}");
     }
     Ok(())
+}
+
+fn production_asset_validation_receipt() -> Result<String, String> {
+    let summary = validate_production_assets(default_production_asset_manifest_path())
+        .map_err(|error| error.to_string())?;
+    Ok(format!(
+        "FVR07 production assets schema={} version={} pack={} manifest={} assets={} generated={} external={} required_categories={} final_art={} placeholder_final={} unknown_license={} rejected={} committed_bytes={} largest={} generated_target={} loader={}:{} missing_policy={} vfx_profiles={} vfx_effects={} min_vfx={} comfort_vfx={} display_only_vfx={} adaptive_vfx={} no_large_artifacts={} renderer_authority_blocked={} scale_up_profiles={} signature={}",
+        summary.schema,
+        summary.schema_version,
+        summary.pack_id,
+        summary.manifest_path.display(),
+        summary.asset_count,
+        summary.generated_assets,
+        summary.external_assets,
+        summary.required_usage_categories_present,
+        summary.final_art_entries,
+        summary.placeholder_final_entries,
+        summary.unknown_license_entries,
+        summary.missing_or_rejected_assets,
+        summary.committed_asset_bytes,
+        summary.largest_asset_bytes,
+        summary.generated_art_target,
+        summary.loader_crate,
+        summary.loader_version,
+        summary.missing_asset_policy,
+        summary.vfx_profile_count,
+        summary.vfx_effects_present,
+        summary.minimum_vfx_budget_state,
+        summary.comfort_vfx_budget_state,
+        summary.display_only_vfx,
+        summary.adaptive_vfx,
+        summary.no_large_artifacts_committed,
+        summary.no_renderer_authority,
+        summary.scale_up_profiles_present,
+        summary.signature_line(),
+    ))
 }
 
 fn parse_launch(
@@ -200,6 +249,20 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn production_asset_validation_command_remains_available() {
+        let receipt = production_asset_validation_receipt().unwrap();
+        assert!(receipt.starts_with("FVR07 production assets"));
+        assert!(receipt.contains("unknown_license=0"));
+        assert!(receipt.contains("renderer_authority_blocked=true"));
+        assert!(help().contains(VALIDATE_PRODUCTION_ASSETS_COMMAND));
+    }
 }

@@ -1,6 +1,6 @@
 # FVR10/FVR11 Visual Game Layer Handoff
 
-Date: 2026-07-13
+Date: 2026-07-14
 
 Status: the FVR11 creature-stage terrain overhaul and the heritable modular
 creature assembly pass are implemented and accepted. The earlier flat-color
@@ -116,12 +116,14 @@ D:\A life\target\artifacts\fvr03\MinimumSettings30x30_runtime_screenshot.png
 D:\A life\target\artifacts\fvr03\MinSpecComfort1080p_runtime_screenshot.png
 ```
 
-The minimum capture is dated 2026-07-13 19:56:58 local time. It preserves 30
-upright textured modular creatures, coherent paths and ledges, textured
-material regions, a distinct fungal biome, and sparse ecology at the 30 FPS
-floor.
+The minimum capture is dated 2026-07-14 04:44:43 local time. It preserves 30
+textured modular creatures across active and prone simulation poses, coherent
+paths and ledges, textured material regions, a distinct fungal biome, and
+sparse ecology at the 30 FPS floor. Upright creatures have bounded torsos and
+layered sclera/iris/pupil eyes; the former oversized triangle sheets and black
+bead eyes are absent.
 
-The comfort capture is dated 2026-07-13 19:57:04 local time. It adds denser
+The comfort capture is dated 2026-07-14 04:44:48 local time. It adds denser
 clustered flora, directional shadows, and stronger depth while preserving
 separated biped limbs, source textures, and the same readable world composition.
 
@@ -130,23 +132,29 @@ evidence. They are not substitutes for the two required clean runtime images.
 
 ## Runtime Receipts
 
-Both final launches exited successfully with empty stderr logs and reported:
+Both final GPU-required launches exited successfully and their receipts report:
 
-- `selected_backend=GpuFull`
+- `requested_policy=gpu-required`
+- `selected_backend=GpuAuthoritative`
+- `authoritative=true`
+- `unavailable_reason=None`
 - `adapter='NVIDIA GeForce RTX 3050'`
 - `backend_api=Vulkan`
-- `fallback=None`
-- `real_save_loaded=true`
-- `mock_data_source=false`
-- `voxel_roundtrip=true`
-- `gpu_runtime_no_bulk_readback=true`
+- `active_creatures=30`
+- `finite_rejections=0`
+- `no_active_bulk_readback=true`
+- `compact_readback_bytes=1440`
+
+The launch signatures identify the real P34 fixture save and asset manifest;
+the production path does not construct a mock simulation or a fallback neural
+backend.
 
 The fresh renderer diagnostics report:
 
 | Profile | Measured local smoke FPS | Target | Dressing | GPU VFX emitters |
 |---|---:|---:|---:|---:|
-| `MinimumSettings30x30` | 227.63 | 30 | 64 | 2 |
-| `MinSpecComfort1080p` | 188.73 | 60 | 224 | 4 |
+| `MinimumSettings30x30` | 198.12 | 30 | 64 | 2 |
+| `MinSpecComfort1080p` | 132.91 | 60 | 224 | 4 |
 
 Both renderer diagnostics report 30 assembly roots, 210 part entities, 180
 join covers, eight represented source families, 56 shared mesh handles,
@@ -203,7 +211,7 @@ implementation, not authority or cross-crate ownership.
 
 ## Validation Receipt
 
-The following commands passed on 2026-07-13:
+The following commands passed on 2026-07-14:
 
 ```text
 cargo fmt --all -- --check
@@ -215,8 +223,11 @@ cargo test -p alife_tools creature_part_builder -- --nocapture
 cargo test -p alife_game_app creature_part_catalog -j 1 -- --nocapture
 cargo test -p alife_game_app creature_part_genetics -j 1 -- --nocapture
 cargo test -p alife_game_app creature_assembly -j 1 -- --nocapture
-cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
+cargo test -p alife_game_app --features "bevy-app gpu-runtime voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
 cargo test -p alife_game_app --test app_shell lifecycle_lineage_birth_inherits_and_mutates_appearance_genes -j 1 -- --nocapture
+cargo test -p alife_game_app --features gpu-runtime --test gpu_closed_loop_policy -j 1 -- --nocapture
+cargo test -p alife_game_app --test no_cpu_shadow_runtime -j 1 -- --nocapture
+cargo test -p alife_game_app --bin alife_game_app production_asset_validation_command_remains_available -j 1 -- --nocapture
 cargo run -p alife_tools --bin creature_part_builder -- validate --catalog crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json
 cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1
@@ -225,9 +236,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
 
 The exact production release build also passed with the full shipping feature
 set. The full FVR03 renderer integration suite passed 19 of 19 tests under the
-low-debug, non-incremental test profile after the default Windows test linker
-hit a transient `STATUS_ACCESS_VIOLATION`; the retry changed build settings only.
-The lineage appearance inheritance/mutation test passed.
+low-debug, non-incremental test profile. The nine GPU policy tests, the no-CPU-
+shadow boundary test, and the lineage appearance inheritance/mutation test also
+passed.
 
 ## Maintenance Guidance
 

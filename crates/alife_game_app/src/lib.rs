@@ -279,6 +279,9 @@ pub use gpu_product_telemetry::*;
 mod gpu_authority_telemetry;
 pub use gpu_authority_telemetry::*;
 
+mod graphical_gpu_runtime_controller;
+pub use graphical_gpu_runtime_controller::*;
+
 #[cfg(feature = "gpu-runtime")]
 mod gpu_live_runtime;
 #[cfg(feature = "gpu-runtime")]
