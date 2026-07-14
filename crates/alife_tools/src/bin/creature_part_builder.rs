@@ -616,7 +616,7 @@ fn update_manifest(
                 let path = root.join(relative);
                 let bytes = fs::read(&path)?;
                 entries.push(json!({
-                    "asset_id": format!("creature-part-{}-{:?}-{}", family.label, lod.lod, kind).to_ascii_lowercase(),
+                    "asset_id": creature_part_asset_id(family.id, lod.lod, kind),
                     "usage_category": "creatures",
                     "local_path": format!("crates/alife_game_app/assets/{relative}"),
                     "digest": fnv1a_digest(&bytes),
@@ -650,6 +650,14 @@ fn update_manifest(
     Ok(())
 }
 
+fn creature_part_asset_id(
+    family: CreaturePartFamilyId,
+    lod: CreaturePartLodId,
+    kind: &str,
+) -> String {
+    format!("creature-part-family-{:04}-{:?}-{kind}", family.0, lod).to_ascii_lowercase()
+}
+
 fn fnv1a_digest(bytes: &[u8]) -> String {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for byte in bytes {
@@ -678,5 +686,13 @@ mod tests {
             "crates/alife_game_app/assets/preview.png",
         ]);
         assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn manifest_asset_ids_use_append_only_family_ids() {
+        assert_eq!(
+            creature_part_asset_id(CreaturePartFamilyId(7), CreaturePartLodId::Compact, "parts"),
+            "creature-part-family-0007-compact-parts"
+        );
     }
 }

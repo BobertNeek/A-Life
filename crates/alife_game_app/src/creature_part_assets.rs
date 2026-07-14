@@ -149,10 +149,15 @@ fn fit_part_to_biped_envelope(slot: CreaturePartSlot, positions: &mut [[f32; 3]]
         let span = (max[axis] - min[axis]).max(1.0e-4);
         target_size[axis] / span
     });
+    let (source_pivot, target_pivot) = if slot == CreaturePartSlot::Torso {
+        (source_center, target_center)
+    } else {
+        ([0.0; 3], [0.0; 3])
+    };
     for position in positions {
         for axis in 0..3 {
             position[axis] =
-                (position[axis] - source_center[axis]) * scale[axis] + target_center[axis];
+                (position[axis] - source_pivot[axis]) * scale[axis] + target_pivot[axis];
         }
     }
     scale
@@ -517,6 +522,12 @@ o part_tail_back
                 .map(|p| p[1])
                 .fold(f32::NEG_INFINITY, f32::max);
             assert!(((max_y - min_y) - expected_height).abs() < 1.0e-4);
+            if slot != CreaturePartSlot::Torso {
+                assert_eq!(
+                    fitted[2], [0.0; 3],
+                    "attached part fitting must preserve the authored socket-local origin"
+                );
+            }
         }
     }
 

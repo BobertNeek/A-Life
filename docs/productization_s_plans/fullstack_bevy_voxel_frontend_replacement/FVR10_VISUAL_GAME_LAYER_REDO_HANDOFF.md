@@ -64,9 +64,11 @@ rebasing, output validation, and staging-before-copy behavior. Boundary-
 crossing triangles are clipped into complete surface fragments instead of
 being stretched across an anatomical part envelope. Each original source
 triangle retains one deterministic primary provenance owner even when its
-surface fragments render in adjacent slots. Runtime loading then fits each
-UV-preserving part into an upright anatomical envelope and assembles a Bevy
-hierarchy:
+surface fragments render in adjacent slots; the builder separately records the
+complete fragment-slot set and validates that the primary owner belongs to it.
+Runtime loading then fits each UV-preserving part into an upright anatomical
+envelope while preserving the authored socket-local origin for every attached
+part, and assembles a Bevy hierarchy:
 
 ```text
 ProductionCreatureAssemblyRoot (stable ID, selection, animation, display-only)
@@ -100,7 +102,9 @@ developer-source directory and are excluded from runtime packaging. Generated
 parts retain Omabuarts Quirky Series source UVs and `CC-BY-4.0` attribution;
 textures remain manifested production dependencies. Source and generated
 records include origin, author, digest, generation status, and replacement
-policy. Unknown-license, rejected, and placeholder-final counts are zero.
+policy. Generated manifest asset IDs use append-only numeric family IDs, so a
+display-label rename cannot change package identity. Unknown-license, rejected,
+and placeholder-final counts are zero.
 
 ## Accepted Screenshot Evidence
 

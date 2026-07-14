@@ -57,6 +57,7 @@ pub struct SlicedCreaturePartPack {
     pub parts: BTreeMap<CreaturePartSlot, GeneratedPartMesh>,
     pub source_triangle_count: usize,
     pub source_triangle_owners: BTreeMap<usize, BTreeSet<CreaturePartSlot>>,
+    pub source_triangle_fragment_slots: BTreeMap<usize, BTreeSet<CreaturePartSlot>>,
     pub sockets: BTreeMap<String, SocketFrame>,
     pub canonical_source_bounds: [[f64; 3]; 2],
     pub minimum_join_overlap: f32,
@@ -184,6 +185,7 @@ pub fn slice_creature_mesh(
         .map(|slot| (slot, BTreeMap::<VertexKey, u32>::new()))
         .collect::<BTreeMap<_, _>>();
     let mut owners = BTreeMap::<usize, BTreeSet<CreaturePartSlot>>::new();
+    let mut fragment_slots = BTreeMap::<usize, BTreeSet<CreaturePartSlot>>::new();
     let mut bounds = [[f64::INFINITY; 3], [f64::NEG_INFINITY; 3]];
     let partition_planes = unique_partition_planes(family);
 
@@ -230,6 +232,10 @@ pub fn slice_creature_mesh(
                     lod,
                     triangle: triangle.source_index,
                 })?;
+            fragment_slots
+                .entry(triangle.source_index)
+                .or_default()
+                .insert(fragment_slot);
             for index in 1..polygon.len() - 1 {
                 for vertex in [polygon[0], polygon[index], polygon[index + 1]] {
                     let local = to_socket_local(vertex, fragment_slot, family)?;
@@ -265,6 +271,7 @@ pub fn slice_creature_mesh(
         parts,
         source_triangle_count: source.triangles.len(),
         source_triangle_owners: owners,
+        source_triangle_fragment_slots: fragment_slots,
         sockets: family.sockets.clone(),
         canonical_source_bounds: bounds,
         minimum_join_overlap,
@@ -280,13 +287,19 @@ pub fn slice_creature_mesh(
 pub fn validate_sliced_pack(pack: &SlicedCreaturePartPack) -> Result<(), CreaturePartBuilderError> {
     if pack.source_triangle_count == 0
         || pack.source_triangle_owners.len() != pack.source_triangle_count
+        || pack.source_triangle_fragment_slots.len() != pack.source_triangle_count
         || pack
             .source_triangle_owners
             .values()
             .any(|owner| owner.len() != 1)
+        || pack.source_triangle_owners.iter().any(|(source, owner)| {
+            pack.source_triangle_fragment_slots
+                .get(source)
+                .is_none_or(|slots| slots.is_empty() || !owner.is_subset(slots))
+        })
     {
         return Err(CreaturePartBuilderError::InvalidPack(
-            "every source triangle must have exactly one owner",
+            "every source triangle must have one primary owner represented in its fragment slots",
         ));
     }
     for slot in CreaturePartSlot::REQUIRED_RUNTIME_SLOTS {
@@ -889,6 +902,13 @@ f 22/1/1 23/2/1 24/3/1
 
         assert!(output_triangle_count > source.triangles.len());
         assert!((source_area - output_area).abs() <= source_area * 1.0e-8);
+        assert!(pack
+            .source_triangle_fragment_slots
+            .values()
+            .any(|slots| slots.len() > 1));
+        assert!(pack.source_triangle_owners.iter().all(|(source, owner)| {
+            owner.is_subset(&pack.source_triangle_fragment_slots[source])
+        }));
     }
 
     fn from_socket_local_position(

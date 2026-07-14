@@ -556,7 +556,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-colobus-full-parts",
+      "asset_id": "creature-part-family-0000-full-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:0cbbeb48a24b87a2",
       "external": false,
@@ -580,7 +580,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-colobus-full-sockets",
+      "asset_id": "creature-part-family-0000-full-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:4aba3e17159fc9a4",
       "external": false,
@@ -604,7 +604,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-colobus-compact-parts",
+      "asset_id": "creature-part-family-0000-compact-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:09a04b5b6f61a1d0",
       "external": false,
@@ -628,7 +628,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-colobus-compact-sockets",
+      "asset_id": "creature-part-family-0000-compact-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:9e02c4ba8d8c1fbe",
       "external": false,
@@ -652,7 +652,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-colobus-impostor-parts",
+      "asset_id": "creature-part-family-0000-impostor-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:82b9741a25defc61",
       "external": false,
@@ -676,7 +676,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-colobus-impostor-sockets",
+      "asset_id": "creature-part-family-0000-impostor-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:0b7ba7ce8132bbe8",
       "external": false,
@@ -700,7 +700,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-gecko-full-parts",
+      "asset_id": "creature-part-family-0001-full-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:cae5f2fb5c0f3cd9",
       "external": false,
@@ -724,7 +724,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-gecko-full-sockets",
+      "asset_id": "creature-part-family-0001-full-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:eb6567ae208b568d",
       "external": false,
@@ -748,7 +748,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-gecko-compact-parts",
+      "asset_id": "creature-part-family-0001-compact-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:f3c6fa33642bbe78",
       "external": false,
@@ -772,7 +772,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-gecko-compact-sockets",
+      "asset_id": "creature-part-family-0001-compact-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:34a29db9912488bd",
       "external": false,
@@ -796,7 +796,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-gecko-impostor-parts",
+      "asset_id": "creature-part-family-0001-impostor-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:895452a6abb35113",
       "external": false,
@@ -820,7 +820,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-gecko-impostor-sockets",
+      "asset_id": "creature-part-family-0001-impostor-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:e92385e9616a2eb9",
       "external": false,
@@ -844,7 +844,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-herring-full-parts",
+      "asset_id": "creature-part-family-0002-full-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:6175da1b340decbb",
       "external": false,
@@ -868,7 +868,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-herring-full-sockets",
+      "asset_id": "creature-part-family-0002-full-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:e94141de830c47f6",
       "external": false,
@@ -892,7 +892,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-herring-compact-parts",
+      "asset_id": "creature-part-family-0002-compact-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:60c4beb97f4ce290",
       "external": false,
@@ -916,7 +916,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-herring-compact-sockets",
+      "asset_id": "creature-part-family-0002-compact-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:2b26e3e5dfe62a34",
       "external": false,
@@ -940,7 +940,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-herring-impostor-parts",
+      "asset_id": "creature-part-family-0002-impostor-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:400f6208250e8df9",
       "external": false,
@@ -964,7 +964,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-herring-impostor-sockets",
+      "asset_id": "creature-part-family-0002-impostor-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:b823acc771c77366",
       "external": false,
@@ -988,7 +988,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-inkfish-full-parts",
+      "asset_id": "creature-part-family-0003-full-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:a79bbaaf67654065",
       "external": false,
@@ -1012,7 +1012,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-inkfish-full-sockets",
+      "asset_id": "creature-part-family-0003-full-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:1e94a45cece4e0d7",
       "external": false,
@@ -1036,7 +1036,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-inkfish-compact-parts",
+      "asset_id": "creature-part-family-0003-compact-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:ba7d49b70a633328",
       "external": false,
@@ -1060,7 +1060,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-inkfish-compact-sockets",
+      "asset_id": "creature-part-family-0003-compact-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:4ef61dab2679af3b",
       "external": false,
@@ -1084,7 +1084,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-inkfish-impostor-parts",
+      "asset_id": "creature-part-family-0003-impostor-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:08beecc2124d52b5",
       "external": false,
@@ -1108,7 +1108,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-inkfish-impostor-sockets",
+      "asset_id": "creature-part-family-0003-impostor-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:eb16ce369f11d93f",
       "external": false,
@@ -1132,7 +1132,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-muskrat-full-parts",
+      "asset_id": "creature-part-family-0004-full-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:52668cb4565e7be5",
       "external": false,
@@ -1156,7 +1156,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-muskrat-full-sockets",
+      "asset_id": "creature-part-family-0004-full-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:d0878abbac81c5f8",
       "external": false,
@@ -1180,7 +1180,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-muskrat-compact-parts",
+      "asset_id": "creature-part-family-0004-compact-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:45623d24a9e49aec",
       "external": false,
@@ -1204,7 +1204,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-muskrat-compact-sockets",
+      "asset_id": "creature-part-family-0004-compact-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:9c93c8b826922012",
       "external": false,
@@ -1228,7 +1228,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-muskrat-impostor-parts",
+      "asset_id": "creature-part-family-0004-impostor-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:f1f7132840f88373",
       "external": false,
@@ -1252,7 +1252,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-muskrat-impostor-sockets",
+      "asset_id": "creature-part-family-0004-impostor-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:093e0e2c680f133c",
       "external": false,
@@ -1276,7 +1276,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-pudu-full-parts",
+      "asset_id": "creature-part-family-0005-full-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:fdce92297329170c",
       "external": false,
@@ -1300,7 +1300,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-pudu-full-sockets",
+      "asset_id": "creature-part-family-0005-full-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:c202b28d0d54fe91",
       "external": false,
@@ -1324,7 +1324,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-pudu-compact-parts",
+      "asset_id": "creature-part-family-0005-compact-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:c7ff4e7d73f1b1d3",
       "external": false,
@@ -1348,7 +1348,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-pudu-compact-sockets",
+      "asset_id": "creature-part-family-0005-compact-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:6a08639d5817b061",
       "external": false,
@@ -1372,7 +1372,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-pudu-impostor-parts",
+      "asset_id": "creature-part-family-0005-impostor-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:23bd8882a11ee708",
       "external": false,
@@ -1396,7 +1396,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-pudu-impostor-sockets",
+      "asset_id": "creature-part-family-0005-impostor-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:316dfaa774636f5d",
       "external": false,
@@ -1420,7 +1420,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-sparrow-full-parts",
+      "asset_id": "creature-part-family-0006-full-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:2275271b4af67abd",
       "external": false,
@@ -1444,7 +1444,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-sparrow-full-sockets",
+      "asset_id": "creature-part-family-0006-full-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:84f13e687bd470ba",
       "external": false,
@@ -1468,7 +1468,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-sparrow-compact-parts",
+      "asset_id": "creature-part-family-0006-compact-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:6691b33274bf7a5e",
       "external": false,
@@ -1492,7 +1492,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-sparrow-compact-sockets",
+      "asset_id": "creature-part-family-0006-compact-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:e02c2b992cf50568",
       "external": false,
@@ -1516,7 +1516,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-sparrow-impostor-parts",
+      "asset_id": "creature-part-family-0006-impostor-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:cf4d408301bb2e71",
       "external": false,
@@ -1540,7 +1540,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-sparrow-impostor-sockets",
+      "asset_id": "creature-part-family-0006-impostor-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:39f3d72cbb5154ba",
       "external": false,
@@ -1564,7 +1564,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-taipan-full-parts",
+      "asset_id": "creature-part-family-0007-full-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:4aea201d1ba69494",
       "external": false,
@@ -1588,7 +1588,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-taipan-full-sockets",
+      "asset_id": "creature-part-family-0007-full-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:ba579696d6862eeb",
       "external": false,
@@ -1612,7 +1612,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-taipan-compact-parts",
+      "asset_id": "creature-part-family-0007-compact-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:d64133f21a231cb1",
       "external": false,
@@ -1636,7 +1636,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-taipan-compact-sockets",
+      "asset_id": "creature-part-family-0007-compact-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:63a1204da01a52af",
       "external": false,
@@ -1660,7 +1660,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-taipan-impostor-parts",
+      "asset_id": "creature-part-family-0007-impostor-parts",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:dd24ac3d44f74a73",
       "external": false,
@@ -1684,7 +1684,7 @@
       "usage_category": "creatures"
     },
     {
-      "asset_id": "creature-part-taipan-impostor-sockets",
+      "asset_id": "creature-part-family-0007-impostor-sockets",
       "author": "Omabuarts Studio",
       "digest": "fnv1a64:1f136bfbe05ced43",
       "external": false,
