@@ -558,13 +558,14 @@
     {
       "asset_id": "creature-part-colobus-full-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:df7d158d38f72e68",
+      "digest": "fnv1a64:0cbbeb48a24b87a2",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:722fb0eca7b31722",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -573,8 +574,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/colobus_full_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 303932,
+      "size_bytes": 498351,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -587,6 +589,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:722fb0eca7b31722",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -597,18 +600,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1604,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-colobus-compact-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:2056383dc14391ab",
+      "digest": "fnv1a64:09a04b5b6f61a1d0",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:2f019a649c10a6d8",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -617,8 +622,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/colobus_compact_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 179961,
+      "size_bytes": 318642,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -631,6 +637,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:2f019a649c10a6d8",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -641,18 +648,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1607,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-colobus-impostor-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:66fb48a000066a14",
+      "digest": "fnv1a64:82b9741a25defc61",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:abea98b06660d09c",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -661,8 +670,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/colobus_impostor_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 128425,
+      "size_bytes": 243325,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -675,6 +685,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:abea98b06660d09c",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -685,18 +696,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1608,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-gecko-full-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:0e167d119afd4f71",
+      "digest": "fnv1a64:cae5f2fb5c0f3cd9",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:0e0bd6e6a605be3c",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -705,8 +718,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/gecko_full_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 209921,
+      "size_bytes": 339080,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -719,6 +733,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:0e0bd6e6a605be3c",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -729,18 +744,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1604,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-gecko-compact-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:4d45b0fb22404b11",
+      "digest": "fnv1a64:f3c6fa33642bbe78",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:a1343e10829e8d04",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -749,8 +766,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/gecko_compact_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 134526,
+      "size_bytes": 232835,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -763,6 +781,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:a1343e10829e8d04",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -773,18 +792,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1607,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-gecko-impostor-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:494f3f5a58662504",
+      "digest": "fnv1a64:895452a6abb35113",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:33656e3681e7fbf4",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -793,8 +814,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/gecko_impostor_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 78370,
+      "size_bytes": 154804,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -807,6 +829,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:33656e3681e7fbf4",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -817,18 +840,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1608,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-herring-full-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:37075ada3a4ba7ca",
+      "digest": "fnv1a64:6175da1b340decbb",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:92b763a0f5538883",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -837,8 +862,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/herring_full_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 174992,
+      "size_bytes": 273478,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -851,6 +877,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:92b763a0f5538883",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -861,18 +888,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1604,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-herring-compact-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:026a71991038ea69",
+      "digest": "fnv1a64:60c4beb97f4ce290",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:5e0339740dc7bff7",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -881,8 +910,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/herring_compact_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 118747,
+      "size_bytes": 199844,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -895,6 +925,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:5e0339740dc7bff7",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -905,18 +936,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1607,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-herring-impostor-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:d58e43db510716dd",
+      "digest": "fnv1a64:400f6208250e8df9",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:67e8495660d7c650",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -925,8 +958,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/herring_impostor_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 85375,
+      "size_bytes": 154852,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -939,6 +973,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:67e8495660d7c650",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -949,18 +984,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1608,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-inkfish-full-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:70996ba434686b0f",
+      "digest": "fnv1a64:a79bbaaf67654065",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:1f6b40d5db8d3ebe",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -969,8 +1006,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/inkfish_full_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 302685,
+      "size_bytes": 415826,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -983,6 +1021,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:1f6b40d5db8d3ebe",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -993,18 +1032,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1604,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-inkfish-compact-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:f2fdd5f0293e1745",
+      "digest": "fnv1a64:ba7d49b70a633328",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:ce0186a7a0abd5fb",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1013,8 +1054,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/inkfish_compact_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 142944,
+      "size_bytes": 224652,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1027,6 +1069,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:ce0186a7a0abd5fb",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1037,18 +1080,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1607,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-inkfish-impostor-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:dc2b26763a750732",
+      "digest": "fnv1a64:08beecc2124d52b5",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:3acb4f983d4ca35f",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1057,8 +1102,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/inkfish_impostor_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 101424,
+      "size_bytes": 159457,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1071,6 +1117,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:3acb4f983d4ca35f",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1081,18 +1128,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1608,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-muskrat-full-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:27a4dd5b2bd79ca1",
+      "digest": "fnv1a64:52668cb4565e7be5",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:a62246b16137472c",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1101,8 +1150,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/muskrat_full_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 225566,
+      "size_bytes": 364784,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1115,6 +1165,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:a62246b16137472c",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1125,18 +1176,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1604,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-muskrat-compact-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:5f1cc3c1310e7a88",
+      "digest": "fnv1a64:45623d24a9e49aec",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:6955ec9b5f469b92",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1145,8 +1198,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/muskrat_compact_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 144609,
+      "size_bytes": 256749,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1159,6 +1213,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:6955ec9b5f469b92",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1169,18 +1224,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1607,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-muskrat-impostor-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:d483fd50fcad090e",
+      "digest": "fnv1a64:f1f7132840f88373",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:884c4a1e5736e62f",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1189,8 +1246,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/muskrat_impostor_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 86343,
+      "size_bytes": 160773,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1203,6 +1261,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:884c4a1e5736e62f",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1213,18 +1272,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1608,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-pudu-full-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:5cf622b49bf59690",
+      "digest": "fnv1a64:fdce92297329170c",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:86c4ee041a3d090d",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1233,8 +1294,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/pudu_full_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 294443,
+      "size_bytes": 406291,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1247,6 +1309,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:86c4ee041a3d090d",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1257,18 +1320,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1604,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-pudu-compact-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:e0e653258c097f10",
+      "digest": "fnv1a64:c7ff4e7d73f1b1d3",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:c4fb6163c2863962",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1277,8 +1342,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/pudu_compact_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 179118,
+      "size_bytes": 281443,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1291,6 +1357,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:c4fb6163c2863962",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1301,18 +1368,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1607,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-pudu-impostor-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:b6606474c88a0cef",
+      "digest": "fnv1a64:23bd8882a11ee708",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:30bf8e5519304cc1",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1321,8 +1390,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/pudu_impostor_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 118005,
+      "size_bytes": 197927,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1335,6 +1405,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:30bf8e5519304cc1",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1345,18 +1416,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1608,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-sparrow-full-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:1f007aa3e990d593",
+      "digest": "fnv1a64:2275271b4af67abd",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:86d6cd3c065770ae",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1365,8 +1438,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/sparrow_full_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 277316,
+      "size_bytes": 410046,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1379,6 +1453,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:86d6cd3c065770ae",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1389,18 +1464,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1604,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-sparrow-compact-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:06c98d1a4758eeaf",
+      "digest": "fnv1a64:6691b33274bf7a5e",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:81ccd43179d863f4",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1409,8 +1486,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/sparrow_compact_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 148923,
+      "size_bytes": 253042,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1423,6 +1501,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:81ccd43179d863f4",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1433,18 +1512,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1607,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-sparrow-impostor-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:6896f72b544275f2",
+      "digest": "fnv1a64:cf4d408301bb2e71",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:169763b2028dbece",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1453,8 +1534,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/sparrow_impostor_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 104171,
+      "size_bytes": 178272,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1467,6 +1549,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:169763b2028dbece",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1477,18 +1560,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1608,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-taipan-full-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:9c09bdac5734df8c",
+      "digest": "fnv1a64:4aea201d1ba69494",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:d09e722fcd3e1a98",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1497,8 +1582,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/taipan_full_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 157578,
+      "size_bytes": 270691,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1511,6 +1597,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:d09e722fcd3e1a98",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1521,18 +1608,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1604,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-taipan-compact-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:936f9d864a02b9e4",
+      "digest": "fnv1a64:d64133f21a231cb1",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:3504362daed8e9d5",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1541,8 +1630,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/taipan_compact_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 108040,
+      "size_bytes": 213320,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1555,6 +1645,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:3504362daed8e9d5",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1565,18 +1656,20 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1607,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
       "asset_id": "creature-part-taipan-impostor-parts",
       "author": "Omabuarts Studio",
-      "digest": "fnv1a64:edeb1336570848cf",
+      "digest": "fnv1a64:dd24ac3d44f74a73",
       "external": false,
       "final_art": true,
       "generated": true,
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:820ba2c16d533bd1",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1585,8 +1678,9 @@
       "local_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated/taipan_impostor_parts.obj",
       "placeholder": false,
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
-      "size_bytes": 77704,
+      "size_bytes": 169255,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     },
     {
@@ -1599,6 +1693,7 @@
       "generator": {
         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
         "date": "2026-07-12",
+        "output_schema": "alife.creature_part_sockets.v1",
         "seed": "fnv1a64:820ba2c16d533bd1",
         "tool": "alife_tools::creature_part_builder.v1"
       },
@@ -1609,6 +1704,7 @@
       "replacement_policy": "regenerate-from-catalog-and-licensed-source",
       "size_bytes": 1608,
       "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
+      "source_asset_id": "quirky-series-free-animals-v14",
       "usage_category": "creatures"
     }
   ],

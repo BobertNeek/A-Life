@@ -265,8 +265,25 @@ fn build_pack(
 ) -> Result<SlicedCreaturePartPack, Box<dyn std::error::Error>> {
     let root = assets_root(catalog_path)?;
     let (family, lod) = family_lod(catalog, family_id, lod_id)?;
-    let source = SourceObjMesh::parse(&fs::read_to_string(root.join(&lod.source_obj))?)?;
+    let source_bytes = read_verified_source(&root, lod)?;
+    let source = SourceObjMesh::parse(std::str::from_utf8(&source_bytes)?)?;
     Ok(slice_creature_mesh(&source, family, lod_id)?)
+}
+
+fn read_verified_source(
+    root: &Path,
+    lod: &alife_game_app::CreaturePartLod,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let bytes = fs::read(root.join(&lod.source_obj))?;
+    let actual = fnv1a_digest(&bytes);
+    if actual != lod.source_digest {
+        return Err(format!(
+            "source digest mismatch for {}: expected {}, got {actual}",
+            lod.source_obj, lod.source_digest
+        )
+        .into());
+    }
+    Ok(bytes)
 }
 
 #[derive(Serialize)]
@@ -289,7 +306,8 @@ fn analyze(
     let catalog = load_catalog(catalog_path)?;
     let root = assets_root(catalog_path)?;
     let (family, lod) = family_lod(&catalog, family_id, lod_id)?;
-    let source = SourceObjMesh::parse(&fs::read_to_string(root.join(&lod.source_obj))?)?;
+    let source_bytes = read_verified_source(&root, lod)?;
+    let source = SourceObjMesh::parse(std::str::from_utf8(&source_bytes)?)?;
     let mut bounds = [[f64::INFINITY; 3], [f64::NEG_INFINITY; 3]];
     for vertex in source
         .triangles
@@ -590,7 +608,7 @@ fn update_manifest(
     });
     for family in &catalog.families {
         for lod in &family.lods {
-            let source_digest = fnv1a_digest(&fs::read(root.join(&lod.source_obj))?);
+            let source_digest = fnv1a_digest(&read_verified_source(&root, lod)?);
             for (kind, relative) in [
                 ("parts", lod.generated_obj.as_str()),
                 ("sockets", lod.socket_manifest.as_str()),
@@ -603,13 +621,15 @@ fn update_manifest(
                     "local_path": format!("crates/alife_game_app/assets/{relative}"),
                     "digest": fnv1a_digest(&bytes),
                     "size_bytes": bytes.len(),
-                    "source": "https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2",
-                    "license": "CC-BY-4.0",
-                    "license_ref": "crates/alife_game_app/assets/production_voxel_v1/models/ATTRIBUTION.md",
-                    "author": "Omabuarts Studio",
+                    "source_asset_id": family.source_attribution.asset_id.as_str(),
+                    "source": family.source_attribution.source.as_str(),
+                    "license": family.source_attribution.license.as_str(),
+                    "license_ref": format!("crates/alife_game_app/assets/{}", family.source_attribution.license_ref),
+                    "author": family.source_attribution.author.as_str(),
                     "generated": true,
                     "generator": {
-                        "tool": "alife_tools::creature_part_builder.v1",
+                        "tool": family.builder_version.as_str(),
+                        "output_schema": family.output_schema.as_str(),
                         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
                         "seed": source_digest,
                         "date": "2026-07-12"

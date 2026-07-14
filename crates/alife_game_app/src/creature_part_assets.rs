@@ -53,7 +53,7 @@ impl CreaturePartAssetLibrary {
                     };
                     library
                         .meshes
-                        .insert(key, mesh_assets.add(part.into_mesh()));
+                        .insert(key, mesh_assets.add(part.into_mesh(slot)));
                 }
             }
         }
@@ -90,16 +90,23 @@ impl CreaturePartAssetLibrary {
 
 #[cfg(feature = "bevy-app")]
 impl PartMeshData {
-    fn into_mesh(self) -> Mesh {
-        let positions = self
+    fn into_mesh(self, slot: CreaturePartSlot) -> Mesh {
+        let mut positions = self
             .positions
             .into_iter()
             .map(|[x, depth, height]| [x, height, -depth])
             .collect::<Vec<_>>();
+        let fitted_scale = fit_part_to_biped_envelope(slot, &mut positions);
         let normals = self
             .normals
             .into_iter()
-            .map(|[x, depth, height]| [x, height, -depth])
+            .map(|[x, depth, height]| {
+                normalize3([
+                    x / fitted_scale[0],
+                    height / fitted_scale[1],
+                    -depth / fitted_scale[2],
+                ])
+            })
             .collect::<Vec<_>>();
         let mut mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
@@ -110,6 +117,58 @@ impl PartMeshData {
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs);
         mesh.insert_indices(Indices::U32(self.indices));
         mesh
+    }
+}
+
+#[cfg(any(feature = "bevy-app", test))]
+fn fit_part_to_biped_envelope(slot: CreaturePartSlot, positions: &mut [[f32; 3]]) -> [f32; 3] {
+    if positions.is_empty() {
+        return [1.0; 3];
+    }
+    let mut min = [f32::INFINITY; 3];
+    let mut max = [f32::NEG_INFINITY; 3];
+    for position in positions.iter() {
+        for axis in 0..3 {
+            min[axis] = min[axis].min(position[axis]);
+            max[axis] = max[axis].max(position[axis]);
+        }
+    }
+    let (target_size, target_center) = match slot {
+        CreaturePartSlot::Head => ([0.62, 0.52, 0.48], [0.0, 0.25, 0.03]),
+        CreaturePartSlot::Torso => ([0.58, 0.82, 0.40], [0.0, -0.02, 0.0]),
+        CreaturePartSlot::LeftArm | CreaturePartSlot::RightArm => {
+            ([0.22, 0.72, 0.24], [0.0, -0.28, 0.0])
+        }
+        CreaturePartSlot::LeftLeg | CreaturePartSlot::RightLeg => {
+            ([0.28, 0.70, 0.32], [0.0, -0.30, 0.04])
+        }
+        CreaturePartSlot::TailBack => ([0.30, 0.42, 0.30], [0.0, -0.06, -0.10]),
+    };
+    let source_center: [f32; 3] = std::array::from_fn(|axis| (min[axis] + max[axis]) * 0.5);
+    let scale = std::array::from_fn(|axis| {
+        let span = (max[axis] - min[axis]).max(1.0e-4);
+        target_size[axis] / span
+    });
+    for position in positions {
+        for axis in 0..3 {
+            position[axis] =
+                (position[axis] - source_center[axis]) * scale[axis] + target_center[axis];
+        }
+    }
+    scale
+}
+
+#[cfg(feature = "bevy-app")]
+fn normalize3(value: [f32; 3]) -> [f32; 3] {
+    let length = value
+        .into_iter()
+        .map(|axis| axis * axis)
+        .sum::<f32>()
+        .sqrt();
+    if length > 1.0e-6 {
+        value.map(|axis| axis / length)
+    } else {
+        [0.0, 1.0, 0.0]
     }
 }
 
@@ -439,5 +498,55 @@ o part_tail_back
             }
         }
         assert_eq!(pack_count, 24);
+    }
+
+    #[test]
+    fn anatomical_fit_forces_upright_head_torso_arms_and_legs() {
+        let source = vec![[-2.0, -0.1, -4.0], [3.0, 0.2, 5.0], [0.0, 0.0, 0.0]];
+        for (slot, expected_height) in [
+            (CreaturePartSlot::Head, 0.52),
+            (CreaturePartSlot::Torso, 0.82),
+            (CreaturePartSlot::LeftArm, 0.72),
+            (CreaturePartSlot::LeftLeg, 0.70),
+        ] {
+            let mut fitted = source.clone();
+            fit_part_to_biped_envelope(slot, &mut fitted);
+            let min_y = fitted.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
+            let max_y = fitted
+                .iter()
+                .map(|p| p[1])
+                .fold(f32::NEG_INFINITY, f32::max);
+            assert!(((max_y - min_y) - expected_height).abs() < 1.0e-4);
+        }
+    }
+
+    #[cfg(feature = "bevy-app")]
+    #[test]
+    fn anatomical_mesh_fit_preserves_uvs_indices_and_unit_normals() {
+        use bevy::mesh::VertexAttributeValues;
+
+        let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]];
+        let indices = vec![0, 1, 2];
+        let mesh = PartMeshData {
+            positions: vec![[-2.0, -0.1, -4.0], [3.0, 0.2, 5.0], [0.0, 0.0, 0.0]],
+            uvs: uvs.clone(),
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            indices: indices.clone(),
+        }
+        .into_mesh(CreaturePartSlot::Torso);
+
+        assert_eq!(
+            mesh.attribute(Mesh::ATTRIBUTE_UV_0),
+            Some(&VertexAttributeValues::Float32x2(uvs))
+        );
+        assert_eq!(mesh.indices(), Some(&Indices::U32(indices)));
+        let Some(VertexAttributeValues::Float32x3(normals)) =
+            mesh.attribute(Mesh::ATTRIBUTE_NORMAL)
+        else {
+            panic!("mesh normals must be Float32x3");
+        };
+        assert!(normals.iter().all(|normal| {
+            (normal.iter().map(|axis| axis * axis).sum::<f32>() - 1.0).abs() < 1.0e-5
+        }));
     }
 }

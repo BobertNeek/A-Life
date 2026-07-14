@@ -6,6 +6,9 @@
       "id": 0,
       "label": "colobus",
       "texture_asset": "production_voxel_v1/models/T_Colobus.png",
+      "source_attribution": {"asset_id":"quirky-series-free-animals-v14","source":"https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2","author":"Omabuarts Studio","license":"CC-BY-4.0","license_ref":"production_voxel_v1/models/ATTRIBUTION.md"},
+      "builder_version": "alife_tools::creature_part_builder.v1",
+      "output_schema": "alife.creature_part_sockets.v1",
       "compatibility_tags": ["mammalian", "long-arm", "plume-tail"],
       "ordinary_substitutions": {"head":["mammalian"],"torso":["mammalian"],"left-arm":["mammalian"],"right-arm":["mammalian"],"left-leg":["mammalian"],"right-leg":["mammalian"],"tail-back":["plume-tail"]},
       "source_to_canonical": {"translation":[0.0,0.0,-0.799836],"rotation_xyzw":[0.70710677,0.0,0.0,0.70710677],"scale":[2.00247,2.00247,2.00247]},
@@ -20,84 +23,105 @@
       },
       "sockets": {"neck":{"translation":[0.0,0.0,0.45],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"left-shoulder":{"translation":[-0.08,0.0,0.28],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"right-shoulder":{"translation":[0.08,0.0,0.28],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"left-hip":{"translation":[-0.08,0.0,-0.1],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"right-hip":{"translation":[0.08,0.0,-0.1],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]},"tail-base":{"translation":[0.0,0.6,0.1],"rotation_xyzw":[0.0,0.0,0.0,1.0],"scale":[1.0,1.0,1.0]}},
       "join_covers": [{"slot":"head","socket":"neck","cover_kind":"ruff","overlap_depth":0.06},{"slot":"left-arm","socket":"left-shoulder","cover_kind":"shoulder-tuft","overlap_depth":0.05},{"slot":"right-arm","socket":"right-shoulder","cover_kind":"shoulder-tuft","overlap_depth":0.05},{"slot":"left-leg","socket":"left-hip","cover_kind":"hip-fur","overlap_depth":0.06},{"slot":"right-leg","socket":"right-hip","cover_kind":"hip-fur","overlap_depth":0.06},{"slot":"tail-back","socket":"tail-base","cover_kind":"tail-ruff","overlap_depth":0.05}],
-      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Colobus_LOD1.obj","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Colobus_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Colobus_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_impostor_sockets.json"}]
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Colobus_LOD1.obj","source_digest":"fnv1a64:722fb0eca7b31722","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Colobus_LOD2.obj","source_digest":"fnv1a64:2f019a649c10a6d8","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Colobus_LOD3.obj","source_digest":"fnv1a64:abea98b06660d09c","generated_obj":"production_voxel_v1/creature_parts/generated/colobus_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/colobus_impostor_sockets.json"}]
     },
     {
       "id": 1,
       "label": "gecko",
       "template_family": 0,
       "texture_asset": "production_voxel_v1/models/T_Gecko.png",
+      "source_attribution": {"asset_id":"quirky-series-free-animals-v14","source":"https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2","author":"Omabuarts Studio","license":"CC-BY-4.0","license_ref":"production_voxel_v1/models/ATTRIBUTION.md"},
+      "builder_version": "alife_tools::creature_part_builder.v1",
+      "output_schema": "alife.creature_part_sockets.v1",
       "compatibility_tags": ["compact", "scaled", "long-tail"],
       "ordinary_substitutions": {"head":["scaled"],"torso":["scaled"],"left-arm":["scaled"],"right-arm":["scaled"],"left-leg":["scaled"],"right-leg":["scaled"],"tail-back":["long-tail"]},
       "source_to_canonical": {"translation":[0.0,0.0,-0.803200],"rotation_xyzw":[0.70710677,0.0,0.0,0.70710677],"scale":[3.84146,3.84146,3.84146]},
       "cuts": {}, "sockets": {}, "join_covers": [],
-      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Gecko_LOD1.obj","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Gecko_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Gecko_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_impostor_sockets.json"}]
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Gecko_LOD1.obj","source_digest":"fnv1a64:0e0bd6e6a605be3c","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Gecko_LOD2.obj","source_digest":"fnv1a64:a1343e10829e8d04","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Gecko_LOD3.obj","source_digest":"fnv1a64:33656e3681e7fbf4","generated_obj":"production_voxel_v1/creature_parts/generated/gecko_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/gecko_impostor_sockets.json"}]
     },
     {
       "id": 2,
       "label": "herring",
       "template_family": 0,
       "texture_asset": "production_voxel_v1/models/T_Herring.png",
+      "source_attribution": {"asset_id":"quirky-series-free-animals-v14","source":"https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2","author":"Omabuarts Studio","license":"CC-BY-4.0","license_ref":"production_voxel_v1/models/ATTRIBUTION.md"},
+      "builder_version": "alife_tools::creature_part_builder.v1",
+      "output_schema": "alife.creature_part_sockets.v1",
       "compatibility_tags": ["aquatic", "fin-arm", "tailless"],
       "ordinary_substitutions": {"head":["aquatic"],"torso":["aquatic"],"left-arm":["aquatic"],"right-arm":["aquatic"],"left-leg":["aquatic"],"right-leg":["aquatic"],"tail-back":["tailless"]},
       "source_to_canonical": {"translation":[0.0,0.0,-0.846900],"rotation_xyzw":[0.70710677,0.0,0.0,0.70710677],"scale":[3.69261,3.69261,3.69261]},
       "cuts": {}, "sockets": {}, "join_covers": [],
-      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Herring_LOD1.obj","generated_obj":"production_voxel_v1/creature_parts/generated/herring_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Herring_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/herring_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Herring_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/herring_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_impostor_sockets.json"}]
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Herring_LOD1.obj","source_digest":"fnv1a64:92b763a0f5538883","generated_obj":"production_voxel_v1/creature_parts/generated/herring_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Herring_LOD2.obj","source_digest":"fnv1a64:5e0339740dc7bff7","generated_obj":"production_voxel_v1/creature_parts/generated/herring_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Herring_LOD3.obj","source_digest":"fnv1a64:67e8495660d7c650","generated_obj":"production_voxel_v1/creature_parts/generated/herring_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/herring_impostor_sockets.json"}]
     },
     {
       "id": 3,
       "label": "inkfish",
       "template_family": 0,
       "texture_asset": "production_voxel_v1/models/T_Inkfish.png",
+      "source_attribution": {"asset_id":"quirky-series-free-animals-v14","source":"https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2","author":"Omabuarts Studio","license":"CC-BY-4.0","license_ref":"production_voxel_v1/models/ATTRIBUTION.md"},
+      "builder_version": "alife_tools::creature_part_builder.v1",
+      "output_schema": "alife.creature_part_sockets.v1",
       "compatibility_tags": ["aquatic", "tentacle-arm", "soft-body"],
       "ordinary_substitutions": {"head":["aquatic"],"torso":["aquatic"],"left-arm":["aquatic"],"right-arm":["aquatic"],"left-leg":["aquatic"],"right-leg":["aquatic"],"tail-back":["soft-body"]},
       "source_to_canonical": {"translation":[0.0,0.0,-0.861060],"rotation_xyzw":[0.70710677,0.0,0.0,0.70710677],"scale":[1.09484,1.09484,1.09484]},
       "cuts": {}, "sockets": {}, "join_covers": [],
-      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Inkfish_LOD1.obj","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Inkfish_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Inkfish_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_impostor_sockets.json"}]
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Inkfish_LOD1.obj","source_digest":"fnv1a64:1f6b40d5db8d3ebe","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Inkfish_LOD2.obj","source_digest":"fnv1a64:ce0186a7a0abd5fb","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Inkfish_LOD3.obj","source_digest":"fnv1a64:3acb4f983d4ca35f","generated_obj":"production_voxel_v1/creature_parts/generated/inkfish_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/inkfish_impostor_sockets.json"}]
     },
     {
       "id": 4,
       "label": "muskrat",
       "template_family": 0,
       "texture_asset": "production_voxel_v1/models/T_Muskrat.png",
+      "source_attribution": {"asset_id":"quirky-series-free-animals-v14","source":"https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2","author":"Omabuarts Studio","license":"CC-BY-4.0","license_ref":"production_voxel_v1/models/ATTRIBUTION.md"},
+      "builder_version": "alife_tools::creature_part_builder.v1",
+      "output_schema": "alife.creature_part_sockets.v1",
       "compatibility_tags": ["mammalian", "compact", "aquatic"],
       "ordinary_substitutions": {"head":["mammalian"],"torso":["mammalian"],"left-arm":["mammalian"],"right-arm":["mammalian"],"left-leg":["mammalian"],"right-leg":["mammalian"],"tail-back":["aquatic"]},
       "source_to_canonical": {"translation":[0.0,0.0,-0.794800],"rotation_xyzw":[0.70710677,0.0,0.0,0.70710677],"scale":[3.20934,3.20934,3.20934]},
       "cuts": {}, "sockets": {}, "join_covers": [],
-      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Muskrat_LOD1.obj","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Muskrat_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Muskrat_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_impostor_sockets.json"}]
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Muskrat_LOD1.obj","source_digest":"fnv1a64:a62246b16137472c","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Muskrat_LOD2.obj","source_digest":"fnv1a64:6955ec9b5f469b92","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Muskrat_LOD3.obj","source_digest":"fnv1a64:884c4a1e5736e62f","generated_obj":"production_voxel_v1/creature_parts/generated/muskrat_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/muskrat_impostor_sockets.json"}]
     },
     {
       "id": 5,
       "label": "pudu",
       "template_family": 0,
       "texture_asset": "production_voxel_v1/models/T_Pudu.png",
+      "source_attribution": {"asset_id":"quirky-series-free-animals-v14","source":"https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2","author":"Omabuarts Studio","license":"CC-BY-4.0","license_ref":"production_voxel_v1/models/ATTRIBUTION.md"},
+      "builder_version": "alife_tools::creature_part_builder.v1",
+      "output_schema": "alife.creature_part_sockets.v1",
       "compatibility_tags": ["mammalian", "heavy-torso", "short-tail"],
       "ordinary_substitutions": {"head":["mammalian"],"torso":["mammalian"],"left-arm":["mammalian"],"right-arm":["mammalian"],"left-leg":["mammalian"],"right-leg":["mammalian"],"tail-back":["short-tail"]},
       "source_to_canonical": {"translation":[0.0,0.0,-0.798120],"rotation_xyzw":[0.70710677,0.0,0.0,0.70710677],"scale":[1.51328,1.51328,1.51328]},
       "cuts": {}, "sockets": {}, "join_covers": [],
-      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Pudu_LOD1.obj","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Pudu_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Pudu_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_impostor_sockets.json"}]
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Pudu_LOD1.obj","source_digest":"fnv1a64:86c4ee041a3d090d","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Pudu_LOD2.obj","source_digest":"fnv1a64:c4fb6163c2863962","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Pudu_LOD3.obj","source_digest":"fnv1a64:30bf8e5519304cc1","generated_obj":"production_voxel_v1/creature_parts/generated/pudu_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/pudu_impostor_sockets.json"}]
     },
     {
       "id": 6,
       "label": "sparrow",
       "template_family": 0,
       "texture_asset": "production_voxel_v1/models/T_Sparrow.png",
+      "source_attribution": {"asset_id":"quirky-series-free-animals-v14","source":"https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2","author":"Omabuarts Studio","license":"CC-BY-4.0","license_ref":"production_voxel_v1/models/ATTRIBUTION.md"},
+      "builder_version": "alife_tools::creature_part_builder.v1",
+      "output_schema": "alife.creature_part_sockets.v1",
       "compatibility_tags": ["compact", "wing-arm", "plume-tail"],
       "ordinary_substitutions": {"head":["compact"],"torso":["compact"],"left-arm":["compact"],"right-arm":["compact"],"left-leg":["compact"],"right-leg":["compact"],"tail-back":["plume-tail"]},
       "source_to_canonical": {"translation":[0.0,0.0,-0.800450],"rotation_xyzw":[0.70710677,0.0,0.0,0.70710677],"scale":[2.41254,2.41254,2.41254]},
       "cuts": {}, "sockets": {}, "join_covers": [],
-      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Sparrow_LOD1.obj","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Sparrow_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Sparrow_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_impostor_sockets.json"}]
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Sparrow_LOD1.obj","source_digest":"fnv1a64:86d6cd3c065770ae","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Sparrow_LOD2.obj","source_digest":"fnv1a64:81ccd43179d863f4","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Sparrow_LOD3.obj","source_digest":"fnv1a64:169763b2028dbece","generated_obj":"production_voxel_v1/creature_parts/generated/sparrow_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/sparrow_impostor_sockets.json"}]
     },
     {
       "id": 7,
       "label": "taipan",
       "template_family": 0,
       "texture_asset": "production_voxel_v1/models/T_Taipan.png",
+      "source_attribution": {"asset_id":"quirky-series-free-animals-v14","source":"https://sketchfab.com/3d-models/quirky-series-free-animals-pack-19e91ef86cd0448f9cbb5d6c538dade2","author":"Omabuarts Studio","license":"CC-BY-4.0","license_ref":"production_voxel_v1/models/ATTRIBUTION.md"},
+      "builder_version": "alife_tools::creature_part_builder.v1",
+      "output_schema": "alife.creature_part_sockets.v1",
       "compatibility_tags": ["scaled", "long-body", "tailless"],
       "ordinary_substitutions": {"head":["scaled"],"torso":["scaled"],"left-arm":["scaled"],"right-arm":["scaled"],"left-leg":["scaled"],"right-leg":["scaled"],"tail-back":["tailless"]},
       "source_to_canonical": {"translation":[0.0,0.0,-0.773750],"rotation_xyzw":[0.70710677,0.0,0.0,0.70710677],"scale":[2.05039,2.05039,2.05039]},
       "cuts": {}, "sockets": {}, "join_covers": [],
-      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Taipan_LOD1.obj","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Taipan_LOD2.obj","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Taipan_LOD3.obj","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_impostor_sockets.json"}]
+      "lods": [{"lod":"full","source_obj":"source_creature_meshes/Taipan_LOD1.obj","source_digest":"fnv1a64:d09e722fcd3e1a98","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_full_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_full_sockets.json"},{"lod":"compact","source_obj":"source_creature_meshes/Taipan_LOD2.obj","source_digest":"fnv1a64:3504362daed8e9d5","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_compact_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_compact_sockets.json"},{"lod":"impostor","source_obj":"source_creature_meshes/Taipan_LOD3.obj","source_digest":"fnv1a64:820ba2c16d533bd1","generated_obj":"production_voxel_v1/creature_parts/generated/taipan_impostor_parts.obj","socket_manifest":"production_voxel_v1/creature_parts/generated/taipan_impostor_sockets.json"}]
     }
   ]
 }

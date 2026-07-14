@@ -136,8 +136,18 @@ pub struct JoinCoverDefinition {
 pub struct CreaturePartLod {
     pub lod: CreaturePartLodId,
     pub source_obj: String,
+    pub source_digest: String,
     pub generated_obj: String,
     pub socket_manifest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreaturePartSourceAttribution {
+    pub asset_id: String,
+    pub source: String,
+    pub author: String,
+    pub license: String,
+    pub license_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -147,6 +157,9 @@ pub struct CreaturePartFamilyDefinition {
     #[serde(default)]
     pub template_family: Option<CreaturePartFamilyId>,
     pub texture_asset: String,
+    pub source_attribution: CreaturePartSourceAttribution,
+    pub builder_version: String,
+    pub output_schema: String,
     pub compatibility_tags: BTreeSet<String>,
     pub ordinary_substitutions: BTreeMap<CreaturePartSlot, BTreeSet<String>>,
     pub source_to_canonical: SocketFrame,
@@ -165,6 +178,20 @@ impl CreaturePartFamilyDefinition {
             return Err(CreaturePartCatalogError::InvalidFamily(self.id));
         }
         validate_production_path(&self.texture_asset)?;
+        if self.source_attribution.asset_id.is_empty()
+            || self.source_attribution.source.is_empty()
+            || self.source_attribution.author.is_empty()
+            || self.source_attribution.license.is_empty()
+            || self
+                .source_attribution
+                .license
+                .eq_ignore_ascii_case("unknown")
+            || self.builder_version.is_empty()
+            || self.output_schema.is_empty()
+        {
+            return Err(CreaturePartCatalogError::InvalidAttribution(self.id));
+        }
+        validate_production_path(&self.source_attribution.license_ref)?;
         self.source_to_canonical.validate()?;
 
         for slot in CreaturePartSlot::ALL {
@@ -220,6 +247,7 @@ impl CreaturePartFamilyDefinition {
         }
         for lod in &self.lods {
             validate_developer_source_path(&lod.source_obj)?;
+            validate_fnv1a_digest(&lod.source_digest)?;
             validate_generated_path(&lod.generated_obj)?;
             validate_generated_path(&lod.socket_manifest)?;
         }
@@ -363,6 +391,10 @@ pub enum CreaturePartCatalogError {
     InvalidScalar(&'static str),
     #[error("invalid catalog path {0}")]
     InvalidPath(String),
+    #[error("invalid source attribution for family {0:?}")]
+    InvalidAttribution(CreaturePartFamilyId),
+    #[error("invalid FNV-1a digest {0}")]
+    InvalidDigest(String),
     #[error("unknown template family {0:?}")]
     UnknownTemplateFamily(CreaturePartFamilyId),
     #[error("no compatible family for torso {torso:?} slot {slot:?}")]
@@ -414,6 +446,16 @@ fn validate_developer_source_path(path: &str) -> Result<(), CreaturePartCatalogE
     Ok(())
 }
 
+fn validate_fnv1a_digest(digest: &str) -> Result<(), CreaturePartCatalogError> {
+    let Some(hex) = digest.strip_prefix("fnv1a64:") else {
+        return Err(CreaturePartCatalogError::InvalidDigest(digest.to_string()));
+    };
+    if hex.len() != 16 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(CreaturePartCatalogError::InvalidDigest(digest.to_string()));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -425,6 +467,23 @@ mod tests {
         let catalog = load_production_creature_part_catalog().unwrap();
         assert_eq!(catalog.schema, CREATURE_PART_CATALOG_SCHEMA);
         assert_eq!(catalog.families.len(), 8);
+        assert_eq!(
+            catalog
+                .families
+                .iter()
+                .map(|family| (family.id.0, family.label.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (0, "colobus"),
+                (1, "gecko"),
+                (2, "herring"),
+                (3, "inkfish"),
+                (4, "muskrat"),
+                (5, "pudu"),
+                (6, "sparrow"),
+                (7, "taipan"),
+            ]
+        );
         assert_eq!(
             catalog
                 .families
@@ -455,6 +514,23 @@ mod tests {
             catalog.family(CreaturePartFamilyId(100)).unwrap().label,
             "future-family"
         );
+    }
+
+    #[test]
+    fn future_family_requires_explicit_known_source_attribution() {
+        let mut catalog = load_production_creature_part_catalog().unwrap();
+        let mut ninth = catalog.families[0].clone();
+        ninth.id = CreaturePartFamilyId(100);
+        ninth.label = "future-family".into();
+        ninth.source_attribution.license = "unknown".into();
+        catalog.families.push(ninth);
+
+        assert!(matches!(
+            catalog.validate(),
+            Err(CreaturePartCatalogError::InvalidAttribution(
+                CreaturePartFamilyId(100)
+            ))
+        ));
     }
 
     #[test]

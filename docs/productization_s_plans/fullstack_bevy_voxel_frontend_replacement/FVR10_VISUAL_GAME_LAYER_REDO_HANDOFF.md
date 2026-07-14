@@ -1,11 +1,10 @@
 # FVR10/FVR11 Visual Game Layer Handoff
 
-Date: 2026-07-11
+Date: 2026-07-13
 
-Status: the FVR11 creature-stage terrain overhaul is implemented and accepted
-for this production pass. The earlier flat-color terrain screenshots and the
-procedural terrain strategy described by the original FVR10 handoff are
-superseded by the evidence below.
+Status: the FVR11 creature-stage terrain overhaul and the heritable modular
+creature assembly pass are implemented and accepted. The earlier flat-color
+terrain and whole-animal creature meshes are superseded by the evidence below.
 
 ## Current Production Result
 
@@ -33,6 +32,76 @@ The minimum profile renders 64 dressing instances and two GPU VFX emitters. The
 comfort profile renders 224 dressing instances and four emitters. Higher
 profiles retain bounded scale-up caps rather than unbounded prop spawning.
 
+## Modular Creature Assembly
+
+Creature appearance save schema v2 adds five stable family sources: head,
+torso, arms, legs, and tail/back. Schema-v1 saves migrate all five sources from
+the former coherent species value. Schema-v2 roundtrips preserve each source,
+founders remain coherent, offspring inherit per slot, and bounded catalog-aware
+mutation may alter compatible parts. This data stays renderer-neutral in
+`alife_world`.
+
+The append-only catalog currently reserves these stable IDs:
+
+| ID | Family | Compatibility |
+|---:|---|---|
+| 0 | `colobus` | mammalian, long-arm, plume-tail |
+| 1 | `gecko` | compact, scaled, long-tail |
+| 2 | `herring` | aquatic, fin-arm, tailless |
+| 3 | `inkfish` | aquatic, tentacle-arm, soft-body |
+| 4 | `muskrat` | mammalian, compact, aquatic |
+| 5 | `pudu` | mammalian, heavy-torso, short-tail |
+| 6 | `sparrow` | compact, wing-arm, plume-tail |
+| 7 | `taipan` | scaled, long-body, tailless |
+
+New families are data additions with new IDs; existing IDs must never be
+renumbered or repurposed. A synthetic ninth-family test proves that catalog
+growth requires no renderer match arm.
+
+The deterministic builder owns source normalization, structured OBJ parsing,
+cut-plane triangle partitioning, UV/normal interpolation, socket-local
+rebasing, output validation, and staging-before-copy behavior. Boundary-
+crossing triangles are clipped into complete surface fragments instead of
+being stretched across an anatomical part envelope. Each original source
+triangle retains one deterministic primary provenance owner even when its
+surface fragments render in adjacent slots. Runtime loading then fits each
+UV-preserving part into an upright anatomical envelope and assembles a Bevy
+hierarchy:
+
+```text
+ProductionCreatureAssemblyRoot (stable ID, selection, animation, display-only)
+  ProductionCreaturePartMarker x7 (head, torso, paired arms/legs, tail/back)
+  ProductionCreatureJoinCoverMarker x6 (textured ruffs/tufts/cuffs)
+  layered sclera/iris/pupil/highlight face children (non-impostor LOD)
+  hidden affordance marker
+```
+
+Meshes are cached by `(family, lod, slot)` and materials by family/palette/
+pattern/expression bucket. Thirty creatures therefore reuse 56 part mesh
+handles instead of allocating per-creature copies. The renderer does not own
+appearance genes, mutation, actions, cognition, or world authority.
+
+Exact maintenance commands are:
+
+```text
+cargo run -p alife_tools --bin creature_part_builder -- analyze --catalog crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json --family <id> --lod compact --json target/artifacts/creature_parts/<family>_analysis.json
+cargo run -p alife_tools --bin creature_part_builder -- build --catalog crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json --family <id> --staging target/generated_art/creature_parts/staging
+cargo run -p alife_tools --bin creature_part_builder -- preview --catalog crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json --family <id> --lod compact --output target/artifacts/creature_parts/<family>_compact.png
+cargo run -p alife_tools --bin creature_part_builder -- validate --catalog crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json
+```
+
+The committed generated pack contains 24 named-part OBJ files (6,377,739
+bytes) and 24 socket manifests (38,552 bytes); the largest generated OBJ is
+498,351 bytes, below the enforced 512 KiB per-file limit. OBJ coordinates,
+UVs, and normals use deterministic six-decimal text precision to keep clipped
+surface fragments compact without visible-scale quantization. All 24 LOD
+packs validate. Whole source OBJs live under the
+developer-source directory and are excluded from runtime packaging. Generated
+parts retain Omabuarts Quirky Series source UVs and `CC-BY-4.0` attribution;
+textures remain manifested production dependencies. Source and generated
+records include origin, author, digest, generation status, and replacement
+policy. Unknown-license, rejected, and placeholder-final counts are zero.
+
 ## Accepted Screenshot Evidence
 
 Both screenshots were regenerated from the final release executable at
@@ -43,13 +112,14 @@ D:\A life\target\artifacts\fvr03\MinimumSettings30x30_runtime_screenshot.png
 D:\A life\target\artifacts\fvr03\MinSpecComfort1080p_runtime_screenshot.png
 ```
 
-The minimum capture is dated 2026-07-11 11:22:51 local time. It preserves 30
-readable creatures, coherent paths and ledges, textured material regions, a
-distinct fungal biome, and sparse ecology at the 30 FPS floor.
+The minimum capture is dated 2026-07-13 19:56:58 local time. It preserves 30
+upright textured modular creatures, coherent paths and ledges, textured
+material regions, a distinct fungal biome, and sparse ecology at the 30 FPS
+floor.
 
-The comfort capture is dated 2026-07-11 11:23:25 local time. It adds denser
-clustered flora, directional shadows, and stronger depth while preserving the
-same readable world composition.
+The comfort capture is dated 2026-07-13 19:57:04 local time. It adds denser
+clustered flora, directional shadows, and stronger depth while preserving
+separated biped limbs, source textures, and the same readable world composition.
 
 The `*_fvr05_*.png` captures in the same artifact directory are supplemental UX
 evidence. They are not substitutes for the two required clean runtime images.
@@ -71,8 +141,13 @@ The fresh renderer diagnostics report:
 
 | Profile | Measured local smoke FPS | Target | Dressing | GPU VFX emitters |
 |---|---:|---:|---:|---:|
-| `MinimumSettings30x30` | 117.71 | 30 | 64 | 2 |
-| `MinSpecComfort1080p` | 154.24 | 60 | 224 | 4 |
+| `MinimumSettings30x30` | 227.63 | 30 | 64 | 2 |
+| `MinSpecComfort1080p` | 188.73 | 60 | 224 | 4 |
+
+Both renderer diagnostics report 30 assembly roots, 210 part entities, 180
+join covers, eight represented source families, 56 shared mesh handles,
+`creature_visual_profile=modular-heritable-part-assembly-v1`, and
+`production_visuals_display_only=true`.
 
 These are local smoke measurements on the named machine, not broad hardware or
 shipping-performance claims. Source receipts remain under ignored
@@ -99,10 +174,10 @@ an explicit permissive license, author, source, and replacement policy.
 
 The Quirky Series creature OBJ/PNG derivatives are attributed in
 `models/ATTRIBUTION.md` and individually manifested under `CC-BY-4.0`.
-`validate-production-assets` reports 59 assets, 19 generated assets, 40 external
-creature assets, 4817399 committed bytes, 43 final-art entries, zero unknown
+`validate-production-assets` reports 75 assets, 67 generated assets, 8 external
+texture assets, 6,747,108 committed bytes, 59 final-art entries, zero unknown
 licenses, zero rejected entries, zero final-art placeholders, and a largest file
-of 452697 bytes.
+of 498,351 bytes.
 
 ## Architecture Boundaries
 
@@ -124,24 +199,31 @@ implementation, not authority or cross-crate ownership.
 
 ## Validation Receipt
 
-The following commands passed on 2026-07-11:
+The following commands passed on 2026-07-13:
 
 ```text
 cargo fmt --all -- --check
-cargo check -p alife_game_app --features "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi" --all-targets -j 1
 cargo check --workspace --all-targets -j 1
-cargo test -p alife_game_app --features "bevy-app voxel-backend" --lib terrain_ -j 1 -- --nocapture
+cargo build -p alife_game_app --release --features "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi" --bin alife_game_app -j 1
+cargo test -p alife_world appearance -- --nocapture
+cargo test -p alife_world --test save_load_roundtrip -- --nocapture
+cargo test -p alife_tools creature_part_builder -- --nocapture
+cargo test -p alife_game_app creature_part_catalog -j 1 -- --nocapture
+cargo test -p alife_game_app creature_part_genetics -j 1 -- --nocapture
+cargo test -p alife_game_app creature_assembly -j 1 -- --nocapture
 cargo test -p alife_game_app --features "bevy-app voxel-backend" --test fvr03_voxel_renderer -j 1 -- --nocapture
 cargo test -p alife_game_app --test app_shell lifecycle_lineage_birth_inherits_and_mutates_appearance_genes -j 1 -- --nocapture
-cargo test -p alife_tools --bin terrain_atlas_builder -j 1 -- --nocapture
+cargo run -p alife_tools --bin creature_part_builder -- validate --catalog crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json
+cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
-cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
 ```
 
-The full FVR03 renderer integration suite passed 18 of 18 tests. The focused
-terrain library suite passed 23 tests, the atlas builder passed four tests, and
-the lineage appearance inheritance/mutation test passed.
+The exact production release build also passed with the full shipping feature
+set. The full FVR03 renderer integration suite passed 19 of 19 tests under the
+low-debug, non-incremental test profile after the default Windows test linker
+hit a transient `STATUS_ACCESS_VIOLATION`; the retry changed build settings only.
+The lineage appearance inheritance/mutation test passed.
 
 ## Maintenance Guidance
 
@@ -154,13 +236,16 @@ Preserve the following properties when extending this layer:
 - new props need grounded silhouettes rather than broad flat fans or unit-cube
   debug geometry;
 - production materials should stay lit and atlas-backed;
+- preserve append-only family IDs and validate a new family before committing;
+- build through staging and inspect compact previews before replacing a pack;
+- keep whole source OBJs out of runtime packaging while retaining attribution;
+- keep part fitting, sockets, joins, and materials in `alife_game_app`;
 - visual tests must be followed by fresh release screenshots and direct image
   inspection;
 - target artifacts, source sheets, caches, and large generated files stay out
   of Git.
 
-The current creature meshes are serviceable and architecture-safe but remain
-less authored and expressive than the approved terrain treatment. Future
-creature art may be replaced independently through the existing app-local
-projection layer without changing simulation state, heredity, saves, or GPU
-runtime authority.
+Future source meshes can be added by registering a new catalog family,
+calibrating its transform/cut profile, generating all three LOD packs, and
+validating the production manifest. No save schema or renderer code change is
+required when the new family follows the existing slot/socket contract.
