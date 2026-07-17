@@ -29,18 +29,17 @@ pub(super) fn compile(
         super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
     let (mut projections, mut synapses, mut receipts) =
         super::topology_compile::compile_recurrent(genome, &layout, capacity)?;
-    let (decoder, decoder_projection, decoder_synapses, decoder_receipt) =
-        super::io_compile::compile_decoder(
-            genome,
-            development,
-            &layout,
-            capacity,
-            u16::try_from(projections.len()).map_err(|_| compile_error())?,
-            u32::try_from(synapses.len()).map_err(|_| compile_error())?,
-        )?;
-    projections.push(decoder_projection);
-    synapses.extend(decoder_synapses);
-    receipts.push(decoder_receipt);
+    let decoders = super::io_compile::compile_decoders(
+        genome,
+        development,
+        &layout,
+        capacity,
+        u16::try_from(projections.len()).map_err(|_| compile_error())?,
+        u32::try_from(synapses.len()).map_err(|_| compile_error())?,
+    )?;
+    projections.extend(decoders.projections);
+    synapses.extend(decoders.synapses);
+    receipts.extend(decoders.receipts);
     super::topology_compile::validate_alpha_matches(genome, &projections, &synapses, &layout)?;
 
     let recurrent = receipts
@@ -51,11 +50,18 @@ pub(super) fn compile(
         .iter()
         .map(|receipt| receipt.action_decoder_synapses)
         .sum::<u32>();
+    let memory = receipts
+        .iter()
+        .map(|receipt| receipt.memory_decoder_synapses)
+        .sum::<u32>();
     let active_tiles = receipts
         .iter()
         .map(|receipt| receipt.active_tiles)
         .sum::<u32>();
-    let total = recurrent.checked_add(action).ok_or_else(compile_error)?;
+    let total = recurrent
+        .checked_add(action)
+        .and_then(|value| value.checked_add(memory))
+        .ok_or_else(compile_error)?;
     let execution = capacity.execution();
     let budgets = CompiledBudgets {
         capacity_class_id: capacity.id(),
@@ -66,7 +72,7 @@ pub(super) fn compile(
             active_tiles,
             recurrent_synapses: recurrent,
             action_decoder_synapses: action,
-            memory_decoder_synapses: 0,
+            memory_decoder_synapses: memory,
             total_synapses: total,
             immutable_payload_words: total,
             candidate_capacity: execution.max_candidates(),
@@ -96,7 +102,9 @@ pub(super) fn compile(
         synapses,
         dynamics,
         encoder,
-        decoder,
+        decoders.candidate,
+        decoders.speech,
+        decoders.memory,
         budgets,
     )
 }

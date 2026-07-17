@@ -61,8 +61,6 @@ impl CompiledBudgets {
         let mut action_decoder_synapses = 0_u32;
         let mut memory_decoder_synapses = 0_u32;
         let mut immutable_payload_words = 0_u32;
-        let last_route = self.routes.len() - 1;
-
         for (index, route) in self.routes.iter().enumerate() {
             if route.route_index != u16::try_from(index).map_err(|_| compile_error())?
                 || route.active_tiles > route.tile_ceiling
@@ -78,11 +76,15 @@ impl CompiledBudgets {
             if route_synapses > route.synapse_ceiling {
                 return Err(compile_error());
             }
-            if index == last_route {
-                if route.recurrent_synapses != 0 || route.memory_decoder_synapses != 0 {
-                    return Err(compile_error());
-                }
-            } else if route.action_decoder_synapses != 0 || route.memory_decoder_synapses != 0 {
+            let populated_categories = [
+                route.recurrent_synapses != 0,
+                route.action_decoder_synapses != 0,
+                route.memory_decoder_synapses != 0,
+            ]
+            .into_iter()
+            .filter(|populated| *populated)
+            .count();
+            if populated_categories != 1 {
                 return Err(compile_error());
             }
 
@@ -118,7 +120,7 @@ impl CompiledBudgets {
             || global.total_synapses != total_synapses
             || global.recurrent_synapses > capacity.execution().max_recurrent_synapses()
             || global.action_decoder_synapses > capacity.execution().max_action_decoder_synapses()
-            || global.memory_decoder_synapses != 0
+            || global.memory_decoder_synapses > capacity.execution().max_memory_decoder_synapses()
             || global.total_synapses > capacity.execution().max_total_synapses()
             || global.active_tiles > capacity.execution().max_active_tiles()
             || global.candidate_capacity > capacity.execution().max_candidates()

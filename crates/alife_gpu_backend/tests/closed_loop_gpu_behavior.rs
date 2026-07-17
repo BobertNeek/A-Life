@@ -257,6 +257,12 @@ fn decode_wgsl_parses_and_abi_remains_compact_candidate_conditioned_and_entity_b
     let compact_decode = decode_body.split_whitespace().collect::<String>();
     assert!(compact_decode.contains("candidate_offset+candidate*8u"));
     assert!(compact_decode.contains("diagnostic_offset+3u"));
+    assert!(compact_decode.contains(
+        "span_within(brain.recurrent_synapse_count,decoder.decoder_synapse_count,brain.synapse_count)"
+    ));
+    assert!(!compact_decode.contains(
+        "decoder.decoder_synapse_count==brain.synapse_count-brain.recurrent_synapse_count"
+    ));
     let support_source = include_str!("support/mod.rs").to_ascii_lowercase();
     for forbidden in ["max_by(", "total_cmp(", "argmax", "cpu_winner"] {
         assert!(!support_source.contains(forbidden));

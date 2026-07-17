@@ -12,6 +12,7 @@ repository = "https://github.com/BobertNeek/A-Life"
 alife_core = { path = "crates/alife_core" }
 bevy = { version = "=0.18.0", default-features = false }
 bitflags = "2.13.0"
+blake3 = "1.8.2"
 bytemuck = { version = "1.25.0", features = ["derive"] }
 pollster = "0.4.0"
 serde = { version = "1.0.228", features = ["derive"] }

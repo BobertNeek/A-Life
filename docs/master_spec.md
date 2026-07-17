@@ -338,7 +338,7 @@ offsets. The recurrent route budget is exactly 24,576 synapses:
 | Metabolic -> Homeostatic | 1,024 | Slow |
 | Homeostatic -> Core | 1,024 | Slow |
 | Homeostatic -> Motor | 768 | Slow |
-| Core -> Motor | 3,072 | Slow/mixed |
+| Core -> Motor | 3,072 | 2,048 Slow / 1,024 Fast |
 | Motor -> Motor | 1,536 | Slow |
 | Core -> Working | 1,536 | Fast |
 | Working -> Core | 1,536 | Fast |

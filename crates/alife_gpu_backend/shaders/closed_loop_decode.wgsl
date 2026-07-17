@@ -35,7 +35,11 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
     && decoder.family_count == 8u
     && span_within(decoder.motor_start, decoder.motor_width, brain.neuron_count)
     && brain.recurrent_synapse_count <= brain.synapse_count
-    && decoder.decoder_synapse_count == brain.synapse_count - brain.recurrent_synapse_count
+    && span_within(
+      brain.recurrent_synapse_count,
+      decoder.decoder_synapse_count,
+      brain.synapse_count
+    )
     && candidate_record.candidate_index == candidate
     && span_within(candidate_record.feature_offset, 24u, frame_word_count);
   var family = GpuDecoderFamilyRecord(0xffffffffu,0u,0u,0u,0u,0u,0u,0u);
