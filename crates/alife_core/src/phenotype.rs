@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+mod abi_validation;
 mod budgets;
 mod capacity;
 mod compiled;
@@ -12,6 +13,7 @@ mod encoder;
 mod inputs;
 mod io_compile;
 mod layout_compile;
+mod persistent_address;
 mod record;
 mod topology_compile;
 
@@ -22,9 +24,15 @@ pub use compiled::{
     DecoderSynapseCoordinate, NeuronDynamics,
 };
 pub use compiler::PhenotypeCompiler;
-pub use decoder::{CandidateDecoderFamilyPlan, CandidateDecoderPlan};
+pub use decoder::{AuxiliaryDecoderPlan, CandidateDecoderFamilyPlan, CandidateDecoderPlan};
 pub use encoder::{SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourceGroup};
 pub use inputs::PhenotypeCompilerInputs;
+pub use persistent_address::{
+    PersistentAddressMap, PersistentDecoderAddress, PersistentDecoderAddressEntry,
+    PersistentNeuronAddress, PersistentNeuronAddressEntry, PersistentProjectionAddress,
+    PersistentProjectionAddressEntry, PersistentProjectionRole, PersistentSynapseAddress,
+    PersistentSynapseAddressEntry,
+};
 pub use record::BrainPhenotype;
 
 /// Stable content hash of one compiled brain phenotype.

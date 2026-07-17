@@ -56,6 +56,9 @@ pub(super) fn compile_recurrent(
         }
     }
     validate_alpha_keys(genome)?;
+    if capacity.id() == BrainCapacityClass::N2048_ID {
+        return compile_n2048_foundation(genome, layout, capacity, &masks, &densities);
+    }
     let mut enabled = masks
         .values()
         .filter(|mask| mask.enabled)
@@ -167,6 +170,125 @@ pub(super) fn compile_recurrent(
     Ok((projections, synapses, receipts))
 }
 
+fn compile_n2048_foundation(
+    genome: &BrainGenome,
+    layout: &LobeLayout,
+    capacity: &BrainCapacityClass,
+    masks: &BTreeMap<(u16, u16), &crate::MacroConnectomeMask>,
+    densities: &BTreeMap<(u16, u16), &crate::SparseDensityPrior>,
+) -> Result<RecurrentCompilation, ScaffoldContractError> {
+    let specs = crate::N2048FoundationLayoutV1::route_specs();
+    if layout != &crate::N2048FoundationLayoutV1::lobe_layout()
+        || masks.len() != specs.len()
+        || densities.len() != specs.len()
+        || capacity.execution().max_recurrent_synapses()
+            != crate::N2048FoundationLayoutV1::RECURRENT_SYNAPSE_COUNT
+    {
+        return Err(compile_error());
+    }
+
+    let mut projections = Vec::with_capacity(specs.len());
+    let mut synapses =
+        Vec::with_capacity(crate::N2048FoundationLayoutV1::RECURRENT_SYNAPSE_COUNT as usize);
+    let mut receipts = Vec::with_capacity(specs.len());
+    let mut tile_total = 0_u32;
+    for (index, spec) in specs.iter().copied().enumerate() {
+        let key = (spec.source_lobe().raw(), spec.target_lobe().raw());
+        let mask = masks.get(&key).ok_or_else(compile_error)?;
+        let density = densities.get(&key).ok_or_else(compile_error)?;
+        if !mask.enabled || mask.structural_growth_allowed {
+            return Err(compile_error());
+        }
+        let source = layout
+            .region(spec.source_lobe())
+            .filter(|region| region.enabled)
+            .ok_or_else(compile_error)?;
+        let target = layout
+            .region(spec.target_lobe())
+            .filter(|region| region.enabled)
+            .ok_or_else(compile_error)?;
+        let route_index = u16::try_from(index).map_err(|_| compile_error())?;
+        let start = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
+        let active_tiles = spec.synapse_count().div_ceil(256).max(1);
+        tile_total = tile_total
+            .checked_add(active_tiles)
+            .ok_or_else(compile_error)?;
+        if tile_total > capacity.execution().max_active_tiles() {
+            return Err(compile_error());
+        }
+        let route = RoutingMask::new(
+            spec.source_lobe(),
+            spec.target_lobe(),
+            spec.projection_type(),
+            spec.active_tile_policy(),
+            spec.update_cadence(),
+            spec.priority(),
+        );
+        let mut rows = deterministic_tile_pairs(
+            source.start,
+            source.len,
+            target.start,
+            target.len,
+            spec.synapse_count(),
+            genome.genetic_prior_seed
+                ^ u64::from(route_index)
+                ^ u64::from(density.density.raw().to_bits()).rotate_left(19),
+            spec.active_tile_policy(),
+        );
+        rows.sort_unstable();
+        for (source_neuron, target_neuron) in rows {
+            let weight = genetic_weight(
+                genome.genetic_prior_seed,
+                route_index,
+                source_neuron,
+                target_neuron,
+                spec.projection_type(),
+            );
+            let alpha = alpha_for(genome, route, source_neuron, target_neuron, target.start);
+            synapses.push(CompiledSynapse::new(
+                source_neuron,
+                target_neuron,
+                weight,
+                alpha,
+                route_index,
+                CompiledSynapseKind::Recurrent,
+            ));
+        }
+        let len = u32::try_from(synapses.len()).map_err(|_| compile_error())? - start;
+        if len != spec.synapse_count() {
+            return Err(compile_error());
+        }
+        projections.push(CompiledProjection::new(
+            route_index,
+            spec.source_lobe(),
+            spec.target_lobe(),
+            spec.projection_type(),
+            spec.active_tile_policy(),
+            spec.update_cadence(),
+            spec.priority(),
+            0,
+            start,
+            len,
+            active_tiles,
+        ));
+        receipts.push(RouteBudgetReceipt {
+            route_index,
+            active_tiles,
+            recurrent_synapses: len,
+            action_decoder_synapses: 0,
+            memory_decoder_synapses: 0,
+            immutable_payload_words: len,
+            tile_ceiling: active_tiles,
+            synapse_ceiling: len,
+            payload_word_ceiling: len,
+        });
+    }
+    if synapses.len() != crate::N2048FoundationLayoutV1::RECURRENT_SYNAPSE_COUNT as usize {
+        return Err(compile_error());
+    }
+    Ok((projections, synapses, receipts))
+}
+
 pub(super) fn decoder_alpha(genome: &BrainGenome, motor_start: u32, neuron: u32) -> f32 {
     let route = RoutingMask::new(
         LobeKind::MotorArbitration,
@@ -180,6 +302,20 @@ pub(super) fn decoder_alpha(genome: &BrainGenome, motor_start: u32, neuron: u32)
 }
 
 fn canonical_route(key: ProjectionKey) -> Option<RoutingMask> {
+    if let Some(spec) = crate::N2048FoundationLayoutV1::route_specs()
+        .iter()
+        .copied()
+        .find(|spec| spec.source_lobe() == key.source_lobe && spec.target_lobe() == key.target_lobe)
+    {
+        return Some(RoutingMask::new(
+            spec.source_lobe(),
+            spec.target_lobe(),
+            spec.projection_type(),
+            spec.active_tile_policy(),
+            spec.update_cadence(),
+            spec.priority(),
+        ));
+    }
     let (projection_type, cadence) = match (key.source_lobe, key.target_lobe) {
         (LobeKind::SensoryGrounding, LobeKind::CoreAssociation) => {
             (ProjectionType::FeedForward, UpdateCadence::Hot60Hz)

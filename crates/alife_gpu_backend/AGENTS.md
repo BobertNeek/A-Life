@@ -22,3 +22,7 @@ Rules:
 - Use sparse class-bucketed storage concepts, not dense `[M, N, N]` buffers.
 - Keep GPU backend replaceable behind narrow traits.
 - No raw host pointers may cross into shader-visible contracts.
+- GPU candidate index records contain only the `ActionCandidate` head. Reserved
+  N2048 speech and memory decoder weights remain in the single immutable
+  authoritative payload but cannot enter candidate arbitration before their
+  dedicated reviewed WGSL passes are implemented.

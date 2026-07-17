@@ -19,7 +19,7 @@ pub struct GpuPhenotypeCountPlan {
     pub neurons: usize,
     pub synapses: usize,
     pub recurrent_synapses: usize,
-    pub decoder_synapses: usize,
+    pub candidate_decoder_synapses: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,7 +73,7 @@ impl GpuPhenotypeUpload {
             neurons: self.neuron_count as usize,
             synapses: self.genetic_weights.len(),
             recurrent_synapses: self.source_indices.len(),
-            decoder_synapses: self.decoder_weight_indices.len(),
+            candidate_decoder_synapses: self.decoder_weight_indices.len(),
         }
     }
     pub fn exact_byte_plan(&self) -> GpuPhenotypeBytePlan {
@@ -214,7 +214,7 @@ impl GpuPhenotypeUpload {
             .map(|row| row.route_index() as u32)
             .collect::<Vec<_>>();
 
-        let mut decoder = phenotype
+        let mut all_decoders = phenotype
             .synapses()
             .iter()
             .filter_map(|row| match row.kind() {
@@ -222,7 +222,7 @@ impl GpuPhenotypeUpload {
                 CompiledSynapseKind::Recurrent => None,
             })
             .collect::<Vec<_>>();
-        decoder.sort_by_key(|(row, c)| {
+        all_decoders.sort_by_key(|(row, c)| {
             (
                 c.head().raw(),
                 c.family().raw(),
@@ -232,8 +232,15 @@ impl GpuPhenotypeUpload {
                 row.target(),
             )
         });
+        let candidate_decoders = all_decoders
+            .iter()
+            .copied()
+            .filter(|(_, coordinate)| {
+                coordinate.head() == alife_core::DecoderHeadKind::ActionCandidate
+            })
+            .collect::<Vec<_>>();
         let recurrent_count = recurrent.len() as u32;
-        let decoder_weight_indices = decoder
+        let decoder_weight_indices = candidate_decoders
             .iter()
             .enumerate()
             .map(|(index, (_, c))| GpuDecoderWeightIndexRecord {
@@ -246,7 +253,7 @@ impl GpuPhenotypeUpload {
         let ordered = recurrent
             .iter()
             .copied()
-            .chain(decoder.iter().map(|(row, _)| *row));
+            .chain(all_decoders.iter().map(|(row, _)| *row));
         let (genetic_weights, alpha): (Vec<_>, Vec<_>) = ordered
             .map(|row| (row.genetic_weight(), row.alpha()))
             .unzip();

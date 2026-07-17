@@ -1,11 +1,11 @@
-//! v0 scaffold: aligned lobe layout contracts, not runtime allocation.
+//! Aligned lobe layout contracts, independent of runtime allocation.
 
 use serde::{Deserialize, Serialize};
 
 use crate::{LobeIndex, ScaffoldContractError};
 
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum LobeKind {
     SensoryGrounding = 1,
     MetabolicDrive = 2,

@@ -282,7 +282,9 @@ fn projections_routes_and_global_budgets_are_exact_partitions() {
             match synapse.kind() {
                 CompiledSynapseKind::Recurrent => recurrent += 1,
                 CompiledSynapseKind::Decoder(coordinate) => match coordinate.head() {
-                    DecoderHeadKind::ActionCandidate => action_decoder += 1,
+                    DecoderHeadKind::ActionCandidate | DecoderHeadKind::SpeechPayload => {
+                        action_decoder += 1
+                    }
                     DecoderHeadKind::MemoryContext => memory_decoder += 1,
                 },
             }

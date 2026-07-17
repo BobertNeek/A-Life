@@ -4,18 +4,22 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
-    BrainCapacityClass, BrainClassId, CanonicalDigestBuilder, LobeLayout, PhenotypeHash,
-    ScaffoldContractError, SensorProfile,
+    Blake3Digest, BrainCapacityClass, BrainClassId, CanonicalDigestBuilder, FoundationAbiBinding,
+    LanguageCodebookV1, LobeLayout, PhenotypeHash, ScaffoldContractError, SensorProfile,
 };
 
+use super::abi_validation::{
+    canonical_recurrent_projection, classify_projection, compute_abi_digests,
+    validate_decoder_synapse, ProjectionKind,
+};
 use super::{
-    CandidateDecoderPlan, CompiledBudgets, CompiledProjection, CompiledSynapse,
-    CompiledSynapseKind, DecoderHeadKind, NeuronDynamics, PhenotypeCompilerInputs,
-    SensorEncoderPlan,
+    AuxiliaryDecoderPlan, CandidateDecoderPlan, CompiledBudgets, CompiledProjection,
+    CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, NeuronDynamics, PersistentAddressMap,
+    PhenotypeCompilerInputs, SensorEncoderPlan,
 };
 
-const PHENOTYPE_SCHEMA_VERSION: u16 = 1;
-const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v1";
+const PHENOTYPE_SCHEMA_VERSION: u16 = 2;
+const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v2";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BrainPhenotype {
@@ -25,12 +29,19 @@ pub struct BrainPhenotype {
     neuron_count: u32,
     microstep_count: u8,
     sensor_profile: SensorProfile,
+    foundation_abi: FoundationAbiBinding,
+    language_codebook: LanguageCodebookV1,
     lobe_layout: LobeLayout,
     projections: Vec<CompiledProjection>,
     synapses: Vec<CompiledSynapse>,
     neuron_dynamics: Vec<NeuronDynamics>,
     sensor_encoder: SensorEncoderPlan,
     decoder: CandidateDecoderPlan,
+    speech_decoder: Option<AuxiliaryDecoderPlan>,
+    memory_decoder: Option<AuxiliaryDecoderPlan>,
+    persistent_address_map: PersistentAddressMap,
+    route_abi_digest: Blake3Digest,
+    plasticity_abi_digest: Blake3Digest,
     budgets: CompiledBudgets,
     phenotype_hash: PhenotypeHash,
 }
@@ -60,6 +71,12 @@ impl BrainPhenotype {
     pub const fn lobe_layout(&self) -> &LobeLayout {
         &self.lobe_layout
     }
+    pub const fn foundation_abi(&self) -> &FoundationAbiBinding {
+        &self.foundation_abi
+    }
+    pub const fn language_codebook(&self) -> &LanguageCodebookV1 {
+        &self.language_codebook
+    }
     pub fn projections(&self) -> &[CompiledProjection] {
         &self.projections
     }
@@ -74,6 +91,21 @@ impl BrainPhenotype {
     }
     pub fn candidate_decoder(&self) -> &CandidateDecoderPlan {
         &self.decoder
+    }
+    pub fn speech_decoder(&self) -> Option<&AuxiliaryDecoderPlan> {
+        self.speech_decoder.as_ref()
+    }
+    pub fn memory_decoder(&self) -> Option<&AuxiliaryDecoderPlan> {
+        self.memory_decoder.as_ref()
+    }
+    pub const fn persistent_address_map(&self) -> &PersistentAddressMap {
+        &self.persistent_address_map
+    }
+    pub const fn route_abi_digest(&self) -> Blake3Digest {
+        self.route_abi_digest
+    }
+    pub const fn plasticity_abi_digest(&self) -> Blake3Digest {
+        self.plasticity_abi_digest
     }
     pub const fn budgets(&self) -> &CompiledBudgets {
         &self.budgets
@@ -91,9 +123,17 @@ impl BrainPhenotype {
         neuron_dynamics: Vec<NeuronDynamics>,
         sensor_encoder: SensorEncoderPlan,
         decoder: CandidateDecoderPlan,
+        speech_decoder: Option<AuxiliaryDecoderPlan>,
+        memory_decoder: Option<AuxiliaryDecoderPlan>,
         budgets: CompiledBudgets,
     ) -> Result<Self, ScaffoldContractError> {
         inputs.validate_against(capacity)?;
+        let persistent_address_map =
+            PersistentAddressMap::compile(&lobe_layout, &projections, &synapses)?;
+        let (route_abi_digest, plasticity_abi_digest) =
+            compute_abi_digests(capacity, &projections, &synapses);
+        let foundation_abi = inputs.foundation_abi().clone();
+        let language_codebook = foundation_abi.language_codebook().clone();
         let mut value = Self {
             schema_version: PHENOTYPE_SCHEMA_VERSION,
             compiler_inputs_digest: inputs.canonical_digest(),
@@ -101,12 +141,19 @@ impl BrainPhenotype {
             neuron_count,
             microstep_count,
             sensor_profile: inputs.sensor_profile(),
+            foundation_abi,
+            language_codebook,
             lobe_layout,
             projections,
             synapses,
             neuron_dynamics,
             sensor_encoder,
             decoder,
+            speech_decoder,
+            memory_decoder,
+            persistent_address_map,
+            route_abi_digest,
+            plasticity_abi_digest,
             budgets,
             phenotype_hash: PhenotypeHash([0; 4]),
         };
@@ -128,6 +175,11 @@ impl BrainPhenotype {
         d.write_u32(self.neuron_count);
         d.write_u8(self.microstep_count);
         d.write_u16(self.sensor_profile.raw());
+        d.write_u16(self.foundation_abi.capacity_class_id().raw());
+        d.write_u64(self.foundation_abi.layout_id().0);
+        write_blake3(&mut d, self.foundation_abi.layout_digest());
+        d.write_u32(self.language_codebook.id().0);
+        write_blake3(&mut d, self.language_codebook.canonical_digest());
         d.write_sequence_len(self.lobe_layout.regions.len());
         for region in &self.lobe_layout.regions {
             d.write_u16(region.id.0);
@@ -189,6 +241,27 @@ impl BrainPhenotype {
         for word in self.decoder.canonical_digest() {
             d.write_u64(word);
         }
+        match &self.speech_decoder {
+            Some(plan) => {
+                d.write_some();
+                for word in plan.canonical_digest() {
+                    d.write_u64(word);
+                }
+            }
+            None => d.write_none(),
+        }
+        match &self.memory_decoder {
+            Some(plan) => {
+                d.write_some();
+                for word in plan.canonical_digest() {
+                    d.write_u64(word);
+                }
+            }
+            None => d.write_none(),
+        }
+        write_blake3(&mut d, self.persistent_address_map.digest());
+        write_blake3(&mut d, self.route_abi_digest);
+        write_blake3(&mut d, self.plasticity_abi_digest);
         encode_budgets(&mut d, &self.budgets);
         Ok(PhenotypeHash(d.finish256()))
     }
@@ -198,6 +271,8 @@ impl BrainPhenotype {
         capacity: &BrainCapacityClass,
     ) -> Result<(), ScaffoldContractError> {
         capacity.validate_contract()?;
+        self.foundation_abi.validate_against(capacity)?;
+        self.language_codebook.validate_contract()?;
         let execution = capacity.execution();
         if self.schema_version != PHENOTYPE_SCHEMA_VERSION
             || self.brain_class_id != capacity.id()
@@ -211,6 +286,9 @@ impl BrainPhenotype {
             || self.synapses.is_empty()
             || self.neuron_dynamics.len() != self.neuron_count as usize
         {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        if self.language_codebook != *self.foundation_abi.language_codebook() {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         self.lobe_layout
@@ -229,8 +307,6 @@ impl BrainPhenotype {
         let mut previous_recurrent_coordinate = None;
         let mut previous_decoder_coordinate = None;
         let mut recurrent_route_keys = std::collections::BTreeSet::new();
-        let final_route_index = u16::try_from(self.projections.len() - 1)
-            .map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
         for (index, (projection, receipt)) in self
             .projections
             .iter()
@@ -266,22 +342,33 @@ impl BrainPhenotype {
                 .region(projection.target_lobe())
                 .filter(|region| region.enabled)
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            let is_decoder_projection = route == final_route_index;
-            if is_decoder_projection
-                && (projection.source_lobe() != crate::LobeKind::MotorArbitration
-                    || projection.target_lobe() != crate::LobeKind::MotorArbitration
-                    || projection.projection_type() != crate::ProjectionType::MotorProposal)
-            {
-                return Err(ScaffoldContractError::PhenotypeCompile);
-            }
-            if !is_decoder_projection
-                && (!canonical_recurrent_projection(projection)
-                    || !recurrent_route_keys.insert((
-                        projection.source_lobe().raw(),
-                        projection.target_lobe().raw(),
-                    )))
-            {
-                return Err(ScaffoldContractError::PhenotypeCompile);
+            let projection_kind =
+                classify_projection(&self.synapses[start as usize..cursor as usize])?;
+            match projection_kind {
+                ProjectionKind::Recurrent
+                    if !canonical_recurrent_projection(projection)
+                        || !recurrent_route_keys.insert((
+                            projection.source_lobe().raw(),
+                            projection.target_lobe().raw(),
+                        )) =>
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile)
+                }
+                ProjectionKind::ActionAndSpeechDecoder
+                    if projection.source_lobe() != crate::LobeKind::MotorArbitration
+                        || projection.target_lobe() != crate::LobeKind::MotorArbitration
+                        || projection.projection_type() != crate::ProjectionType::MotorProposal =>
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile)
+                }
+                ProjectionKind::MemoryDecoder
+                    if projection.source_lobe() != crate::LobeKind::EpisodicMemory
+                        || projection.target_lobe() != crate::LobeKind::CoreAssociation
+                        || projection.projection_type() != crate::ProjectionType::Feedback =>
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile)
+                }
+                _ => {}
             }
             let mut touched_tiles = std::collections::BTreeSet::new();
             for synapse in &self.synapses[start as usize..cursor as usize] {
@@ -307,7 +394,7 @@ impl BrainPhenotype {
                 }
                 match synapse.kind() {
                     CompiledSynapseKind::Recurrent => {
-                        if is_decoder_projection {
+                        if projection_kind != ProjectionKind::Recurrent {
                             return Err(ScaffoldContractError::PhenotypeCompile);
                         }
                         let coordinate = (route, synapse.source(), synapse.target());
@@ -321,22 +408,10 @@ impl BrainPhenotype {
                             .ok_or(ScaffoldContractError::PhenotypeCompile)?
                     }
                     CompiledSynapseKind::Decoder(coordinate) => {
-                        if !is_decoder_projection {
+                        if projection_kind == ProjectionKind::Recurrent {
                             return Err(ScaffoldContractError::PhenotypeCompile);
                         }
-                        let motor_neuron = self
-                            .decoder
-                            .motor_start()
-                            .checked_add(u32::from(coordinate.motor_index()))
-                            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-                        if coordinate.head() != DecoderHeadKind::ActionCandidate
-                            || coordinate.input_lane() >= self.decoder.flattened_input_lane_count()
-                            || coordinate.motor_index() >= self.decoder.motor_width()
-                            || synapse.source() != motor_neuron
-                            || synapse.target() != motor_neuron
-                        {
-                            return Err(ScaffoldContractError::PhenotypeCompile);
-                        }
+                        validate_decoder_synapse(self, projection_kind, synapse, coordinate)?;
                         let identity = (
                             route,
                             coordinate.head().raw(),
@@ -351,7 +426,7 @@ impl BrainPhenotype {
                         }
                         previous_decoder_coordinate = Some(identity);
                         match coordinate.head() {
-                            DecoderHeadKind::ActionCandidate => {
+                            DecoderHeadKind::ActionCandidate | DecoderHeadKind::SpeechPayload => {
                                 action_decoder = action_decoder
                                     .checked_add(1)
                                     .ok_or(ScaffoldContractError::PhenotypeCompile)?
@@ -404,12 +479,40 @@ impl BrainPhenotype {
         }
         self.sensor_encoder.validate_against(self)?;
         self.decoder.validate_against(self)?;
-        if self.budgets.routes.last().is_none_or(|receipt| {
-            receipt.recurrent_synapses != 0
-                || receipt.memory_decoder_synapses != 0
-                || receipt.action_decoder_synapses == 0
-        })
-            || self.synapses.iter().any(|row| matches!(row.kind(), CompiledSynapseKind::Decoder(c) if c.head() != DecoderHeadKind::ActionCandidate))
+        if let Some(plan) = &self.speech_decoder {
+            plan.validate_against(self)?;
+        }
+        if let Some(plan) = &self.memory_decoder {
+            plan.validate_against(self)?;
+        }
+        let candidate_count = self.decoder.decoder_synapse_count();
+        let speech_count = self
+            .speech_decoder
+            .as_ref()
+            .map_or(0, AuxiliaryDecoderPlan::decoder_synapse_count);
+        let memory_count = self
+            .memory_decoder
+            .as_ref()
+            .map_or(0, AuxiliaryDecoderPlan::decoder_synapse_count);
+        let (route_abi_digest, plasticity_abi_digest) =
+            compute_abi_digests(capacity, &self.projections, &self.synapses);
+        let n2048 = capacity.id() == BrainCapacityClass::N2048_ID;
+        if candidate_count.checked_add(speech_count)
+            != Some(self.budgets.global.action_decoder_synapses)
+            || memory_count != self.budgets.global.memory_decoder_synapses
+            || (n2048
+                && (candidate_count
+                    != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT
+                    || speech_count
+                        != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT
+                    || memory_count
+                        != crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT))
+            || (!n2048 && (self.speech_decoder.is_some() || self.memory_decoder.is_some()))
+            || self.route_abi_digest != route_abi_digest
+            || self.plasticity_abi_digest != plasticity_abi_digest
+            || self.persistent_address_map.digest()
+                != self.persistent_address_map.recompute_digest()?
+            || self.persistent_address_map.validate_against(self).is_err()
             || self.recompute_phenotype_hash()? != self.phenotype_hash
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
@@ -418,27 +521,10 @@ impl BrainPhenotype {
     }
 }
 
-fn canonical_recurrent_projection(projection: &CompiledProjection) -> bool {
-    use crate::{ActiveTilePolicy, BiologicalPriority, LobeKind, ProjectionType, UpdateCadence};
-    let expected = match (projection.source_lobe(), projection.target_lobe()) {
-        (LobeKind::SensoryGrounding, LobeKind::CoreAssociation) => {
-            (ProjectionType::FeedForward, UpdateCadence::Hot60Hz)
-        }
-        (LobeKind::CoreAssociation, LobeKind::MotorArbitration) => {
-            (ProjectionType::MotorProposal, UpdateCadence::Hot60Hz)
-        }
-        (LobeKind::MetabolicDrive, LobeKind::HomeostaticRegulation) => {
-            (ProjectionType::Homeostatic, UpdateCadence::Hot10To30Hz)
-        }
-        (LobeKind::MotorArbitration, LobeKind::MotorArbitration) => {
-            (ProjectionType::LateralInhibition, UpdateCadence::Hot60Hz)
-        }
-        _ => return false,
-    };
-    projection.projection_type() == expected.0
-        && projection.update_cadence() == expected.1
-        && projection.active_tile_policy() == ActiveTilePolicy::EssentialReservation
-        && projection.priority() == BiologicalPriority::Essential
+fn write_blake3(d: &mut CanonicalDigestBuilder, digest: Blake3Digest) {
+    for byte in digest.bytes() {
+        d.write_u8(*byte);
+    }
 }
 
 impl<'de> Deserialize<'de> for BrainPhenotype {
@@ -454,12 +540,19 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             neuron_count: u32,
             microstep_count: u8,
             sensor_profile: SensorProfile,
+            foundation_abi: FoundationAbiBinding,
+            language_codebook: LanguageCodebookV1,
             lobe_layout: LobeLayout,
             projections: Vec<CompiledProjection>,
             synapses: Vec<CompiledSynapse>,
             neuron_dynamics: Vec<NeuronDynamics>,
             sensor_encoder: SensorEncoderPlan,
             decoder: CandidateDecoderPlan,
+            speech_decoder: Option<AuxiliaryDecoderPlan>,
+            memory_decoder: Option<AuxiliaryDecoderPlan>,
+            persistent_address_map: PersistentAddressMap,
+            route_abi_digest: Blake3Digest,
+            plasticity_abi_digest: Blake3Digest,
             budgets: CompiledBudgets,
             phenotype_hash: PhenotypeHash,
         }
@@ -471,12 +564,19 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             neuron_count: w.neuron_count,
             microstep_count: w.microstep_count,
             sensor_profile: w.sensor_profile,
+            foundation_abi: w.foundation_abi,
+            language_codebook: w.language_codebook,
             lobe_layout: w.lobe_layout,
             projections: w.projections,
             synapses: w.synapses,
             neuron_dynamics: w.neuron_dynamics,
             sensor_encoder: w.sensor_encoder,
             decoder: w.decoder,
+            speech_decoder: w.speech_decoder,
+            memory_decoder: w.memory_decoder,
+            persistent_address_map: w.persistent_address_map,
+            route_abi_digest: w.route_abi_digest,
+            plasticity_abi_digest: w.plasticity_abi_digest,
             budgets: w.budgets,
             phenotype_hash: w.phenotype_hash,
         };
