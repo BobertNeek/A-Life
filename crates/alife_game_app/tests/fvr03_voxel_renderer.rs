@@ -106,12 +106,22 @@ fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
             .iter()
             .all(|slot| slots.contains(slot))
     }));
-    assert!(translations_by_root.values().all(|translations| {
-        translations[&CreaturePartSlot::LeftArm].x < -0.30
-            && translations[&CreaturePartSlot::RightArm].x > 0.30
-            && translations[&CreaturePartSlot::LeftLeg].x < -0.12
-            && translations[&CreaturePartSlot::RightLeg].x > 0.12
-    }));
+    let minimum_arm_gap = translations_by_root
+        .values()
+        .map(|translations| {
+            translations[&CreaturePartSlot::RightArm].x - translations[&CreaturePartSlot::LeftArm].x
+        })
+        .fold(f32::INFINITY, f32::min);
+    let minimum_leg_gap = translations_by_root
+        .values()
+        .map(|translations| {
+            translations[&CreaturePartSlot::RightLeg].x - translations[&CreaturePartSlot::LeftLeg].x
+        })
+        .fold(f32::INFINITY, f32::min);
+    assert!(
+        minimum_arm_gap >= 0.40 && minimum_leg_gap >= 0.20,
+        "live articulated assemblies must retain bilateral limb separation: arm_gap={minimum_arm_gap:.3} leg_gap={minimum_leg_gap:.3}"
+    );
     assert!(families.len() >= 8);
     assert!(mesh_handles.len() < parts.len() / 3);
     assert!(material_handles.len() < parts.len() / 3);
@@ -333,7 +343,10 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         ProductionFrontendProfileId::MinimumSettings30x30
     );
     assert_eq!(scene.population, 30);
-    assert!(scene.uses_bevy_voxel_world_backend);
+    assert_eq!(
+        scene.uses_bevy_voxel_world_backend,
+        cfg!(feature = "voxel-backend")
+    );
     assert!(scene.uses_internal_chunk_mesh_for_fvr02_contract);
     assert!(scene.visible_chunk_count > 0);
     assert_eq!(scene.visible_chunk_count, scene.resident_chunk_count);
@@ -865,6 +878,93 @@ fn fvr10_creatures_have_high_contrast_heritable_surface_markings() {
         && marker.no_renderer_authority_over_actions_or_cognition
         && marker.high_contrast_marking
         && marker.heritable));
+}
+
+#[test]
+fn fvr10_surface_details_are_rendered_children_not_invisible_markers() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let marker_count = {
+        let mut query = app.world_mut().query::<&Fvr10CreatureSurfaceDetailMarker>();
+        query.iter(app.world()).count()
+    };
+    let rendered_details = {
+        let mut query = app.world_mut().query::<(
+            &Fvr10CreatureSurfaceDetailMarker,
+            &Mesh3d,
+            &MeshMaterial3d<StandardMaterial>,
+            &bevy::prelude::ChildOf,
+            &Transform,
+        )>();
+        query
+            .iter(app.world())
+            .map(|(marker, mesh, material, parent, transform)| {
+                (
+                    *marker,
+                    mesh.0.id(),
+                    material.0.id(),
+                    parent.parent(),
+                    transform.translation,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+
+    assert!(
+        marker_count > 0,
+        "production scene must declare surface details"
+    );
+    assert_eq!(
+        rendered_details.len(),
+        marker_count,
+        "every surface detail marker must own visible geometry and a material"
+    );
+    assert!(rendered_details
+        .iter()
+        .all(|(marker, _, _, parent, offset)| {
+            app.world()
+                .get::<ProductionCreaturePartMarker>(*parent)
+                .is_some_and(|part| part.stable_id == marker.stable_id)
+                && offset.is_finite()
+                && offset.length() < 1.0
+        }));
+
+    let face_parents = {
+        let mut query = app
+            .world_mut()
+            .query::<(&Fvr09CreatureFaceFeatureMarker, &bevy::prelude::ChildOf)>();
+        query
+            .iter(app.world())
+            .map(|(marker, parent)| (*marker, parent.parent()))
+            .collect::<Vec<_>>()
+    };
+    assert!(!face_parents.is_empty());
+    assert!(face_parents.iter().all(|(face, parent)| {
+        app.world()
+            .get::<ProductionCreaturePartMarker>(*parent)
+            .is_some_and(|part| {
+                part.stable_id == face.stable_id && part.slot == CreaturePartSlot::Head
+            })
+    }));
+
+    let cover_parents = {
+        let mut query = app
+            .world_mut()
+            .query::<(&ProductionCreatureJoinCoverMarker, &bevy::prelude::ChildOf)>();
+        query
+            .iter(app.world())
+            .map(|(marker, parent)| (*marker, parent.parent()))
+            .collect::<Vec<_>>()
+    };
+    assert!(!cover_parents.is_empty());
+    assert!(cover_parents.iter().all(|(cover, parent)| {
+        app.world()
+            .get::<ProductionCreaturePartMarker>(*parent)
+            .is_some_and(|part| part.stable_id == cover.stable_id)
+    }));
 }
 
 #[test]

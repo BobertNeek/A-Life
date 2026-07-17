@@ -8,8 +8,12 @@ use alife_world::{
     persistence::{
         AdapterRemapEntry, AdapterRemapTable, AssetKind, AssetManifest, AssetManifestEntry,
         AssetPresence, BrainPolicyConfig, CreatureMindSaveSummary, CreatureSaveState,
-        FeatureFlagConfig, LearningTraceSaveSummary, MigrationHook, PersistenceError,
-        PortableAssetDigest, PortableSaveFile, RuntimeConfig, SchoolConfig, WeightLayerSaveSummary,
+        FeatureFlagConfig, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
+        GpuRuntimeAuthorityState, GpuRuntimeClassBucketAllocation, GpuRuntimeResidencySlots,
+        GpuRuntimeSafeCheckpoint, GpuRuntimeSaveState, GpuRuntimeShaderAbiVersions,
+        LearningTraceSaveSummary, MigrationHook, PersistenceError, PortableAssetDigest,
+        PortableSaveFile, RuntimeConfig, SchoolConfig, WeightLayerSaveSummary,
+        FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
         P34_ASSET_MANIFEST_SCHEMA, P34_ASSET_MANIFEST_SCHEMA_VERSION, P34_SAVE_FILE_SCHEMA,
         P34_SAVE_FILE_SCHEMA_VERSION,
     },
@@ -109,6 +113,69 @@ fn assert_no_runtime_fallback_keys(value: &serde_json::Value) {
         }
         _ => {}
     }
+}
+
+#[test]
+fn typed_unavailable_gpu_runtime_state_is_valid_and_stops_learned_actions() {
+    let state = GpuRuntimeSaveState {
+        schema: FVR06_GPU_RUNTIME_STATE_SCHEMA.to_string(),
+        schema_version: FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
+        requested_backend_mode: "GpuAuthoritative".to_string(),
+        selected_backend_mode: "Unavailable".to_string(),
+        adapter_identity: GpuRuntimeAdapterIdentity {
+            adapter_name: None,
+            backend_api: None,
+            adapter_type: None,
+            driver: None,
+            driver_info: Some("gpu-runtime feature disabled".to_string()),
+        },
+        validation_profile: "test-unavailable".to_string(),
+        brain_residency_slots: GpuRuntimeResidencySlots {
+            hot_slots: 1,
+            warm_slots: 1,
+            cold_slots: 0,
+        },
+        class_bucket_allocations: vec![GpuRuntimeClassBucketAllocation {
+            brain_class: BrainScaleTier::Nano512,
+            hot_slots: 1,
+            warm_slots: 1,
+            cold_slots: 0,
+            max_creatures: 1,
+        }],
+        active_profile_caps: GpuRuntimeActiveProfileCaps {
+            target_fps: 30,
+            target_frame_ms: 33.333,
+            renderer_reserve_ms: 12.0,
+            gpu_neural_budget_ms: 4.0,
+            neural_heap_mb: 64,
+            staging_readback_budget_kib: 4,
+            chunk_activation_radius: 1,
+            active_chunk_cap: 9,
+            vfx_budget: "conservative".to_string(),
+            adaptive_throttling_order: vec!["vfx".to_string()],
+        },
+        shader_abi_versions: GpuRuntimeShaderAbiVersions {
+            shader_manifest: vec!["closed-loop:v1".to_string()],
+            abi_manifest: vec!["gpu-runtime:v1".to_string()],
+        },
+        authority: GpuRuntimeAuthorityState {
+            authoritative: false,
+            failure_stops_learned_actions: true,
+            finite_rejections: 0,
+        },
+        last_safe_checkpoint: GpuRuntimeSafeCheckpoint {
+            save_id: "test-save".to_string(),
+            world_tick: Tick::new(1),
+            sealed_patch_boundary: true,
+            checkpoint_label: "gpu-unavailable:tick=1".to_string(),
+        },
+        unavailable_reason: Some("gpu-runtime feature disabled".to_string()),
+        selected_scale_profile: "MinimumSettings30x30".to_string(),
+        compact_action_readback_bytes_per_creature: 64,
+        no_active_bulk_readback: true,
+    };
+
+    assert!(state.validate().is_ok());
 }
 
 fn load_runtime_config_value(test_name: &str, value: &serde_json::Value) -> RuntimeConfig {
@@ -224,11 +291,11 @@ fn appearance_schema_v1_migrates_and_schema_v2_roundtrips_in_saves() {
     );
 
     save.creatures[0].appearance.part_sources = alife_world::CreaturePartSources {
-        head: alife_world::CreaturePartFamilyId(1),
-        torso: alife_world::CreaturePartFamilyId(5),
-        arms: alife_world::CreaturePartFamilyId(6),
-        legs: alife_world::CreaturePartFamilyId(5),
-        tail: alife_world::CreaturePartFamilyId(7),
+        head: alife_world::CreaturePartFamilyId(8),
+        torso: alife_world::CreaturePartFamilyId(9),
+        arms: alife_world::CreaturePartFamilyId(10),
+        legs: alife_world::CreaturePartFamilyId(11),
+        tail: alife_world::CreaturePartFamilyId(8),
     };
     let roundtrip =
         PortableSaveFile::from_json_str(&save.to_json_string_pretty().unwrap()).unwrap();

@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use crate::{
     CreaturePartCatalog, CreaturePartFamilyDefinition, CreaturePartLodId, CreaturePartSlot,
+    CreatureVisualBounds,
 };
 
 #[cfg(feature = "bevy-app")]
@@ -31,6 +32,7 @@ pub struct GeneratedPartObjPack {
 #[derive(Debug, Default, Resource)]
 pub struct CreaturePartAssetLibrary {
     meshes: BTreeMap<crate::CreaturePartMeshKey, Handle<Mesh>>,
+    bounds: BTreeMap<crate::CreaturePartMeshKey, CreatureVisualBounds>,
     materials: BTreeMap<crate::CreaturePartMaterialKey, Handle<StandardMaterial>>,
 }
 
@@ -51,9 +53,13 @@ impl CreaturePartAssetLibrary {
                         lod: lod.lod,
                         slot,
                     };
+                    let bounds = part
+                        .bevy_bounds()
+                        .ok_or(CreaturePartAssetError::InvalidBounds(slot))?;
+                    library.bounds.insert(key, bounds);
                     library
                         .meshes
-                        .insert(key, mesh_assets.add(part.into_mesh(slot)));
+                        .insert(key, mesh_assets.add(part.into_mesh()));
                 }
             }
         }
@@ -62,6 +68,10 @@ impl CreaturePartAssetLibrary {
 
     pub fn mesh(&self, key: crate::CreaturePartMeshKey) -> Option<Handle<Mesh>> {
         self.meshes.get(&key).cloned()
+    }
+
+    pub fn bounds(&self, key: crate::CreaturePartMeshKey) -> Option<CreatureVisualBounds> {
+        self.bounds.get(&key).copied()
     }
 
     pub fn material(
@@ -88,15 +98,34 @@ impl CreaturePartAssetLibrary {
     }
 }
 
+impl PartMeshData {
+    pub fn bevy_bounds(&self) -> Option<CreatureVisualBounds> {
+        let mut min = [f32::INFINITY; 3];
+        let mut max = [f32::NEG_INFINITY; 3];
+        for &[x, depth, height] in &self.positions {
+            let position = [x, height, -depth];
+            if !position.into_iter().all(f32::is_finite) {
+                return None;
+            }
+            for axis in 0..3 {
+                min[axis] = min[axis].min(position[axis]);
+                max[axis] = max[axis].max(position[axis]);
+            }
+        }
+        let bounds = CreatureVisualBounds::new(min, max);
+        bounds.is_valid().then_some(bounds)
+    }
+}
+
 #[cfg(feature = "bevy-app")]
 impl PartMeshData {
-    fn into_mesh(self, slot: CreaturePartSlot) -> Mesh {
+    fn into_mesh(self) -> Mesh {
         let mut positions = self
             .positions
             .into_iter()
             .map(|[x, depth, height]| [x, height, -depth])
             .collect::<Vec<_>>();
-        let fitted_scale = fit_part_to_biped_envelope(slot, &mut positions);
+        let fitted_scale = preserve_canonical_part_geometry(&mut positions);
         let normals = self
             .normals
             .into_iter()
@@ -121,46 +150,8 @@ impl PartMeshData {
 }
 
 #[cfg(any(feature = "bevy-app", test))]
-fn fit_part_to_biped_envelope(slot: CreaturePartSlot, positions: &mut [[f32; 3]]) -> [f32; 3] {
-    if positions.is_empty() {
-        return [1.0; 3];
-    }
-    let mut min = [f32::INFINITY; 3];
-    let mut max = [f32::NEG_INFINITY; 3];
-    for position in positions.iter() {
-        for axis in 0..3 {
-            min[axis] = min[axis].min(position[axis]);
-            max[axis] = max[axis].max(position[axis]);
-        }
-    }
-    let (target_size, target_center) = match slot {
-        CreaturePartSlot::Head => ([0.62, 0.52, 0.48], [0.0, 0.25, 0.03]),
-        CreaturePartSlot::Torso => ([0.58, 0.82, 0.40], [0.0, -0.02, 0.0]),
-        CreaturePartSlot::LeftArm | CreaturePartSlot::RightArm => {
-            ([0.22, 0.72, 0.24], [0.0, -0.28, 0.0])
-        }
-        CreaturePartSlot::LeftLeg | CreaturePartSlot::RightLeg => {
-            ([0.28, 0.70, 0.32], [0.0, -0.30, 0.04])
-        }
-        CreaturePartSlot::TailBack => ([0.30, 0.42, 0.30], [0.0, -0.06, -0.10]),
-    };
-    let source_center: [f32; 3] = std::array::from_fn(|axis| (min[axis] + max[axis]) * 0.5);
-    let scale = std::array::from_fn(|axis| {
-        let span = (max[axis] - min[axis]).max(1.0e-4);
-        target_size[axis] / span
-    });
-    let (source_pivot, target_pivot) = if slot == CreaturePartSlot::Torso {
-        (source_center, target_center)
-    } else {
-        ([0.0; 3], [0.0; 3])
-    };
-    for position in positions {
-        for axis in 0..3 {
-            position[axis] =
-                (position[axis] - source_pivot[axis]) * scale[axis] + target_pivot[axis];
-        }
-    }
-    scale
+fn preserve_canonical_part_geometry(_positions: &mut [[f32; 3]]) -> [f32; 3] {
+    [1.0; 3]
 }
 
 #[cfg(feature = "bevy-app")]
@@ -189,6 +180,8 @@ pub enum CreaturePartAssetError {
     UnknownFamily,
     #[error("missing creature part LOD")]
     MissingLod,
+    #[error("generated creature part has invalid bounds for {0:?}")]
+    InvalidBounds(CreaturePartSlot),
     #[error("creature part asset IO failed: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -506,29 +499,144 @@ o part_tail_back
     }
 
     #[test]
-    fn anatomical_fit_forces_upright_head_torso_arms_and_legs() {
-        let source = vec![[-2.0, -0.1, -4.0], [3.0, 0.2, 5.0], [0.0, 0.0, 0.0]];
-        for (slot, expected_height) in [
-            (CreaturePartSlot::Head, 0.52),
-            (CreaturePartSlot::Torso, 0.82),
-            (CreaturePartSlot::LeftArm, 0.72),
-            (CreaturePartSlot::LeftLeg, 0.70),
-        ] {
-            let mut fitted = source.clone();
-            fit_part_to_biped_envelope(slot, &mut fitted);
-            let min_y = fitted.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
-            let max_y = fitted
-                .iter()
-                .map(|p| p[1])
-                .fold(f32::NEG_INFINITY, f32::max);
-            assert!(((max_y - min_y) - expected_height).abs() < 1.0e-4);
-            if slot != CreaturePartSlot::Torso {
-                assert_eq!(
-                    fitted[2], [0.0; 3],
-                    "attached part fitting must preserve the authored socket-local origin"
+    fn production_part_packs_are_canonical_biped_geometry_without_runtime_stretching() {
+        let catalog = crate::load_production_creature_part_catalog().unwrap();
+        let assets_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+
+        for family in &catalog.families {
+            for lod in &family.lods {
+                let pack = load_generated_part_pack(&assets_root, family, lod.lod).unwrap();
+                let bounds = |slot| {
+                    let positions = &pack.parts[&slot].positions;
+                    let min: [f32; 3] = std::array::from_fn(|axis| {
+                        positions
+                            .iter()
+                            .map(|position| position[axis])
+                            .fold(f32::INFINITY, f32::min)
+                    });
+                    let max: [f32; 3] = std::array::from_fn(|axis| {
+                        positions
+                            .iter()
+                            .map(|position| position[axis])
+                            .fold(f32::NEG_INFINITY, f32::max)
+                    });
+                    let span: [f32; 3] = std::array::from_fn(|axis| max[axis] - min[axis]);
+                    (min, max, span)
+                };
+
+                let (head_min, head_max, head_span) = bounds(CreaturePartSlot::Head);
+                let (torso_min, torso_max, torso_span) = bounds(CreaturePartSlot::Torso);
+                assert!(
+                    (0.38..=0.78).contains(&head_span[0])
+                        && (0.34..=0.78).contains(&head_span[2])
+                        && head_min[2] >= -0.12
+                        && head_max[2] >= 0.30,
+                    "family {} {:?} head is not canonical: min={head_min:?} max={head_max:?}",
+                    family.label,
+                    lod.lod
                 );
+                assert!(
+                    (0.38..=0.90).contains(&torso_span[0])
+                        && (0.58..=0.94).contains(&torso_span[2])
+                        && torso_min[2] <= -0.26
+                        && torso_max[2] >= 0.26,
+                    "family {} {:?} torso is not a readable biped chest: min={torso_min:?} max={torso_max:?}",
+                    family.label,
+                    lod.lod
+                );
+
+                for slot in [CreaturePartSlot::LeftArm, CreaturePartSlot::RightArm] {
+                    let (min, max, span) = bounds(slot);
+                    assert!(
+                        (0.10..=0.38).contains(&span[0])
+                            && (0.48..=0.90).contains(&span[2])
+                            && min[2] <= -0.42
+                            && max[2] <= 0.18,
+                        "family {} {:?} {slot:?} is not a bounded hanging arm: min={min:?} max={max:?}",
+                        family.label,
+                        lod.lod
+                    );
+                }
+                for slot in [CreaturePartSlot::LeftLeg, CreaturePartSlot::RightLeg] {
+                    let (min, max, span) = bounds(slot);
+                    assert!(
+                        (0.14..=0.40).contains(&span[0])
+                            && (0.48..=0.82).contains(&span[2])
+                            && min[2] <= -0.46
+                            && max[2] <= 0.16,
+                        "family {} {:?} {slot:?} is not a bounded grounded leg: min={min:?} max={max:?}",
+                        family.label,
+                        lod.lod
+                    );
+                }
             }
         }
+    }
+
+    #[test]
+    fn production_creature_textures_have_readable_surface_detail_and_contrast() {
+        let catalog = crate::load_production_creature_part_catalog().unwrap();
+        let assets_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
+
+        for family in &catalog.families {
+            let texture = image::open(assets_root.join(&family.texture_asset))
+                .unwrap_or_else(|error| panic!("{} texture failed to load: {error}", family.label))
+                .to_rgba8();
+            assert!(
+                texture.width() >= 128 && texture.height() >= 128,
+                "{} texture is only {}x{}; palette strips are not production surface maps",
+                family.label,
+                texture.width(),
+                texture.height()
+            );
+            let colors = texture
+                .pixels()
+                .map(|pixel| [pixel[0], pixel[1], pixel[2]])
+                .collect::<std::collections::BTreeSet<_>>();
+            let luminance = texture
+                .pixels()
+                .map(|pixel| {
+                    (u16::from(pixel[0]) * 54
+                        + u16::from(pixel[1]) * 183
+                        + u16::from(pixel[2]) * 19)
+                        / 256
+                })
+                .collect::<Vec<_>>();
+            let range = luminance.iter().max().unwrap() - luminance.iter().min().unwrap();
+            assert!(
+                colors.len() >= 96 && range >= 64,
+                "{} texture lacks bold readable detail: colors={} luminance_range={range}",
+                family.label,
+                colors.len()
+            );
+            assert!(texture.pixels().all(|pixel| pixel[3] == 255));
+        }
+    }
+
+    #[test]
+    fn canonical_part_geometry_preserves_authored_proportions() {
+        let source = vec![[-2.0, -0.1, -4.0], [3.0, 0.2, 5.0], [0.0, 0.0, 0.0]];
+        let mut fitted = source.clone();
+        let scale = preserve_canonical_part_geometry(&mut fitted);
+        assert_eq!(scale, [1.0; 3]);
+        assert_eq!(
+            fitted, source,
+            "canonical generated parts must not be stretched per axis at runtime"
+        );
+    }
+
+    #[test]
+    fn part_mesh_bounds_use_the_same_canonical_to_bevy_axes_as_rendering() {
+        let bounds = PartMeshData {
+            positions: vec![[-0.4, -0.3, -0.7], [0.5, 0.2, 0.9]],
+            ..Default::default()
+        }
+        .bevy_bounds()
+        .expect("nonempty finite part has bounds");
+
+        assert_eq!(bounds.min, [-0.4, -0.7, -0.2]);
+        assert_eq!(bounds.max, [0.5, 0.9, 0.3]);
+        assert!(bounds.is_valid());
     }
 
     #[cfg(feature = "bevy-app")]
@@ -544,7 +652,7 @@ o part_tail_back
             normals: vec![[0.0, 0.0, 1.0]; 3],
             indices: indices.clone(),
         }
-        .into_mesh(CreaturePartSlot::Torso);
+        .into_mesh();
 
         assert_eq!(
             mesh.attribute(Mesh::ATTRIBUTE_UV_0),

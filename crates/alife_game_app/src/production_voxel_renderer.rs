@@ -27,11 +27,12 @@ use bevy::{
     math::primitives::InfinitePlane3d,
     mesh::Indices,
     prelude::{
-        default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Color,
-        Commands, Component, Cuboid, DetectChanges, GlobalTransform, Handle, KeyCode, Mesh, Mesh3d,
-        MeshMaterial3d, MessageWriter, MouseButton, Name, Node, ParamSet, PositionType, Projection,
-        Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
-        Transform, Update, Val, Vec3, Visibility, Window, With,
+        default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, Capsule3d, ChildOf,
+        Color, Commands, Component, Cuboid, DetectChanges, Entity, EulerRot, GlobalTransform,
+        Handle, KeyCode, Mesh, Mesh3d, MeshMaterial3d, Meshable, MessageWriter, MouseButton, Name,
+        Node, ParamSet, PositionType, Projection, Quat, Res, ResMut, Resource, Sphere,
+        StandardMaterial, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val, Vec3,
+        Visibility, Window, With,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -42,6 +43,13 @@ use bevy::{
 
 use crate::terrain_mesh::build_production_terrain_meshes;
 use crate::{
+    creature_face_style, creature_part_pose, creature_root_pose, creature_surface_detail_recipe,
+    grounded_root_height, load_production_creature_part_catalog, resolve_creature_assembly,
+    CreatureDetailMaterialRole, CreatureDetailMeshKind, CreaturePartAssetLibrary,
+    CreaturePartCatalog, CreaturePartLodId, CreaturePartMaterialKey, CreaturePartMeshKey,
+    CreaturePartSlot, CreatureVisualBounds, JoinCoverPrimitive, SocketFrame,
+};
+use crate::{
     creature_visual_snapshot_from_parts_with_appearance,
     production_terrain::{ProductionTerrainSample, ProductionTerrainSampleMap},
     production_voxel_save_with_population, CreatureAnimationState, CreatureExpressionState,
@@ -51,11 +59,6 @@ use crate::{
     ProductionFrontendProfileBudget, ProductionFrontendProfileId, ProductionSaveMetadata,
     ProductionVoxelLaunchSummary, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
     PRODUCTION_VOXEL_RENDERER_PROFILE,
-};
-use crate::{
-    load_production_creature_part_catalog, resolve_creature_assembly, CreaturePartAssetLibrary,
-    CreaturePartCatalog, CreaturePartLodId, CreaturePartMaterialKey, CreaturePartMeshKey,
-    CreaturePartSlot, JoinCoverPrimitive, SocketFrame,
 };
 use crate::{
     terrain_dressing::{
@@ -847,6 +850,9 @@ pub struct Fvr04ProductionCreatureVisualMarker {
     pub lod: Fvr04CreatureLod,
     pub base_translation: Vec3,
     pub local_offset: Vec3,
+    pub base_scale: Vec3,
+    pub local_bounds: CreatureVisualBounds,
+    pub surface_height: f32,
     pub phase: f32,
 }
 
@@ -861,10 +867,11 @@ pub struct ProductionCreaturePartMarker {
     pub stable_id: alife_core::WorldEntityId,
     pub family: alife_world::CreaturePartFamilyId,
     pub slot: CreaturePartSlot,
+    pub animation: CreatureAnimationState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-struct ProductionCreaturePartRestRotation(Quat);
+struct ProductionCreaturePartRestTransform(Transform);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
 pub struct ProductionCreatureJoinCoverMarker {
@@ -895,6 +902,7 @@ pub struct Fvr10CreatureSurfaceDetailMarker {
     pub stable_id: alife_core::WorldEntityId,
     pub species_archetype: u8,
     pub detail_role: &'static str,
+    pub anchor_slot: CreaturePartSlot,
     pub display_only: bool,
     pub no_renderer_authority_over_actions_or_cognition: bool,
     pub high_contrast_marking: bool,
@@ -1376,19 +1384,39 @@ pub fn spawn_fvr03_production_voxel_scene(
     };
     let creature_eye_sclera_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.145, 0.155, 0.024))
+        meshes.add(
+            Sphere::new(0.085)
+                .mesh()
+                .ico(2)
+                .expect("valid creature eye sclera"),
+        )
     };
     let creature_eye_iris_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.082, 0.095, 0.018))
+        meshes.add(
+            Sphere::new(0.085)
+                .mesh()
+                .ico(2)
+                .expect("valid creature iris"),
+        )
     };
     let creature_eye_pupil_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.038, 0.052, 0.014))
+        meshes.add(
+            Sphere::new(0.085)
+                .mesh()
+                .ico(1)
+                .expect("valid creature pupil"),
+        )
     };
     let creature_eye_highlight_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(0.022, 0.027, 0.012))
+        meshes.add(
+            Sphere::new(0.010)
+                .mesh()
+                .ico(1)
+                .expect("valid creature eye highlight"),
+        )
     };
     let creature_face_mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
@@ -1402,27 +1430,30 @@ pub fn spawn_fvr03_production_voxel_scene(
     ) = {
         let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
         let sclera = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.89, 0.82, 0.67),
-            perceptual_roughness: 0.72,
-            unlit: true,
+            base_color: Color::srgb(0.91, 0.86, 0.74),
+            perceptual_roughness: 0.52,
+            reflectance: 0.34,
+            unlit: false,
             ..default()
         });
         let pupil = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.105, 0.055, 0.035),
-            perceptual_roughness: 0.62,
-            unlit: true,
+            base_color: Color::srgb(0.08, 0.045, 0.03),
+            perceptual_roughness: 0.38,
+            reflectance: 0.42,
+            unlit: false,
             ..default()
         });
         let highlight = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.96, 0.92, 0.78),
-            perceptual_roughness: 0.42,
-            unlit: true,
+            base_color: Color::srgb(1.0, 0.98, 0.90),
+            perceptual_roughness: 0.24,
+            reflectance: 0.50,
+            unlit: false,
             ..default()
         });
         let face = materials.add(StandardMaterial {
             base_color: Color::srgb(0.70, 0.28, 0.25),
             perceptual_roughness: 0.68,
-            unlit: true,
+            unlit: false,
             ..default()
         });
         (sclera, pupil, highlight, face)
@@ -1494,6 +1525,7 @@ pub fn spawn_fvr03_production_voxel_scene(
     let creature_scene = spawn_fvr04_creatures(
         app,
         &runtime_state.creatures,
+        &tile_summaries_by_tile,
         &creature_settings,
         &creature_part_catalog,
         &mut creature_part_assets,
@@ -3028,6 +3060,7 @@ fn spawn_fvr03_chunk_boundary(
 fn spawn_fvr04_creatures(
     app: &mut App,
     creatures: &[Fvr04CreatureVisualRecord],
+    tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
     settings: &Fvr04ProductionCreatureRendererSettings,
     catalog: &CreaturePartCatalog,
     assets: &mut CreaturePartAssetLibrary,
@@ -3072,7 +3105,7 @@ fn spawn_fvr04_creatures(
             ),
         ])
     };
-    let detail_meshes = fvr10_creature_detail_meshes(app, settings.lod);
+    let detail_meshes = fvr10_creature_detail_meshes(app);
     let mut expression_buffer = Vec::new();
     let mut stable_lookup_by_raw_id = BTreeMap::new();
     let mut part_families = BTreeSet::new();
@@ -3096,13 +3129,45 @@ fn spawn_fvr04_creatures(
         mixed_assembly_count += usize::from(recipe_families.len() > 1);
         part_families.extend(recipe_families);
 
+        let mut local_bounds = None::<CreatureVisualBounds>;
+        for part in recipe.parts.values() {
+            let key = CreaturePartMeshKey {
+                family: part.family,
+                lod: part.lod,
+                slot: part.slot,
+            };
+            let part_bounds = assets
+                .bounds(key)
+                .expect("validated creature part mesh has finite bounds");
+            let part_transform = socket_transform_to_bevy(part.slot, part.socket, part.local_scale);
+            let transformed = transform_creature_visual_bounds(part_bounds, part_transform);
+            if let Some(bounds) = &mut local_bounds {
+                bounds.include(transformed);
+            } else {
+                local_bounds = Some(transformed);
+            }
+        }
+        let local_bounds = local_bounds.expect("resolved creature assembly has visible parts");
+        let surface_height = tile_summaries
+            .get(&creature.tile)
+            .map(|tile| tile.height_units)
+            .unwrap_or(0.44);
+
+        let base_scale = fvr04_creature_scale(visual, settings.lod);
+        let base_height = grounded_root_height(
+            surface_height,
+            0.04,
+            local_bounds,
+            base_scale.to_array(),
+            bevy::math::Mat3::IDENTITY.to_cols_array(),
+        );
         let base_translation = Vec3::new(
             creature.tile.x as f32 + 0.5,
-            fvr04_creature_base_height(settings.lod),
+            base_height,
             creature.tile.z as f32 + 0.5,
         );
         let mut transform = Transform::from_translation(base_translation);
-        transform.scale = fvr04_creature_scale(visual, settings.lod);
+        transform.scale = base_scale;
         let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
         let root = app
             .world_mut()
@@ -3126,6 +3191,9 @@ fn spawn_fvr04_creatures(
                     lod: settings.lod,
                     base_translation,
                     local_offset: Vec3::ZERO,
+                    base_scale,
+                    local_bounds,
+                    surface_height,
                     phase,
                 },
                 ProductionCreatureAssemblyRoot {
@@ -3154,6 +3222,7 @@ fn spawn_fvr04_creatures(
             .id();
 
         let mut part_materials = BTreeMap::new();
+        let mut part_entities = BTreeMap::new();
         for part in recipe.parts.values() {
             let mesh_key = CreaturePartMeshKey {
                 family: part.family,
@@ -3189,30 +3258,35 @@ fn spawn_fvr04_creatures(
             };
             part_materials.insert(part.slot, material.clone());
             let part_transform = socket_transform_to_bevy(part.slot, part.socket, part.local_scale);
-            let rest_rotation = part_transform.rotation;
-            app.world_mut().spawn((
-                Name::new(format!(
-                    "A-Life creature part {} {:?}",
-                    visual.stable_id.raw(),
-                    part.slot
-                )),
-                Mesh3d(mesh),
-                MeshMaterial3d(material),
-                part_transform,
-                ChildOf(root),
-                ProductionCreaturePartMarker {
-                    stable_id: visual.stable_id,
-                    family: part.family,
-                    slot: part.slot,
-                },
-                ProductionCreaturePartRestRotation(rest_rotation),
-            ));
+            let rest_transform = part_transform;
+            let part_entity = app
+                .world_mut()
+                .spawn((
+                    Name::new(format!(
+                        "A-Life creature part {} {:?}",
+                        visual.stable_id.raw(),
+                        part.slot
+                    )),
+                    Mesh3d(mesh),
+                    MeshMaterial3d(material),
+                    part_transform,
+                    ChildOf(root),
+                    ProductionCreaturePartMarker {
+                        stable_id: visual.stable_id,
+                        family: part.family,
+                        slot: part.slot,
+                        animation: visual.animation,
+                    },
+                    ProductionCreaturePartRestTransform(rest_transform),
+                ))
+                .id();
+            part_entities.insert(part.slot, part_entity);
             part_entity_count += 1;
         }
 
         for cover in &recipe.join_covers {
             let scale = 0.72 + cover.overlap_depth;
-            let transform = socket_transform_to_bevy(cover.slot, cover.socket, [scale; 3]);
+            let transform = Transform::from_scale(Vec3::splat(scale));
             let material = part_materials
                 .get(&cover.slot)
                 .or_else(|| part_materials.get(&CreaturePartSlot::Torso))
@@ -3227,7 +3301,7 @@ fn spawn_fvr04_creatures(
                 Mesh3d(cover_meshes[&cover.primitive].clone()),
                 MeshMaterial3d(material),
                 transform,
-                ChildOf(root),
+                ChildOf(part_entities[&cover.slot]),
                 ProductionCreatureJoinCoverMarker {
                     stable_id: visual.stable_id,
                     cover_kind: cover.primitive.label(),
@@ -3239,65 +3313,69 @@ fn spawn_fvr04_creatures(
 
         if !matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
             let detail_materials = fvr10_creature_detail_materials(app, visual);
-            let head_transform = socket_transform_to_bevy(
-                CreaturePartSlot::Head,
-                recipe.parts[&CreaturePartSlot::Head].socket,
-                [1.0; 3],
-            );
-            let face_origin =
-                head_transform.translation + head_transform.rotation * Vec3::new(0.0, 0.18, 0.27);
-            for (feature, offset, mesh, material) in [
+            let face_style = creature_face_style(visual.appearance);
+            let face_origin = Vec3::new(0.0, face_style.eye_height, face_style.eye_forward);
+            for (feature, offset, scale, mesh, material) in [
                 (
                     "left-eye-sclera",
-                    Vec3::new(-0.09, 0.05, 0.0),
+                    Vec3::new(-face_style.eye_spacing, 0.0, 0.0),
+                    Vec3::from_array(face_style.sclera_scale),
                     eye_sclera_mesh.clone(),
                     eye_sclera_material.clone(),
                 ),
                 (
                     "right-eye-sclera",
-                    Vec3::new(0.09, 0.05, 0.0),
+                    Vec3::new(face_style.eye_spacing, 0.0, 0.0),
+                    Vec3::from_array(face_style.sclera_scale),
                     eye_sclera_mesh.clone(),
                     eye_sclera_material.clone(),
                 ),
                 (
                     "left-eye-iris",
-                    Vec3::new(-0.09, 0.047, 0.021),
+                    Vec3::new(-face_style.eye_spacing, -0.002, 0.042),
+                    Vec3::from_array(face_style.iris_scale),
                     eye_iris_mesh.clone(),
                     detail_materials.accent.clone(),
                 ),
                 (
                     "right-eye-iris",
-                    Vec3::new(0.09, 0.047, 0.021),
+                    Vec3::new(face_style.eye_spacing, -0.002, 0.042),
+                    Vec3::from_array(face_style.iris_scale),
                     eye_iris_mesh.clone(),
                     detail_materials.accent.clone(),
                 ),
                 (
                     "left-eye-pupil",
-                    Vec3::new(-0.09, 0.045, 0.038),
+                    Vec3::new(-face_style.eye_spacing, -0.004, 0.064),
+                    Vec3::from_array(face_style.pupil_scale),
                     eye_pupil_mesh.clone(),
                     eye_pupil_material.clone(),
                 ),
                 (
                     "right-eye-pupil",
-                    Vec3::new(0.09, 0.045, 0.038),
+                    Vec3::new(face_style.eye_spacing, -0.004, 0.064),
+                    Vec3::from_array(face_style.pupil_scale),
                     eye_pupil_mesh.clone(),
                     eye_pupil_material.clone(),
                 ),
                 (
                     "left-eye-glint",
-                    Vec3::new(-0.102, 0.074, 0.051),
+                    Vec3::new(-face_style.eye_spacing - 0.014, 0.024, 0.078),
+                    Vec3::ONE,
                     eye_highlight_mesh.clone(),
                     eye_highlight_material.clone(),
                 ),
                 (
                     "right-eye-glint",
-                    Vec3::new(0.078, 0.074, 0.051),
+                    Vec3::new(face_style.eye_spacing - 0.014, 0.024, 0.078),
+                    Vec3::ONE,
                     eye_highlight_mesh.clone(),
                     eye_highlight_material.clone(),
                 ),
                 (
                     "soft-mouth",
-                    Vec3::new(0.0, -0.10, 0.025),
+                    Vec3::new(0.0, -0.16, 0.032),
+                    Vec3::ONE,
                     face_mesh.clone(),
                     face_material.clone(),
                 ),
@@ -3310,9 +3388,8 @@ fn spawn_fvr04_creatures(
                     )),
                     Mesh3d(mesh),
                     MeshMaterial3d(material),
-                    Transform::from_translation(face_origin + head_transform.rotation * offset)
-                        .with_rotation(head_transform.rotation),
-                    ChildOf(root),
+                    Transform::from_translation(face_origin + offset).with_scale(scale),
+                    ChildOf(part_entities[&CreaturePartSlot::Head]),
                     Fvr09CreatureFaceFeatureMarker {
                         stable_id: visual.stable_id,
                         feature,
@@ -3321,10 +3398,9 @@ fn spawn_fvr04_creatures(
             }
             fvr10_spawn_creature_surface_details(
                 app,
+                &part_entities,
                 visual,
-                index,
                 settings.lod,
-                base_translation,
                 &detail_meshes,
                 &detail_materials,
             );
@@ -3415,26 +3491,31 @@ fn socket_scale_to_bevy([x, depth, height]: [f32; 3]) -> Vec3 {
     Vec3::new(x, height, depth)
 }
 
+fn transform_creature_visual_bounds(
+    bounds: CreatureVisualBounds,
+    transform: Transform,
+) -> CreatureVisualBounds {
+    let affine = transform.compute_affine();
+    let mut min = [f32::INFINITY; 3];
+    let mut max = [f32::NEG_INFINITY; 3];
+    for corner in bounds.corners() {
+        let point = affine.transform_point3(Vec3::from_array(corner)).to_array();
+        for axis in 0..3 {
+            min[axis] = min[axis].min(point[axis]);
+            max[axis] = max[axis].max(point[axis]);
+        }
+    }
+    CreatureVisualBounds::new(min, max)
+}
+
 fn socket_transform_to_bevy(
-    slot: CreaturePartSlot,
+    _slot: CreaturePartSlot,
     socket: SocketFrame,
     local_scale: [f32; 3],
 ) -> Transform {
-    Transform::from_translation(biped_part_translation(slot, socket.translation))
+    Transform::from_translation(socket_translation_to_bevy(socket.translation))
         .with_rotation(socket_rotation_to_bevy(socket.rotation_xyzw))
         .with_scale(socket_scale_to_bevy(socket.scale) * socket_scale_to_bevy(local_scale))
-}
-
-fn biped_part_translation(slot: CreaturePartSlot, translation: [f32; 3]) -> Vec3 {
-    let mut translation = socket_translation_to_bevy(translation);
-    translation.x += match slot {
-        CreaturePartSlot::LeftArm => -0.26,
-        CreaturePartSlot::RightArm => 0.26,
-        CreaturePartSlot::LeftLeg => -0.09,
-        CreaturePartSlot::RightLeg => 0.09,
-        _ => 0.0,
-    };
-    translation
 }
 
 #[derive(Clone)]
@@ -3442,10 +3523,30 @@ struct Fvr10CreatureDetailMeshes {
     cheek_spot: Handle<Mesh>,
     forehead_band: Handle<Mesh>,
     muzzle_patch: Handle<Mesh>,
-    antenna_tip: Handle<Mesh>,
+    ear: Handle<Mesh>,
     side_fin: Handle<Mesh>,
     brow_horn: Handle<Mesh>,
     limb_band: Handle<Mesh>,
+    hand: Handle<Mesh>,
+    foot: Handle<Mesh>,
+    tail_accent: Handle<Mesh>,
+}
+
+impl Fvr10CreatureDetailMeshes {
+    fn get(&self, kind: CreatureDetailMeshKind) -> Handle<Mesh> {
+        match kind {
+            CreatureDetailMeshKind::CheekPatch => self.cheek_spot.clone(),
+            CreatureDetailMeshKind::BrowBand => self.forehead_band.clone(),
+            CreatureDetailMeshKind::Muzzle => self.muzzle_patch.clone(),
+            CreatureDetailMeshKind::Ear => self.ear.clone(),
+            CreatureDetailMeshKind::Fin => self.side_fin.clone(),
+            CreatureDetailMeshKind::Tuft => self.brow_horn.clone(),
+            CreatureDetailMeshKind::LimbBand => self.limb_band.clone(),
+            CreatureDetailMeshKind::Hand => self.hand.clone(),
+            CreatureDetailMeshKind::Foot => self.foot.clone(),
+            CreatureDetailMeshKind::TailAccent => self.tail_accent.clone(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -3456,21 +3557,40 @@ struct Fvr10CreatureDetailMaterials {
     horn: Handle<StandardMaterial>,
 }
 
-fn fvr10_creature_detail_meshes(app: &mut App, lod: Fvr04CreatureLod) -> Fvr10CreatureDetailMeshes {
-    let scale = match lod {
-        Fvr04CreatureLod::FullVoxel => 1.0,
-        Fvr04CreatureLod::CompactVoxel => 0.92,
-        Fvr04CreatureLod::ImpostorVoxel => 0.72,
-    };
+impl Fvr10CreatureDetailMaterials {
+    fn get(&self, role: CreatureDetailMaterialRole) -> Handle<StandardMaterial> {
+        match role {
+            CreatureDetailMaterialRole::Belly => self.belly.clone(),
+            CreatureDetailMaterialRole::Accent => self.accent.clone(),
+            CreatureDetailMaterialRole::Dark => self.dark.clone(),
+            CreatureDetailMaterialRole::Keratin => self.horn.clone(),
+        }
+    }
+}
+
+fn fvr10_creature_detail_meshes(app: &mut App) -> Fvr10CreatureDetailMeshes {
     let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
     Fvr10CreatureDetailMeshes {
-        cheek_spot: meshes.add(Cuboid::new(0.105 * scale, 0.085 * scale, 0.060 * scale)),
-        forehead_band: meshes.add(Cuboid::new(0.34 * scale, 0.075 * scale, 0.062 * scale)),
-        muzzle_patch: meshes.add(Cuboid::new(0.255 * scale, 0.135 * scale, 0.066 * scale)),
-        antenna_tip: meshes.add(Cuboid::new(0.095 * scale, 0.095 * scale, 0.095 * scale)),
-        side_fin: meshes.add(fvr10_side_fin_mesh(scale)),
-        brow_horn: meshes.add(fvr10_brow_horn_mesh(scale)),
-        limb_band: meshes.add(Cuboid::new(0.20 * scale, 0.055 * scale, 0.065 * scale)),
+        cheek_spot: meshes.add(
+            Sphere::new(0.075)
+                .mesh()
+                .ico(1)
+                .expect("valid cheek patch sphere"),
+        ),
+        forehead_band: meshes.add(Cuboid::new(0.30, 0.075, 0.065)),
+        muzzle_patch: meshes.add(
+            Sphere::new(0.13)
+                .mesh()
+                .ico(2)
+                .expect("valid muzzle sphere"),
+        ),
+        ear: meshes.add(Sphere::new(0.105).mesh().ico(1).expect("valid ear sphere")),
+        side_fin: meshes.add(fvr10_side_fin_mesh(1.0)),
+        brow_horn: meshes.add(fvr10_brow_horn_mesh(1.0)),
+        limb_band: meshes.add(Cuboid::new(0.19, 0.060, 0.070)),
+        hand: meshes.add(Sphere::new(0.085).mesh().ico(1).expect("valid hand sphere")),
+        foot: meshes.add(Sphere::new(0.085).mesh().ico(1).expect("valid foot sphere")),
+        tail_accent: meshes.add(Capsule3d::new(0.065, 0.25)),
     }
 }
 
@@ -3568,235 +3688,49 @@ fn fvr10_creature_color_set(appearance: CreatureAppearanceGenome) -> Fvr10Creatu
 fn fvr10_creature_detail_material(rgba: [f32; 4]) -> StandardMaterial {
     StandardMaterial {
         base_color: Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]),
-        perceptual_roughness: 0.74,
-        unlit: true,
+        perceptual_roughness: 0.68,
+        reflectance: 0.28,
+        unlit: false,
         ..default()
     }
 }
 
 fn fvr10_spawn_creature_surface_details(
     app: &mut App,
+    part_entities: &BTreeMap<CreaturePartSlot, Entity>,
     visual: &CreatureVisualSnapshot,
-    index: usize,
     lod: Fvr04CreatureLod,
-    base_translation: Vec3,
     meshes: &Fvr10CreatureDetailMeshes,
     materials: &Fvr10CreatureDetailMaterials,
 ) {
-    let scale = match lod {
+    let lod_scale = match lod {
         Fvr04CreatureLod::FullVoxel => 1.0,
         Fvr04CreatureLod::CompactVoxel => 0.92,
         Fvr04CreatureLod::ImpostorVoxel => 0.72,
     };
-    let morph = usize::from(visual.appearance.accessory_trait % 3);
-    let mut spawns = vec![
-        (
-            "left-cheek-fur-spot",
-            Vec3::new(-0.275, 0.53, 0.585) * scale,
-            meshes.cheek_spot.clone(),
-            materials.accent.clone(),
-        ),
-        (
-            "right-cheek-fur-spot",
-            Vec3::new(0.275, 0.53, 0.585) * scale,
-            meshes.cheek_spot.clone(),
-            materials.accent.clone(),
-        ),
-        (
-            "brow-fur-mask",
-            Vec3::new(0.0, 0.775, 0.592) * scale,
-            meshes.forehead_band.clone(),
-            materials.accent.clone(),
-        ),
-        (
-            "left-toe-pad",
-            Vec3::new(-0.22, -0.89, 0.455) * scale,
-            meshes.limb_band.clone(),
-            materials.dark.clone(),
-        ),
-        (
-            "right-toe-pad",
-            Vec3::new(0.22, -0.89, 0.455) * scale,
-            meshes.limb_band.clone(),
-            materials.dark.clone(),
-        ),
-    ];
-    match morph {
-        0 => {
-            spawns.extend([
-                (
-                    "left-whisker-bar",
-                    Vec3::new(-0.35, 0.535, 0.625) * scale,
-                    meshes.limb_band.clone(),
-                    materials.accent.clone(),
-                ),
-                (
-                    "right-whisker-bar",
-                    Vec3::new(0.35, 0.535, 0.625) * scale,
-                    meshes.limb_band.clone(),
-                    materials.accent.clone(),
-                ),
-                (
-                    "left-ear-bead",
-                    Vec3::new(-0.28, 0.82, 0.61) * scale,
-                    meshes.antenna_tip.clone(),
-                    materials.horn.clone(),
-                ),
-                (
-                    "right-ear-bead",
-                    Vec3::new(0.28, 0.82, 0.61) * scale,
-                    meshes.antenna_tip.clone(),
-                    materials.horn.clone(),
-                ),
-            ]);
-        }
-        1 => {
-            spawns.extend([
-                (
-                    "left-ear-fluff",
-                    Vec3::new(-0.55, 0.72, 0.18) * scale,
-                    meshes.side_fin.clone(),
-                    materials.accent.clone(),
-                ),
-                (
-                    "right-ear-fluff",
-                    Vec3::new(0.55, 0.72, 0.18) * scale,
-                    meshes.side_fin.clone(),
-                    materials.accent.clone(),
-                ),
-                (
-                    "left-wrist-wrap",
-                    Vec3::new(-0.47, 0.00, 0.22) * scale,
-                    meshes.limb_band.clone(),
-                    materials.dark.clone(),
-                ),
-                (
-                    "right-wrist-wrap",
-                    Vec3::new(0.47, 0.00, 0.22) * scale,
-                    meshes.limb_band.clone(),
-                    materials.dark.clone(),
-                ),
-            ]);
-        }
-        _ => {
-            spawns.extend([
-                (
-                    "left-forehead-fur-tuft",
-                    Vec3::new(-0.20, 0.78, 0.61) * scale,
-                    meshes.brow_horn.clone(),
-                    materials.horn.clone(),
-                ),
-                (
-                    "right-forehead-fur-tuft",
-                    Vec3::new(0.20, 0.78, 0.61) * scale,
-                    meshes.brow_horn.clone(),
-                    materials.horn.clone(),
-                ),
-                (
-                    "crest-fur-tuft",
-                    Vec3::new(0.0, 1.08, 0.18) * scale,
-                    meshes.brow_horn.clone(),
-                    materials.accent.clone(),
-                ),
-                (
-                    "chin-fur-dot",
-                    Vec3::new(0.0, 0.35, 0.59) * scale,
-                    meshes.cheek_spot.clone(),
-                    materials.dark.clone(),
-                ),
-            ]);
-        }
-    }
-
-    match visual.appearance.species_archetype % 8 {
-        0 => spawns.push((
-            "roundling-cave-paint",
-            Vec3::new(0.0, 0.62, 0.604) * scale,
-            meshes.cheek_spot.clone(),
-            materials.dark.clone(),
-        )),
-        1 => spawns.push((
-            "longtail-back-tuft",
-            Vec3::new(0.0, -0.16, -0.42) * scale,
-            meshes.brow_horn.clone(),
-            materials.accent.clone(),
-        )),
-        2 => spawns.extend([
-            (
-                "left-digger-paw",
-                Vec3::new(-0.50, -0.10, 0.30) * scale,
-                meshes.cheek_spot.clone(),
-                materials.dark.clone(),
-            ),
-            (
-                "right-digger-paw",
-                Vec3::new(0.50, -0.10, 0.30) * scale,
-                meshes.cheek_spot.clone(),
-                materials.dark.clone(),
-            ),
-        ]),
-        3 => spawns.push((
-            "nightling-ear-tip",
-            Vec3::new(0.0, 1.26, 0.20) * scale,
-            meshes.antenna_tip.clone(),
-            materials.horn.clone(),
-        )),
-        4 => spawns.push((
-            "river-muzzle-patch",
-            Vec3::new(0.0, 0.48, 0.61) * scale,
-            meshes.muzzle_patch.clone(),
-            materials.belly.clone(),
-        )),
-        5 => spawns.push((
-            "leaf-wrap-sash",
-            Vec3::new(0.0, -0.12, 0.58) * scale,
-            meshes.forehead_band.clone(),
-            materials.accent.clone(),
-        )),
-        6 => spawns.push((
-            "sleepy-longarm-band",
-            Vec3::new(0.0, -0.26, 0.57) * scale,
-            meshes.limb_band.clone(),
-            materials.dark.clone(),
-        )),
-        _ => spawns.push((
-            "mask-face-band",
-            Vec3::new(0.0, 0.62, 0.60) * scale,
-            meshes.forehead_band.clone(),
-            materials.dark.clone(),
-        )),
-    }
-
-    for (role, local_offset, _mesh, _material) in spawns {
+    for detail in creature_surface_detail_recipe(visual.appearance, lod_scale) {
+        let local_offset = Vec3::from_array(detail.local_offset);
         app.world_mut().spawn((
             Name::new(format!(
                 "A-Life FVR10 caveman furry creature detail {} stable {}",
-                role,
+                detail.role,
                 visual.stable_id.raw()
             )),
-            Transform::from_translation(base_translation + local_offset),
+            Mesh3d(meshes.get(detail.mesh)),
+            MeshMaterial3d(materials.get(detail.material)),
+            Transform::from_translation(local_offset)
+                .with_scale(Vec3::from_array(detail.local_scale)),
+            Visibility::Inherited,
+            ChildOf(part_entities[&detail.anchor_slot]),
             Fvr10CreatureSurfaceDetailMarker {
                 stable_id: visual.stable_id,
                 species_archetype: visual.appearance.species_archetype,
-                detail_role: role,
+                detail_role: detail.role,
+                anchor_slot: detail.anchor_slot,
                 display_only: true,
                 no_renderer_authority_over_actions_or_cognition: true,
                 high_contrast_marking: true,
                 heritable: true,
-            },
-            Fvr04ProductionCreatureVisualMarker {
-                stable_id: visual.stable_id,
-                organism_id: visual.organism_id,
-                tile: VoxelTileCoord::new(
-                    base_translation.x.floor() as i32,
-                    base_translation.z.floor() as i32,
-                ),
-                expression: visual.expression,
-                animation: visual.animation,
-                lod,
-                base_translation,
-                local_offset,
-                phase: (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11,
             },
         ));
     }
@@ -3886,19 +3820,11 @@ fn fvr04_creature_material(visual: &CreatureVisualSnapshot) -> StandardMaterial 
     }
 }
 
-fn fvr04_creature_base_height(lod: Fvr04CreatureLod) -> f32 {
-    match lod {
-        Fvr04CreatureLod::FullVoxel => 0.92,
-        Fvr04CreatureLod::CompactVoxel => 0.84,
-        Fvr04CreatureLod::ImpostorVoxel => 0.70,
-    }
-}
-
 fn fvr04_creature_scale(visual: &CreatureVisualSnapshot, lod: Fvr04CreatureLod) -> Vec3 {
     let fatigue_squash = 1.0 - visual.cues.fatigue.value * 0.18;
     let fear_narrow = 1.0 - visual.cues.fear.value * 0.10;
     let energy = 0.92 + visual.cues.energy.value * 0.14;
-    let mut scale = match lod {
+    match lod {
         Fvr04CreatureLod::FullVoxel => {
             Vec3::new(1.18 * fear_narrow, 1.18 * fatigue_squash * energy, 1.18)
         }
@@ -3908,16 +3834,7 @@ fn fvr04_creature_scale(visual: &CreatureVisualSnapshot, lod: Fvr04CreatureLod) 
         Fvr04CreatureLod::ImpostorVoxel => {
             Vec3::new(0.86 * fear_narrow, 0.86 * fatigue_squash, 0.72)
         }
-    };
-    if matches!(
-        visual.animation,
-        CreatureAnimationState::Sleeping | CreatureAnimationState::Resting
-    ) {
-        scale.y *= 0.52;
-        scale.x *= 1.24;
-        scale.z *= 1.10;
     }
-    scale
 }
 
 fn animate_fvr04_creatures(
@@ -3936,34 +3853,29 @@ fn animate_fvr04_creatures(
     for (mut transform, marker) in &mut creatures {
         let wave = (seconds * fvr04_animation_speed(marker.animation) + marker.phase).sin();
         let lateral = (seconds * 7.0 + marker.phase * 1.7).sin();
-        transform.translation = marker.base_translation + marker.local_offset;
-        match marker.animation {
-            CreatureAnimationState::Sleeping | CreatureAnimationState::Resting => {
-                transform.translation.y -= 0.22;
-                transform.rotation = Quat::from_rotation_y(0.10 * wave);
-            }
-            CreatureAnimationState::Afraid | CreatureAnimationState::Hurt => {
-                transform.translation.x += lateral * 0.035;
-                transform.translation.z += wave * 0.025;
-                transform.rotation = Quat::from_rotation_y(lateral * 0.12);
-            }
-            CreatureAnimationState::Curious | CreatureAnimationState::Inspecting => {
-                transform.translation.y += wave.abs() * 0.08;
-                transform.rotation = Quat::from_rotation_y(wave * 0.24);
-            }
-            CreatureAnimationState::Moving => {
-                transform.translation.y += wave.abs() * 0.14;
-                transform.rotation = Quat::from_rotation_y(wave * 0.16);
-            }
-            CreatureAnimationState::Interacting | CreatureAnimationState::Signaling => {
-                transform.translation.y += wave.abs() * 0.10;
-                transform.rotation = Quat::from_rotation_y(wave * 0.32);
-            }
-            CreatureAnimationState::Idle => {
-                transform.translation.y += wave * 0.035;
-                transform.rotation = Quat::from_rotation_y(wave * 0.05);
-            }
-        }
+        let pose = creature_root_pose(marker.animation, wave, lateral);
+        let rotation = Quat::from_euler(
+            EulerRot::XYZ,
+            pose.rotation_xyz[0],
+            pose.rotation_xyz[1],
+            pose.rotation_xyz[2],
+        );
+        let pose_translation = Vec3::from_array(pose.translation);
+        let grounded_height = grounded_root_height(
+            marker.surface_height,
+            0.04,
+            marker.local_bounds,
+            marker.base_scale.to_array(),
+            bevy::math::Mat3::from_quat(rotation).to_cols_array(),
+        );
+        let requested_height = marker.base_translation.y + pose_translation.y;
+        transform.translation = Vec3::new(
+            marker.base_translation.x + marker.local_offset.x + pose_translation.x,
+            requested_height.max(grounded_height) + marker.local_offset.y,
+            marker.base_translation.z + marker.local_offset.z + pose_translation.z,
+        );
+        transform.rotation = rotation;
+        transform.scale = marker.base_scale * Vec3::from_array(pose.scale);
     }
 }
 
@@ -3973,7 +3885,7 @@ fn animate_fvr04_creature_parts(
     mut parts: bevy::prelude::Query<(
         &mut Transform,
         &ProductionCreaturePartMarker,
-        &ProductionCreaturePartRestRotation,
+        &ProductionCreaturePartRestTransform,
     )>,
 ) {
     if ux.as_ref().is_some_and(|ux| ux.settings.paused) {
@@ -3984,17 +3896,19 @@ fn animate_fvr04_creature_parts(
         .map(|ux| ux.settings.simulation_speed)
         .unwrap_or(1.0);
     let seconds = time.elapsed_secs() * speed;
-    for (mut transform, marker, rest_rotation) in &mut parts {
+    for (mut transform, marker, rest_transform) in &mut parts {
         let phase = (marker.stable_id.raw() % 31) as f32 * 0.19;
         let wave = (seconds * 3.8 + phase).sin();
-        let animation = match marker.slot {
-            CreaturePartSlot::LeftArm => Quat::from_rotation_x(wave * 0.16),
-            CreaturePartSlot::RightArm => Quat::from_rotation_x(-wave * 0.16),
-            CreaturePartSlot::LeftLeg => Quat::from_rotation_x(-wave * 0.10),
-            CreaturePartSlot::RightLeg => Quat::from_rotation_x(wave * 0.10),
-            _ => Quat::IDENTITY,
-        };
-        transform.rotation = rest_rotation.0 * animation;
+        let pose = creature_part_pose(marker.animation, marker.slot, wave);
+        transform.translation = rest_transform.0.translation + Vec3::from_array(pose.translation);
+        transform.rotation = rest_transform.0.rotation
+            * Quat::from_euler(
+                EulerRot::XYZ,
+                pose.rotation_xyz[0],
+                pose.rotation_xyz[1],
+                pose.rotation_xyz[2],
+            );
+        transform.scale = rest_transform.0.scale * Vec3::from_array(pose.scale);
     }
 }
 
@@ -5383,7 +5297,7 @@ mod tests {
             [0.5, 0.25, 0.125],
         );
 
-        assert!((transform.translation - Vec3::new(-0.34, 0.3, -0.2)).length() < 1.0e-5);
+        assert!((transform.translation - Vec3::new(-0.08, 0.3, -0.2)).length() < 1.0e-5);
         assert!((transform.scale - Vec3::new(1.0, 0.5, 0.75)).length() < 1.0e-5);
         assert!((transform.rotation * Vec3::X - Vec3::NEG_Z).length() < 1.0e-5);
     }

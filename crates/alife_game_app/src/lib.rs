@@ -84,6 +84,14 @@ pub use creature_part_assets::*;
 mod creature_assembly;
 pub use creature_assembly::*;
 
+mod creature_surface_details;
+pub use creature_surface_details::*;
+mod creature_visual_geometry;
+pub use creature_visual_geometry::*;
+
+mod creature_part_pose;
+pub use creature_part_pose::*;
+
 mod live_brain_bridge;
 pub(crate) use live_brain_bridge::proposal;
 pub use live_brain_bridge::*;

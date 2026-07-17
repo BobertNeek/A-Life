@@ -646,6 +646,27 @@ mod tests {
     }
 
     #[test]
+    fn production_asset_manifest_reports_every_rejected_entry() {
+        let root = ca12_workspace_root();
+        let manifest = fixture_manifest();
+        let mut asset_ids = BTreeSet::new();
+        let rejected = manifest
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                validate_production_asset_entry(&root, entry, &mut asset_ids)
+                    .err()
+                    .map(|error| format!("{}: {error}", entry.asset_id))
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            rejected.is_empty(),
+            "rejected production assets:\n{}",
+            rejected.join("\n")
+        );
+    }
+
+    #[test]
     fn fvr10_descriptor_json_entries_are_not_mislabeled_as_final_visible_art() {
         let manifest = fixture_manifest();
         let descriptor_asset_ids = [
