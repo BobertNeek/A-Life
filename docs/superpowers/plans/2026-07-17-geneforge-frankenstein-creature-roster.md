@@ -102,7 +102,6 @@ neural runtime unchanged.
 
 - Modify: `crates/alife_game_app/src/creature_part_catalog.rs`
 - Modify: `crates/alife_game_app/src/lib.rs`
-- Replace: `crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json`
 - Create: `crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json`
 
 1. Add failing unit tests for catalog schema v2:
@@ -121,18 +120,22 @@ neural runtime unchanged.
    cargo test -p alife_game_app creature_part_catalog --lib -j 1 --offline -- --nocapture
    ```
 
-3. Add app-local serializable types for:
+3. Add app-local serializable types for catalog v2 alongside the current v1
+   production loader. The v1 catalog remains the live production catalog until
+   Task 8; v2 tests load `geneforge_recipes.json` directly.
+4. Add types for:
    - `CreaturePartAssetId`;
    - donor source and exact object selectors;
    - generated mesh group, LOD, bounds, attachment frame, semantic mask, and
      face/detail landmarks;
    - per-family slot recipes and bounded authored fits;
    - source digests, importer version, recipe digest, and output digest.
-4. Author the exact twelve recipes from the design. Include explicit head
+5. Author the exact twelve recipes from the design. Include explicit head
    expression, upper/lower limbs, feet, tail root/tip, eyes, lids, teeth,
    tongue, hair, ears, whiskers, and extras where present.
-5. Keep catalog validation pure Rust and independent of Blender availability.
-6. Re-run to GREEN and commit catalog contracts plus recipes.
+6. Keep catalog validation pure Rust and independent of Blender availability.
+7. Re-run to GREEN and commit catalog contracts plus recipes. Prove the current
+   v1 production catalog and manifest still validate unchanged.
 
 ## Task 4: Build The Deterministic GeneForge Blender Importer
 

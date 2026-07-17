@@ -3,13 +3,16 @@ use std::{
     path::{Component, Path},
 };
 
-use alife_world::CreaturePartFamilyId;
+use alife_world::{CreaturePartFamilyId, CreaturePartSlotKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub const CREATURE_PART_CATALOG_SCHEMA: &str = "alife.creature_part_catalog.v1";
+pub const GENEFORGE_CREATURE_PART_CATALOG_SCHEMA: &str = "alife.geneforge_creature_part_catalog.v2";
 const PRODUCTION_CATALOG_JSON: &str =
     include_str!("../assets/production_voxel_v1/creature_parts/catalog.json");
+const GENEFORGE_RECIPE_CATALOG_JSON: &str =
+    include_str!("../assets/production_voxel_v1/creature_parts/geneforge_recipes.json");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -361,6 +364,323 @@ impl CreaturePartCatalog {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CreaturePartAssetId(pub String);
+
+impl CreaturePartAssetId {
+    fn validate(&self) -> bool {
+        !self.0.is_empty()
+            && self.0.len() <= 64
+            && self
+                .0
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeDonorId {
+    Norn,
+    Ettin,
+    Grendel,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneForgeSourceDefinition {
+    pub donor: GeneForgeDonorId,
+    pub blend_file: String,
+    pub sha256: String,
+    pub texture_root: String,
+    pub source_url: String,
+    pub author: String,
+    pub license: String,
+    pub license_ref: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneForgePartSelector {
+    pub marker_ids: Vec<u8>,
+    #[serde(default)]
+    pub include_objects: Vec<String>,
+    #[serde(default)]
+    pub object_visscripts: BTreeMap<String, String>,
+    #[serde(default)]
+    pub selector_tags: BTreeMap<String, String>,
+    pub mirror_policy: String,
+    pub uv_map: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeGeneratedPartLod {
+    pub lod: CreaturePartLodId,
+    pub generated_obj: String,
+    pub socket_manifest: String,
+    pub semantic_mask: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgePartAssetDefinition {
+    pub id: CreaturePartAssetId,
+    pub donor: GeneForgeDonorId,
+    pub logical_slot: CreaturePartSlotKey,
+    pub selector: GeneForgePartSelector,
+    pub groups: BTreeMap<CreaturePartSlot, String>,
+    pub attachment_frames: BTreeMap<CreaturePartSlot, SocketFrame>,
+    pub lods: Vec<GeneForgeGeneratedPartLod>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeFamilyPartRecipe {
+    pub asset_id: CreaturePartAssetId,
+    pub fit: SocketFrame,
+    pub seam_offset: [f32; 3],
+    pub variant_label: String,
+    pub join_cover_kind: String,
+}
+
+impl GeneForgeFamilyPartRecipe {
+    pub fn has_authored_tweak(&self) -> bool {
+        self.fit != SocketFrame::IDENTITY
+            || self
+                .seam_offset
+                .into_iter()
+                .any(|value| value.abs() > 1.0e-6)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeCreatureFamilyDefinition {
+    pub id: CreaturePartFamilyId,
+    pub label: String,
+    pub parts: BTreeMap<CreaturePartSlotKey, GeneForgeFamilyPartRecipe>,
+    pub compatibility_tags: BTreeSet<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeCreaturePartCatalog {
+    pub schema: String,
+    pub schema_version: u16,
+    pub blender_version: String,
+    pub sources: Vec<GeneForgeSourceDefinition>,
+    pub part_assets: Vec<GeneForgePartAssetDefinition>,
+    pub families: Vec<GeneForgeCreatureFamilyDefinition>,
+}
+
+impl GeneForgeCreaturePartCatalog {
+    pub fn from_json_str(text: &str) -> Result<Self, GeneForgeCatalogError> {
+        let catalog: Self = serde_json::from_str(text)?;
+        catalog.validate()?;
+        Ok(catalog)
+    }
+
+    pub fn asset(&self, id: &CreaturePartAssetId) -> Option<&GeneForgePartAssetDefinition> {
+        self.part_assets.iter().find(|asset| asset.id == *id)
+    }
+
+    pub fn validate(&self) -> Result<(), GeneForgeCatalogError> {
+        if self.schema != GENEFORGE_CREATURE_PART_CATALOG_SCHEMA
+            || self.schema_version != 2
+            || self.blender_version != "5.1.0"
+        {
+            return Err(GeneForgeCatalogError::Schema);
+        }
+        if self.sources.is_empty() || self.part_assets.is_empty() || self.families.is_empty() {
+            return Err(GeneForgeCatalogError::Empty);
+        }
+
+        let mut source_donors = BTreeSet::new();
+        for source in &self.sources {
+            if !source_donors.insert(source.donor)
+                || !valid_sha256(&source.sha256)
+                || !valid_relative_path(&source.blend_file)
+                || !valid_relative_path(&source.texture_root)
+                || source.source_url.trim().is_empty()
+                || source.author.trim().is_empty()
+                || source.license.trim().is_empty()
+                || source.license.eq_ignore_ascii_case("unknown")
+                || !valid_production_path(&source.license_ref)
+            {
+                return Err(GeneForgeCatalogError::InvalidSource(
+                    source.blend_file.clone(),
+                ));
+            }
+        }
+        if source_donors
+            != BTreeSet::from([
+                GeneForgeDonorId::Norn,
+                GeneForgeDonorId::Ettin,
+                GeneForgeDonorId::Grendel,
+            ])
+        {
+            return Err(GeneForgeCatalogError::InvalidSource(
+                "donor set".to_string(),
+            ));
+        }
+
+        let mut asset_ids = BTreeSet::new();
+        for asset in &self.part_assets {
+            if !asset_ids.insert(asset.id.clone())
+                || !asset.id.validate()
+                || !source_donors.contains(&asset.donor)
+                || asset.selector.marker_ids.is_empty()
+                || asset.selector.include_objects.is_empty()
+                || (asset.selector.object_visscripts.is_empty()
+                    && !asset.selector.selector_tags.contains_key("pitch_id"))
+                || !asset
+                    .selector
+                    .marker_ids
+                    .iter()
+                    .all(|id| (1..=14).contains(id))
+                || asset.selector.mirror_policy.trim().is_empty()
+                || asset.selector.uv_map.trim().is_empty()
+                || (asset.logical_slot == CreaturePartSlotKey::Tail
+                    && asset.donor == GeneForgeDonorId::Ettin)
+                || asset.groups.keys().copied().collect::<BTreeSet<_>>()
+                    != required_runtime_slots(asset.logical_slot)
+                || asset
+                    .attachment_frames
+                    .keys()
+                    .copied()
+                    .collect::<BTreeSet<_>>()
+                    != required_runtime_slots(asset.logical_slot)
+            {
+                return Err(GeneForgeCatalogError::InvalidAsset(asset.id.0.clone()));
+            }
+            if asset
+                .attachment_frames
+                .values()
+                .any(|frame| frame.validate().is_err())
+            {
+                return Err(GeneForgeCatalogError::InvalidAsset(asset.id.0.clone()));
+            }
+            let lods = asset
+                .lods
+                .iter()
+                .map(|lod| lod.lod)
+                .collect::<BTreeSet<_>>();
+            if lods
+                != BTreeSet::from([
+                    CreaturePartLodId::Full,
+                    CreaturePartLodId::Compact,
+                    CreaturePartLodId::Impostor,
+                ])
+                || asset.lods.len() != 3
+                || asset.lods.iter().any(|lod| {
+                    !valid_generated_path(&lod.generated_obj)
+                        || !valid_generated_path(&lod.socket_manifest)
+                        || !valid_production_path(&lod.semantic_mask)
+                })
+            {
+                return Err(GeneForgeCatalogError::InvalidAsset(asset.id.0.clone()));
+            }
+        }
+
+        let expected_slots = BTreeSet::from([
+            CreaturePartSlotKey::Head,
+            CreaturePartSlotKey::Torso,
+            CreaturePartSlotKey::Arms,
+            CreaturePartSlotKey::Legs,
+            CreaturePartSlotKey::Tail,
+        ]);
+        let mut labels = BTreeSet::new();
+        for (index, family) in self.families.iter().enumerate() {
+            if family.id.0 != index as u16
+                || family.label.trim().is_empty()
+                || !labels.insert(family.label.as_str())
+                || family.parts.keys().copied().collect::<BTreeSet<_>>() != expected_slots
+                || family.compatibility_tags.len() < 2
+            {
+                return Err(GeneForgeCatalogError::InvalidFamily(family.id));
+            }
+            let mut donors = BTreeSet::new();
+            for (slot, recipe) in &family.parts {
+                let asset = self.asset(&recipe.asset_id).ok_or_else(|| {
+                    GeneForgeCatalogError::UnknownAsset(recipe.asset_id.0.clone())
+                })?;
+                if asset.logical_slot != *slot
+                    || recipe.fit.validate().is_err()
+                    || !recipe.seam_offset.into_iter().all(f32::is_finite)
+                    || recipe.variant_label.trim().is_empty()
+                    || recipe.join_cover_kind.trim().is_empty()
+                {
+                    return Err(GeneForgeCatalogError::InvalidFamily(family.id));
+                }
+                donors.insert(asset.donor);
+            }
+            if donors != source_donors
+                || !family
+                    .parts
+                    .values()
+                    .any(GeneForgeFamilyPartRecipe::has_authored_tweak)
+            {
+                return Err(GeneForgeCatalogError::InvalidFamily(family.id));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum GeneForgeCatalogError {
+    #[error("GeneForge recipe catalog JSON is invalid: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("GeneForge recipe catalog schema or pinned Blender version is invalid")]
+    Schema,
+    #[error("GeneForge recipe catalog is empty")]
+    Empty,
+    #[error("invalid GeneForge source {0}")]
+    InvalidSource(String),
+    #[error("invalid GeneForge part asset {0}")]
+    InvalidAsset(String),
+    #[error("unknown GeneForge part asset {0}")]
+    UnknownAsset(String),
+    #[error("invalid GeneForge family {0:?}")]
+    InvalidFamily(CreaturePartFamilyId),
+}
+
+pub fn load_geneforge_creature_part_catalog(
+) -> Result<GeneForgeCreaturePartCatalog, GeneForgeCatalogError> {
+    GeneForgeCreaturePartCatalog::from_json_str(GENEFORGE_RECIPE_CATALOG_JSON)
+}
+
+fn required_runtime_slots(logical_slot: CreaturePartSlotKey) -> BTreeSet<CreaturePartSlot> {
+    match logical_slot {
+        CreaturePartSlotKey::Head => BTreeSet::from([CreaturePartSlot::Head]),
+        CreaturePartSlotKey::Torso => BTreeSet::from([CreaturePartSlot::Torso]),
+        CreaturePartSlotKey::Arms => {
+            BTreeSet::from([CreaturePartSlot::LeftArm, CreaturePartSlot::RightArm])
+        }
+        CreaturePartSlotKey::Legs => {
+            BTreeSet::from([CreaturePartSlot::LeftLeg, CreaturePartSlot::RightLeg])
+        }
+        CreaturePartSlotKey::Tail => BTreeSet::from([CreaturePartSlot::TailBack]),
+    }
+}
+
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn valid_relative_path(path: &str) -> bool {
+    let path_ref = Path::new(path);
+    !path.is_empty()
+        && !path_ref.is_absolute()
+        && path_ref
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+}
+
+fn valid_production_path(path: &str) -> bool {
+    valid_relative_path(path) && path.starts_with("production_voxel_v1/")
+}
+
+fn valid_generated_path(path: &str) -> bool {
+    valid_production_path(path)
+        && path.starts_with("production_voxel_v1/creature_parts/generated/geneforge/")
+}
+
 #[derive(Debug, Error)]
 pub enum CreaturePartCatalogError {
     #[error("creature part catalog JSON is invalid: {0}")]
@@ -616,5 +936,169 @@ mod tests {
         catalog.families.push(catalog.families[0].clone());
 
         assert!(catalog.validate().is_err());
+    }
+
+    #[test]
+    fn geneforge_v2_catalog_has_the_exact_twelve_frankenstein_families() {
+        let catalog = load_geneforge_creature_part_catalog().unwrap();
+
+        assert_eq!(catalog.schema, GENEFORGE_CREATURE_PART_CATALOG_SCHEMA);
+        assert_eq!(catalog.schema_version, 2);
+        assert_eq!(catalog.blender_version, "5.1.0");
+        assert_eq!(
+            catalog
+                .families
+                .iter()
+                .map(|family| (family.id.0, family.label.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (0, "tuftback"),
+                (1, "tideclimber"),
+                (2, "mossknuckle"),
+                (3, "emberloper"),
+                (4, "duskmane"),
+                (5, "reefburrower"),
+                (6, "velvetreed"),
+                (7, "copperskipper"),
+                (8, "slateprowler"),
+                (9, "cobaltbramble"),
+                (10, "orchidstout"),
+                (11, "amberlongstep"),
+            ]
+        );
+
+        for family in &catalog.families {
+            let donors = family
+                .parts
+                .values()
+                .map(|recipe| catalog.asset(&recipe.asset_id).unwrap().donor)
+                .collect::<BTreeSet<_>>();
+            assert_eq!(
+                donors,
+                BTreeSet::from([
+                    GeneForgeDonorId::Norn,
+                    GeneForgeDonorId::Ettin,
+                    GeneForgeDonorId::Grendel,
+                ]),
+                "{} must visibly combine all three donors",
+                family.label
+            );
+            assert!(
+                family
+                    .parts
+                    .values()
+                    .any(|recipe| recipe.has_authored_tweak()),
+                "{} must not be an unmodified stock donor recipe",
+                family.label
+            );
+        }
+    }
+
+    #[test]
+    fn geneforge_v2_sources_and_generated_assets_are_complete() {
+        let catalog = load_geneforge_creature_part_catalog().unwrap();
+        let source_hashes = catalog
+            .sources
+            .iter()
+            .map(|source| (source.donor, source.sha256.as_str()))
+            .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(
+            source_hashes[&GeneForgeDonorId::Norn],
+            "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A"
+        );
+        assert_eq!(
+            source_hashes[&GeneForgeDonorId::Ettin],
+            "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B"
+        );
+        assert_eq!(
+            source_hashes[&GeneForgeDonorId::Grendel],
+            "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62"
+        );
+
+        for asset in &catalog.part_assets {
+            assert_eq!(
+                asset
+                    .lods
+                    .iter()
+                    .map(|lod| lod.lod)
+                    .collect::<BTreeSet<_>>(),
+                BTreeSet::from([
+                    CreaturePartLodId::Full,
+                    CreaturePartLodId::Compact,
+                    CreaturePartLodId::Impostor,
+                ]),
+                "{} must have every production LOD",
+                asset.id.0
+            );
+            assert!(asset
+                .selector
+                .marker_ids
+                .iter()
+                .all(|id| (1..=14).contains(id)));
+            assert!(
+                !asset.selector.include_objects.is_empty(),
+                "{} must select source meshes by exact object name",
+                asset.id.0
+            );
+            assert!(
+                !asset.selector.object_visscripts.is_empty()
+                    || asset.selector.selector_tags.contains_key("pitch_id"),
+                "{} must preserve raw visibility or pitch selection metadata",
+                asset.id.0
+            );
+        }
+
+        let expected_head_objects = [
+            ("norn-head", ["Head1.normal", "Eye_L", "Lid_L"]),
+            ("ettin-head", ["head1_Ettin_normal", "Eye L", "Eyelid L"]),
+            ("grendel-head", ["Head1_Grendel", "Eye L", "ear 2L"]),
+        ];
+        for (asset_id, objects) in expected_head_objects {
+            let asset = catalog
+                .asset(&CreaturePartAssetId(asset_id.into()))
+                .unwrap();
+            for object in objects {
+                assert!(
+                    asset
+                        .selector
+                        .include_objects
+                        .iter()
+                        .any(|name| name == object),
+                    "{asset_id} is missing exact selector {object}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn geneforge_v2_accepts_a_data_only_thirteenth_family() {
+        let mut catalog = load_geneforge_creature_part_catalog().unwrap();
+        let mut family = catalog.families[0].clone();
+        family.id = CreaturePartFamilyId(12);
+        family.label = "future-frankenstein".into();
+        catalog.families.push(family);
+
+        catalog.validate().unwrap();
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_missing_assets_and_ettin_tails() {
+        let mut missing = load_geneforge_creature_part_catalog().unwrap();
+        missing.families[0]
+            .parts
+            .get_mut(&alife_world::CreaturePartSlotKey::Head)
+            .unwrap()
+            .asset_id = CreaturePartAssetId("missing-head".into());
+        assert!(missing.validate().is_err());
+
+        let mut impossible_tail = load_geneforge_creature_part_catalog().unwrap();
+        let tail = impossible_tail
+            .part_assets
+            .iter_mut()
+            .find(|asset| asset.logical_slot == alife_world::CreaturePartSlotKey::Tail)
+            .unwrap();
+        tail.donor = GeneForgeDonorId::Ettin;
+        assert!(impossible_tail.validate().is_err());
     }
 }

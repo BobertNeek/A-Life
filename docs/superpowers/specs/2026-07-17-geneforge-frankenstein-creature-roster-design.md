@@ -112,7 +112,7 @@ body. The fit values are offline shape targets, not runtime gameplay traits.
 | 8 | `slateprowler` | G | G | N | E | N | Reduced muzzle ridge, wide chest, medium athletic limbs |
 | 9 | `cobaltbramble` | N | G | G | E | N | Short ears, two-tone crest, powerful upper body |
 | 10 | `orchidstout` | E | E | G | N | G | Round face, low ears, barrel torso, short sturdy legs |
-| 11 | `amberlongstep` | G | N | N | G | G | Large soft ears, slim chest, very long hands and feet |
+| 11 | `amberlongstep` | G | N | E | G | G | Large soft ears, slim chest, very long hands and feet |
 
 Minor changes are intentionally bounded. Head width, muzzle length, limb length,
 ear angle, crest size, torso depth, and tail extent may vary by at most 12% from

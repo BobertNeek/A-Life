@@ -1,0 +1,3007 @@
+{
+  "schema": "alife.geneforge_creature_part_catalog.v2",
+  "schema_version": 2,
+  "blender_version": "5.1.0",
+  "sources": [
+    {
+      "donor": "norn",
+      "blend_file": "Norn/Geneforge_r4.0_Norn.blend",
+      "sha256": "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A",
+      "texture_root": "Norn/Blueberry Norns Example/Geneforge Textures",
+      "source_url": "https://eem.foo/geneforge/",
+      "author": "Eem Foo",
+      "license": "MIT",
+      "license_ref": "production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md"
+    },
+    {
+      "donor": "ettin",
+      "blend_file": "Ettin/geneforge_r4.0_ettin.blend",
+      "sha256": "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B",
+      "texture_root": "Ettin/Teal Ettin Textures",
+      "source_url": "https://eem.foo/geneforge/",
+      "author": "Eem Foo",
+      "license": "MIT",
+      "license_ref": "production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md"
+    },
+    {
+      "donor": "grendel",
+      "blend_file": "Grendel/geneforge_r4.0_grendel.blend",
+      "sha256": "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62",
+      "texture_root": "Grendel/Purple Grendels Textures",
+      "source_url": "https://eem.foo/geneforge/",
+      "author": "Eem Foo",
+      "license": "MIT",
+      "license_ref": "production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md"
+    }
+  ],
+  "part_assets": [
+    {
+      "id": "norn-head",
+      "donor": "norn",
+      "logical_slot": "head",
+      "selector": {
+        "marker_ids": [
+          1
+        ],
+        "include_objects": [
+          "Head1.normal",
+          "Eye_L",
+          "Eye_R",
+          "Lid_L",
+          "Lid_R",
+          "Teeth_T",
+          "Teeth_B",
+          "tongue",
+          "Bald Patch",
+          "mouthback_patched",
+          "Hair_m_civet",
+          "extra whiskers mL-bengal",
+          "extra whiskers mR-bengal"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVMap",
+        "object_visscripts": {
+          "Head1.normal": "part=Head&normal",
+          "Teeth_T": "part=Head",
+          "Teeth_B": "part=Head&!sad&!sleepy",
+          "tongue": "part=Head"
+        }
+      },
+      "groups": {
+        "head": "head"
+      },
+      "attachment_frames": {
+        "head": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "norn-torso",
+      "donor": "norn",
+      "logical_slot": "torso",
+      "selector": {
+        "marker_ids": [
+          2
+        ],
+        "include_objects": [
+          "Body1"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVMap",
+        "object_visscripts": {
+          "Body1": "part=Body&egg=0|part=Body&male"
+        }
+      },
+      "groups": {
+        "torso": "torso"
+      },
+      "attachment_frames": {
+        "torso": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "norn-arms",
+      "donor": "norn",
+      "logical_slot": "arms",
+      "selector": {
+        "marker_ids": [
+          9,
+          10,
+          11,
+          12
+        ],
+        "include_objects": [
+          "Humerous_L",
+          "radius_L",
+          "Humerous_R",
+          "radius_R"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVMap",
+        "object_visscripts": {
+          "Humerous_L": "part=LeftUpperArm",
+          "radius_L": "part=LeftLowerArm",
+          "Humerous_R": "part=RightUpperArm",
+          "radius_R": "part=RightLowerArm"
+        }
+      },
+      "groups": {
+        "left-arm": "left-arm",
+        "right-arm": "right-arm"
+      },
+      "attachment_frames": {
+        "left-arm": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "right-arm": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "norn-legs",
+      "donor": "norn",
+      "logical_slot": "legs",
+      "selector": {
+        "marker_ids": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "include_objects": [
+          "Thigh_L",
+          "Shin_L",
+          "Foot_2L",
+          "Thigh_R",
+          "Shin_R",
+          "Foot_2R"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral",
+          "pitch_id": "0"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVMap",
+        "object_visscripts": {
+          "Thigh_L": "part=LeftThigh",
+          "Shin_L": "part=LeftShin",
+          "Thigh_R": "part=RightThigh",
+          "Shin_R": "part=RightShin"
+        }
+      },
+      "groups": {
+        "left-leg": "left-leg",
+        "right-leg": "right-leg"
+      },
+      "attachment_frames": {
+        "left-leg": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "right-leg": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "ettin-head",
+      "donor": "ettin",
+      "logical_slot": "head",
+      "selector": {
+        "marker_ids": [
+          1
+        ],
+        "include_objects": [
+          "head1_Ettin_normal",
+          "Eye L",
+          "Eye R",
+          "Eyelid L",
+          "Eyelid R",
+          "Teeth B",
+          "Teeth T",
+          "tongue",
+          "Mouth Inner",
+          "Hair m"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {
+          "head1_Ettin_normal": "part=Head&mode=0&normal",
+          "Hair m": "part=Head&mode=0"
+        }
+      },
+      "groups": {
+        "head": "head"
+      },
+      "attachment_frames": {
+        "head": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "ettin-torso",
+      "donor": "ettin",
+      "logical_slot": "torso",
+      "selector": {
+        "marker_ids": [
+          2
+        ],
+        "include_objects": [
+          "Body1"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {
+          "Body1": "part=Body&mode=0"
+        }
+      },
+      "groups": {
+        "torso": "torso"
+      },
+      "attachment_frames": {
+        "torso": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "ettin-arms",
+      "donor": "ettin",
+      "logical_slot": "arms",
+      "selector": {
+        "marker_ids": [
+          9,
+          10,
+          11,
+          12
+        ],
+        "include_objects": [
+          "Humerous L",
+          "radius L",
+          "Humerous R",
+          "radius R"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {
+          "Humerous L": "part=LeftUpperArm&mode=0",
+          "radius L": "part=LeftLowerArm&mode=0",
+          "Humerous R": "part=RightUpperArm&mode=0",
+          "radius R": "part=RightLowerArm&mode=0"
+        }
+      },
+      "groups": {
+        "left-arm": "left-arm",
+        "right-arm": "right-arm"
+      },
+      "attachment_frames": {
+        "left-arm": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "right-arm": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "ettin-legs",
+      "donor": "ettin",
+      "logical_slot": "legs",
+      "selector": {
+        "marker_ids": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "include_objects": [
+          "Thigh L",
+          "Shin L",
+          "Foot_2L",
+          "Thigh R",
+          "Shin R",
+          "Foot_2R"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral",
+          "pitch_id": "0"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {
+          "Thigh L": "part=LeftThigh&mode=0",
+          "Shin L": "part=LeftShin&mode=0",
+          "Thigh R": "part=RightThigh&mode=0",
+          "Shin R": "part=RightShin&mode=0"
+        }
+      },
+      "groups": {
+        "left-leg": "left-leg",
+        "right-leg": "right-leg"
+      },
+      "attachment_frames": {
+        "left-leg": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "right-leg": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "grendel-head",
+      "donor": "grendel",
+      "logical_slot": "head",
+      "selector": {
+        "marker_ids": [
+          1
+        ],
+        "include_objects": [
+          "Head1_Grendel",
+          "Eye L",
+          "Eye_R",
+          "Lid_L_Closed",
+          "Lid_R_Closed",
+          "teeth B",
+          "teeth T",
+          "extra teeth",
+          "tongue.001",
+          "ear 2L",
+          "ear 2R",
+          "Hair m"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {
+          "Head1_Grendel": "part=head&normal",
+          "Eye L": "part=Head",
+          "Eye_R": "part=head",
+          "Lid_L_Closed": "part=Head&!eyes",
+          "Lid_R_Closed": "part=Head&!eyes",
+          "Hair m": "part=Head&male"
+        }
+      },
+      "groups": {
+        "head": "head"
+      },
+      "attachment_frames": {
+        "head": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "grendel-torso",
+      "donor": "grendel",
+      "logical_slot": "torso",
+      "selector": {
+        "marker_ids": [
+          2
+        ],
+        "include_objects": [
+          "body1",
+          "extra spike8"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {
+          "body1": "part=body",
+          "extra spike8": "part=Body"
+        }
+      },
+      "groups": {
+        "torso": "torso"
+      },
+      "attachment_frames": {
+        "torso": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "grendel-arms",
+      "donor": "grendel",
+      "logical_slot": "arms",
+      "selector": {
+        "marker_ids": [
+          9,
+          10,
+          11,
+          12
+        ],
+        "include_objects": [
+          "humerous L",
+          "radius L",
+          "humerous R",
+          "radius R"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {
+          "humerous L": "part=LeftUpperArm",
+          "radius L": "part=LeftLowerArm",
+          "humerous R": "part=RightUpperArm",
+          "radius R": "part=RightLowerArm"
+        }
+      },
+      "groups": {
+        "left-arm": "left-arm",
+        "right-arm": "right-arm"
+      },
+      "attachment_frames": {
+        "left-arm": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "right-arm": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "grendel-legs",
+      "donor": "grendel",
+      "logical_slot": "legs",
+      "selector": {
+        "marker_ids": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "include_objects": [
+          "Thigh L",
+          "Shin L",
+          "foot 2L",
+          "Thigh R",
+          "Shin R",
+          "foot 2R"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral",
+          "pitch_id": "0"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {
+          "Thigh L": "part=LeftThigh",
+          "Shin L": "part=LeftShin",
+          "Thigh R": "part=RightThigh",
+          "Shin R": "part=RightShin"
+        }
+      },
+      "groups": {
+        "left-leg": "left-leg",
+        "right-leg": "right-leg"
+      },
+      "attachment_frames": {
+        "left-leg": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "right-leg": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "norn-tail",
+      "donor": "norn",
+      "logical_slot": "tail",
+      "selector": {
+        "marker_ids": [
+          13,
+          14
+        ],
+        "include_objects": [
+          "tail",
+          "tailtip_f"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVMap",
+        "object_visscripts": {
+          "tail": "part=TailRoot&!mode=1",
+          "tailtip_f": "part=TailTip"
+        }
+      },
+      "groups": {
+        "tail-back": "tail-back"
+      },
+      "attachment_frames": {
+        "tail-back": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+        }
+      ]
+    },
+    {
+      "id": "grendel-tail",
+      "donor": "grendel",
+      "logical_slot": "tail",
+      "selector": {
+        "marker_ids": [
+          13,
+          14
+        ],
+        "include_objects": [
+          "tail.0",
+          "tailend.0"
+        ],
+        "selector_tags": {
+          "age": "adult",
+          "expression": "neutral",
+          "sex": "neutral",
+          "pitch_id": "0"
+        },
+        "mirror_policy": "evaluated-source",
+        "uv_map": "UVChannel_1",
+        "object_visscripts": {}
+      },
+      "groups": {
+        "tail-back": "tail-back"
+      },
+      "attachment_frames": {
+        "tail-back": {
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lods": [
+        {
+          "lod": "full",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+        },
+        {
+          "lod": "compact",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+        },
+        {
+          "lod": "impostor",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+        }
+      ]
+    }
+  ],
+  "families": [
+    {
+      "id": 0,
+      "label": "tuftback",
+      "parts": {
+        "head": {
+          "asset_id": "norn-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.06,
+              1,
+              1.02
+            ]
+          },
+          "seam_offset": [
+            0,
+            -0.002,
+            0
+          ],
+          "variant_label": "wide-swept-ears",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "ettin-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.97,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "wide-swept-ears-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "grendel-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              0.97,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "wide-swept-ears-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "norn-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              0.95,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "wide-swept-ears-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "grendel-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              0.94
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "wide-swept-ears-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "compact"
+      ]
+    },
+    {
+      "id": 1,
+      "label": "tideclimber",
+      "parts": {
+        "head": {
+          "asset_id": "ettin-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.96,
+              1.04,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "blue-ear-sweep",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "norn-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1.03
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "blue-ear-sweep-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "norn-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              0.99,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "blue-ear-sweep-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "grendel-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "blue-ear-sweep-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "grendel-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              0.98
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "blue-ear-sweep-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "long-limbed"
+      ]
+    },
+    {
+      "id": 2,
+      "label": "mossknuckle",
+      "parts": {
+        "head": {
+          "asset_id": "grendel-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              0.98,
+              1.03
+            ]
+          },
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "variant_label": "soft-round-brow",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "ettin-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.03,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "soft-round-brow-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "norn-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1.01,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "soft-round-brow-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "ettin-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1.05,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "soft-round-brow-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "norn-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1.02
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "soft-round-brow-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "compact"
+      ]
+    },
+    {
+      "id": 3,
+      "label": "emberloper",
+      "parts": {
+        "head": {
+          "asset_id": "norn-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.98,
+              1.08,
+              0.98
+            ]
+          },
+          "seam_offset": [
+            0,
+            -0.002,
+            0
+          ],
+          "variant_label": "tall-crown-tuft",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "grendel-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.97,
+              1,
+              1.03
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "tall-crown-tuft-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "ettin-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.03,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "tall-crown-tuft-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "grendel-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              0.95,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "tall-crown-tuft-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "norn-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1.06
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "tall-crown-tuft-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "long-limbed"
+      ]
+    },
+    {
+      "id": 4,
+      "label": "duskmane",
+      "parts": {
+        "head": {
+          "asset_id": "ettin-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.07,
+              0.97,
+              1.02
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "short-dense-mane",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "grendel-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "short-dense-mane-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "norn-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              0.97,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "short-dense-mane-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "norn-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "short-dense-mane-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "grendel-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              0.94
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "short-dense-mane-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "compact"
+      ]
+    },
+    {
+      "id": 5,
+      "label": "reefburrower",
+      "parts": {
+        "head": {
+          "asset_id": "grendel-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.08,
+              1.02,
+              1.06
+            ]
+          },
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "variant_label": "rounded-snout",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "norn-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.03,
+              1,
+              1.03
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "rounded-snout-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "ettin-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              0.99,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "rounded-snout-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "ettin-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1.05,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "rounded-snout-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "grendel-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              0.98
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "rounded-snout-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "long-limbed"
+      ]
+    },
+    {
+      "id": 6,
+      "label": "velvetreed",
+      "parts": {
+        "head": {
+          "asset_id": "norn-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.94,
+              1.08,
+              0.96
+            ]
+          },
+          "seam_offset": [
+            0,
+            -0.002,
+            0
+          ],
+          "variant_label": "long-ear-fins",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "ettin-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.97,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "long-ear-fins-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "norn-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1.01,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "long-ear-fins-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "grendel-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              0.95,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "long-ear-fins-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "grendel-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1.02
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "long-ear-fins-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "compact"
+      ]
+    },
+    {
+      "id": 7,
+      "label": "copperskipper",
+      "parts": {
+        "head": {
+          "asset_id": "ettin-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1.03,
+              0.97
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "upturned-ear-tips",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "norn-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1.03
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "upturned-ear-tips-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "grendel-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.03,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "upturned-ear-tips-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "ettin-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "upturned-ear-tips-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "norn-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1.06
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "upturned-ear-tips-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "long-limbed"
+      ]
+    },
+    {
+      "id": 8,
+      "label": "slateprowler",
+      "parts": {
+        "head": {
+          "asset_id": "grendel-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.05,
+              1.01,
+              1.03
+            ]
+          },
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "variant_label": "reduced-muzzle-ridge",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "grendel-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.03,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "reduced-muzzle-ridge-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "norn-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              0.97,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "reduced-muzzle-ridge-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "ettin-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1.05,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "reduced-muzzle-ridge-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "norn-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              0.94
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "reduced-muzzle-ridge-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "compact"
+      ]
+    },
+    {
+      "id": 9,
+      "label": "cobaltbramble",
+      "parts": {
+        "head": {
+          "asset_id": "norn-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.05,
+              1.04
+            ]
+          },
+          "seam_offset": [
+            0,
+            -0.002,
+            0
+          ],
+          "variant_label": "two-tone-crest",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "grendel-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.97,
+              1,
+              1.03
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "two-tone-crest-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "grendel-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              0.99,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "two-tone-crest-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "ettin-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              0.95,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "two-tone-crest-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "norn-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              0.98
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "two-tone-crest-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "long-limbed"
+      ]
+    },
+    {
+      "id": 10,
+      "label": "orchidstout",
+      "parts": {
+        "head": {
+          "asset_id": "ettin-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.1,
+              0.94,
+              1.08
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "low-round-ears",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "ettin-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "low-round-ears-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "grendel-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1.01,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "low-round-ears-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "norn-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "low-round-ears-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "grendel-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1.02
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "low-round-ears-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "compact"
+      ]
+    },
+    {
+      "id": 11,
+      "label": "amberlongstep",
+      "parts": {
+        "head": {
+          "asset_id": "grendel-head",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.96,
+              1.1,
+              0.95
+            ]
+          },
+          "seam_offset": [
+            0,
+            0.002,
+            0
+          ],
+          "variant_label": "large-soft-ears",
+          "join_cover_kind": "neck-ruff"
+        },
+        "torso": {
+          "asset_id": "norn-torso",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.03,
+              1,
+              1.03
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "large-soft-ears-torso",
+          "join_cover_kind": "root-coat"
+        },
+        "arms": {
+          "asset_id": "ettin-arms",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.03,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "large-soft-ears-arms",
+          "join_cover_kind": "shoulder-tuft"
+        },
+        "legs": {
+          "asset_id": "grendel-legs",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1.05,
+              1
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "large-soft-ears-legs",
+          "join_cover_kind": "hip-fur"
+        },
+        "tail": {
+          "asset_id": "grendel-tail",
+          "fit": {
+            "translation": [
+              0,
+              0,
+              0
+            ],
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1.06
+            ]
+          },
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "variant_label": "large-soft-ears-tail",
+          "join_cover_kind": "tail-ruff"
+        }
+      },
+      "compatibility_tags": [
+        "bipedal",
+        "geneforge-frankenstein",
+        "long-limbed"
+      ]
+    }
+  ]
+}
