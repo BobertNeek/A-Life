@@ -2,6 +2,8 @@
   "schema": "alife.geneforge_creature_part_catalog.v2",
   "schema_version": 2,
   "blender_version": "5.1.0",
+  "importer_version": "alife.geneforge_importer.v1",
+  "recipe_sha256": "cbea0b830a96408bda361d3cb446a1754710a2cd3361bf95339d263147060e37",
   "sources": [
     {
       "donor": "norn",
@@ -100,21 +102,90 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj_sha256": "ea93d909d14e6038ff42baaf0e79818006580e0cf803a19782c60743c6cf26ef",
+          "socket_manifest_sha256": "bbb11daa38f14556b2115c6c96768323f0f256a88aea2d15d9a687ceafafd35f",
+          "semantic_mask_sha256": "417e46338b4840d27049c9d7bbe7c2945a9ae048f2a4f5bde9f220f41fb2b498"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj_sha256": "ba66498bb6aacff656336a8287229c16b634d02cfb56f3ecf2d951301859e3a6",
+          "socket_manifest_sha256": "4ed2b4b3a14e9f481df1673d33488ebc3d3c8394b5fb8d2468ee1f67d747f3e6",
+          "semantic_mask_sha256": "89a6be17420338adc6174c20653247ab41eb56124dfcf54067e703d20a8b2119"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj_sha256": "3606715005a3d1e0819e2b79fe61351493647018cd27f96b98aca673e2def10b",
+          "socket_manifest_sha256": "2853880df3d6e67590afff26e8928e08e9228f6c0977328f566d1df8999103e9",
+          "semantic_mask_sha256": "a3ebe6105d0e07fdb77c1a669dccf38c8684a428dbe02dce883aa01b93a1cccb"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.45,
+          -0.5,
+          -0.45
+        ],
+        "max": [
+          0.45,
+          0.5,
+          0.45
+        ]
+      },
+      "semantic_regions": [
+        "head",
+        "eyes",
+        "mouth",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-eye": [
+          -0.16,
+          0.1,
+          -0.39
+        ],
+        "right-eye": [
+          0.16,
+          0.1,
+          -0.39
+        ],
+        "muzzle": [
+          0,
+          -0.08,
+          -0.45
+        ],
+        "left-brow": [
+          -0.16,
+          0.19,
+          -0.38
+        ],
+        "right-brow": [
+          0.16,
+          0.19,
+          -0.38
+        ],
+        "left-lid": [
+          -0.16,
+          0.11,
+          -0.405
+        ],
+        "right-lid": [
+          0.16,
+          0.11,
+          -0.405
+        ],
+        "neck-attachment": [
+          0,
+          -0.46,
+          0
+        ]
+      }
     },
     {
       "id": "norn-torso",
@@ -166,21 +237,78 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj_sha256": "ea93d909d14e6038ff42baaf0e79818006580e0cf803a19782c60743c6cf26ef",
+          "socket_manifest_sha256": "bbb11daa38f14556b2115c6c96768323f0f256a88aea2d15d9a687ceafafd35f",
+          "semantic_mask_sha256": "417e46338b4840d27049c9d7bbe7c2945a9ae048f2a4f5bde9f220f41fb2b498"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj_sha256": "ba66498bb6aacff656336a8287229c16b634d02cfb56f3ecf2d951301859e3a6",
+          "socket_manifest_sha256": "4ed2b4b3a14e9f481df1673d33488ebc3d3c8394b5fb8d2468ee1f67d747f3e6",
+          "semantic_mask_sha256": "89a6be17420338adc6174c20653247ab41eb56124dfcf54067e703d20a8b2119"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj_sha256": "3606715005a3d1e0819e2b79fe61351493647018cd27f96b98aca673e2def10b",
+          "socket_manifest_sha256": "2853880df3d6e67590afff26e8928e08e9228f6c0977328f566d1df8999103e9",
+          "semantic_mask_sha256": "a3ebe6105d0e07fdb77c1a669dccf38c8684a428dbe02dce883aa01b93a1cccb"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.55,
+          -0.7,
+          -0.4
+        ],
+        "max": [
+          0.55,
+          0.7,
+          0.4
+        ]
+      },
+      "semantic_regions": [
+        "torso",
+        "join-cover"
+      ],
+      "landmarks": {
+        "neck-attachment": [
+          0,
+          0.66,
+          0
+        ],
+        "left-shoulder-attachment": [
+          -0.48,
+          0.42,
+          0
+        ],
+        "right-shoulder-attachment": [
+          0.48,
+          0.42,
+          0
+        ],
+        "left-hip-attachment": [
+          -0.27,
+          -0.62,
+          0
+        ],
+        "right-hip-attachment": [
+          0.27,
+          -0.62,
+          0
+        ],
+        "tail-root": [
+          0,
+          -0.48,
+          0.32
+        ]
+      }
     },
     {
       "id": "norn-arms",
@@ -260,21 +388,69 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj_sha256": "ea93d909d14e6038ff42baaf0e79818006580e0cf803a19782c60743c6cf26ef",
+          "socket_manifest_sha256": "bbb11daa38f14556b2115c6c96768323f0f256a88aea2d15d9a687ceafafd35f",
+          "semantic_mask_sha256": "417e46338b4840d27049c9d7bbe7c2945a9ae048f2a4f5bde9f220f41fb2b498"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj_sha256": "ba66498bb6aacff656336a8287229c16b634d02cfb56f3ecf2d951301859e3a6",
+          "socket_manifest_sha256": "4ed2b4b3a14e9f481df1673d33488ebc3d3c8394b5fb8d2468ee1f67d747f3e6",
+          "semantic_mask_sha256": "89a6be17420338adc6174c20653247ab41eb56124dfcf54067e703d20a8b2119"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj_sha256": "3606715005a3d1e0819e2b79fe61351493647018cd27f96b98aca673e2def10b",
+          "socket_manifest_sha256": "2853880df3d6e67590afff26e8928e08e9228f6c0977328f566d1df8999103e9",
+          "semantic_mask_sha256": "a3ebe6105d0e07fdb77c1a669dccf38c8684a428dbe02dce883aa01b93a1cccb"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.9,
+          -0.5,
+          -0.3
+        ],
+        "max": [
+          0.9,
+          0.5,
+          0.3
+        ]
+      },
+      "semantic_regions": [
+        "left-arm",
+        "right-arm",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-shoulder-attachment": [
+          -0.46,
+          0.42,
+          0
+        ],
+        "right-shoulder-attachment": [
+          0.46,
+          0.42,
+          0
+        ],
+        "left-hand": [
+          -0.84,
+          -0.43,
+          -0.02
+        ],
+        "right-hand": [
+          0.84,
+          -0.43,
+          -0.02
+        ]
+      }
     },
     {
       "id": "norn-legs",
@@ -359,21 +535,69 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj_sha256": "ea93d909d14e6038ff42baaf0e79818006580e0cf803a19782c60743c6cf26ef",
+          "socket_manifest_sha256": "bbb11daa38f14556b2115c6c96768323f0f256a88aea2d15d9a687ceafafd35f",
+          "semantic_mask_sha256": "417e46338b4840d27049c9d7bbe7c2945a9ae048f2a4f5bde9f220f41fb2b498"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj_sha256": "ba66498bb6aacff656336a8287229c16b634d02cfb56f3ecf2d951301859e3a6",
+          "socket_manifest_sha256": "4ed2b4b3a14e9f481df1673d33488ebc3d3c8394b5fb8d2468ee1f67d747f3e6",
+          "semantic_mask_sha256": "89a6be17420338adc6174c20653247ab41eb56124dfcf54067e703d20a8b2119"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj_sha256": "3606715005a3d1e0819e2b79fe61351493647018cd27f96b98aca673e2def10b",
+          "socket_manifest_sha256": "2853880df3d6e67590afff26e8928e08e9228f6c0977328f566d1df8999103e9",
+          "semantic_mask_sha256": "a3ebe6105d0e07fdb77c1a669dccf38c8684a428dbe02dce883aa01b93a1cccb"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.55,
+          -0.9,
+          -0.35
+        ],
+        "max": [
+          0.55,
+          0.9,
+          0.35
+        ]
+      },
+      "semantic_regions": [
+        "left-leg",
+        "right-leg",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-hip-attachment": [
+          -0.25,
+          0.82,
+          0
+        ],
+        "right-hip-attachment": [
+          0.25,
+          0.82,
+          0
+        ],
+        "left-foot": [
+          -0.25,
+          -0.88,
+          -0.12
+        ],
+        "right-foot": [
+          0.25,
+          -0.88,
+          -0.12
+        ]
+      }
     },
     {
       "id": "ettin-head",
@@ -435,21 +659,90 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png",
+          "generated_obj_sha256": "47cc2be0756cc82feab412e6db2de139f57e2116c6f593001c4a1aa4cd1b8b9c",
+          "socket_manifest_sha256": "ca117ec01ba6265b7ff41243247b8d3373c88c5f58519edcaefff8ba854acc73",
+          "semantic_mask_sha256": "bf558c6589c73ff65a75ae9ee7cd55f14568599f5a3a7c6d201f887019a92100"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png",
+          "generated_obj_sha256": "08a3726a06f48f5f077e7d791b24e73cec0e0d2eca6577801274135044aa0114",
+          "socket_manifest_sha256": "60185fa599e17ba06f93fe0d4e6ce92a2bea561d57b0aaa133484082f045c552",
+          "semantic_mask_sha256": "5aa0ba753569ed221cc33281b1b8cb07a477bbcc41bbd763176a766436423243"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png",
+          "generated_obj_sha256": "58848dd6accbbd6d1633b0a0f74284bf1f2cd9ccd78c0b50342d22a3433a7405",
+          "socket_manifest_sha256": "b07ad99bda95566818c8c1e685f8ce1fd4d0074bea56a9effebfa5ff12d29be8",
+          "semantic_mask_sha256": "21099b0453567fa4daad698434c8a11cbf1f0e1d33ba912d325d8dfc45287e16"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.45,
+          -0.5,
+          -0.45
+        ],
+        "max": [
+          0.45,
+          0.5,
+          0.45
+        ]
+      },
+      "semantic_regions": [
+        "head",
+        "eyes",
+        "mouth",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-eye": [
+          -0.16,
+          0.1,
+          -0.39
+        ],
+        "right-eye": [
+          0.16,
+          0.1,
+          -0.39
+        ],
+        "muzzle": [
+          0,
+          -0.08,
+          -0.45
+        ],
+        "left-brow": [
+          -0.16,
+          0.19,
+          -0.38
+        ],
+        "right-brow": [
+          0.16,
+          0.19,
+          -0.38
+        ],
+        "left-lid": [
+          -0.16,
+          0.11,
+          -0.405
+        ],
+        "right-lid": [
+          0.16,
+          0.11,
+          -0.405
+        ],
+        "neck-attachment": [
+          0,
+          -0.46,
+          0
+        ]
+      }
     },
     {
       "id": "ettin-torso",
@@ -501,21 +794,78 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png",
+          "generated_obj_sha256": "47cc2be0756cc82feab412e6db2de139f57e2116c6f593001c4a1aa4cd1b8b9c",
+          "socket_manifest_sha256": "ca117ec01ba6265b7ff41243247b8d3373c88c5f58519edcaefff8ba854acc73",
+          "semantic_mask_sha256": "bf558c6589c73ff65a75ae9ee7cd55f14568599f5a3a7c6d201f887019a92100"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png",
+          "generated_obj_sha256": "08a3726a06f48f5f077e7d791b24e73cec0e0d2eca6577801274135044aa0114",
+          "socket_manifest_sha256": "60185fa599e17ba06f93fe0d4e6ce92a2bea561d57b0aaa133484082f045c552",
+          "semantic_mask_sha256": "5aa0ba753569ed221cc33281b1b8cb07a477bbcc41bbd763176a766436423243"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png",
+          "generated_obj_sha256": "58848dd6accbbd6d1633b0a0f74284bf1f2cd9ccd78c0b50342d22a3433a7405",
+          "socket_manifest_sha256": "b07ad99bda95566818c8c1e685f8ce1fd4d0074bea56a9effebfa5ff12d29be8",
+          "semantic_mask_sha256": "21099b0453567fa4daad698434c8a11cbf1f0e1d33ba912d325d8dfc45287e16"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.55,
+          -0.7,
+          -0.4
+        ],
+        "max": [
+          0.55,
+          0.7,
+          0.4
+        ]
+      },
+      "semantic_regions": [
+        "torso",
+        "join-cover"
+      ],
+      "landmarks": {
+        "neck-attachment": [
+          0,
+          0.66,
+          0
+        ],
+        "left-shoulder-attachment": [
+          -0.48,
+          0.42,
+          0
+        ],
+        "right-shoulder-attachment": [
+          0.48,
+          0.42,
+          0
+        ],
+        "left-hip-attachment": [
+          -0.27,
+          -0.62,
+          0
+        ],
+        "right-hip-attachment": [
+          0.27,
+          -0.62,
+          0
+        ],
+        "tail-root": [
+          0,
+          -0.48,
+          0.32
+        ]
+      }
     },
     {
       "id": "ettin-arms",
@@ -595,21 +945,69 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png",
+          "generated_obj_sha256": "47cc2be0756cc82feab412e6db2de139f57e2116c6f593001c4a1aa4cd1b8b9c",
+          "socket_manifest_sha256": "ca117ec01ba6265b7ff41243247b8d3373c88c5f58519edcaefff8ba854acc73",
+          "semantic_mask_sha256": "bf558c6589c73ff65a75ae9ee7cd55f14568599f5a3a7c6d201f887019a92100"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png",
+          "generated_obj_sha256": "08a3726a06f48f5f077e7d791b24e73cec0e0d2eca6577801274135044aa0114",
+          "socket_manifest_sha256": "60185fa599e17ba06f93fe0d4e6ce92a2bea561d57b0aaa133484082f045c552",
+          "semantic_mask_sha256": "5aa0ba753569ed221cc33281b1b8cb07a477bbcc41bbd763176a766436423243"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png",
+          "generated_obj_sha256": "58848dd6accbbd6d1633b0a0f74284bf1f2cd9ccd78c0b50342d22a3433a7405",
+          "socket_manifest_sha256": "b07ad99bda95566818c8c1e685f8ce1fd4d0074bea56a9effebfa5ff12d29be8",
+          "semantic_mask_sha256": "21099b0453567fa4daad698434c8a11cbf1f0e1d33ba912d325d8dfc45287e16"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.9,
+          -0.5,
+          -0.3
+        ],
+        "max": [
+          0.9,
+          0.5,
+          0.3
+        ]
+      },
+      "semantic_regions": [
+        "left-arm",
+        "right-arm",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-shoulder-attachment": [
+          -0.46,
+          0.42,
+          0
+        ],
+        "right-shoulder-attachment": [
+          0.46,
+          0.42,
+          0
+        ],
+        "left-hand": [
+          -0.84,
+          -0.43,
+          -0.02
+        ],
+        "right-hand": [
+          0.84,
+          -0.43,
+          -0.02
+        ]
+      }
     },
     {
       "id": "ettin-legs",
@@ -694,21 +1092,69 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png",
+          "generated_obj_sha256": "47cc2be0756cc82feab412e6db2de139f57e2116c6f593001c4a1aa4cd1b8b9c",
+          "socket_manifest_sha256": "ca117ec01ba6265b7ff41243247b8d3373c88c5f58519edcaefff8ba854acc73",
+          "semantic_mask_sha256": "bf558c6589c73ff65a75ae9ee7cd55f14568599f5a3a7c6d201f887019a92100"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png",
+          "generated_obj_sha256": "08a3726a06f48f5f077e7d791b24e73cec0e0d2eca6577801274135044aa0114",
+          "socket_manifest_sha256": "60185fa599e17ba06f93fe0d4e6ce92a2bea561d57b0aaa133484082f045c552",
+          "semantic_mask_sha256": "5aa0ba753569ed221cc33281b1b8cb07a477bbcc41bbd763176a766436423243"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png",
+          "generated_obj_sha256": "58848dd6accbbd6d1633b0a0f74284bf1f2cd9ccd78c0b50342d22a3433a7405",
+          "socket_manifest_sha256": "b07ad99bda95566818c8c1e685f8ce1fd4d0074bea56a9effebfa5ff12d29be8",
+          "semantic_mask_sha256": "21099b0453567fa4daad698434c8a11cbf1f0e1d33ba912d325d8dfc45287e16"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.55,
+          -0.9,
+          -0.35
+        ],
+        "max": [
+          0.55,
+          0.9,
+          0.35
+        ]
+      },
+      "semantic_regions": [
+        "left-leg",
+        "right-leg",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-hip-attachment": [
+          -0.25,
+          0.82,
+          0
+        ],
+        "right-hip-attachment": [
+          0.25,
+          0.82,
+          0
+        ],
+        "left-foot": [
+          -0.25,
+          -0.88,
+          -0.12
+        ],
+        "right-foot": [
+          0.25,
+          -0.88,
+          -0.12
+        ]
+      }
     },
     {
       "id": "grendel-head",
@@ -776,21 +1222,90 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj_sha256": "71200cdbd47325f4f82a59d30f3816464e00929ac8d67ed5c27921d4d8213a07",
+          "socket_manifest_sha256": "72a32175ceeb131300bb6f2c01e1600eff1622bd37081d61b519dcfe532b2540",
+          "semantic_mask_sha256": "1f58f91f3ef0fbc142065d13c2d142f8263957d396ee474311ee3a023c356714"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj_sha256": "5cdfdbac4156e1e427bff78aef84fe833e1c97409d4fda01e2f73935149ebee2",
+          "socket_manifest_sha256": "4bbc8987ce82fbbe19e77b468c087dba81c0a06f923d2e2298b52e5c6d1c1508",
+          "semantic_mask_sha256": "181d6208edcd9ffde8076bd987b27432d8c72d9993cda8b0e839fa8216d4d18e"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj_sha256": "68ab287f407d62798f1a947083ca3165bb3d656010e591f22630b68857a9f718",
+          "socket_manifest_sha256": "33db6ead2524c9d305ab0970f362a6b67cb15f661df2deb74031c862ea90720a",
+          "semantic_mask_sha256": "2bf9e9a1f8ea5887931aa73577dae4e25e904f25ed7ff85c16d046786b376612"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.45,
+          -0.5,
+          -0.45
+        ],
+        "max": [
+          0.45,
+          0.5,
+          0.45
+        ]
+      },
+      "semantic_regions": [
+        "head",
+        "eyes",
+        "mouth",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-eye": [
+          -0.16,
+          0.1,
+          -0.39
+        ],
+        "right-eye": [
+          0.16,
+          0.1,
+          -0.39
+        ],
+        "muzzle": [
+          0,
+          -0.08,
+          -0.45
+        ],
+        "left-brow": [
+          -0.16,
+          0.19,
+          -0.38
+        ],
+        "right-brow": [
+          0.16,
+          0.19,
+          -0.38
+        ],
+        "left-lid": [
+          -0.16,
+          0.11,
+          -0.405
+        ],
+        "right-lid": [
+          0.16,
+          0.11,
+          -0.405
+        ],
+        "neck-attachment": [
+          0,
+          -0.46,
+          0
+        ]
+      }
     },
     {
       "id": "grendel-torso",
@@ -844,21 +1359,78 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj_sha256": "71200cdbd47325f4f82a59d30f3816464e00929ac8d67ed5c27921d4d8213a07",
+          "socket_manifest_sha256": "72a32175ceeb131300bb6f2c01e1600eff1622bd37081d61b519dcfe532b2540",
+          "semantic_mask_sha256": "1f58f91f3ef0fbc142065d13c2d142f8263957d396ee474311ee3a023c356714"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj_sha256": "5cdfdbac4156e1e427bff78aef84fe833e1c97409d4fda01e2f73935149ebee2",
+          "socket_manifest_sha256": "4bbc8987ce82fbbe19e77b468c087dba81c0a06f923d2e2298b52e5c6d1c1508",
+          "semantic_mask_sha256": "181d6208edcd9ffde8076bd987b27432d8c72d9993cda8b0e839fa8216d4d18e"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj_sha256": "68ab287f407d62798f1a947083ca3165bb3d656010e591f22630b68857a9f718",
+          "socket_manifest_sha256": "33db6ead2524c9d305ab0970f362a6b67cb15f661df2deb74031c862ea90720a",
+          "semantic_mask_sha256": "2bf9e9a1f8ea5887931aa73577dae4e25e904f25ed7ff85c16d046786b376612"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.55,
+          -0.7,
+          -0.4
+        ],
+        "max": [
+          0.55,
+          0.7,
+          0.4
+        ]
+      },
+      "semantic_regions": [
+        "torso",
+        "join-cover"
+      ],
+      "landmarks": {
+        "neck-attachment": [
+          0,
+          0.66,
+          0
+        ],
+        "left-shoulder-attachment": [
+          -0.48,
+          0.42,
+          0
+        ],
+        "right-shoulder-attachment": [
+          0.48,
+          0.42,
+          0
+        ],
+        "left-hip-attachment": [
+          -0.27,
+          -0.62,
+          0
+        ],
+        "right-hip-attachment": [
+          0.27,
+          -0.62,
+          0
+        ],
+        "tail-root": [
+          0,
+          -0.48,
+          0.32
+        ]
+      }
     },
     {
       "id": "grendel-arms",
@@ -938,21 +1510,69 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj_sha256": "71200cdbd47325f4f82a59d30f3816464e00929ac8d67ed5c27921d4d8213a07",
+          "socket_manifest_sha256": "72a32175ceeb131300bb6f2c01e1600eff1622bd37081d61b519dcfe532b2540",
+          "semantic_mask_sha256": "1f58f91f3ef0fbc142065d13c2d142f8263957d396ee474311ee3a023c356714"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj_sha256": "5cdfdbac4156e1e427bff78aef84fe833e1c97409d4fda01e2f73935149ebee2",
+          "socket_manifest_sha256": "4bbc8987ce82fbbe19e77b468c087dba81c0a06f923d2e2298b52e5c6d1c1508",
+          "semantic_mask_sha256": "181d6208edcd9ffde8076bd987b27432d8c72d9993cda8b0e839fa8216d4d18e"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj_sha256": "68ab287f407d62798f1a947083ca3165bb3d656010e591f22630b68857a9f718",
+          "socket_manifest_sha256": "33db6ead2524c9d305ab0970f362a6b67cb15f661df2deb74031c862ea90720a",
+          "semantic_mask_sha256": "2bf9e9a1f8ea5887931aa73577dae4e25e904f25ed7ff85c16d046786b376612"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.9,
+          -0.5,
+          -0.3
+        ],
+        "max": [
+          0.9,
+          0.5,
+          0.3
+        ]
+      },
+      "semantic_regions": [
+        "left-arm",
+        "right-arm",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-shoulder-attachment": [
+          -0.46,
+          0.42,
+          0
+        ],
+        "right-shoulder-attachment": [
+          0.46,
+          0.42,
+          0
+        ],
+        "left-hand": [
+          -0.84,
+          -0.43,
+          -0.02
+        ],
+        "right-hand": [
+          0.84,
+          -0.43,
+          -0.02
+        ]
+      }
     },
     {
       "id": "grendel-legs",
@@ -1037,21 +1657,69 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj_sha256": "71200cdbd47325f4f82a59d30f3816464e00929ac8d67ed5c27921d4d8213a07",
+          "socket_manifest_sha256": "72a32175ceeb131300bb6f2c01e1600eff1622bd37081d61b519dcfe532b2540",
+          "semantic_mask_sha256": "1f58f91f3ef0fbc142065d13c2d142f8263957d396ee474311ee3a023c356714"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj_sha256": "5cdfdbac4156e1e427bff78aef84fe833e1c97409d4fda01e2f73935149ebee2",
+          "socket_manifest_sha256": "4bbc8987ce82fbbe19e77b468c087dba81c0a06f923d2e2298b52e5c6d1c1508",
+          "semantic_mask_sha256": "181d6208edcd9ffde8076bd987b27432d8c72d9993cda8b0e839fa8216d4d18e"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj_sha256": "68ab287f407d62798f1a947083ca3165bb3d656010e591f22630b68857a9f718",
+          "socket_manifest_sha256": "33db6ead2524c9d305ab0970f362a6b67cb15f661df2deb74031c862ea90720a",
+          "semantic_mask_sha256": "2bf9e9a1f8ea5887931aa73577dae4e25e904f25ed7ff85c16d046786b376612"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.55,
+          -0.9,
+          -0.35
+        ],
+        "max": [
+          0.55,
+          0.9,
+          0.35
+        ]
+      },
+      "semantic_regions": [
+        "left-leg",
+        "right-leg",
+        "join-cover"
+      ],
+      "landmarks": {
+        "left-hip-attachment": [
+          -0.25,
+          0.82,
+          0
+        ],
+        "right-hip-attachment": [
+          0.25,
+          0.82,
+          0
+        ],
+        "left-foot": [
+          -0.25,
+          -0.88,
+          -0.12
+        ],
+        "right-foot": [
+          0.25,
+          -0.88,
+          -0.12
+        ]
+      }
     },
     {
       "id": "norn-tail",
@@ -1106,21 +1774,58 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj_sha256": "ea93d909d14e6038ff42baaf0e79818006580e0cf803a19782c60743c6cf26ef",
+          "socket_manifest_sha256": "bbb11daa38f14556b2115c6c96768323f0f256a88aea2d15d9a687ceafafd35f",
+          "semantic_mask_sha256": "417e46338b4840d27049c9d7bbe7c2945a9ae048f2a4f5bde9f220f41fb2b498"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj_sha256": "ba66498bb6aacff656336a8287229c16b634d02cfb56f3ecf2d951301859e3a6",
+          "socket_manifest_sha256": "4ed2b4b3a14e9f481df1673d33488ebc3d3c8394b5fb8d2468ee1f67d747f3e6",
+          "semantic_mask_sha256": "89a6be17420338adc6174c20653247ab41eb56124dfcf54067e703d20a8b2119"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj_sha256": "3606715005a3d1e0819e2b79fe61351493647018cd27f96b98aca673e2def10b",
+          "socket_manifest_sha256": "2853880df3d6e67590afff26e8928e08e9228f6c0977328f566d1df8999103e9",
+          "semantic_mask_sha256": "a3ebe6105d0e07fdb77c1a669dccf38c8684a428dbe02dce883aa01b93a1cccb"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.25,
+          -0.25,
+          -0.8
+        ],
+        "max": [
+          0.25,
+          0.4,
+          0.25
+        ]
+      },
+      "semantic_regions": [
+        "tail",
+        "join-cover"
+      ],
+      "landmarks": {
+        "tail-root": [
+          0,
+          0.32,
+          0.2
+        ],
+        "tail-tip": [
+          0,
+          -0.18,
+          -0.76
+        ]
+      }
     },
     {
       "id": "grendel-tail",
@@ -1173,21 +1878,58 @@
           "lod": "full",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj_sha256": "71200cdbd47325f4f82a59d30f3816464e00929ac8d67ed5c27921d4d8213a07",
+          "socket_manifest_sha256": "72a32175ceeb131300bb6f2c01e1600eff1622bd37081d61b519dcfe532b2540",
+          "semantic_mask_sha256": "1f58f91f3ef0fbc142065d13c2d142f8263957d396ee474311ee3a023c356714"
         },
         {
           "lod": "compact",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj_sha256": "5cdfdbac4156e1e427bff78aef84fe833e1c97409d4fda01e2f73935149ebee2",
+          "socket_manifest_sha256": "4bbc8987ce82fbbe19e77b468c087dba81c0a06f923d2e2298b52e5c6d1c1508",
+          "semantic_mask_sha256": "181d6208edcd9ffde8076bd987b27432d8c72d9993cda8b0e839fa8216d4d18e"
         },
         {
           "lod": "impostor",
           "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png"
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj_sha256": "68ab287f407d62798f1a947083ca3165bb3d656010e591f22630b68857a9f718",
+          "socket_manifest_sha256": "33db6ead2524c9d305ab0970f362a6b67cb15f661df2deb74031c862ea90720a",
+          "semantic_mask_sha256": "2bf9e9a1f8ea5887931aa73577dae4e25e904f25ed7ff85c16d046786b376612"
         }
-      ]
+      ],
+      "canonical_bounds": {
+        "min": [
+          -0.25,
+          -0.25,
+          -0.8
+        ],
+        "max": [
+          0.25,
+          0.4,
+          0.25
+        ]
+      },
+      "semantic_regions": [
+        "tail",
+        "join-cover"
+      ],
+      "landmarks": {
+        "tail-root": [
+          0,
+          0.32,
+          0.2
+        ],
+        "tail-tip": [
+          0,
+          -0.18,
+          -0.76
+        ]
+      }
     }
   ],
   "families": [
@@ -1211,8 +1953,8 @@
             ],
             "scale": [
               1.06,
-              1,
-              1.02
+              1.06,
+              1.06
             ]
           },
           "seam_offset": [
@@ -1239,8 +1981,8 @@
             ],
             "scale": [
               0.97,
-              1,
-              1
+              0.97,
+              0.97
             ]
           },
           "seam_offset": [
@@ -1266,9 +2008,9 @@
               1
             ],
             "scale": [
-              1,
-              0.97,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1294,9 +2036,9 @@
               1
             ],
             "scale": [
-              1,
-              0.95,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1322,9 +2064,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              0.94
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1362,8 +2104,8 @@
             ],
             "scale": [
               0.96,
-              1.04,
-              1
+              0.96,
+              0.96
             ]
           },
           "seam_offset": [
@@ -1389,9 +2131,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1.03
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1418,8 +2160,8 @@
             ],
             "scale": [
               1.04,
-              0.99,
-              1
+              1.04,
+              1.04
             ]
           },
           "seam_offset": [
@@ -1445,9 +2187,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1473,9 +2215,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              0.98
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1513,8 +2255,8 @@
             ],
             "scale": [
               1.04,
-              0.98,
-              1.03
+              1.04,
+              1.04
             ]
           },
           "seam_offset": [
@@ -1541,8 +2283,8 @@
             ],
             "scale": [
               1.03,
-              1,
-              1
+              1.03,
+              1.03
             ]
           },
           "seam_offset": [
@@ -1568,9 +2310,9 @@
               1
             ],
             "scale": [
-              1,
-              1.01,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1596,9 +2338,9 @@
               1
             ],
             "scale": [
-              1,
-              1.05,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1624,9 +2366,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1.02
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1664,7 +2406,7 @@
             ],
             "scale": [
               0.98,
-              1.08,
+              0.98,
               0.98
             ]
           },
@@ -1692,8 +2434,8 @@
             ],
             "scale": [
               0.97,
-              1,
-              1.03
+              0.97,
+              0.97
             ]
           },
           "seam_offset": [
@@ -1720,8 +2462,8 @@
             ],
             "scale": [
               1.04,
-              1.03,
-              1
+              1.04,
+              1.04
             ]
           },
           "seam_offset": [
@@ -1747,9 +2489,9 @@
               1
             ],
             "scale": [
-              1,
-              0.95,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1775,9 +2517,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1.06
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1815,8 +2557,8 @@
             ],
             "scale": [
               1.07,
-              0.97,
-              1.02
+              1.07,
+              1.07
             ]
           },
           "seam_offset": [
@@ -1842,9 +2584,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1870,9 +2612,9 @@
               1
             ],
             "scale": [
-              1,
-              0.97,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1898,9 +2640,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1926,9 +2668,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              0.94
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -1966,8 +2708,8 @@
             ],
             "scale": [
               1.08,
-              1.02,
-              1.06
+              1.08,
+              1.08
             ]
           },
           "seam_offset": [
@@ -1994,7 +2736,7 @@
             ],
             "scale": [
               1.03,
-              1,
+              1.03,
               1.03
             ]
           },
@@ -2022,8 +2764,8 @@
             ],
             "scale": [
               1.04,
-              0.99,
-              1
+              1.04,
+              1.04
             ]
           },
           "seam_offset": [
@@ -2049,9 +2791,9 @@
               1
             ],
             "scale": [
-              1,
-              1.05,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2077,9 +2819,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              0.98
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2117,8 +2859,8 @@
             ],
             "scale": [
               0.94,
-              1.08,
-              0.96
+              0.94,
+              0.94
             ]
           },
           "seam_offset": [
@@ -2145,8 +2887,8 @@
             ],
             "scale": [
               0.97,
-              1,
-              1
+              0.97,
+              0.97
             ]
           },
           "seam_offset": [
@@ -2172,9 +2914,9 @@
               1
             ],
             "scale": [
-              1,
-              1.01,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2200,9 +2942,9 @@
               1
             ],
             "scale": [
-              1,
-              0.95,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2228,9 +2970,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1.02
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2267,9 +3009,9 @@
               1
             ],
             "scale": [
-              1,
-              1.03,
-              0.97
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2295,9 +3037,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1.03
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2324,8 +3066,8 @@
             ],
             "scale": [
               1.04,
-              1.03,
-              1
+              1.04,
+              1.04
             ]
           },
           "seam_offset": [
@@ -2351,9 +3093,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2379,9 +3121,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1.06
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2419,8 +3161,8 @@
             ],
             "scale": [
               1.05,
-              1.01,
-              1.03
+              1.05,
+              1.05
             ]
           },
           "seam_offset": [
@@ -2447,8 +3189,8 @@
             ],
             "scale": [
               1.03,
-              1,
-              1
+              1.03,
+              1.03
             ]
           },
           "seam_offset": [
@@ -2474,9 +3216,9 @@
               1
             ],
             "scale": [
-              1,
-              0.97,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2502,9 +3244,9 @@
               1
             ],
             "scale": [
-              1,
-              1.05,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2530,9 +3272,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              0.94
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2570,7 +3312,7 @@
             ],
             "scale": [
               1.04,
-              1.05,
+              1.04,
               1.04
             ]
           },
@@ -2598,8 +3340,8 @@
             ],
             "scale": [
               0.97,
-              1,
-              1.03
+              0.97,
+              0.97
             ]
           },
           "seam_offset": [
@@ -2626,8 +3368,8 @@
             ],
             "scale": [
               1.04,
-              0.99,
-              1
+              1.04,
+              1.04
             ]
           },
           "seam_offset": [
@@ -2653,9 +3395,9 @@
               1
             ],
             "scale": [
-              1,
-              0.95,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2681,9 +3423,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              0.98
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2721,8 +3463,8 @@
             ],
             "scale": [
               1.1,
-              0.94,
-              1.08
+              1.1,
+              1.1
             ]
           },
           "seam_offset": [
@@ -2748,9 +3490,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2776,9 +3518,9 @@
               1
             ],
             "scale": [
-              1,
-              1.01,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2804,9 +3546,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2832,9 +3574,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1.02
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2872,8 +3614,8 @@
             ],
             "scale": [
               0.96,
-              1.1,
-              0.95
+              0.96,
+              0.96
             ]
           },
           "seam_offset": [
@@ -2900,7 +3642,7 @@
             ],
             "scale": [
               1.03,
-              1,
+              1.03,
               1.03
             ]
           },
@@ -2928,8 +3670,8 @@
             ],
             "scale": [
               1.04,
-              1.03,
-              1
+              1.04,
+              1.04
             ]
           },
           "seam_offset": [
@@ -2955,9 +3697,9 @@
               1
             ],
             "scale": [
-              1,
-              1.05,
-              1
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [
@@ -2983,9 +3725,9 @@
               1
             ],
             "scale": [
-              1,
-              1,
-              1.06
+              1.0,
+              1.0,
+              1.0
             ]
           },
           "seam_offset": [

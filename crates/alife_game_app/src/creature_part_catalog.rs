@@ -412,12 +412,71 @@ pub struct GeneForgePartSelector {
     pub uv_map: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeCanonicalBounds {
+    pub min: [f32; 3],
+    pub max: [f32; 3],
+}
+
+impl GeneForgeCanonicalBounds {
+    fn validate(self) -> Result<(), &'static str> {
+        if !self.min.into_iter().chain(self.max).all(f32::is_finite) {
+            return Err("bounds contain a non-finite coordinate");
+        }
+        if !(0..3).all(|axis| self.min[axis] < self.max[axis]) {
+            return Err("bounds must have positive extent on every axis");
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeSemanticRegion {
+    Head,
+    Torso,
+    LeftArm,
+    RightArm,
+    LeftLeg,
+    RightLeg,
+    Tail,
+    Eyes,
+    Mouth,
+    JoinCover,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeLandmarkId {
+    LeftEye,
+    RightEye,
+    Muzzle,
+    LeftBrow,
+    RightBrow,
+    LeftLid,
+    RightLid,
+    NeckAttachment,
+    LeftShoulderAttachment,
+    RightShoulderAttachment,
+    LeftHipAttachment,
+    RightHipAttachment,
+    LeftHand,
+    RightHand,
+    LeftFoot,
+    RightFoot,
+    TailRoot,
+    TailTip,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeneForgeGeneratedPartLod {
     pub lod: CreaturePartLodId,
     pub generated_obj: String,
+    pub generated_obj_sha256: String,
     pub socket_manifest: String,
+    pub socket_manifest_sha256: String,
     pub semantic_mask: String,
+    pub semantic_mask_sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -428,6 +487,9 @@ pub struct GeneForgePartAssetDefinition {
     pub selector: GeneForgePartSelector,
     pub groups: BTreeMap<CreaturePartSlot, String>,
     pub attachment_frames: BTreeMap<CreaturePartSlot, SocketFrame>,
+    pub canonical_bounds: GeneForgeCanonicalBounds,
+    pub semantic_regions: BTreeSet<GeneForgeSemanticRegion>,
+    pub landmarks: BTreeMap<GeneForgeLandmarkId, [f32; 3]>,
     pub lods: Vec<GeneForgeGeneratedPartLod>,
 }
 
@@ -448,6 +510,55 @@ impl GeneForgeFamilyPartRecipe {
                 .into_iter()
                 .any(|value| value.abs() > 1.0e-6)
     }
+
+    fn validate_authored_fit(&self) -> Result<(), &'static str> {
+        if !self
+            .fit
+            .translation
+            .into_iter()
+            .chain(self.fit.rotation_xyzw)
+            .chain(self.fit.scale)
+            .chain(self.seam_offset)
+            .all(f32::is_finite)
+        {
+            return Err("fit contains a non-finite value");
+        }
+        let rotation_norm_squared = self
+            .fit
+            .rotation_xyzw
+            .into_iter()
+            .map(|value| value * value)
+            .sum::<f32>();
+        if (rotation_norm_squared - 1.0).abs() > 1.0e-3 {
+            return Err("fit quaternion is not normalized");
+        }
+        let scale = self.fit.scale[0];
+        if !(0.88..=1.12).contains(&scale)
+            || self
+                .fit
+                .scale
+                .into_iter()
+                .any(|component| (component - scale).abs() > 1.0e-6)
+        {
+            return Err("fit scale must be uniform and within 0.88..=1.12");
+        }
+        if self
+            .fit
+            .translation
+            .into_iter()
+            .any(|component| component.abs() > 0.12)
+        {
+            return Err("fit translation exceeds 0.12 canonical units");
+        }
+        if self
+            .seam_offset
+            .into_iter()
+            .any(|component| component.abs() > 0.025)
+        {
+            return Err("fit seam offset exceeds 0.025 canonical units");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -463,6 +574,8 @@ pub struct GeneForgeCreaturePartCatalog {
     pub schema: String,
     pub schema_version: u16,
     pub blender_version: String,
+    pub importer_version: String,
+    pub recipe_sha256: String,
     pub sources: Vec<GeneForgeSourceDefinition>,
     pub part_assets: Vec<GeneForgePartAssetDefinition>,
     pub families: Vec<GeneForgeCreatureFamilyDefinition>,
@@ -486,14 +599,29 @@ impl GeneForgeCreaturePartCatalog {
         {
             return Err(GeneForgeCatalogError::Schema);
         }
+        if self.importer_version != "alife.geneforge_importer.v1" {
+            return Err(GeneForgeCatalogError::InvalidCatalogMetadata {
+                reason: "unexpected importer version",
+            });
+        }
+        if !valid_sha256(&self.recipe_sha256) {
+            return Err(GeneForgeCatalogError::InvalidCatalogMetadata {
+                reason: "invalid recipe SHA-256",
+            });
+        }
         if self.sources.is_empty() || self.part_assets.is_empty() || self.families.is_empty() {
             return Err(GeneForgeCatalogError::Empty);
         }
 
         let mut source_donors = BTreeSet::new();
         for source in &self.sources {
-            if !source_donors.insert(source.donor)
-                || !valid_sha256(&source.sha256)
+            if !source_donors.insert(source.donor) {
+                return Err(GeneForgeCatalogError::SourceAttributionDrift {
+                    donor: source.donor,
+                    reason: "duplicate donor source",
+                });
+            }
+            if !valid_sha256(&source.sha256)
                 || !valid_relative_path(&source.blend_file)
                 || !valid_relative_path(&source.texture_root)
                 || source.source_url.trim().is_empty()
@@ -502,9 +630,16 @@ impl GeneForgeCreaturePartCatalog {
                 || source.license.eq_ignore_ascii_case("unknown")
                 || !valid_production_path(&source.license_ref)
             {
-                return Err(GeneForgeCatalogError::InvalidSource(
-                    source.blend_file.clone(),
-                ));
+                return Err(GeneForgeCatalogError::SourceAttributionDrift {
+                    donor: source.donor,
+                    reason: "source record contains invalid metadata",
+                });
+            }
+            if !source_matches_pinned_attribution(source) {
+                return Err(GeneForgeCatalogError::SourceAttributionDrift {
+                    donor: source.donor,
+                    reason: "source record differs from pinned attribution",
+                });
             }
         }
         if source_donors
@@ -514,15 +649,15 @@ impl GeneForgeCreaturePartCatalog {
                 GeneForgeDonorId::Grendel,
             ])
         {
-            return Err(GeneForgeCatalogError::InvalidSource(
-                "donor set".to_string(),
-            ));
+            return Err(GeneForgeCatalogError::InvalidSourceSet);
         }
 
         let mut asset_ids = BTreeSet::new();
         for asset in &self.part_assets {
-            if !asset_ids.insert(asset.id.clone())
-                || !asset.id.validate()
+            if !asset_ids.insert(asset.id.clone()) {
+                return Err(GeneForgeCatalogError::DuplicateAssetId(asset.id.clone()));
+            }
+            if !asset.id.validate()
                 || !source_donors.contains(&asset.donor)
                 || asset.selector.marker_ids.is_empty()
                 || asset.selector.include_objects.is_empty()
@@ -537,23 +672,63 @@ impl GeneForgeCreaturePartCatalog {
                 || asset.selector.uv_map.trim().is_empty()
                 || (asset.logical_slot == CreaturePartSlotKey::Tail
                     && asset.donor == GeneForgeDonorId::Ettin)
-                || asset.groups.keys().copied().collect::<BTreeSet<_>>()
-                    != required_runtime_slots(asset.logical_slot)
-                || asset
-                    .attachment_frames
-                    .keys()
-                    .copied()
-                    .collect::<BTreeSet<_>>()
-                    != required_runtime_slots(asset.logical_slot)
             {
-                return Err(GeneForgeCatalogError::InvalidAsset(asset.id.0.clone()));
+                return Err(GeneForgeCatalogError::InvalidAsset {
+                    asset: asset.id.clone(),
+                    reason: "invalid selector, donor, or logical slot contract",
+                });
             }
-            if asset
-                .attachment_frames
-                .values()
-                .any(|frame| frame.validate().is_err())
-            {
-                return Err(GeneForgeCatalogError::InvalidAsset(asset.id.0.clone()));
+            for slot in required_runtime_slots(asset.logical_slot) {
+                if !asset.groups.contains_key(&slot) {
+                    return Err(GeneForgeCatalogError::MissingRuntimeGroup {
+                        asset: asset.id.clone(),
+                        slot,
+                    });
+                }
+                let frame = asset.attachment_frames.get(&slot).ok_or_else(|| {
+                    GeneForgeCatalogError::MissingAttachmentFrame {
+                        asset: asset.id.clone(),
+                        slot,
+                    }
+                })?;
+                frame.validate().map_err(|error| {
+                    GeneForgeCatalogError::InvalidAttachmentFrame {
+                        asset: asset.id.clone(),
+                        slot,
+                        reason: error.to_string(),
+                    }
+                })?;
+            }
+            asset.canonical_bounds.validate().map_err(|reason| {
+                GeneForgeCatalogError::InvalidCanonicalBounds {
+                    asset: asset.id.clone(),
+                    reason,
+                }
+            })?;
+            for region in required_semantic_regions(asset.logical_slot) {
+                if !asset.semantic_regions.contains(&region) {
+                    return Err(GeneForgeCatalogError::MissingSemanticRegion {
+                        asset: asset.id.clone(),
+                        region,
+                    });
+                }
+            }
+            for (landmark, point) in &asset.landmarks {
+                if !point.iter().copied().all(f32::is_finite) {
+                    return Err(GeneForgeCatalogError::InvalidLandmark {
+                        asset: asset.id.clone(),
+                        landmark: *landmark,
+                        reason: "landmark contains a non-finite coordinate",
+                    });
+                }
+            }
+            for landmark in required_landmarks(asset.logical_slot) {
+                if !asset.landmarks.contains_key(&landmark) {
+                    return Err(GeneForgeCatalogError::MissingLandmark {
+                        asset: asset.id.clone(),
+                        landmark,
+                    });
+                }
             }
             let lods = asset
                 .lods
@@ -567,13 +742,34 @@ impl GeneForgeCreaturePartCatalog {
                     CreaturePartLodId::Impostor,
                 ])
                 || asset.lods.len() != 3
-                || asset.lods.iter().any(|lod| {
-                    !valid_generated_path(&lod.generated_obj)
-                        || !valid_generated_path(&lod.socket_manifest)
-                        || !valid_production_path(&lod.semantic_mask)
-                })
             {
-                return Err(GeneForgeCatalogError::InvalidAsset(asset.id.0.clone()));
+                return Err(GeneForgeCatalogError::InvalidAssetLodSet {
+                    asset: asset.id.clone(),
+                });
+            }
+            for lod in &asset.lods {
+                if !valid_generated_path(&lod.generated_obj)
+                    || !valid_generated_path(&lod.socket_manifest)
+                    || !valid_production_path(&lod.semantic_mask)
+                {
+                    return Err(GeneForgeCatalogError::InvalidAssetLodPath {
+                        asset: asset.id.clone(),
+                        lod: lod.lod,
+                    });
+                }
+                for (output, digest) in [
+                    ("generated OBJ", &lod.generated_obj_sha256),
+                    ("socket manifest", &lod.socket_manifest_sha256),
+                    ("semantic mask", &lod.semantic_mask_sha256),
+                ] {
+                    if !valid_sha256(digest) {
+                        return Err(GeneForgeCatalogError::InvalidOutputDigest {
+                            asset: asset.id.clone(),
+                            lod: lod.lod,
+                            output,
+                        });
+                    }
+                }
             }
         }
 
@@ -597,16 +793,25 @@ impl GeneForgeCreaturePartCatalog {
             let mut donors = BTreeSet::new();
             for (slot, recipe) in &family.parts {
                 let asset = self.asset(&recipe.asset_id).ok_or_else(|| {
-                    GeneForgeCatalogError::UnknownAsset(recipe.asset_id.0.clone())
+                    GeneForgeCatalogError::UnknownAsset {
+                        family: family.id,
+                        slot: *slot,
+                        asset: recipe.asset_id.clone(),
+                    }
                 })?;
                 if asset.logical_slot != *slot
-                    || recipe.fit.validate().is_err()
-                    || !recipe.seam_offset.into_iter().all(f32::is_finite)
                     || recipe.variant_label.trim().is_empty()
                     || recipe.join_cover_kind.trim().is_empty()
                 {
                     return Err(GeneForgeCatalogError::InvalidFamily(family.id));
                 }
+                recipe.validate_authored_fit().map_err(|reason| {
+                    GeneForgeCatalogError::InvalidFamilyFit {
+                        family: family.id,
+                        slot: *slot,
+                        reason,
+                    }
+                })?;
                 donors.insert(asset.donor);
             }
             if donors != source_donors
@@ -630,14 +835,86 @@ pub enum GeneForgeCatalogError {
     Schema,
     #[error("GeneForge recipe catalog is empty")]
     Empty,
-    #[error("invalid GeneForge source {0}")]
-    InvalidSource(String),
-    #[error("invalid GeneForge part asset {0}")]
-    InvalidAsset(String),
-    #[error("unknown GeneForge part asset {0}")]
-    UnknownAsset(String),
+    #[error("invalid GeneForge catalog metadata: {reason}")]
+    InvalidCatalogMetadata { reason: &'static str },
+    #[error("GeneForge source set must contain exactly Norn, Ettin, and Grendel")]
+    InvalidSourceSet,
+    #[error("GeneForge source attribution drift for {donor:?}: {reason}")]
+    SourceAttributionDrift {
+        donor: GeneForgeDonorId,
+        reason: &'static str,
+    },
+    #[error("duplicate GeneForge part asset ID {0:?}")]
+    DuplicateAssetId(CreaturePartAssetId),
+    #[error("invalid GeneForge part asset {asset:?}: {reason}")]
+    InvalidAsset {
+        asset: CreaturePartAssetId,
+        reason: &'static str,
+    },
+    #[error("missing runtime group {slot:?} for GeneForge part asset {asset:?}")]
+    MissingRuntimeGroup {
+        asset: CreaturePartAssetId,
+        slot: CreaturePartSlot,
+    },
+    #[error("missing attachment frame {slot:?} for GeneForge part asset {asset:?}")]
+    MissingAttachmentFrame {
+        asset: CreaturePartAssetId,
+        slot: CreaturePartSlot,
+    },
+    #[error("invalid attachment frame {slot:?} for GeneForge part asset {asset:?}: {reason}")]
+    InvalidAttachmentFrame {
+        asset: CreaturePartAssetId,
+        slot: CreaturePartSlot,
+        reason: String,
+    },
+    #[error("invalid canonical bounds for GeneForge part asset {asset:?}: {reason}")]
+    InvalidCanonicalBounds {
+        asset: CreaturePartAssetId,
+        reason: &'static str,
+    },
+    #[error("missing semantic region {region:?} for GeneForge part asset {asset:?}")]
+    MissingSemanticRegion {
+        asset: CreaturePartAssetId,
+        region: GeneForgeSemanticRegion,
+    },
+    #[error("missing landmark {landmark:?} for GeneForge part asset {asset:?}")]
+    MissingLandmark {
+        asset: CreaturePartAssetId,
+        landmark: GeneForgeLandmarkId,
+    },
+    #[error("invalid landmark {landmark:?} for GeneForge part asset {asset:?}: {reason}")]
+    InvalidLandmark {
+        asset: CreaturePartAssetId,
+        landmark: GeneForgeLandmarkId,
+        reason: &'static str,
+    },
+    #[error("invalid LOD set for GeneForge part asset {asset:?}")]
+    InvalidAssetLodSet { asset: CreaturePartAssetId },
+    #[error("invalid {lod:?} output path for GeneForge part asset {asset:?}")]
+    InvalidAssetLodPath {
+        asset: CreaturePartAssetId,
+        lod: CreaturePartLodId,
+    },
+    #[error("invalid {output} SHA-256 for GeneForge part asset {asset:?} LOD {lod:?}")]
+    InvalidOutputDigest {
+        asset: CreaturePartAssetId,
+        lod: CreaturePartLodId,
+        output: &'static str,
+    },
+    #[error("unknown GeneForge part asset {asset:?} for family {family:?} slot {slot:?}")]
+    UnknownAsset {
+        family: CreaturePartFamilyId,
+        slot: CreaturePartSlotKey,
+        asset: CreaturePartAssetId,
+    },
     #[error("invalid GeneForge family {0:?}")]
     InvalidFamily(CreaturePartFamilyId),
+    #[error("invalid authored fit for GeneForge family {family:?} slot {slot:?}: {reason}")]
+    InvalidFamilyFit {
+        family: CreaturePartFamilyId,
+        slot: CreaturePartSlotKey,
+        reason: &'static str,
+    },
 }
 
 pub fn load_geneforge_creature_part_catalog(
@@ -657,6 +934,80 @@ fn required_runtime_slots(logical_slot: CreaturePartSlotKey) -> BTreeSet<Creatur
         }
         CreaturePartSlotKey::Tail => BTreeSet::from([CreaturePartSlot::TailBack]),
     }
+}
+
+fn required_semantic_regions(
+    logical_slot: CreaturePartSlotKey,
+) -> BTreeSet<GeneForgeSemanticRegion> {
+    use GeneForgeSemanticRegion::*;
+    match logical_slot {
+        CreaturePartSlotKey::Head => BTreeSet::from([Head, Eyes, Mouth, JoinCover]),
+        CreaturePartSlotKey::Torso => BTreeSet::from([Torso, JoinCover]),
+        CreaturePartSlotKey::Arms => BTreeSet::from([LeftArm, RightArm, JoinCover]),
+        CreaturePartSlotKey::Legs => BTreeSet::from([LeftLeg, RightLeg, JoinCover]),
+        CreaturePartSlotKey::Tail => BTreeSet::from([Tail, JoinCover]),
+    }
+}
+
+fn required_landmarks(logical_slot: CreaturePartSlotKey) -> BTreeSet<GeneForgeLandmarkId> {
+    use GeneForgeLandmarkId::*;
+    match logical_slot {
+        CreaturePartSlotKey::Head => BTreeSet::from([
+            LeftEye,
+            RightEye,
+            Muzzle,
+            LeftBrow,
+            RightBrow,
+            LeftLid,
+            RightLid,
+            NeckAttachment,
+        ]),
+        CreaturePartSlotKey::Torso => BTreeSet::from([
+            NeckAttachment,
+            LeftShoulderAttachment,
+            RightShoulderAttachment,
+            LeftHipAttachment,
+            RightHipAttachment,
+            TailRoot,
+        ]),
+        CreaturePartSlotKey::Arms => BTreeSet::from([
+            LeftShoulderAttachment,
+            RightShoulderAttachment,
+            LeftHand,
+            RightHand,
+        ]),
+        CreaturePartSlotKey::Legs => {
+            BTreeSet::from([LeftHipAttachment, RightHipAttachment, LeftFoot, RightFoot])
+        }
+        CreaturePartSlotKey::Tail => BTreeSet::from([TailRoot, TailTip]),
+    }
+}
+
+fn source_matches_pinned_attribution(source: &GeneForgeSourceDefinition) -> bool {
+    let (blend_file, sha256, texture_root) = match source.donor {
+        GeneForgeDonorId::Norn => (
+            "Norn/Geneforge_r4.0_Norn.blend",
+            "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A",
+            "Norn/Blueberry Norns Example/Geneforge Textures",
+        ),
+        GeneForgeDonorId::Ettin => (
+            "Ettin/geneforge_r4.0_ettin.blend",
+            "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B",
+            "Ettin/Teal Ettin Textures",
+        ),
+        GeneForgeDonorId::Grendel => (
+            "Grendel/geneforge_r4.0_grendel.blend",
+            "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62",
+            "Grendel/Purple Grendels Textures",
+        ),
+    };
+    source.blend_file == blend_file
+        && source.sha256 == sha256
+        && source.texture_root == texture_root
+        && source.source_url == "https://eem.foo/geneforge/"
+        && source.author == "Eem Foo"
+        && source.license == "MIT"
+        && source.license_ref == "production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md"
 }
 
 fn valid_sha256(value: &str) -> bool {
@@ -997,26 +1348,57 @@ mod tests {
     #[test]
     fn geneforge_v2_sources_and_generated_assets_are_complete() {
         let catalog = load_geneforge_creature_part_catalog().unwrap();
-        let source_hashes = catalog
-            .sources
-            .iter()
-            .map(|source| (source.donor, source.sha256.as_str()))
-            .collect::<BTreeMap<_, _>>();
-
         assert_eq!(
-            source_hashes[&GeneForgeDonorId::Norn],
-            "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A"
+            catalog.sources,
+            vec![
+                GeneForgeSourceDefinition {
+                    donor: GeneForgeDonorId::Norn,
+                    blend_file: "Norn/Geneforge_r4.0_Norn.blend".into(),
+                    sha256: "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A"
+                        .into(),
+                    texture_root: "Norn/Blueberry Norns Example/Geneforge Textures".into(),
+                    source_url: "https://eem.foo/geneforge/".into(),
+                    author: "Eem Foo".into(),
+                    license: "MIT".into(),
+                    license_ref: "production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md".into(),
+                },
+                GeneForgeSourceDefinition {
+                    donor: GeneForgeDonorId::Ettin,
+                    blend_file: "Ettin/geneforge_r4.0_ettin.blend".into(),
+                    sha256: "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B"
+                        .into(),
+                    texture_root: "Ettin/Teal Ettin Textures".into(),
+                    source_url: "https://eem.foo/geneforge/".into(),
+                    author: "Eem Foo".into(),
+                    license: "MIT".into(),
+                    license_ref: "production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md".into(),
+                },
+                GeneForgeSourceDefinition {
+                    donor: GeneForgeDonorId::Grendel,
+                    blend_file: "Grendel/geneforge_r4.0_grendel.blend".into(),
+                    sha256: "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62"
+                        .into(),
+                    texture_root: "Grendel/Purple Grendels Textures".into(),
+                    source_url: "https://eem.foo/geneforge/".into(),
+                    author: "Eem Foo".into(),
+                    license: "MIT".into(),
+                    license_ref: "production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md".into(),
+                },
+            ]
         );
-        assert_eq!(
-            source_hashes[&GeneForgeDonorId::Ettin],
-            "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B"
-        );
-        assert_eq!(
-            source_hashes[&GeneForgeDonorId::Grendel],
-            "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62"
-        );
+        assert_eq!(catalog.importer_version, "alife.geneforge_importer.v1");
+        assert!(valid_sha256(&catalog.recipe_sha256));
 
         for asset in &catalog.part_assets {
+            assert!(asset.canonical_bounds.validate().is_ok());
+            assert_eq!(
+                asset.semantic_regions,
+                required_semantic_regions(asset.logical_slot),
+                "{} must declare the complete semantic atlas contract",
+                asset.id.0
+            );
+            assert!(required_landmarks(asset.logical_slot)
+                .is_subset(&asset.landmarks.keys().copied().collect()));
             assert_eq!(
                 asset
                     .lods
@@ -1031,6 +1413,11 @@ mod tests {
                 "{} must have every production LOD",
                 asset.id.0
             );
+            for lod in &asset.lods {
+                assert!(valid_sha256(&lod.generated_obj_sha256));
+                assert!(valid_sha256(&lod.socket_manifest_sha256));
+                assert!(valid_sha256(&lod.semantic_mask_sha256));
+            }
             assert!(asset
                 .selector
                 .marker_ids
@@ -1100,5 +1487,239 @@ mod tests {
             .unwrap();
         tail.donor = GeneForgeDonorId::Ettin;
         assert!(impossible_tail.validate().is_err());
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_duplicate_asset_ids() {
+        let mut catalog = load_geneforge_creature_part_catalog().unwrap();
+        catalog.part_assets.push(catalog.part_assets[0].clone());
+
+        assert!(matches!(
+            catalog.validate(),
+            Err(GeneForgeCatalogError::DuplicateAssetId(ref asset))
+                if asset == &CreaturePartAssetId("norn-head".into())
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_invalid_logical_slot_json() {
+        let invalid = GENEFORGE_RECIPE_CATALOG_JSON.replacen(
+            "\"logical_slot\": \"head\"",
+            "\"logical_slot\": \"wings\"",
+            1,
+        );
+
+        assert!(matches!(
+            GeneForgeCreaturePartCatalog::from_json_str(&invalid),
+            Err(GeneForgeCatalogError::Json(_))
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_missing_or_invalid_attachment_frames() {
+        let mut missing = load_geneforge_creature_part_catalog().unwrap();
+        missing.part_assets[0]
+            .attachment_frames
+            .remove(&CreaturePartSlot::Head);
+        assert!(matches!(
+            missing.validate(),
+            Err(GeneForgeCatalogError::MissingAttachmentFrame { ref asset, slot })
+                if asset == &CreaturePartAssetId("norn-head".into())
+                    && slot == CreaturePartSlot::Head
+        ));
+
+        let mut invalid = load_geneforge_creature_part_catalog().unwrap();
+        invalid.part_assets[0]
+            .attachment_frames
+            .get_mut(&CreaturePartSlot::Head)
+            .unwrap()
+            .rotation_xyzw = [0.0; 4];
+        assert!(matches!(
+            invalid.validate(),
+            Err(GeneForgeCatalogError::InvalidAttachmentFrame {
+                ref asset,
+                slot: CreaturePartSlot::Head,
+                ..
+            }) if asset == &CreaturePartAssetId("norn-head".into())
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_missing_semantic_regions() {
+        let mut catalog = load_geneforge_creature_part_catalog().unwrap();
+        catalog.part_assets[0]
+            .semantic_regions
+            .remove(&GeneForgeSemanticRegion::JoinCover);
+
+        assert!(matches!(
+            catalog.validate(),
+            Err(GeneForgeCatalogError::MissingSemanticRegion {
+                ref asset,
+                region: GeneForgeSemanticRegion::JoinCover,
+            }) if asset == &CreaturePartAssetId("norn-head".into())
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_non_finite_and_out_of_range_family_fits() {
+        let mut non_finite = load_geneforge_creature_part_catalog().unwrap();
+        non_finite.families[0]
+            .parts
+            .get_mut(&CreaturePartSlotKey::Head)
+            .unwrap()
+            .seam_offset[0] = f32::NAN;
+        assert!(matches!(
+            non_finite.validate(),
+            Err(GeneForgeCatalogError::InvalidFamilyFit {
+                family: CreaturePartFamilyId(0),
+                slot: CreaturePartSlotKey::Head,
+                ..
+            })
+        ));
+
+        let mut out_of_range = load_geneforge_creature_part_catalog().unwrap();
+        out_of_range.families[0]
+            .parts
+            .get_mut(&CreaturePartSlotKey::Head)
+            .unwrap()
+            .fit
+            .scale = [1.13; 3];
+        assert!(matches!(
+            out_of_range.validate(),
+            Err(GeneForgeCatalogError::InvalidFamilyFit {
+                family: CreaturePartFamilyId(0),
+                slot: CreaturePartSlotKey::Head,
+                ..
+            })
+        ));
+
+        let mut non_uniform = load_geneforge_creature_part_catalog().unwrap();
+        non_uniform.families[0]
+            .parts
+            .get_mut(&CreaturePartSlotKey::Head)
+            .unwrap()
+            .fit
+            .scale = [1.0, 1.01, 1.0];
+        assert!(matches!(
+            non_uniform.validate(),
+            Err(GeneForgeCatalogError::InvalidFamilyFit {
+                family: CreaturePartFamilyId(0),
+                slot: CreaturePartSlotKey::Head,
+                ..
+            })
+        ));
+
+        let mut translated = load_geneforge_creature_part_catalog().unwrap();
+        translated.families[0]
+            .parts
+            .get_mut(&CreaturePartSlotKey::Head)
+            .unwrap()
+            .fit
+            .translation = [0.121, 0.0, 0.0];
+        assert!(matches!(
+            translated.validate(),
+            Err(GeneForgeCatalogError::InvalidFamilyFit {
+                family: CreaturePartFamilyId(0),
+                slot: CreaturePartSlotKey::Head,
+                ..
+            })
+        ));
+
+        let mut seam = load_geneforge_creature_part_catalog().unwrap();
+        seam.families[0]
+            .parts
+            .get_mut(&CreaturePartSlotKey::Head)
+            .unwrap()
+            .seam_offset = [0.026, 0.0, 0.0];
+        assert!(matches!(
+            seam.validate(),
+            Err(GeneForgeCatalogError::InvalidFamilyFit {
+                family: CreaturePartFamilyId(0),
+                slot: CreaturePartSlotKey::Head,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_invalid_output_digests() {
+        let mut catalog = load_geneforge_creature_part_catalog().unwrap();
+        catalog.part_assets[0].lods[0].generated_obj_sha256 = "not-a-sha256".into();
+
+        assert!(matches!(
+            catalog.validate(),
+            Err(GeneForgeCatalogError::InvalidOutputDigest {
+                ref asset,
+                lod: CreaturePartLodId::Full,
+                output: "generated OBJ",
+            }) if asset == &CreaturePartAssetId("norn-head".into())
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_absent_required_metadata() {
+        let mut json: serde_json::Value =
+            serde_json::from_str(GENEFORGE_RECIPE_CATALOG_JSON).unwrap();
+        json["part_assets"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("canonical_bounds");
+
+        assert!(matches!(
+            GeneForgeCreaturePartCatalog::from_json_str(&json.to_string()),
+            Err(GeneForgeCatalogError::Json(_))
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_invalid_catalog_bounds_and_landmark_metadata() {
+        let mut catalog_metadata = load_geneforge_creature_part_catalog().unwrap();
+        catalog_metadata.importer_version = "unreviewed-importer".into();
+        assert!(matches!(
+            catalog_metadata.validate(),
+            Err(GeneForgeCatalogError::InvalidCatalogMetadata { .. })
+        ));
+
+        let mut recipe_digest = load_geneforge_creature_part_catalog().unwrap();
+        recipe_digest.recipe_sha256 = "invalid".into();
+        assert!(matches!(
+            recipe_digest.validate(),
+            Err(GeneForgeCatalogError::InvalidCatalogMetadata { .. })
+        ));
+
+        let mut bounds = load_geneforge_creature_part_catalog().unwrap();
+        bounds.part_assets[0].canonical_bounds.max[0] =
+            bounds.part_assets[0].canonical_bounds.min[0];
+        assert!(matches!(
+            bounds.validate(),
+            Err(GeneForgeCatalogError::InvalidCanonicalBounds { .. })
+        ));
+
+        let mut landmark = load_geneforge_creature_part_catalog().unwrap();
+        landmark.part_assets[0]
+            .landmarks
+            .get_mut(&GeneForgeLandmarkId::LeftEye)
+            .unwrap()[0] = f32::NAN;
+        assert!(matches!(
+            landmark.validate(),
+            Err(GeneForgeCatalogError::InvalidLandmark {
+                landmark: GeneForgeLandmarkId::LeftEye,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_complete_source_attribution_drift() {
+        let mut catalog = load_geneforge_creature_part_catalog().unwrap();
+        catalog.sources[0].author = "Different Author".into();
+
+        assert!(matches!(
+            catalog.validate(),
+            Err(GeneForgeCatalogError::SourceAttributionDrift {
+                donor: GeneForgeDonorId::Norn,
+                ..
+            })
+        ));
     }
 }
