@@ -575,6 +575,7 @@ pub struct GeneForgeCreaturePartCatalog {
     pub schema_version: u16,
     pub blender_version: String,
     pub importer_version: String,
+    /// SHA-256 of key-sorted compact JSON with this field replaced by 64 zeroes.
     pub recipe_sha256: String,
     pub sources: Vec<GeneForgeSourceDefinition>,
     pub part_assets: Vec<GeneForgePartAssetDefinition>,
@@ -1387,7 +1388,10 @@ mod tests {
             ]
         );
         assert_eq!(catalog.importer_version, "alife.geneforge_importer.v1");
-        assert!(valid_sha256(&catalog.recipe_sha256));
+        assert_eq!(
+            catalog.recipe_sha256,
+            "9549054622316ede00728fd369dec3b97eec4be18b3210eab25ed4e97b9b71b0"
+        );
 
         for asset in &catalog.part_assets {
             assert!(asset.canonical_bounds.validate().is_ok());
@@ -1437,9 +1441,21 @@ mod tests {
         }
 
         let expected_head_objects = [
-            ("norn-head", ["Head1.normal", "Eye_L", "Lid_L"]),
-            ("ettin-head", ["head1_Ettin_normal", "Eye L", "Eyelid L"]),
-            ("grendel-head", ["Head1_Grendel", "Eye L", "ear 2L"]),
+            (
+                "norn-head",
+                &[
+                    "Head1.normal",
+                    "Eye_L",
+                    "Lid_L",
+                    "ear_2L_chichi",
+                    "ear_2R_chichi",
+                ][..],
+            ),
+            (
+                "ettin-head",
+                &["head1_Ettin_normal", "Eye L", "Eyelid L"][..],
+            ),
+            ("grendel-head", &["Head1_Grendel", "Eye L", "ear 2L"][..]),
         ];
         for (asset_id, objects) in expected_head_objects {
             let asset = catalog

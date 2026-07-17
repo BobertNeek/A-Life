@@ -3,7 +3,7 @@
   "schema_version": 2,
   "blender_version": "5.1.0",
   "importer_version": "alife.geneforge_importer.v1",
-  "recipe_sha256": "cbea0b830a96408bda361d3cb446a1754710a2cd3361bf95339d263147060e37",
+  "recipe_sha256": "9549054622316ede00728fd369dec3b97eec4be18b3210eab25ed4e97b9b71b0",
   "sources": [
     {
       "donor": "norn",
@@ -58,7 +58,9 @@
           "mouthback_patched",
           "Hair_m_civet",
           "extra whiskers mL-bengal",
-          "extra whiskers mR-bengal"
+          "extra whiskers mR-bengal",
+          "ear_2L_chichi",
+          "ear_2R_chichi"
         ],
         "selector_tags": {
           "age": "adult",
@@ -69,6 +71,8 @@
         "uv_map": "UVMap",
         "object_visscripts": {
           "Head1.normal": "part=Head&normal",
+          "ear_2L_chichi": "part=Head&normal",
+          "ear_2R_chichi": "part=Head&&normal|sad|angry",
           "Teeth_T": "part=Head",
           "Teeth_B": "part=Head&!sad&!sleepy",
           "tongue": "part=Head"
