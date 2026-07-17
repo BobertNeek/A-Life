@@ -237,14 +237,14 @@ fn assets_root(catalog_path: &Path) -> Result<PathBuf, Box<dyn std::error::Error
         .to_path_buf())
 }
 
-fn family_lod<'a>(
-    catalog: &'a CreaturePartCatalog,
+fn family_lod(
+    catalog: &CreaturePartCatalog,
     family: CreaturePartFamilyId,
     lod: CreaturePartLodId,
 ) -> Result<
     (
-        &'a CreaturePartFamilyDefinition,
-        &'a alife_game_app::CreaturePartLod,
+        &CreaturePartFamilyDefinition,
+        &alife_game_app::CreaturePartLod,
     ),
     Box<dyn std::error::Error>,
 > {
@@ -314,9 +314,9 @@ fn analyze(
         .iter()
         .flat_map(|triangle| triangle.vertices)
     {
-        for axis in 0..3 {
-            bounds[0][axis] = bounds[0][axis].min(vertex.position[axis]);
-            bounds[1][axis] = bounds[1][axis].max(vertex.position[axis]);
+        for (axis, coordinate) in vertex.position.into_iter().enumerate() {
+            bounds[0][axis] = bounds[0][axis].min(coordinate);
+            bounds[1][axis] = bounds[1][axis].max(coordinate);
         }
     }
     let receipt = AnalysisReceipt {
@@ -462,13 +462,25 @@ fn render_preview(
         .fold(f64::NEG_INFINITY, f64::max);
     let scale = (f64::from(width) * 0.8 / (max_x - min_x).max(1.0e-6))
         .min(f64::from(height) * 0.8 / (max_z - min_z).max(1.0e-6));
+    let projection = PreviewProjection {
+        min_x,
+        max_z,
+        scale,
+    };
     for (slot, color) in colors {
         let Some(part) = pack.parts.get(&slot) else {
             continue;
         };
-        draw_part_triangles(&mut image, pack, slot, part, color, min_x, max_z, scale);
+        draw_part_triangles(&mut image, pack, slot, part, color, projection);
     }
     image
+}
+
+#[derive(Clone, Copy)]
+struct PreviewProjection {
+    min_x: f64,
+    max_z: f64,
+    scale: f64,
 }
 
 fn draw_part_triangles(
@@ -477,17 +489,17 @@ fn draw_part_triangles(
     slot: CreaturePartSlot,
     part: &GeneratedPartMesh,
     color: [u8; 4],
-    min_x: f64,
-    max_z: f64,
-    scale: f64,
+    projection: PreviewProjection,
 ) {
     for triangle in part.indices.chunks_exact(3) {
         let points = [0_usize, 1, 2].map(|corner| {
             let index = triangle[corner];
             let position = assembled_position(pack, slot, part.vertices[index as usize].position);
             [
-                (position[0] - min_x) * scale + f64::from(image.width()) * 0.1,
-                (max_z - position[2]) * scale + f64::from(image.height()) * 0.1,
+                (position[0] - projection.min_x) * projection.scale
+                    + f64::from(image.width()) * 0.1,
+                (projection.max_z - position[2]) * projection.scale
+                    + f64::from(image.height()) * 0.1,
             ]
         });
         let min_px = points

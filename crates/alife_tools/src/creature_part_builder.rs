@@ -672,7 +672,7 @@ fn emit_named_obj(pack: &SlicedCreaturePartPack) -> Vec<u8> {
             ));
         }
         for triangle in part.indices.chunks_exact(3) {
-            output.push_str("f");
+            output.push('f');
             for index in triangle {
                 let global = vertex_offset + index;
                 output.push_str(&format!(" {global}/{global}/{global}"));
