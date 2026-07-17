@@ -113,6 +113,72 @@ require_all_text docs/architecture_decisions.md 'ADR-024 presence and explicit s
   '## ADR-024: Closed-Loop Neural Cognition Is GPU-Authoritative' \
   'This decision supersedes the CPU consolidation authority in ADR-014, the P14 CPU-schema ownership clause in ADR-015, GPU parity ''gating in ADR-016, CPU fallback in ADR-019 and ADR-021, and the CPU-''shadow/parity authority clauses in ADR-023. Their save-safety, sparse-layout, world-authority, and sealed-patch boundaries remain in force where they do not conflict with ADR-024.'
 
+# N2048 foundation/language/lineage program specification alignment.
+require_all_text docs/architecture_decisions.md 'ADR-027 Baldwinian foundation inheritance' \
+  '## ADR-027: Curated Foundations Use Baldwinian Inheritance' \
+  'W_genetic = foundation + compiled genome deltas' \
+  'Lifetime weights, episodic or semantic memories, learned language bindings, eligibility, and transient state are not inherited.'
+require_all_text docs/architecture_decisions.md 'ADR-028 grounded language and authentic narration' \
+  '## ADR-028: Grounded Language and Narration Remain Neural' \
+  'LanguageCodebookV1' \
+  'Other creatures hear the raw token sequence selected by the speaker, never polished SLM output.'
+require_all_text docs/architecture_decisions.md 'ADR-029 persistent neural identity and growth' \
+  '## ADR-029: Persistent Neural Identity Enables Function-Preserving Growth' \
+  'BLAKE3-256' \
+  'Packed GPU offsets remain runtime-local.'
+require_all_text docs/architecture_decisions.md 'ADR-030 durable archives and founder portability' \
+  '## ADR-030: Durable Creature Archives Precede Retirement' \
+  'Every creature receives an immutable genetic archive before GPU insertion.' \
+  'A dying creature is archived before its GPU handle is scrubbed or its world entity despawns.'
+require_all_text docs/master_spec.md 'N2048 curated foundation boundary' \
+  '`N2048FoundationLayoutV1` is the first trained foundation.' \
+  '`W_genetic = foundation + compiled genome deltas`' \
+  'Genetic birth clears lifetime weights, fast weights, eligibility, semantic and episodic content, and learned lexicon bindings.'
+require_all_text docs/master_spec.md 'limited language is an ABI rather than a neuron layout' \
+  '`LanguageCodebookV1` has 256 stable logical codes independent of neuron indices.' \
+  'Token IDs never identify neurons or packed GPU offsets.'
+require_all_text docs/master_spec.md 'spatial speech and neural narration authority' \
+  'Player speech is spatial perception, never a direct command channel.' \
+  '`Vocalize` is an unscored world opportunity whose speech act and token payload are selected by the GPU brain.'
+require_all_text docs/master_spec.md 'bounded SLM translation boundary' \
+  '`SemanticPriorRequest` and `SpeechTranslationRequest` are separate request schemas.' \
+  'The SLM never authors creature thought, action, reward, target, desirability, or hidden comprehension.'
+require_all_text docs/master_spec.md 'persistent address and checkpoint boundary' \
+  '`PersistentNeuronAddress { lobe, ordinal }`' \
+  '`GeneticRebuild`, `DurableLearnedFounder`, and `ExactResume`' \
+  'Packed GPU offsets remain runtime-local.'
+require_all_text docs/master_spec.md 'durable archive and founder boundary' \
+  'Every creature receives an immutable genetic archive before GPU insertion.' \
+  '`GeneticFounder`, `MindStateClone`, and `GeneticOffspring`' \
+  'A dying creature is archived before its GPU handle is scrubbed or its world entity despawns.'
+require_all_text docs/schooling_and_teacher_architecture.md 'perception-only language nursery' \
+  'The language nursery teaches through normal hearing, object presentation, action demonstration, and sealed world feedback.' \
+  'The canonical codebook defines pronounceable symbols and grammatical roles, not inherited world meanings.' \
+  'Language evaluation runs with SLM translation disabled.'
+require_all_text AGENTS.md 'root N2048 foundation and language guardrails' \
+  'N2048 is the first trained foundation; N4096 remains research-only.' \
+  'Language token IDs are stable logical codes, never neuron indices or packed GPU offsets.' \
+  'Archive every creature before GPU insertion and archive death before GPU retirement.'
+require_all_text docs/AGENTS.md 'documentation foundation and lineage authority' \
+  'ADR-027 through ADR-030 control curated foundations, grounded language, persistent neural identity, and durable archives.' \
+  'Limited language is a scalable ABI, not a neuron-address layout.'
+require_all_text crates/alife_core/AGENTS.md 'core foundation and language contract ownership' \
+  'Own foundation, language-codebook, persistent-address, checkpoint, and archive-provenance contracts.' \
+  'Never equate a language token ID with a neuron or packed GPU offset.'
+require_all_text crates/alife_gpu_backend/AGENTS.md 'GPU speech and training authority' \
+  'Neural `Vocalize` payload selection remains GPU-authoritative.' \
+  'Training-only WGSL and optimizer state stay out of production game binaries and saves.'
+require_all_text crates/alife_school/AGENTS.md 'school language nursery boundary' \
+  'Teach vocabulary through spatial hearing, visible objects, demonstrations, and sealed outcomes.' \
+  'Run language mastery gates with SLM translation disabled.'
+require_all_text crates/alife_semantic/AGENTS.md 'separate SLM schemas and no authored cognition' \
+  '`SemanticPriorRequest` and `SpeechTranslationRequest` remain separate schemas.' \
+  'Translation may map or render bounded raw tokens; it may not author creature thought or speech.'
+require_all_text crates/alife_world/AGENTS.md 'world speech and retirement authority' \
+  'Player, creature, and teacher speech are spatial world perception.' \
+  '`Vocalize` is an unscored opportunity whose payload is selected by the GPU brain.' \
+  'Death archiving completes before GPU retirement and despawn.'
+
 if (( semantic_failures > 0 )); then
   printf 'TASK_1_SEMANTIC_ASSERTIONS=FAIL (%d/%d failed)\n' "${semantic_failures}" "${semantic_checks}" >&2
   exit 1
