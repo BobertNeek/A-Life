@@ -17,4 +17,9 @@ Rules:
   legality and outcomes.
 - Promote only N512, N1024, and N2048 until larger tiers pass the documented
   causal and performance gates.
+- Own foundation, language-codebook, persistent-address, checkpoint, and
+  archive-provenance contracts.
+- Never equate a language token ID with a neuron or packed GPU offset.
+- Genetic birth must not inherit lifetime weights, memories, learned lexicon
+  bindings, eligibility, or transient state.
 - Runtime GPU kernels do not belong here.

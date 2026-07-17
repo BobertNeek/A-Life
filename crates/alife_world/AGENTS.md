@@ -11,4 +11,8 @@ Rules:
 - Use stable IDs and core ABI types rather than Bevy ECS internals.
 - Do not store renderer, GPU backend, or teacher-private state here.
 - Do not let neural outputs bypass world validation.
+- Player, creature, and teacher speech are spatial world perception.
+- `Vocalize` is an unscored opportunity whose payload is selected by the GPU
+  brain.
+- Death archiving completes before GPU retirement and despawn.
 - Implement reviewed world behavior through focused modules and stable contracts.

@@ -7,6 +7,11 @@ Rules:
 
 - External teachers must teach through ordinary perception: speech, writing,
   gesture, demonstrations, objects, and feedback.
+- Teach vocabulary through spatial hearing, visible objects, demonstrations,
+  and sealed outcomes.
+- Run language mastery gates with SLM translation disabled.
 - Do not inject hidden vectors, direct rewards, or weight edits into creatures.
 - Keep teacher-private planning state separate from creature memory.
-- Do not bind the scaffold to a specific LLM vendor without an explicit spec update.
+- Teacher requests never become scored candidates, selected actions, or hidden
+  semantic activations.
+- Keep provider integration vendor-neutral unless an explicit spec changes it.

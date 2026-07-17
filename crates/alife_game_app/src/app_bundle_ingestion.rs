@@ -228,7 +228,10 @@ fn validate_app_bundle_manifest_inner(
         resolve_workspace_path(root, &manifest.production_voxel_asset_manifest)?;
     let production_voxel_assets = validate_production_assets(&production_voxel_asset_path)?;
     largest_file_bytes = largest_file_bytes
-        .max(tiny_file_size(&production_voxel_asset_path)?)
+        .max(bounded_file_size(
+            &production_voxel_asset_path,
+            CA12_MAX_REFERENCED_MANIFEST_BYTES,
+        )?)
         .max(production_voxel_assets.largest_asset_bytes);
 
     let mut ids = BTreeSet::new();
@@ -484,8 +487,12 @@ fn require_id(value: &str) -> Result<(), GameAppShellError> {
 }
 
 fn tiny_file_size(path: &Path) -> Result<u64, GameAppShellError> {
+    bounded_file_size(path, CA12_MAX_BUNDLE_FILE_BYTES)
+}
+
+fn bounded_file_size(path: &Path, max_bytes: u64) -> Result<u64, GameAppShellError> {
     let bytes = std::fs::metadata(path)?.len();
-    if bytes > CA12_MAX_BUNDLE_FILE_BYTES {
+    if bytes > max_bytes {
         Err(ScaffoldContractError::MissingPhaseData.into())
     } else {
         Ok(bytes)

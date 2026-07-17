@@ -24,4 +24,9 @@ Rules:
   legality and outcomes.
 - Promote only N512, N1024, and N2048 until larger tiers pass the documented
   causal and performance gates.
+- ADR-027 through ADR-030 control curated foundations, grounded language,
+  persistent neural identity, and durable archives.
+- Limited language is a scalable ABI, not a neuron-address layout.
+- Keep genetic inheritance separate from lifetime weights, episodic/semantic
+  content, and learned language.
 - When docs change architecture, update `architecture_decisions.md` or explain why no ADR change is needed.

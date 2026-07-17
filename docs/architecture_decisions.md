@@ -170,3 +170,102 @@ CPU-schema ownership clause in ADR-015, GPU parity gating in ADR-016, CPU
 fallback in ADR-019 and ADR-021, and the CPU-shadow/parity authority clauses in
 ADR-023. Their save-safety, sparse-layout, world-authority, and sealed-patch
 boundaries remain in force where they do not conflict with ADR-024.
+
+ADR-025 and ADR-026 are reserved for the already approved memory/grounding and
+scaling/promotion checkpoints. Their reserved numbers do not delay the
+foundation, language, identity, or archive decisions below.
+
+## ADR-027: Curated Foundations Use Baldwinian Inheritance
+
+Decision: N2048 is the first trained brain class. A versioned immutable curated
+foundation supplies perception, proprioception, movement, eating, resting,
+survival instincts, content-neutral memory mechanics, and language mechanics.
+The production genetic payload is composed deterministically as
+`W_genetic = foundation + compiled genome deltas`. Curated gradient training is
+followed by evolutionary hardening in the exact production GPU runtime.
+
+Foundation sections declare `Fixed`, `Slow`, or `Fast` lifetime-plasticity
+bands. Fixed sections do not learn during life. Slow sections can adapt without
+quickly erasing inherited skills. Fast sections support personal association,
+episodic, working-memory, and lexicon learning. Promotion may distill audited
+population improvements into a future foundation version, but an individual
+parent's acquired weights are not silently copied into offspring.
+
+At genetic birth, the child inherits foundation identity, compatible structural
+genes, endocrine traits, and sparse genetic deltas. Lifetime weights, episodic
+or semantic memories, learned language bindings, eligibility, and transient
+state are not inherited. Cross-foundation mating is allowed only inside an
+explicit compatibility family, using persistent logical addresses and a
+declared child foundation. This is the default Baldwinian boundary; experimental
+Lamarckian modes require separate, visible provenance and are not Foundation V1.
+
+## ADR-028: Grounded Language and Narration Remain Neural
+
+Decision: N2048 uses `LanguageCodebookV1`, a limited compositional vocabulary of
+256 stable logical codes that is independent of neuron indices and packed GPU
+offsets. The codebook supplies pronounceable symbols and grammatical roles, not
+inherited object meanings. Ecological nouns, action words, names, aliases, and
+dialects are grounded during life through ordinary perception, action,
+demonstration, and sealed outcomes.
+
+Player, creature, and teacher utterances are spatial world events. Player text
+may be normalized into at most 16 existing or novel tokens, but it never creates
+an action score, target instruction, or reward. A named utterance is addressed;
+an unnamed utterance is heard only by creatures in physical range, subject to
+noise, attention, and hearing ability.
+
+Self-narration is an authentic neural act. The world exposes one unscored
+`Vocalize` opportunity when legal. Only after it wins does the GPU speech head
+select the speech act and up to six tokens. The world validates, charges, and
+broadcasts that literal payload. Other creatures hear the raw token sequence
+selected by the speaker, never polished SLM output.
+
+The local SLM has separate developmental-prior and translation request schemas.
+It may weakly scaffold learning or map human surface text to already bounded
+tokens, and may render raw creature tokens for the player with uncertainty. It
+may not author creature thought or speech content, issue actions, choose world
+targets, inject reward, or activate hidden concepts. Unaided and SLM-assisted
+language evidence remain separate.
+
+## ADR-029: Persistent Neural Identity Enables Function-Preserving Growth
+
+Decision: Every phenotype publishes persistent neuron, projection, synapse, and
+decoder addresses. A neuron is addressed by lobe identity and ordinal, while
+projection and synapse addresses derive from stable logical endpoints and route
+identity. The canonical address map is bound by BLAKE3-256. Packed GPU offsets
+remain runtime-local.
+
+`GeneticRebuild`, `DurableLearnedFounder`, and `ExactResume` are distinct
+checkpoint modes. Durable founder cloning preserves consolidated learning,
+long-term semantic/episodic content, learned language, and provenance while
+clearing activations, eligibility, working memory, injuries, age, current
+targets, and world-local bindings.
+
+Research growth appends capacity after each preserved lobe prefix. Migration
+occurs only at a sealed boundary, completes pending consolidation exactly once,
+creates a rollback checkpoint, maps all old state by persistent address,
+initializes expansion neurons and bridges dormant, and requires same-adapter
+selection identity with logit delta at most `1e-6` before atomic handoff.
+`N4096Research` remains unpromoted.
+
+## ADR-030: Durable Creature Archives Precede Retirement
+
+Decision: Every creature receives an immutable genetic archive before GPU
+insertion. The archive binds genome, foundation assets, ABI and codebook
+identities, lineage, provenance, and passive life statistics in a content-
+addressed profile-local store. Selected elites may additionally receive
+quota-bound durable learned checkpoints; pinned checkpoints are never
+automatically evicted.
+
+A dying creature is archived before its GPU handle is scrubbed or its world
+entity despawns. Final outcome sealing, life-stat commit, optional learned-state
+capture, and retirement receipt all precede handle retirement. A crash-rebuilt
+index must recover the immutable manifests and content-addressed assets.
+
+Founder creation supports genetic founders by default, explicit learned
+mind-state clones for selected elites, and mutated genetic offspring. Cross-run
+ranking uses exposure-aware passive statistics plus active survival, reversal,
+retention, grounding, narration, communication, and generalization challenges.
+Missing exposure is `Unknown`, never a zero score. Export/import bundles are
+digest-checked, bounded, traversal-safe, and preserve complete founder
+provenance across saves.

@@ -7,6 +7,14 @@ use alife_game_app::{
 };
 
 const VALIDATE_PRODUCTION_ASSETS_COMMAND: &str = "validate-production-assets";
+const GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND: &str = "gpu-closed-loop-acceptance";
+const GPU_EVIDENCE_VALIDATE_COMMAND: &str = "gpu-evidence-validate";
+
+#[cfg(feature = "gpu-runtime")]
+struct GpuAcceptanceCli {
+    options: alife_game_app::GpuClosedLoopAcceptanceOptions,
+    output: PathBuf,
+}
 
 fn main() {
     if let Err(error) = run(std::env::args().skip(1).collect()) {
@@ -22,6 +30,78 @@ fn run(args: Vec<String>) -> Result<(), String> {
     if command == "--help" || command == "-h" {
         println!("{}", help());
         return Ok(());
+    }
+    if command == GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND {
+        if rest
+            .iter()
+            .any(|argument| argument == "--help" || argument == "-h")
+        {
+            println!("{}", help());
+            return Ok(());
+        }
+        #[cfg(feature = "gpu-runtime")]
+        {
+            let parsed = parse_gpu_acceptance(rest)?;
+            let receipt = alife_game_app::run_and_write_gpu_closed_loop_acceptance(
+                parsed.options,
+                &parsed.output,
+            )
+            .map_err(|error| error.to_string())?;
+            println!(
+                "Slice A GPU evidence class={} backend={} adapter={} ticks={} active_synapses={} readback_bytes={} replay_error={} artifact={} commit={} tree={}",
+                receipt.capacity_class,
+                receipt.backend_api,
+                receipt.adapter_name,
+                receipt.requested_ticks,
+                receipt.active_synapses,
+                receipt.compact_readback_bytes,
+                receipt.replay.max_abs_error,
+                parsed.output.display(),
+                receipt.header.git_commit,
+                receipt.header.source_tree_digest,
+            );
+            return Ok(());
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            return Err(format!(
+                "{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} requires --features gpu-runtime"
+            ));
+        }
+    }
+    if command == GPU_EVIDENCE_VALIDATE_COMMAND {
+        if rest
+            .iter()
+            .any(|argument| argument == "--help" || argument == "-h")
+        {
+            println!("{}", help());
+            return Ok(());
+        }
+        #[cfg(feature = "gpu-runtime")]
+        {
+            let (slice_raw, input) = parse_gpu_evidence_validation(rest)?;
+            let receipt = alife_game_app::validate_gpu_evidence_file(slice_raw, &input)
+                .map_err(|error| error.to_string())?;
+            println!(
+                "GPU evidence valid slice={} class={} backend={} adapter={} ticks={} artifact_digest={:016x}{:016x}{:016x}{:016x}",
+                receipt.header.slice_raw,
+                receipt.capacity_class,
+                receipt.backend_api,
+                receipt.adapter_name,
+                receipt.requested_ticks,
+                receipt.header.artifact_digest[0],
+                receipt.header.artifact_digest[1],
+                receipt.header.artifact_digest[2],
+                receipt.header.artifact_digest[3],
+            );
+            return Ok(());
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            return Err(format!(
+                "{GPU_EVIDENCE_VALIDATE_COMMAND} requires --features gpu-runtime"
+            ));
+        }
     }
     if command == VALIDATE_PRODUCTION_ASSETS_COMMAND {
         if !rest.is_empty() {
@@ -232,6 +312,113 @@ fn parse_resolution(value: &str) -> Result<(u32, u32), String> {
     Ok((width, height))
 }
 
+#[cfg(feature = "gpu-runtime")]
+fn parse_gpu_acceptance(args: &[String]) -> Result<GpuAcceptanceCli, String> {
+    let mut capacity = None;
+    let mut ticks = None;
+    let mut seed = None;
+    let mut sensor_profile = None;
+    let mut output = None;
+    let mut index = 0;
+    while index < args.len() {
+        let flag = args[index].as_str();
+        match flag {
+            "--class" => {
+                set_once(
+                    &mut capacity,
+                    match value(args, index, flag)? {
+                        "n512" => alife_core::BrainCapacityClass::n512(),
+                        "n1024" => alife_core::BrainCapacityClass::n1024(),
+                        "n2048" => alife_core::BrainCapacityClass::n2048(),
+                        _ => return Err("--class must be n512, n1024, or n2048".to_string()),
+                    },
+                    flag,
+                )?;
+                index += 2;
+            }
+            "--ticks" => {
+                let parsed = value(args, index, flag)?
+                    .parse::<u32>()
+                    .map_err(|_| "--ticks must be an unsigned integer".to_string())?;
+                set_once(&mut ticks, parsed, flag)?;
+                index += 2;
+            }
+            "--seed" => {
+                let parsed = value(args, index, flag)?
+                    .parse::<u64>()
+                    .map_err(|_| "--seed must be an unsigned integer".to_string())?;
+                set_once(&mut seed, parsed, flag)?;
+                index += 2;
+            }
+            "--sensor-profile" => {
+                let parsed = match value(args, index, flag)? {
+                    "privileged-affordance-v1" => alife_core::SensorProfile::PrivilegedAffordanceV1,
+                    _ => {
+                        return Err("--sensor-profile must be privileged-affordance-v1".to_string());
+                    }
+                };
+                set_once(&mut sensor_profile, parsed, flag)?;
+                index += 2;
+            }
+            "--output" => {
+                let parsed = PathBuf::from(value(args, index, flag)?);
+                set_once(&mut output, parsed, flag)?;
+                index += 2;
+            }
+            unknown => return Err(format!("unknown GPU acceptance option: {unknown}")),
+        }
+    }
+    Ok(GpuAcceptanceCli {
+        options: alife_game_app::GpuClosedLoopAcceptanceOptions {
+            capacity: capacity.ok_or_else(|| "--class is required".to_string())?,
+            requested_ticks: ticks.ok_or_else(|| "--ticks is required".to_string())?,
+            deterministic_seed: seed.ok_or_else(|| "--seed is required".to_string())?,
+            sensor_profile: sensor_profile
+                .ok_or_else(|| "--sensor-profile is required".to_string())?,
+        },
+        output: output.ok_or_else(|| "--output is required".to_string())?,
+    })
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn parse_gpu_evidence_validation(args: &[String]) -> Result<(u16, PathBuf), String> {
+    let mut slice = None;
+    let mut input = None;
+    let mut index = 0;
+    while index < args.len() {
+        let flag = args[index].as_str();
+        match flag {
+            "--slice" => {
+                let parsed = match value(args, index, flag)? {
+                    "a" => alife_game_app::GPU_SLICE_A_RAW,
+                    "b" => alife_game_app::GPU_SLICE_B_RAW,
+                    _ => return Err("--slice must be a or b".to_string()),
+                };
+                set_once(&mut slice, parsed, flag)?;
+                index += 2;
+            }
+            "--input" => {
+                set_once(&mut input, PathBuf::from(value(args, index, flag)?), flag)?;
+                index += 2;
+            }
+            unknown => return Err(format!("unknown GPU evidence option: {unknown}")),
+        }
+    }
+    Ok((
+        slice.ok_or_else(|| "--slice is required".to_string())?,
+        input.ok_or_else(|| "--input is required".to_string())?,
+    ))
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn set_once<T>(slot: &mut Option<T>, value: T, flag: &str) -> Result<(), String> {
+    if slot.replace(value).is_some() {
+        Err(format!("{flag} may be provided only once"))
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(feature = "bevy-app")]
 fn run_graphical(
     launch: &ProductionVoxelLaunchConfig,
@@ -249,7 +436,7 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b --input PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
 }
 
@@ -264,5 +451,36 @@ mod tests {
         assert!(receipt.contains("unknown_license=0"));
         assert!(receipt.contains("renderer_authority_blocked=true"));
         assert!(help().contains(VALIDATE_PRODUCTION_ASSETS_COMMAND));
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn parse_gpu_evidence_cli_requires_the_complete_class_bound_contract() {
+        let args = [
+            "--class",
+            "n2048",
+            "--ticks",
+            "64",
+            "--seed",
+            "4101",
+            "--sensor-profile",
+            "privileged-affordance-v1",
+            "--output",
+            "target/artifacts/gpu-closed-loop-slice-a-n2048.json",
+        ]
+        .map(str::to_string);
+        let parsed = parse_gpu_acceptance(&args).unwrap();
+
+        assert_eq!(
+            parsed.options.capacity,
+            alife_core::BrainCapacityClass::n2048()
+        );
+        assert_eq!(parsed.options.requested_ticks, 64);
+        assert_eq!(parsed.options.deterministic_seed, 4_101);
+        assert!(parsed
+            .output
+            .ends_with("gpu-closed-loop-slice-a-n2048.json"));
+        assert!(help().contains(GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND));
+        assert!(help().contains(GPU_EVIDENCE_VALIDATE_COMMAND));
     }
 }
