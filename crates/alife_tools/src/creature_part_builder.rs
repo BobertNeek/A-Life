@@ -1,10 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::{Component, Path};
 
 use alife_game_app::{
     CreaturePartFamilyDefinition, CreaturePartLodId, CreaturePartSlot, CutPlane, CutVolume,
     SocketFrame,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const SLOT_PRIORITY: [CreaturePartSlot; 7] = [
@@ -102,6 +104,55 @@ pub enum CreaturePartBuilderError {
     },
     #[error("socket manifest serialization failed: {0}")]
     SocketJson(#[from] serde_json::Error),
+    #[error("GeneForge staging validation failed: {0}")]
+    Staging(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneForgeStagingValidation {
+    pub donor_count: usize,
+    pub lod_count: usize,
+    pub obj_count: usize,
+    pub mask_count: usize,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeneForgeBuildReceipt {
+    donor_count: usize,
+    lods: Vec<String>,
+    outputs: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedBounds {
+    min: [f64; 3],
+    max: [f64; 3],
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedSocket {
+    translation: [f64; 3],
+    rotation_xyzw: [f64; 4],
+    scale: [f64; 3],
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedSocketManifest {
+    schema: String,
+    donor: String,
+    lod: String,
+    bounds: StagedBounds,
+    sockets: BTreeMap<String, StagedSocket>,
+    landmarks: BTreeMap<String, [f64; 3]>,
+    ground_contacts: Vec<[f64; 3]>,
+    semantic_mask: String,
+}
+
+#[derive(Debug)]
+struct StagedObjSummary {
+    bounds: StagedBounds,
+    groups: BTreeSet<String>,
 }
 
 impl SourceObjMesh {
@@ -169,6 +220,470 @@ impl SourceObjMesh {
         }
         Ok(Self { triangles })
     }
+}
+
+pub fn validate_geneforge_staging(
+    staging_root: &Path,
+) -> Result<GeneForgeStagingValidation, CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let receipt_path = staging_root.join("build_receipt.json");
+    let receipt_bytes = fs::read(&receipt_path).map_err(|error| {
+        fail(format!(
+            "missing build receipt {}: {error}",
+            receipt_path.display()
+        ))
+    })?;
+    let receipt: GeneForgeBuildReceipt = serde_json::from_slice(&receipt_bytes)
+        .map_err(|error| fail(format!("invalid build receipt: {error}")))?;
+    if receipt.donor_count != 3
+        || receipt.lods != ["full", "compact", "impostor"]
+        || receipt.outputs.len() != 27
+    {
+        return Err(fail(
+            "build receipt must contain three donors, three ordered LODs, and 27 outputs"
+                .to_string(),
+        ));
+    }
+
+    let mut total_bytes = receipt_bytes.len() as u64;
+    let mut obj_paths = Vec::new();
+    let mut socket_paths = Vec::new();
+    let mut mask_paths = Vec::new();
+    for relative in receipt.outputs.keys() {
+        let relative_path = Path::new(relative);
+        if relative_path.is_absolute()
+            || relative_path
+                .components()
+                .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
+        {
+            return Err(fail(format!("output path escapes staging: {relative}")));
+        }
+        let path = staging_root.join(relative_path);
+        let metadata = fs::metadata(&path).map_err(|error| {
+            let kind = if relative.ends_with(".png") {
+                "semantic mask"
+            } else {
+                "output"
+            };
+            fail(format!("missing {kind} {relative}: {error}"))
+        })?;
+        if metadata.len() > 512 * 1024 {
+            return Err(fail(format!(
+                "output {relative} exceeds the 512 KiB per-file budget"
+            )));
+        }
+        total_bytes += metadata.len();
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some("obj") => obj_paths.push(path),
+            Some("json") => socket_paths.push(path),
+            Some("png") => mask_paths.push(path),
+            _ => return Err(fail(format!("unsupported staged output {relative}"))),
+        }
+    }
+    if total_bytes > 8 * 1024 * 1024 {
+        return Err(fail(format!(
+            "staged pack exceeds the 8 MiB budget: {total_bytes} bytes"
+        )));
+    }
+    if obj_paths.len() != 9 || socket_paths.len() != 9 || mask_paths.len() != 9 {
+        return Err(fail(
+            "staged pack must contain nine OBJs, socket manifests, and semantic masks".to_string(),
+        ));
+    }
+
+    let mut obj_summaries = BTreeMap::new();
+    for path in &obj_paths {
+        obj_summaries.insert(staged_stem(path)?, validate_staged_obj(path)?);
+    }
+    for path in &mask_paths {
+        let bytes = fs::read(path).map_err(|error| {
+            fail(format!(
+                "failed reading semantic mask {}: {error}",
+                path.display()
+            ))
+        })?;
+        if bytes.len() < 32 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Err(fail(format!(
+                "semantic mask {} is not a valid bounded PNG",
+                path.display()
+            )));
+        }
+    }
+    for path in &socket_paths {
+        let stem = staged_stem(path)?.replace("_sockets", "_parts");
+        let summary = obj_summaries
+            .get(&stem)
+            .ok_or_else(|| fail(format!("socket manifest has no matching OBJ: {stem}")))?;
+        validate_staged_socket_manifest(staging_root, path, summary)?;
+    }
+
+    for (relative, expected) in &receipt.outputs {
+        let bytes = fs::read(staging_root.join(relative))
+            .map_err(|error| fail(format!("failed reading {relative} for digest: {error}")))?;
+        let actual = sha256_hex(&bytes);
+        if !expected.eq_ignore_ascii_case(&actual) {
+            return Err(fail(format!(
+                "digest drift for {relative}: expected {expected}, found {actual}"
+            )));
+        }
+    }
+
+    Ok(GeneForgeStagingValidation {
+        donor_count: receipt.donor_count,
+        lod_count: obj_paths.len(),
+        obj_count: obj_paths.len(),
+        mask_count: mask_paths.len(),
+        total_bytes,
+    })
+}
+
+fn staged_stem(path: &Path) -> Result<String, CreaturePartBuilderError> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            CreaturePartBuilderError::Staging(format!(
+                "staged output has a non-UTF-8 file name: {}",
+                path.display()
+            ))
+        })
+}
+
+fn validate_staged_obj(path: &Path) -> Result<StagedObjSummary, CreaturePartBuilderError> {
+    let text = fs::read_to_string(path).map_err(|error| {
+        CreaturePartBuilderError::Staging(format!("failed reading OBJ {}: {error}", path.display()))
+    })?;
+    let mut positions = Vec::<[f64; 3]>::new();
+    let mut uvs = Vec::<[f64; 2]>::new();
+    let mut normals = Vec::<[f64; 3]>::new();
+    let mut groups = BTreeSet::new();
+    let mut current_group = None::<String>;
+    let mut face_count = 0_usize;
+    let mut bounds = StagedBounds {
+        min: [f64::INFINITY; 3],
+        max: [f64::NEG_INFINITY; 3],
+    };
+    for (index, raw) in text.lines().enumerate() {
+        let line_number = index + 1;
+        let line = raw.trim();
+        let mut fields = line.split_whitespace();
+        match fields.next().unwrap_or_default() {
+            "v" => {
+                let value = parse_vector::<3>(fields, line_number, "position")?;
+                extend_bounds(&mut [bounds.min, bounds.max], value);
+                for axis in 0..3 {
+                    bounds.min[axis] = bounds.min[axis].min(value[axis]);
+                    bounds.max[axis] = bounds.max[axis].max(value[axis]);
+                }
+                positions.push(value);
+            }
+            "vt" => {
+                let value = parse_vector::<2>(fields, line_number, "UV")?;
+                if !value
+                    .into_iter()
+                    .all(|coordinate| (-0.001..=1.001).contains(&coordinate))
+                {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ UV is outside the semantic atlas at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                uvs.push(value);
+            }
+            "vn" => {
+                let value = parse_vector::<3>(fields, line_number, "normal")?;
+                let length = dot(value, value).sqrt();
+                if (length - 1.0).abs() > 2.0e-3 {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ normal is non-unit at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                normals.push(value);
+            }
+            "g" => {
+                let group = fields.next().unwrap_or_default().to_string();
+                if group.is_empty() {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ has an empty group at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                groups.insert(group.clone());
+                current_group = Some(group);
+            }
+            "f" => {
+                if current_group.is_none() {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ face has no semantic group at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                let refs = fields.collect::<Vec<_>>();
+                if refs.len() != 3 {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ face is not triangular at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                for reference in refs {
+                    let parts = reference.split('/').collect::<Vec<_>>();
+                    if parts.len() != 3
+                        || !valid_positive_obj_index(parts[0], positions.len())
+                        || !valid_positive_obj_index(parts[1], uvs.len())
+                        || !valid_positive_obj_index(parts[2], normals.len())
+                    {
+                        return Err(CreaturePartBuilderError::Staging(format!(
+                            "OBJ index is invalid at {}:{line_number}",
+                            path.display()
+                        )));
+                    }
+                }
+                face_count += 1;
+            }
+            _ => {}
+        }
+    }
+    if positions.is_empty() || uvs.is_empty() || normals.is_empty() || face_count == 0 {
+        return Err(CreaturePartBuilderError::Staging(format!(
+            "OBJ is empty or incomplete: {}",
+            path.display()
+        )));
+    }
+    for required in [
+        "head",
+        "torso",
+        "left-arm",
+        "right-arm",
+        "left-leg",
+        "right-leg",
+    ] {
+        if !groups
+            .iter()
+            .any(|group| group == required || group.starts_with(&format!("{required}.")))
+        {
+            return Err(CreaturePartBuilderError::Staging(format!(
+                "OBJ is missing semantic group {required}: {}",
+                path.display()
+            )));
+        }
+    }
+    Ok(StagedObjSummary { bounds, groups })
+}
+
+fn valid_positive_obj_index(value: &str, count: usize) -> bool {
+    value
+        .parse::<usize>()
+        .is_ok_and(|index| index > 0 && index <= count)
+}
+
+fn validate_staged_socket_manifest(
+    staging_root: &Path,
+    path: &Path,
+    obj: &StagedObjSummary,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let bytes = fs::read(path).map_err(|error| {
+        fail(format!(
+            "failed reading socket manifest {}: {error}",
+            path.display()
+        ))
+    })?;
+    let manifest: StagedSocketManifest = serde_json::from_slice(&bytes).map_err(|error| {
+        fail(format!(
+            "invalid socket manifest {}: {error}",
+            path.display()
+        ))
+    })?;
+    if manifest.schema != "alife.creature_part_sockets.v2"
+        || manifest.donor.trim().is_empty()
+        || !["full", "compact", "impostor"].contains(&manifest.lod.as_str())
+    {
+        return Err(fail(format!(
+            "socket manifest metadata is invalid: {}",
+            path.display()
+        )));
+    }
+    if !manifest
+        .bounds
+        .min
+        .into_iter()
+        .chain(manifest.bounds.max)
+        .all(f64::is_finite)
+        || !(0..3).all(|axis| manifest.bounds.min[axis] < manifest.bounds.max[axis])
+    {
+        return Err(fail(format!(
+            "socket bounds are invalid: {}",
+            path.display()
+        )));
+    }
+    for axis in 0..3 {
+        if obj.bounds.min[axis] < manifest.bounds.min[axis] - 0.01
+            || obj.bounds.max[axis] > manifest.bounds.max[axis] + 0.01
+        {
+            return Err(fail(format!(
+                "OBJ bounds exceed declared socket bounds: {}",
+                path.display()
+            )));
+        }
+    }
+    for required in [
+        "neck",
+        "left-shoulder",
+        "right-shoulder",
+        "left-hip",
+        "right-hip",
+    ] {
+        if !manifest.sockets.contains_key(required) {
+            return Err(fail(format!(
+                "socket {required} is missing: {}",
+                path.display()
+            )));
+        }
+    }
+    for (name, socket) in &manifest.sockets {
+        if !socket
+            .translation
+            .into_iter()
+            .chain(socket.rotation_xyzw)
+            .chain(socket.scale)
+            .all(f64::is_finite)
+            || socket.scale.into_iter().any(|value| value <= 0.0)
+        {
+            return Err(fail(format!("socket {name} has invalid finite values")));
+        }
+        let quaternion_length = socket
+            .rotation_xyzw
+            .into_iter()
+            .map(|value| value * value)
+            .sum::<f64>()
+            .sqrt();
+        if (quaternion_length - 1.0).abs() > 1.0e-4 {
+            return Err(fail(format!("socket {name} has a non-unit quaternion")));
+        }
+        if (0..3).any(|axis| {
+            socket.translation[axis] < manifest.bounds.min[axis] - 0.25
+                || socket.translation[axis] > manifest.bounds.max[axis] + 0.25
+        }) {
+            return Err(fail(format!(
+                "socket {name} is detached from declared bounds"
+            )));
+        }
+    }
+    for required in [
+        "head",
+        "torso",
+        "left-foot",
+        "right-foot",
+        "left-upper-arm",
+        "right-upper-arm",
+    ] {
+        if !manifest.landmarks.contains_key(required) {
+            return Err(fail(format!("required landmark {required} is missing")));
+        }
+    }
+    if manifest
+        .landmarks
+        .values()
+        .flatten()
+        .chain(manifest.ground_contacts.iter().flatten())
+        .any(|value| !value.is_finite())
+    {
+        return Err(fail("landmark or ground contact is non-finite".to_string()));
+    }
+    if manifest.ground_contacts.len() != 2
+        || manifest
+            .ground_contacts
+            .iter()
+            .any(|contact| contact[1] > manifest.bounds.min[1] + 0.25)
+    {
+        return Err(fail(
+            "ground contacts are not planted within tolerance".to_string(),
+        ));
+    }
+    let mask_relative = Path::new(&manifest.semantic_mask);
+    if mask_relative.is_absolute()
+        || mask_relative
+            .components()
+            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
+        || !staging_root.join(mask_relative).is_file()
+    {
+        return Err(fail(format!(
+            "semantic mask reference is missing or unsafe: {}",
+            manifest.semantic_mask
+        )));
+    }
+    let _ = &obj.groups;
+    Ok(())
+}
+
+fn sha256_hex(input: &[u8]) -> String {
+    const INITIAL: [u32; 8] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let bit_len = (input.len() as u64) * 8;
+    let mut padded = input.to_vec();
+    padded.push(0x80);
+    while padded.len() % 64 != 56 {
+        padded.push(0);
+    }
+    padded.extend_from_slice(&bit_len.to_be_bytes());
+    let mut hash = INITIAL;
+    for chunk in padded.chunks_exact(64) {
+        let mut words = [0_u32; 64];
+        for (index, bytes) in chunk.chunks_exact(4).enumerate() {
+            words[index] = u32::from_be_bytes(bytes.try_into().unwrap());
+        }
+        for index in 16..64 {
+            let s0 = words[index - 15].rotate_right(7)
+                ^ words[index - 15].rotate_right(18)
+                ^ (words[index - 15] >> 3);
+            let s1 = words[index - 2].rotate_right(17)
+                ^ words[index - 2].rotate_right(19)
+                ^ (words[index - 2] >> 10);
+            words[index] = words[index - 16]
+                .wrapping_add(s0)
+                .wrapping_add(words[index - 7])
+                .wrapping_add(s1);
+        }
+        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = hash;
+        for index in 0..64 {
+            let sum1 = h
+                .wrapping_add(e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25))
+                .wrapping_add((e & f) ^ (!e & g))
+                .wrapping_add(K[index])
+                .wrapping_add(words[index]);
+            let sum0 = (a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22))
+                .wrapping_add((a & b) ^ (a & c) ^ (b & c));
+            h = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(sum1);
+            d = c;
+            c = b;
+            b = a;
+            a = sum0.wrapping_add(sum1);
+        }
+        for (state, value) in hash.iter_mut().zip([a, b, c, d, e, f, g, h]) {
+            *state = state.wrapping_add(value);
+        }
+    }
+    hash.into_iter()
+        .map(|value| format!("{value:08x}"))
+        .collect()
 }
 
 pub fn slice_creature_mesh(

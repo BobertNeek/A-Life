@@ -399,8 +399,72 @@ pub struct GeneForgeSourceDefinition {
     pub license_ref: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeMarkerSemantic {
+    Head,
+    Torso,
+    LeftThigh,
+    LeftShin,
+    LeftFoot,
+    RightThigh,
+    RightShin,
+    RightFoot,
+    LeftUpperArm,
+    LeftLowerArm,
+    RightUpperArm,
+    RightLowerArm,
+    TailRoot,
+    TailTip,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeSelectionPolicy {
+    ExactCaseSensitiveNames,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeGeometryPolicy {
+    EvaluatedDepsgraph,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeTopologyRepair {
+    RemoveZeroAreaFaces,
+    RepairDeclaredNonManifoldEdges,
+    RemoveLooseVertices,
+    RepairDeclaredBoundaryEdges,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeEvaluatedEmptyPolicy {
+    ValidatedRawMesh,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeUvFallbackPolicy {
+    SemanticDetailRegion,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeDetailRole {
+    Eyes,
+    Lids,
+    Hair,
+    Teeth,
+    Tongue,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneForgePartSelector {
+    pub selection_policy: GeneForgeSelectionPolicy,
+    pub geometry_policy: GeneForgeGeometryPolicy,
     pub marker_ids: Vec<u8>,
     #[serde(default)]
     pub include_objects: Vec<String>,
@@ -408,6 +472,12 @@ pub struct GeneForgePartSelector {
     pub object_visscripts: BTreeMap<String, String>,
     #[serde(default)]
     pub selector_tags: BTreeMap<String, String>,
+    #[serde(default)]
+    pub topology_repairs: BTreeMap<String, Vec<GeneForgeTopologyRepair>>,
+    #[serde(default)]
+    pub evaluated_empty_policy: BTreeMap<String, GeneForgeEvaluatedEmptyPolicy>,
+    #[serde(default)]
+    pub uv_fallbacks: BTreeMap<String, GeneForgeUvFallbackPolicy>,
     pub mirror_policy: String,
     pub uv_map: String,
 }
@@ -486,6 +556,8 @@ pub struct GeneForgePartAssetDefinition {
     pub logical_slot: CreaturePartSlotKey,
     pub selector: GeneForgePartSelector,
     pub groups: BTreeMap<CreaturePartSlot, String>,
+    #[serde(default)]
+    pub detail_groups: BTreeMap<GeneForgeDetailRole, Vec<String>>,
     pub attachment_frames: BTreeMap<CreaturePartSlot, SocketFrame>,
     pub canonical_bounds: GeneForgeCanonicalBounds,
     pub semantic_regions: BTreeSet<GeneForgeSemanticRegion>,
@@ -577,6 +649,7 @@ pub struct GeneForgeCreaturePartCatalog {
     pub importer_version: String,
     /// SHA-256 of key-sorted compact JSON with this field replaced by 64 zeroes.
     pub recipe_sha256: String,
+    pub marker_map: BTreeMap<u8, GeneForgeMarkerSemantic>,
     pub sources: Vec<GeneForgeSourceDefinition>,
     pub part_assets: Vec<GeneForgePartAssetDefinition>,
     pub families: Vec<GeneForgeCreatureFamilyDefinition>,
@@ -608,6 +681,28 @@ impl GeneForgeCreaturePartCatalog {
         if !valid_sha256(&self.recipe_sha256) {
             return Err(GeneForgeCatalogError::InvalidCatalogMetadata {
                 reason: "invalid recipe SHA-256",
+            });
+        }
+        if self.marker_map
+            != BTreeMap::from([
+                (1, GeneForgeMarkerSemantic::Head),
+                (2, GeneForgeMarkerSemantic::Torso),
+                (3, GeneForgeMarkerSemantic::LeftThigh),
+                (4, GeneForgeMarkerSemantic::LeftShin),
+                (5, GeneForgeMarkerSemantic::LeftFoot),
+                (6, GeneForgeMarkerSemantic::RightThigh),
+                (7, GeneForgeMarkerSemantic::RightShin),
+                (8, GeneForgeMarkerSemantic::RightFoot),
+                (9, GeneForgeMarkerSemantic::LeftUpperArm),
+                (10, GeneForgeMarkerSemantic::LeftLowerArm),
+                (11, GeneForgeMarkerSemantic::RightUpperArm),
+                (12, GeneForgeMarkerSemantic::RightLowerArm),
+                (13, GeneForgeMarkerSemantic::TailRoot),
+                (14, GeneForgeMarkerSemantic::TailTip),
+            ])
+        {
+            return Err(GeneForgeCatalogError::InvalidCatalogMetadata {
+                reason: "marker map must be the stable semantic 1..=14 contract",
             });
         }
         if self.sources.is_empty() || self.part_assets.is_empty() || self.families.is_empty() {
@@ -662,6 +757,9 @@ impl GeneForgeCreaturePartCatalog {
                 || !source_donors.contains(&asset.donor)
                 || asset.selector.marker_ids.is_empty()
                 || asset.selector.include_objects.is_empty()
+                || asset.selector.selection_policy
+                    != GeneForgeSelectionPolicy::ExactCaseSensitiveNames
+                || asset.selector.geometry_policy != GeneForgeGeometryPolicy::EvaluatedDepsgraph
                 || (asset.selector.object_visscripts.is_empty()
                     && !asset.selector.selector_tags.contains_key("pitch_id"))
                 || !asset
@@ -677,6 +775,63 @@ impl GeneForgeCreaturePartCatalog {
                 return Err(GeneForgeCatalogError::InvalidAsset {
                     asset: asset.id.clone(),
                     reason: "invalid selector, donor, or logical slot contract",
+                });
+            }
+            let selected = asset
+                .selector
+                .include_objects
+                .iter()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>();
+            if asset
+                .selector
+                .topology_repairs
+                .iter()
+                .any(|(name, repairs)| !selected.contains(name.as_str()) || repairs.is_empty())
+                || asset
+                    .selector
+                    .evaluated_empty_policy
+                    .keys()
+                    .chain(asset.selector.uv_fallbacks.keys())
+                    .any(|name| !selected.contains(name.as_str()))
+            {
+                return Err(GeneForgeCatalogError::InvalidAsset {
+                    asset: asset.id.clone(),
+                    reason: "importer repair metadata references an unselected object",
+                });
+            }
+            let detail_objects = asset
+                .detail_groups
+                .values()
+                .flatten()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>();
+            if asset.logical_slot == CreaturePartSlotKey::Head {
+                let required_roles = BTreeSet::from([
+                    GeneForgeDetailRole::Eyes,
+                    GeneForgeDetailRole::Lids,
+                    GeneForgeDetailRole::Hair,
+                    GeneForgeDetailRole::Teeth,
+                    GeneForgeDetailRole::Tongue,
+                ]);
+                if asset.detail_groups.keys().copied().collect::<BTreeSet<_>>() != required_roles
+                    || detail_objects.is_empty()
+                    || !detail_objects.is_subset(&selected)
+                    || asset
+                        .selector
+                        .uv_fallbacks
+                        .keys()
+                        .any(|name| !detail_objects.contains(name.as_str()))
+                {
+                    return Err(GeneForgeCatalogError::InvalidAsset {
+                        asset: asset.id.clone(),
+                        reason: "head detail groups or UV fallback metadata are invalid",
+                    });
+                }
+            } else if !asset.detail_groups.is_empty() || !asset.selector.uv_fallbacks.is_empty() {
+                return Err(GeneForgeCatalogError::InvalidAsset {
+                    asset: asset.id.clone(),
+                    reason: "non-head asset declares head detail metadata",
                 });
             }
             for slot in required_runtime_slots(asset.logical_slot) {
@@ -1390,7 +1545,7 @@ mod tests {
         assert_eq!(catalog.importer_version, "alife.geneforge_importer.v1");
         assert_eq!(
             catalog.recipe_sha256,
-            "9549054622316ede00728fd369dec3b97eec4be18b3210eab25ed4e97b9b71b0"
+            "f26b1be2d9537aeaec7742eebb2dd663b41ef87a46281a1c077ddd68fe7d09a5"
         );
 
         for asset in &catalog.part_assets {
@@ -1472,6 +1627,47 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn geneforge_v2_types_deterministic_importer_metadata() {
+        let catalog = load_geneforge_creature_part_catalog().unwrap();
+        assert_eq!(catalog.marker_map.len(), 14);
+        assert_eq!(catalog.marker_map[&1], GeneForgeMarkerSemantic::Head);
+        assert_eq!(catalog.marker_map[&14], GeneForgeMarkerSemantic::TailTip);
+
+        let norn_head = catalog
+            .asset(&CreaturePartAssetId("norn-head".into()))
+            .unwrap();
+        assert_eq!(
+            norn_head.selector.selection_policy,
+            GeneForgeSelectionPolicy::ExactCaseSensitiveNames
+        );
+        assert_eq!(
+            norn_head.selector.geometry_policy,
+            GeneForgeGeometryPolicy::EvaluatedDepsgraph
+        );
+        assert!(!norn_head
+            .selector
+            .include_objects
+            .iter()
+            .any(|name| name.contains("whiskers")));
+        assert_eq!(
+            norn_head.detail_groups[&GeneForgeDetailRole::Eyes],
+            vec!["Eye_L", "Eye_R"]
+        );
+
+        let ettin_head = catalog
+            .asset(&CreaturePartAssetId("ettin-head".into()))
+            .unwrap();
+        assert_eq!(
+            ettin_head.selector.evaluated_empty_policy["Eyelid L"],
+            GeneForgeEvaluatedEmptyPolicy::ValidatedRawMesh
+        );
+        assert_eq!(
+            ettin_head.selector.uv_fallbacks["Eye L"],
+            GeneForgeUvFallbackPolicy::SemanticDetailRegion
+        );
     }
 
     #[test]

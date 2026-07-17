@@ -9,8 +9,8 @@ use alife_game_app::{
     CreaturePartSlot, SocketFrame,
 };
 use alife_tools::creature_part_builder::{
-    slice_creature_mesh, validate_sliced_pack, GeneratedPartMesh, ObjVertex,
-    SlicedCreaturePartPack, SourceObjMesh,
+    slice_creature_mesh, validate_geneforge_staging, validate_sliced_pack, GeneratedPartMesh,
+    ObjVertex, SlicedCreaturePartPack, SourceObjMesh,
 };
 use alife_world::{persistence::PortableAssetDigest, CreaturePartFamilyId};
 use image::{ImageBuffer, Rgba};
@@ -38,6 +38,9 @@ enum CreaturePartBuilderCommand {
     },
     Validate {
         catalog: PathBuf,
+    },
+    ValidateGeneForgeStaging {
+        staging: PathBuf,
     },
     Preview {
         catalog: PathBuf,
@@ -67,7 +70,7 @@ impl CreaturePartBuilderCommand {
 
     fn parse(args: Vec<String>) -> Result<Self, String> {
         let Some(command) = args.first().map(String::as_str) else {
-            return Err("expected analyze, build, validate, preview, or manifest".to_string());
+            return Err("expected analyze, build, validate, validate-geneforge-staging, preview, or manifest".to_string());
         };
         let options = parse_options(&args[1..])?;
         let catalog = PathBuf::from(
@@ -106,6 +109,20 @@ impl CreaturePartBuilderCommand {
                 ),
             }),
             "validate" => Ok(Self::Validate { catalog }),
+            "validate-geneforge-staging" => {
+                let staging = PathBuf::from(
+                    options
+                        .get("staging")
+                        .map(String::as_str)
+                        .unwrap_or("target/artifacts/creature_parts/geneforge-staging"),
+                );
+                if !is_target_artifact_path(&staging) {
+                    return Err(
+                        "GeneForge staging must be under target/artifacts/creature_parts".into(),
+                    );
+                }
+                Ok(Self::ValidateGeneForgeStaging { staging })
+            }
             "preview" => {
                 let output = PathBuf::from(
                     options
@@ -152,6 +169,19 @@ impl CreaturePartBuilderCommand {
                 staging,
             } => build(&catalog, family.map(CreaturePartFamilyId), &staging),
             Self::Validate { catalog } => validate(&catalog),
+            Self::ValidateGeneForgeStaging { staging } => {
+                let receipt = validate_geneforge_staging(&staging)?;
+                println!(
+                    "validated_geneforge_staging={} donors={} lods={} objs={} masks={} bytes={}",
+                    staging.display(),
+                    receipt.donor_count,
+                    receipt.lod_count,
+                    receipt.obj_count,
+                    receipt.mask_count,
+                    receipt.total_bytes
+                );
+                Ok(())
+            }
             Self::Preview {
                 catalog,
                 family,
@@ -865,6 +895,12 @@ mod tests {
         for command in ["analyze", "build", "validate", "preview", "manifest"] {
             assert!(CreaturePartBuilderCommand::parse_for_test([command]).is_ok());
         }
+        assert!(CreaturePartBuilderCommand::parse_for_test([
+            "validate-geneforge-staging",
+            "--staging",
+            "target/artifacts/creature_parts/geneforge-staging",
+        ])
+        .is_ok());
     }
 
     #[test]
