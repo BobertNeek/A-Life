@@ -159,6 +159,9 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
     assert_eq!(summary.true_25d_endocrine_feedback_assets, 2);
     assert!(summary.true_25d_endocrine_feedback_contract_validated);
     assert!(summary.production_true_25d_assets);
+    assert!(summary.production_voxel_asset_entries > 0);
+    assert!(summary.production_voxel_generated_assets > 0);
+    assert!(summary.production_voxel_asset_manifest_validated);
     assert!(summary.shader_discovery_complete);
     assert!(summary.tiny_placeholder_art);
     assert!(!summary.large_binary_assets_committed);
