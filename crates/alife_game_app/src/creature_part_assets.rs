@@ -11,7 +11,7 @@ use crate::{
 use bevy::{
     asset::RenderAssetUsages,
     mesh::Indices,
-    prelude::{Assets, Handle, Mesh, Resource, StandardMaterial},
+    prelude::{Assets, Handle, Image, Mesh, Resource, StandardMaterial},
     render::render_resource::PrimitiveTopology,
 };
 
@@ -29,11 +29,15 @@ pub struct GeneratedPartObjPack {
 }
 
 #[cfg(feature = "bevy-app")]
-#[derive(Debug, Default, Resource)]
+#[derive(Debug, Resource)]
 pub struct CreaturePartAssetLibrary {
     meshes: BTreeMap<crate::CreaturePartMeshKey, Handle<Mesh>>,
     bounds: BTreeMap<crate::CreaturePartMeshKey, CreatureVisualBounds>,
     materials: BTreeMap<crate::CreaturePartMaterialKey, Handle<StandardMaterial>>,
+    coat_cache: crate::CreatureCoatCache,
+    coat_images: BTreeMap<u64, Handle<Image>>,
+    coat_materials: BTreeMap<u64, Handle<StandardMaterial>>,
+    next_coat_asset_id: u64,
 }
 
 #[cfg(feature = "bevy-app")]
@@ -43,7 +47,22 @@ impl CreaturePartAssetLibrary {
         catalog: &CreaturePartCatalog,
         mesh_assets: &mut Assets<Mesh>,
     ) -> Result<Self, CreaturePartAssetError> {
-        let mut library = Self::default();
+        Self::load_for_profile(
+            assets_root,
+            catalog,
+            mesh_assets,
+            crate::ProductionFrontendProfileId::MinSpecComfort1080p,
+        )
+    }
+
+    pub fn load_for_profile(
+        assets_root: &Path,
+        catalog: &CreaturePartCatalog,
+        mesh_assets: &mut Assets<Mesh>,
+        profile: crate::ProductionFrontendProfileId,
+    ) -> Result<Self, CreaturePartAssetError> {
+        let mut library =
+            Self::with_coat_limits(crate::CreatureCoatCacheLimits::for_profile(profile));
         for family in &catalog.families {
             for lod in &family.lods {
                 let pack = load_generated_part_pack(assets_root, family, lod.lod)?;
@@ -64,6 +83,18 @@ impl CreaturePartAssetLibrary {
             }
         }
         Ok(library)
+    }
+
+    fn with_coat_limits(limits: crate::CreatureCoatCacheLimits) -> Self {
+        Self {
+            meshes: BTreeMap::new(),
+            bounds: BTreeMap::new(),
+            materials: BTreeMap::new(),
+            coat_cache: crate::CreatureCoatCache::new(limits),
+            coat_images: BTreeMap::new(),
+            coat_materials: BTreeMap::new(),
+            next_coat_asset_id: 1,
+        }
     }
 
     pub fn mesh(&self, key: crate::CreaturePartMeshKey) -> Option<Handle<Mesh>> {
@@ -96,6 +127,94 @@ impl CreaturePartAssetLibrary {
     pub fn material_handle_count(&self) -> usize {
         self.materials.len()
     }
+
+    pub fn acquire_coat_assets(
+        &mut self,
+        key: crate::CreatureCoatKey,
+        image: Handle<Image>,
+        material: Handle<StandardMaterial>,
+        image_assets: &mut Assets<Image>,
+        material_assets: &mut Assets<StandardMaterial>,
+    ) -> Result<CreatureCoatAssetHandles, CreaturePartAssetError> {
+        let candidate = crate::CreatureCoatAssetPair::new(
+            self.next_coat_asset_id,
+            self.next_coat_asset_id.saturating_add(1),
+        );
+        self.next_coat_asset_id = self.next_coat_asset_id.saturating_add(2);
+        let update = self.coat_cache.acquire(key, candidate);
+
+        for evicted in update.evicted {
+            if let Some(handle) = self.coat_images.remove(&evicted.image_id) {
+                image_assets.remove(handle.id());
+            }
+            if let Some(handle) = self.coat_materials.remove(&evicted.material_id) {
+                material_assets.remove(handle.id());
+            }
+        }
+
+        if update.inserted {
+            self.coat_images.insert(candidate.image_id, image);
+            self.coat_materials.insert(candidate.material_id, material);
+        } else {
+            image_assets.remove(image.id());
+            material_assets.remove(material.id());
+        }
+
+        let image = self
+            .coat_images
+            .get(&update.selected.image_id)
+            .cloned()
+            .ok_or(CreaturePartAssetError::MissingCoatAssetPair)?;
+        let material = self
+            .coat_materials
+            .get(&update.selected.material_id)
+            .cloned()
+            .ok_or(CreaturePartAssetError::MissingCoatAssetPair)?;
+        Ok(CreatureCoatAssetHandles {
+            image,
+            material,
+            pair: update.selected,
+            selected_key: update.selected_key,
+            used_pinned_fallback: update.used_pinned_fallback,
+        })
+    }
+
+    pub fn release_coat(
+        &mut self,
+        key: crate::CreatureCoatKey,
+    ) -> Result<(), CreaturePartAssetError> {
+        self.coat_cache.release(key)?;
+        Ok(())
+    }
+
+    pub fn coat_handle_count(&self) -> usize {
+        self.coat_cache.len()
+    }
+
+    pub const fn coat_rgba_bytes(&self) -> usize {
+        self.coat_cache.rgba_bytes()
+    }
+
+    pub const fn coat_cache_limits(&self) -> crate::CreatureCoatCacheLimits {
+        self.coat_cache.limits()
+    }
+}
+
+#[cfg(feature = "bevy-app")]
+impl Default for CreaturePartAssetLibrary {
+    fn default() -> Self {
+        Self::with_coat_limits(crate::CreatureCoatCacheLimits::comfort())
+    }
+}
+
+#[cfg(feature = "bevy-app")]
+#[derive(Debug, Clone)]
+pub struct CreatureCoatAssetHandles {
+    pub image: Handle<Image>,
+    pub material: Handle<StandardMaterial>,
+    pub pair: crate::CreatureCoatAssetPair,
+    pub selected_key: crate::CreatureCoatKey,
+    pub used_pinned_fallback: bool,
 }
 
 impl PartMeshData {
@@ -114,6 +233,173 @@ impl PartMeshData {
         }
         let bounds = CreatureVisualBounds::new(min, max);
         bounds.is_valid().then_some(bounds)
+    }
+}
+
+#[cfg(all(test, feature = "bevy-app"))]
+mod coat_asset_tests {
+    use alife_world::{CreaturePartFamilyId, CreaturePartSources};
+    use bevy::{
+        asset::RenderAssetUsages,
+        prelude::{Assets, Image, StandardMaterial},
+        render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    };
+
+    use super::*;
+
+    fn key(offset: u16) -> crate::CreatureCoatKey {
+        crate::CreatureCoatKey::new(
+            CreaturePartSources {
+                head: CreaturePartFamilyId(offset),
+                torso: CreaturePartFamilyId(offset + 1),
+                arms: CreaturePartFamilyId(offset + 2),
+                legs: CreaturePartFamilyId(offset + 3),
+                tail: CreaturePartFamilyId(offset + 4),
+            },
+            3,
+            4,
+            5,
+        )
+    }
+
+    fn add_candidate(
+        images: &mut Assets<Image>,
+        materials: &mut Assets<StandardMaterial>,
+    ) -> (Handle<Image>, Handle<StandardMaterial>) {
+        let image = Image::new_fill(
+            Extent3d {
+                width: crate::CREATURE_COAT_ATLAS_SIZE,
+                height: crate::CREATURE_COAT_ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[17, 29, 43, 255],
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::default(),
+        );
+        (
+            images.add(image),
+            materials.add(StandardMaterial::default()),
+        )
+    }
+
+    #[test]
+    fn duplicate_acquire_removes_unused_candidate_assets_and_reuses_identity() {
+        let mut library =
+            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits::minimum());
+        let mut images = Assets::<Image>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let first_candidate = add_candidate(&mut images, &mut materials);
+        let first = library
+            .acquire_coat_assets(
+                key(0),
+                first_candidate.0,
+                first_candidate.1,
+                &mut images,
+                &mut materials,
+            )
+            .unwrap();
+        let duplicate_candidate = add_candidate(&mut images, &mut materials);
+        let duplicate_image_id = duplicate_candidate.0.id();
+        let duplicate_material_id = duplicate_candidate.1.id();
+        let reused = library
+            .acquire_coat_assets(
+                key(0),
+                duplicate_candidate.0,
+                duplicate_candidate.1,
+                &mut images,
+                &mut materials,
+            )
+            .unwrap();
+
+        assert_eq!(first.selected_key, key(0));
+        assert_eq!(reused.selected_key, key(0));
+        assert_eq!(first.image, reused.image);
+        assert_eq!(first.material, reused.material);
+        assert!(images.get(duplicate_image_id).is_none());
+        assert!(materials.get(duplicate_material_id).is_none());
+        assert_eq!(library.coat_rgba_bytes(), crate::CREATURE_COAT_RGBA_BYTES);
+        library.release_coat(first.selected_key).unwrap();
+        library.release_coat(reused.selected_key).unwrap();
+    }
+
+    #[test]
+    fn eviction_removes_both_bevy_assets() {
+        let mut library =
+            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits {
+                max_entries: 1,
+                max_rgba_bytes: crate::CREATURE_COAT_RGBA_BYTES,
+            });
+        let mut images = Assets::<Image>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let first_candidate = add_candidate(&mut images, &mut materials);
+        let first = library
+            .acquire_coat_assets(
+                key(0),
+                first_candidate.0,
+                first_candidate.1,
+                &mut images,
+                &mut materials,
+            )
+            .unwrap();
+        library.release_coat(first.selected_key).unwrap();
+        let first_image_id = first.image.id();
+        let first_material_id = first.material.id();
+        let second_candidate = add_candidate(&mut images, &mut materials);
+        library
+            .acquire_coat_assets(
+                key(10),
+                second_candidate.0,
+                second_candidate.1,
+                &mut images,
+                &mut materials,
+            )
+            .unwrap();
+
+        assert!(images.get(first_image_id).is_none());
+        assert!(materials.get(first_material_id).is_none());
+    }
+
+    #[test]
+    fn bevy_acquire_reports_pinned_fallback_and_release_underflow() {
+        let mut library =
+            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits {
+                max_entries: 1,
+                max_rgba_bytes: crate::CREATURE_COAT_RGBA_BYTES,
+            });
+        let mut images = Assets::<Image>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let resident_candidate = add_candidate(&mut images, &mut materials);
+        let resident = library
+            .acquire_coat_assets(
+                key(0),
+                resident_candidate.0,
+                resident_candidate.1,
+                &mut images,
+                &mut materials,
+            )
+            .unwrap();
+        let fallback_candidate = add_candidate(&mut images, &mut materials);
+        let fallback = library
+            .acquire_coat_assets(
+                key(10),
+                fallback_candidate.0,
+                fallback_candidate.1,
+                &mut images,
+                &mut materials,
+            )
+            .unwrap();
+
+        assert!(fallback.used_pinned_fallback);
+        assert_eq!(fallback.selected_key, resident.selected_key);
+        library.release_coat(resident.selected_key).unwrap();
+        library.release_coat(fallback.selected_key).unwrap();
+        assert!(matches!(
+            library.release_coat(fallback.selected_key),
+            Err(CreaturePartAssetError::CoatCache(
+                crate::CreatureCoatCacheError::UnbalancedRelease
+            ))
+        ));
     }
 }
 
@@ -182,6 +468,10 @@ pub enum CreaturePartAssetError {
     MissingLod,
     #[error("generated creature part has invalid bounds for {0:?}")]
     InvalidBounds(CreaturePartSlot),
+    #[error("creature coat cache selected an asset pair that is not resident")]
+    MissingCoatAssetPair,
+    #[error(transparent)]
+    CoatCache(#[from] crate::CreatureCoatCacheError),
     #[error("creature part asset IO failed: {0}")]
     Io(#[from] std::io::Error),
 }

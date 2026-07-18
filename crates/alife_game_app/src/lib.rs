@@ -81,6 +81,9 @@ pub use creature_part_genetics::*;
 mod creature_part_assets;
 pub use creature_part_assets::*;
 
+mod creature_coat;
+pub use creature_coat::*;
+
 mod creature_assembly;
 pub use creature_assembly::*;
 
