@@ -298,6 +298,11 @@ mod gpu_live_runtime;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_live_runtime::*;
 
+#[cfg(feature = "gpu-runtime")]
+mod gpu_evidence;
+#[cfg(feature = "gpu-runtime")]
+pub use gpu_evidence::*;
+
 mod soak_isolation;
 pub use soak_isolation::*;
 

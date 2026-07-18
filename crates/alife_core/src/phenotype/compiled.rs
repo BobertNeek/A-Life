@@ -107,10 +107,11 @@ impl<'de> Deserialize<'de> for NeuronDynamics {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum DecoderHeadKind {
     ActionCandidate = 1,
     MemoryContext = 2,
+    SpeechPayload = 3,
 }
 
 impl DecoderHeadKind {
@@ -121,6 +122,7 @@ impl DecoderHeadKind {
         match raw {
             1 => Ok(Self::ActionCandidate),
             2 => Ok(Self::MemoryContext),
+            3 => Ok(Self::SpeechPayload),
             _ => Err(ScaffoldContractError::PhenotypeCompile),
         }
     }

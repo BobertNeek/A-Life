@@ -9,10 +9,20 @@ use crate::{
 };
 
 use super::{
-    BrainCapacityClass, CandidateDecoderFamilyPlan, CandidateDecoderPlan, CompiledProjection,
-    CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate,
-    RouteBudgetReceipt, SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourceGroup,
+    AuxiliaryDecoderPlan, BrainCapacityClass, CandidateDecoderFamilyPlan, CandidateDecoderPlan,
+    CompiledProjection, CompiledSynapse, CompiledSynapseKind, DecoderHeadKind,
+    DecoderSynapseCoordinate, RouteBudgetReceipt, SensorEncoderAssignment, SensorEncoderPlan,
+    SensorEncoderSourceGroup,
 };
+
+pub(super) struct CompiledDecoderSet {
+    pub candidate: CandidateDecoderPlan,
+    pub speech: Option<AuxiliaryDecoderPlan>,
+    pub memory: Option<AuxiliaryDecoderPlan>,
+    pub projections: Vec<CompiledProjection>,
+    pub synapses: Vec<CompiledSynapse>,
+    pub receipts: Vec<RouteBudgetReceipt>,
+}
 
 pub(super) fn compile_encoder(
     genome: &BrainGenome,
@@ -118,22 +128,17 @@ pub(super) fn compile_encoder(
 }
 
 #[allow(clippy::type_complexity)]
-pub(super) fn compile_decoder(
+pub(super) fn compile_decoders(
     genome: &BrainGenome,
     development: &DevelopmentState,
     layout: &LobeLayout,
     capacity: &BrainCapacityClass,
     route_index: u16,
     start: u32,
-) -> Result<
-    (
-        CandidateDecoderPlan,
-        CompiledProjection,
-        Vec<CompiledSynapse>,
-        RouteBudgetReceipt,
-    ),
-    ScaffoldContractError,
-> {
+) -> Result<CompiledDecoderSet, ScaffoldContractError> {
+    if capacity.id() == BrainCapacityClass::N2048_ID {
+        return compile_n2048_decoders(genome, layout, route_index, start);
+    }
     let motor = layout
         .region(LobeKind::MotorArbitration)
         .filter(|region| region.enabled)
@@ -260,7 +265,230 @@ pub(super) fn compile_decoder(
         synapse_ceiling: len,
         payload_word_ceiling: len,
     };
-    Ok((decoder, projection, synapses, receipt))
+    Ok(CompiledDecoderSet {
+        candidate: decoder,
+        speech: None,
+        memory: None,
+        projections: vec![projection],
+        synapses,
+        receipts: vec![receipt],
+    })
+}
+
+fn compile_n2048_decoders(
+    genome: &BrainGenome,
+    layout: &LobeLayout,
+    action_route_index: u16,
+    start: u32,
+) -> Result<CompiledDecoderSet, ScaffoldContractError> {
+    let motor = layout
+        .region(LobeKind::MotorArbitration)
+        .filter(|region| region.enabled && region.len == 224)
+        .ok_or_else(compile_error)?;
+    let episodic = layout
+        .region(LobeKind::EpisodicMemory)
+        .filter(|region| region.enabled && region.len >= 64)
+        .ok_or_else(compile_error)?;
+    let core = layout
+        .region(LobeKind::CoreAssociation)
+        .filter(|region| region.enabled && region.len >= 64)
+        .ok_or_else(compile_error)?;
+
+    let mut synapses = Vec::with_capacity(8_192);
+    let mut family_plans =
+        Vec::with_capacity(crate::N2048FoundationLayoutV1::CANDIDATE_FAMILY_COUNT as usize);
+    for raw in 0_u8..crate::N2048FoundationLayoutV1::CANDIDATE_FAMILY_COUNT as u8 {
+        let family = CandidateActionFamily::try_from_raw(raw)?;
+        let family_start = start + u32::try_from(synapses.len()).map_err(|_| compile_error())?;
+        let first_motor =
+            u16::from(raw) * crate::N2048FoundationLayoutV1::CANDIDATE_MOTOR_UNITS_PER_FAMILY;
+        for input_lane in 0..CANDIDATE_FEATURE_COUNT as u16 {
+            for motor_index in first_motor
+                ..first_motor + crate::N2048FoundationLayoutV1::CANDIDATE_MOTOR_UNITS_PER_FAMILY
+            {
+                let neuron = motor.start + u32::from(motor_index);
+                let coordinate = DecoderSynapseCoordinate::new(
+                    DecoderHeadKind::ActionCandidate,
+                    family,
+                    input_lane,
+                    motor_index,
+                );
+                synapses.push(CompiledSynapse::new(
+                    neuron,
+                    neuron,
+                    genetic_weight(
+                        genome.genetic_prior_seed,
+                        action_route_index,
+                        neuron,
+                        u32::from(input_lane),
+                    ),
+                    super::topology_compile::decoder_alpha(genome, motor.start, neuron),
+                    action_route_index,
+                    CompiledSynapseKind::Decoder(coordinate),
+                ));
+            }
+        }
+        let count =
+            start + u32::try_from(synapses.len()).map_err(|_| compile_error())? - family_start;
+        family_plans.push(CandidateDecoderFamilyPlan::new(
+            family,
+            0.0,
+            family_start,
+            count,
+        ));
+    }
+    let candidate_count = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
+    if candidate_count != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT {
+        return Err(compile_error());
+    }
+    let candidate = CandidateDecoderPlan::try_new(
+        motor.start,
+        u16::try_from(motor.len).map_err(|_| compile_error())?,
+        CANDIDATE_FEATURE_COUNT as u16,
+        CANDIDATE_FEATURE_COUNT as u16,
+        family_plans,
+    )?;
+
+    let speech_start = start + candidate_count;
+    for input_lane in 0_u16..crate::SpeechDecoderLayoutV1::INPUT_WIDTH {
+        for output_index in 0_u16..crate::SpeechDecoderLayoutV1::OUTPUT_WIDTH {
+            let source = motor.start
+                + crate::SpeechDecoderLayoutV1::MOTOR_SOURCE_OFFSET
+                + u32::from(input_lane);
+            let target = motor.start
+                + crate::SpeechDecoderLayoutV1::MOTOR_TARGET_OFFSET
+                + u32::from(output_index);
+            synapses.push(CompiledSynapse::new(
+                source,
+                target,
+                genetic_weight(
+                    genome.genetic_prior_seed ^ 0x5350_4545_4348,
+                    action_route_index,
+                    source,
+                    u32::from(output_index),
+                ),
+                super::topology_compile::decoder_alpha(genome, motor.start, target),
+                action_route_index,
+                CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
+                    DecoderHeadKind::SpeechPayload,
+                    CandidateActionFamily::Other,
+                    input_lane,
+                    output_index,
+                )),
+            ));
+        }
+    }
+    let speech_count =
+        start + u32::try_from(synapses.len()).map_err(|_| compile_error())? - speech_start;
+    if speech_count != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT {
+        return Err(compile_error());
+    }
+    let speech = AuxiliaryDecoderPlan::try_new(
+        DecoderHeadKind::SpeechPayload,
+        crate::SpeechDecoderLayoutV1::INPUT_WIDTH,
+        crate::SpeechDecoderLayoutV1::OUTPUT_WIDTH,
+        speech_start,
+        speech_count,
+    )?;
+    let action_len = candidate_count + speech_count;
+    let action_projection = CompiledProjection::new(
+        action_route_index,
+        LobeKind::MotorArbitration,
+        LobeKind::MotorArbitration,
+        ProjectionType::MotorProposal,
+        ActiveTilePolicy::EssentialReservation,
+        UpdateCadence::Hot60Hz,
+        BiologicalPriority::Essential,
+        0,
+        start,
+        action_len,
+        0,
+    );
+    let action_receipt = RouteBudgetReceipt {
+        route_index: action_route_index,
+        active_tiles: 0,
+        recurrent_synapses: 0,
+        action_decoder_synapses: action_len,
+        memory_decoder_synapses: 0,
+        immutable_payload_words: action_len,
+        tile_ceiling: 0,
+        synapse_ceiling: action_len,
+        payload_word_ceiling: action_len,
+    };
+
+    let memory_route_index = action_route_index
+        .checked_add(1)
+        .ok_or_else(compile_error)?;
+    let memory_start = start + action_len;
+    for input_lane in 0_u16..crate::N2048FoundationLayoutV1::MEMORY_DECODER_INPUT_WIDTH {
+        for output_index in 0_u16..crate::N2048FoundationLayoutV1::MEMORY_DECODER_OUTPUT_WIDTH {
+            let source = episodic.start + u32::from(input_lane);
+            let target = core.start + u32::from(output_index);
+            synapses.push(CompiledSynapse::new(
+                source,
+                target,
+                genetic_weight(
+                    genome.genetic_prior_seed ^ 0x4D45_4D4F_5259,
+                    memory_route_index,
+                    source,
+                    target,
+                ),
+                1.0,
+                memory_route_index,
+                CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
+                    DecoderHeadKind::MemoryContext,
+                    CandidateActionFamily::Other,
+                    input_lane,
+                    output_index,
+                )),
+            ));
+        }
+    }
+    let memory_count =
+        start + u32::try_from(synapses.len()).map_err(|_| compile_error())? - memory_start;
+    if memory_count != crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT {
+        return Err(compile_error());
+    }
+    let memory = AuxiliaryDecoderPlan::try_new(
+        DecoderHeadKind::MemoryContext,
+        crate::N2048FoundationLayoutV1::MEMORY_DECODER_INPUT_WIDTH,
+        crate::N2048FoundationLayoutV1::MEMORY_DECODER_OUTPUT_WIDTH,
+        memory_start,
+        memory_count,
+    )?;
+    let memory_projection = CompiledProjection::new(
+        memory_route_index,
+        LobeKind::EpisodicMemory,
+        LobeKind::CoreAssociation,
+        ProjectionType::Feedback,
+        ActiveTilePolicy::EssentialReservation,
+        UpdateCadence::Hot5To15Hz,
+        BiologicalPriority::High,
+        0,
+        memory_start,
+        memory_count,
+        0,
+    );
+    let memory_receipt = RouteBudgetReceipt {
+        route_index: memory_route_index,
+        active_tiles: 0,
+        recurrent_synapses: 0,
+        action_decoder_synapses: 0,
+        memory_decoder_synapses: memory_count,
+        immutable_payload_words: memory_count,
+        tile_ceiling: 0,
+        synapse_ceiling: memory_count,
+        payload_word_ceiling: memory_count,
+    };
+
+    Ok(CompiledDecoderSet {
+        candidate,
+        speech: Some(speech),
+        memory: Some(memory),
+        projections: vec![action_projection, memory_projection],
+        synapses,
+        receipts: vec![action_receipt, memory_receipt],
+    })
 }
 
 fn sensor_lanes(kind: SensorChannelKind) -> (SensorEncoderSourceGroup, u16, u16) {

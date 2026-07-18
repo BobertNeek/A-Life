@@ -5,11 +5,12 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     AlphaStoragePolicy, BrainCapacityClass, BrainClassId, BrainGenome, CanonicalDigestBuilder,
-    DevelopmentState, LobeRatioPlan, ScaffoldContractError, SensorProfile, Validate,
+    DevelopmentState, FoundationAbiBinding, LobeRatioPlan, ScaffoldContractError, SensorProfile,
+    Validate,
 };
 
-const INPUTS_SCHEMA_VERSION: u16 = 1;
-const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v1";
+const INPUTS_SCHEMA_VERSION: u16 = 2;
+const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v2";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PhenotypeCompilerInputs {
@@ -17,6 +18,7 @@ pub struct PhenotypeCompilerInputs {
     genome: BrainGenome,
     development: DevelopmentState,
     sensor_profile: SensorProfile,
+    foundation_abi: FoundationAbiBinding,
     capacity_class_id: BrainClassId,
     capacity_digest: [u64; 4],
     canonical_digest: [u64; 4],
@@ -29,9 +31,27 @@ impl PhenotypeCompilerInputs {
         development: DevelopmentState,
         sensor_profile: SensorProfile,
     ) -> Result<Self, ScaffoldContractError> {
+        let foundation_abi = FoundationAbiBinding::canonical_for_capacity(capacity)?;
+        Self::try_new_with_foundation_abi(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            foundation_abi,
+        )
+    }
+
+    pub fn try_new_with_foundation_abi(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation_abi: FoundationAbiBinding,
+    ) -> Result<Self, ScaffoldContractError> {
         capacity.validate_contract()?;
         genome.validate_contract()?;
         development.validate_contract()?;
+        foundation_abi.validate_against(capacity)?;
         if genome.brain_class_id != capacity.id() || development.genome_id != genome.id {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -41,6 +61,7 @@ impl PhenotypeCompilerInputs {
             genome,
             development,
             sensor_profile,
+            foundation_abi,
             capacity_class_id: capacity.id(),
             capacity_digest: capacity.canonical_digest(),
             canonical_digest: [0; 4],
@@ -58,6 +79,9 @@ impl PhenotypeCompilerInputs {
     pub const fn capacity_class_id(&self) -> BrainClassId {
         self.capacity_class_id
     }
+    pub const fn foundation_abi(&self) -> &FoundationAbiBinding {
+        &self.foundation_abi
+    }
     pub(super) const fn genome(&self) -> &BrainGenome {
         &self.genome
     }
@@ -72,6 +96,7 @@ impl PhenotypeCompilerInputs {
         capacity.validate_contract()?;
         self.genome.validate_contract()?;
         self.development.validate_contract()?;
+        self.foundation_abi.validate_against(capacity)?;
         if self.schema_version != INPUTS_SCHEMA_VERSION
             || self.capacity_class_id != capacity.id()
             || self.capacity_digest != capacity.canonical_digest()
@@ -91,6 +116,20 @@ impl PhenotypeCompilerInputs {
         encode_genome(&mut d, &self.genome)?;
         encode_development(&mut d, &self.development)?;
         d.write_u16(self.sensor_profile.raw());
+        d.write_u16(self.foundation_abi.capacity_class_id().raw());
+        d.write_u64(self.foundation_abi.layout_id().0);
+        for byte in self.foundation_abi.layout_digest().bytes() {
+            d.write_u8(*byte);
+        }
+        d.write_u32(self.foundation_abi.language_codebook().id().0);
+        for byte in self
+            .foundation_abi
+            .language_codebook()
+            .canonical_digest()
+            .bytes()
+        {
+            d.write_u8(*byte);
+        }
         d.write_u16(self.capacity_class_id.raw());
         for word in self.capacity_digest {
             d.write_u64(word);
@@ -110,6 +149,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             genome: BrainGenome,
             development: DevelopmentState,
             sensor_profile: SensorProfile,
+            foundation_abi: FoundationAbiBinding,
             capacity_class_id: BrainClassId,
             capacity_digest: [u64; 4],
             canonical_digest: [u64; 4],
@@ -120,6 +160,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             genome: w.genome,
             development: w.development,
             sensor_profile: w.sensor_profile,
+            foundation_abi: w.foundation_abi,
             capacity_class_id: w.capacity_class_id,
             capacity_digest: w.capacity_digest,
             canonical_digest: w.canonical_digest,

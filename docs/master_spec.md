@@ -2,13 +2,13 @@
 
 **Project:** A-Life  
 **Stack:** Rust + Bevy + wgpu/WebGPU + WGSL  
-**Spec revision:** 0.4 GPU-authoritative closed-loop implementation
-**Date:** 2026-07-10
-**Status:** implementation target; GPU-authoritative closed-loop neural runtime
+**Spec revision:** 0.5 N2048 foundation, grounded language, and evolvable lineage
+**Date:** 2026-07-17
+**Status:** implementation target; GPU-authoritative trainable creature runtime
 
-This document is the controlling engineering specification for A-Life. It supersedes earlier fixed-2048, HLSL, dense-matrix, single-pass-kernel, scaffold-only, and CPU-shadow neural drafts. It preserves scalable brain classes, class-bucketed sparse storage, Rust/Bevy/wgpu/WebGPU/WGSL, separated neural compute passes, and explicit boundaries between internal subconscious semantic priors and external teacher agents. ADR-024 and the approved GPU closed-loop design control production cognition when older milestone prose conflicts with this specification.
+This document is the controlling engineering specification for A-Life. It supersedes earlier fixed-2048, HLSL, dense-matrix, single-pass-kernel, scaffold-only, and CPU-shadow neural drafts. It preserves scalable brain classes, class-bucketed sparse storage, Rust/Bevy/wgpu/WebGPU/WGSL, separated neural compute passes, and explicit boundaries between internal subconscious semantic priors and external teacher agents. ADR-024 and ADR-027 through ADR-030, together with the approved GPU closed-loop and N2048 foundation program, control production cognition when older milestone prose conflicts with this specification. ADR-025 and ADR-026 remain reserved for their approved memory/grounding and scaling/promotion checkpoints.
 
-The implementation goal is one causally closed production brain in which current perception, recurrent state, candidate scoring, action selection, measured outcome, waking plasticity, sleep consolidation, and later behavior remain connected. Production neural execution is GPU-authoritative WGSL. Pure CPU neural math is test-only or developer-only and never runs as a live shadow, parity gate, or automatic neural fallback.
+The implementation goal is one causally closed production brain in which current perception, recurrent state, candidate scoring, action selection, measured outcome, waking plasticity, sleep consolidation, and later behavior remain connected. Production neural execution is GPU-authoritative WGSL. Pure CPU neural math is test-only or developer-only and never runs as a live shadow, parity gate, or automatic neural fallback. N2048 is the first fully trained class: curated inherited foundations establish robust sensorimotor and language mechanics, evolution hardens them, and personal semantic and episodic knowledge remains lifetime-learned.
 
 The long-term research direction is a grounded developmental generalist agent: an artificial organism whose world model, instincts, language, social behavior, and reasoning arise from evolved brain topology, Hebbian/Oja plasticity, neurochemistry, embodied experience, schooling, and sleep consolidation. The formal spec avoids product claims about AGI. Speculative frontier-scale ideas are quarantined in `docs/future_research_compatibility.md` and must not become v0/v1 requirements.
 
@@ -119,8 +119,11 @@ The initial workspace should contain these crates:
 - `alife_world`: engine-neutral world concepts: ecology, organisms, resources, drives, lesson-world APIs, candidate enumeration, legality, outcomes, and sensory extraction contracts.
 - `alife_bevy_adapter`: Bevy-specific app, plugins, rendering, ECS integration, physics adapters, debug UI, and eventual demo scenes.
 - `alife_gpu_backend`: the shared `GpuClosedLoopBackend`, generation-checked brain handles, sparse class-bucketed pools, production WGSL pipelines, dispatch scheduling, bounded readback, waking plasticity, and sleep consolidation.
+- `alife_runtime`: the single GPU-authoritative session boundary shared by gameplay, foundation training, evolution, challenges, checkpoint capture, and migration.
+- `alife_training`: exact-production-graph WGSL gradient training, curricula, evaluation, evolutionary hardening, and foundation promotion receipts. Training shaders and optimizer state never enter normal game binaries or saves.
+- `alife_archive`: profile-local cross-save lineage manifests, content-addressed foundation/genome/checkpoint assets, quotas, indexes, secure bundles, and founder resolution.
 - `alife_school`: external teacher LLM roles, lesson API, verifier interfaces, curriculum definitions, and in-world teaching object contracts.
-- `alife_semantic`: internal semantic prior provider interface and optional tiny local SLM provider stub.
+- `alife_semantic`: bounded local-model adapters for separate developmental semantic-prior and speech-translation request schemas, including a no-provider ablation implementation.
 - `alife_tools`: developer tooling hooks, graph integration helpers, docs validation, and spec consistency checks.
 
 Both `alife_core` and `alife_world` depend on none of Bevy, wgpu, renderer
@@ -173,6 +176,9 @@ A-Life/
 │   ├── alife_core/
 │   ├── alife_world/
 │   ├── alife_gpu_backend/
+│   ├── alife_runtime/
+│   ├── alife_training/
+│   ├── alife_archive/
 │   ├── alife_bevy_adapter/
 │   ├── alife_school/
 │   ├── alife_semantic/
@@ -271,6 +277,13 @@ All classes obey these invariants:
 
 `Standard2048` remains useful for continuity as a legacy/reference adapter, not because it is privileged. Production acceptance compiles nonempty sparse phenotypes for N512, N1024, and N2048 and proves the architecture is neither fixed at 2048 nor silently promoting larger tiers.
 
+`N2048FoundationLayoutV1` is the first trained foundation. N512 and N1024
+remain valid promoted runtime capacities but receive separate foundation assets
+later; their weights are never derived by truncating N2048. `N4096Research`
+exists only as an unpromoted migration target for function-preserving growth
+evidence. Capacity-class support, foundation availability, and production
+promotion are separate facts and must be reported separately.
+
 
 ## 9. Lobe Layout Generation
 
@@ -296,6 +309,52 @@ The motor lobe must distinguish logical motor nodes from physical stride. Logica
 
 Evolution may adjust lobe ratios, but curriculum and advanced schooling should be staged. There is no point trying to teach high-level math to a creature whose brain class lacks enough working memory, lexicon capacity, auditory/glyph capacity, and social motivation.
 
+### N2048FoundationLayoutV1
+
+The first trainable layout is frozen at exactly 2,048 neurons:
+
+| Lobe | Neurons | Persistent ordinal range |
+|---|---:|---:|
+| Sensory | 256 | 0-255 |
+| Metabolic | 128 | 0-127 |
+| Auditory/Speech | 128 | 0-127 |
+| Glyph | 128 | 0-127 |
+| Lexicon | 256 | 0-255 |
+| Core Association | 448 | 0-447 |
+| Episodic | 256 | 0-255 |
+| Working Memory | 128 | 0-127 |
+| Motor | 224 | 0-223 |
+| Homeostatic | 96 | 0-95 |
+| **Total** | **2,048** | |
+
+Persistent ordinals are local to a lobe and do not expose packed runtime
+offsets. The recurrent route budget is exactly 24,576 synapses:
+
+| Route | Synapses | Lifetime plasticity |
+|---|---:|---|
+| Sensory -> Core | 3,584 | Slow |
+| Auditory -> Core | 1,536 | Slow |
+| Glyph -> Core | 1,536 | Slow |
+| Metabolic -> Homeostatic | 1,024 | Slow |
+| Homeostatic -> Core | 1,024 | Slow |
+| Homeostatic -> Motor | 768 | Slow |
+| Core -> Motor | 3,072 | 2,048 Slow / 1,024 Fast |
+| Motor -> Motor | 1,536 | Slow |
+| Core -> Working | 1,536 | Fast |
+| Working -> Core | 1,536 | Fast |
+| Core -> Episodic | 1,536 | Fast |
+| Episodic -> Core | 1,536 | Fast |
+| Core -> Lexicon | 1,536 | Fast |
+| Lexicon -> Core | 1,536 | Fast |
+| Lexicon -> Working | 768 | Fast |
+| Working -> Lexicon | 512 | Fast |
+| **Total** | **24,576** | |
+
+Action-decoder and memory-decoder budgets are each 4,096 synapses. The action
+decoder reserves a bounded recurrent speech payload head used only after the
+world's unscored `Vocalize` candidate wins. The speech head never competes with
+world candidates or supplies their logits.
+
 
 ## 10. Genome and Developmental Encoding
 
@@ -308,6 +367,54 @@ The genome should also encode developmental growth checkpoints. A creature may h
 Inheritance should support biological and engineered modes. Pure biological mode inherits only genome plus cultural exposure. Practical A-Life mode may allow limited inherited deja-vu, species culture priors, and experimental Lamarckian carryover. This is intentional: the project is interested in smart creatures more than strict biological fidelity. All such inheritance mechanisms must be flagged and ablatable.
 
 The genome should never directly store every learned synapse as heritable default. It should store compressed predispositions, structural tendencies, seed templates, and maybe distillation summaries. This keeps evolution from becoming a hidden supervised checkpoint copy mechanism.
+
+### Curated foundation and Baldwinian inheritance
+
+A `FoundationManifest` binds `FoundationId`, `FoundationVersion`,
+`FoundationCompatibilityFamilyId`, capacity class, lobe layout, sensor/action/
+language ABIs, persistent-address map, route and plasticity digests,
+curriculum/evaluation versions, immutable payload digest, provenance, and a
+`FoundationPromotionReceipt`. A `FoundationWeightAssetRef` resolves the
+content-addressed immutable payload. Missing or mismatched topology, address
+map, class, plasticity, sensory ABI, action ABI, language ABI, or payload digest
+fails before GPU allocation.
+
+Every route or section declares a `FoundationSectionPolicy` and
+`LifetimePlasticityBand::{Fixed, Slow, Fast}`. Fixed weights never change during
+life. Slow bands permit bounded, low-rate individual adaptation while retaining
+curated skills. Fast bands support personal working-memory, episodic,
+association, and learned-language development. All production dispatches retain
+the same effective-weight rule:
+
+The inherited composition identity is
+`W_genetic = foundation + compiled genome deltas`; the equations below define
+how that immutable genetic payload combines with lifetime state.
+
+```text
+W_effective = W_genetic + W_lifetime + alpha * H_fast
+W_genetic = foundation + compiled genome deltas
+```
+
+At genetic birth, the selected immutable foundation and deterministic compiled
+genome deltas produce `W_genetic`. Genetic birth clears lifetime weights, fast
+weights, eligibility, semantic and episodic content, and learned lexicon
+bindings. The child inherits the foundation identity, compatible neural
+structure, endocrine traits, morphology, and sparse genetic deltas, not either
+parent's acquired mind.
+
+Cross-foundation mating is allowed only within a declared compatibility family.
+Parent genetic values are resolved by persistent logical address, recombined
+deterministically, and re-encoded as deltas against the chosen child foundation.
+An unmappable address or incompatible ABI makes the offspring nonviable; it
+never triggers positional array crossover.
+
+Foundation creation uses two explicit phases. Offline WGSL truncated
+backpropagation trains curated sensorimotor, homeostatic, content-neutral memory,
+and language mechanics on the exact sparse production graph. Evolutionary
+hardening then evaluates memory-empty newborns in the real production runtime
+and mutates only causal genetic fields. Personal semantic facts, episodic
+content, names, aliases, dialect, teacher-private state, and world bindings are
+excluded from foundation promotion.
 
 
 ## 11. Genetics, Evolution, and Population Pressure
@@ -341,7 +448,7 @@ Chemistry affects:
 - synaptic wear and autophagy,
 - developmental migration readiness.
 
-Teacher feedback should generally enter through social/world channels: praise, tone, visible approval, access, reward objects, correction, demonstration, or task success. Limited hidden reward/plasticity injection is allowed only as an early bootstrapping or experimental mode and must be marked in logs so results are not confused with clean grounded learning.
+Teacher feedback enters through social/world channels: praise, tone, visible approval, access, reward objects, correction, demonstration, or task success. Hidden reward/plasticity injection is research-only, must be explicitly logged, and cannot satisfy production foundation, grounding, language, or intelligence gates.
 
 
 ## 13. Internal SLM / Semantic Prior Layer
@@ -366,7 +473,27 @@ It may not produce:
 - direct reward injection,
 - privileged teacher intents.
 
-The interface should be named `SemanticPriorProvider`, not `SlmHardcodedSystem`. The first implementation may be a tiny local SLM optional provider or a deterministic stub. The interface must support `NoSemanticPriorProvider` for ablation tests.
+The interface is named `SemanticPriorProvider`, not `SlmHardcodedSystem`. The
+production local-model runtime exposes two disjoint request schemas:
+`SemanticPriorRequest` and `SpeechTranslationRequest` are separate request
+schemas. `NoSemanticPriorProvider` and no-translation modes remain first-class
+ablation paths.
+
+`SemanticPriorRequest` produces a bounded, short-lived developmental packet.
+Default maximum juvenile gain is 0.20 and packet lifetime is at most 32 ticks.
+Unaided probes occur every 64 relevant exposures, fade begins after 128 unaided
+exposures, and gain reaches zero after three consecutive probe windows whose
+75% lower-confidence bound passes. Novelty may reactivate gain 0.05 for at most
+128 ticks with a 1,024-tick cooldown. The packet cannot contain an action,
+reward, entity target, desirability score, direct weight delta, or teacher-private
+answer.
+
+`SpeechTranslationRequest` maps player surface text into at most 16 canonical,
+learned, or explicitly novel tokens, or renders only the raw tokens selected by
+a creature. It carries confidence, model identity, assistance status, and
+literal/rendered provenance. Unknown concepts stay novel; low confidence is
+shown rather than invented away. The SLM never authors creature thought,
+action, reward, target, desirability, or hidden comprehension.
 
 The internal semantic prior substitutes for some instincts animals get from deep evolution. It can bootstrap language/salience in ways that would otherwise require impossible evolutionary time. But its influence must remain bounded and testable. If a creature appears intelligent only when the internal SLM is verbose, the learned brain has not internalized the skill.
 
@@ -473,8 +600,77 @@ ETF/codebook anchors are versioned. They are useful for sensory invariance and m
 
 Language must be grounded through perception. Teacher and peer speech uses the same hearing pathway as creature speech. Written language uses visible in-world symbols, simplified glyph sensors, or eventually rendered text. The transition can be developmental: clean token/glyph stream first for tests, then lower-level phoneme/audio/glyph perception later.
 
+### LanguageCodebookV1
+
+`LanguageCodebookV1` has 256 stable logical codes independent of neuron indices.
+Token IDs never identify neurons or packed GPU offsets. Code 0 is the
+silence/unknown sentinel; 1-128 are canonical compositional vocabulary; 129-192
+are learned aliases and creature dialect; 193-224 are names and social
+bindings; 225-255 are reserved experimental expansion. The canonical range
+allocates 24 verbs/actions, 64 ecological/category nouns, 16 drives/internal
+states, 16 modifiers/spatial relations, and 8 grammatical/query/social
+operators.
+
+The default bounded grammar is:
+
+```text
+[addressee] [subject] [modifier] [verb/state] [modifier] [object/target]
+```
+
+Heard utterances contain at most 16 tokens and creature-generated utterances at
+most six. Localized surface words do not change token IDs. The codebook defines
+pronounceable symbols, sequence roles, and protocol scaffolding; it does not
+inherit ecological noun meanings, action meanings, personal names, aliases, or
+dialects. Those bindings are learned through visible objects, normal hearing,
+demonstrated actions, creature actions, and sealed outcomes. Operators such as
+`what`, `why`, `self`, `yes`, and `no` may receive content-neutral inherited
+protocol scaffolding.
+
+Versioned contracts include `LanguageCodebookId`, `LanguageTokenId`,
+`LanguageTokenClass`, `SpeechActKind`, `UtteranceId`,
+`UtteranceSourceKind::{Player, Creature, Teacher}`, `PlayerUtterance`,
+`AudibleUtterance`, `SpeechMotorPayload`, `CreatureUtteranceReceipt`,
+`SpeechTranslationReceipt`, and `LanguageGroundingLedger`. A `HeardToken`
+records utterance identity, sequence position, source kind, optional addressee,
+spatial origin, confidence, and perception-only semantics.
+
+### Spatial player speech
+
+Player speech is spatial perception, never a direct command channel. Text is
+tokenized locally or through the bounded translation schema, then emitted as an
+`AudibleUtterance` at the player Hand. A leading recognized name supplies an
+optional addressee. Named messages reach that creature only if it can hear the
+source; unnamed messages reach every attentive creature in range. Distance,
+noise, hearing morphology, and attention determine confidence. Unknown words
+remain novel token records instead of becoming hidden concepts. Correctly
+hearing a request neither creates a scored candidate nor forces compliance.
+
+### Authentic neural speech and self-narration
+
+`Vocalize` is an unscored world opportunity whose speech act and token payload
+are selected by the GPU brain. The opportunity exists only when cooldown and
+energy rules permit. If it wins normal candidate arbitration, the recurrent
+speech payload head selects a speech act and up to six tokens. The world then
+validates the payload, charges a small metabolic cost, emits the literal raw
+utterance, and records social consequences in the sealed outcome.
+
+Nearby creatures hear exactly those raw tokens. The player sees a literal
+bubble or an optional uncertain translation. The host never reads internal
+neural state and invents a narration sentence. Default spontaneous speech is
+driven by meaningful learned goal, action, or dominant-drive transitions,
+responses to `what`, `why`, or `express`, and occasional learned social speech.
+Spontaneous cooldown is 32 ticks and prompted response minimum interval is 8
+ticks.
+
+Creature-to-player translation consumes only the raw selected token sequence
+and previously grounded ledger associations. Other creatures always receive
+raw tokens, never rendered prose. Developer evidence preserves literal tokens,
+translation, confidence, assistance status, source, hearing range, and model
+identity.
+
 The speech ABI should support:
 
+- utterance ID, source kind, sequence position, and optional addressee,
 - speaker ID,
 - direction/source location,
 - confidence/noise,
@@ -492,7 +688,7 @@ The writing ABI should support:
 - language/script ID,
 - links to world objects when physically labelled.
 
-The teacher may write on boards, label objects, create books, draw maps, or arrange symbols. These are world objects. The creature reads them through perception. Hidden token-to-lexicon injection is forbidden for the teacher.
+The teacher may write on boards, label objects, create books, draw maps, or arrange symbols. These are world objects. The creature reads them through perception. Hidden token-to-lexicon injection is forbidden for the teacher. Player teaching, teacher nursery lessons, and peer teaching use the same audible/visible world pathway and sealed outcome ledger.
 
 
 ## 19. Action ABI and Motor Arbitration
@@ -586,6 +782,31 @@ The scheduler chooses residency based on salience, distance, social relevance, p
 
 Ascension is future-only now but must be architecturally possible. A favorite evolved creature can eventually be exported and migrated into a larger brain class. The migration process preserves identity while adding capacity.
 
+Every compiled phenotype publishes a canonical stable address map containing
+`PersistentNeuronAddress { lobe, ordinal }`, `PersistentProjectionAddress`,
+`PersistentSynapseAddress`, and persistent decoder addresses. Logical addresses
+are independent of sparse-pool ordering, tile packing, and runtime slot.
+The serialized map and compatibility metadata use a BLAKE3-256 digest. Packed
+GPU offsets remain runtime-local.
+
+Checkpoint intent is explicit:
+
+`GeneticRebuild`, `DurableLearnedFounder`, and `ExactResume` are separate,
+non-interchangeable persistence contracts.
+
+- `GeneticRebuild`: foundation identity plus genome and genetic deltas only.
+- `DurableLearnedFounder`: consolidated lifetime weights, durable semantic and
+  episodic state, learned language/dialect, personality-relevant durable state,
+  and provenance.
+- `ExactResume`: all mutable GPU state needed for same-save continuation,
+  including active buffer selectors, fast weights, eligibility, homeostasis,
+  sleep phase/cycle, bounded replay state, and deterministic RNG state.
+
+Founder restore is not exact resume. A learned founder receives a healthy new
+body and local identity. It retains consolidated learning and durable language,
+but clears activations, eligibility, working memory, current conversations,
+current targets, injuries, age, and world-local entity/social bindings.
+
 Migration inputs:
 
 - genome,
@@ -600,16 +821,24 @@ Migration inputs:
 - memory/concept ledger,
 - lineage metadata.
 
+Function-preserving N2048-to-N4096 research migration doubles each lobe by
+appending neurons after its preserved prefix. `N4096Research` has 4,096
+neurons, 49,152 recurrent synapses, 8,192 action-decoder synapses, and 8,192
+memory-decoder synapses while preserving language token IDs and speech ABI. It
+remains research-only.
+
 Migration process:
 
-1. Suspend production dispatch at a safe offline boundary and persist an immutable source checkpoint.
-2. Allocate the target class bucket without changing the active production handle.
-3. Map old lobe ranges into the target layout.
-4. Preserve stable sensory/action ABI mappings.
-5. Initialize expansion lobes as tabula-rasa or weakly seeded.
-6. Validate the target offline with deterministic replays and fixtures; neither source nor target emits production world actions during validation.
-7. Atomically replace the active production handle only after every migration gate passes.
-8. Resume production with only the migrated brain; the source remains an offline rollback artifact.
+1. Suspend production dispatch at a sealed boundary.
+2. Finish pending consolidation exactly once and persist an immutable rollback checkpoint.
+3. Compile the target through the versioned migration compiler without changing the active handle.
+4. Map genetic, lifetime, fast, activation, eligibility, memory, language, and RNG state by persistent address.
+5. Preserve old synapse accumulation order and all stable sensory/action/language ABI mappings.
+6. Initialize appended neurons and bridge routes dormant.
+7. Replay source and target on the same adapter without emitting world actions.
+8. Require identical selected candidates and maximum logit delta at most `1e-6`.
+9. Atomically replace the active handle only after every gate passes, otherwise restore the source.
+10. Resume production with one active target brain; retain the source as an offline rollback artifact.
 
 Offline deterministic replay and fixture validation exercise the migrated brain
 without producing world actions. The production handoff is atomic, and old and
@@ -840,6 +1069,63 @@ Saves must be versioned. They should include world state, organisms, genomes, br
 
 Lineage export supports ascension. It should store enough to recreate the creature later, migrate it to a larger class, and test whether its identity survived migration.
 
+The profile-local lineage library is durable across saves:
+
+```text
+platform-local-data/A-Life/lineage-library/
+|-- lineage.db
+|-- manifests/
+|-- assets/<digest>/
+|-- checkpoints/<digest>/
+`-- staging/
+```
+
+Every creature receives an immutable genetic archive before GPU insertion. The
+canonical manifest and all referenced genome/foundation assets are copied into
+the profile store before the runtime allocates a neural slot. The bundled SQLite
+index is rebuildable from immutable manifests and content-addressed assets;
+SQLite is not the sole source of truth.
+
+Learned checkpoints use compressed, content-addressed 64 KiB pages. Genetic
+archives are retained indefinitely. The default full-state quota is 4 GiB, with
+up to 64 temporary peak candidates and 24 automatic permanent learned
+checkpoints per run plus user pins. Pinned checkpoints are never auto-evicted.
+Quota pressure visibly downgrades an automatic learned capture to genetic-only;
+it never silently discards the genetic archive.
+
+Death ordering is transactional:
+
+```text
+DeathDetected
+-> Quiescent
+-> seal final outcome and statistics
+-> commit life archive
+-> capture selected learned checkpoint
+-> obtain retirement receipt
+-> scrub GPU handle
+-> despawn
+-> Dead
+```
+
+A dying creature is archived before its GPU handle is scrubbed or its world
+entity despawns. Crash recovery can complete or roll back staged content without
+publishing a partial manifest.
+
+Founder modes are `GeneticFounder`, `MindStateClone`, and `GeneticOffspring`.
+Genetic founder is the default and restores only the inherited foundation/
+genome boundary. A chosen checkpoint-capable elite may become a mind-state
+clone with a healthy new body, remapped local IDs, and cleared transient or
+world-local state. Genetic offspring applies a deterministic mutation seed.
+New-save creation records all source runs, archives, checkpoint IDs, remaps, and
+founder provenance before validating the complete save.
+
+Portable `.alife-creature` and `.alife-cohort` bundles reject traversal,
+oversized entries, duplicate paths, missing assets, digest mismatch,
+unsupported class/ABI/codebook/foundation identities, and partial extraction.
+Genetic founders lose acquired vocabulary and meanings. Mind-state clones retain
+durable learned language and dialect but clear current conversations and working
+memory.
+
 A `LineageExportManifest` should include:
 
 - schema version,
@@ -853,11 +1139,42 @@ A `LineageExportManifest` should include:
 - export tick,
 - parent lineage references,
 - flags for inherited deja-vu or Lamarckian modes.
+- foundation ID/version/compatibility family and payload digest,
+- persistent-address-map and language-codebook digests,
+- checkpoint mode and content-addressed page references when present,
+- source run, life statistics, ranking/evaluation versions, and founder provenance.
+
+Passive statistics update in O(1) during ordinary simulation and use `Unknown`
+when the creature had no relevant exposure. They cover survival regimes, food,
+poison, hazards, energy, movement, reproduction, sleep retention, learning
+slope, reversal recovery, vocabulary grounding, unaided versus SLM-assisted
+comprehension, narration fidelity, peer communication, dialect divergence, and
+GPU dispatch/throttle counts. A bounded active battery grades navigation,
+detours, dangerous-short versus safe-long routes, reversals, delayed choice,
+unfamiliar edibility, sleep retention, generalization, recovery, named
+instruction, word grounding, narration, peer aliases, and SLM-disabled dialect
+transfer. Selection is Pareto/category based; no default kinship penalty is
+applied, while ancestry and genome distance remain visible.
 
 
 ## 37. Schooling and Curriculum Interfaces
 
 The master spec defines boundaries; detailed schooling lives in `docs/schooling_and_teacher_architecture.md`. Schooling is staged by utility and reasoning capacity.
+
+The perception-only language nursery is the canonical route for vocabulary
+grounding. It presents visible objects, demonstrates actions, speaks through
+normal spatial hearing, and supplies visible/social/world feedback whose
+consequences are sealed in ordinary experience patches. It has no lexicon-vector
+write, token-meaning injection, scored candidate, direct reward, or teacher
+action bypass. Player teaching and peer teaching use this same path.
+
+Foundation speech training randomizes surface forms and token assignments so it
+learns discrimination, name attention, turn taking, grammatical roles, speech
+sequencing, vocal mechanics, and content-neutral state-to-role binding rather
+than memorizing English meanings. Live vocabulary grounding begins with empty
+personal bindings. Language curriculum and evaluation include SLM-disabled
+tests, novel surface words, token permutations, novel speakers, delayed recall,
+and peer transfer; assisted and unaided results are never merged.
 
 Stages:
 
@@ -870,7 +1187,7 @@ Stages:
 7. Social reasoning: promises, obligations, trust, teaching others.
 8. Independent exams: teacher off, internal SLM reduced/off, novel environment, delayed recall.
 
-Teacher LLM roles use world-authorized lesson APIs to spawn/arrange objects. The private evaluator can grade and select lessons. Direct hidden reward/plasticity injection is allowed only in limited, logged bootstrapping mode.
+Teacher LLM roles use world-authorized lesson APIs to spawn/arrange objects. The private evaluator can grade and select lessons. Direct hidden reward/plasticity injection is research-only and is never accepted as clean curriculum or promotion evidence.
 
 
 ## 38. Future Compatibility Envelope
@@ -904,12 +1221,12 @@ Do not build:
 - HLSL production kernels.
 - CUDA/Triton/TPU backends.
 - 1M-neuron runtime.
-- Teacher LLM runtime.
-- Internal SLM model loading.
 - D2NWG training.
 - full topological Morse implementation.
 - AGI claims.
 - arbitrary dynamic brain resizing.
+- fully open-ended natural language in N2048.
+- production promotion of `N4096Research`.
 - live CPU neural shadow execution.
 - CPU-parity-gated production handoff.
 - automatic CPU neural fallback.
@@ -936,6 +1253,16 @@ Slice B: GPU causal learning and sleep. Add eligibility buffers, three-factor fa
 Slice C: memory, topology, and grounding. Add candidate-conditional memory, nonfatal topology, explicit privileged and grounded sensor profiles, tracked-object bindings, and a 10,000-plus-tick bounded cognition soak.
 
 Slice D: scaling and cleanup. Enforce global/per-route budgets, activity-dependent BrainATP, memory ceilings, tier promotion gates, legacy save migration, documentation cleanup, and removal of superseded backend code and claims.
+
+N2048 Foundation and Lineage Program: after Slice A evidence and the remaining
+B/C/D runtime gates, freeze `N2048FoundationLayoutV1`; load immutable foundation
+assets at birth; share one checkpointable GPU runtime across game and labs; add
+spatial hearing and GPU neural speech; train staged survival/language mechanics
+with offline WGSL gradients; harden them through production evolution; add
+fading SLM priors and bounded translation; archive every lineage; rank passive
+and active performance across runs; support secure founder bundles and new-save
+cohorts; add player conversation and lineage UI; and prove unpromoted,
+function-preserving N2048-to-N4096 research growth.
 
 Each slice must pass its behavioral and architectural gates before integration. Completion requires the final requirement-by-requirement audit across all four slices.
 
@@ -971,6 +1298,9 @@ Required crates:
 - `crates/alife_core`
 - `crates/alife_world`
 - `crates/alife_gpu_backend`
+- `crates/alife_runtime` (created by the shared-runtime checkpoint)
+- `crates/alife_training` (created by the foundation-trainer checkpoint)
+- `crates/alife_archive` (created by the lineage-library checkpoint)
 - `crates/alife_bevy_adapter`
 - `crates/alife_school`
 - `crates/alife_semantic`
@@ -996,6 +1326,18 @@ Each crate should have a local AGENTS.md with local rules.
 `W_lifetime`: lifetime learning promoted during GPU sleep consolidation; `W_consolidated_habit` is the legacy save name.
 
 `H_fast`: immediately active eligibility-gated waking plastic state.
+
+`FoundationManifest`: immutable identity and compatibility contract for a
+curated inherited neural payload plus its training/promotion provenance.
+
+`LanguageCodebookV1`: 256-code compositional language ABI whose logical token
+IDs are stable across saves and independent of neuron or GPU addresses.
+
+`PersistentNeuronAddress`: stable lobe-and-ordinal identity used for
+checkpointing, recombination, and function-preserving growth.
+
+`Lineage Library`: profile-local immutable genetic archive plus quota-bound
+learned checkpoints, ranking records, and portable founder bundles.
 
 `NeuralClosedLoopGpu`: normal GPU-authoritative neural policy.
 
@@ -1110,6 +1452,14 @@ The following checks are required acceptance evidence:
 19. Production source and telemetry contain no live CPU neural shadow, parity gate, or automatic neural fallback.
 20. A 10,000-plus-tick soak keeps memory, topology, candidates, and GPU buffers bounded without terminal capacity errors.
 21. Populated-phenotype performance reports record hardware, class, memory accounting, readback, and missed/unknown targets honestly.
+22. N2048 genetic birth loads the exact foundation plus causal genome deltas and clears every lifetime, episodic, semantic, language, eligibility, and transient field.
+23. Limited language token IDs remain stable across saves/exports and never equal neuron or packed GPU addresses.
+24. Named and broadcast player speech obey spatial hearing, and removing auditory routes causally removes comprehension.
+25. `Vocalize` wins normal GPU arbitration and emits only GPU-selected raw tokens; removing speech routes removes meaningful narration.
+26. Language grounding and narration gates pass with SLM translation disabled, while assisted evidence remains separately labelled.
+27. Dead creatures commit genetic/life archives before retirement; selected learned checkpoints restore durable minds without stale body/world state.
+28. Cross-run ranking treats unexposed metrics as `Unknown` and resolves secure genetic-founder or explicit mind-clone cohorts with full provenance.
+29. N2048-to-N4096 research migration maps by persistent address and proves same-adapter selection identity plus logit delta at most `1e-6` before atomic handoff.
 
 # Appendix C: Print/Page Estimate
 
@@ -1511,6 +1861,23 @@ crates/alife_gpu_backend/src/
   dispatch_batch.rs
   shader_manifest.rs
 
+crates/alife_runtime/src/
+  session.rs
+  checkpoint.rs
+  restore.rs
+
+crates/alife_training/src/
+  trainer.rs
+  curriculum.rs
+  evaluation.rs
+  evolution.rs
+
+crates/alife_archive/src/
+  manifest.rs
+  content_store.rs
+  index.rs
+  bundle.rs
+
 crates/alife_school/src/
   teacher.rs
   lesson_api.rs
@@ -1520,9 +1887,10 @@ crates/alife_school/src/
 
 crates/alife_semantic/src/
   semantic_prior.rs
+  speech_translation.rs
   lexicon_packet.rs
   providers/noop.rs
-  providers/tiny_local_stub.rs
+  providers/local_model.rs
 ```
 
 Every file should start with a module-level comment that states whether it is contract-only, production runtime, test/developer-only, or research-gated future compatibility. This prevents Codex from mistaking a contract or research surface for production authority.

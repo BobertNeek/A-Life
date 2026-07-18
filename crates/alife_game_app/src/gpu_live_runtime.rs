@@ -28,6 +28,15 @@ struct ResidentCognition {
     next_sequence: u64,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct GpuLiveBrainEvidenceMetrics {
+    pub completed_dispatch_count: u64,
+    pub completed_selection_count: u64,
+    pub compact_readback_bytes: usize,
+    pub active_tiles: u32,
+    pub active_synapses: u32,
+}
+
 /// Owns all production neural authority for one headless world.
 pub struct GpuLiveBrainRuntime {
     backend: GpuClosedLoopBackend,
@@ -37,6 +46,7 @@ pub struct GpuLiveBrainRuntime {
     deterministic_seed: u64,
     brain_class: BrainScaleTier,
     sealed_patches: Vec<ExperiencePatch>,
+    last_gpu_metrics: GpuLiveBrainEvidenceMetrics,
 }
 
 impl GpuLiveBrainRuntime {
@@ -102,6 +112,7 @@ impl GpuLiveBrainRuntime {
             deterministic_seed,
             brain_class,
             sealed_patches: Vec::new(),
+            last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
         };
         runtime.reconcile_population()?;
         Ok(runtime)
@@ -183,6 +194,26 @@ impl GpuLiveBrainRuntime {
         if gpu_ticks.len() != batch.len() {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
+        self.last_gpu_metrics = GpuLiveBrainEvidenceMetrics {
+            completed_dispatch_count: self.backend.completed_dispatch_count(),
+            completed_selection_count: self.backend.completed_selection_count(),
+            compact_readback_bytes: gpu_ticks
+                .iter()
+                .try_fold(0_usize, |total, tick| {
+                    total.checked_add(tick.compact_readback_bytes)
+                })
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+            active_tiles: gpu_ticks
+                .iter()
+                .map(|tick| tick.selection.active_tiles)
+                .max()
+                .unwrap_or(0),
+            active_synapses: gpu_ticks
+                .iter()
+                .map(|tick| tick.selection.active_synapses)
+                .max()
+                .unwrap_or(0),
+        };
 
         let mut summaries = Vec::with_capacity(gpu_ticks.len());
         for ((handle, frame), gpu_tick) in batch.into_iter().zip(gpu_ticks) {
@@ -194,6 +225,14 @@ impl GpuLiveBrainRuntime {
 
     pub fn sealed_patches(&self) -> &[ExperiencePatch] {
         &self.sealed_patches
+    }
+
+    pub(crate) const fn evidence_metrics(&self) -> GpuLiveBrainEvidenceMetrics {
+        self.last_gpu_metrics
+    }
+
+    pub(crate) const fn hardware_receipt(&self) -> &alife_gpu_backend::GpuHardwareReceipt {
+        self.backend.hardware_receipt()
     }
 
     pub fn authority_telemetry(&self) -> GpuBrainAuthorityTelemetry {
@@ -221,15 +260,11 @@ impl GpuLiveBrainRuntime {
         &self,
         organism_id: OrganismId,
     ) -> Result<(alife_core::BrainPhenotype, ResidentCognition), GameAppShellError> {
-        let capacity = BrainCapacityClass::production_for_id(self.brain_class.default_class_id())?;
-        let birth_seed = self.deterministic_seed ^ organism_id.raw().rotate_left(17);
-        let genome = BrainGenome::scaffold(birth_seed, capacity.id());
-        let development =
-            DevelopmentState::new(genome.id, self.world.tick(), NormalizedScalar::new(0.35)?);
-        let phenotype = PhenotypeCompiler::compile(
-            &genome,
-            &capacity,
-            &development,
+        let (phenotype, genome, development) = compile_gpu_birth_components(
+            self.deterministic_seed,
+            self.brain_class,
+            organism_id,
+            self.world.tick(),
             SensorProfile::PrivilegedAffordanceV1,
         )?;
         let resident = ResidentCognition {
@@ -377,6 +412,25 @@ impl GpuLiveBrainRuntime {
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         self.backend.tick_batch(&[(handle, frame)])
     }
+}
+
+pub(crate) fn compile_gpu_birth_components(
+    deterministic_seed: u64,
+    brain_class: BrainScaleTier,
+    organism_id: OrganismId,
+    tick: Tick,
+    sensor_profile: SensorProfile,
+) -> Result<(alife_core::BrainPhenotype, BrainGenome, DevelopmentState), ScaffoldContractError> {
+    if deterministic_seed == 0 {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    organism_id.validate()?;
+    let capacity = BrainCapacityClass::production_for_id(brain_class.default_class_id())?;
+    let birth_seed = deterministic_seed ^ organism_id.raw().rotate_left(17);
+    let genome = BrainGenome::scaffold(birth_seed, capacity.id());
+    let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35)?);
+    let phenotype = PhenotypeCompiler::compile(&genome, &capacity, &development, sensor_profile)?;
+    Ok((phenotype, genome, development))
 }
 
 #[cfg(test)]

@@ -649,12 +649,13 @@ mod task3_causal_genome_and_routing_red_tests {
         for (value, raw) in [
             (DecoderHeadKind::ActionCandidate, 1),
             (DecoderHeadKind::MemoryContext, 2),
+            (DecoderHeadKind::SpeechPayload, 3),
         ] {
             assert_eq!(value.raw(), raw);
             assert_eq!(DecoderHeadKind::try_from_raw(raw).unwrap(), value);
         }
         assert!(DecoderHeadKind::try_from_raw(0).is_err());
-        assert!(DecoderHeadKind::try_from_raw(3).is_err());
+        assert!(DecoderHeadKind::try_from_raw(4).is_err());
     }
 
     #[test]

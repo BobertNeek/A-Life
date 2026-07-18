@@ -122,7 +122,7 @@ impl CandidateDecoderPlan {
             || self.flattened_input_lane_count != execution.candidate_feature_count()
             || self.flattened_input_lane_count != phenotype.budgets().global.decoder_input_lanes
             || self.flattened_input_lane_count > execution.max_decoder_input_lanes()
-            || self.decoder_synapse_count() != phenotype.budgets().global.action_decoder_synapses
+            || self.decoder_synapse_count() > phenotype.budgets().global.action_decoder_synapses
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -220,6 +220,172 @@ impl CandidateDecoderPlan {
             digest.write_u32(row.decoder_synapse_count);
         }
         Ok(digest.finish256())
+    }
+}
+
+const AUXILIARY_DECODER_SCHEMA_VERSION: u16 = 1;
+const AUXILIARY_DECODER_DOMAIN: &[u8] = b"alife.phenotype.auxiliary-decoder.v1";
+
+/// A bounded decoder head reserved inside the immutable phenotype ABI.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AuxiliaryDecoderPlan {
+    schema_version: u16,
+    head: DecoderHeadKind,
+    input_width: u16,
+    output_width: u16,
+    decoder_synapse_start: u32,
+    decoder_synapse_count: u32,
+    canonical_digest: [u64; 4],
+}
+
+impl AuxiliaryDecoderPlan {
+    pub(super) fn try_new(
+        head: DecoderHeadKind,
+        input_width: u16,
+        output_width: u16,
+        decoder_synapse_start: u32,
+        decoder_synapse_count: u32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = Self {
+            schema_version: AUXILIARY_DECODER_SCHEMA_VERSION,
+            head,
+            input_width,
+            output_width,
+            decoder_synapse_start,
+            decoder_synapse_count,
+            canonical_digest: [0; 4],
+        };
+        value.validate_shape()?;
+        value.canonical_digest = value.recompute_digest();
+        Ok(value)
+    }
+
+    pub const fn head(&self) -> DecoderHeadKind {
+        self.head
+    }
+    pub const fn input_width(&self) -> u16 {
+        self.input_width
+    }
+    pub const fn output_width(&self) -> u16 {
+        self.output_width
+    }
+    pub const fn decoder_synapse_start(&self) -> u32 {
+        self.decoder_synapse_start
+    }
+    pub const fn decoder_synapse_count(&self) -> u32 {
+        self.decoder_synapse_count
+    }
+    pub const fn canonical_digest(&self) -> [u64; 4] {
+        self.canonical_digest
+    }
+
+    pub fn validate_against(
+        &self,
+        phenotype: &BrainPhenotype,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_local()?;
+        let end = self
+            .decoder_synapse_start
+            .checked_add(self.decoder_synapse_count)
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        let slice = phenotype
+            .synapses()
+            .get(self.decoder_synapse_start as usize..end as usize)
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        if slice.iter().any(|synapse| {
+            !matches!(
+                synapse.kind(),
+                CompiledSynapseKind::Decoder(coordinate) if coordinate.head() == self.head
+            )
+        }) {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        let total_for_head = phenotype
+            .synapses()
+            .iter()
+            .filter(|synapse| {
+                matches!(
+                    synapse.kind(),
+                    CompiledSynapseKind::Decoder(coordinate) if coordinate.head() == self.head
+                )
+            })
+            .count();
+        if total_for_head
+            != usize::try_from(self.decoder_synapse_count)
+                .map_err(|_| ScaffoldContractError::PhenotypeCompile)?
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+
+    pub(super) fn validate_local(&self) -> Result<(), ScaffoldContractError> {
+        self.validate_shape()?;
+        if self.canonical_digest != self.recompute_digest() {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+
+    fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
+        if self.schema_version != AUXILIARY_DECODER_SCHEMA_VERSION
+            || !matches!(
+                self.head,
+                DecoderHeadKind::SpeechPayload | DecoderHeadKind::MemoryContext
+            )
+            || self.input_width == 0
+            || self.output_width == 0
+            || self.decoder_synapse_count
+                != u32::from(self.input_width) * u32::from(self.output_width)
+            || self
+                .decoder_synapse_start
+                .checked_add(self.decoder_synapse_count)
+                .is_none()
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+
+    fn recompute_digest(&self) -> [u64; 4] {
+        let mut d = CanonicalDigestBuilder::new(AUXILIARY_DECODER_DOMAIN);
+        d.write_u16(self.schema_version);
+        d.write_u8(self.head.raw());
+        d.write_u16(self.input_width);
+        d.write_u16(self.output_width);
+        d.write_u32(self.decoder_synapse_start);
+        d.write_u32(self.decoder_synapse_count);
+        d.finish256()
+    }
+}
+
+impl<'de> Deserialize<'de> for AuxiliaryDecoderPlan {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wire {
+            schema_version: u16,
+            head: DecoderHeadKind,
+            input_width: u16,
+            output_width: u16,
+            decoder_synapse_start: u32,
+            decoder_synapse_count: u32,
+            canonical_digest: [u64; 4],
+        }
+        let w = Wire::deserialize(deserializer)?;
+        let value = Self {
+            schema_version: w.schema_version,
+            head: w.head,
+            input_width: w.input_width,
+            output_width: w.output_width,
+            decoder_synapse_start: w.decoder_synapse_start,
+            decoder_synapse_count: w.decoder_synapse_count,
+            canonical_digest: w.canonical_digest,
+        };
+        value.validate_local().map_err(D::Error::custom)?;
+        Ok(value)
     }
 }
 

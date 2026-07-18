@@ -1,4 +1,4 @@
-//! v0 scaffold: genome, development, and weight-split contracts.
+//! Genome, development, and weight-split contracts.
 
 use serde::{Deserialize, Serialize};
 
@@ -48,8 +48,16 @@ impl BrainGenome {
             genetic_prior_seed: seeds.genetic_prior_seed,
             seeds,
             lobe_ratios: LobeRatioPlan::ClassDefault,
-            macro_connectome_masks: MacroConnectomeMask::scaffold_defaults(),
-            sparse_density_priors: SparseDensityPrior::scaffold_defaults(),
+            macro_connectome_masks: if brain_class_id == crate::BrainCapacityClass::N2048_ID {
+                MacroConnectomeMask::n2048_foundation_defaults()
+            } else {
+                MacroConnectomeMask::scaffold_defaults()
+            },
+            sparse_density_priors: if brain_class_id == crate::BrainCapacityClass::N2048_ID {
+                SparseDensityPrior::n2048_foundation_defaults()
+            } else {
+                SparseDensityPrior::scaffold_defaults()
+            },
             alpha_mask: AlphaMask::default_for_projection(NormalizedScalar(0.25)),
             plasticity_mask: PlasticityMask::scaffold_default(),
             endocrine_constants: EndocrineConstantGene::baseline_defaults(),
@@ -228,6 +236,17 @@ impl MacroConnectomeMask {
         })
         .collect()
     }
+
+    pub fn n2048_foundation_defaults() -> Vec<Self> {
+        crate::N2048FoundationLayoutV1::route_specs()
+            .iter()
+            .map(|route| Self {
+                projection: ProjectionKey::new(route.source_lobe(), route.target_lobe()),
+                enabled: true,
+                structural_growth_allowed: false,
+            })
+            .collect()
+    }
 }
 
 impl Validate for MacroConnectomeMask {
@@ -283,6 +302,30 @@ impl SparseDensityPrior {
             },
         ]
     }
+
+    pub fn n2048_foundation_defaults() -> Vec<Self> {
+        let layout = crate::N2048FoundationLayoutV1::lobe_layout();
+        crate::N2048FoundationLayoutV1::route_specs()
+            .iter()
+            .map(|route| {
+                let source = layout
+                    .region(route.source_lobe())
+                    .expect("frozen source lobe");
+                let target = layout
+                    .region(route.target_lobe())
+                    .expect("frozen target lobe");
+                let possible = (u64::from(source.len) * u64::from(target.len)) as f32;
+                Self {
+                    projection: ProjectionKey::new(route.source_lobe(), route.target_lobe()),
+                    density: NormalizedScalar(route.synapse_count() as f32 / possible),
+                    max_active_synapse_share: NormalizedScalar(
+                        route.synapse_count() as f32
+                            / crate::N2048FoundationLayoutV1::RECURRENT_SYNAPSE_COUNT as f32,
+                    ),
+                }
+            })
+            .collect()
+    }
 }
 
 impl Validate for SparseDensityPrior {
@@ -332,6 +375,18 @@ const fn is_canonical_slice_a_projection(key: ProjectionKey) -> bool {
             | (LobeKind::CoreAssociation, LobeKind::MotorArbitration)
             | (LobeKind::MetabolicDrive, LobeKind::HomeostaticRegulation)
             | (LobeKind::MotorArbitration, LobeKind::MotorArbitration)
+            | (LobeKind::AuditorySpeech, LobeKind::CoreAssociation)
+            | (LobeKind::GlyphVision, LobeKind::CoreAssociation)
+            | (LobeKind::HomeostaticRegulation, LobeKind::CoreAssociation)
+            | (LobeKind::HomeostaticRegulation, LobeKind::MotorArbitration)
+            | (LobeKind::CoreAssociation, LobeKind::WorkingMemory)
+            | (LobeKind::WorkingMemory, LobeKind::CoreAssociation)
+            | (LobeKind::CoreAssociation, LobeKind::EpisodicMemory)
+            | (LobeKind::EpisodicMemory, LobeKind::CoreAssociation)
+            | (LobeKind::CoreAssociation, LobeKind::LexiconConcept)
+            | (LobeKind::LexiconConcept, LobeKind::CoreAssociation)
+            | (LobeKind::LexiconConcept, LobeKind::WorkingMemory)
+            | (LobeKind::WorkingMemory, LobeKind::LexiconConcept)
     )
 }
 

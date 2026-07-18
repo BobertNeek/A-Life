@@ -24,6 +24,13 @@ Non-negotiable rules:
   legality and outcomes.
 - Promote only N512, N1024, and N2048 until larger tiers pass the documented
   causal and performance gates.
+- N2048 is the first trained foundation; N4096 remains research-only.
+- Language token IDs are stable logical codes, never neuron indices or packed
+  GPU offsets.
+- Player, creature, and teacher speech enters as spatial perception; neural
+  `Vocalize` payload selection remains GPU-authoritative.
+- Archive every creature before GPU insertion and archive death before GPU
+  retirement.
 - Keep docs and local AGENTS.md files updated after meaningful changes.
 - Prefer Graphify queries for architecture questions when installed and a graph
   exists.

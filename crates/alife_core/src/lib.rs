@@ -1,16 +1,19 @@
-//! v0 scaffold: engine-agnostic A-Life cognitive contracts.
+//! Engine-agnostic A-Life cognitive contracts.
 
 pub mod action;
 pub mod action_abi;
 pub mod adapter;
+mod blake3_digest;
 pub mod brain_class;
 pub mod canonical_digest;
 pub mod chemistry;
 pub mod diagnostics;
 pub mod error;
 pub mod experience;
+pub mod foundation;
 pub mod genome;
 pub mod ids;
+pub mod language;
 pub mod lineage;
 pub mod lobe;
 pub mod math;
@@ -40,6 +43,7 @@ pub use action::{
 };
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
+pub use blake3_digest::Blake3Digest;
 pub use brain_class::{
     BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,
 };
@@ -59,6 +63,10 @@ pub use experience::{
     NeuralDecisionEvidence, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
     PreActionBrainEvidence, PreActionSnapshot, TeacherFeedbackObservation,
 };
+pub use foundation::{
+    FoundationAbiBinding, FoundationLayoutId, FoundationSectionPolicy, LifetimePlasticityBand,
+    N2048FoundationLayoutV1, N2048FoundationRouteSpec,
+};
 pub use genome::{
     AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
     DevelopmentState, DevelopmentalMilestone, DevelopmentalSchedule, DriveThresholdGene,
@@ -75,6 +83,10 @@ pub use ids::{
     validate_optional_target, ActionId, BrainClassId, ConceptCellId, CreatureId,
     ExperienceSequenceId, GaussianClusterId, GenomeId, LineageId, LobeIndex, MemoryId, NeuronIndex,
     OrganismId, WorldEntityId,
+};
+pub use language::{
+    LanguageCodebookId, LanguageCodebookV1, LanguageTokenClass, LanguageTokenId, SpeechActKind,
+    SpeechDecoderLayoutV1,
 };
 pub use lineage::LineageExportManifest;
 pub use lobe::{
@@ -116,11 +128,15 @@ pub use perception::{
     CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
 pub use phenotype::{
-    BrainCapacityClass, BrainExecutionBudget, BrainPhenotype, CandidateDecoderFamilyPlan,
-    CandidateDecoderPlan, CompiledBudgets, CompiledProjection, CompiledSynapse,
-    CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate, GlobalPhenotypeBudgetReceipt,
-    NeuronDynamics, PhenotypeCompiler, PhenotypeCompilerInputs, PhenotypeHash, RouteBudgetReceipt,
-    SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourceGroup,
+    AuxiliaryDecoderPlan, BrainCapacityClass, BrainExecutionBudget, BrainPhenotype,
+    CandidateDecoderFamilyPlan, CandidateDecoderPlan, CompiledBudgets, CompiledProjection,
+    CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate,
+    GlobalPhenotypeBudgetReceipt, NeuronDynamics, PersistentAddressMap, PersistentDecoderAddress,
+    PersistentDecoderAddressEntry, PersistentNeuronAddress, PersistentNeuronAddressEntry,
+    PersistentProjectionAddress, PersistentProjectionAddressEntry, PersistentProjectionRole,
+    PersistentSynapseAddress, PersistentSynapseAddressEntry, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PhenotypeHash, RouteBudgetReceipt, SensorEncoderAssignment,
+    SensorEncoderPlan, SensorEncoderSourceGroup,
 };
 pub use post_seal_lifetime::{
     PostSealHShadowDeltaTarget, PostSealLearningToken, PostSealLifetimeDeltaApplication,

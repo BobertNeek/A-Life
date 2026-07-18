@@ -3,6 +3,12 @@ use alife_world::{CreaturePartFamilyId, CreaturePartSlotKey, CreaturePartSources
 use crate::{CreaturePartCatalog, CreaturePartCatalogError, CreaturePartSlot};
 
 pub const RARE_PART_MUTATION_THRESHOLD: u16 = 8;
+const MUTABLE_PART_SLOTS: [CreaturePartSlotKey; 4] = [
+    CreaturePartSlotKey::Head,
+    CreaturePartSlotKey::Arms,
+    CreaturePartSlotKey::Legs,
+    CreaturePartSlotKey::Tail,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CreaturePartMutationWarning {
@@ -32,24 +38,8 @@ pub fn mutate_creature_part_sources(
 
     let rare_cross_family = mutation_count >= RARE_PART_MUTATION_THRESHOLD
         && ((mutation_seed ^ u64::from(mutation_count)) & 0x7) == 0x5;
-    let slots = if rare_cross_family {
-        [
-            CreaturePartSlotKey::Head,
-            CreaturePartSlotKey::Arms,
-            CreaturePartSlotKey::Legs,
-            CreaturePartSlotKey::Tail,
-        ]
-        .as_slice()
-    } else {
-        [
-            CreaturePartSlotKey::Head,
-            CreaturePartSlotKey::Arms,
-            CreaturePartSlotKey::Legs,
-            CreaturePartSlotKey::Tail,
-        ]
-        .as_slice()
-    };
-    let slot = slots[deterministic_index(mutation_seed, 0x51A7, slots.len())];
+    let slot =
+        MUTABLE_PART_SLOTS[deterministic_index(mutation_seed, 0x51A7, MUTABLE_PART_SLOTS.len())];
     let current = family_for_slot(normalized, slot);
     let mut candidates = catalog
         .families
@@ -105,12 +95,7 @@ fn normalize_sources(
             fallback,
         });
     } else {
-        for slot in [
-            CreaturePartSlotKey::Head,
-            CreaturePartSlotKey::Arms,
-            CreaturePartSlotKey::Legs,
-            CreaturePartSlotKey::Tail,
-        ] {
+        for slot in MUTABLE_PART_SLOTS {
             let current = family_for_slot(normalized, slot);
             if catalog.family(current).is_some() {
                 continue;
@@ -136,15 +121,7 @@ fn normalize_ordinary_compatibility(
     catalog: &CreaturePartCatalog,
 ) -> Result<CreaturePartSources, CreaturePartCatalogError> {
     let mut normalized = inherited;
-    for (index, slot) in [
-        CreaturePartSlotKey::Head,
-        CreaturePartSlotKey::Arms,
-        CreaturePartSlotKey::Legs,
-        CreaturePartSlotKey::Tail,
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    for (index, slot) in MUTABLE_PART_SLOTS.into_iter().enumerate() {
         let current = family_for_slot(normalized, slot);
         if slot_is_ordinary_compatible(normalized.torso, slot, current, catalog) {
             continue;

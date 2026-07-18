@@ -11,7 +11,7 @@ fn promoted_classes_have_exact_phenotype_owned_count_and_byte_plans() {
         let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
         let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
         let recurrent = recurrent_count(&phenotype);
-        let decoder = phenotype.synapses().len() - recurrent;
+        let candidate_decoder = phenotype.candidate_decoder().decoder_synapse_count() as usize;
 
         assert_eq!(upload.class_id, phenotype.brain_class_id().raw() as u32);
         assert_eq!(upload.neuron_count, phenotype.neuron_count());
@@ -49,7 +49,7 @@ fn promoted_classes_have_exact_phenotype_owned_count_and_byte_plans() {
             upload.decoder_families.len(),
             phenotype.candidate_decoder().families().len()
         );
-        assert_eq!(upload.decoder_weight_indices.len(), decoder);
+        assert_eq!(upload.decoder_weight_indices.len(), candidate_decoder);
         assert_eq!(upload.genetic_weights.len(), phenotype.synapses().len());
         assert_eq!(upload.alpha.len(), phenotype.synapses().len());
 
@@ -58,7 +58,7 @@ fn promoted_classes_have_exact_phenotype_owned_count_and_byte_plans() {
         assert_eq!(counts.neurons, phenotype.neuron_count() as usize);
         assert_eq!(counts.synapses, phenotype.synapses().len());
         assert_eq!(counts.recurrent_synapses, recurrent);
-        assert_eq!(counts.decoder_synapses, decoder);
+        assert_eq!(counts.candidate_decoder_synapses, candidate_decoder);
         assert_eq!(bytes.immutable_weight_bytes, phenotype.synapses().len() * 8);
         assert_eq!(bytes.mutable_weight_bytes, phenotype.synapses().len() * 12);
         assert_eq!(
@@ -73,7 +73,13 @@ fn promoted_classes_have_exact_phenotype_owned_count_and_byte_plans() {
         match phenotype.brain_class_id() {
             BrainCapacityClass::N512_ID => assert_eq!(counts.neurons, 512),
             BrainCapacityClass::N1024_ID => assert_eq!(counts.neurons, 1024),
-            BrainCapacityClass::N2048_ID => assert_eq!(counts.neurons, 2048),
+            BrainCapacityClass::N2048_ID => {
+                assert_eq!(counts.neurons, 2_048);
+                assert_eq!(counts.synapses, 32_768);
+                assert_eq!(counts.recurrent_synapses, 24_576);
+                assert_eq!(counts.candidate_decoder_synapses, 3_072);
+                assert_eq!(upload.decoder_weight_indices.len(), 3_072);
+            }
             other => panic!("unexpected production class {other:?}"),
         }
     }
@@ -285,115 +291,141 @@ fn upload_is_an_exact_projection_encoder_dynamics_and_decoder_translation() {
 
 #[test]
 fn recurrent_and_decoder_views_are_a_disjoint_complete_global_partition() {
-    let phenotype = production_phenotypes().into_iter().next().unwrap();
-    let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
-    let recurrent = recurrent_count(&phenotype) as u32;
-    let total = phenotype.synapses().len() as u32;
+    for phenotype in production_phenotypes() {
+        let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
+        let recurrent = recurrent_count(&phenotype) as u32;
+        let candidate_decoder = phenotype.candidate_decoder().decoder_synapse_count();
+        let total = phenotype.synapses().len() as u32;
 
-    assert_eq!(
-        upload.target_offsets.len(),
-        phenotype.neuron_count() as usize + 1
-    );
-    assert_eq!(upload.target_offsets[0], 0);
-    assert_eq!(*upload.target_offsets.last().unwrap(), recurrent);
-    assert!(upload
-        .target_offsets
-        .windows(2)
-        .all(|span| span[0] <= span[1]));
-    assert_eq!(upload.source_indices.len(), recurrent as usize);
-    assert_eq!(upload.route_indices.len(), recurrent as usize);
+        assert_eq!(
+            upload.target_offsets.len(),
+            phenotype.neuron_count() as usize + 1
+        );
+        assert_eq!(upload.target_offsets[0], 0);
+        assert_eq!(*upload.target_offsets.last().unwrap(), recurrent);
+        assert!(upload
+            .target_offsets
+            .windows(2)
+            .all(|span| span[0] <= span[1]));
+        assert_eq!(upload.source_indices.len(), recurrent as usize);
+        assert_eq!(upload.route_indices.len(), recurrent as usize);
 
-    let mut expected_recurrent = phenotype
-        .synapses()
-        .iter()
-        .filter(|row| matches!(row.kind(), CompiledSynapseKind::Recurrent))
-        .collect::<Vec<_>>();
-    expected_recurrent.sort_by_key(|row| (row.target(), row.source(), row.route_index()));
-    let mut expected_target_offsets = vec![0_u32; phenotype.neuron_count() as usize + 1];
-    for row in &expected_recurrent {
-        expected_target_offsets[row.target() as usize + 1] += 1;
-    }
-    for index in 1..expected_target_offsets.len() {
-        expected_target_offsets[index] += expected_target_offsets[index - 1];
-    }
-    assert_eq!(upload.target_offsets, expected_target_offsets);
-    assert_eq!(
-        upload.source_indices,
-        expected_recurrent
+        let mut expected_recurrent = phenotype
+            .synapses()
             .iter()
-            .map(|row| row.source())
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(
-        upload.route_indices,
-        expected_recurrent
+            .filter(|row| matches!(row.kind(), CompiledSynapseKind::Recurrent))
+            .collect::<Vec<_>>();
+        expected_recurrent.sort_by_key(|row| (row.target(), row.source(), row.route_index()));
+        let mut expected_target_offsets = vec![0_u32; phenotype.neuron_count() as usize + 1];
+        for row in &expected_recurrent {
+            expected_target_offsets[row.target() as usize + 1] += 1;
+        }
+        for index in 1..expected_target_offsets.len() {
+            expected_target_offsets[index] += expected_target_offsets[index - 1];
+        }
+        assert_eq!(upload.target_offsets, expected_target_offsets);
+        assert_eq!(
+            upload.source_indices,
+            expected_recurrent
+                .iter()
+                .map(|row| row.source())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            upload.route_indices,
+            expected_recurrent
+                .iter()
+                .map(|row| u32::from(row.route_index()))
+                .collect::<Vec<_>>()
+        );
+
+        let recurrent_ids: BTreeSet<u32> = (0..recurrent).collect();
+        let candidate_decoder_ids: BTreeSet<u32> = upload
+            .decoder_weight_indices
             .iter()
-            .map(|row| u32::from(row.route_index()))
-            .collect::<Vec<_>>()
-    );
-
-    let recurrent_ids: BTreeSet<u32> = (0..recurrent).collect();
-    let decoder_ids: BTreeSet<u32> = upload
-        .decoder_weight_indices
-        .iter()
-        .map(|row| row.global_synapse_id)
-        .collect();
-    assert!(recurrent_ids.is_disjoint(&decoder_ids));
-    assert_eq!(decoder_ids.first().copied(), Some(recurrent));
-    assert!(decoder_ids.iter().all(|id| *id >= recurrent && *id < total));
-
-    let union: BTreeSet<u32> = recurrent_ids.union(&decoder_ids).copied().collect();
-    assert_eq!(union, (0..total).collect());
-    assert_eq!(union.len(), upload.genetic_weights.len());
-    assert_eq!(union.len(), upload.alpha.len());
-    assert_eq!(
-        upload.recurrent_global_ids(),
-        (0..recurrent).collect::<Vec<_>>()
-    );
-
-    let mut expected_decoder = phenotype
-        .synapses()
-        .iter()
-        .filter_map(|row| match row.kind() {
-            CompiledSynapseKind::Decoder(coordinate) => Some((row, coordinate)),
-            CompiledSynapseKind::Recurrent => None,
-        })
-        .collect::<Vec<_>>();
-    expected_decoder.sort_by_key(|(row, coordinate)| {
-        (
-            coordinate.head().raw(),
-            coordinate.family().raw(),
-            coordinate.input_lane(),
-            coordinate.motor_index(),
-            row.source(),
-            row.target(),
-        )
-    });
-    let expected = expected_recurrent
-        .iter()
-        .copied()
-        .chain(expected_decoder.iter().map(|(row, _)| *row))
-        .collect::<Vec<_>>();
-    for (global_id, compiled) in expected.iter().enumerate() {
+            .map(|row| row.global_synapse_id)
+            .collect();
+        assert!(recurrent_ids.is_disjoint(&candidate_decoder_ids));
+        assert_eq!(candidate_decoder_ids.first().copied(), Some(recurrent));
+        assert_eq!(candidate_decoder_ids.len(), candidate_decoder as usize);
         assert_eq!(
-            upload.genetic_weights[global_id].to_bits(),
-            compiled.genetic_weight().to_bits()
+            candidate_decoder_ids,
+            (recurrent..recurrent + candidate_decoder).collect(),
         );
+
+        let candidate_execution_ids: BTreeSet<u32> = recurrent_ids
+            .union(&candidate_decoder_ids)
+            .copied()
+            .collect();
+        assert!(candidate_execution_ids.iter().all(|id| *id < total));
+        let auxiliary_ids: BTreeSet<u32> =
+            (recurrent + candidate_decoder..total).collect::<BTreeSet<_>>();
+        assert!(candidate_execution_ids.is_disjoint(&auxiliary_ids));
         assert_eq!(
-            upload.alpha[global_id].to_bits(),
-            compiled.alpha().to_bits()
+            candidate_execution_ids
+                .union(&auxiliary_ids)
+                .copied()
+                .collect::<BTreeSet<_>>(),
+            (0..total).collect(),
         );
-    }
-    for (global_id, (row, coordinate)) in expected_decoder.iter().enumerate() {
-        let gpu = &upload.decoder_weight_indices[global_id];
-        assert_eq!(gpu.global_synapse_id, recurrent + global_id as u32);
-        assert_eq!(gpu.input_lane, u32::from(coordinate.input_lane()));
-        assert_eq!(gpu.motor_index, u32::from(coordinate.motor_index()));
-        assert_eq!(gpu.reserved0, 0);
+        assert_eq!(total as usize, upload.genetic_weights.len());
+        assert_eq!(total as usize, upload.alpha.len());
         assert_eq!(
-            upload.genetic_weights[gpu.global_synapse_id as usize].to_bits(),
-            row.genetic_weight().to_bits()
+            upload.recurrent_global_ids(),
+            (0..recurrent).collect::<Vec<_>>()
         );
+
+        let mut expected_all_decoders = phenotype
+            .synapses()
+            .iter()
+            .filter_map(|row| match row.kind() {
+                CompiledSynapseKind::Decoder(coordinate) => Some((row, coordinate)),
+                CompiledSynapseKind::Recurrent => None,
+            })
+            .collect::<Vec<_>>();
+        expected_all_decoders.sort_by_key(|(row, coordinate)| {
+            (
+                coordinate.head().raw(),
+                coordinate.family().raw(),
+                coordinate.input_lane(),
+                coordinate.motor_index(),
+                row.source(),
+                row.target(),
+            )
+        });
+        let expected = expected_recurrent
+            .iter()
+            .copied()
+            .chain(expected_all_decoders.iter().map(|(row, _)| *row))
+            .collect::<Vec<_>>();
+        for (global_id, compiled) in expected.iter().enumerate() {
+            assert_eq!(
+                upload.genetic_weights[global_id].to_bits(),
+                compiled.genetic_weight().to_bits()
+            );
+            assert_eq!(
+                upload.alpha[global_id].to_bits(),
+                compiled.alpha().to_bits()
+            );
+        }
+        let expected_candidate_decoders = expected_all_decoders
+            .iter()
+            .copied()
+            .filter(|(_, coordinate)| {
+                coordinate.head() == alife_core::DecoderHeadKind::ActionCandidate
+            })
+            .collect::<Vec<_>>();
+        for (global_id, (row, coordinate)) in expected_candidate_decoders.iter().enumerate() {
+            let gpu = &upload.decoder_weight_indices[global_id];
+            assert_eq!(gpu.global_synapse_id, recurrent + global_id as u32);
+            assert_eq!(gpu.input_lane, u32::from(coordinate.input_lane()));
+            assert_eq!(gpu.motor_index, u32::from(coordinate.motor_index()));
+            assert_eq!(gpu.reserved0, 0);
+            assert_eq!(
+                upload.genetic_weights[gpu.global_synapse_id as usize].to_bits(),
+                row.genetic_weight().to_bits()
+            );
+        }
     }
 }
 
