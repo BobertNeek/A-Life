@@ -176,13 +176,14 @@ impl CreaturePartBuilderCommand {
             Self::ValidateGeneForgeStaging { staging, recipes } => {
                 let receipt = validate_geneforge_staging(&staging, &recipes)?;
                 println!(
-                    "validated_geneforge_staging={} donors={} assets={} lods={} objs={} masks={} bytes={}",
+                    "validated_geneforge_staging={} donors={} assets={} lods={} objs={} semantic_masks={} anatomy_masks={} bytes={}",
                     staging.display(),
                     receipt.donor_count,
                     receipt.asset_count,
                     receipt.lod_count,
                     receipt.obj_count,
                     receipt.mask_count,
+                    receipt.anatomy_mask_count,
                     receipt.total_bytes
                 );
                 Ok(())

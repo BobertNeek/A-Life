@@ -3,7 +3,7 @@
   "schema_version": 2,
   "blender_version": "5.1.0",
   "importer_version": "alife.geneforge_importer.v2",
-  "recipe_sha256": "20c43ca8644bc82dfcba0cc42f7b2ecf01d2e510ac5070f6b024d9ec7edf69e6",
+  "recipe_sha256": "85b3a060ac11529d3d57db816de3eb41c773ac825d8cda9ab0bbcb909cf25b74",
   "marker_map": {
     "1": "head",
     "2": "torso",
@@ -189,8 +189,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_head_full_semantic.png",
           "generated_obj_sha256": "08e5221be57da38d11f9afd9ede942412b4b77df627465aa53e60ff1680bafff",
-          "socket_manifest_sha256": "a3f9a81b8890c437ee011a285aad56ee92ee391ea88ba31732c876a4f67e68df",
-          "semantic_mask_sha256": "529ddb0bf93d28afda595ed55810917649275479b22f0a39fdf1626e29a1e567"
+          "socket_manifest_sha256": "731b34bc236ceba67d11210fcc1d91ff92cfcbaf57aa53a5c4b29a08a3eb0f12",
+          "semantic_mask_sha256": "529ddb0bf93d28afda595ed55810917649275479b22f0a39fdf1626e29a1e567",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_head_full_anatomy.png",
+          "anatomy_mask_sha256": "7d894a3b9300af8f6fc7a0a1b7370caad386e659dac097f0bc1ea0a75c0539bb"
         },
         {
           "lod": "compact",
@@ -198,8 +200,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_head_compact_semantic.png",
           "generated_obj_sha256": "1c539058ff7145c942791a4bf63aba0ce0420e5f1ca09168f5c223a83cabf908",
-          "socket_manifest_sha256": "77b9daa7a33d0533f7150108e7fb4735210eec1b9aeb598a6e55c8898377c638",
-          "semantic_mask_sha256": "76318524ad99d699eb9bd2cde53847744c4f6cba789415288d2b4f84f76adcbd"
+          "socket_manifest_sha256": "4ac5761656f3f04444a6e5174f963fc828e9f4307b8712dd00382617e6cbcef4",
+          "semantic_mask_sha256": "76318524ad99d699eb9bd2cde53847744c4f6cba789415288d2b4f84f76adcbd",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_head_compact_anatomy.png",
+          "anatomy_mask_sha256": "bd57f2459c47412b0522e13b0f87a35c59cb8ef021e64afbf5832033fb8a7a89"
         },
         {
           "lod": "impostor",
@@ -207,8 +211,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_head_impostor_semantic.png",
           "generated_obj_sha256": "db615e38dc68e6022408d60cfcf391697711478d445100ca07d25ed35b24a8b4",
-          "socket_manifest_sha256": "120fe2af1eb977ea28b8265796370cde5ae9b242f0bce7e5270019a730de55e3",
-          "semantic_mask_sha256": "38a5bad56aa869efc6573bc548b4f00d10caf8e179e0faa21f9ebc37a8b330ff"
+          "socket_manifest_sha256": "e366d0d27fbe7542053a360eea645e4097f7824d6cfee932499eb4a393ac3882",
+          "semantic_mask_sha256": "38a5bad56aa869efc6573bc548b4f00d10caf8e179e0faa21f9ebc37a8b330ff",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_head_impostor_anatomy.png",
+          "anatomy_mask_sha256": "7a89af2808c52cf4fdaf5a7442f87957de5f9635ac9075e0f5bc62f1888b8b4c"
         }
       ],
       "canonical_bounds": {
@@ -270,6 +276,130 @@
           -0.46,
           0
         ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "muzzle",
+          "inner-ear",
+          "keratin-skin",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "norn-head-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.17,
+                  0.0
+                ],
+                [
+                  0.17,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "norn-head-inner-ear",
+            "channel": "inner-ear",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.19,
+                  0.0
+                ],
+                [
+                  0.35,
+                  0.0
+                ],
+                [
+                  0.35,
+                  1.0
+                ],
+                [
+                  0.19,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "norn-head-muzzle",
+            "channel": "muzzle",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "ellipse",
+              "center": [
+                0.46,
+                0.35
+              ],
+              "radius": [
+                0.1,
+                0.32
+              ]
+            },
+            "strength": 255,
+            "priority": 20
+          },
+          {
+            "id": "norn-head-keratin",
+            "channel": "keratin-skin",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.73,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.73,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
+        ]
       }
     },
     {
@@ -326,8 +456,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_torso_full_semantic.png",
           "generated_obj_sha256": "daa0e61554629abc1ab795a94720a4f2a8a0a7398e5860461c1e8d9439247130",
-          "socket_manifest_sha256": "5973369d606b478372eb859cc4e7db256ccfcdd81aa1bb66192f953977250ba2",
-          "semantic_mask_sha256": "5063a0827fc3274b39c1ab2e401ded648444a4bbc47ca0a930c3c98d9b644d29"
+          "socket_manifest_sha256": "525be81d937c27f0b256295c077da0b6ac26273a1a6b8e19770a8ae21b9fc530",
+          "semantic_mask_sha256": "5063a0827fc3274b39c1ab2e401ded648444a4bbc47ca0a930c3c98d9b644d29",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_torso_full_anatomy.png",
+          "anatomy_mask_sha256": "c262f07cfcb32cfc6465359c782207d519184f90b797cb83e0c8b59107132d15"
         },
         {
           "lod": "compact",
@@ -335,8 +467,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_torso_compact_semantic.png",
           "generated_obj_sha256": "319b357326cc2afefdf309cacf0b7b601fa7626e78f907859b81d1f2f6708249",
-          "socket_manifest_sha256": "2002ef40717234d2d834093cf46b650652bd33358fb8bc4b44c2b279c1bf4f83",
-          "semantic_mask_sha256": "33f0154fae85509a8cda32b9a7c541f1b3afa3df552f9d1a82ced44f1ab88913"
+          "socket_manifest_sha256": "0b34bc0bb8f3da54945ca23877423f8e8fd2dda004f0f71057328dabc6149dec",
+          "semantic_mask_sha256": "33f0154fae85509a8cda32b9a7c541f1b3afa3df552f9d1a82ced44f1ab88913",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_torso_compact_anatomy.png",
+          "anatomy_mask_sha256": "e1c81d2b3a501fa259f27c2bacf567565dc78b7fa208e4896851ca74b0da831c"
         },
         {
           "lod": "impostor",
@@ -344,8 +478,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_torso_impostor_semantic.png",
           "generated_obj_sha256": "75a84a9c2ad53604263ce76786e893e04e9ba3732839be9e2944f619aee3d44a",
-          "socket_manifest_sha256": "099f51486737a5a43267742075d5aa47197f7aed0cc3e0959548f6630ba97885",
-          "semantic_mask_sha256": "6920b405470be43f1327d458c67ddb04f8845b1561a939022216a4f12e9984f9"
+          "socket_manifest_sha256": "1eb23f283e730cdd69dbea925f35b8203a98ed82469a826126174f29d25b5247",
+          "semantic_mask_sha256": "6920b405470be43f1327d458c67ddb04f8845b1561a939022216a4f12e9984f9",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_torso_impostor_anatomy.png",
+          "anatomy_mask_sha256": "61224934a7355c439d6e0eb3f27a3f344be3b6fa9a8507f21505dcf8b7e4ec68"
         }
       ],
       "canonical_bounds": {
@@ -394,6 +530,68 @@
           0,
           -0.48,
           0.32
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "belly",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "norn-torso-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "torso"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "norn-torso-belly",
+            "channel": "belly",
+            "semantic_groups": [
+              "torso"
+            ],
+            "shape": {
+              "kind": "ellipse",
+              "center": [
+                0.5,
+                0.5
+              ],
+              "radius": [
+                0.2,
+                0.48
+              ]
+            },
+            "strength": 255,
+            "priority": 20
+          }
         ]
       }
     },
@@ -479,8 +677,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_arms_full_semantic.png",
           "generated_obj_sha256": "318633b0bd5999718a7f127aaaac063be37748be5e7aa84bed78620b108957a2",
-          "socket_manifest_sha256": "5215a3d4757402b990b7cb4d8503d5e4fa41d47d68d777df2fe9c7eedf62dbdb",
-          "semantic_mask_sha256": "f325f421dd3370d397c7a23c0e70e08dd3a362211bc5718acb202cdad9d2568a"
+          "socket_manifest_sha256": "38cd9ed97d17b24c2840be093ff80b0a82aa6199d7f9ccb4b903a91f01886af3",
+          "semantic_mask_sha256": "f325f421dd3370d397c7a23c0e70e08dd3a362211bc5718acb202cdad9d2568a",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_arms_full_anatomy.png",
+          "anatomy_mask_sha256": "3910af279c644f619e50cb933d9915f6a1d103f6229b4432f47f868bd7ef44f9"
         },
         {
           "lod": "compact",
@@ -488,8 +688,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_arms_compact_semantic.png",
           "generated_obj_sha256": "7d15ff25290b5b3d19be0eff0cdb35dc0c3ef88af7658bb270b3629adf25004a",
-          "socket_manifest_sha256": "4cb60764f19cd8d8f0151491e0030624880f50c7052a428e0db51422c8f16f1b",
-          "semantic_mask_sha256": "67414209e4a123614c258bbe03ef7abda9feb6f58345b2c51a0bfacd320837c4"
+          "socket_manifest_sha256": "ffc8bc0c1c18d0ecccb32aa12b79555ab22b680089543198a9cf62c270b1e3d5",
+          "semantic_mask_sha256": "67414209e4a123614c258bbe03ef7abda9feb6f58345b2c51a0bfacd320837c4",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_arms_compact_anatomy.png",
+          "anatomy_mask_sha256": "7507cf0c94a61ff801354f4d6d5a6dcdd599b0aa28055dda586c05d967ce73e4"
         },
         {
           "lod": "impostor",
@@ -497,8 +699,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_arms_impostor_semantic.png",
           "generated_obj_sha256": "7d6fd4a449cc7f18f100865676b1e8b1a9c40d94cb4b905270d7f04b5a095e34",
-          "socket_manifest_sha256": "ff19f26cab29654d9c947c3e2366b638eb2ac159950951cfe5b2741d6b92c9c0",
-          "semantic_mask_sha256": "0210c6483119ae3490823dd0f26bce9d27d76994d31edfbbb31a9456173e386f"
+          "socket_manifest_sha256": "e7162ff71e10e5fc12ff0c42c7a60632be6cff15a23690165c4b93a656fcafc5",
+          "semantic_mask_sha256": "0210c6483119ae3490823dd0f26bce9d27d76994d31edfbbb31a9456173e386f",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_arms_impostor_anatomy.png",
+          "anatomy_mask_sha256": "708ecb88945f0e5dedbf24d1541956f2c62ee73796fa63c72812a26d9e4765ab"
         }
       ],
       "canonical_bounds": {
@@ -538,6 +742,80 @@
           0.84,
           -0.43,
           -0.02
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "hands-feet",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "norn-arms-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "left-arm",
+              "right-arm"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "norn-arms-extremity",
+            "channel": "hands-feet",
+            "semantic_groups": [
+              "left-arm",
+              "right-arm"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.72,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.72,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
         ]
       }
     },
@@ -630,8 +908,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_legs_full_semantic.png",
           "generated_obj_sha256": "23fc94b488bcc540aead2b883479184cf986544b1d05e7690f8d91012f187b4a",
-          "socket_manifest_sha256": "799ff825dbcc488ad7aa3b70735f244d45cc7271d47a693a186d2783c68fb4d3",
-          "semantic_mask_sha256": "201f0ad763cc46daf015b215e6519796d6dff567bb8adce9bfd0ee33c07f8903"
+          "socket_manifest_sha256": "8654ecd50f11fab1bd92fb91b0c0b88d1ab0af55213a65eb857a18612033ae64",
+          "semantic_mask_sha256": "201f0ad763cc46daf015b215e6519796d6dff567bb8adce9bfd0ee33c07f8903",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_legs_full_anatomy.png",
+          "anatomy_mask_sha256": "cb3fec6a114f44de8588def64a940201520a6f4fa144a1780191e377a370bd9a"
         },
         {
           "lod": "compact",
@@ -639,8 +919,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_legs_compact_semantic.png",
           "generated_obj_sha256": "eb7280aa2c9e184abf3058f69c12f3f44be2078bd735c63512e35747ea30a941",
-          "socket_manifest_sha256": "2f37b2815f5037280679e7226e6242a222e6ae803484616a753ad8a87fd5bc24",
-          "semantic_mask_sha256": "3b3c5555dc644398bd284a59c534d6ac77b55c8dc6195c52672544aaff26e915"
+          "socket_manifest_sha256": "318811eb46fe80f96a9234bfacf3358e23dcf188d1974350b5ac1b986860ed12",
+          "semantic_mask_sha256": "3b3c5555dc644398bd284a59c534d6ac77b55c8dc6195c52672544aaff26e915",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_legs_compact_anatomy.png",
+          "anatomy_mask_sha256": "cd9fd91a0314488baf403aca154453f8afb8ec31870d735f0348192d0e62e9e8"
         },
         {
           "lod": "impostor",
@@ -648,8 +930,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_legs_impostor_semantic.png",
           "generated_obj_sha256": "e0016a5ae67eae4892776a5e4bb217f0736eb0ed41a3b7df45958993485adb07",
-          "socket_manifest_sha256": "36642496a4f8a6c90969314ce06739fb15ddb6e0e11c5cd312cc978cb003bd88",
-          "semantic_mask_sha256": "903cc53d41c94cb5ab4e9263ba83fd4abfba1351935d3dd4ef6616b050716d17"
+          "socket_manifest_sha256": "1a8de52b5352d002127590837bc2b8f5436edc3c35ca61a126291a25b33915f5",
+          "semantic_mask_sha256": "903cc53d41c94cb5ab4e9263ba83fd4abfba1351935d3dd4ef6616b050716d17",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_legs_impostor_anatomy.png",
+          "anatomy_mask_sha256": "a3f68c541201aac4f9185f2409067e760e8c17c364a9c4f1160e803382f938e2"
         }
       ],
       "canonical_bounds": {
@@ -689,6 +973,80 @@
           0.25,
           -0.88,
           -0.12
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "hands-feet",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "norn-legs-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "left-leg",
+              "right-leg"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "norn-legs-extremity",
+            "channel": "hands-feet",
+            "semantic_groups": [
+              "left-leg",
+              "right-leg"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.72,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.72,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
         ]
       }
     },
@@ -797,8 +1155,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_head_full_semantic.png",
           "generated_obj_sha256": "679c46554948fa2efc3604092f7b04bb2ab038f457afa71b57169efe9254df89",
-          "socket_manifest_sha256": "9d9d97a043c1eb884f1d219c8c49bf16b7de8b5e719dc1be45b67195e93eb73b",
-          "semantic_mask_sha256": "0a8754bbd57ef106f58356f7004a590b161c8d793e21344c0b9f3b72f416c566"
+          "socket_manifest_sha256": "9995453079690ca72e998ddde6b08e5bdc1f87ebbae47d68412b4634ef62bcfc",
+          "semantic_mask_sha256": "0a8754bbd57ef106f58356f7004a590b161c8d793e21344c0b9f3b72f416c566",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_head_full_anatomy.png",
+          "anatomy_mask_sha256": "9c422d6e081539c7f93f5fe1002dbd0f9339b8e4fd2f7ea7173b315ffa9092d5"
         },
         {
           "lod": "compact",
@@ -806,8 +1166,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_head_compact_semantic.png",
           "generated_obj_sha256": "26eda9c9ea4cb5641f4de5fca5eec733a290dc0d36e7dc957a125c007eefa4ed",
-          "socket_manifest_sha256": "49cc07ec8d6ead12446331b2a1ea2b0a2374ff8c3b494ddf04fe521f5ce4a3fe",
-          "semantic_mask_sha256": "cf780889b93016bff6ac8cfe7a93be12edf1462b1ce8d7764395ea21aa80bb4c"
+          "socket_manifest_sha256": "7c1cd3e0435c1acf6088ec7677873331ad6c9f953dadbb93c0e373f7d08a11b7",
+          "semantic_mask_sha256": "cf780889b93016bff6ac8cfe7a93be12edf1462b1ce8d7764395ea21aa80bb4c",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_head_compact_anatomy.png",
+          "anatomy_mask_sha256": "5ce0a177b193eae21f4f5369a9badba19c97d50c4d18c716fd6fbb0867e162c7"
         },
         {
           "lod": "impostor",
@@ -815,8 +1177,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_head_impostor_semantic.png",
           "generated_obj_sha256": "743edc3064bdcda3e09e657db15915458d38af4acff0ed2a5a5c9a19f5e94ab9",
-          "socket_manifest_sha256": "53989bb6d3bc96a5432f29c4c643f726dc9492fa43afeb701986ef086df5b2ee",
-          "semantic_mask_sha256": "c8e73b72463f437f1fa39d1d51e7f2561660af7bf2909e5c29ed0e943e0589fa"
+          "socket_manifest_sha256": "00b891f7ef9a7635ba92dd69f052da9712aa7864d6d58c8bac2f9dc529fc2322",
+          "semantic_mask_sha256": "c8e73b72463f437f1fa39d1d51e7f2561660af7bf2909e5c29ed0e943e0589fa",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_head_impostor_anatomy.png",
+          "anatomy_mask_sha256": "262783ed5f2dd3a567d4c960a1e430c0820974b8516b5d5f659573e302177a72"
         }
       ],
       "canonical_bounds": {
@@ -878,6 +1242,130 @@
           -0.46,
           0
         ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "muzzle",
+          "inner-ear",
+          "keratin-skin",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "ettin-head-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.17,
+                  0.0
+                ],
+                [
+                  0.17,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "ettin-head-inner-ear",
+            "channel": "inner-ear",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.19,
+                  0.0
+                ],
+                [
+                  0.35,
+                  0.0
+                ],
+                [
+                  0.35,
+                  1.0
+                ],
+                [
+                  0.19,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "ettin-head-muzzle",
+            "channel": "muzzle",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "ellipse",
+              "center": [
+                0.46,
+                0.35
+              ],
+              "radius": [
+                0.1,
+                0.32
+              ]
+            },
+            "strength": 255,
+            "priority": 20
+          },
+          {
+            "id": "ettin-head-keratin",
+            "channel": "keratin-skin",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.73,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.73,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
+        ]
       }
     },
     {
@@ -934,8 +1422,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_torso_full_semantic.png",
           "generated_obj_sha256": "b000386fc3685c5092eafbe0318dbace18c15dc4a25ce40502ac978a98ac5f1e",
-          "socket_manifest_sha256": "3e4a85dfdf0083e0e6491eafafdb50a8a419d7796cfc38521ef1691fc63768b4",
-          "semantic_mask_sha256": "a93c3fa43d61450d9607e26e90019179a7b9f0dd08c9b3b42addee1b61b59a82"
+          "socket_manifest_sha256": "2d08a224e45cc35b3a3a454da9926cf95d23a0c3aac95252af6d09f9ffd3dedb",
+          "semantic_mask_sha256": "a93c3fa43d61450d9607e26e90019179a7b9f0dd08c9b3b42addee1b61b59a82",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_torso_full_anatomy.png",
+          "anatomy_mask_sha256": "0bff1716e0e966b9dfde8647f9590c071402da8129e6fa0e61162052feba91bb"
         },
         {
           "lod": "compact",
@@ -943,8 +1433,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_torso_compact_semantic.png",
           "generated_obj_sha256": "ea111501586e0a9041ee000a027e17e6a4283a8117d11040fd9392b609e3b54a",
-          "socket_manifest_sha256": "1dd0dad16b7b3e0c37a41e1a97ef870021623ec7edbe2abbdf39ab6ed583e82b",
-          "semantic_mask_sha256": "e80a1cf2c966a7b0c1e63718aa042c9263effbb39b1048851549d257a851bf3c"
+          "socket_manifest_sha256": "c2caa7be13f4dd3e7e4168b778846a29860bd7a5c43dcd0ac173770775241839",
+          "semantic_mask_sha256": "e80a1cf2c966a7b0c1e63718aa042c9263effbb39b1048851549d257a851bf3c",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_torso_compact_anatomy.png",
+          "anatomy_mask_sha256": "f9e9be3b91e2376eb28dfccc54067ff34e9b967c6e061071615fb0c16e69910c"
         },
         {
           "lod": "impostor",
@@ -952,8 +1444,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_torso_impostor_semantic.png",
           "generated_obj_sha256": "d816d67273b64d5af3d91df66d2b0796576c29baf5e4d06458cee0adcc417bc5",
-          "socket_manifest_sha256": "0d9b5fa37b64488e99d87d06ab2419206518d67728ef7566355d4115dab10cc0",
-          "semantic_mask_sha256": "8fdf0784a2192855d7d6f934d2d698e1849f3549f7496628d5bb49f316b0d9ec"
+          "socket_manifest_sha256": "355bd404d42f6426f7995cef4d5642f1af2edef19fad778713dcebe073db3fdb",
+          "semantic_mask_sha256": "8fdf0784a2192855d7d6f934d2d698e1849f3549f7496628d5bb49f316b0d9ec",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_torso_impostor_anatomy.png",
+          "anatomy_mask_sha256": "de94885a9469d2466c91bb28cc40747090a5284de81946e17fe0ccc57bd38ef1"
         }
       ],
       "canonical_bounds": {
@@ -1002,6 +1496,68 @@
           0,
           -0.48,
           0.32
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "belly",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "ettin-torso-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "torso"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "ettin-torso-belly",
+            "channel": "belly",
+            "semantic_groups": [
+              "torso"
+            ],
+            "shape": {
+              "kind": "ellipse",
+              "center": [
+                0.5,
+                0.5
+              ],
+              "radius": [
+                0.2,
+                0.48
+              ]
+            },
+            "strength": 255,
+            "priority": 20
+          }
         ]
       }
     },
@@ -1095,8 +1651,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_arms_full_semantic.png",
           "generated_obj_sha256": "57a26a38d5e60574cb9d663de2096b57c10df4c8beffc9a8ebb222542744ae9a",
-          "socket_manifest_sha256": "39f58ebcfb51ef7f52ec08259184c0206e4322ec613d49315f2bd7783533d60e",
-          "semantic_mask_sha256": "2ee24d427b9ae2a2fec75e5b8bc3bc1279128a6374fe854f3352410749edab18"
+          "socket_manifest_sha256": "ab2cdab57c97221212c87ca2414d0a1886e064b16ac810c017801327c8cbb577",
+          "semantic_mask_sha256": "2ee24d427b9ae2a2fec75e5b8bc3bc1279128a6374fe854f3352410749edab18",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_arms_full_anatomy.png",
+          "anatomy_mask_sha256": "78ee83aa31e0ea5a02dcb0ebcf18af857e4e95a685173d62deba64d10824e2da"
         },
         {
           "lod": "compact",
@@ -1104,8 +1662,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_arms_compact_semantic.png",
           "generated_obj_sha256": "48d623c41046dec1a68c316b17ad4988e25c5a713c6d3681e20a10b19a560bb3",
-          "socket_manifest_sha256": "ccf7ea3ea347a6e9e9c98d8acd523bc6b1ac2e824fe0290911abeb55bd5924be",
-          "semantic_mask_sha256": "cf2aaa8076688430ff1c08df2bc7ab4252fe882aec15383a61350ce30e3f8cc2"
+          "socket_manifest_sha256": "b6dc60d939f92c81329c3a39953538cca13a9f732d5afb4bc4f355462816bc64",
+          "semantic_mask_sha256": "cf2aaa8076688430ff1c08df2bc7ab4252fe882aec15383a61350ce30e3f8cc2",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_arms_compact_anatomy.png",
+          "anatomy_mask_sha256": "4aab864ac75292dcff29208d51fd56b46e9393fda976f3fc62dc0e4efbcb078d"
         },
         {
           "lod": "impostor",
@@ -1113,8 +1673,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_arms_impostor_semantic.png",
           "generated_obj_sha256": "a1a6ae907859912913c2b82dbd295d62f358b899255c711cc3b5dbd62bcbfb4a",
-          "socket_manifest_sha256": "9c5efaee85531878b64b1df2a112d05d312cf6fb472d3c55ada8f0d8f0013f15",
-          "semantic_mask_sha256": "190373608611c8691a73eda43e1479f971ac3fdeabdc4c857f2b3aebce12458d"
+          "socket_manifest_sha256": "2b50eb8b79334953fc5de4bc14b67ca84fa92d6bc235b74b828566f9cc22cbd5",
+          "semantic_mask_sha256": "190373608611c8691a73eda43e1479f971ac3fdeabdc4c857f2b3aebce12458d",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_arms_impostor_anatomy.png",
+          "anatomy_mask_sha256": "47b564fd34e7f36156f88a2c8a43956d02b79f2f6f912ca8e8ca9e667ea7736b"
         }
       ],
       "canonical_bounds": {
@@ -1154,6 +1716,80 @@
           0.84,
           -0.43,
           -0.02
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "hands-feet",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "ettin-arms-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "left-arm",
+              "right-arm"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "ettin-arms-extremity",
+            "channel": "hands-feet",
+            "semantic_groups": [
+              "left-arm",
+              "right-arm"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.72,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.72,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
         ]
       }
     },
@@ -1246,8 +1882,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_legs_full_semantic.png",
           "generated_obj_sha256": "aa40aa36e11ac5d2b76fdce2385ac2092e7bceaef6dba7b5ea9bb5cb53d14cd1",
-          "socket_manifest_sha256": "247414fbd5a2486c8d1c9f95ef82baa4389066648f54c0d2dc0c016ad48fc313",
-          "semantic_mask_sha256": "36d0b2b4a74bd8762c341659f2d6cd432626f64d493178747e7c82f767257762"
+          "socket_manifest_sha256": "347bc6fb14734a1629123a9bc8ff45cc401b3873dfd533e29e7c66a41bbeed21",
+          "semantic_mask_sha256": "36d0b2b4a74bd8762c341659f2d6cd432626f64d493178747e7c82f767257762",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_legs_full_anatomy.png",
+          "anatomy_mask_sha256": "0d52b731372e1119db4116d50e320421a4b6b53a68e8e77e722e8798d61b7f93"
         },
         {
           "lod": "compact",
@@ -1255,8 +1893,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_legs_compact_semantic.png",
           "generated_obj_sha256": "e18d88c2303df050eb35e3c0d84dc930bc1f6b78b543cb8bfb134620374ecc80",
-          "socket_manifest_sha256": "c7d8185cf062d26bb9c00c515b49382f6aa290f4c6dcf577bfb4a23f0e3b0c19",
-          "semantic_mask_sha256": "9ad111bd1543b8366858694283d8b443c849a9046da22f523672ad20595339ef"
+          "socket_manifest_sha256": "b3361ffdf4f10472b105ec5bc356cab160ec9416ce6df57e856c29285870affa",
+          "semantic_mask_sha256": "9ad111bd1543b8366858694283d8b443c849a9046da22f523672ad20595339ef",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_legs_compact_anatomy.png",
+          "anatomy_mask_sha256": "a3e3eecf64631da74eff1a1e7020258f78087f7dafa69dcd9e2edd9ec3e2b142"
         },
         {
           "lod": "impostor",
@@ -1264,8 +1904,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/ettin_legs_impostor_semantic.png",
           "generated_obj_sha256": "a33110a9d53de7c69c706f8329c554d70b503be81b264b8697fc6696aeccd7df",
-          "socket_manifest_sha256": "7e4ad3484b7bc3565d7e4599722d59afcd444f2489049d7052c9ea48b582215d",
-          "semantic_mask_sha256": "f11db3f58e0aeaf7ed10eb39128bda0846bd47af1b853d55edcbd16f6a2f65b0"
+          "socket_manifest_sha256": "f40fb190cf90b5532637cf9586bea88aed712d897f55e220fa60cfc15a0f847c",
+          "semantic_mask_sha256": "f11db3f58e0aeaf7ed10eb39128bda0846bd47af1b853d55edcbd16f6a2f65b0",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_legs_impostor_anatomy.png",
+          "anatomy_mask_sha256": "951e712bab38ceb256ff19efb9a0c6b2a4500bfeb5e55a23e5886238c1ddac7a"
         }
       ],
       "canonical_bounds": {
@@ -1305,6 +1947,80 @@
           0.25,
           -0.88,
           -0.12
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "hands-feet",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "ettin-legs-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "left-leg",
+              "right-leg"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "ettin-legs-extremity",
+            "channel": "hands-feet",
+            "semantic_groups": [
+              "left-leg",
+              "right-leg"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.72,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.72,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
         ]
       }
     },
@@ -1422,8 +2138,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_head_full_semantic.png",
           "generated_obj_sha256": "88674500283834fe46813d45620c38706a89c7e5e8dcfb9fdcd66b32ec8164e7",
-          "socket_manifest_sha256": "a0c6d7e4bc6dd3d5758bc8a93f2724c4acb280019b92ff07d78f583e48689662",
-          "semantic_mask_sha256": "4b6d55b166c338eb1f914cfb86d8a84e8b0345ae4fb52fa04a87045458f35b49"
+          "socket_manifest_sha256": "d295283eb1801f0f17fcadec495733861bd7b58e57ee2f97d408307464483c6f",
+          "semantic_mask_sha256": "4b6d55b166c338eb1f914cfb86d8a84e8b0345ae4fb52fa04a87045458f35b49",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_head_full_anatomy.png",
+          "anatomy_mask_sha256": "45fa2d125bbd3af3b1a9bacd28cdb575a83e7e01ecf509691fe011fdaaa677a9"
         },
         {
           "lod": "compact",
@@ -1431,8 +2149,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_head_compact_semantic.png",
           "generated_obj_sha256": "5c991a7213873d501eb90a2286129fad9881b77592aa99eef8a4db1c72e336ca",
-          "socket_manifest_sha256": "6c722146998e24e7257bac09ab23af94d3a4dd56157f3fef264825cf0dc47c2f",
-          "semantic_mask_sha256": "d4fa9f5f608b9ae4b58860ebf3b96c7dade158b10f8d4cf852b932927fc4f7f1"
+          "socket_manifest_sha256": "90995ea47b21c6e8ce2d68306916c538efd5ec66712dce241afc52ea690d3c11",
+          "semantic_mask_sha256": "d4fa9f5f608b9ae4b58860ebf3b96c7dade158b10f8d4cf852b932927fc4f7f1",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_head_compact_anatomy.png",
+          "anatomy_mask_sha256": "b5946b038627e247f49c08cffe3c1bd3c51dc435261b0c41ec6e3c2d15bf1a76"
         },
         {
           "lod": "impostor",
@@ -1440,8 +2160,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_head_impostor_semantic.png",
           "generated_obj_sha256": "b5d8adda79cf247ecb480fa599cbc31d6bcd1b8be52229729e5e5d29f04118bc",
-          "socket_manifest_sha256": "e6b41c62cdd01524f278b5d4c05c574ea687403153c8ca7aad593f518774b8b9",
-          "semantic_mask_sha256": "dd15142b944061c09a7f9abdb43a3086cbcb1edfbbd5562b163445850512f6ba"
+          "socket_manifest_sha256": "4470f33e85c04a188c91f536bbefc987648d002a28554a200c80d8460c08cc8c",
+          "semantic_mask_sha256": "dd15142b944061c09a7f9abdb43a3086cbcb1edfbbd5562b163445850512f6ba",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_head_impostor_anatomy.png",
+          "anatomy_mask_sha256": "b741b83ff6eaf353075fad6b119a48234c8dcdec2466edfe7a3ecde243f4ebf1"
         }
       ],
       "canonical_bounds": {
@@ -1503,6 +2225,130 @@
           -0.46,
           0
         ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "muzzle",
+          "inner-ear",
+          "keratin-skin",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "grendel-head-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.17,
+                  0.0
+                ],
+                [
+                  0.17,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "grendel-head-inner-ear",
+            "channel": "inner-ear",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.19,
+                  0.0
+                ],
+                [
+                  0.35,
+                  0.0
+                ],
+                [
+                  0.35,
+                  1.0
+                ],
+                [
+                  0.19,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "grendel-head-muzzle",
+            "channel": "muzzle",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "ellipse",
+              "center": [
+                0.46,
+                0.35
+              ],
+              "radius": [
+                0.1,
+                0.32
+              ]
+            },
+            "strength": 255,
+            "priority": 20
+          },
+          {
+            "id": "grendel-head-keratin",
+            "channel": "keratin-skin",
+            "semantic_groups": [
+              "head"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.73,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.73,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
+        ]
       }
     },
     {
@@ -1561,8 +2407,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_torso_full_semantic.png",
           "generated_obj_sha256": "e48a42d27d47c7a5c78b26d6c71e2c3b15c2d7cf761e01e9ea72aec22e804584",
-          "socket_manifest_sha256": "1bf023fa6bcd28232dd815c956184b04d90a970fc46d1388c9d64ccfaa2cd7c4",
-          "semantic_mask_sha256": "8c1a8e0d99b307907668e3dd6e44e2eda0dec4e315f54e8f2f8593b4231f4e84"
+          "socket_manifest_sha256": "f8e9a3a5a193432329e62909aabe2a8d0f8d619d27db2c5136d4277f6ac2b575",
+          "semantic_mask_sha256": "8c1a8e0d99b307907668e3dd6e44e2eda0dec4e315f54e8f2f8593b4231f4e84",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_torso_full_anatomy.png",
+          "anatomy_mask_sha256": "54cf1f42831a2473b81f260c3dce4dac77ea0710fb2285a9b38fa62809b4cb95"
         },
         {
           "lod": "compact",
@@ -1570,8 +2418,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_torso_compact_semantic.png",
           "generated_obj_sha256": "8b4400e557fb346486e0f77f67852a8e48e465452daa4d2808076d57a74635aa",
-          "socket_manifest_sha256": "163e6d011be9d08663235a9eee2aceeec55805926b276cb943c10661a15ef912",
-          "semantic_mask_sha256": "394f87348af7602c869f1121e4f4dd73713ba70dfe894265080b2e1908a5b337"
+          "socket_manifest_sha256": "ae8c85dbcbb2484f92df2de07bb0fa7fef14cb79db103b044c71cadb99d8e6e6",
+          "semantic_mask_sha256": "394f87348af7602c869f1121e4f4dd73713ba70dfe894265080b2e1908a5b337",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_torso_compact_anatomy.png",
+          "anatomy_mask_sha256": "efc03e88601337a629c85039ccb0bbb1e46e2eeaba8b3fc184b8185b0de77092"
         },
         {
           "lod": "impostor",
@@ -1579,8 +2429,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_torso_impostor_semantic.png",
           "generated_obj_sha256": "c429c65e7b13422bdda43fffa9dadd7b797e41d96786c3cbb56302d6955e949a",
-          "socket_manifest_sha256": "23ce7e2e2b521fe2119aea2035c79e0aed95bed498856efc0f2674350b55ed90",
-          "semantic_mask_sha256": "034786a922de3a38be310aa052f32f18d15be91230e24f00fd02ff669dba8e76"
+          "socket_manifest_sha256": "8ff282c7671196303346a11dfc0259a214f2ff8b1404c9d0d18da9c8515e0be7",
+          "semantic_mask_sha256": "034786a922de3a38be310aa052f32f18d15be91230e24f00fd02ff669dba8e76",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_torso_impostor_anatomy.png",
+          "anatomy_mask_sha256": "e7fa6a927ad7ec4db1309f19fb0d35c4a3181b841c968cae640bef28a5be4b3f"
         }
       ],
       "canonical_bounds": {
@@ -1629,6 +2481,68 @@
           0,
           -0.48,
           0.32
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "belly",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "grendel-torso-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "torso"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "grendel-torso-belly",
+            "channel": "belly",
+            "semantic_groups": [
+              "torso"
+            ],
+            "shape": {
+              "kind": "ellipse",
+              "center": [
+                0.5,
+                0.5
+              ],
+              "radius": [
+                0.2,
+                0.48
+              ]
+            },
+            "strength": 255,
+            "priority": 20
+          }
         ]
       }
     },
@@ -1722,8 +2636,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_arms_full_semantic.png",
           "generated_obj_sha256": "2cfa70181a6c1219f7acd090bce97c5531e87c2cb5bbacbccc8aca628647c7ff",
-          "socket_manifest_sha256": "384d56fc50ed3f561a13ea2e3bb131a9c8f8953d061e23b6359dc1c366f614ec",
-          "semantic_mask_sha256": "0afee62c320296223f62332935d1eec951c590f8a491d89f084cd18f813ae526"
+          "socket_manifest_sha256": "0ad810a7fa9da8405af90adab30eee978bfb70c470dfbe1b1eb2b42536623aa1",
+          "semantic_mask_sha256": "0afee62c320296223f62332935d1eec951c590f8a491d89f084cd18f813ae526",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_arms_full_anatomy.png",
+          "anatomy_mask_sha256": "9a40d7284e72f77535b457b261bf15113160ee50999d8b161440502e6d871caa"
         },
         {
           "lod": "compact",
@@ -1731,8 +2647,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_arms_compact_semantic.png",
           "generated_obj_sha256": "b21eaf91c6dcb9e9023cc449f0f270fe87c247812ebce464fe7a68a72e04984c",
-          "socket_manifest_sha256": "619bcbbfa8645bf577a7d3b5703a5a972ff55b8dbf6b033f1bb82ab3e3a727fa",
-          "semantic_mask_sha256": "8f0310fb980f3b7ff5ba854ddf3fcdca982f65d148d9755db4274b7ee096e0e6"
+          "socket_manifest_sha256": "25f2c1a8413b15c8197e8dbe15cbdcf0f2ed471c5d6e74c39baf9846cdc28dd2",
+          "semantic_mask_sha256": "8f0310fb980f3b7ff5ba854ddf3fcdca982f65d148d9755db4274b7ee096e0e6",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_arms_compact_anatomy.png",
+          "anatomy_mask_sha256": "2da42d7563154b1657ecd75a84c8fb3dc67fe1d47068f10e5cf27bbb02561af0"
         },
         {
           "lod": "impostor",
@@ -1740,8 +2658,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_arms_impostor_semantic.png",
           "generated_obj_sha256": "dd992ae5e88ce33be705c3d8a031726dcef34fb5e16f8dfb04ad62d9ea55c03f",
-          "socket_manifest_sha256": "e14c07fe86c09d2162229bfeadd6c3c5f3bbfc1a47050847e4f14b6aaa194a37",
-          "semantic_mask_sha256": "20bd9bfc4656be87e0bd5c29a03cd9859b19f40d93a39b8a27539f8f7df51912"
+          "socket_manifest_sha256": "62f8ed87116a75250869fc550ae835e4283e138191dc402bbeadc2006f4c78d4",
+          "semantic_mask_sha256": "20bd9bfc4656be87e0bd5c29a03cd9859b19f40d93a39b8a27539f8f7df51912",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_arms_impostor_anatomy.png",
+          "anatomy_mask_sha256": "fc83aaa0f126b22e482d3ca6745dbfeec53bf16890b8110633c1d64c533a6d96"
         }
       ],
       "canonical_bounds": {
@@ -1781,6 +2701,80 @@
           0.84,
           -0.43,
           -0.02
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "hands-feet",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "grendel-arms-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "left-arm",
+              "right-arm"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "grendel-arms-extremity",
+            "channel": "hands-feet",
+            "semantic_groups": [
+              "left-arm",
+              "right-arm"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.72,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.72,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
         ]
       }
     },
@@ -1873,8 +2867,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_legs_full_semantic.png",
           "generated_obj_sha256": "c656994fc888321ee17506694d84d5e22a0ea1140ac92dfd5c6766a74f4d31dc",
-          "socket_manifest_sha256": "2eeb1fb9c92aa017f4c5d2bd11953ee5fa98776d1468440d9d6f236d0822b024",
-          "semantic_mask_sha256": "1b0658bc19fa60bafc746bc982d38e8c04e3af181ae1ca7fc5a44552be340e54"
+          "socket_manifest_sha256": "917b9df46e7c3a3eb96d0c6ad81e6d9f2c6375631eef2395a6723885e6e5f6a9",
+          "semantic_mask_sha256": "1b0658bc19fa60bafc746bc982d38e8c04e3af181ae1ca7fc5a44552be340e54",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_legs_full_anatomy.png",
+          "anatomy_mask_sha256": "c3a45c9cfa4aac90c0cae132929824281ed3806822099edeff511ff91fb251d9"
         },
         {
           "lod": "compact",
@@ -1882,8 +2878,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_legs_compact_semantic.png",
           "generated_obj_sha256": "67c5c7d94251b44a39130d48fd14eb802dc83f23e03316fb565e54a6e5ec9d37",
-          "socket_manifest_sha256": "86543720274417a86d21c97353a2f528576e245a55d1f1ed52d16b9a4392bcfc",
-          "semantic_mask_sha256": "4fd5d81c78d404e4f817d005914ced74cd330c70d579e5b7f8ca041c3473b265"
+          "socket_manifest_sha256": "bf17a44ddc170c725f325f180c248f5ba66d21d36a5bd9bcf8be238560948f7e",
+          "semantic_mask_sha256": "4fd5d81c78d404e4f817d005914ced74cd330c70d579e5b7f8ca041c3473b265",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_legs_compact_anatomy.png",
+          "anatomy_mask_sha256": "727e6e213b8ad7341af4cf9d3e6a78691985b604594635c4a7eeb53490585df9"
         },
         {
           "lod": "impostor",
@@ -1891,8 +2889,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_legs_impostor_semantic.png",
           "generated_obj_sha256": "9eba8a588f6e23282d1c6805ffb95d59be13c5d66305475609a96c838729c99e",
-          "socket_manifest_sha256": "25fd1c35a6285b69014b40bbb0b9d828d5b7ae01d6df79546f7877d172c3f93a",
-          "semantic_mask_sha256": "84fbf624de0d73f038032a39ecabcef3725fb98e349b1d4638e1e6ed4cae7d11"
+          "socket_manifest_sha256": "9ff3b25d29091ef83b8f64be7e69a47057536b47a75406727e5de513bcf47b9b",
+          "semantic_mask_sha256": "84fbf624de0d73f038032a39ecabcef3725fb98e349b1d4638e1e6ed4cae7d11",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_legs_impostor_anatomy.png",
+          "anatomy_mask_sha256": "35a3c0868b00df51445ae270699cec26f991b35a1bd0b23214496f53b2806401"
         }
       ],
       "canonical_bounds": {
@@ -1932,6 +2932,80 @@
           0.25,
           -0.88,
           -0.12
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "hands-feet",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "grendel-legs-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "left-leg",
+              "right-leg"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "grendel-legs-extremity",
+            "channel": "hands-feet",
+            "semantic_groups": [
+              "left-leg",
+              "right-leg"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.72,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.72,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
         ]
       }
     },
@@ -1992,8 +3066,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_tail_full_semantic.png",
           "generated_obj_sha256": "680fc6638405b56b64a056b5c46196ed7ecdd22f1ffd264f3142a72808c9e2ea",
-          "socket_manifest_sha256": "d61580cc85058044cba30d0ac1c1399e809a055907841ee402903ab439ea831f",
-          "semantic_mask_sha256": "2265b5e7a977b737f582f89452ee2b3aa75e5951d18a67798de894a3f2cec19c"
+          "socket_manifest_sha256": "632dc1f3772f3f9f57b6ca3f1e1159e4f5a63f744fce1198b90dec7298a78099",
+          "semantic_mask_sha256": "2265b5e7a977b737f582f89452ee2b3aa75e5951d18a67798de894a3f2cec19c",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_tail_full_anatomy.png",
+          "anatomy_mask_sha256": "e3b19ccb7e024585bce943910570149dfc83697a6daac977489fb055ec614bf7"
         },
         {
           "lod": "compact",
@@ -2001,8 +3077,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_tail_compact_semantic.png",
           "generated_obj_sha256": "0d831a3f7b942d1bdb74f9a3c9e508e95bfea36c5c0948f8215e911f622b2ed9",
-          "socket_manifest_sha256": "98626d0009ab368e30bd05f9d6f0c875ed7bd6c3697f757ea50277c45e3bca75",
-          "semantic_mask_sha256": "d364407a4f972623af5c50ca3edf04392a021e2c2da81a3e3f521beb08e7e4ac"
+          "socket_manifest_sha256": "867305a284700c5dbadd8e43899b38721886769b7ad22ac7672ada7c20a35aef",
+          "semantic_mask_sha256": "d364407a4f972623af5c50ca3edf04392a021e2c2da81a3e3f521beb08e7e4ac",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_tail_compact_anatomy.png",
+          "anatomy_mask_sha256": "74c9040eeaae8fe299bcb078aa183b77bb0af4c26e5e6c51e9df8d15f84e77f8"
         },
         {
           "lod": "impostor",
@@ -2010,8 +3088,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/norn_tail_impostor_semantic.png",
           "generated_obj_sha256": "45d2140473f11268c93e4d486e9ff090a6bb588e978b1d5116b652debac925c5",
-          "socket_manifest_sha256": "48c52b863c5efb9437567383786b796326ff16dc0eb8e328abc9750ec38880ae",
-          "semantic_mask_sha256": "b9a64f0f6f2702453a4deca5133f6b03de6873dfcb7a4386e85335e0b79aab73"
+          "socket_manifest_sha256": "adffe017c44c54c4adb79e135b84337e76aed363e940b9cac896e36c51227953",
+          "semantic_mask_sha256": "b9a64f0f6f2702453a4deca5133f6b03de6873dfcb7a4386e85335e0b79aab73",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/norn_tail_impostor_anatomy.png",
+          "anatomy_mask_sha256": "cc2cc067092f64c421dea9376d3a6a95526b2b5f1d716225ffc6181379540b07"
         }
       ],
       "canonical_bounds": {
@@ -2040,6 +3120,78 @@
           0,
           -0.18,
           -0.76
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "keratin-skin",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "norn-tail-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "tail-back"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "norn-tail-keratin",
+            "channel": "keratin-skin",
+            "semantic_groups": [
+              "tail-back"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.72,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.72,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
         ]
       }
     },
@@ -2101,8 +3253,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_full_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_tail_full_semantic.png",
           "generated_obj_sha256": "6d9e2b5e48de766dcefc33659667012222a13b0b68dc61021f866f4ed04bcf5f",
-          "socket_manifest_sha256": "3eb7b49528bd98a6d6c9bccbd6fc0b507e71b5916f3b673a86739848849a15ee",
-          "semantic_mask_sha256": "363b08fdd0fa0cbb8591691e14a0c82afd2c37901a7760c0ef253badd66c1e6f"
+          "socket_manifest_sha256": "6e5e75a554fba646bb97b034cc25d4c337b506b4428a179682c7f9f20eb7e92f",
+          "semantic_mask_sha256": "363b08fdd0fa0cbb8591691e14a0c82afd2c37901a7760c0ef253badd66c1e6f",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_tail_full_anatomy.png",
+          "anatomy_mask_sha256": "153c8093e0982a2b7e6c16f7733828f13020a3458db8b5c0d87b5e2908de685a"
         },
         {
           "lod": "compact",
@@ -2110,8 +3264,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_compact_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_tail_compact_semantic.png",
           "generated_obj_sha256": "44de0b328f28c0b2ca577c9833e6f2c9bf65b2387a8df0b1ee10e942ec46a6bd",
-          "socket_manifest_sha256": "74f4266ca76f2d3e44715eac33aee9e34c9a99c64c37c7434ba4c7cf60aebc5e",
-          "semantic_mask_sha256": "baafceba3ba21ea89d38c586518c915b945ad28716cda8bc3f27f616b4b9ada5"
+          "socket_manifest_sha256": "be822d0d0183ec1a2d559367b96ed8ada535860a6f2d95a6f9889318ace911bc",
+          "semantic_mask_sha256": "baafceba3ba21ea89d38c586518c915b945ad28716cda8bc3f27f616b4b9ada5",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_tail_compact_anatomy.png",
+          "anatomy_mask_sha256": "153c8093e0982a2b7e6c16f7733828f13020a3458db8b5c0d87b5e2908de685a"
         },
         {
           "lod": "impostor",
@@ -2119,8 +3275,10 @@
           "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_impostor_sockets.json",
           "semantic_mask": "production_voxel_v1/models/geneforge/grendel_tail_impostor_semantic.png",
           "generated_obj_sha256": "f82ae24f81b3107db01fa3f36c1c909fe26694fc3e685350be5948c325ebc5ac",
-          "socket_manifest_sha256": "b309169d4d3bac0e4fe4ef00bbc3cd991b16ee2497aefaa2102479640efc0a1f",
-          "semantic_mask_sha256": "12e674412d7f823c6cbd29402455d58d061c6b258f334a219e6abe26479dd4f4"
+          "socket_manifest_sha256": "ba028666b7b55f17087bd8216790f01006ced0e7cf3bc1ed6381c01bb97abdcf",
+          "semantic_mask_sha256": "12e674412d7f823c6cbd29402455d58d061c6b258f334a219e6abe26479dd4f4",
+          "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_tail_impostor_anatomy.png",
+          "anatomy_mask_sha256": "fb10400efb54edd43763d7e0f1f5cc2ff355181b96e1cd84f02546453bef4842"
         }
       ],
       "canonical_bounds": {
@@ -2149,6 +3307,78 @@
           0,
           -0.18,
           -0.76
+        ]
+      },
+      "anatomy_authoring": {
+        "schema": "alife.geneforge_anatomy_authoring.v1",
+        "coordinate_space": "semantic-group-local-uv",
+        "default_channel": "primary",
+        "required_channels": [
+          "primary",
+          "keratin-skin",
+          "secondary-marking"
+        ],
+        "zones": [
+          {
+            "id": "grendel-tail-secondary",
+            "channel": "secondary-marking",
+            "semantic_groups": [
+              "tail-back"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.28,
+                  0.0
+                ],
+                [
+                  0.28,
+                  1.0
+                ],
+                [
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          },
+          {
+            "id": "grendel-tail-keratin",
+            "channel": "keratin-skin",
+            "semantic_groups": [
+              "tail-back"
+            ],
+            "shape": {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.72,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ],
+                [
+                  0.72,
+                  1.0
+                ]
+              ]
+            },
+            "strength": 255,
+            "priority": 10
+          }
         ]
       }
     }

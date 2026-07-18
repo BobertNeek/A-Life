@@ -463,6 +463,44 @@ pub enum GeneForgeDetailRole {
     Tongue,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeneForgeAnatomyChannel {
+    Primary,
+    Belly,
+    Muzzle,
+    InnerEar,
+    HandsFeet,
+    KeratinSkin,
+    SecondaryMarking,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum GeneForgeAnatomyShape {
+    Ellipse { center: [f32; 2], radius: [f32; 2] },
+    Polygon { points: Vec<[f32; 2]> },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeAnatomyZone {
+    pub id: String,
+    pub channel: GeneForgeAnatomyChannel,
+    pub semantic_groups: BTreeSet<String>,
+    pub shape: GeneForgeAnatomyShape,
+    pub strength: u8,
+    pub priority: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeAnatomyAuthoring {
+    pub schema: String,
+    pub coordinate_space: String,
+    pub default_channel: GeneForgeAnatomyChannel,
+    pub required_channels: BTreeSet<GeneForgeAnatomyChannel>,
+    pub zones: Vec<GeneForgeAnatomyZone>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneForgePartSelector {
     pub selection_policy: GeneForgeSelectionPolicy,
@@ -549,6 +587,8 @@ pub struct GeneForgeGeneratedPartLod {
     pub socket_manifest_sha256: String,
     pub semantic_mask: String,
     pub semantic_mask_sha256: String,
+    pub anatomy_mask: String,
+    pub anatomy_mask_sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -564,6 +604,7 @@ pub struct GeneForgePartAssetDefinition {
     pub canonical_bounds: GeneForgeCanonicalBounds,
     pub semantic_regions: BTreeSet<GeneForgeSemanticRegion>,
     pub landmarks: BTreeMap<GeneForgeLandmarkId, [f32; 3]>,
+    pub anatomy_authoring: GeneForgeAnatomyAuthoring,
     pub lods: Vec<GeneForgeGeneratedPartLod>,
 }
 
@@ -958,6 +999,12 @@ impl GeneForgeCreaturePartCatalog {
                     });
                 }
             }
+            validate_anatomy_authoring(asset).map_err(|reason| {
+                GeneForgeCatalogError::InvalidAsset {
+                    asset: asset.id.clone(),
+                    reason,
+                }
+            })?;
             let lods = asset
                 .lods
                 .iter()
@@ -979,6 +1026,7 @@ impl GeneForgeCreaturePartCatalog {
                 if !valid_generated_path(&lod.generated_obj)
                     || !valid_generated_path(&lod.socket_manifest)
                     || !valid_production_path(&lod.semantic_mask)
+                    || !valid_production_path(&lod.anatomy_mask)
                 {
                     return Err(GeneForgeCatalogError::InvalidAssetLodPath {
                         asset: asset.id.clone(),
@@ -989,6 +1037,7 @@ impl GeneForgeCreaturePartCatalog {
                     ("generated OBJ", &lod.generated_obj_sha256),
                     ("socket manifest", &lod.socket_manifest_sha256),
                     ("semantic mask", &lod.semantic_mask_sha256),
+                    ("anatomy mask", &lod.anatomy_mask_sha256),
                 ] {
                     if !valid_sha256(digest) {
                         return Err(GeneForgeCatalogError::InvalidOutputDigest {
@@ -1179,6 +1228,130 @@ fn required_runtime_slots(logical_slot: CreaturePartSlotKey) -> BTreeSet<Creatur
             BTreeSet::from([CreaturePartSlot::LeftLeg, CreaturePartSlot::RightLeg])
         }
         CreaturePartSlotKey::Tail => BTreeSet::from([CreaturePartSlot::TailBack]),
+    }
+}
+
+fn validate_anatomy_authoring(asset: &GeneForgePartAssetDefinition) -> Result<(), &'static str> {
+    let profile = &asset.anatomy_authoring;
+    if profile.schema != "alife.geneforge_anatomy_authoring.v1"
+        || profile.coordinate_space != "semantic-group-local-uv"
+        || profile.default_channel != GeneForgeAnatomyChannel::Primary
+        || profile.zones.is_empty()
+    {
+        return Err("invalid anatomy authoring metadata");
+    }
+    let (required, allowed, groups) = match asset.logical_slot {
+        CreaturePartSlotKey::Head => (
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::Muzzle,
+                GeneForgeAnatomyChannel::InnerEar,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::Muzzle,
+                GeneForgeAnatomyChannel::InnerEar,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from(["head"]),
+        ),
+        CreaturePartSlotKey::Torso => (
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::Belly,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::Belly,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from(["torso"]),
+        ),
+        CreaturePartSlotKey::Arms => (
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::HandsFeet,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::HandsFeet,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from(["left-arm", "right-arm"]),
+        ),
+        CreaturePartSlotKey::Legs => (
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::HandsFeet,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::HandsFeet,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from(["left-leg", "right-leg"]),
+        ),
+        CreaturePartSlotKey::Tail => (
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from([
+                GeneForgeAnatomyChannel::Primary,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                GeneForgeAnatomyChannel::SecondaryMarking,
+            ]),
+            BTreeSet::from(["tail-back"]),
+        ),
+    };
+    if profile.required_channels != required {
+        return Err("anatomy required-channel contract is invalid");
+    }
+    let mut ids = BTreeSet::new();
+    let mut authored = BTreeSet::from([GeneForgeAnatomyChannel::Primary]);
+    for zone in &profile.zones {
+        if zone.id.is_empty()
+            || !ids.insert(zone.id.as_str())
+            || !allowed.contains(&zone.channel)
+            || zone.semantic_groups.is_empty()
+            || !zone
+                .semantic_groups
+                .iter()
+                .all(|group| groups.contains(group.as_str()))
+            || zone.strength == 0
+            || !valid_anatomy_shape(&zone.shape)
+        {
+            return Err("anatomy zone is malformed or violates source ownership");
+        }
+        authored.insert(zone.channel);
+    }
+    if !required.is_subset(&authored) {
+        return Err("anatomy zones do not author every required channel");
+    }
+    Ok(())
+}
+
+fn valid_anatomy_shape(shape: &GeneForgeAnatomyShape) -> bool {
+    let unit = |value: f32| value.is_finite() && (0.0..=1.0).contains(&value);
+    match shape {
+        GeneForgeAnatomyShape::Ellipse { center, radius } => {
+            center.iter().copied().all(unit)
+                && radius.iter().copied().all(unit)
+                && radius.iter().all(|value| *value > 0.0)
+        }
+        GeneForgeAnatomyShape::Polygon { points } => {
+            points.len() >= 3 && points.iter().flatten().copied().all(unit)
+        }
     }
 }
 
@@ -1653,7 +1826,7 @@ mod tests {
         assert_eq!(catalog.importer_version, "alife.geneforge_importer.v2");
         assert_eq!(
             catalog.recipe_sha256,
-            "20c43ca8644bc82dfcba0cc42f7b2ecf01d2e510ac5070f6b024d9ec7edf69e6"
+            "85b3a060ac11529d3d57db816de3eb41c773ac825d8cda9ab0bbcb909cf25b74"
         );
 
         for asset in &catalog.part_assets {
@@ -1666,6 +1839,7 @@ mod tests {
             );
             assert!(required_landmarks(asset.logical_slot)
                 .is_subset(&asset.landmarks.keys().copied().collect()));
+            assert!(validate_anatomy_authoring(asset).is_ok());
             assert_eq!(
                 asset
                     .lods
@@ -1684,6 +1858,8 @@ mod tests {
                 assert!(valid_sha256(&lod.generated_obj_sha256));
                 assert!(valid_sha256(&lod.socket_manifest_sha256));
                 assert!(valid_sha256(&lod.semantic_mask_sha256));
+                assert!(valid_production_path(&lod.anatomy_mask));
+                assert!(valid_sha256(&lod.anatomy_mask_sha256));
             }
             assert!(asset
                 .selector
@@ -1973,6 +2149,40 @@ mod tests {
                 lod: CreaturePartLodId::Full,
                 output: "generated OBJ",
             }) if asset == &CreaturePartAssetId("norn-head".into())
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_invalid_anatomy_authoring_and_paths() {
+        let mut schema = load_geneforge_creature_part_catalog().unwrap();
+        schema.part_assets[0].anatomy_authoring.schema = "unreviewed".into();
+        assert!(matches!(
+            schema.validate(),
+            Err(GeneForgeCatalogError::InvalidAsset { .. })
+        ));
+
+        let mut ownership = load_geneforge_creature_part_catalog().unwrap();
+        ownership.part_assets[0].anatomy_authoring.zones[0].channel =
+            GeneForgeAnatomyChannel::Belly;
+        assert!(matches!(
+            ownership.validate(),
+            Err(GeneForgeCatalogError::InvalidAsset { .. })
+        ));
+
+        let mut shape = load_geneforge_creature_part_catalog().unwrap();
+        shape.part_assets[0].anatomy_authoring.zones[0].shape = GeneForgeAnatomyShape::Polygon {
+            points: vec![[-0.1, 0.0], [0.5, 0.0], [0.5, 0.5]],
+        };
+        assert!(matches!(
+            shape.validate(),
+            Err(GeneForgeCatalogError::InvalidAsset { .. })
+        ));
+
+        let mut path = load_geneforge_creature_part_catalog().unwrap();
+        path.part_assets[0].lods[0].anatomy_mask = "../escaped.png".into();
+        assert!(matches!(
+            path.validate(),
+            Err(GeneForgeCatalogError::InvalidAssetLodPath { .. })
         ));
     }
 

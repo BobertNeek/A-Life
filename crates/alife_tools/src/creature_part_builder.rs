@@ -4,7 +4,7 @@ use std::path::{Component, Path};
 
 use alife_game_app::{
     CreaturePartFamilyDefinition, CreaturePartLodId, CreaturePartSlot, CutPlane, CutVolume,
-    GeneForgeCreaturePartCatalog, GeneForgeDetailRole, GeneForgeDonorId,
+    GeneForgeAnatomyChannel, GeneForgeCreaturePartCatalog, GeneForgeDetailRole, GeneForgeDonorId,
     GeneForgePartAssetDefinition, SocketFrame,
 };
 use alife_world::CreaturePartSlotKey;
@@ -117,6 +117,7 @@ pub struct GeneForgeStagingValidation {
     pub lod_count: usize,
     pub obj_count: usize,
     pub mask_count: usize,
+    pub anatomy_mask_count: usize,
     pub total_bytes: u64,
 }
 
@@ -165,6 +166,7 @@ struct StagedSocketManifest {
     landmarks: BTreeMap<String, [f64; 3]>,
     ground_contacts: Vec<[f64; 3]>,
     semantic_mask: String,
+    anatomy_mask: String,
     lod_topology: StagedObjTopology,
     expected_groups: BTreeSet<String>,
     microdetail: StagedMicrodetail,
@@ -351,6 +353,7 @@ pub fn validate_geneforge_staging(
     let mut obj_contracts = BTreeMap::new();
     let mut socket_contracts = BTreeMap::new();
     let mut mask_contracts = BTreeMap::new();
+    let mut anatomy_contracts = BTreeMap::new();
     let mut output_digest_contracts = BTreeMap::new();
     for (asset_index, asset) in catalog.part_assets.iter().enumerate() {
         if asset.lods.len() != 3 {
@@ -360,7 +363,12 @@ pub fn validate_geneforge_staging(
             )));
         }
         for (lod_index, lod) in asset.lods.iter().enumerate() {
-            for relative in [&lod.generated_obj, &lod.socket_manifest, &lod.semantic_mask] {
+            for relative in [
+                &lod.generated_obj,
+                &lod.socket_manifest,
+                &lod.semantic_mask,
+                &lod.anatomy_mask,
+            ] {
                 validate_relative_staging_path(relative)?;
                 if !expected_outputs.insert(relative.clone()) {
                     return Err(fail(format!("duplicate recipe output path {relative}")));
@@ -369,6 +377,7 @@ pub fn validate_geneforge_staging(
             obj_contracts.insert(lod.generated_obj.clone(), (asset_index, lod_index));
             socket_contracts.insert(lod.socket_manifest.clone(), (asset_index, lod_index));
             mask_contracts.insert(lod.semantic_mask.clone(), (asset_index, lod_index));
+            anatomy_contracts.insert(lod.anatomy_mask.clone(), (asset_index, lod_index));
             output_digest_contracts
                 .insert(lod.generated_obj.clone(), lod.generated_obj_sha256.clone());
             output_digest_contracts.insert(
@@ -377,15 +386,18 @@ pub fn validate_geneforge_staging(
             );
             output_digest_contracts
                 .insert(lod.semantic_mask.clone(), lod.semantic_mask_sha256.clone());
+            output_digest_contracts
+                .insert(lod.anatomy_mask.clone(), lod.anatomy_mask_sha256.clone());
         }
     }
-    if expected_outputs.len() != 14 * 3 * 3
+    if expected_outputs.len() != 14 * 3 * 4
         || obj_contracts.len() != 42
         || socket_contracts.len() != 42
         || mask_contracts.len() != 42
+        || anatomy_contracts.len() != 42
     {
         return Err(fail(
-            "recipe must declare 14 shared assets with three unique OBJ/socket/mask LOD outputs"
+            "recipe must declare 14 shared assets with three unique OBJ/socket/semantic/anatomy LOD outputs"
                 .to_string(),
         ));
     }
@@ -432,7 +444,9 @@ pub fn validate_geneforge_staging(
     for relative in &expected_outputs {
         let path = staging_root.join(relative);
         let metadata = fs::metadata(&path).map_err(|error| {
-            let kind = if relative.ends_with(".png") {
+            let kind = if relative.ends_with("_anatomy.png") {
+                "anatomy mask"
+            } else if relative.ends_with(".png") {
                 "semantic mask"
             } else {
                 "output"
@@ -457,6 +471,18 @@ pub fn validate_geneforge_staging(
             .map_err(|error| fail(format!("failed reading semantic mask {relative}: {error}")))?;
         let expected_colors = expected_asset_semantic_colors(&catalog.part_assets[*asset_index])?;
         validate_semantic_mask_png_bytes(relative, &bytes, &expected_colors)?;
+    }
+    for (relative, (asset_index, lod_index)) in &anatomy_contracts {
+        let asset = &catalog.part_assets[*asset_index];
+        let semantic_relative = &asset.lods[*lod_index].semantic_mask;
+        let semantic = fs::read(staging_root.join(semantic_relative)).map_err(|error| {
+            fail(format!(
+                "failed reading semantic mask {semantic_relative}: {error}"
+            ))
+        })?;
+        let anatomy = fs::read(staging_root.join(relative))
+            .map_err(|error| fail(format!("failed reading anatomy mask {relative}: {error}")))?;
+        validate_anatomy_mask_png_bytes(relative, &semantic, &anatomy, asset.logical_slot)?;
     }
 
     let mut obj_summaries = BTreeMap::new();
@@ -544,6 +570,7 @@ pub fn validate_geneforge_staging(
         lod_count: obj_contracts.len(),
         obj_count: obj_contracts.len(),
         mask_count: mask_contracts.len(),
+        anatomy_mask_count: anatomy_contracts.len(),
         total_bytes,
     })
 }
@@ -962,16 +989,23 @@ fn validate_staged_socket_manifest(
         ));
     }
     let mask_relative = Path::new(&manifest.semantic_mask);
+    let anatomy_relative = Path::new(&manifest.anatomy_mask);
     if mask_relative.is_absolute()
         || mask_relative
             .components()
             .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
         || manifest.semantic_mask != lod.semantic_mask
+        || manifest.anatomy_mask != lod.anatomy_mask
+        || anatomy_relative.is_absolute()
+        || anatomy_relative
+            .components()
+            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
         || !staging_root.join(mask_relative).is_file()
+        || !staging_root.join(anatomy_relative).is_file()
     {
         return Err(fail(format!(
-            "semantic mask reference is missing or unsafe: {}",
-            manifest.semantic_mask
+            "semantic/anatomy mask reference is missing or unsafe: {}, {}",
+            manifest.semantic_mask, manifest.anatomy_mask
         )));
     }
     if manifest.expected_groups != obj.groups {
@@ -1423,6 +1457,124 @@ fn validate_semantic_mask_png_bytes(
         )));
     }
     Ok(())
+}
+
+fn validate_anatomy_mask_png_bytes(
+    label: &str,
+    semantic_bytes: &[u8],
+    anatomy_bytes: &[u8],
+    logical_slot: CreaturePartSlotKey,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let semantic = image::load_from_memory_with_format(semantic_bytes, image::ImageFormat::Png)
+        .map_err(|error| {
+            fail(format!(
+                "semantic mask paired with {label} is invalid: {error}"
+            ))
+        })?
+        .to_rgba8();
+    let anatomy = image::load_from_memory_with_format(anatomy_bytes, image::ImageFormat::Png)
+        .map_err(|error| fail(format!("anatomy mask {label} is not a valid PNG: {error}")))?
+        .to_rgba8();
+    if semantic.dimensions() != (64, 64) || anatomy.dimensions() != (64, 64) {
+        return Err(fail(format!(
+            "anatomy mask {label} and its semantic mask must be exactly 64x64 RGBA8"
+        )));
+    }
+    let (required, allowed) = anatomy_channels_for_slot(logical_slot);
+    let mut used = BTreeSet::new();
+    for (semantic_pixel, anatomy_pixel) in semantic.pixels().zip(anatomy.pixels()) {
+        if (semantic_pixel[3] > 0) != (anatomy_pixel[3] > 0) {
+            return Err(fail(format!(
+                "anatomy mask {label} occupancy does not match its semantic mask"
+            )));
+        }
+        if anatomy_pixel[3] == 0 {
+            if anatomy_pixel.0 != [0, 0, 0, 0] {
+                return Err(fail(format!(
+                    "anatomy mask {label} has a nonzero transparent pixel"
+                )));
+            }
+            continue;
+        }
+        let channel =
+            anatomy_channel_from_rgb([anatomy_pixel[0], anatomy_pixel[1], anatomy_pixel[2]])
+                .ok_or_else(|| {
+                    fail(format!(
+                        "anatomy mask {label} contains an unknown channel color"
+                    ))
+                })?;
+        if !allowed.contains(&channel) {
+            return Err(fail(format!(
+                "anatomy mask {label} violates source channel ownership"
+            )));
+        }
+        used.insert(channel);
+    }
+    if !required.is_subset(&used) {
+        return Err(fail(format!(
+            "anatomy mask {label} lacks required source channel coverage"
+        )));
+    }
+    Ok(())
+}
+
+fn anatomy_channel_from_rgb(rgb: [u8; 3]) -> Option<GeneForgeAnatomyChannel> {
+    match rgb {
+        [248, 248, 248] => Some(GeneForgeAnatomyChannel::Primary),
+        [232, 176, 72] => Some(GeneForgeAnatomyChannel::Belly),
+        [226, 112, 128] => Some(GeneForgeAnatomyChannel::Muzzle),
+        [238, 86, 154] => Some(GeneForgeAnatomyChannel::InnerEar),
+        [72, 174, 218] => Some(GeneForgeAnatomyChannel::HandsFeet),
+        [64, 52, 72] => Some(GeneForgeAnatomyChannel::KeratinSkin),
+        [84, 92, 214] => Some(GeneForgeAnatomyChannel::SecondaryMarking),
+        _ => None,
+    }
+}
+
+fn anatomy_channels_for_slot(
+    slot: CreaturePartSlotKey,
+) -> (
+    BTreeSet<GeneForgeAnatomyChannel>,
+    BTreeSet<GeneForgeAnatomyChannel>,
+) {
+    let primary = GeneForgeAnatomyChannel::Primary;
+    let secondary = GeneForgeAnatomyChannel::SecondaryMarking;
+    match slot {
+        CreaturePartSlotKey::Head => {
+            let channels = BTreeSet::from([
+                primary,
+                GeneForgeAnatomyChannel::Muzzle,
+                GeneForgeAnatomyChannel::InnerEar,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                secondary,
+            ]);
+            (channels.clone(), channels)
+        }
+        CreaturePartSlotKey::Torso => (
+            BTreeSet::from([primary, GeneForgeAnatomyChannel::Belly, secondary]),
+            BTreeSet::from([
+                primary,
+                GeneForgeAnatomyChannel::Belly,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                secondary,
+            ]),
+        ),
+        CreaturePartSlotKey::Arms | CreaturePartSlotKey::Legs => (
+            BTreeSet::from([primary, GeneForgeAnatomyChannel::HandsFeet, secondary]),
+            BTreeSet::from([
+                primary,
+                GeneForgeAnatomyChannel::HandsFeet,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                secondary,
+            ]),
+        ),
+        CreaturePartSlotKey::Tail => {
+            let channels =
+                BTreeSet::from([primary, GeneForgeAnatomyChannel::KeratinSkin, secondary]);
+            (channels.clone(), channels)
+        }
+    }
 }
 
 fn analyze_obj_topology(text: &str) -> Result<StagedObjTopology, CreaturePartBuilderError> {

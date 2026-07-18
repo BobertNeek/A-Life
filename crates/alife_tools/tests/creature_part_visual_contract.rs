@@ -76,6 +76,7 @@ fn validator_fixture() -> &'static PathBuf {
                     ("generated_obj", "generated_obj_sha256"),
                     ("socket_manifest", "socket_manifest_sha256"),
                     ("semantic_mask", "semantic_mask_sha256"),
+                    ("anatomy_mask", "anatomy_mask_sha256"),
                 ] {
                     let relative = lod[path_field].as_str().unwrap();
                     lod[digest_field] =
@@ -117,6 +118,17 @@ fn first_with_extension(root: &Path, extension: &str) -> PathBuf {
     walk(root)
         .into_iter()
         .find(|path| path.extension().is_some_and(|value| value == extension))
+        .unwrap()
+}
+
+fn first_named_output(root: &Path, suffix: &str) -> PathBuf {
+    walk(root)
+        .into_iter()
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.ends_with(suffix))
+        })
         .unwrap()
 }
 
@@ -183,6 +195,7 @@ fn fixture_and_real_staged_outputs_pass_the_complete_visual_contract() {
     assert_eq!(fixture_receipt.lod_count, 42);
     assert_eq!(fixture_receipt.obj_count, 42);
     assert_eq!(fixture_receipt.mask_count, 42);
+    assert_eq!(fixture_receipt.anatomy_mask_count, 42);
 
     let real = workspace_path("target/artifacts/creature_parts/geneforge-staging");
     assert!(
@@ -193,6 +206,8 @@ fn fixture_and_real_staged_outputs_pass_the_complete_visual_contract() {
     assert_eq!(real_receipt.donor_count, 3);
     assert_eq!(real_receipt.asset_count, 14);
     assert_eq!(real_receipt.lod_count, 42);
+    assert_eq!(real_receipt.mask_count, 42);
+    assert_eq!(real_receipt.anatomy_mask_count, 42);
     assert!(real_receipt.total_bytes <= 8 * 1024 * 1024);
 }
 
@@ -311,12 +326,12 @@ fn staged_validator_rejects_missing_masks_and_budget_overrun() {
 
     let root = mutation_root("mask");
     copy_tree(&source, &root);
-    fs::remove_file(first_with_extension(&root, "png")).unwrap();
+    fs::remove_file(first_named_output(&root, "_semantic.png")).unwrap();
     assert_rejected(&root, "mask");
 
     let root = mutation_root("uniform-mask");
     copy_tree(&source, &root);
-    let mask = first_with_extension(&root, "png");
+    let mask = first_named_output(&root, "_semantic.png");
     let mut image = image::open(&mask).unwrap().to_rgba8();
     for pixel in image.pixels_mut() {
         if pixel[3] > 0 {
@@ -335,6 +350,90 @@ fn staged_validator_rejects_missing_masks_and_budget_overrun() {
     let obj = first_with_extension(&root, "obj");
     fs::write(&obj, vec![b' '; 512 * 1024 + 1]).unwrap();
     assert_rejected(&root, "512 KiB");
+}
+
+#[test]
+fn staged_validator_rejects_anatomy_corruption_path_and_digest_drift() {
+    let source = fixture_staging();
+
+    let root = mutation_root("missing-anatomy");
+    copy_tree(&source, &root);
+    fs::remove_file(first_named_output(&root, "_anatomy.png")).unwrap();
+    assert_rejected(&root, "anatomy mask");
+
+    let root = mutation_root("anatomy-color");
+    copy_tree(&source, &root);
+    let anatomy = first_named_output(&root, "_anatomy.png");
+    let mut image = image::open(&anatomy).unwrap().to_rgba8();
+    let pixel = image.pixels_mut().find(|pixel| pixel[3] > 0).unwrap();
+    pixel.0 = [1, 2, 3, pixel[3]];
+    image.save(&anatomy).unwrap();
+    assert_rejected(&root, "unknown channel color");
+
+    let root = mutation_root("anatomy-source-ownership");
+    copy_tree(&source, &root);
+    let anatomy = first_named_output(&root, "norn_torso_full_anatomy.png");
+    let mut image = image::open(&anatomy).unwrap().to_rgba8();
+    let pixel = image.pixels_mut().find(|pixel| pixel[3] > 0).unwrap();
+    pixel.0 = [226, 112, 128, pixel[3]];
+    image.save(&anatomy).unwrap();
+    assert_rejected(&root, "source channel ownership");
+
+    let root = mutation_root("anatomy-required-coverage");
+    copy_tree(&source, &root);
+    let anatomy = first_named_output(&root, "norn_tail_full_anatomy.png");
+    let mut image = image::open(&anatomy).unwrap().to_rgba8();
+    for pixel in image.pixels_mut() {
+        if pixel.0[..3] == [64, 52, 72] {
+            pixel.0[..3].copy_from_slice(&[248, 248, 248]);
+        }
+    }
+    image.save(&anatomy).unwrap();
+    assert_rejected(&root, "required source channel coverage");
+
+    let root = mutation_root("anatomy-occupancy");
+    copy_tree(&source, &root);
+    let anatomy = first_named_output(&root, "_anatomy.png");
+    let mut image = image::open(&anatomy).unwrap().to_rgba8();
+    let pixel = image.pixels_mut().find(|pixel| pixel[3] > 0).unwrap();
+    pixel.0 = [0, 0, 0, 0];
+    image.save(&anatomy).unwrap();
+    assert_rejected(&root, "occupancy");
+
+    let root = mutation_root("anatomy-socket-path");
+    copy_tree(&source, &root);
+    mutate_socket(&root, |value| {
+        value["anatomy_mask"] = serde_json::json!("../escaped_anatomy.png")
+    });
+    assert_rejected(&root, "semantic/anatomy mask reference");
+
+    let root = mutation_root("anatomy-digest");
+    copy_tree(&source, &root);
+    let anatomy = first_named_output(&root, "_anatomy.png");
+    let mut image = image::open(&anatomy).unwrap().to_rgba8();
+    let pixel = image.pixels_mut().find(|pixel| pixel[3] > 0).unwrap();
+    pixel[3] = pixel[3].saturating_sub(1).max(1);
+    image.save(&anatomy).unwrap();
+    rewrite_receipt_digest(&root, &anatomy);
+    assert_rejected(&root, "external catalog digest drift");
+
+    let root = mutation_root("anatomy-receipt-output-set");
+    copy_tree(&source, &root);
+    let receipt_path = root.join("build_receipt.json");
+    let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    let anatomy_key = receipt["outputs"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .find(|key| key.ends_with("_anatomy.png"))
+        .unwrap()
+        .clone();
+    receipt["outputs"]
+        .as_object_mut()
+        .unwrap()
+        .remove(&anatomy_key);
+    fs::write(receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+    assert_rejected(&root, "outputs do not exactly match");
 }
 
 #[test]
@@ -394,7 +493,7 @@ fn staged_validator_rejects_component_loss_and_asset_independent_mask_colors() {
 
     let root = mutation_root("asset-independent-mask-colors");
     copy_tree(&source, &root);
-    let mask = first_with_extension(&root, "png");
+    let mask = first_named_output(&root, "_semantic.png");
     let image = RgbaImage::from_fn(64, 64, |x, y| {
         let colors = [
             [230, 92, 88],

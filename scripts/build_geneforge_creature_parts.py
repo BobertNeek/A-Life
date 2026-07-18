@@ -61,6 +61,29 @@ GROUP_REGIONS = {
         )
     )
 }
+ANATOMY_COLORS = {
+    "primary": (248, 248, 248),
+    "belly": (232, 176, 72),
+    "muzzle": (226, 112, 128),
+    "inner-ear": (238, 86, 154),
+    "hands-feet": (72, 174, 218),
+    "keratin-skin": (64, 52, 72),
+    "secondary-marking": (84, 92, 214),
+}
+ALLOWED_ANATOMY_CHANNELS = {
+    "head": {"primary", "muzzle", "inner-ear", "keratin-skin", "secondary-marking"},
+    "torso": {"primary", "belly", "keratin-skin", "secondary-marking"},
+    "arms": {"primary", "hands-feet", "keratin-skin", "secondary-marking"},
+    "legs": {"primary", "hands-feet", "keratin-skin", "secondary-marking"},
+    "tail": {"primary", "keratin-skin", "secondary-marking"},
+}
+REQUIRED_ANATOMY_CHANNELS = {
+    "head": {"primary", "muzzle", "inner-ear", "keratin-skin", "secondary-marking"},
+    "torso": {"primary", "belly", "secondary-marking"},
+    "arms": {"primary", "hands-feet", "secondary-marking"},
+    "legs": {"primary", "hands-feet", "secondary-marking"},
+    "tail": {"primary", "keratin-skin", "secondary-marking"},
+}
 
 
 class ImportFailure(RuntimeError):
@@ -103,7 +126,65 @@ def load_recipe(path: Path) -> dict:
             raise ImportFailure(f"{asset.get('id')} has an unsupported geometry policy")
         if set(selector.get("object_visscripts", {})) != set(selector.get("include_objects", [])):
             raise ImportFailure(f"{asset.get('id')} lacks exact kc3dsbpy_visscript contracts")
+        validate_anatomy_authoring(asset)
+        for lod in asset.get("lods", []):
+            for field in ("anatomy_mask", "anatomy_mask_sha256"):
+                if field not in lod:
+                    raise ImportFailure(f"{asset.get('id')} {lod.get('lod')} lacks {field}")
     return recipe
+
+
+def validate_anatomy_authoring(asset: dict) -> None:
+    profile = asset.get("anatomy_authoring")
+    slot = asset.get("logical_slot")
+    if not isinstance(profile, dict) or profile.get("schema") != "alife.geneforge_anatomy_authoring.v1":
+        raise ImportFailure(f"{asset.get('id')} has invalid anatomy authoring schema")
+    if profile.get("coordinate_space") != "semantic-group-local-uv" or profile.get("default_channel") != "primary":
+        raise ImportFailure(f"{asset.get('id')} has invalid anatomy authoring coordinates/default")
+    if slot not in ALLOWED_ANATOMY_CHANNELS:
+        raise ImportFailure(f"{asset.get('id')} has unsupported anatomy slot {slot}")
+    zones = profile.get("zones")
+    if not isinstance(zones, list) or not zones:
+        raise ImportFailure(f"{asset.get('id')} has no anatomy zones")
+    ids = set()
+    authored_channels = {"primary"}
+    for zone in zones:
+        zone_id = zone.get("id")
+        channel = zone.get("channel")
+        groups = zone.get("semantic_groups")
+        shape = zone.get("shape", {})
+        if not isinstance(zone_id, str) or not zone_id or zone_id in ids:
+            raise ImportFailure(f"{asset.get('id')} has invalid/duplicate anatomy zone id")
+        ids.add(zone_id)
+        if channel not in ALLOWED_ANATOMY_CHANNELS[slot]:
+            raise ImportFailure(f"{asset.get('id')} anatomy channel {channel} is not owned by {slot}")
+        authored_channels.add(channel)
+        if not isinstance(groups, list) or not groups or any(group not in GROUP_REGIONS for group in groups):
+            raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has unknown semantic group")
+        if not isinstance(zone.get("priority"), int) or not isinstance(zone.get("strength"), int) or not 1 <= zone["strength"] <= 255:
+            raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has invalid priority/strength")
+        kind = shape.get("kind")
+        if kind == "ellipse":
+            center, radius = shape.get("center"), shape.get("radius")
+            if not _unit_pair(center) or not _positive_unit_pair(radius):
+                raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has malformed ellipse")
+        elif kind == "polygon":
+            points = shape.get("points")
+            if not isinstance(points, list) or len(points) < 3 or any(not _unit_pair(point) for point in points):
+                raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has malformed polygon")
+        else:
+            raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has unknown shape")
+    missing = REQUIRED_ANATOMY_CHANNELS[slot] - authored_channels
+    if missing:
+        raise ImportFailure(f"{asset.get('id')} anatomy profile lacks channels: {sorted(missing)}")
+
+
+def _unit_pair(value) -> bool:
+    return isinstance(value, list) and len(value) == 2 and all(isinstance(v, (int, float)) and math.isfinite(v) and 0.0 <= v <= 1.0 for v in value)
+
+
+def _positive_unit_pair(value) -> bool:
+    return _unit_pair(value) and all(v > 0.0 for v in value)
 
 
 def ensure_artifact_path(path: Path, label: str) -> Path:
@@ -390,6 +471,107 @@ def png_bytes(width: int, height: int, pixels: bytes) -> bytes:
     return signature + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b"")
 
 
+def decode_rgba_png(data: bytes) -> tuple[int, int, bytes]:
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ImportFailure("anatomy source is not a PNG")
+    offset = 8
+    width = height = None
+    compressed = bytearray()
+    while offset < len(data):
+        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        kind = data[offset + 4 : offset + 8]
+        payload = data[offset + 8 : offset + 8 + length]
+        if zlib.crc32(kind + payload) & 0xFFFFFFFF != struct.unpack(">I", data[offset + 8 + length : offset + 12 + length])[0]:
+            raise ImportFailure("anatomy source PNG has an invalid chunk checksum")
+        offset += 12 + length
+        if kind == b"IHDR":
+            width, height, depth, color, compression, filtering, interlace = struct.unpack(">IIBBBBB", payload)
+            if (depth, color, compression, filtering, interlace) != (8, 6, 0, 0, 0):
+                raise ImportFailure("anatomy source PNG must be deterministic RGBA8")
+        elif kind == b"IDAT":
+            compressed.extend(payload)
+        elif kind == b"IEND":
+            break
+    if width is None or height is None:
+        raise ImportFailure("anatomy source PNG is missing IHDR")
+    raw = zlib.decompress(bytes(compressed))
+    stride = width * 4
+    if len(raw) != height * (stride + 1):
+        raise ImportFailure("anatomy source PNG has invalid decompressed length")
+    pixels = bytearray()
+    for row in range(height):
+        start = row * (stride + 1)
+        if raw[start] != 0:
+            raise ImportFailure("anatomy source PNG must use deterministic filter zero")
+        pixels.extend(raw[start + 1 : start + 1 + stride])
+    return width, height, bytes(pixels)
+
+
+def _point_in_polygon(point: tuple[float, float], vertices: list[list[float]]) -> bool:
+    x, y = point
+    inside = False
+    previous = vertices[-1]
+    for current in vertices:
+        x0, y0 = previous
+        x1, y1 = current
+        if (y0 > y) != (y1 > y):
+            crossing = (x1 - x0) * (y - y0) / (y1 - y0) + x0
+            if x <= crossing:
+                inside = not inside
+        previous = current
+    return inside
+
+
+def _zone_contains(shape: dict, uv: tuple[float, float]) -> bool:
+    if shape["kind"] == "ellipse":
+        dx = (uv[0] - shape["center"][0]) / shape["radius"][0]
+        dy = (uv[1] - shape["center"][1]) / shape["radius"][1]
+        return dx * dx + dy * dy <= 1.0
+    return _point_in_polygon(uv, shape["points"])
+
+
+def anatomy_mask(semantic_png: bytes, profile: dict, logical_slot: str) -> bytes:
+    validate_anatomy_authoring({"id": "raster-input", "logical_slot": logical_slot, "anatomy_authoring": profile})
+    width, height, semantic = decode_rgba_png(semantic_png)
+    if (width, height) != (64, 64):
+        raise ImportFailure("semantic mask for anatomy must be exactly 64x64 RGBA8")
+    color_to_group = {tuple(color[:3]): group for group, color in GROUP_COLORS.items()}
+    zones = sorted(profile["zones"], key=lambda zone: (zone["priority"], zone["id"]))
+    output = bytearray(width * height * 4)
+    used_channels = set()
+    for y in range(height):
+        for x in range(width):
+            offset = (y * width + x) * 4
+            alpha = semantic[offset + 3]
+            if alpha == 0:
+                continue
+            semantic_color = tuple(semantic[offset : offset + 3])
+            group = color_to_group.get(semantic_color)
+            if group is None:
+                raise ImportFailure(f"semantic mask contains unknown occupied color {semantic_color}")
+            # Detail cells stay Primary; the coat baker treats their semantic roles.
+            channel = "primary"
+            strength = 255
+            selected_priority = None
+            atlas_uv = ((x + 0.5) / width, (y + 0.5) / height)
+            local_uv = semantic_source_uv(group, atlas_uv)
+            if not group.startswith("head."):
+                for zone in zones:
+                    if group not in zone["semantic_groups"] or not _zone_contains(zone["shape"], local_uv):
+                        continue
+                    if selected_priority == zone["priority"] and channel != zone["channel"]:
+                        raise ImportFailure(f"equal-priority anatomy zones conflict at pixel {x},{y}")
+                    channel = zone["channel"]
+                    strength = zone["strength"]
+                    selected_priority = zone["priority"]
+            output[offset : offset + 4] = bytes((*ANATOMY_COLORS[channel], strength))
+            used_channels.add(channel)
+    missing = REQUIRED_ANATOMY_CHANNELS[logical_slot] - used_channels
+    if missing:
+        raise ImportFailure(f"anatomy raster lacks required {logical_slot} channels: {sorted(missing)}")
+    return png_bytes(width, height, bytes(output))
+
+
 def draw_line(pixels: bytearray, width: int, height: int, start, end, color) -> None:
     x0, y0 = start
     x1, y1 = end
@@ -484,6 +666,7 @@ def command_bind_output_digests(args, recipe: dict) -> None:
                 ("generated_obj", "generated_obj_sha256"),
                 ("socket_manifest", "socket_manifest_sha256"),
                 ("semantic_mask", "semantic_mask_sha256"),
+                ("anatomy_mask", "anatomy_mask_sha256"),
             ):
                 relative = lod[path_field]
                 raw = Path(relative)
@@ -524,6 +707,166 @@ def command_bind_output_digests(args, recipe: dict) -> None:
     print(f"bound_outputs={len(bound_outputs)}")
     print(f"recipe_sha256={recipe['recipe_sha256']}")
     print(f"recipe_output={output}")
+
+
+def _verify_receipt_outputs(staging: Path, receipt: dict) -> None:
+    if receipt.get("schema") != "alife.geneforge_build_receipt.v2":
+        raise ImportFailure("augment-anatomy requires a v2 build receipt")
+    outputs = receipt.get("outputs")
+    if not isinstance(outputs, dict):
+        raise ImportFailure("build receipt outputs are missing")
+    for relative, expected in outputs.items():
+        path = staging / Path(relative)
+        if not path.is_file() or sha256_file(path) != expected:
+            raise ImportFailure(f"existing staged output digest mismatch: {relative}")
+
+
+def _validate_augmented_tree(staging: Path, recipe: dict) -> dict[str, str]:
+    outputs = {}
+    if len(recipe["part_assets"]) != 14:
+        raise ImportFailure("anatomy augmentation requires 14 production assets")
+    for asset in recipe["part_assets"]:
+        for lod in asset["lods"]:
+            semantic_path = staging / Path(lod["semantic_mask"])
+            anatomy_path = staging / Path(lod["anatomy_mask"])
+            semantic_size, _, semantic = decode_rgba_png(semantic_path.read_bytes())
+            anatomy_size, _, anatomy = decode_rgba_png(anatomy_path.read_bytes())
+            if semantic_size != 64 or anatomy_size != 64:
+                raise ImportFailure("semantic/anatomy staging masks must be 64x64")
+            used = set()
+            for offset in range(0, len(semantic), 4):
+                semantic_occupied = semantic[offset + 3] > 0
+                anatomy_occupied = anatomy[offset + 3] > 0
+                if semantic_occupied != anatomy_occupied:
+                    raise ImportFailure(f"semantic/anatomy occupancy mismatch: {lod['anatomy_mask']}")
+                if not anatomy_occupied:
+                    if anatomy[offset : offset + 4] != b"\0\0\0\0":
+                        raise ImportFailure(f"transparent anatomy pixel is nonzero: {lod['anatomy_mask']}")
+                    continue
+                rgb = tuple(anatomy[offset : offset + 3])
+                channel = next((name for name, color in ANATOMY_COLORS.items() if color == rgb), None)
+                if channel is None:
+                    raise ImportFailure(f"unknown anatomy color {rgb}: {lod['anatomy_mask']}")
+                if channel not in ALLOWED_ANATOMY_CHANNELS[asset["logical_slot"]]:
+                    raise ImportFailure(f"anatomy channel {channel} is not owned by {asset['logical_slot']}")
+                used.add(channel)
+            missing = REQUIRED_ANATOMY_CHANNELS[asset["logical_slot"]] - used
+            if missing:
+                raise ImportFailure(f"{asset['id']} {lod['lod']} anatomy coverage lacks {sorted(missing)}")
+            socket = json.loads((staging / Path(lod["socket_manifest"])).read_text(encoding="utf-8"))
+            if socket.get("schema") != "alife.creature_part_sockets.v2" or socket.get("anatomy_mask") != lod["anatomy_mask"]:
+                raise ImportFailure(f"socket anatomy metadata mismatch: {lod['socket_manifest']}")
+            for field in ("generated_obj", "socket_manifest", "semantic_mask", "anatomy_mask"):
+                relative = Path(lod[field])
+                path = staging / relative
+                if not path.is_file():
+                    raise ImportFailure(f"missing augmented output: {lod[field]}")
+                if path.stat().st_size > 512 * 1024:
+                    raise ImportFailure(f"augmented output exceeds 512 KiB: {lod[field]}")
+                outputs[relative.as_posix()] = sha256_file(path)
+    if len(outputs) != 168:
+        raise ImportFailure(f"augmented output set must contain 168 files; found {len(outputs)}")
+    if sum((staging / Path(relative)).stat().st_size for relative in outputs) > 8 * 1024 * 1024:
+        raise ImportFailure("augmented production pack exceeds 8 MiB")
+    return outputs
+
+
+def command_augment_anatomy(args, recipe: dict) -> None:
+    staging = ensure_artifact_path(args.staging, "anatomy staging input")
+    receipt_path = staging / "build_receipt.json"
+    if not receipt_path.is_file():
+        raise ImportFailure(f"missing staged build receipt: {receipt_path}")
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    _verify_receipt_outputs(staging, receipt)
+    legacy_outputs = {
+        lod[field]
+        for asset in recipe["part_assets"]
+        for lod in asset["lods"]
+        for field in ("generated_obj", "socket_manifest", "semantic_mask")
+    }
+    augmented_outputs = legacy_outputs | {
+        lod["anatomy_mask"]
+        for asset in recipe["part_assets"]
+        for lod in asset["lods"]
+    }
+    receipt_outputs = set(receipt["outputs"])
+    if receipt_outputs not in (legacy_outputs, augmented_outputs):
+        raise ImportFailure(
+            "existing build receipt must contain exactly 126 legacy or 168 augmented outputs"
+        )
+    old_stable = {
+        lod[field]: sha256_file(staging / Path(lod[field]))
+        for asset in recipe["part_assets"]
+        for lod in asset["lods"]
+        for field in ("generated_obj", "semantic_mask")
+    }
+    temporary = staging.with_name(staging.name + f".augment-tmp-{os.getpid()}")
+    backup = staging.with_name(staging.name + f".augment-rollback-{os.getpid()}")
+    output = args.output.resolve()
+    recipe_temporary = output.with_name(f".{output.name}.augment-tmp-{os.getpid()}")
+    if temporary.exists():
+        shutil.rmtree(temporary)
+    if backup.exists():
+        shutil.rmtree(backup)
+    shutil.copytree(staging, temporary)
+    try:
+        for asset in recipe["part_assets"]:
+            for lod in asset["lods"]:
+                semantic_path = temporary / Path(lod["semantic_mask"])
+                anatomy_path = staged_output_path(temporary, lod["anatomy_mask"])
+                anatomy_path.write_bytes(anatomy_mask(semantic_path.read_bytes(), asset["anatomy_authoring"], asset["logical_slot"]))
+                socket_path = temporary / Path(lod["socket_manifest"])
+                socket = json.loads(socket_path.read_text(encoding="utf-8"))
+                if socket.get("schema") != "alife.creature_part_sockets.v2" or socket.get("semantic_mask") != lod["semantic_mask"]:
+                    raise ImportFailure(f"existing socket manifest is incompatible: {lod['socket_manifest']}")
+                socket["anatomy_mask"] = lod["anatomy_mask"]
+                socket_path.write_text(json.dumps(socket, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        outputs = _validate_augmented_tree(temporary, recipe)
+        for asset in recipe["part_assets"]:
+            for lod in asset["lods"]:
+                for path_field, digest_field in (
+                    ("generated_obj", "generated_obj_sha256"),
+                    ("socket_manifest", "socket_manifest_sha256"),
+                    ("semantic_mask", "semantic_mask_sha256"),
+                    ("anatomy_mask", "anatomy_mask_sha256"),
+                ):
+                    lod[digest_field] = outputs[lod[path_field]]
+        recipe["recipe_sha256"] = canonical_recipe_digest(recipe)
+        receipt["recipe_sha256"] = recipe["recipe_sha256"]
+        receipt["outputs"] = outputs
+        for source in receipt.get("sources", []):
+            donor_outputs = [
+                lod[field]
+                for asset in recipe["part_assets"] if asset["donor"] == source["donor"]
+                for lod in asset["lods"]
+                for field in ("generated_obj", "socket_manifest", "semantic_mask", "anatomy_mask")
+            ]
+            source["outputs"] = donor_outputs
+            source["output_count"] = len(donor_outputs)
+        (temporary / "build_receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        after_stable = {relative: sha256_file(temporary / Path(relative)) for relative in old_stable}
+        if after_stable != old_stable:
+            raise ImportFailure("augment-anatomy changed existing OBJ or semantic bytes")
+        recipe_temporary.write_text(json.dumps(recipe, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+        staging.replace(backup)
+        try:
+            temporary.replace(staging)
+            os.replace(recipe_temporary, output)
+        except BaseException:
+            if staging.exists():
+                shutil.rmtree(staging)
+            backup.replace(staging)
+            raise
+        shutil.rmtree(backup)
+    except BaseException:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+        recipe_temporary.unlink(missing_ok=True)
+        raise
+    print("anatomy_masks=42")
+    print("outputs=168")
+    print("unchanged_obj_semantic=84")
+    print(f"recipe_sha256={recipe['recipe_sha256']}")
 
 
 def atomic_replace_pair(
@@ -573,10 +916,11 @@ def build_parser() -> argparse.ArgumentParser:
         "build",
         "preview",
         "bind-output-digests",
+        "augment-anatomy",
     ):
         child = subparsers.add_parser(command)
         child.add_argument("--recipes", type=Path, required=True)
-        if command == "bind-output-digests":
+        if command in ("bind-output-digests", "augment-anatomy"):
             child.add_argument("--staging", type=Path, required=True)
             child.add_argument("--output", type=Path, required=True)
             continue
@@ -598,6 +942,9 @@ def outer_main() -> None:
     recipe = load_recipe(args.recipes)
     if args.command == "bind-output-digests":
         command_bind_output_digests(args, recipe)
+        return
+    if args.command == "augment-anatomy":
+        command_augment_anatomy(args, recipe)
         return
     args.source_root = args.source_root.resolve()
     blender = discover_blender(args.blender_exe)
@@ -2140,6 +2487,7 @@ def socket_manifest(
     bounds,
     ground_contacts,
     mask_path: str,
+    anatomy_path: str,
     topology: dict,
     microdetail_files: list[str],
     bridge_geometry: list[dict],
@@ -2166,6 +2514,7 @@ def socket_manifest(
         "landmarks": landmarks,
         "ground_contacts": ground_contacts,
         "semantic_mask": mask_path,
+        "anatomy_mask": anatomy_path,
         "lod_topology": topology,
         "expected_groups": sorted(
             {
@@ -2279,7 +2628,13 @@ def build_scene_outputs(
             obj_path = staged_output_path(staging, contract["generated_obj"])
             socket_path = staged_output_path(staging, contract["socket_manifest"])
             mask_path = staged_output_path(staging, contract["semantic_mask"])
+            anatomy_path = staged_output_path(staging, contract["anatomy_mask"])
             obj_path.write_bytes(emit_obj(lod_grouped))
+            semantic_bytes = semantic_mask(lod_grouped, source_samples)
+            mask_path.write_bytes(semantic_bytes)
+            anatomy_path.write_bytes(
+                anatomy_mask(semantic_bytes, asset["anatomy_authoring"], asset["logical_slot"])
+            )
             socket_path.write_text(
                 json.dumps(
                     socket_manifest(
@@ -2291,6 +2646,7 @@ def build_scene_outputs(
                         lod_bounds,
                         contacts,
                         contract["semantic_mask"],
+                        contract["anatomy_mask"],
                         lod_topology,
                         detail_source_files,
                         bridge_geometry,
@@ -2301,8 +2657,7 @@ def build_scene_outputs(
                 + "\n",
                 encoding="utf-8",
             )
-            mask_path.write_bytes(semantic_mask(lod_grouped, source_samples))
-            outputs.extend((obj_path, socket_path, mask_path))
+            outputs.extend((obj_path, socket_path, mask_path, anatomy_path))
     return {
         "donor": donor,
         "topology": topology,

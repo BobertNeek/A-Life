@@ -71,6 +71,22 @@ EXPECTED_GROUP_COLORS = {
     "head.teeth": (235, 222, 188),
     "head.tongue": (213, 92, 126),
 }
+EXPECTED_ANATOMY_COLORS = {
+    "primary": (248, 248, 248),
+    "belly": (232, 176, 72),
+    "muzzle": (226, 112, 128),
+    "inner-ear": (238, 86, 154),
+    "hands-feet": (72, 174, 218),
+    "keratin-skin": (64, 52, 72),
+    "secondary-marking": (84, 92, 214),
+}
+REQUIRED_ANATOMY_CHANNELS = {
+    "head": {"primary", "muzzle", "inner-ear", "keratin-skin", "secondary-marking"},
+    "torso": {"primary", "belly", "secondary-marking"},
+    "arms": {"primary", "hands-feet", "secondary-marking"},
+    "legs": {"primary", "hands-feet", "secondary-marking"},
+    "tail": {"primary", "keratin-skin", "secondary-marking"},
+}
 AUDITED_NEVER_OR_INVALID = {
     "ear_4L_chichi",
     "Ear_4L_civet",
@@ -246,6 +262,119 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
             EXPECTED_SOURCE_HASHES,
         )
 
+    def test_outer_v2_contracts_remain_stable_with_anatomy_authoring_v1(self) -> None:
+        self.assertEqual(self.recipe["schema"], "alife.geneforge_creature_part_catalog.v2")
+        self.assertEqual(self.recipe["schema_version"], 2)
+        self.assertEqual(self.recipe["importer_version"], "alife.geneforge_importer.v2")
+        self.assertEqual(len(self.recipe["part_assets"]), 14)
+        for asset in self.recipe["part_assets"]:
+            authoring = asset["anatomy_authoring"]
+            self.assertEqual(authoring["schema"], "alife.geneforge_anatomy_authoring.v1")
+            self.assertEqual(authoring["coordinate_space"], "semantic-group-local-uv")
+            self.assertEqual(authoring["default_channel"], "primary")
+            channels = {zone["channel"] for zone in authoring["zones"]} | {"primary"}
+            self.assertTrue(REQUIRED_ANATOMY_CHANNELS[asset["logical_slot"]] <= channels)
+
+    def test_all_lods_have_unique_confined_anatomy_outputs(self) -> None:
+        paths = []
+        for asset in self.recipe["part_assets"]:
+            for lod in asset["lods"]:
+                self.assertRegex(lod["anatomy_mask_sha256"], r"^[0-9a-f]{64}$")
+                path = PurePosixPath(lod["anatomy_mask"])
+                self.assertFalse(path.is_absolute())
+                self.assertNotIn("..", path.parts)
+                self.assertEqual(path.suffix, ".png")
+                paths.append(path.as_posix())
+        self.assertEqual(len(paths), 42)
+        self.assertEqual(len(set(paths)), 42)
+
+    def test_anatomy_rasterizer_rejects_conflicting_equal_priority_overlap(self) -> None:
+        semantic = importer.png_bytes(64, 64, bytes([230, 92, 88, 255]) * (64 * 64))
+        profile = {
+            "schema": "alife.geneforge_anatomy_authoring.v1",
+            "coordinate_space": "semantic-group-local-uv",
+            "default_channel": "primary",
+            "zones": [
+                {"id": "a", "channel": "muzzle", "semantic_groups": ["head"], "shape": {"kind": "ellipse", "center": [0.5, 0.5], "radius": [0.4, 0.4]}, "strength": 255, "priority": 10},
+                {"id": "b", "channel": "inner-ear", "semantic_groups": ["head"], "shape": {"kind": "ellipse", "center": [0.5, 0.5], "radius": [0.4, 0.4]}, "strength": 255, "priority": 10},
+                {"id": "c", "channel": "keratin-skin", "semantic_groups": ["head"], "shape": {"kind": "ellipse", "center": [0.05, 0.05], "radius": [0.02, 0.02]}, "strength": 255, "priority": 20},
+                {"id": "d", "channel": "secondary-marking", "semantic_groups": ["head"], "shape": {"kind": "ellipse", "center": [0.95, 0.95], "radius": [0.02, 0.02]}, "strength": 255, "priority": 20},
+            ],
+        }
+        with self.assertRaisesRegex(importer.ImportFailure, "equal-priority"):
+            importer.anatomy_mask(semantic, profile, "head")
+
+    def test_anatomy_rasterizer_is_deterministic_and_preserves_occupancy(self) -> None:
+        semantic_pixels = bytearray(64 * 64 * 4)
+        for y in range(1, 21):
+            for x in range(1, 15):
+                offset = (y * 64 + x) * 4
+                semantic_pixels[offset : offset + 4] = bytes((*EXPECTED_GROUP_COLORS["head"], 37 + ((x + y) % 200)))
+        semantic = importer.png_bytes(64, 64, bytes(semantic_pixels))
+        profile = self.assets["norn-head"]["anatomy_authoring"]
+        first = importer.anatomy_mask(semantic, profile, "head")
+        second = importer.anatomy_mask(semantic, profile, "head")
+        self.assertEqual(first, second)
+        _, _, anatomy_pixels = importer.decode_rgba_png(first)
+        for semantic_alpha, anatomy_alpha in zip(semantic_pixels[3::4], anatomy_pixels[3::4]):
+            self.assertEqual(semantic_alpha > 0, anatomy_alpha > 0)
+        used = {tuple(anatomy_pixels[i : i + 3]) for i in range(0, len(anatomy_pixels), 4) if anatomy_pixels[i + 3]}
+        self.assertTrue(set(EXPECTED_ANATOMY_COLORS.values()) >= used)
+
+    def test_anatomy_authoring_rejects_malformed_shapes_groups_and_channels(self) -> None:
+        asset = json.loads(json.dumps(self.assets["norn-head"]))
+        mutations = (
+            ("malformed polygon", lambda zone: zone["shape"].update({"points": [[-0.1, 0.0], [0.2, 0.0], [0.2, 0.2]]})),
+            ("unknown semantic group", lambda zone: zone.update({"semantic_groups": ["unknown"]})),
+            ("not owned", lambda zone: zone.update({"channel": "belly"})),
+            ("unknown shape", lambda zone: zone.update({"shape": {"kind": "rectangle"}})),
+        )
+        for expected, mutation in mutations:
+            candidate = json.loads(json.dumps(asset))
+            mutation(candidate["anatomy_authoring"]["zones"][0])
+            with self.subTest(expected=expected):
+                with self.assertRaisesRegex(importer.ImportFailure, expected):
+                    importer.validate_anatomy_authoring(candidate)
+
+    def test_zone_change_changes_only_anatomy_output(self) -> None:
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        asset = self.assets["norn-head"]
+        semantic = (staging / asset["lods"][0]["semantic_mask"]).read_bytes()
+        profile = json.loads(json.dumps(asset["anatomy_authoring"]))
+        before = importer.anatomy_mask(semantic, profile, "head")
+        profile["zones"][2]["shape"]["center"][1] += 0.08
+        after = importer.anatomy_mask(semantic, profile, "head")
+        self.assertNotEqual(before, after)
+        self.assertEqual(semantic, (staging / asset["lods"][0]["semantic_mask"]).read_bytes())
+
+    def test_production_augmentation_matches_normal_build_rasterizer_for_all_lods(self) -> None:
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        for asset in self.recipe["part_assets"]:
+            for lod in asset["lods"]:
+                expected = importer.anatomy_mask(
+                    (staging / lod["semantic_mask"]).read_bytes(),
+                    asset["anatomy_authoring"],
+                    asset["logical_slot"],
+                )
+                self.assertEqual(expected, (staging / lod["anatomy_mask"]).read_bytes())
+
+    def test_every_family_and_independent_slot_combination_has_all_channels(self) -> None:
+        channels_by_asset = {
+            asset["id"]: {"primary"} | {zone["channel"] for zone in asset["anatomy_authoring"]["zones"]}
+            for asset in self.recipe["part_assets"]
+        }
+        all_channels = set(EXPECTED_ANATOMY_COLORS)
+        for family in self.recipe["families"]:
+            union = set().union(*(channels_by_asset[part["asset_id"]] for part in family["parts"].values()))
+            self.assertEqual(union, all_channels)
+        by_slot = {
+            slot: [channels_by_asset[asset["id"]] for asset in self.recipe["part_assets"] if asset["logical_slot"] == slot]
+            for slot in REQUIRED_ANATOMY_CHANNELS
+        }
+        for slot, variants in by_slot.items():
+            for channels in variants:
+                self.assertTrue(REQUIRED_ANATOMY_CHANNELS[slot] <= channels)
+
     def test_source_microdetail_roots_are_explicit_and_audited(self) -> None:
         self.assertEqual(
             {
@@ -353,7 +482,7 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
                 self.assertNotIn("..", path.parts)
         for asset in self.assets.values():
             for lod in asset["lods"]:
-                for key in ("generated_obj", "socket_manifest", "semantic_mask"):
+                for key in ("generated_obj", "socket_manifest", "semantic_mask", "anatomy_mask"):
                     path = PurePosixPath(lod[key])
                     self.assertFalse(path.is_absolute())
                     self.assertNotIn("..", path.parts)
@@ -361,7 +490,7 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
 
     def test_all_fourteen_shared_assets_have_unique_lod_outputs(self) -> None:
         self.assertEqual(len(self.assets), 14)
-        for key in ("generated_obj", "socket_manifest", "semantic_mask"):
+        for key in ("generated_obj", "socket_manifest", "semantic_mask", "anatomy_mask"):
             paths = [lod[key] for asset in self.assets.values() for lod in asset["lods"]]
             with self.subTest(output=key):
                 self.assertEqual(len(paths), 14 * 3)
@@ -462,6 +591,19 @@ def tree_digest(root: Path) -> dict[str, str]:
     }
 
 
+def upgrade_fixture_anatomy_contracts() -> None:
+    production_assets = {asset["id"]: asset for asset in load_recipe()["part_assets"]}
+    for path in FIXTURE_ROOT.rglob("fixture_recipes.json"):
+        recipe = json.loads(path.read_text(encoding="utf-8"))
+        for asset in recipe["part_assets"]:
+            asset["anatomy_authoring"] = production_assets[asset["id"]]["anatomy_authoring"]
+            for lod in asset["lods"]:
+                lod["anatomy_mask"] = lod["semantic_mask"].replace("_semantic.png", "_anatomy.png")
+                lod["anatomy_mask_sha256"] = "0" * 64
+        recipe["recipe_sha256"] = canonical_recipe_digest(recipe)
+        path.write_text(json.dumps(recipe, indent=2) + "\n", encoding="utf-8")
+
+
 class GeneForgeImporterSubprocessTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -475,6 +617,7 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
             cwd=WORKSPACE,
             check=True,
         )
+        upgrade_fixture_anatomy_contracts()
         if TEST_OUTPUT.exists():
             shutil.rmtree(TEST_OUTPUT)
         TEST_OUTPUT.mkdir(parents=True)
@@ -638,7 +781,7 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
         self.assertEqual(receipt["lods"], ["full", "compact", "impostor"])
         self.assertEqual(receipt["donor_count"], 3)
         self.assertEqual(receipt["asset_count"], 14)
-        self.assertEqual(len(receipt["outputs"]), 14 * 3 * 3)
+        self.assertEqual(len(receipt["outputs"]), 14 * 3 * 4)
         self.assertGreater(receipt["topology"]["removed_degenerate_faces"], 0)
         self.assertGreater(receipt["topology"]["removed_loose_vertices"], 0)
         self.assertGreater(receipt["topology"]["repaired_non_manifold_edges"], 0)
@@ -662,7 +805,7 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
         self.assertLessEqual(sum(path.stat().st_size for path in staged_files), 8 * 1024 * 1024)
         for asset in load_recipe()["part_assets"]:
             for lod in asset["lods"]:
-                for key in ("generated_obj", "socket_manifest", "semantic_mask"):
+                for key in ("generated_obj", "socket_manifest", "semantic_mask", "anatomy_mask"):
                     self.assertTrue((staging / lod[key]).is_file())
 
     def test_bind_output_digests_writes_external_contract_and_updates_receipt(self) -> None:
@@ -698,13 +841,81 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
                     ("generated_obj", "generated_obj_sha256"),
                     ("socket_manifest", "socket_manifest_sha256"),
                     ("semantic_mask", "semantic_mask_sha256"),
-                    ):
+                    ("anatomy_mask", "anatomy_mask_sha256"),
+                ):
                     self.assertEqual(
                         lod[digest_field],
                         hashlib.sha256((staging / lod[path_field]).read_bytes()).hexdigest(),
                     )
         receipt = json.loads((staging / "build_receipt.json").read_text(encoding="utf-8"))
         self.assertEqual(receipt["recipe_sha256"], bound["recipe_sha256"])
+
+    def test_augment_anatomy_is_atomic_idempotent_and_preserves_existing_outputs(self) -> None:
+        source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        staging = TEST_OUTPUT / "augment-idempotent-staging"
+        if staging.exists():
+            shutil.rmtree(staging)
+        shutil.copytree(source, staging)
+        recipe = TEST_OUTPUT / "augment-idempotent-recipes.json"
+        shutil.copy2(RECIPE_PATH, recipe)
+        before = tree_digest(staging)
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(IMPORTER),
+                "augment-anatomy",
+                "--recipes",
+                str(recipe),
+                "--staging",
+                str(staging),
+                "--output",
+                str(recipe),
+            ],
+            cwd=WORKSPACE,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assert_success(completed)
+        self.assertEqual(before, tree_digest(staging))
+        self.assertIn("outputs=168", completed.stdout)
+        self.assertIn("unchanged_obj_semantic=84", completed.stdout)
+
+    def test_augment_rejects_incomplete_receipt_without_mutating_staging(self) -> None:
+        source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        staging = TEST_OUTPUT / "augment-incomplete-receipt"
+        if staging.exists():
+            shutil.rmtree(staging)
+        shutil.copytree(source, staging)
+        recipe = TEST_OUTPUT / "augment-incomplete-recipes.json"
+        shutil.copy2(RECIPE_PATH, recipe)
+        receipt_path = staging / "build_receipt.json"
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["outputs"].pop(next(iter(receipt["outputs"])))
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        before = tree_digest(staging)
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(IMPORTER),
+                "augment-anatomy",
+                "--recipes",
+                str(recipe),
+                "--staging",
+                str(staging),
+                "--output",
+                str(recipe),
+            ],
+            cwd=WORKSPACE,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("exactly 126 legacy or 168 augmented outputs", completed.stderr)
+        self.assertEqual(before, tree_digest(staging))
 
     def test_atomic_pair_replace_rolls_back_first_destination_on_second_failure(self) -> None:
         root = TEST_OUTPUT / "atomic-pair-replace"
