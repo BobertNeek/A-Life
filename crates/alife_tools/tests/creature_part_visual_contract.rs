@@ -1,9 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::OnceLock;
 
 use alife_tools::creature_part_builder::{
-    canonical_path_is_within, sha256_hex, validate_geneforge_staging,
+    canonical_geneforge_recipe_sha256, canonical_path_is_within, sha256_hex,
+    validate_geneforge_staging,
 };
 use image::{Rgba, RgbaImage};
 use serde_json::Value;
@@ -68,30 +70,13 @@ fn validator_fixture() -> &'static PathBuf {
         let root = workspace_path("target/artifacts/creature_parts/validator-fixture");
         let staging = root.join("staging");
         copy_tree(&source, &staging);
-
-        let mut recipe: Value =
-            serde_json::from_slice(&fs::read(production_recipe()).unwrap()).unwrap();
-        for asset in recipe["part_assets"].as_array_mut().unwrap() {
-            for lod in asset["lods"].as_array_mut().unwrap() {
-                for (path_field, digest_field) in [
-                    ("generated_obj", "generated_obj_sha256"),
-                    ("socket_manifest", "socket_manifest_sha256"),
-                    ("semantic_mask", "semantic_mask_sha256"),
-                    ("anatomy_mask", "anatomy_mask_sha256"),
-                ] {
-                    let relative = lod[path_field].as_str().unwrap();
-                    lod[digest_field] =
-                        serde_json::json!(sha256_hex(&fs::read(staging.join(relative)).unwrap()));
-                }
-            }
-        }
         let recipe_path = root.join("fixture_recipes.json");
         fs::create_dir_all(&root).unwrap();
-        let recipe_digest = write_recipe_with_canonical_digest(&recipe_path, recipe.clone());
-
+        fs::copy(production_recipe(), &recipe_path).unwrap();
+        let recipe: Value = serde_json::from_slice(&fs::read(&recipe_path).unwrap()).unwrap();
         let receipt_path = staging.join("build_receipt.json");
         let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
-        receipt["recipe_sha256"] = serde_json::json!(recipe_digest);
+        receipt["recipe_sha256"] = recipe["recipe_sha256"].clone();
         receipt["source_sha256"] = serde_json::json!({
             "norn": recipe["sources"][0]["sha256"].as_str().unwrap(),
             "ettin": recipe["sources"][1]["sha256"].as_str().unwrap(),
@@ -99,6 +84,35 @@ fn validator_fixture() -> &'static PathBuf {
         });
         fs::write(&receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
         rewrite_all_receipt_digests(&staging);
+        let bind_status = Command::new("python")
+            .arg(workspace_path("scripts/build_geneforge_creature_parts.py"))
+            .arg("bind-output-digests")
+            .arg("--recipes")
+            .arg(&recipe_path)
+            .arg("--staging")
+            .arg(&staging)
+            .arg("--output")
+            .arg(&recipe_path)
+            .status()
+            .unwrap();
+        assert!(
+            bind_status.success(),
+            "fixture output digest binding failed"
+        );
+        let status = Command::new("python")
+            .arg(workspace_path("scripts/build_geneforge_creature_parts.py"))
+            .arg("augment-anatomy")
+            .arg("--recipes")
+            .arg(&recipe_path)
+            .arg("--staging")
+            .arg(&staging)
+            .arg("--output")
+            .arg(&recipe_path)
+            .arg("--authority-recipes")
+            .arg(&recipe_path)
+            .status()
+            .unwrap();
+        assert!(status.success(), "fixture anatomy augmentation failed");
         root
     })
 }
@@ -728,7 +742,8 @@ fn staged_validator_rejects_symlink_or_reparse_output_escape() {
 
 fn write_recipe_with_canonical_digest(path: &Path, mut recipe: Value) -> String {
     recipe["recipe_sha256"] = serde_json::json!("0".repeat(64));
-    let digest = sha256_hex(&serde_json::to_vec(&recipe).unwrap());
+    let digest =
+        canonical_geneforge_recipe_sha256(&serde_json::to_string(&recipe).unwrap()).unwrap();
     recipe["recipe_sha256"] = serde_json::json!(digest.clone());
     fs::write(path, serde_json::to_vec_pretty(&recipe).unwrap()).unwrap();
     digest

@@ -476,20 +476,97 @@ pub enum GeneForgeAnatomyChannel {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-pub enum GeneForgeAnatomyShape {
-    Ellipse { center: [f32; 2], radius: [f32; 2] },
-    Polygon { points: Vec<[f32; 2]> },
+pub struct GeneForgeAnatomyProjection {
+    pub schema: String,
+    pub texel_sample: String,
+    pub triangle_tie_break: String,
+    pub classifier: String,
+    pub detail_group_channels: BTreeMap<String, GeneForgeAnatomyChannel>,
+    pub source_geometry: GeneForgeAnatomySourceGeometry,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GeneForgeAnatomyZone {
-    pub id: String,
+pub struct GeneForgeAnatomySourceGeometry {
+    pub schema: String,
+    pub groups: BTreeSet<String>,
+    pub landmarks: BTreeMap<String, [f32; 3]>,
+    pub canonical_bounds: GeneForgeAnatomySourceBounds,
+    pub feature_landmarks: BTreeMap<String, GeneForgeAnatomyFeatureLandmark>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeAnatomySourceBounds {
+    pub min: [f32; 3],
+    pub max: [f32; 3],
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeAnatomyLodAudit {
+    pub obj_sha256: String,
+    pub semantic_sha256: String,
+    pub projection_sha256: String,
+    pub projected_texels: usize,
+    pub inside_texels: usize,
+    pub nearest_texels: usize,
+    pub overlap_texels: usize,
+    pub runtime_group_counts: BTreeMap<String, usize>,
+    pub channel_counts: BTreeMap<GeneForgeAnatomyChannel, usize>,
+    pub geometry_classification: BTreeMap<GeneForgeAnatomyChannel, GeneForgeAnatomyClassification>,
+    pub source_landmark_projections: BTreeMap<String, GeneForgeSourceLandmarkProjection>,
+    pub feature_anchor_ownership: BTreeMap<String, GeneForgeFeatureAnchorOwnership>,
+    pub source_bounds: GeneForgeAnatomySourceBounds,
+    pub derived_landmarks: BTreeMap<String, [f32; 3]>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeAnatomyClassification {
+    pub groups: Vec<String>,
+    pub landmarks: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeSourceLandmarkProjection {
+    pub x: usize,
+    pub y: usize,
+    pub source: [f32; 3],
+    pub projected: [f32; 3],
+    pub face: usize,
+    pub group: String,
+    pub weights: [f32; 3],
+    pub distance: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeAnatomyFeatureLandmark {
     pub channel: GeneForgeAnatomyChannel,
-    pub semantic_groups: BTreeSet<String>,
-    pub shape: GeneForgeAnatomyShape,
-    pub strength: u8,
-    pub priority: i32,
+    pub runtime_group: String,
+    pub source_group: String,
+    pub point: [f32; 3],
+    pub source_position: [f32; 3],
+    pub source_basis: Vec<String>,
+    pub method: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeFeatureAnchorOwnership {
+    pub channel: GeneForgeAnatomyChannel,
+    pub runtime_group: String,
+    pub owned_channel: GeneForgeAnatomyChannel,
+    pub canonical: [f32; 3],
+    pub x: usize,
+    pub y: usize,
+    pub source: [f32; 3],
+    pub projected: [f32; 3],
+    pub face: usize,
+    pub group: String,
+    pub weights: [f32; 3],
+    pub distance: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeAnatomySourceProjectionAudit {
+    pub schema: String,
+    pub lods: BTreeMap<CreaturePartLodId, GeneForgeAnatomyLodAudit>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -498,7 +575,8 @@ pub struct GeneForgeAnatomyAuthoring {
     pub coordinate_space: String,
     pub default_channel: GeneForgeAnatomyChannel,
     pub required_channels: BTreeSet<GeneForgeAnatomyChannel>,
-    pub zones: Vec<GeneForgeAnatomyZone>,
+    pub projection: GeneForgeAnatomyProjection,
+    pub source_projection_audit: GeneForgeAnatomySourceProjectionAudit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1231,12 +1309,131 @@ fn required_runtime_slots(logical_slot: CreaturePartSlotKey) -> BTreeSet<Creatur
     }
 }
 
+fn required_feature_anchors(
+    logical_slot: CreaturePartSlotKey,
+) -> BTreeMap<&'static str, (GeneForgeAnatomyChannel, &'static str)> {
+    use GeneForgeAnatomyChannel::*;
+    match logical_slot {
+        CreaturePartSlotKey::Head => BTreeMap::from([
+            ("left-ear", (InnerEar, "head")),
+            ("right-ear", (InnerEar, "head")),
+            ("muzzle", (Muzzle, "head")),
+        ]),
+        CreaturePartSlotKey::Torso => BTreeMap::from([("belly", (Belly, "torso"))]),
+        CreaturePartSlotKey::Arms => BTreeMap::from([
+            ("left-hand", (HandsFeet, "left-arm")),
+            ("right-hand", (HandsFeet, "right-arm")),
+        ]),
+        CreaturePartSlotKey::Legs => BTreeMap::from([
+            ("left-foot", (HandsFeet, "left-leg")),
+            ("right-foot", (HandsFeet, "right-leg")),
+        ]),
+        CreaturePartSlotKey::Tail => BTreeMap::from([("tail-tip", (KeratinSkin, "tail-back"))]),
+    }
+}
+
 fn validate_anatomy_authoring(asset: &GeneForgePartAssetDefinition) -> Result<(), &'static str> {
     let profile = &asset.anatomy_authoring;
-    if profile.schema != "alife.geneforge_anatomy_authoring.v1"
-        || profile.coordinate_space != "semantic-group-local-uv"
+    let mut expected_source_groups = asset.groups.values().cloned().collect::<BTreeSet<_>>();
+    for role in asset.detail_groups.keys() {
+        let role = serde_json::to_value(role)
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .ok_or("detail role cannot be represented as a stable string")?;
+        expected_source_groups.insert(format!("head.{role}"));
+    }
+    let expected_source_landmarks = asset
+        .landmarks
+        .keys()
+        .map(|landmark| {
+            serde_json::to_value(landmark)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_owned))
+                .ok_or("landmark cannot be represented as a stable string")
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let expected_feature_anchors = required_feature_anchors(asset.logical_slot);
+    if profile.schema != "alife.geneforge_anatomy_authoring.v2"
+        || profile.coordinate_space != "same-lod-staged-obj"
         || profile.default_channel != GeneForgeAnatomyChannel::Primary
-        || profile.zones.is_empty()
+        || profile.projection.schema != "alife.geneforge_anatomy_projection.v1"
+        || profile.projection.texel_sample != "pixel-center"
+        || profile.projection.triangle_tie_break
+            != "inside-max-min-barycentric-then-face-index;nearest-uv-then-face-index"
+        || profile.projection.classifier != "source-geometry-feature-anchors.v3"
+        || profile.projection.detail_group_channels
+            != BTreeMap::from([
+                (
+                    "head.hair".to_string(),
+                    GeneForgeAnatomyChannel::SecondaryMarking,
+                ),
+                (
+                    "head.teeth".to_string(),
+                    GeneForgeAnatomyChannel::KeratinSkin,
+                ),
+            ])
+        || profile.projection.source_geometry.schema
+            != "alife.geneforge_source_geometry_classifier.v2"
+        || profile.projection.source_geometry.groups != expected_source_groups
+        || profile
+            .projection
+            .source_geometry
+            .landmarks
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            != expected_source_landmarks
+        || profile
+            .projection
+            .source_geometry
+            .landmarks
+            .iter()
+            .any(|(name, point)| {
+                name.is_empty()
+                    || point.iter().any(|value| !value.is_finite())
+                    || !expected_source_landmarks.contains(name)
+            })
+        || profile
+            .projection
+            .source_geometry
+            .feature_landmarks
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            != expected_feature_anchors
+                .keys()
+                .map(|name| (*name).to_string())
+                .collect::<BTreeSet<_>>()
+        || profile
+            .projection
+            .source_geometry
+            .feature_landmarks
+            .iter()
+            .any(|(name, feature)| {
+                let Some((channel, runtime_group)) = expected_feature_anchors.get(name.as_str())
+                else {
+                    return true;
+                };
+                feature.channel != *channel
+                    || feature.runtime_group != *runtime_group
+                    || feature.source_group != *runtime_group
+                    || feature.method != "source-geometry-anchor-v1"
+                    || feature.source_basis.is_empty()
+                    || feature.source_basis.iter().any(|basis| basis.is_empty())
+                    || feature.point.iter().any(|value| !value.is_finite())
+                    || feature
+                        .source_position
+                        .iter()
+                        .any(|value| !value.is_finite())
+                    || !profile
+                        .projection
+                        .source_geometry
+                        .groups
+                        .contains(&feature.source_group)
+            })
+        || profile.projection.source_geometry.canonical_bounds.min != asset.canonical_bounds.min
+        || profile.projection.source_geometry.canonical_bounds.max != asset.canonical_bounds.max
+        || profile.source_projection_audit.schema != "alife.geneforge_source_projection_audit.v1"
     {
         return Err("invalid anatomy authoring metadata");
     }
@@ -1256,7 +1453,14 @@ fn validate_anatomy_authoring(asset: &GeneForgePartAssetDefinition) -> Result<()
                 GeneForgeAnatomyChannel::KeratinSkin,
                 GeneForgeAnatomyChannel::SecondaryMarking,
             ]),
-            BTreeSet::from(["head"]),
+            BTreeSet::from([
+                "head",
+                "head.eyes",
+                "head.lids",
+                "head.hair",
+                "head.teeth",
+                "head.tongue",
+            ]),
         ),
         CreaturePartSlotKey::Torso => (
             BTreeSet::from([
@@ -1317,112 +1521,164 @@ fn validate_anatomy_authoring(asset: &GeneForgePartAssetDefinition) -> Result<()
     if profile.required_channels != required {
         return Err("anatomy required-channel contract is invalid");
     }
-    let mut ids = BTreeSet::new();
-    let mut authored = BTreeSet::from([GeneForgeAnatomyChannel::Primary]);
-    for zone in &profile.zones {
-        if zone.id.is_empty()
-            || !ids.insert(zone.id.as_str())
-            || !allowed.contains(&zone.channel)
-            || zone.semantic_groups.is_empty()
-            || !zone
-                .semantic_groups
-                .iter()
-                .all(|group| groups.contains(group.as_str()))
-            || zone.strength == 0
-            || !valid_anatomy_shape(&zone.shape)
-        {
-            return Err("anatomy zone is malformed or violates source ownership");
-        }
-        authored.insert(zone.channel);
+    let _ = allowed;
+    let expected_lods = BTreeSet::from([
+        CreaturePartLodId::Full,
+        CreaturePartLodId::Compact,
+        CreaturePartLodId::Impostor,
+    ]);
+    if profile
+        .source_projection_audit
+        .lods
+        .keys()
+        .copied()
+        .collect::<BTreeSet<_>>()
+        != expected_lods
+    {
+        return Err("source projection audit must cover every LOD");
     }
-    if !required.is_subset(&authored) {
-        return Err("anatomy zones do not author every required channel");
+    for (lod_id, evidence) in &profile.source_projection_audit.lods {
+        let Some(lod) = asset.lods.iter().find(|lod| lod.lod == *lod_id) else {
+            return Err("source projection audit references an unknown LOD");
+        };
+        if !valid_sha256(&evidence.obj_sha256)
+            || !valid_sha256(&evidence.semantic_sha256)
+            || !valid_sha256(&evidence.projection_sha256)
+            || (valid_sha256(&lod.generated_obj_sha256)
+                && evidence.obj_sha256 != lod.generated_obj_sha256)
+            || (valid_sha256(&lod.semantic_mask_sha256)
+                && evidence.semantic_sha256 != lod.semantic_mask_sha256)
+            || evidence.projected_texels == 0
+            || evidence.projected_texels > 64 * 64
+            || evidence.inside_texels + evidence.nearest_texels != evidence.projected_texels
+            || evidence.overlap_texels > evidence.inside_texels
+            || evidence.runtime_group_counts.is_empty()
+            || evidence
+                .runtime_group_counts
+                .iter()
+                .any(|(group, count)| *count == 0 || !groups.contains(group.as_str()))
+            || evidence.runtime_group_counts.values().sum::<usize>() != evidence.projected_texels
+            || evidence
+                .channel_counts
+                .keys()
+                .copied()
+                .collect::<BTreeSet<_>>()
+                != required
+            || evidence.channel_counts.values().any(|count| *count == 0)
+            || evidence.channel_counts.values().sum::<usize>() != evidence.projected_texels
+            || evidence
+                .source_landmark_projections
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+                != profile
+                    .projection
+                    .source_geometry
+                    .landmarks
+                    .keys()
+                    .cloned()
+                    .collect()
+            || evidence
+                .source_landmark_projections
+                .iter()
+                .any(|(name, projection)| {
+                    name.is_empty()
+                        || projection.group.is_empty()
+                        || !profile
+                            .projection
+                            .source_geometry
+                            .groups
+                            .contains(&projection.group)
+                        || projection.source.iter().any(|value| !value.is_finite())
+                        || projection.projected.iter().any(|value| !value.is_finite())
+                        || projection.weights.iter().any(|value| {
+                            !value.is_finite() || *value < -1.0e-6 || *value > 1.0 + 1.0e-6
+                        })
+                        || (projection.weights.iter().sum::<f32>() - 1.0).abs() > 1.0e-5
+                        || !projection.distance.is_finite()
+                        || projection.distance < 0.0
+                })
+            || evidence
+                .feature_anchor_ownership
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+                != expected_feature_anchors
+                    .keys()
+                    .map(|name| (*name).to_string())
+                    .collect::<BTreeSet<_>>()
+            || evidence
+                .feature_anchor_ownership
+                .iter()
+                .any(|(name, ownership)| {
+                    let Some((channel, runtime_group)) =
+                        expected_feature_anchors.get(name.as_str())
+                    else {
+                        return true;
+                    };
+                    ownership.channel != *channel
+                        || ownership.owned_channel != *channel
+                        || ownership.runtime_group != *runtime_group
+                        || ownership.group != *runtime_group
+                        || ownership.x >= 64
+                        || ownership.y >= 64
+                        || ownership.canonical.iter().any(|value| !value.is_finite())
+                        || ownership.source.iter().any(|value| !value.is_finite())
+                        || ownership.projected.iter().any(|value| !value.is_finite())
+                        || ownership.weights.iter().any(|value| !value.is_finite())
+                        || (ownership.weights.iter().sum::<f32>() - 1.0).abs() > 1.0e-5
+                        || !ownership.distance.is_finite()
+                        || ownership.distance < 0.0
+                })
+            || evidence
+                .geometry_classification
+                .keys()
+                .copied()
+                .collect::<BTreeSet<_>>()
+                != evidence.channel_counts.keys().copied().collect()
+            || evidence
+                .geometry_classification
+                .iter()
+                .any(|(_, classification)| {
+                    classification.groups.is_empty()
+                        || classification
+                            .groups
+                            .iter()
+                            .any(|group| !profile.projection.source_geometry.groups.contains(group))
+                        || classification.landmarks.iter().any(|name| {
+                            !profile
+                                .projection
+                                .source_geometry
+                                .landmarks
+                                .contains_key(name)
+                                && !profile
+                                    .projection
+                                    .source_geometry
+                                    .feature_landmarks
+                                    .contains_key(name)
+                        })
+                })
+            || evidence
+                .source_bounds
+                .min
+                .iter()
+                .chain(evidence.source_bounds.max.iter())
+                .any(|value| !value.is_finite())
+            || evidence
+                .source_bounds
+                .min
+                .iter()
+                .zip(evidence.source_bounds.max.iter())
+                .any(|(min, max)| min > max)
+            || evidence.derived_landmarks.is_empty()
+            || evidence.derived_landmarks.iter().any(|(name, point)| {
+                name.is_empty() || point.iter().any(|value| !value.is_finite())
+            })
+        {
+            return Err("source projection audit is malformed or detached from its LOD");
+        }
     }
     Ok(())
-}
-
-fn valid_anatomy_shape(shape: &GeneForgeAnatomyShape) -> bool {
-    const POLYGON_AREA_EPSILON: f32 = 1.0e-6;
-    let unit = |value: f32| value.is_finite() && (0.0..=1.0).contains(&value);
-    match shape {
-        GeneForgeAnatomyShape::Ellipse { center, radius } => {
-            center.iter().copied().all(unit)
-                && radius.iter().copied().all(unit)
-                && radius.iter().all(|value| *value > 0.0)
-        }
-        GeneForgeAnatomyShape::Polygon { points } => {
-            points.len() >= 3
-                && points.iter().flatten().copied().all(unit)
-                && points
-                    .iter()
-                    .enumerate()
-                    .all(|(index, point)| !points[..index].contains(point))
-                && points.iter().enumerate().all(|(index, start)| {
-                    let end = points[(index + 1) % points.len()];
-                    let dx = end[0] - start[0];
-                    let dy = end[1] - start[1];
-                    dx * dx + dy * dy > POLYGON_AREA_EPSILON * POLYGON_AREA_EPSILON
-                })
-                && !(0..points.len()).any(|first| {
-                    let first_next = (first + 1) % points.len();
-                    ((first + 1)..points.len()).any(|second| {
-                        let second_next = (second + 1) % points.len();
-                        ![second, second_next].contains(&first)
-                            && ![second, second_next].contains(&first_next)
-                            && anatomy_segments_intersect(
-                                points[first],
-                                points[first_next],
-                                points[second],
-                                points[second_next],
-                                POLYGON_AREA_EPSILON,
-                            )
-                    })
-                })
-                // Smaller normalized-UV areas are not raster-stable at 64x64.
-                && points
-                    .iter()
-                    .enumerate()
-                    .map(|(index, start)| {
-                        let end = points[(index + 1) % points.len()];
-                        start[0] * end[1] - end[0] * start[1]
-                    })
-                    .sum::<f32>()
-                    .abs()
-                    * 0.5
-                    > POLYGON_AREA_EPSILON
-        }
-    }
-}
-
-fn anatomy_segments_intersect(
-    a: [f32; 2],
-    b: [f32; 2],
-    c: [f32; 2],
-    d: [f32; 2],
-    epsilon: f32,
-) -> bool {
-    let orientation = |p: [f32; 2], q: [f32; 2], r: [f32; 2]| {
-        (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
-    };
-    let on_segment = |p: [f32; 2], q: [f32; 2], r: [f32; 2]| {
-        q[0] >= p[0].min(r[0]) - epsilon
-            && q[0] <= p[0].max(r[0]) + epsilon
-            && q[1] >= p[1].min(r[1]) - epsilon
-            && q[1] <= p[1].max(r[1]) + epsilon
-    };
-    let values = [
-        orientation(a, b, c),
-        orientation(a, b, d),
-        orientation(c, d, a),
-        orientation(c, d, b),
-    ];
-    if (values[0] > 0.0) != (values[1] > 0.0) && (values[2] > 0.0) != (values[3] > 0.0) {
-        return true;
-    }
-    (values[0].abs() <= epsilon && on_segment(a, c, b))
-        || (values[1].abs() <= epsilon && on_segment(a, d, b))
-        || (values[2].abs() <= epsilon && on_segment(c, a, d))
-        || (values[3].abs() <= epsilon && on_segment(c, b, d))
 }
 
 fn required_semantic_regions(
@@ -1896,7 +2152,7 @@ mod tests {
         assert_eq!(catalog.importer_version, "alife.geneforge_importer.v2");
         assert_eq!(
             catalog.recipe_sha256,
-            "8c8f0015bf67bab6ddf2f6da5dafb7221d61e458fc3f477e5a7c0385d2bb0eb2"
+            "d1568c84421934586c3b9fa8313de58e4b8b6a07922d7f8c1aa2e002770760c1"
         );
 
         for asset in &catalog.part_assets {
@@ -2232,19 +2488,26 @@ mod tests {
         ));
 
         let mut ownership = load_geneforge_creature_part_catalog().unwrap();
-        ownership.part_assets[0].anatomy_authoring.zones[0].channel =
-            GeneForgeAnatomyChannel::Belly;
+        ownership.part_assets[0]
+            .anatomy_authoring
+            .projection
+            .detail_group_channels
+            .insert("head.teeth".into(), GeneForgeAnatomyChannel::Belly);
         assert!(matches!(
             ownership.validate(),
             Err(GeneForgeCatalogError::InvalidAsset { .. })
         ));
 
-        let mut shape = load_geneforge_creature_part_catalog().unwrap();
-        shape.part_assets[0].anatomy_authoring.zones[0].shape = GeneForgeAnatomyShape::Polygon {
-            points: vec![[-0.1, 0.0], [0.5, 0.0], [0.5, 0.5]],
-        };
+        let mut detached = load_geneforge_creature_part_catalog().unwrap();
+        detached.part_assets[0]
+            .anatomy_authoring
+            .source_projection_audit
+            .lods
+            .get_mut(&CreaturePartLodId::Full)
+            .unwrap()
+            .obj_sha256 = "0".repeat(64);
         assert!(matches!(
-            shape.validate(),
+            detached.validate(),
             Err(GeneForgeCatalogError::InvalidAsset { .. })
         ));
 
@@ -2257,15 +2520,64 @@ mod tests {
     }
 
     #[test]
-    fn geneforge_v2_rejects_repeated_collinear_and_self_intersecting_polygons() {
-        for points in [
-            vec![[0.1, 0.1], [0.8, 0.1], [0.1, 0.1]],
-            vec![[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]],
-            vec![[0.1, 0.1], [0.9, 0.9], [0.1, 0.9], [0.9, 0.1]],
-        ] {
+    fn geneforge_v2_requires_same_lod_obj_projection_evidence() {
+        let json: serde_json::Value = serde_json::from_str(GENEFORGE_RECIPE_CATALOG_JSON).unwrap();
+        for asset in json["part_assets"].as_array().unwrap() {
+            let authoring = &asset["anatomy_authoring"];
+            assert_eq!(authoring["schema"], "alife.geneforge_anatomy_authoring.v2");
+            assert_eq!(authoring["coordinate_space"], "same-lod-staged-obj");
+            assert_eq!(
+                authoring["projection"]["schema"],
+                "alife.geneforge_anatomy_projection.v1"
+            );
+            assert!(authoring.get("zones").is_none());
+            let audit = &authoring["source_projection_audit"];
+            assert_eq!(
+                audit["schema"],
+                "alife.geneforge_source_projection_audit.v1"
+            );
+            for lod in ["full", "compact", "impostor"] {
+                let evidence = &audit["lods"][lod];
+                for digest in ["obj_sha256", "semantic_sha256", "projection_sha256"] {
+                    assert_eq!(evidence[digest].as_str().unwrap().len(), 64);
+                }
+                assert!(evidence["projected_texels"].as_u64().unwrap() > 0);
+                assert_eq!(
+                    evidence["projected_texels"].as_u64().unwrap(),
+                    evidence["inside_texels"].as_u64().unwrap()
+                        + evidence["nearest_texels"].as_u64().unwrap()
+                );
+            }
+        }
+
+        let mut missing = json;
+        missing["part_assets"][0]["anatomy_authoring"]
+            .as_object_mut()
+            .unwrap()
+            .remove("source_projection_audit");
+        assert!(matches!(
+            GeneForgeCreaturePartCatalog::from_json_str(&missing.to_string()),
+            Err(GeneForgeCatalogError::Json(_))
+        ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_malformed_source_projection_counts_and_bounds() {
+        for mutation in 0..3 {
             let mut catalog = load_geneforge_creature_part_catalog().unwrap();
-            catalog.part_assets[0].anatomy_authoring.zones[0].shape =
-                GeneForgeAnatomyShape::Polygon { points };
+            let evidence = catalog.part_assets[0]
+                .anatomy_authoring
+                .source_projection_audit
+                .lods
+                .get_mut(&CreaturePartLodId::Full)
+                .unwrap();
+            match mutation {
+                0 => evidence.projected_texels += 1,
+                1 => evidence.source_bounds.min[0] = evidence.source_bounds.max[0] + 1.0,
+                _ => {
+                    evidence.runtime_group_counts.insert("alternate".into(), 1);
+                }
+            }
             assert!(matches!(
                 catalog.validate(),
                 Err(GeneForgeCatalogError::InvalidAsset { .. })

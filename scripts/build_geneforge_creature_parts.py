@@ -33,13 +33,20 @@ DEFAULT_BLENDER = Path(r"C:\Program Files\Blender Foundation\Blender 5.1\blender
 REQUIRED_BLENDER_VERSION = "5.1.0"
 REQUIRED_IMPORTER_VERSION = "alife.geneforge_importer.v2"
 MAX_DONOR_WORKERS = 3
-ANATOMY_POLYGON_AREA_EPSILON = 1.0e-6
 FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
 MAX_STAGED_FILE_BYTES = 512 * 1024
 PNG_WIDTH = 64
 PNG_HEIGHT = 64
 PNG_FILTERED_BYTES = PNG_HEIGHT * (1 + PNG_WIDTH * 4)
-ANATOMY_TRANSACTION_SCHEMA = "alife.geneforge_anatomy_transaction.v1"
+ANATOMY_AUTHORING_SCHEMA = "alife.geneforge_anatomy_authoring.v2"
+ANATOMY_PROJECTION_SCHEMA = "alife.geneforge_anatomy_projection.v1"
+ANATOMY_SOURCE_GEOMETRY_SCHEMA = "alife.geneforge_source_geometry_classifier.v2"
+ANATOMY_AUDIT_SCHEMA = "alife.geneforge_source_projection_audit.v1"
+ANATOMY_TRIANGLE_TIE_BREAK = (
+    "inside-max-min-barycentric-then-face-index;nearest-uv-then-face-index"
+)
+ANATOMY_CLASSIFIER = "source-geometry-feature-anchors.v3"
+ANATOMY_TRANSACTION_SCHEMA = "alife.geneforge_anatomy_transaction.v2"
 LODS = (("full", 1.0, 1200), ("compact", 0.65, 800), ("impostor", 0.35, 400))
 GROUP_COLORS = {
     "head": (230, 92, 88, 255),
@@ -98,6 +105,27 @@ REQUIRED_ANATOMY_CHANNELS = {
     "legs": {"primary", "hands-feet", "secondary-marking"},
     "tail": {"primary", "keratin-skin", "secondary-marking"},
 }
+ANATOMY_DETAIL_GROUP_CHANNELS = {
+    "head.hair": "secondary-marking",
+    "head.teeth": "keratin-skin",
+}
+REQUIRED_FEATURE_ANCHORS = {
+    "head": {
+        "left-ear": ("inner-ear", "head"),
+        "right-ear": ("inner-ear", "head"),
+        "muzzle": ("muzzle", "head"),
+    },
+    "torso": {"belly": ("belly", "torso")},
+    "arms": {
+        "left-hand": ("hands-feet", "left-arm"),
+        "right-hand": ("hands-feet", "right-arm"),
+    },
+    "legs": {
+        "left-foot": ("hands-feet", "left-leg"),
+        "right-foot": ("hands-feet", "right-leg"),
+    },
+    "tail": {"tail-tip": ("keratin-skin", "tail-back")},
+}
 
 
 class ImportFailure(RuntimeError):
@@ -121,7 +149,7 @@ def canonical_recipe_digest(recipe: dict) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def load_recipe(path: Path) -> dict:
+def load_recipe(path: Path, *, validate_current_anatomy: bool = True) -> dict:
     recipe = json.loads(path.read_text(encoding="utf-8"))
     actual = canonical_recipe_digest(recipe)
     if recipe.get("recipe_sha256", "").lower() != actual:
@@ -140,8 +168,8 @@ def load_recipe(path: Path) -> dict:
             raise ImportFailure(f"{asset.get('id')} has an unsupported geometry policy")
         if set(selector.get("object_visscripts", {})) != set(selector.get("include_objects", [])):
             raise ImportFailure(f"{asset.get('id')} lacks exact kc3dsbpy_visscript contracts")
-        validate_anatomy_authoring(asset)
-        if "source_audit" in asset["anatomy_authoring"]:
+        if validate_current_anatomy:
+            validate_anatomy_authoring(asset)
             validate_anatomy_source_audit(asset)
         for lod in asset.get("lods", []):
             for field in ("anatomy_mask", "anatomy_mask_sha256"):
@@ -153,131 +181,253 @@ def load_recipe(path: Path) -> dict:
 def validate_anatomy_authoring(asset: dict) -> None:
     profile = asset.get("anatomy_authoring")
     slot = asset.get("logical_slot")
-    if not isinstance(profile, dict) or profile.get("schema") != "alife.geneforge_anatomy_authoring.v1":
+    if not isinstance(profile, dict) or profile.get("schema") != ANATOMY_AUTHORING_SCHEMA:
         raise ImportFailure(f"{asset.get('id')} has invalid anatomy authoring schema")
-    if profile.get("coordinate_space") != "semantic-group-local-uv" or profile.get("default_channel") != "primary":
+    if (
+        profile.get("coordinate_space") != "same-lod-staged-obj"
+        or profile.get("default_channel") != "primary"
+        or "zones" in profile
+    ):
         raise ImportFailure(f"{asset.get('id')} has invalid anatomy authoring coordinates/default")
     if slot not in ALLOWED_ANATOMY_CHANNELS:
         raise ImportFailure(f"{asset.get('id')} has unsupported anatomy slot {slot}")
-    zones = profile.get("zones")
-    if not isinstance(zones, list) or not zones:
-        raise ImportFailure(f"{asset.get('id')} has no anatomy zones")
-    ids = set()
-    authored_channels = {"primary"}
-    for zone in zones:
-        zone_id = zone.get("id")
-        channel = zone.get("channel")
-        groups = zone.get("semantic_groups")
-        shape = zone.get("shape", {})
-        if not isinstance(zone_id, str) or not zone_id or zone_id in ids:
-            raise ImportFailure(f"{asset.get('id')} has invalid/duplicate anatomy zone id")
-        ids.add(zone_id)
-        if channel not in ALLOWED_ANATOMY_CHANNELS[slot]:
-            raise ImportFailure(f"{asset.get('id')} anatomy channel {channel} is not owned by {slot}")
-        authored_channels.add(channel)
-        if not isinstance(groups, list) or not groups or any(group not in GROUP_REGIONS for group in groups):
-            raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has unknown semantic group")
-        if not isinstance(zone.get("priority"), int) or not isinstance(zone.get("strength"), int) or not 1 <= zone["strength"] <= 255:
-            raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has invalid priority/strength")
-        kind = shape.get("kind")
-        if kind == "ellipse":
-            center, radius = shape.get("center"), shape.get("radius")
-            if not _unit_pair(center) or not _positive_unit_pair(radius):
-                raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has malformed ellipse")
-        elif kind == "polygon":
-            points = shape.get("points")
-            if not isinstance(points, list) or len(points) < 3 or any(not _unit_pair(point) for point in points):
-                raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has malformed polygon")
-            polygon_error = _anatomy_polygon_error(points)
-            if polygon_error is not None:
-                raise ImportFailure(
-                    f"{asset.get('id')} anatomy zone {zone_id} has {polygon_error}"
-                )
-        else:
-            raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has unknown shape")
-    missing = REQUIRED_ANATOMY_CHANNELS[slot] - authored_channels
-    if missing:
-        raise ImportFailure(f"{asset.get('id')} anatomy profile lacks channels: {sorted(missing)}")
+    required = profile.get("required_channels")
+    if (
+        not isinstance(required, list)
+        or len(required) != len(set(required))
+        or set(required) != REQUIRED_ANATOMY_CHANNELS[slot]
+    ):
+        raise ImportFailure(f"{asset.get('id')} has invalid required anatomy channels")
+    projection = profile.get("projection")
+    source_geometry = projection.get("source_geometry") if isinstance(projection, dict) else None
+    if (
+        not isinstance(projection, dict)
+        or projection.get("schema") != ANATOMY_PROJECTION_SCHEMA
+        or projection.get("texel_sample") != "pixel-center"
+        or projection.get("triangle_tie_break") != ANATOMY_TRIANGLE_TIE_BREAK
+        or projection.get("classifier") != ANATOMY_CLASSIFIER
+        or projection.get("detail_group_channels") != ANATOMY_DETAIL_GROUP_CHANNELS
+        or not isinstance(source_geometry, dict)
+        or source_geometry.get("schema") != ANATOMY_SOURCE_GEOMETRY_SCHEMA
+        or not isinstance(source_geometry.get("groups"), list)
+        or not source_geometry["groups"]
+        or len(source_geometry["groups"]) != len(set(source_geometry["groups"]))
+        or any(not isinstance(group, str) or group not in GROUP_REGIONS for group in source_geometry["groups"])
+        or not isinstance(source_geometry.get("landmarks"), dict)
+        or not source_geometry["landmarks"]
+        or any(
+            not isinstance(name, str)
+            or not name
+            or not _finite_vector(point, 3)
+            for name, point in source_geometry["landmarks"].items()
+        )
+        or not isinstance(source_geometry.get("canonical_bounds"), dict)
+        or not _finite_vector(source_geometry["canonical_bounds"].get("min"), 3)
+        or not _finite_vector(source_geometry["canonical_bounds"].get("max"), 3)
+        or any(
+            lower >= upper
+            for lower, upper in zip(
+                source_geometry["canonical_bounds"]["min"],
+                source_geometry["canonical_bounds"]["max"],
+            )
+        )
+    ):
+        raise ImportFailure(f"{asset.get('id')} has invalid OBJ projection policy")
+    if "groups" in asset:
+        expected_groups = set(asset["groups"].values())
+        for role in asset.get("detail_groups", {}):
+            expected_groups.add(f"head.{role}")
+        if set(source_geometry["groups"]) != expected_groups:
+            raise ImportFailure(f"{asset.get('id')} source geometry groups are not source-bound")
+    expected_features = REQUIRED_FEATURE_ANCHORS[slot]
+    feature_landmarks = source_geometry.get("feature_landmarks")
+    if (
+        not isinstance(feature_landmarks, dict)
+        or set(feature_landmarks) != set(expected_features)
+        or any(
+            not isinstance(anchor, dict)
+            or anchor.get("channel") != channel
+            or anchor.get("runtime_group") != runtime_group
+            or anchor.get("source_group") != runtime_group
+            or anchor.get("method") != "source-geometry-anchor-v1"
+            or not isinstance(anchor.get("source_basis"), list)
+            or not anchor["source_basis"]
+            or any(not isinstance(basis, str) or not basis for basis in anchor["source_basis"])
+            or not _finite_vector(anchor.get("point"), 3)
+            or not _finite_vector(anchor.get("source_position"), 3)
+            or runtime_group not in source_geometry["groups"]
+            for name, (channel, runtime_group) in expected_features.items()
+            for anchor in [feature_landmarks.get(name)]
+        )
+    ):
+        raise ImportFailure(f"{asset.get('id')} has invalid source feature landmarks")
+    if "landmarks" in asset and source_geometry["landmarks"] != asset["landmarks"]:
+        raise ImportFailure(f"{asset.get('id')} source geometry landmarks are not source-bound")
+    if "canonical_bounds" in asset and source_geometry["canonical_bounds"] != asset["canonical_bounds"]:
+        raise ImportFailure(f"{asset.get('id')} source geometry bounds are not source-bound")
 
 
 def validate_anatomy_source_audit(asset: dict) -> None:
-    audit = asset.get("anatomy_authoring", {}).get("source_audit")
-    if (
-        not isinstance(audit, dict)
-        or audit.get("schema") != "alife.geneforge_anatomy_source_audit.v1"
-        or audit.get("semantic_lod") != "full"
-        or not re.fullmatch(r"[0-9a-f]{64}", str(audit.get("semantic_occupancy_sha256", "")))
-        or not isinstance(audit.get("occupied_pixels"), int)
-        or audit.get("occupied_pixels", 0) <= 0
-        or audit.get("landmarks") != sorted(asset.get("landmarks", {}))
-        or audit.get("landmark_positions") != asset.get("landmarks")
-        or not isinstance(audit.get("semantic_groups"), dict)
-        or not isinstance(audit.get("channel_atlas_bounds"), dict)
-    ):
+    audit = asset.get("anatomy_authoring", {}).get("source_projection_audit")
+    if not isinstance(audit, dict) or audit.get("schema") != ANATOMY_AUDIT_SCHEMA:
         raise ImportFailure(f"{asset.get('id')} has invalid source anatomy audit evidence")
-
-
-def _unit_pair(value) -> bool:
-    return isinstance(value, list) and len(value) == 2 and all(isinstance(v, (int, float)) and math.isfinite(v) and 0.0 <= v <= 1.0 for v in value)
-
-
-def _positive_unit_pair(value) -> bool:
-    return _unit_pair(value) and all(v > 0.0 for v in value)
-
-
-def _anatomy_polygon_error(points: list[list[float]]) -> str | None:
-    if len({tuple(point) for point in points}) != len(points):
-        return "degenerate polygon with repeated vertices"
-    for index, start in enumerate(points):
-        end = points[(index + 1) % len(points)]
-        if math.dist(start, end) <= ANATOMY_POLYGON_AREA_EPSILON:
-            return "degenerate polygon edge"
-    for first in range(len(points)):
-        first_next = (first + 1) % len(points)
-        for second in range(first + 1, len(points)):
-            second_next = (second + 1) % len(points)
-            if first in (second, second_next) or first_next in (second, second_next):
-                continue
-            if _segments_intersect(
-                points[first], points[first_next], points[second], points[second_next]
-            ):
-                return "self-intersecting polygon"
-    twice_area = abs(
-        sum(
-            start[0] * end[1] - end[0] * start[1]
-            for start, end in zip(points, points[1:] + points[:1])
-        )
+    source_geometry = (
+        asset.get("anatomy_authoring", {}).get("projection", {}).get("source_geometry")
     )
-    # Normalized UV polygons at or below this area are not raster-stable at 64x64.
-    if twice_area * 0.5 <= ANATOMY_POLYGON_AREA_EPSILON:
-        return "degenerate polygon area"
-    return None
+    source_feature_landmarks = (
+        source_geometry.get("feature_landmarks")
+        if isinstance(source_geometry, dict)
+        else None
+    )
+    lods = audit.get("lods")
+    if not isinstance(lods, dict) or set(lods) != {lod for lod, _, _ in LODS}:
+        raise ImportFailure(f"{asset.get('id')} source anatomy audit lacks every LOD")
+    required_channels = REQUIRED_ANATOMY_CHANNELS[asset["logical_slot"]]
+    for lod_name, evidence in lods.items():
+        bounds = evidence.get("source_bounds") if isinstance(evidence, dict) else None
+        if (
+            not isinstance(evidence, dict)
+            or any(
+                not isinstance(evidence.get(field), str)
+                or re.fullmatch(r"[0-9a-f]{64}", evidence[field]) is None
+                for field in ("obj_sha256", "semantic_sha256", "projection_sha256")
+            )
+            or not isinstance(evidence.get("projected_texels"), int)
+            or evidence["projected_texels"] <= 0
+            or not isinstance(evidence.get("inside_texels"), int)
+            or not isinstance(evidence.get("nearest_texels"), int)
+            or evidence["projected_texels"]
+            != evidence["inside_texels"] + evidence["nearest_texels"]
+            or not isinstance(evidence.get("overlap_texels"), int)
+            or not 0 <= evidence["overlap_texels"] <= evidence["inside_texels"]
+            or not isinstance(evidence.get("runtime_group_counts"), dict)
+            or not evidence["runtime_group_counts"]
+            or any(
+                not isinstance(group, str)
+                or group not in GROUP_REGIONS
+                or not isinstance(count, int)
+                or count <= 0
+                for group, count in evidence["runtime_group_counts"].items()
+            )
+            or not isinstance(evidence.get("channel_counts"), dict)
+            or set(evidence["channel_counts"]) != required_channels
+            or any(
+                not isinstance(count, int) or count <= 0
+                for count in evidence["channel_counts"].values()
+            )
+            or not isinstance(bounds, dict)
+            or not _finite_vector(bounds.get("min"), 3)
+            or not _finite_vector(bounds.get("max"), 3)
+            or any(lower > upper for lower, upper in zip(bounds["min"], bounds["max"]))
+            or not isinstance(evidence.get("derived_landmarks"), dict)
+            or not evidence["derived_landmarks"]
+            or any(
+                not isinstance(name, str) or not name or not _finite_vector(point, 3)
+                for name, point in evidence["derived_landmarks"].items()
+            )
+            or not isinstance(evidence.get("source_landmark_projections"), dict)
+            or not evidence["source_landmark_projections"]
+            or any(
+                not isinstance(name, str)
+                or not isinstance(projection, dict)
+                or not _finite_vector(projection.get("source"), 3)
+                or not _finite_vector(projection.get("projected"), 3)
+                or not isinstance(projection.get("face"), int)
+                or projection["face"] < 0
+                or not isinstance(projection.get("group"), str)
+                or projection["group"] not in GROUP_REGIONS
+                or not isinstance(projection.get("weights"), list)
+                or len(projection["weights"]) != 3
+                or any(
+                    not isinstance(weight, (int, float))
+                    or isinstance(weight, bool)
+                    or not math.isfinite(weight)
+                    or weight < -1.0e-6
+                    or weight > 1.0 + 1.0e-6
+                    for weight in projection["weights"]
+                )
+                or abs(sum(projection["weights"]) - 1.0) > 1.0e-5
+                or not isinstance(projection.get("distance"), (int, float))
+                or isinstance(projection["distance"], bool)
+                or not math.isfinite(projection["distance"])
+                or projection["distance"] < 0.0
+                for name, projection in evidence["source_landmark_projections"].items()
+            )
+            or not isinstance(evidence.get("feature_anchor_ownership"), dict)
+            or set(evidence["feature_anchor_ownership"]) != set(
+                REQUIRED_FEATURE_ANCHORS[asset["logical_slot"]]
+            )
+            or any(
+                not isinstance(name, str)
+                or not isinstance(ownership, dict)
+                or not isinstance(source_anchor, dict)
+                or ownership.get("channel") != channel
+                or not isinstance(ownership.get("owned_channel"), str)
+                or ownership["owned_channel"] != ownership["channel"]
+                or ownership["owned_channel"] != channel
+                or ownership["owned_channel"] != source_anchor.get("channel")
+                or ownership.get("runtime_group") != runtime_group
+                or ownership.get("group") != runtime_group
+                or not isinstance(ownership.get("x"), int)
+                or not 0 <= ownership["x"] < PNG_WIDTH
+                or not isinstance(ownership.get("y"), int)
+                or not 0 <= ownership["y"] < PNG_HEIGHT
+                or not _finite_vector(ownership.get("canonical"), 3)
+                or not _finite_vector(ownership.get("source"), 3)
+                or not _finite_vector(ownership.get("projected"), 3)
+                or not isinstance(ownership.get("face"), int)
+                or ownership["face"] < 0
+                or not isinstance(ownership.get("weights"), list)
+                or len(ownership["weights"]) != 3
+                or any(
+                    not isinstance(weight, (int, float))
+                    or isinstance(weight, bool)
+                    or not math.isfinite(weight)
+                    or weight < -1.0e-6
+                    or weight > 1.0 + 1.0e-6
+                    for weight in ownership["weights"]
+                )
+                or abs(sum(ownership["weights"]) - 1.0) > 1.0e-5
+                or not isinstance(ownership.get("distance"), (int, float))
+                or isinstance(ownership["distance"], bool)
+                or not math.isfinite(ownership["distance"])
+                or ownership["distance"] < 0.0
+                for name, (channel, runtime_group) in REQUIRED_FEATURE_ANCHORS[
+                    asset["logical_slot"]
+                ].items()
+                for ownership in [evidence["feature_anchor_ownership"].get(name)]
+                for source_anchor in [
+                    source_feature_landmarks.get(name)
+                    if isinstance(source_feature_landmarks, dict)
+                    else None
+                ]
+            )
+            or not isinstance(evidence.get("geometry_classification"), dict)
+            or any(
+                channel not in ALLOWED_ANATOMY_CHANNELS[asset["logical_slot"]]
+                or not isinstance(classification, dict)
+                or not isinstance(classification.get("groups"), list)
+                or not classification["groups"]
+                or any(group not in GROUP_REGIONS for group in classification["groups"])
+                or not isinstance(classification.get("landmarks"), list)
+                or any(not isinstance(name, str) or not name for name in classification["landmarks"])
+                for channel, classification in evidence["geometry_classification"].items()
+            )
+        ):
+            raise ImportFailure(
+                f"{asset.get('id')} {lod_name} has invalid source projection audit evidence"
+            )
 
 
-def _segments_intersect(a: list[float], b: list[float], c: list[float], d: list[float]) -> bool:
-    def orientation(p, q, r) -> float:
-        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
-
-    def on_segment(p, q, r) -> bool:
-        return (
-            min(p[0], r[0]) - ANATOMY_POLYGON_AREA_EPSILON
-            <= q[0]
-            <= max(p[0], r[0]) + ANATOMY_POLYGON_AREA_EPSILON
-            and min(p[1], r[1]) - ANATOMY_POLYGON_AREA_EPSILON
-            <= q[1]
-            <= max(p[1], r[1]) + ANATOMY_POLYGON_AREA_EPSILON
-        )
-
-    values = (orientation(a, b, c), orientation(a, b, d), orientation(c, d, a), orientation(c, d, b))
-    if (values[0] > 0.0) != (values[1] > 0.0) and (values[2] > 0.0) != (values[3] > 0.0):
-        return True
-    return any(
-        abs(value) <= ANATOMY_POLYGON_AREA_EPSILON and on_segment(start, point, end)
-        for value, start, point, end in (
-            (values[0], a, c, b),
-            (values[1], a, d, b),
-            (values[2], c, a, d),
-            (values[3], c, b, d),
+def _finite_vector(value, length: int) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == length
+        and all(
+            isinstance(component, (int, float))
+            and not isinstance(component, bool)
+            and math.isfinite(component)
+            for component in value
         )
     )
 
@@ -739,69 +889,907 @@ def decode_rgba_png(data: bytes) -> tuple[int, int, bytes]:
     return PNG_WIDTH, PNG_HEIGHT, bytes(pixels)
 
 
-def _point_in_polygon(point: tuple[float, float], vertices: list[list[float]]) -> bool:
-    x, y = point
-    inside = False
-    previous = vertices[-1]
-    for current in vertices:
-        x0, y0 = previous
-        x1, y1 = current
-        if (y0 > y) != (y1 > y):
-            crossing = (x1 - x0) * (y - y0) / (y1 - y0) + x0
-            if x <= crossing:
-                inside = not inside
-        previous = current
-    return inside
+def _parse_projection_obj(data: bytes) -> list[dict]:
+    if len(data) > MAX_STAGED_FILE_BYTES:
+        raise ImportFailure("anatomy source OBJ exceeds 512 KiB")
+    try:
+        lines = data.decode("ascii").splitlines()
+    except UnicodeDecodeError as error:
+        raise ImportFailure("anatomy source OBJ is not ASCII") from error
+    positions = []
+    uvs = []
+    triangles = []
+    group = None
+    for line_number, line in enumerate(lines, 1):
+        fields = line.split()
+        if not fields or fields[0].startswith("#"):
+            continue
+        try:
+            if fields[0] == "v":
+                if len(fields) != 4:
+                    raise ValueError("position arity")
+                position = tuple(float(value) for value in fields[1:4])
+                if not all(math.isfinite(value) for value in position):
+                    raise ValueError("non-finite position")
+                positions.append(position)
+            elif fields[0] == "vt":
+                if len(fields) < 3:
+                    raise ValueError("UV arity")
+                uv = tuple(float(value) for value in fields[1:3])
+                if not all(math.isfinite(value) for value in uv):
+                    raise ValueError("non-finite UV")
+                uvs.append(uv)
+            elif fields[0] == "g":
+                if len(fields) != 2 or fields[1] not in GROUP_REGIONS:
+                    raise ValueError("unknown runtime group")
+                group = fields[1]
+            elif fields[0] == "f":
+                if group is None or len(fields) != 4:
+                    raise ValueError("triangle/group contract")
+                references = [field.split("/") for field in fields[1:]]
+                if any(len(reference) < 2 for reference in references):
+                    raise ValueError("missing UV reference")
+                position_indices = [int(reference[0]) for reference in references]
+                uv_indices = [int(reference[1]) for reference in references]
+                if (
+                    any(index <= 0 or index > len(positions) for index in position_indices)
+                    or any(index <= 0 or index > len(uvs) for index in uv_indices)
+                ):
+                    raise ValueError("out-of-range OBJ index")
+                triangles.append(
+                    {
+                        "face": len(triangles),
+                        "group": group,
+                        "positions": tuple(positions[index - 1] for index in position_indices),
+                        "uvs": tuple(uvs[index - 1] for index in uv_indices),
+                    }
+                )
+        except (ValueError, IndexError) as error:
+            raise ImportFailure(
+                f"anatomy source OBJ is malformed at line {line_number}: {error}"
+            ) from error
+    if not positions or not uvs or not triangles:
+        raise ImportFailure("anatomy source OBJ has no projectable triangles")
+    return triangles
 
 
-def _zone_contains(shape: dict, uv: tuple[float, float]) -> bool:
-    if shape["kind"] == "ellipse":
-        dx = (uv[0] - shape["center"][0]) / shape["radius"][0]
-        dy = (uv[1] - shape["center"][1]) / shape["radius"][1]
-        return dx * dx + dy * dy <= 1.0
-    return _point_in_polygon(uv, shape["points"])
+def _closest_uv_weights(
+    point: tuple[float, float], triangle: tuple[tuple[float, float], ...]
+) -> tuple[float, tuple[float, float, float]]:
+    candidates = []
+    for first, second, opposite in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
+        start = triangle[first]
+        end = triangle[second]
+        edge = (end[0] - start[0], end[1] - start[1])
+        length_squared = edge[0] * edge[0] + edge[1] * edge[1]
+        amount = (
+            0.0
+            if length_squared <= 1.0e-18
+            else max(
+                0.0,
+                min(
+                    1.0,
+                    ((point[0] - start[0]) * edge[0] + (point[1] - start[1]) * edge[1])
+                    / length_squared,
+                ),
+            )
+        )
+        projected = (start[0] + edge[0] * amount, start[1] + edge[1] * amount)
+        weights = [0.0, 0.0, 0.0]
+        weights[first] = 1.0 - amount
+        weights[second] = amount
+        weights[opposite] = 0.0
+        distance_squared = sum((a - b) ** 2 for a, b in zip(point, projected))
+        candidates.append((distance_squared, tuple(weights)))
+    return min(candidates, key=lambda candidate: (candidate[0], candidate[1]))
 
 
-def anatomy_mask(semantic_png: bytes, profile: dict, logical_slot: str) -> bytes:
-    validate_anatomy_authoring({"id": "raster-input", "logical_slot": logical_slot, "anatomy_authoring": profile})
+def _project_semantic_texels(obj_bytes: bytes, semantic_png: bytes) -> list[dict]:
+    triangles = _parse_projection_obj(obj_bytes)
     width, height, semantic = decode_rgba_png(semantic_png)
-    if (width, height) != (64, 64):
-        raise ImportFailure("semantic mask for anatomy must be exactly 64x64 RGBA8")
-    color_to_group = {tuple(color[:3]): group for group, color in GROUP_COLORS.items()}
-    zones = sorted(profile["zones"], key=lambda zone: (zone["priority"], zone["id"]))
-    output = bytearray(width * height * 4)
-    used_channels = set()
+    groups_by_color = {}
+    for group, color in GROUP_COLORS.items():
+        if group in GROUP_REGIONS:
+            groups_by_color.setdefault(tuple(color[:3]), set()).add(group)
+    triangles_by_group = {}
+    exact_bins = {}
+    for triangle in triangles:
+        triangles_by_group.setdefault(triangle["group"], []).append(triangle)
+        minimum_x = max(
+            0,
+            math.ceil(min(uv[0] for uv in triangle["uvs"]) * width - 0.5 - 1.0e-9),
+        )
+        maximum_x = min(
+            width - 1,
+            math.floor(max(uv[0] for uv in triangle["uvs"]) * width - 0.5 + 1.0e-9),
+        )
+        minimum_y = max(
+            0,
+            math.ceil(min(uv[1] for uv in triangle["uvs"]) * height - 0.5 - 1.0e-9),
+        )
+        maximum_y = min(
+            height - 1,
+            math.floor(max(uv[1] for uv in triangle["uvs"]) * height - 0.5 + 1.0e-9),
+        )
+        for bin_y in range(minimum_y, maximum_y + 1):
+            for bin_x in range(minimum_x, maximum_x + 1):
+                exact_bins.setdefault((triangle["group"], bin_x, bin_y), []).append(
+                    triangle
+                )
+    records = []
     for y in range(height):
         for x in range(width):
             offset = (y * width + x) * 4
-            alpha = semantic[offset + 3]
-            if alpha == 0:
+            if semantic[offset + 3] == 0:
                 continue
-            semantic_color = tuple(semantic[offset : offset + 3])
-            group = color_to_group.get(semantic_color)
-            if group is None:
-                raise ImportFailure(f"semantic mask contains unknown occupied color {semantic_color}")
-            # Detail cells stay Primary; the coat baker treats their semantic roles.
-            channel = "primary"
-            strength = 255
-            selected_priority = None
-            atlas_uv = ((x + 0.5) / width, (y + 0.5) / height)
-            local_uv = semantic_source_uv(group, atlas_uv)
-            if not group.startswith("head."):
-                for zone in zones:
-                    if group not in zone["semantic_groups"] or not _zone_contains(zone["shape"], local_uv):
-                        continue
-                    if selected_priority == zone["priority"] and channel != zone["channel"]:
-                        raise ImportFailure(f"equal-priority anatomy zones conflict at pixel {x},{y}")
-                    channel = zone["channel"]
-                    strength = zone["strength"]
-                    selected_priority = zone["priority"]
-            output[offset : offset + 4] = bytes((*ANATOMY_COLORS[channel], strength))
-            used_channels.add(channel)
-    missing = REQUIRED_ANATOMY_CHANNELS[logical_slot] - used_channels
+            color = tuple(semantic[offset : offset + 3])
+            groups = groups_by_color.get(color)
+            if not groups:
+                raise ImportFailure(f"semantic mask contains unknown occupied color {color}")
+            candidates = [
+                triangle
+                for group in sorted(groups)
+                for triangle in triangles_by_group.get(group, ())
+            ]
+            if not candidates:
+                raise ImportFailure(
+                    f"semantic texel {x},{y} has no same-group OBJ triangle"
+                )
+            texel_uv = ((x + 0.5) / width, (y + 0.5) / height)
+            exact_candidates = [
+                triangle
+                for group in sorted(groups)
+                for triangle in exact_bins.get((group, x, y), ())
+            ]
+            exact = []
+            nearest = []
+            for triangle in exact_candidates:
+                weights = barycentric_weights(texel_uv, triangle["uvs"])
+                if weights is not None:
+                    exact.append((-min(weights), triangle["face"], triangle, weights))
+            if exact:
+                _, _, triangle, weights = min(exact)
+                mode = "inside"
+            else:
+                for triangle in candidates:
+                    distance_squared, closest = _closest_uv_weights(
+                        texel_uv, triangle["uvs"]
+                    )
+                    nearest.append(
+                        (distance_squared, triangle["face"], triangle, closest)
+                    )
+                _, _, triangle, weights = min(nearest)
+                mode = "nearest"
+            point = tuple(
+                sum(
+                    weights[corner] * triangle["positions"][corner][axis]
+                    for corner in range(3)
+                )
+                for axis in range(3)
+            )
+            records.append(
+                {
+                    "x": x,
+                    "y": y,
+                    "group": triangle["group"],
+                    "face": triangle["face"],
+                    "weights": weights,
+                    "point": point,
+                    "mode": mode,
+                    "overlap": len(exact),
+                }
+            )
+    if not records:
+        raise ImportFailure("semantic mask has no occupied anatomy texels")
+    return records
+
+
+def _point_bounds(records: list[dict]) -> tuple[list[float], list[float]]:
+    return (
+        [min(record["point"][axis] for record in records) for axis in range(3)],
+        [max(record["point"][axis] for record in records) for axis in range(3)],
+    )
+
+
+def _normalized_point(record: dict, bounds: tuple[list[float], list[float]]) -> tuple[float, float, float]:
+    lower, upper = bounds
+    return tuple(
+        0.5
+        if upper[axis] - lower[axis] <= 1.0e-12
+        else (record["point"][axis] - lower[axis]) / (upper[axis] - lower[axis])
+        for axis in range(3)
+    )
+
+
+def _select_records(candidates: list[dict], count: int, score) -> list[dict]:
+    return sorted(
+        candidates,
+        key=lambda record: (score(record), record["face"], record["y"], record["x"]),
+    )[: max(0, min(count, len(candidates)))]
+
+
+def _centroid(records: list[dict]) -> list[float]:
+    if not records:
+        raise ImportFailure("cannot derive an anatomy landmark from no source points")
+    return [
+        round(sum(record["point"][axis] for record in records) / len(records), 9)
+        for axis in range(3)
+    ]
+
+
+def _source_landmark_projection_data(
+    records: list[dict], profile: dict
+) -> tuple[dict[str, tuple[float, float, float]], dict[str, dict]]:
+    source_geometry = profile["projection"]["source_geometry"]
+    return _source_point_projection_data(
+        records,
+        source_geometry["landmarks"],
+        source_geometry["canonical_bounds"],
+    )
+
+
+def _source_point_projection_data(
+    records: list[dict],
+    points: dict[str, list[float]],
+    canonical: dict,
+) -> tuple[dict[str, tuple[float, float, float]], dict[str, dict]]:
+    actual = _point_bounds(records)
+    targets = {}
+    projections = {}
+    for name, source in sorted(points.items()):
+        if name == "canonical_bounds":
+            continue
+        target = tuple(
+            actual[0][axis]
+            + (source[axis] - canonical["min"][axis])
+            / (canonical["max"][axis] - canonical["min"][axis])
+            * (actual[1][axis] - actual[0][axis])
+            for axis in range(3)
+        )
+        nearest = min(
+            records,
+            key=lambda record: (
+                sum((record["point"][axis] - target[axis]) ** 2 for axis in range(3)),
+                record["face"],
+                record["y"],
+                record["x"],
+            ),
+        )
+        distance = math.sqrt(
+            sum((nearest["point"][axis] - target[axis]) ** 2 for axis in range(3))
+        )
+        targets[name] = target
+        projections[name] = {
+            "x": nearest["x"],
+            "y": nearest["y"],
+            "source": [round(value, 9) for value in target],
+            "projected": [round(value, 9) for value in nearest["point"]],
+            "face": nearest["face"],
+            "group": nearest["group"],
+            "weights": [round(value, 9) for value in nearest["weights"]],
+            "distance": round(distance, 9),
+        }
+    return targets, projections
+
+
+def _feature_anchor_projection_data(
+    records: list[dict], profile: dict
+) -> dict[str, dict]:
+    source_geometry = profile["projection"]["source_geometry"]
+    canonical = source_geometry["canonical_bounds"]
+    actual = _point_bounds(records)
+    projections = {}
+    for name, anchor in sorted(source_geometry["feature_landmarks"].items()):
+        source = anchor["point"]
+        target = tuple(
+            actual[0][axis]
+            + (source[axis] - canonical["min"][axis])
+            / (canonical["max"][axis] - canonical["min"][axis])
+            * (actual[1][axis] - actual[0][axis])
+            for axis in range(3)
+        )
+        candidates = [
+            record
+            for record in records
+            if record["group"] == anchor["runtime_group"]
+        ]
+        if not candidates:
+            raise ImportFailure(
+                f"feature anchor {name} has no {anchor['runtime_group']} source geometry"
+            )
+        nearest = min(
+            candidates,
+            key=lambda record: (
+                sum((record["point"][axis] - target[axis]) ** 2 for axis in range(3)),
+                record["face"],
+                record["y"],
+                record["x"],
+            ),
+        )
+        distance = math.sqrt(
+            sum((nearest["point"][axis] - target[axis]) ** 2 for axis in range(3))
+        )
+        projections[name] = {
+            "channel": anchor["channel"],
+            "runtime_group": anchor["runtime_group"],
+            "canonical": [round(value, 9) for value in source],
+            "x": nearest["x"],
+            "y": nearest["y"],
+            "source": [round(value, 9) for value in target],
+            "projected": [round(value, 9) for value in nearest["point"]],
+            "face": nearest["face"],
+            "group": nearest["group"],
+            "weights": [round(value, 9) for value in nearest["weights"]],
+            "distance": round(distance, 9),
+        }
+    return projections
+
+
+def _classify_projected_anatomy(
+    records: list[dict], profile: dict, logical_slot: str
+) -> tuple[dict[str, list[dict]], dict[str, dict], dict[str, dict], dict[str, dict]]:
+    targets, landmark_projections = _source_landmark_projection_data(records, profile)
+    feature_anchor_ownership = _feature_anchor_projection_data(records, profile)
+    for record in records:
+        record["channel"] = ANATOMY_DETAIL_GROUP_CHANNELS.get(record["group"], "primary")
+    classification = {}
+
+    def mark(channel: str, selected: list[dict], landmarks: tuple[str, ...] = ()) -> None:
+        entry = classification.setdefault(channel, {"groups": set(), "landmarks": set()})
+        entry["groups"].update(record["group"] for record in selected)
+        entry["landmarks"].update(landmarks)
+
+    def assign(
+        channel: str,
+        candidates: list[dict],
+        count: int,
+        target: tuple[float, float, float],
+        landmarks: tuple[str, ...],
+    ) -> list[dict]:
+        selected = _select_records(
+            [record for record in candidates if record["channel"] == "primary"],
+            count,
+            lambda record: sum(
+                (record["point"][axis] - target[axis]) ** 2 for axis in range(3)
+            ),
+        )
+        for record in selected:
+            record["channel"] = channel
+        mark(channel, selected, landmarks)
+        return selected
+
+    used_anchor_pixels = set()
+    for name, ownership in sorted(feature_anchor_ownership.items()):
+        anchor_candidates = [
+            record
+            for record in records
+            if record["group"] == ownership["runtime_group"]
+        ]
+        if name == "tail-tip":
+            tail_z = [record["point"][2] for record in anchor_candidates]
+            root_z, tip_z = max(tail_z), min(tail_z)
+            span = max(root_z - tip_z, 1.0e-12)
+            anchor_candidates = [
+                record
+                for record in anchor_candidates
+                if (root_z - record["point"][2]) / span >= 0.72
+            ]
+        candidates = [
+            record
+            for record in anchor_candidates
+            if (record["x"], record["y"]) not in used_anchor_pixels
+            and record["channel"] in {"primary", ownership["channel"]}
+        ]
+        if not candidates:
+            raise ImportFailure(f"feature anchor {name} did not resolve to an unused source texel")
+        target = ownership["source"]
+        anchor_record = min(
+            candidates,
+            key=lambda record: (
+                sum((record["point"][axis] - target[axis]) ** 2 for axis in range(3)),
+                record["face"],
+                record["y"],
+                record["x"],
+            ),
+        )
+        ownership.update(
+            {
+                "x": anchor_record["x"],
+                "y": anchor_record["y"],
+                "projected": [round(value, 9) for value in anchor_record["point"]],
+                "face": anchor_record["face"],
+                "group": anchor_record["group"],
+                "weights": [round(value, 9) for value in anchor_record["weights"]],
+                "distance": round(
+                    math.sqrt(
+                        sum(
+                            (anchor_record["point"][axis] - target[axis]) ** 2
+                            for axis in range(3)
+                        )
+                    ),
+                    9,
+                ),
+            }
+        )
+        used_anchor_pixels.add((anchor_record["x"], anchor_record["y"]))
+        if anchor_record["channel"] not in {"primary", ownership["channel"]}:
+            raise ImportFailure(
+                f"feature anchor {name} conflicts with {anchor_record['channel']} source detail"
+            )
+        anchor_record["channel"] = ownership["channel"]
+        ownership["owned_channel"] = anchor_record["channel"]
+        mark(ownership["channel"], [anchor_record], (name,))
+
+    for record in records:
+        channel = record["channel"]
+        if channel != "primary":
+            mark(channel, [record])
+
+    bounds = _point_bounds(records)
+    if logical_slot == "head":
+        main = [record for record in records if record["group"] == "head"]
+        if not main:
+            raise ImportFailure("head anatomy has no source head geometry")
+        eye_y = sum(targets[name][1] for name in ("left-eye", "right-eye")) / 2.0
+        eye_z = sum(targets[name][2] for name in ("left-eye", "right-eye")) / 2.0
+        left_target = (bounds[0][0], eye_y, eye_z)
+        right_target = (bounds[1][0], eye_y, eye_z)
+        ear_count = max(1, round(len(main) * 0.07))
+        ear_candidates = [
+            record
+            for record in main
+            if abs(_normalized_point(record, bounds)[0] - 0.5) >= 0.24
+        ]
+        left_ears = assign(
+            "inner-ear", ear_candidates, ear_count, left_target, ("left-eye",)
+        )
+        right_ears = assign(
+            "inner-ear",
+            [record for record in ear_candidates if record not in left_ears],
+            ear_count,
+            right_target,
+            ("right-eye",),
+        )
+        muzzle_candidates = [
+            record
+            for record in main
+            if abs(_normalized_point(record, bounds)[0] - 0.5) <= 0.34
+            and _normalized_point(record, bounds)[1] <= 0.68
+            and _normalized_point(record, bounds)[2] <= 0.58
+        ]
+        if not muzzle_candidates:
+            muzzle_candidates = main
+        assign(
+            "muzzle",
+            muzzle_candidates,
+            max(1, round(len(main) * 0.16)),
+            targets["muzzle"],
+            ("muzzle",),
+        )
+    elif logical_slot == "torso":
+        torso = [record for record in records if record["group"] == "torso"]
+        if not torso:
+            raise ImportFailure("torso anatomy has no source torso geometry")
+        hip_names = ("left-hip-attachment", "right-hip-attachment")
+        y_target = sum(targets[name][1] for name in hip_names) / 2.0
+        tail_target = targets["tail-root"]
+        front_z = bounds[0][2] if tail_target[2] > sum(bounds[axis][2] for axis in (0, 1)) / 2.0 else bounds[1][2]
+        belly_target = (0.0, y_target, front_z)
+        belly_candidates = [
+            record
+            for record in torso
+            if abs(_normalized_point(record, bounds)[0] - 0.5) <= 0.36
+            and _normalized_point(record, bounds)[2] <= 0.58
+        ]
+        assign(
+            "belly",
+            belly_candidates,
+            max(1, round(len(torso) * 0.28)),
+            belly_target,
+            hip_names,
+        )
+        assign(
+            "secondary-marking",
+            torso,
+            max(1, round(len(torso) * 0.18)),
+            tail_target,
+            ("tail-root",),
+        )
+    elif logical_slot in {"arms", "legs"}:
+        distal_name = "hand" if logical_slot == "arms" else "foot"
+        root_name = "shoulder-attachment" if logical_slot == "arms" else "hip-attachment"
+        for group in sorted({record["group"] for record in records}):
+            group_records = [record for record in records if record["group"] == group]
+            side = "left" if group.startswith("left-") else "right"
+            distal = f"{side}-{distal_name}"
+            root = f"{side}-{root_name}"
+            distal_target = targets[distal]
+            root_target = targets[root]
+            group_bounds = _point_bounds(group_records)
+            distal_candidates = [
+                record
+                for record in group_records
+                if _normalized_point(record, group_bounds)[1] <= 0.46
+            ]
+            selected = assign(
+                "hands-feet",
+                distal_candidates,
+                max(1, round(len(group_records) * 0.30)),
+                distal_target,
+                (distal,),
+            )
+            midpoint = tuple((distal_target[axis] + root_target[axis]) / 2.0 for axis in range(3))
+            assign(
+                "secondary-marking",
+                [record for record in group_records if record not in selected],
+                max(1, round(len(group_records) * 0.16)),
+                midpoint,
+                (distal, root),
+            )
+    elif logical_slot == "tail":
+        tail = [record for record in records if record["group"] == "tail-back"]
+        if not tail:
+            raise ImportFailure("tail anatomy has no source tail geometry")
+        tip_target = targets["tail-tip"]
+        root_target = targets["tail-root"]
+        root_z = max(record["point"][2] for record in tail)
+        tip_z = min(record["point"][2] for record in tail)
+        span = max(root_z - tip_z, 1.0e-12)
+        tip_candidates = [
+            record
+            for record in tail
+            if (root_z - record["point"][2]) / span >= 0.72
+        ]
+        assign(
+            "keratin-skin",
+            tip_candidates,
+            max(1, round(len(tail) * 0.30)),
+            tip_target,
+            ("tail-tip",),
+        )
+        midpoint = tuple((tip_target[axis] + root_target[axis]) / 2.0 for axis in range(3))
+        middle_candidates = [
+            record
+            for record in tail
+            if record["channel"] == "primary"
+            and 0.28 <= (root_z - record["point"][2]) / span <= 0.82
+        ]
+        assign(
+            "secondary-marking",
+            middle_candidates,
+            max(1, round(len(tail) * 0.25)),
+            midpoint,
+            ("tail-root", "tail-tip"),
+        )
+    else:
+        raise ImportFailure(f"unsupported anatomy slot {logical_slot}")
+    by_channel = {}
+    for record in records:
+        by_channel.setdefault(record["channel"], []).append(record)
+    for channel, channel_records in by_channel.items():
+        mark(channel, channel_records)
+    missing = REQUIRED_ANATOMY_CHANNELS[logical_slot] - set(by_channel)
     if missing:
-        raise ImportFailure(f"anatomy raster lacks required {logical_slot} channels: {sorted(missing)}")
-    return png_bytes(width, height, bytes(output))
+        raise ImportFailure(
+            f"source geometry cannot localize required {logical_slot} channels: {sorted(missing)}"
+        )
+    return by_channel, classification, landmark_projections, feature_anchor_ownership
+
+
+def _derived_anatomy_landmarks(
+    records: list[dict], by_channel: dict[str, list[dict]], logical_slot: str
+) -> dict[str, list[float]]:
+    landmarks = {
+        f"channel.{channel}": _centroid(channel_records)
+        for channel, channel_records in sorted(by_channel.items())
+    }
+    if logical_slot == "head":
+        ears = by_channel["inner-ear"]
+        landmarks["head.left-lateral"] = _centroid(
+            [record for record in ears if record["point"][0] <= 0.0] or ears
+        )
+        landmarks["head.right-lateral"] = _centroid(
+            [record for record in ears if record["point"][0] > 0.0] or ears
+        )
+        landmarks["head.muzzle"] = _centroid(by_channel["muzzle"])
+    elif logical_slot in {"arms", "legs"}:
+        for group in sorted({record["group"] for record in records}):
+            grouped = [record for record in records if record["group"] == group]
+            ordered = sorted(grouped, key=lambda record: (record["point"][1], record["face"]))
+            count = max(1, len(ordered) // 10)
+            landmarks[f"{group}.distal"] = _centroid(ordered[:count])
+            landmarks[f"{group}.root"] = _centroid(ordered[-count:])
+            if logical_slot == "legs":
+                ground_y = ordered[0]["point"][1]
+                contacts = [
+                    record
+                    for record in ordered
+                    if abs(record["point"][1] - ground_y) <= 1.0e-6
+                ]
+                landmarks[f"{group}.ground-contact"] = _centroid(contacts)
+    elif logical_slot == "tail":
+        ordered = sorted(records, key=lambda record: (record["point"][2], record["face"]))
+        count = max(1, len(ordered) // 10)
+        landmarks["tail.tip"] = _centroid(ordered[:count])
+        landmarks["tail.root"] = _centroid(ordered[-count:])
+    return dict(sorted(landmarks.items()))
+
+
+def _projection_digest(records: list[dict]) -> str:
+    evidence = [
+        {
+            "x": record["x"],
+            "y": record["y"],
+            "group": record["group"],
+            "face": record["face"],
+            "weights": [round(value, 9) for value in record["weights"]],
+            "point": [round(value, 9) for value in record["point"]],
+            "mode": record["mode"],
+        }
+        for record in records
+    ]
+    payload = json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def anatomy_mask_with_audit(
+    semantic_png: bytes,
+    obj_bytes: bytes,
+    profile: dict,
+    logical_slot: str,
+    *,
+    validate_profile: bool = True,
+) -> tuple[bytes, dict]:
+    if validate_profile:
+        validate_anatomy_authoring(
+            {
+                "id": "raster-input",
+                "logical_slot": logical_slot,
+                "anatomy_authoring": profile,
+            }
+        )
+    records = _project_semantic_texels(obj_bytes, semantic_png)
+    (
+        by_channel,
+        geometry_classification,
+        landmark_projections,
+        feature_anchor_ownership,
+    ) = _classify_projected_anatomy(
+        records, profile, logical_slot
+    )
+    output = bytearray(PNG_WIDTH * PNG_HEIGHT * 4)
+    for record in records:
+        offset = (record["y"] * PNG_WIDTH + record["x"]) * 4
+        output[offset : offset + 4] = bytes((*ANATOMY_COLORS[record["channel"]], 255))
+    lower, upper = _point_bounds(records)
+    runtime_group_counts = {
+        group: sum(record["group"] == group for record in records)
+        for group in sorted({record["group"] for record in records})
+    }
+    audit = {
+        "obj_sha256": hashlib.sha256(obj_bytes).hexdigest(),
+        "semantic_sha256": hashlib.sha256(semantic_png).hexdigest(),
+        "projection_sha256": _projection_digest(records),
+        "projected_texels": len(records),
+        "inside_texels": sum(record["mode"] == "inside" for record in records),
+        "nearest_texels": sum(record["mode"] == "nearest" for record in records),
+        "overlap_texels": sum(record["overlap"] > 1 for record in records),
+        "runtime_group_counts": runtime_group_counts,
+        "channel_counts": {
+            channel: len(channel_records)
+            for channel, channel_records in sorted(by_channel.items())
+        },
+        "geometry_classification": {
+            channel: {
+                "groups": sorted(classification["groups"]),
+                "landmarks": sorted(classification["landmarks"]),
+            }
+            for channel, classification in sorted(geometry_classification.items())
+        },
+        "source_landmark_projections": landmark_projections,
+        "feature_anchor_ownership": feature_anchor_ownership,
+        "source_bounds": {
+            "min": [round(value, 9) for value in lower],
+            "max": [round(value, 9) for value in upper],
+        },
+        "derived_landmarks": _derived_anatomy_landmarks(
+            records, by_channel, logical_slot
+        ),
+    }
+    return png_bytes(PNG_WIDTH, PNG_HEIGHT, bytes(output)), audit
+
+
+def anatomy_mask(
+    semantic_png: bytes, obj_bytes: bytes, profile: dict, logical_slot: str
+) -> bytes:
+    return anatomy_mask_with_audit(
+        semantic_png, obj_bytes, profile, logical_slot
+    )[0]
+
+
+def _source_feature_landmarks(asset: dict, staging: Path) -> dict[str, dict]:
+    full_lod = next(lod for lod in asset["lods"] if lod["lod"] == "full")
+    triangles = _parse_projection_obj(
+        confined_existing_staged_path(
+            staging, full_lod["generated_obj"], "full source geometry"
+        ).read_bytes()
+    )
+    points_by_group = {}
+    for triangle in triangles:
+        points_by_group.setdefault(triangle["group"], []).extend(triangle["positions"])
+    all_points = [point for points in points_by_group.values() for point in points]
+    actual_bounds = (
+        [min(point[axis] for point in all_points) for axis in range(3)],
+        [max(point[axis] for point in all_points) for axis in range(3)],
+    )
+    canonical = asset["canonical_bounds"]
+
+    def to_actual(point: list[float] | tuple[float, float, float]) -> tuple[float, float, float]:
+        return tuple(
+            actual_bounds[0][axis]
+            + (point[axis] - canonical["min"][axis])
+            / (canonical["max"][axis] - canonical["min"][axis])
+            * (actual_bounds[1][axis] - actual_bounds[0][axis])
+            for axis in range(3)
+        )
+
+    def to_canonical(point: tuple[float, float, float]) -> list[float]:
+        return [
+            round(
+                canonical["min"][axis]
+                + (point[axis] - actual_bounds[0][axis])
+                / (actual_bounds[1][axis] - actual_bounds[0][axis])
+                * (canonical["max"][axis] - canonical["min"][axis]),
+                9,
+            )
+            for axis in range(3)
+        ]
+
+    def nearest(group: str, canonical_target: list[float]) -> tuple[float, float, float]:
+        target = to_actual(canonical_target)
+        points = points_by_group.get(group, [])
+        if not points:
+            raise ImportFailure(f"{asset['id']} has no source geometry group {group}")
+        return min(
+            points,
+            key=lambda point: (
+                sum((point[axis] - target[axis]) ** 2 for axis in range(3)),
+                point,
+            ),
+        )
+
+    def feature(
+        channel: str,
+        runtime_group: str,
+        point: tuple[float, float, float],
+        basis: list[str],
+    ) -> dict:
+        return {
+            "channel": channel,
+            "runtime_group": runtime_group,
+            "source_group": runtime_group,
+            "point": to_canonical(point),
+            "source_position": [round(value, 9) for value in point],
+            "source_basis": basis,
+            "method": "source-geometry-anchor-v1",
+        }
+
+    landmarks = asset["landmarks"]
+    features = {}
+    if asset["logical_slot"] == "head":
+        head_points = points_by_group["head"]
+        left_eye = to_actual(landmarks["left-eye"])
+        right_eye = to_actual(landmarks["right-eye"])
+        left_ear = min(
+            head_points,
+            key=lambda point: (point[0], abs(point[1] - left_eye[1]), abs(point[2] - left_eye[2]), point),
+        )
+        right_ear = min(
+            head_points,
+            key=lambda point: (-point[0], abs(point[1] - right_eye[1]), abs(point[2] - right_eye[2]), point),
+        )
+        features["left-ear"] = feature(
+            "inner-ear", "head", left_ear, ["source-geometry:head", "landmark:left-eye"]
+        )
+        features["right-ear"] = feature(
+            "inner-ear", "head", right_ear, ["source-geometry:head", "landmark:right-eye"]
+        )
+        features["muzzle"] = feature(
+            "muzzle",
+            "head",
+            nearest("head", landmarks["muzzle"]),
+            ["source-geometry:head", "landmark:muzzle"],
+        )
+    elif asset["logical_slot"] == "torso":
+        hip_y = (landmarks["left-hip-attachment"][1] + landmarks["right-hip-attachment"][1]) / 2.0
+        belly_target = [0.0, hip_y, canonical["min"][2]]
+        features["belly"] = feature(
+            "belly",
+            "torso",
+            nearest("torso", belly_target),
+            [
+                "source-geometry:torso",
+                "landmark:left-hip-attachment",
+                "landmark:right-hip-attachment",
+                "landmark:tail-root",
+            ],
+        )
+    elif asset["logical_slot"] == "arms":
+        for side in ("left", "right"):
+            name = f"{side}-hand"
+            features[name] = feature(
+                "hands-feet",
+                f"{side}-arm",
+                nearest(f"{side}-arm", landmarks[name]),
+                [f"source-geometry:{side}-arm", f"landmark:{name}"],
+            )
+    elif asset["logical_slot"] == "legs":
+        for side in ("left", "right"):
+            name = f"{side}-foot"
+            features[name] = feature(
+                "hands-feet",
+                f"{side}-leg",
+                nearest(f"{side}-leg", landmarks[name]),
+                [f"source-geometry:{side}-leg", f"landmark:{name}"],
+            )
+    elif asset["logical_slot"] == "tail":
+        tail_tip = min(
+            points_by_group["tail-back"],
+            key=lambda point: (point[2], point[0], point[1], point),
+        )
+        features["tail-tip"] = feature(
+            "keratin-skin",
+            "tail-back",
+            tail_tip,
+            ["source-geometry:tail-back", "landmark:tail-tip", "derived:distal-z-extreme"],
+        )
+    return features
+
+
+def source_projected_anatomy_authoring(asset: dict, staging: Path) -> dict:
+    source_groups = set(asset["groups"].values())
+    for role in asset.get("detail_groups", {}):
+        source_groups.add(f"head.{role}")
+    profile = {
+        "schema": ANATOMY_AUTHORING_SCHEMA,
+        "coordinate_space": "same-lod-staged-obj",
+        "default_channel": "primary",
+        "required_channels": sorted(REQUIRED_ANATOMY_CHANNELS[asset["logical_slot"]]),
+        "projection": {
+            "schema": ANATOMY_PROJECTION_SCHEMA,
+            "texel_sample": "pixel-center",
+            "triangle_tie_break": ANATOMY_TRIANGLE_TIE_BREAK,
+            "classifier": ANATOMY_CLASSIFIER,
+            "detail_group_channels": ANATOMY_DETAIL_GROUP_CHANNELS,
+            "source_geometry": {
+                "schema": ANATOMY_SOURCE_GEOMETRY_SCHEMA,
+                "groups": sorted(source_groups),
+                "landmarks": json.loads(json.dumps(asset["landmarks"])),
+                "canonical_bounds": json.loads(json.dumps(asset["canonical_bounds"])),
+                "feature_landmarks": _source_feature_landmarks(asset, staging),
+            },
+        },
+    }
+    lod_audits = {}
+    for lod in asset["lods"]:
+        obj_bytes = confined_existing_staged_path(
+            staging, lod["generated_obj"], "generated OBJ"
+        ).read_bytes()
+        semantic_bytes = confined_existing_staged_path(
+            staging, lod["semantic_mask"], "semantic mask"
+        ).read_bytes()
+        _, lod_audits[lod["lod"]] = anatomy_mask_with_audit(
+            semantic_bytes,
+            obj_bytes,
+            profile,
+            asset["logical_slot"],
+            validate_profile=False,
+        )
+    profile["source_projection_audit"] = {
+        "schema": ANATOMY_AUDIT_SCHEMA,
+        "lods": lod_audits,
+    }
+    return profile
 
 
 def draw_line(pixels: bytearray, width: int, height: int, start, end, color) -> None:
@@ -913,6 +1901,32 @@ def command_bind_output_digests(args, recipe: dict) -> None:
                 digest = sha256_file(path)
                 lod[digest_field] = digest
                 bound_outputs[raw.as_posix()] = digest
+    for asset in recipe["part_assets"]:
+        source_geometry = asset.get("anatomy_authoring", {}).get("projection", {}).get(
+            "source_geometry", {}
+        )
+        if "feature_landmarks" not in source_geometry:
+            asset["anatomy_authoring"] = source_projected_anatomy_authoring(
+                asset, staging
+            )
+        for lod in asset["lods"]:
+            expected = anatomy_mask(
+                confined_existing_staged_path(
+                    staging, lod["semantic_mask"], "bound semantic mask"
+                ).read_bytes(),
+                confined_existing_staged_path(
+                    staging, lod["generated_obj"], "bound generated OBJ"
+                ).read_bytes(),
+                asset["anatomy_authoring"],
+                asset["logical_slot"],
+            )
+            actual = confined_existing_staged_path(
+                staging, lod["anatomy_mask"], "bound anatomy mask"
+            ).read_bytes()
+            if actual != expected:
+                raise ImportFailure(
+                    f"bound anatomy mask is not projected from {asset['id']} {lod['lod']}"
+                )
     if set(receipt.get("outputs", {})) != set(bound_outputs):
         raise ImportFailure(
             "build receipt outputs do not exactly match the recipe digest-binding paths"
@@ -959,6 +1973,59 @@ def _expected_receipt_outputs(recipe: dict, include_anatomy: bool) -> dict[str, 
     return expected
 
 
+def _staging_file_set(staging: Path) -> set[str]:
+    _assert_tree_has_no_reparse_entries(staging)
+    root = _canonical_staging_root(staging)
+    files = set()
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        for entry in sorted(os.scandir(directory), key=lambda candidate: candidate.name):
+            path = Path(entry.path)
+            if entry.is_dir(follow_symlinks=False):
+                pending.append(path)
+            elif entry.is_file(follow_symlinks=False):
+                files.add(path.relative_to(root).as_posix())
+            else:
+                raise ImportFailure(
+                    f"staged tree contains a non-regular path: {path.relative_to(root)}"
+                )
+    return files
+
+
+def _authority_frozen_contract(recipe: dict) -> dict:
+    frozen = json.loads(json.dumps(recipe))
+    frozen.pop("recipe_sha256", None)
+    for asset in frozen.get("part_assets", []):
+        asset["anatomy_authoring"] = "<allowed-anatomy-authoring-change>"
+        for lod in asset.get("lods", []):
+            lod.pop("anatomy_mask_sha256", None)
+            lod.pop("socket_manifest_sha256", None)
+    return frozen
+
+
+def _validate_authority_handoff(authority: dict, candidate: dict) -> None:
+    if _authority_frozen_contract(authority) != _authority_frozen_contract(candidate):
+        raise ImportFailure(
+            "candidate recipe changes pre-existing asset identities, paths, or path/digest tuples"
+        )
+
+
+def _load_live_authority_recipe(authority_path: Path, output: Path) -> dict:
+    authority_path = Path(authority_path)
+    output = Path(output)
+    if _is_symlink_or_reparse(authority_path) or _is_symlink_or_reparse(output):
+        raise ImportFailure("live prior output recipe is a symlink or reparse point")
+    authority_path = authority_path.resolve(strict=False)
+    output = output.resolve(strict=False)
+    if authority_path != output:
+        raise ImportFailure("authority recipe must be the live prior output recipe")
+    try:
+        return load_recipe(output, validate_current_anatomy=False)
+    except OSError as error:
+        raise ImportFailure(f"live prior output recipe is unavailable: {output}") from error
+
+
 def _verify_receipt_outputs(
     staging: Path,
     receipt: dict,
@@ -998,6 +2065,14 @@ def _verify_receipt_outputs(
         raise ImportFailure(
             "existing build receipt must contain exactly 126 legacy or 168 augmented outputs"
         )
+    actual_files = _staging_file_set(staging)
+    expected_files = output_set | {"build_receipt.json"}
+    extra_files = sorted(actual_files - expected_files)
+    missing_files = sorted(expected_files - actual_files)
+    if extra_files:
+        raise ImportFailure(f"unreceipted staged path: {extra_files[0]}")
+    if missing_files:
+        raise ImportFailure(f"receipt references a missing staged path: {missing_files[0]}")
 
     expected_donors = set(expected_by_donor)
     sources = receipt.get("sources")
@@ -1074,7 +2149,12 @@ def _validate_augmented_tree(staging: Path, recipe: dict) -> dict[str, str]:
     if len(recipe["part_assets"]) != 14:
         raise ImportFailure("anatomy augmentation requires 14 production assets")
     for asset in recipe["part_assets"]:
+        validate_anatomy_authoring(asset)
+        validate_anatomy_source_audit(asset)
         for lod in asset["lods"]:
+            obj_path = confined_existing_staged_path(
+                staging, lod["generated_obj"], "generated anatomy source OBJ"
+            )
             semantic_path = confined_existing_staged_path(
                 staging, lod["semantic_mask"], "semantic staging mask"
             )
@@ -1087,6 +2167,25 @@ def _validate_augmented_tree(staging: Path, recipe: dict) -> dict[str, str]:
             anatomy_width, anatomy_height, anatomy = decode_rgba_png(
                 anatomy_path.read_bytes()
             )
+            expected_anatomy, expected_audit = anatomy_mask_with_audit(
+                semantic_path.read_bytes(),
+                obj_path.read_bytes(),
+                asset["anatomy_authoring"],
+                asset["logical_slot"],
+            )
+            if anatomy_path.read_bytes() != expected_anatomy:
+                raise ImportFailure(
+                    f"anatomy mask is not derived from its same-LOD OBJ: {lod['anatomy_mask']}"
+                )
+            if (
+                asset["anatomy_authoring"]["source_projection_audit"]["lods"].get(
+                    lod["lod"]
+                )
+                != expected_audit
+            ):
+                raise ImportFailure(
+                    f"source projection audit does not match {asset['id']} {lod['lod']}"
+                )
             if (
                 (semantic_width, semantic_height) != (64, 64)
                 or (anatomy_width, anatomy_height) != (64, 64)
@@ -1172,6 +2271,126 @@ def _augmentation_transaction_path(staging: Path) -> Path:
     return staging.with_name(f".{staging.name}.augment-transaction.json")
 
 
+def _flush_file(path: Path) -> None:
+    try:
+        with Path(path).open("r+b") as stream:
+            os.fsync(stream.fileno())
+    except OSError as error:
+        raise ImportFailure(f"cannot flush durable file data: {path}") from error
+
+
+def _flush_windows_directory(path: Path) -> bool:
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    handle = create_file(
+        str(path),
+        0x40000000,
+        0x00000001 | 0x00000002 | 0x00000004,
+        None,
+        3,
+        0x02000000,
+        None,
+    )
+    invalid_handle = wintypes.HANDLE(-1).value
+    if handle == invalid_handle:
+        error = ctypes.get_last_error()
+        if error in {1, 5, 50, 87}:
+            return False
+        raise OSError(error, f"CreateFileW directory flush failed for {path}")
+    try:
+        if kernel32.FlushFileBuffers(handle):
+            return True
+        error = ctypes.get_last_error()
+        if error in {1, 5, 6, 50, 87}:
+            return False
+        raise OSError(error, f"FlushFileBuffers directory flush failed for {path}")
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _flush_directory(path: Path) -> bool:
+    path = Path(path)
+    try:
+        if os.name == "nt":
+            # Some Windows filesystems reject directory FlushFileBuffers. File data is
+            # still flushed; only this documented unsupported-handle case is best effort.
+            return _flush_windows_directory(path)
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        descriptor = os.open(path, flags)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        return True
+    except OSError as error:
+        if getattr(error, "errno", None) in {1, 5, 13, 22, 50, 95}:
+            return False
+        raise ImportFailure(f"cannot flush containing directory: {path}") from error
+
+
+def _require_directory_flush(path: Path) -> None:
+    if not _flush_directory(path):
+        raise ImportFailure(f"directory durability barrier unavailable: {path}")
+
+
+def _durable_replace(source: Path, target: Path) -> None:
+    source = Path(source)
+    target = Path(target)
+    source_parent = source.parent
+    target_parent = target.parent
+    if source.is_file():
+        _flush_file(source)
+    os.replace(source, target)
+    if target.is_file():
+        _flush_file(target)
+    _require_directory_flush(target_parent)
+    if source_parent != target_parent:
+        _require_directory_flush(source_parent)
+
+
+def _durable_remove(path: Path) -> None:
+    path = Path(path)
+    if not path.exists() and not _is_symlink_or_reparse(path):
+        return
+    if _is_symlink_or_reparse(path):
+        raise ImportFailure(f"refusing to remove a symlink or reparse recovery operand: {path}")
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+    _require_directory_flush(path.parent)
+
+
+def _flush_tree(root: Path) -> None:
+    _assert_tree_has_no_reparse_entries(root)
+    directories = []
+    for directory, child_directories, files in os.walk(root, topdown=True, followlinks=False):
+        current = Path(directory)
+        directories.append(current)
+        child_directories.sort()
+        for name in sorted(files):
+            path = current / name
+            if _is_symlink_or_reparse(path) or not path.is_file():
+                raise ImportFailure(f"cannot durably flush non-regular staged path: {path}")
+            _flush_file(path)
+    for directory in reversed(directories):
+        _require_directory_flush(directory)
+    _require_directory_flush(root.parent)
+
+
 def _durable_json_write(path: Path, payload: dict) -> None:
     temporary = path.with_name(f".{path.name}.write-{os.getpid()}")
     with temporary.open("w", encoding="utf-8", newline="\n") as stream:
@@ -1179,7 +2398,8 @@ def _durable_json_write(path: Path, payload: dict) -> None:
         stream.write("\n")
         stream.flush()
         os.fsync(stream.fileno())
-    os.replace(temporary, path)
+    _flush_file(temporary)
+    _durable_replace(temporary, path)
 
 
 def _pair_recipe_digest(path: Path, label: str) -> str:
@@ -1187,10 +2407,156 @@ def _pair_recipe_digest(path: Path, label: str) -> str:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ImportFailure(f"{label} is unreadable: {path}") from error
+    if not isinstance(payload, dict):
+        raise ImportFailure(f"{label} must contain a JSON object: {path}")
     digest = payload.get("recipe_sha256")
     if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
         raise ImportFailure(f"{label} has no valid recipe digest: {path}")
     return digest.lower()
+
+
+def _staging_tree_digest(staging: Path) -> str:
+    root = _canonical_staging_root(staging)
+    digest = hashlib.sha256()
+    for relative in sorted(_staging_file_set(root)):
+        path = confined_existing_staged_path(root, relative, "transaction staged file")
+        encoded = relative.encode("utf-8")
+        digest.update(len(encoded).to_bytes(4, "big"))
+        digest.update(encoded)
+        digest.update(path.stat().st_size.to_bytes(8, "big"))
+        digest.update(bytes.fromhex(sha256_file(path)))
+    return digest.hexdigest()
+
+
+def _valid_marker_digest(value) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def _validate_transaction_marker(
+    transaction, staging: Path, output: Path
+) -> dict[str, object]:
+    path_fields = {
+        "staging",
+        "temporary",
+        "backup",
+        "output",
+        "recipe_temporary",
+        "recipe_backup",
+    }
+    digest_fields = {
+        "old_recipe_sha256",
+        "new_recipe_sha256",
+        "old_recipe_file_sha256",
+        "new_recipe_file_sha256",
+        "old_receipt_file_sha256",
+        "new_receipt_file_sha256",
+        "old_staging_tree_sha256",
+        "new_staging_tree_sha256",
+    }
+    required_fields = {"schema", "phase"} | path_fields | digest_fields
+    if not isinstance(transaction, dict) or set(transaction) != required_fields:
+        raise ImportFailure("anatomy transaction marker has missing or unknown fields")
+    if transaction["schema"] != ANATOMY_TRANSACTION_SCHEMA:
+        raise ImportFailure("anatomy transaction marker has an unsupported schema")
+    if transaction["phase"] not in {
+        "prepared",
+        "staging-backed-up",
+        "staging-promoted",
+        "recipe-promoted",
+    }:
+        raise ImportFailure("anatomy transaction marker has an invalid phase")
+    if any(not isinstance(transaction[field], str) for field in path_fields):
+        raise ImportFailure("anatomy transaction marker has a non-string path field")
+    if any(not _valid_marker_digest(transaction[field]) for field in digest_fields):
+        raise ImportFailure("anatomy transaction marker has an invalid SHA-256 field")
+    expected_staging = str(staging.resolve(strict=False))
+    expected_output = str(output.resolve(strict=False))
+    if (
+        transaction["staging"] != expected_staging
+        or transaction["output"] != expected_output
+    ):
+        raise ImportFailure("anatomy transaction marker does not match requested staging/output")
+    return transaction
+
+
+def _validate_recovery_operands(transaction: dict, staging: Path, output: Path) -> dict[str, Path]:
+    paths = {
+        field: Path(transaction[field])
+        for field in (
+            "staging",
+            "temporary",
+            "backup",
+            "output",
+            "recipe_temporary",
+            "recipe_backup",
+        )
+    }
+    expected_paths = (
+        (paths["staging"], staging.parent.resolve(), staging.name, False),
+        (
+            paths["temporary"],
+            staging.parent.resolve(),
+            f"{staging.name}.augment-tmp-",
+            True,
+        ),
+        (
+            paths["backup"],
+            staging.parent.resolve(),
+            f"{staging.name}.augment-rollback-",
+            True,
+        ),
+        (paths["output"], output.parent.resolve(), output.name, False),
+        (
+            paths["recipe_temporary"],
+            output.parent.resolve(),
+            f".{output.name}.augment-tmp-",
+            True,
+        ),
+        (
+            paths["recipe_backup"],
+            output.parent.resolve(),
+            f".{output.name}.augment-rollback-",
+            True,
+        ),
+    )
+    for path, parent, expected_name, is_prefix in expected_paths:
+        name_matches = (
+            path.name.startswith(expected_name) if is_prefix else path.name == expected_name
+        )
+        if path.parent.resolve(strict=False) != parent or not name_matches:
+            raise ImportFailure("anatomy transaction marker contains an unsafe recovery path")
+        if _is_symlink_or_reparse(path):
+            raise ImportFailure(
+                f"anatomy transaction recovery operand is a symlink or reparse point: {path}"
+            )
+    return paths
+
+
+def _recipe_file_matches(path: Path, recipe_digest: str, file_digest: str) -> bool:
+    if _is_symlink_or_reparse(path) or not path.is_file():
+        return False
+    return (
+        sha256_file(path) == file_digest
+        and _pair_recipe_digest(path, "transaction recipe") == recipe_digest
+    )
+
+
+def _staging_generation_matches(
+    path: Path,
+    recipe_digest: str,
+    receipt_file_digest: str,
+    tree_digest: str,
+) -> bool:
+    if _is_symlink_or_reparse(path) or not path.is_dir():
+        return False
+    receipt = path / "build_receipt.json"
+    return (
+        not _is_symlink_or_reparse(receipt)
+        and receipt.is_file()
+        and sha256_file(receipt) == receipt_file_digest
+        and _pair_recipe_digest(receipt, "transaction staging receipt") == recipe_digest
+        and _staging_tree_digest(path) == tree_digest
+    )
 
 
 def _write_augmentation_phase(marker: Path, transaction: dict, phase: str) -> None:
@@ -1198,65 +2564,127 @@ def _write_augmentation_phase(marker: Path, transaction: dict, phase: str) -> No
     _durable_json_write(marker, transaction)
 
 
+def _cleanup_augmentation_orphans(staging: Path, output: Path) -> None:
+    if _is_symlink_or_reparse(staging) or _is_symlink_or_reparse(output):
+        raise ImportFailure("live augmentation pair contains a symlink or reparse point")
+    receipt = staging / "build_receipt.json"
+    if not staging.is_dir() or not output.is_file() or not receipt.is_file():
+        return
+    if _is_symlink_or_reparse(receipt):
+        raise ImportFailure("live staging receipt is a symlink or reparse point")
+    if _pair_recipe_digest(receipt, "live staging receipt") != _pair_recipe_digest(
+        output, "live recipe"
+    ):
+        return
+    marker = _augmentation_transaction_path(staging)
+    candidates = []
+    for pattern in (
+        f"{staging.name}.augment-tmp-*",
+        f"{staging.name}.augment-rollback-*",
+    ):
+        candidates.extend(staging.parent.glob(pattern))
+    for pattern in (
+        f".{output.name}.augment-tmp-*",
+        f".{output.name}.augment-rollback-*",
+        f".{marker.name}.write-*",
+    ):
+        candidates.extend(output.parent.glob(pattern))
+    for candidate in sorted(set(candidates), key=lambda path: str(path)):
+        if candidate.parent.resolve(strict=False) not in {
+            staging.parent.resolve(),
+            output.parent.resolve(),
+        }:
+            raise ImportFailure("augmentation orphan escaped its confined parent")
+        if _is_symlink_or_reparse(candidate):
+            raise ImportFailure(
+                f"augmentation orphan is a symlink or reparse point: {candidate}"
+            )
+        _durable_remove(candidate)
+
+
 def _recover_augmentation_transaction(staging: Path, output: Path) -> None:
     marker = _augmentation_transaction_path(staging)
+    if _is_symlink_or_reparse(marker):
+        raise ImportFailure("anatomy transaction marker is a symlink or reparse point")
     if not marker.exists():
+        _cleanup_augmentation_orphans(staging, output)
         return
     try:
         transaction = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ImportFailure(f"anatomy transaction marker is unreadable: {marker}") from error
-    if transaction.get("schema") != ANATOMY_TRANSACTION_SCHEMA:
-        raise ImportFailure(f"anatomy transaction marker has an unsupported schema: {marker}")
-    expected_staging = str(staging.resolve(strict=False))
-    expected_output = str(output.resolve(strict=False))
-    if transaction.get("staging") != expected_staging or transaction.get("output") != expected_output:
-        raise ImportFailure("anatomy transaction marker does not match requested staging/output")
+    transaction = _validate_transaction_marker(transaction, staging, output)
+    paths = _validate_recovery_operands(transaction, staging, output)
+    temporary = paths["temporary"]
+    backup = paths["backup"]
+    recipe_temporary = paths["recipe_temporary"]
+    recipe_backup = paths["recipe_backup"]
 
-    temporary = Path(transaction["temporary"])
-    backup = Path(transaction["backup"])
-    recipe_temporary = Path(transaction["recipe_temporary"])
-    recipe_backup = Path(transaction["recipe_backup"])
-    expected_paths = (
-        (temporary, staging.parent.resolve(), f"{staging.name}.augment-tmp-"),
-        (backup, staging.parent.resolve(), f"{staging.name}.augment-rollback-"),
-        (recipe_temporary, output.parent.resolve(), f".{output.name}.augment-tmp-"),
-        (recipe_backup, output.parent.resolve(), f".{output.name}.augment-rollback-"),
+    new_staging = _staging_generation_matches(
+        staging,
+        transaction["new_recipe_sha256"],
+        transaction["new_receipt_file_sha256"],
+        transaction["new_staging_tree_sha256"],
     )
-    for path, parent, prefix in expected_paths:
-        if path.parent.resolve(strict=False) != parent or not path.name.startswith(prefix):
-            raise ImportFailure("anatomy transaction marker contains an unsafe recovery path")
-    old_digest = transaction["old_recipe_sha256"]
-    new_digest = transaction["new_recipe_sha256"]
-    live_staging_digest = (
-        _pair_recipe_digest(staging / "build_receipt.json", "live staging receipt")
-        if (staging / "build_receipt.json").is_file()
-        else None
+    new_recipe = _recipe_file_matches(
+        output,
+        transaction["new_recipe_sha256"],
+        transaction["new_recipe_file_sha256"],
     )
-    live_recipe_digest = _pair_recipe_digest(output, "live recipe") if output.is_file() else None
+    old_staging = _staging_generation_matches(
+        staging,
+        transaction["old_recipe_sha256"],
+        transaction["old_receipt_file_sha256"],
+        transaction["old_staging_tree_sha256"],
+    )
+    old_recipe = _recipe_file_matches(
+        output,
+        transaction["old_recipe_sha256"],
+        transaction["old_recipe_file_sha256"],
+    )
 
-    if live_staging_digest == new_digest and live_recipe_digest == new_digest:
-        if backup.exists():
-            shutil.rmtree(backup)
-    else:
-        if live_staging_digest == new_digest and staging.exists():
-            shutil.rmtree(staging)
-        if backup.exists():
-            backup.replace(staging)
-        if live_recipe_digest == new_digest and recipe_backup.is_file():
-            os.replace(recipe_backup, output)
-        recovered_staging = _pair_recipe_digest(
-            staging / "build_receipt.json", "recovered staging receipt"
+    if not (new_staging and new_recipe) and not (old_staging and old_recipe):
+        backup_matches = _staging_generation_matches(
+            backup,
+            transaction["old_recipe_sha256"],
+            transaction["old_receipt_file_sha256"],
+            transaction["old_staging_tree_sha256"],
         )
-        recovered_recipe = _pair_recipe_digest(output, "recovered recipe")
-        if recovered_staging != old_digest or recovered_recipe != old_digest:
-            raise ImportFailure("anatomy transaction recovery could not restore a matched pair")
+        recipe_backup_matches = _recipe_file_matches(
+            recipe_backup,
+            transaction["old_recipe_sha256"],
+            transaction["old_recipe_file_sha256"],
+        )
+        if not old_staging:
+            if not backup_matches:
+                raise ImportFailure(
+                    "anatomy transaction recovery has no verified old staging generation"
+                )
+            if staging.exists():
+                _durable_remove(staging)
+            _durable_replace(backup, staging)
+        if not old_recipe:
+            if not recipe_backup_matches:
+                raise ImportFailure(
+                    "anatomy transaction recovery has no verified old recipe generation"
+                )
+            _durable_replace(recipe_backup, output)
+        if not _staging_generation_matches(
+            staging,
+            transaction["old_recipe_sha256"],
+            transaction["old_receipt_file_sha256"],
+            transaction["old_staging_tree_sha256"],
+        ) or not _recipe_file_matches(
+            output,
+            transaction["old_recipe_sha256"],
+            transaction["old_recipe_file_sha256"],
+        ):
+            raise ImportFailure("anatomy transaction recovery could not verify the restored tree")
 
-    if temporary.exists():
-        shutil.rmtree(temporary)
-    recipe_temporary.unlink(missing_ok=True)
-    recipe_backup.unlink(missing_ok=True)
-    marker.unlink(missing_ok=True)
+    for orphan in (temporary, backup, recipe_temporary, recipe_backup):
+        if orphan.exists() or _is_symlink_or_reparse(orphan):
+            _durable_remove(orphan)
+    _durable_remove(marker)
 
 
 def _promote_augmented_pair(
@@ -1266,10 +2694,37 @@ def _promote_augmented_pair(
     recipe_temporary: Path,
     output: Path,
     phase_observer=None,
+    *,
+    verified_live_output: Path | None = None,
 ) -> None:
+    if verified_live_output is not None and _is_symlink_or_reparse(verified_live_output):
+        raise ImportFailure(
+            f"augmentation promotion operand is a symlink or reparse point: {verified_live_output}"
+        )
     marker = _augmentation_transaction_path(staging)
     recipe_backup = output.with_name(f".{output.name}.augment-rollback-{os.getpid()}")
+    for operand in (
+        staging,
+        temporary,
+        backup,
+        output,
+        recipe_temporary,
+        recipe_backup,
+        marker,
+    ):
+        if _is_symlink_or_reparse(operand):
+            raise ImportFailure(
+                f"augmentation promotion operand is a symlink or reparse point: {operand}"
+            )
+    _flush_tree(staging)
+    _flush_tree(temporary)
+    _flush_file(output)
+    _flush_file(recipe_temporary)
     shutil.copy2(output, recipe_backup)
+    _flush_file(recipe_backup)
+    _require_directory_flush(recipe_backup.parent)
+    old_receipt = staging / "build_receipt.json"
+    new_receipt = temporary / "build_receipt.json"
     transaction = {
         "schema": ANATOMY_TRANSACTION_SCHEMA,
         "phase": "prepared",
@@ -1281,43 +2736,56 @@ def _promote_augmented_pair(
         "recipe_backup": str(recipe_backup.resolve(strict=False)),
         "old_recipe_sha256": _pair_recipe_digest(output, "existing recipe"),
         "new_recipe_sha256": _pair_recipe_digest(recipe_temporary, "new recipe"),
+        "old_recipe_file_sha256": sha256_file(output),
+        "new_recipe_file_sha256": sha256_file(recipe_temporary),
+        "old_receipt_file_sha256": sha256_file(old_receipt),
+        "new_receipt_file_sha256": sha256_file(new_receipt),
+        "old_staging_tree_sha256": _staging_tree_digest(staging),
+        "new_staging_tree_sha256": _staging_tree_digest(temporary),
     }
-    new_receipt_digest = _pair_recipe_digest(
-        temporary / "build_receipt.json", "new staging receipt"
-    )
-    if new_receipt_digest != transaction["new_recipe_sha256"]:
-        raise ImportFailure("new staging receipt and recipe are not a matched pair")
+    if (
+        _pair_recipe_digest(old_receipt, "old staging receipt")
+        != transaction["old_recipe_sha256"]
+        or _pair_recipe_digest(new_receipt, "new staging receipt")
+        != transaction["new_recipe_sha256"]
+    ):
+        raise ImportFailure("staging receipt and recipe generations are not matched pairs")
     _write_augmentation_phase(marker, transaction, "prepared")
     if phase_observer is not None:
         phase_observer("prepared")
 
-    staging.replace(backup)
+    _durable_replace(staging, backup)
     _write_augmentation_phase(marker, transaction, "staging-backed-up")
     if phase_observer is not None:
         phase_observer("staging-backed-up")
 
-    temporary.replace(staging)
+    _durable_replace(temporary, staging)
     _write_augmentation_phase(marker, transaction, "staging-promoted")
     if phase_observer is not None:
         phase_observer("staging-promoted")
 
-    os.replace(recipe_temporary, output)
+    _durable_replace(recipe_temporary, output)
     _write_augmentation_phase(marker, transaction, "recipe-promoted")
     if phase_observer is not None:
         phase_observer("recipe-promoted")
     _recover_augmentation_transaction(staging, output)
 
 
-def command_augment_anatomy(args, recipe: dict) -> None:
+def command_augment_anatomy(args) -> None:
     staging = ensure_artifact_path(args.staging, "anatomy staging input")
-    output = args.output.resolve()
+    live_output_argument = Path(args.output)
+    if _is_symlink_or_reparse(live_output_argument):
+        raise ImportFailure("live prior output recipe is a symlink or reparse point")
+    output = live_output_argument.resolve(strict=False)
     _recover_augmentation_transaction(staging, output)
-    recipe = load_recipe(args.recipes)
-    authority_recipe = (
-        load_recipe(args.authority_recipes)
+    recipe = load_recipe(args.recipes, validate_current_anatomy=False)
+    authority_path = (
+        args.authority_recipes
         if getattr(args, "authority_recipes", None) is not None
-        else recipe
+        else output
     )
+    authority_recipe = _load_live_authority_recipe(authority_path, output)
+    _validate_authority_handoff(authority_recipe, recipe)
     _assert_tree_has_no_reparse_entries(staging)
     receipt_path = confined_existing_staged_path(
         staging, "build_receipt.json", "staged build receipt"
@@ -1344,12 +2812,26 @@ def command_augment_anatomy(args, recipe: dict) -> None:
     shutil.copytree(staging, temporary, symlinks=True)
     try:
         for asset in recipe["part_assets"]:
+            asset["anatomy_authoring"] = source_projected_anatomy_authoring(
+                asset, temporary
+            )
+        for asset in recipe["part_assets"]:
+            lod_audits = {}
             for lod in asset["lods"]:
+                obj_path = confined_existing_staged_path(
+                    temporary, lod["generated_obj"], "generated anatomy source OBJ"
+                )
                 semantic_path = confined_existing_staged_path(
                     temporary, lod["semantic_mask"], "semantic staging mask"
                 )
                 anatomy_path = staged_output_path(temporary, lod["anatomy_mask"])
-                anatomy_path.write_bytes(anatomy_mask(semantic_path.read_bytes(), asset["anatomy_authoring"], asset["logical_slot"]))
+                anatomy_bytes, lod_audits[lod["lod"]] = anatomy_mask_with_audit(
+                    semantic_path.read_bytes(),
+                    obj_path.read_bytes(),
+                    asset["anatomy_authoring"],
+                    asset["logical_slot"],
+                )
+                anatomy_path.write_bytes(anatomy_bytes)
                 socket_path = confined_existing_staged_path(
                     temporary, lod["socket_manifest"], "socket staging manifest"
                 )
@@ -1358,6 +2840,10 @@ def command_augment_anatomy(args, recipe: dict) -> None:
                     raise ImportFailure(f"existing socket manifest is incompatible: {lod['socket_manifest']}")
                 socket["anatomy_mask"] = lod["anatomy_mask"]
                 socket_path.write_text(json.dumps(socket, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            asset["anatomy_authoring"]["source_projection_audit"] = {
+                "schema": ANATOMY_AUDIT_SCHEMA,
+                "lods": lod_audits,
+            }
         outputs = _validate_augmented_tree(temporary, recipe)
         for asset in recipe["part_assets"]:
             for lod in asset["lods"]:
@@ -1388,7 +2874,12 @@ def command_augment_anatomy(args, recipe: dict) -> None:
         recipe_temporary.write_text(json.dumps(recipe, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
         try:
             _promote_augmented_pair(
-                staging, temporary, backup, recipe_temporary, output
+                staging,
+                temporary,
+                backup,
+                recipe_temporary,
+                output,
+                verified_live_output=live_output_argument,
             )
         except BaseException:
             _recover_augmentation_transaction(staging, output)
@@ -1476,12 +2967,12 @@ def build_parser() -> argparse.ArgumentParser:
 def outer_main() -> None:
     args = build_parser().parse_args()
     args.recipes = args.recipes.resolve()
+    if args.command == "augment-anatomy":
+        command_augment_anatomy(args)
+        return
     recipe = load_recipe(args.recipes)
     if args.command == "bind-output-digests":
         command_bind_output_digests(args, recipe)
-        return
-    if args.command == "augment-anatomy":
-        command_augment_anatomy(args, recipe)
         return
     args.source_root = args.source_root.resolve()
     blender = discover_blender(args.blender_exe)
@@ -3119,7 +4610,20 @@ def staged_output_path(staging: Path, relative: str) -> Path:
         try:
             parent.lstat()
         except FileNotFoundError:
-            parent.mkdir()
+            try:
+                parent.mkdir(exist_ok=True)
+            except OSError as exc:
+                raise ImportFailure(
+                    f"could not create generated output parent {relative}: {exc}"
+                ) from exc
+        if _is_symlink_or_reparse(parent):
+            raise ImportFailure(
+                f"generated output parent contains a symlink or reparse point: {relative}"
+            )
+        if not parent.is_dir():
+            raise ImportFailure(
+                f"generated output parent is not a directory: {relative}"
+            )
         canonical_parent = parent.resolve(strict=True)
         if not canonical_path_is_within(root, canonical_parent):
             raise ImportFailure(f"generated output escapes canonical staging: {relative}")
@@ -3195,11 +4699,17 @@ def build_scene_outputs(
             socket_path = staged_output_path(staging, contract["socket_manifest"])
             mask_path = staged_output_path(staging, contract["semantic_mask"])
             anatomy_path = staged_output_path(staging, contract["anatomy_mask"])
-            obj_path.write_bytes(emit_obj(lod_grouped))
+            obj_bytes = emit_obj(lod_grouped)
+            obj_path.write_bytes(obj_bytes)
             semantic_bytes = semantic_mask(lod_grouped, source_samples)
             mask_path.write_bytes(semantic_bytes)
             anatomy_path.write_bytes(
-                anatomy_mask(semantic_bytes, asset["anatomy_authoring"], asset["logical_slot"])
+                anatomy_mask(
+                    semantic_bytes,
+                    obj_bytes,
+                    asset["anatomy_authoring"],
+                    asset["logical_slot"],
+                )
             )
             socket_path.write_text(
                 json.dumps(

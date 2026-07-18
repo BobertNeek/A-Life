@@ -349,7 +349,7 @@ pub fn validate_geneforge_staging(
     })?;
     let catalog = GeneForgeCreaturePartCatalog::from_json_str(&recipe_text)
         .map_err(|error| fail(format!("invalid external GeneForge recipe: {error}")))?;
-    let canonical_digest = canonical_recipe_sha256(&recipe_text)?;
+    let canonical_digest = canonical_geneforge_recipe_sha256(&recipe_text)?;
     if !catalog
         .recipe_sha256
         .eq_ignore_ascii_case(&canonical_digest)
@@ -2064,7 +2064,7 @@ fn validate_topology_preserving_lods(
     Ok(())
 }
 
-fn canonical_recipe_sha256(text: &str) -> Result<String, CreaturePartBuilderError> {
+pub fn canonical_geneforge_recipe_sha256(text: &str) -> Result<String, CreaturePartBuilderError> {
     let mut value: serde_json::Value = serde_json::from_str(text).map_err(|error| {
         CreaturePartBuilderError::Staging(format!("invalid recipe JSON for digest: {error}"))
     })?;
@@ -2080,10 +2080,136 @@ fn canonical_recipe_sha256(text: &str) -> Result<String, CreaturePartBuilderErro
         "recipe_sha256".to_string(),
         serde_json::Value::String("0".repeat(64)),
     );
-    let canonical = serde_json::to_vec(&value).map_err(|error| {
-        CreaturePartBuilderError::Staging(format!("failed canonicalizing recipe JSON: {error}"))
-    })?;
+    let mut canonical = Vec::new();
+    write_python_canonical_json(&value, &mut canonical)?;
     Ok(sha256_hex(&canonical))
+}
+
+fn write_python_canonical_json(
+    value: &serde_json::Value,
+    output: &mut Vec<u8>,
+) -> Result<(), CreaturePartBuilderError> {
+    match value {
+        serde_json::Value::Null => output.extend_from_slice(b"null"),
+        serde_json::Value::Bool(value) => {
+            output.extend_from_slice(if *value { b"true" } else { b"false" })
+        }
+        serde_json::Value::Number(number) => {
+            if let Some(value) = number.as_i64() {
+                output.extend_from_slice(value.to_string().as_bytes());
+            } else if let Some(value) = number.as_u64() {
+                output.extend_from_slice(value.to_string().as_bytes());
+            } else {
+                let value = number.as_f64().ok_or_else(|| {
+                    CreaturePartBuilderError::Staging(
+                        "recipe JSON contains an unsupported number".to_string(),
+                    )
+                })?;
+                output.extend_from_slice(python_json_float(value)?.as_bytes());
+            }
+        }
+        serde_json::Value::String(value) => {
+            write_python_json_string(value, output);
+        }
+        serde_json::Value::Array(values) => {
+            output.push(b'[');
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    output.push(b',');
+                }
+                write_python_canonical_json(value, output)?;
+            }
+            output.push(b']');
+        }
+        serde_json::Value::Object(values) => {
+            output.push(b'{');
+            let mut entries = values.iter().collect::<Vec<_>>();
+            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            for (index, (key, value)) in entries.into_iter().enumerate() {
+                if index > 0 {
+                    output.push(b',');
+                }
+                write_python_canonical_json(&serde_json::Value::String(key.clone()), output)?;
+                output.push(b':');
+                write_python_canonical_json(value, output)?;
+            }
+            output.push(b'}');
+        }
+    }
+    Ok(())
+}
+
+fn write_python_json_string(value: &str, output: &mut Vec<u8>) {
+    output.push(b'"');
+    for character in value.chars() {
+        match character {
+            '"' => output.extend_from_slice(br#"\""#),
+            '\\' => output.extend_from_slice(br#"\\"#),
+            '\u{0008}' => output.extend_from_slice(br#"\b"#),
+            '\u{000c}' => output.extend_from_slice(br#"\f"#),
+            '\n' => output.extend_from_slice(br#"\n"#),
+            '\r' => output.extend_from_slice(br#"\r"#),
+            '\t' => output.extend_from_slice(br#"\t"#),
+            '\u{0020}'..='\u{007e}' => output.push(character as u8),
+            character if character <= '\u{ffff}' => {
+                write_python_unicode_escape(character as u16, output);
+            }
+            character => {
+                let scalar = character as u32 - 0x1_0000;
+                write_python_unicode_escape(0xd800 + (scalar >> 10) as u16, output);
+                write_python_unicode_escape(0xdc00 + (scalar & 0x03ff) as u16, output);
+            }
+        }
+    }
+    output.push(b'"');
+}
+
+fn write_python_unicode_escape(code_unit: u16, output: &mut Vec<u8>) {
+    const LOWER_HEX: &[u8; 16] = b"0123456789abcdef";
+
+    output.extend_from_slice(br#"\u"#);
+    for shift in [12, 8, 4, 0] {
+        output.push(LOWER_HEX[((code_unit >> shift) & 0x0f) as usize]);
+    }
+}
+
+fn python_json_float(value: f64) -> Result<String, CreaturePartBuilderError> {
+    if !value.is_finite() {
+        return Err(CreaturePartBuilderError::Staging(
+            "recipe JSON contains a non-finite number".to_string(),
+        ));
+    }
+    if value == 0.0 {
+        return Ok(if value.is_sign_negative() {
+            "-0.0".to_string()
+        } else {
+            "0.0".to_string()
+        });
+    }
+    let absolute = value.abs();
+    if !(1.0e-4..1.0e16).contains(&absolute) {
+        let scientific = format!("{value:e}");
+        let (mantissa, exponent) = scientific.split_once('e').ok_or_else(|| {
+            CreaturePartBuilderError::Staging(
+                "failed canonicalizing recipe floating-point number".to_string(),
+            )
+        })?;
+        let exponent = exponent.parse::<i32>().map_err(|error| {
+            CreaturePartBuilderError::Staging(format!(
+                "failed canonicalizing recipe exponent: {error}"
+            ))
+        })?;
+        return Ok(format!(
+            "{mantissa}e{}{magnitude:02}",
+            if exponent < 0 { '-' } else { '+' },
+            magnitude = exponent.unsigned_abs()
+        ));
+    }
+    let mut encoded = value.to_string();
+    if !encoded.contains('.') {
+        encoded.push_str(".0");
+    }
+    Ok(encoded)
 }
 
 pub fn sha256_hex(input: &[u8]) -> String {
@@ -3128,11 +3254,64 @@ f 22/1/1 23/2/1 24/3/1
 
     #[test]
     fn creature_part_builder_recipe_digest_zeroes_only_the_digest_field() {
-        let first = canonical_recipe_sha256(r#"{"recipe_sha256":"aaaa","schema":"x"}"#).unwrap();
-        let second = canonical_recipe_sha256(r#"{"recipe_sha256":"bbbb","schema":"x"}"#).unwrap();
-        let changed = canonical_recipe_sha256(r#"{"recipe_sha256":"aaaa","schema":"y"}"#).unwrap();
+        let first =
+            canonical_geneforge_recipe_sha256(r#"{"recipe_sha256":"aaaa","schema":"x"}"#).unwrap();
+        let second =
+            canonical_geneforge_recipe_sha256(r#"{"recipe_sha256":"bbbb","schema":"x"}"#).unwrap();
+        let changed =
+            canonical_geneforge_recipe_sha256(r#"{"recipe_sha256":"aaaa","schema":"y"}"#).unwrap();
         assert_eq!(first, second);
         assert_ne!(first, changed);
+    }
+
+    #[test]
+    fn creature_part_builder_recipe_digest_matches_python_float_canonicalization() {
+        let text = r#"{"recipe_sha256":"ignored","values":[-0.000073921,0.0001,1e16,1e-7,-0.0]}"#;
+        let expected = br#"{"recipe_sha256":"0000000000000000000000000000000000000000000000000000000000000000","values":[-7.3921e-05,0.0001,1e+16,1e-07,-0.0]}"#;
+        assert_eq!(
+            canonical_geneforge_recipe_sha256(text).unwrap(),
+            sha256_hex(expected)
+        );
+    }
+
+    #[test]
+    fn creature_part_builder_recipe_strings_match_python_ascii_canonicalization() {
+        let vectors = [
+            (
+                serde_json::json!("caf\u{00e9}"),
+                br#""caf\u00e9""#.as_slice(),
+                "ee08d8beb64c89c25fe7f583c6b522f7f380aab939035ec58d3fcdba24c881e1",
+            ),
+            (
+                serde_json::json!("\u{1f600}"),
+                br#""\ud83d\ude00""#.as_slice(),
+                "e30439cb87e140c0b998ad3095285abfec0294e2a8916f9a8f30d85734e6f82b",
+            ),
+            (
+                serde_json::json!("\"\\\u{0001}\n\t"),
+                br#""\"\\\u0001\n\t""#.as_slice(),
+                "b7bff3672a60c2d23a77d7b8b256f1310302f4b7f37baaf22d892858e77f72ef",
+            ),
+            (
+                serde_json::json!("\u{abcd}"),
+                br#""\uabcd""#.as_slice(),
+                "3654f686cead849be1ed22f53c44b27eeb64f23c26648a67d6a95c66f706cdd6",
+            ),
+        ];
+
+        for (value, expected_bytes, expected_digest) in vectors {
+            let mut actual = Vec::new();
+            write_python_canonical_json(&value, &mut actual).unwrap();
+            assert_eq!(actual, expected_bytes);
+            assert_eq!(sha256_hex(&actual), expected_digest);
+        }
+
+        let text = r#"{"label":"caf\u00e9 \ud83d\ude00","recipe_sha256":"ignored"}"#;
+        let expected = br#"{"label":"caf\u00e9 \ud83d\ude00","recipe_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}"#;
+        assert_eq!(
+            canonical_geneforge_recipe_sha256(text).unwrap(),
+            sha256_hex(expected)
+        );
     }
 
     #[test]

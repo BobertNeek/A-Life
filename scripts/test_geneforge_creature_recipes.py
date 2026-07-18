@@ -87,6 +87,23 @@ REQUIRED_ANATOMY_CHANNELS = {
     "legs": {"primary", "hands-feet", "secondary-marking"},
     "tail": {"primary", "keratin-skin", "secondary-marking"},
 }
+REQUIRED_FEATURE_ANCHORS = {
+    "head": {
+        "left-ear": ("inner-ear", "head"),
+        "right-ear": ("inner-ear", "head"),
+        "muzzle": ("muzzle", "head"),
+    },
+    "torso": {"belly": ("belly", "torso")},
+    "arms": {
+        "left-hand": ("hands-feet", "left-arm"),
+        "right-hand": ("hands-feet", "right-arm"),
+    },
+    "legs": {
+        "left-foot": ("hands-feet", "left-leg"),
+        "right-foot": ("hands-feet", "right-leg"),
+    },
+    "tail": {"tail-tip": ("keratin-skin", "tail-back")},
+}
 AUDITED_NEVER_OR_INVALID = {
     "ear_4L_chichi",
     "Ear_4L_civet",
@@ -264,6 +281,155 @@ def obj_topology(path: Path) -> dict:
     }
 
 
+def _independent_barycentric(point, triangle):
+    (px, py) = point
+    (ax, ay), (bx, by), (cx, cy) = triangle
+    denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+    if abs(denominator) <= 1.0e-12:
+        return None
+    first = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / denominator
+    second = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / denominator
+    return (first, second, 1.0 - first - second)
+
+
+def _independent_closest_uv_weights(point, triangle):
+    candidates = []
+    for first, second, opposite in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
+        start = triangle[first]
+        end = triangle[second]
+        edge = (end[0] - start[0], end[1] - start[1])
+        length_squared = edge[0] * edge[0] + edge[1] * edge[1]
+        if length_squared <= 1.0e-18:
+            amount = 0.0
+        else:
+            amount = max(
+                0.0,
+                min(
+                    1.0,
+                    ((point[0] - start[0]) * edge[0] + (point[1] - start[1]) * edge[1])
+                    / length_squared,
+                ),
+            )
+        projected = (start[0] + edge[0] * amount, start[1] + edge[1] * amount)
+        weights = [0.0, 0.0, 0.0]
+        weights[first] = 1.0 - amount
+        weights[second] = amount
+        weights[opposite] = 0.0
+        distance_squared = sum((a - b) ** 2 for a, b in zip(point, projected))
+        candidates.append((distance_squared, tuple(weights)))
+    return min(candidates, key=lambda candidate: (candidate[0], candidate[1]))
+
+
+def independent_obj_texel_projection(obj_path: Path, semantic_path: Path) -> list[dict]:
+    positions = []
+    uvs = []
+    triangles = []
+    group = None
+    for line in obj_path.read_text(encoding="ascii").splitlines():
+        fields = line.split()
+        if not fields:
+            continue
+        if fields[0] == "v":
+            positions.append(tuple(float(value) for value in fields[1:4]))
+        elif fields[0] == "vt":
+            uvs.append(tuple(float(value) for value in fields[1:3]))
+        elif fields[0] == "g":
+            group = fields[1]
+        elif fields[0] == "f":
+            references = [field.split("/") for field in fields[1:4]]
+            triangles.append(
+                {
+                    "face": len(triangles),
+                    "group": group,
+                    "positions": tuple(positions[int(reference[0]) - 1] for reference in references),
+                    "uvs": tuple(uvs[int(reference[1]) - 1] for reference in references),
+                }
+            )
+    groups_by_color: dict[tuple[int, int, int], set[str]] = {}
+    for runtime_group, color in EXPECTED_GROUP_COLORS.items():
+        groups_by_color.setdefault(color, set()).add(runtime_group)
+    exact_bins: dict[tuple[str, int, int], list[dict]] = {}
+    for triangle in triangles:
+        minimum_x = max(
+            0,
+            math.ceil(min(uv[0] for uv in triangle["uvs"]) * 64 - 0.5 - 1.0e-9),
+        )
+        maximum_x = min(
+            63,
+            math.floor(max(uv[0] for uv in triangle["uvs"]) * 64 - 0.5 + 1.0e-9),
+        )
+        minimum_y = max(
+            0,
+            math.ceil(min(uv[1] for uv in triangle["uvs"]) * 64 - 0.5 - 1.0e-9),
+        )
+        maximum_y = min(
+            63,
+            math.floor(max(uv[1] for uv in triangle["uvs"]) * 64 - 0.5 + 1.0e-9),
+        )
+        for bin_y in range(minimum_y, maximum_y + 1):
+            for bin_x in range(minimum_x, maximum_x + 1):
+                exact_bins.setdefault((triangle["group"], bin_x, bin_y), []).append(
+                    triangle
+                )
+    _, _, semantic = read_rgba_png(semantic_path)
+    projected = []
+    for y in range(64):
+        for x in range(64):
+            offset = (y * 64 + x) * 4
+            if semantic[offset + 3] == 0:
+                continue
+            color = tuple(semantic[offset : offset + 3])
+            runtime_groups = groups_by_color[color]
+            texel_uv = ((x + 0.5) / 64.0, (y + 0.5) / 64.0)
+            candidates = [triangle for triangle in triangles if triangle["group"] in runtime_groups]
+            exact = []
+            exact_candidates = [
+                triangle
+                for runtime_group in sorted(runtime_groups)
+                for triangle in exact_bins.get((runtime_group, x, y), ())
+            ]
+            for triangle in exact_candidates:
+                weights = _independent_barycentric(texel_uv, triangle["uvs"])
+                if weights is not None and min(weights) >= -1.0e-9:
+                    exact.append((-min(weights), triangle["face"], triangle, weights))
+            if exact:
+                _, _, triangle, weights = min(exact)
+                mode = "inside"
+            else:
+                nearest = []
+                for triangle in candidates:
+                    distance_squared, closest = _independent_closest_uv_weights(
+                        texel_uv, triangle["uvs"]
+                    )
+                    nearest.append(
+                        (distance_squared, triangle["face"], triangle, closest)
+                    )
+                _, _, triangle, weights = min(nearest)
+                mode = "nearest"
+            point = tuple(
+                sum(weights[corner] * triangle["positions"][corner][axis] for corner in range(3))
+                for axis in range(3)
+            )
+            projected.append(
+                {
+                    "x": x,
+                    "y": y,
+                    "group": triangle["group"],
+                    "face": triangle["face"],
+                    "weights": weights,
+                    "point": point,
+                    "mode": mode,
+                    "overlap": len(exact),
+                }
+            )
+    return projected
+
+
+def normalized_axis(value: float, values: list[float]) -> float:
+    lower, upper = min(values), max(values)
+    return 0.5 if upper - lower <= 1.0e-12 else (value - lower) / (upper - lower)
+
+
 class GeneForgeRecipeContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -276,18 +442,56 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
             EXPECTED_SOURCE_HASHES,
         )
 
-    def test_outer_v2_contracts_remain_stable_with_anatomy_authoring_v1(self) -> None:
+    def test_outer_v2_contracts_require_source_projected_anatomy_v2(self) -> None:
         self.assertEqual(self.recipe["schema"], "alife.geneforge_creature_part_catalog.v2")
         self.assertEqual(self.recipe["schema_version"], 2)
         self.assertEqual(self.recipe["importer_version"], "alife.geneforge_importer.v2")
         self.assertEqual(len(self.recipe["part_assets"]), 14)
         for asset in self.recipe["part_assets"]:
             authoring = asset["anatomy_authoring"]
-            self.assertEqual(authoring["schema"], "alife.geneforge_anatomy_authoring.v1")
-            self.assertEqual(authoring["coordinate_space"], "semantic-group-local-uv")
+            self.assertEqual(authoring["schema"], "alife.geneforge_anatomy_authoring.v2")
+            self.assertEqual(authoring["coordinate_space"], "same-lod-staged-obj")
             self.assertEqual(authoring["default_channel"], "primary")
-            channels = {zone["channel"] for zone in authoring["zones"]} | {"primary"}
-            self.assertTrue(REQUIRED_ANATOMY_CHANNELS[asset["logical_slot"]] <= channels)
+            self.assertEqual(
+                authoring["projection"]["schema"],
+                "alife.geneforge_anatomy_projection.v1",
+            )
+            self.assertEqual(
+                authoring["projection"]["texel_sample"], "pixel-center"
+            )
+            self.assertIn("source_geometry", authoring["projection"])
+            source_geometry = authoring["projection"]["source_geometry"]
+            self.assertEqual(
+                source_geometry["schema"],
+                "alife.geneforge_source_geometry_classifier.v2",
+            )
+            self.assertTrue(source_geometry["groups"])
+            expected_anchors = REQUIRED_FEATURE_ANCHORS[asset["logical_slot"]]
+            self.assertEqual(set(source_geometry["feature_landmarks"]), set(expected_anchors))
+            for name, (channel, runtime_group) in expected_anchors.items():
+                anchor = source_geometry["feature_landmarks"][name]
+                self.assertEqual(anchor["channel"], channel)
+                self.assertEqual(anchor["runtime_group"], runtime_group)
+                self.assertEqual(anchor["source_group"], runtime_group)
+                self.assertEqual(anchor["method"], "source-geometry-anchor-v1")
+            self.assertEqual(
+                set(source_geometry["landmarks"]),
+                set(asset["landmarks"]),
+            )
+            self.assertEqual(
+                authoring["projection"]["triangle_tie_break"],
+                "inside-max-min-barycentric-then-face-index;nearest-uv-then-face-index",
+            )
+            self.assertNotIn("zones", authoring)
+            self.assertEqual(
+                set(authoring["required_channels"]),
+                REQUIRED_ANATOMY_CHANNELS[asset["logical_slot"]],
+            )
+            audit = authoring["source_projection_audit"]
+            self.assertEqual(
+                audit["schema"], "alife.geneforge_source_projection_audit.v1"
+            )
+            self.assertEqual(set(audit["lods"]), {"full", "compact", "impostor"})
 
     def test_all_lods_have_unique_confined_anatomy_outputs(self) -> None:
         paths = []
@@ -302,139 +506,287 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
         self.assertEqual(len(paths), 42)
         self.assertEqual(len(set(paths)), 42)
 
-    def test_anatomy_rasterizer_rejects_conflicting_equal_priority_overlap(self) -> None:
-        semantic = importer.png_bytes(64, 64, bytes([230, 92, 88, 255]) * (64 * 64))
-        profile = {
-            "schema": "alife.geneforge_anatomy_authoring.v1",
-            "coordinate_space": "semantic-group-local-uv",
-            "default_channel": "primary",
-            "zones": [
-                {"id": "a", "channel": "muzzle", "semantic_groups": ["head"], "shape": {"kind": "ellipse", "center": [0.5, 0.5], "radius": [0.4, 0.4]}, "strength": 255, "priority": 10},
-                {"id": "b", "channel": "inner-ear", "semantic_groups": ["head"], "shape": {"kind": "ellipse", "center": [0.5, 0.5], "radius": [0.4, 0.4]}, "strength": 255, "priority": 10},
-                {"id": "c", "channel": "keratin-skin", "semantic_groups": ["head"], "shape": {"kind": "ellipse", "center": [0.05, 0.05], "radius": [0.02, 0.02]}, "strength": 255, "priority": 20},
-                {"id": "d", "channel": "secondary-marking", "semantic_groups": ["head"], "shape": {"kind": "ellipse", "center": [0.95, 0.95], "radius": [0.02, 0.02]}, "strength": 255, "priority": 20},
-            ],
-        }
-        with self.assertRaisesRegex(importer.ImportFailure, "equal-priority"):
-            importer.anatomy_mask(semantic, profile, "head")
+    def test_anatomy_projection_rejects_semantic_groups_absent_from_obj(self) -> None:
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        asset = self.assets["norn-head"]
+        lod = asset["lods"][0]
+        _, _, pixels = importer.decode_rgba_png(
+            (staging / lod["semantic_mask"]).read_bytes()
+        )
+        pixels = bytearray(pixels)
+        occupied = next(index for index in range(0, len(pixels), 4) if pixels[index + 3])
+        pixels[occupied : occupied + 3] = bytes(EXPECTED_GROUP_COLORS["torso"])
+        semantic = importer.png_bytes(64, 64, bytes(pixels))
+        with self.assertRaisesRegex(importer.ImportFailure, "same-group OBJ triangle"):
+            importer.anatomy_mask(
+                semantic,
+                (staging / lod["generated_obj"]).read_bytes(),
+                asset["anatomy_authoring"],
+                "head",
+            )
 
     def test_anatomy_rasterizer_is_deterministic_and_preserves_occupancy(self) -> None:
-        semantic_pixels = bytearray(64 * 64 * 4)
-        for y in range(1, 21):
-            for x in range(1, 15):
-                offset = (y * 64 + x) * 4
-                semantic_pixels[offset : offset + 4] = bytes((*EXPECTED_GROUP_COLORS["head"], 37 + ((x + y) % 200)))
-        semantic = importer.png_bytes(64, 64, bytes(semantic_pixels))
-        profile = self.assets["norn-head"]["anatomy_authoring"]
-        first = importer.anatomy_mask(semantic, profile, "head")
-        second = importer.anatomy_mask(semantic, profile, "head")
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        asset = self.assets["norn-head"]
+        lod = asset["lods"][0]
+        semantic = (staging / lod["semantic_mask"]).read_bytes()
+        obj = (staging / lod["generated_obj"]).read_bytes()
+        profile = asset["anatomy_authoring"]
+        first = importer.anatomy_mask(semantic, obj, profile, "head")
+        second = importer.anatomy_mask(semantic, obj, profile, "head")
         self.assertEqual(first, second)
+        _, _, semantic_pixels = importer.decode_rgba_png(semantic)
         _, _, anatomy_pixels = importer.decode_rgba_png(first)
         for semantic_alpha, anatomy_alpha in zip(semantic_pixels[3::4], anatomy_pixels[3::4]):
             self.assertEqual(semantic_alpha > 0, anatomy_alpha > 0)
         used = {tuple(anatomy_pixels[i : i + 3]) for i in range(0, len(anatomy_pixels), 4) if anatomy_pixels[i + 3]}
         self.assertTrue(set(EXPECTED_ANATOMY_COLORS.values()) >= used)
 
-    def test_production_anatomy_profiles_are_independently_audited_and_localized(self) -> None:
-        recipe = load_recipe()
+    def test_source_projected_anatomy_reprojects_to_independent_3d_predicates(self) -> None:
         staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
-        authored_profiles = set()
-        for asset in recipe["part_assets"]:
-            profile = asset["anatomy_authoring"]
-            audit = profile["source_audit"]
-            self.assertEqual(audit["schema"], "alife.geneforge_anatomy_source_audit.v1")
-            self.assertEqual(audit["semantic_lod"], "full")
-            self.assertEqual(audit["landmarks"], sorted(asset["landmarks"]))
-            authored = json.dumps(
-                [
-                    {key: value for key, value in zone.items() if key != "id"}
-                    for zone in profile["zones"]
-                ],
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            self.assertNotIn(authored, authored_profiles, asset["id"])
-            authored_profiles.add(authored)
+        color_to_channel = {value: key for key, value in EXPECTED_ANATOMY_COLORS.items()}
+        for asset in self.recipe["part_assets"]:
+            authoring = asset["anatomy_authoring"]
+            self.assertEqual(authoring["schema"], "alife.geneforge_anatomy_authoring.v2")
+            source_geometry = authoring["projection"]["source_geometry"]
+            audit_lods = authoring["source_projection_audit"]["lods"]
+            for lod in asset["lods"]:
+                with self.subTest(asset=asset["id"], lod=lod["lod"]):
+                    obj_path = staging / lod["generated_obj"]
+                    semantic_path = staging / lod["semantic_mask"]
+                    anatomy_path = staging / lod["anatomy_mask"]
+                    projected = independent_obj_texel_projection(obj_path, semantic_path)
+                    _, _, anatomy = read_rgba_png(anatomy_path)
+                    records = {(record["x"], record["y"]): record for record in projected}
+                    channels: dict[str, list[dict]] = {}
+                    for y in range(64):
+                        for x in range(64):
+                            offset = (y * 64 + x) * 4
+                            if anatomy[offset + 3] == 0:
+                                self.assertNotIn((x, y), records)
+                                continue
+                            self.assertIn((x, y), records)
+                            channel = color_to_channel[tuple(anatomy[offset : offset + 3])]
+                            channels.setdefault(channel, []).append(records[(x, y)])
 
-            full = next(lod for lod in asset["lods"] if lod["lod"] == "full")
-            width, height, semantic = importer.decode_rgba_png(
-                (staging / full["semantic_mask"]).read_bytes()
-            )
-            occupancy = bytes(1 if semantic[offset + 3] else 0 for offset in range(0, len(semantic), 4))
-            self.assertEqual((width, height), (64, 64))
-            self.assertEqual(audit["semantic_occupancy_sha256"], hashlib.sha256(occupancy).hexdigest())
-            self.assertEqual(audit["occupied_pixels"], sum(occupancy))
-            color_to_group = {
-                tuple(color): group for group, color in EXPECTED_GROUP_COLORS.items()
-            }
-            audited_groups: dict[str, list[tuple[float, float]]] = {}
-            for y in range(64):
-                for x in range(64):
-                    offset = (y * 64 + x) * 4
-                    if semantic[offset + 3]:
-                        group = color_to_group[tuple(semantic[offset : offset + 3])]
-                        local_uv = importer.semantic_source_uv(
-                            group, ((x + 0.5) / 64, (y + 0.5) / 64)
+                    self.assertEqual(
+                        set(channels), REQUIRED_ANATOMY_CHANNELS[asset["logical_slot"]]
+                    )
+                    evidence = audit_lods[lod["lod"]]
+                    self.assertEqual(
+                        evidence["obj_sha256"], hashlib.sha256(obj_path.read_bytes()).hexdigest()
+                    )
+                    self.assertEqual(
+                        evidence["semantic_sha256"],
+                        hashlib.sha256(semantic_path.read_bytes()).hexdigest(),
+                    )
+                    self.assertEqual(evidence["projected_texels"], len(projected))
+                    self.assertEqual(
+                        evidence["inside_texels"],
+                        sum(record["mode"] == "inside" for record in projected),
+                    )
+                    self.assertEqual(
+                        evidence["nearest_texels"],
+                        sum(record["mode"] == "nearest" for record in projected),
+                    )
+                    self.assertEqual(
+                        evidence["overlap_texels"],
+                        sum(record["overlap"] > 1 for record in projected),
+                    )
+                    self.assertEqual(
+                        set(evidence["source_landmark_projections"]),
+                        set(source_geometry["landmarks"]),
+                    )
+                    self.assertEqual(
+                        set(evidence["feature_anchor_ownership"]),
+                        set(source_geometry["feature_landmarks"]),
+                    )
+                    self.assertTrue(evidence["geometry_classification"])
+                    self.assertEqual(
+                        evidence["channel_counts"],
+                        {channel: len(points) for channel, points in sorted(channels.items())},
+                    )
+
+                    columns: dict[int, set[str]] = {}
+                    for channel, channel_records in channels.items():
+                        for record in channel_records:
+                            columns.setdefault(record["x"], set()).add(channel)
+                    self.assertTrue(
+                        any(len(column_channels) > 1 for column_channels in columns.values()),
+                        "anatomy classification collapsed to repeated vertical partitions",
+                    )
+
+                    all_x = [record["point"][0] for record in projected]
+                    all_y = [record["point"][1] for record in projected]
+                    all_z = [record["point"][2] for record in projected]
+                    if asset["logical_slot"] == "head":
+                        self.assertTrue(
+                            all(record["group"] == "head.teeth" for record in channels["keratin-skin"])
                         )
-                        audited_groups.setdefault(group, []).append(local_uv)
-            self.assertEqual(set(audit["semantic_groups"]), set(audited_groups))
-            for group, points in audited_groups.items():
-                recorded = audit["semantic_groups"][group]
-                self.assertEqual(recorded["occupied_pixels"], len(points))
-                actual_bounds = [
-                    min(point[0] for point in points),
-                    min(point[1] for point in points),
-                    max(point[0] for point in points),
-                    max(point[1] for point in points),
-                ]
-                for actual, expected in zip(actual_bounds, recorded["local_uv_bounds"]):
-                    self.assertAlmostEqual(actual, expected, places=5)
+                        self.assertTrue(
+                            all(record["group"] == "head.hair" for record in channels["secondary-marking"])
+                        )
+                        for record in channels["inner-ear"]:
+                            self.assertEqual(record["group"], "head")
+                            lateral = abs(normalized_axis(record["point"][0], all_x) - 0.5)
+                            self.assertGreaterEqual(lateral, 0.24)
+                        for record in channels["muzzle"]:
+                            self.assertEqual(record["group"], "head")
+                            self.assertLessEqual(
+                                abs(normalized_axis(record["point"][0], all_x) - 0.5), 0.34
+                            )
+                            self.assertLessEqual(normalized_axis(record["point"][1], all_y), 0.68)
+                            self.assertLessEqual(normalized_axis(record["point"][2], all_z), 0.58)
+                    elif asset["logical_slot"] == "torso":
+                        for record in channels["belly"]:
+                            self.assertLessEqual(
+                                abs(normalized_axis(record["point"][0], all_x) - 0.5), 0.36
+                            )
+                            self.assertLessEqual(normalized_axis(record["point"][2], all_z), 0.58)
+                    elif asset["logical_slot"] in {"arms", "legs"}:
+                        for record in channels["hands-feet"]:
+                            group_records = [
+                                candidate
+                                for candidate in projected
+                                if candidate["group"] == record["group"]
+                            ]
+                            group_y = [candidate["point"][1] for candidate in group_records]
+                            self.assertLessEqual(
+                                normalized_axis(record["point"][1], group_y), 0.46
+                            )
+                    else:
+                        root_z = max(all_z)
+                        tip_z = min(all_z)
+                        span = max(root_z - tip_z, 1.0e-12)
+                        for record in channels["keratin-skin"]:
+                            distance = (root_z - record["point"][2]) / span
+                            self.assertGreaterEqual(distance, 0.72)
+                        for record in channels["secondary-marking"]:
+                            distance = (root_z - record["point"][2]) / span
+                            self.assertGreaterEqual(distance, 0.28)
+                            self.assertLessEqual(distance, 0.82)
 
-            anatomy = importer.anatomy_mask(
-                (staging / full["semantic_mask"]).read_bytes(), profile, asset["logical_slot"]
+    def test_source_feature_anchor_ownership_is_independent_of_production_classifier(self) -> None:
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        color_to_channel = {value: key for key, value in EXPECTED_ANATOMY_COLORS.items()}
+        for asset in self.recipe["part_assets"]:
+            source_geometry = asset["anatomy_authoring"]["projection"]["source_geometry"]
+            expected = REQUIRED_FEATURE_ANCHORS[asset["logical_slot"]]
+            for lod in asset["lods"]:
+                with self.subTest(asset=asset["id"], lod=lod["lod"]):
+                    obj_path = staging / lod["generated_obj"]
+                    semantic_path = staging / lod["semantic_mask"]
+                    anatomy_path = staging / lod["anatomy_mask"]
+                    projected = independent_obj_texel_projection(obj_path, semantic_path)
+                    by_group = {}
+                    for record in projected:
+                        by_group.setdefault(record["group"], []).append(record)
+                    evidence = asset["anatomy_authoring"]["source_projection_audit"]["lods"][lod["lod"]]
+                    bounds = evidence["source_bounds"]
+                    canonical = source_geometry["canonical_bounds"]
+                    _, _, anatomy = read_rgba_png(anatomy_path)
+                    for name, (channel, runtime_group) in expected.items():
+                        anchor = source_geometry["feature_landmarks"][name]
+                        target = tuple(
+                            bounds["min"][axis]
+                            + (anchor["point"][axis] - canonical["min"][axis])
+                            / (canonical["max"][axis] - canonical["min"][axis])
+                            * (bounds["max"][axis] - bounds["min"][axis])
+                            for axis in range(3)
+                        )
+                        candidates = by_group[runtime_group]
+                        nearest = min(
+                            candidates,
+                            key=lambda record: (
+                                sum((record["point"][axis] - target[axis]) ** 2 for axis in range(3)),
+                                record["face"],
+                                record["y"],
+                                record["x"],
+                            ),
+                        )
+                        offset = (nearest["y"] * 64 + nearest["x"]) * 4
+                        self.assertEqual(
+                            tuple(anatomy[offset : offset + 3]),
+                            EXPECTED_ANATOMY_COLORS[channel],
+                        )
+                        ownership = evidence["feature_anchor_ownership"][name]
+                        self.assertEqual(ownership["channel"], channel)
+                        self.assertEqual(ownership["runtime_group"], runtime_group)
+                        self.assertEqual(ownership["group"], nearest["group"])
+                        self.assertEqual((ownership["x"], ownership["y"]), (nearest["x"], nearest["y"]))
+
+    def test_lexical_live_output_reparse_is_rejected_before_resolution(self) -> None:
+        root = TEST_OUTPUT / "augment-live-output-reparse"
+        if root.exists():
+            shutil.rmtree(root)
+        root.mkdir(parents=True)
+        output = root / "live-recipes.json"
+        output.write_text(RECIPE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        with mock.patch.object(
+            importer,
+            "_is_symlink_or_reparse",
+            side_effect=lambda path: Path(path) == output,
+        ):
+            with self.assertRaisesRegex(importer.ImportFailure, "live prior output recipe"):
+                importer._load_live_authority_recipe(output, output)
+
+    def test_directory_durability_false_is_a_typed_promotion_failure(self) -> None:
+        root = TEST_OUTPUT / "augment-durability-failure"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        staging.mkdir(parents=True)
+        temporary.mkdir()
+        old_digest, new_digest = "1" * 64, "2" * 64
+        (staging / "build_receipt.json").write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        (temporary / "build_receipt.json").write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        with mock.patch.object(importer, "_flush_directory", return_value=False):
+            with self.assertRaisesRegex(importer.ImportFailure, "directory durability"):
+                importer._promote_augmented_pair(
+                    staging, temporary, backup, recipe_temporary, output
+                )
+
+    def test_pair_recipe_digest_rejects_marker_selected_non_object_json(self) -> None:
+        root = TEST_OUTPUT / "augment-recovery-non-object-generation"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        staging.mkdir(parents=True)
+        temporary.mkdir()
+        old_digest, new_digest = "1" * 64, "2" * 64
+        (staging / "build_receipt.json").write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        (temporary / "build_receipt.json").write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        with self.assertRaises(KeyboardInterrupt):
+            importer._promote_augmented_pair(
+                staging,
+                temporary,
+                backup,
+                recipe_temporary,
+                output,
+                phase_observer=lambda phase: (_ for _ in ()).throw(KeyboardInterrupt())
+                if phase == "prepared"
+                else None,
             )
-            _, _, pixels = importer.decode_rgba_png(anatomy)
-            channel_points: dict[str, list[tuple[float, float]]] = {}
-            color_to_channel = {value: key for key, value in EXPECTED_ANATOMY_COLORS.items()}
-            for y in range(64):
-                for x in range(64):
-                    offset = (y * 64 + x) * 4
-                    if pixels[offset + 3]:
-                        channel = color_to_channel[tuple(pixels[offset : offset + 3])]
-                        channel_points.setdefault(channel, []).append(((x + 0.5) / 64, (y + 0.5) / 64))
-            for channel, expected_bounds in audit["channel_atlas_bounds"].items():
-                points = channel_points[channel]
-                actual = [
-                    min(point[0] for point in points),
-                    min(point[1] for point in points),
-                    max(point[0] for point in points),
-                    max(point[1] for point in points),
-                ]
-                for value, lower, upper in zip(actual, expected_bounds[0], expected_bounds[1]):
-                    self.assertGreaterEqual(value, lower, (asset["id"], channel, actual))
-                    self.assertLessEqual(value, upper, (asset["id"], channel, actual))
-
-            zones_by_channel = {
-                zone["channel"]: zone for zone in profile["zones"]
-            }
-            secondary_points = zones_by_channel["secondary-marking"]["shape"]["points"]
-            self.assertLessEqual(max(point[0] for point in secondary_points), 0.4)
-            if asset["logical_slot"] == "head":
-                inner_points = zones_by_channel["inner-ear"]["shape"]["points"]
-                muzzle = zones_by_channel["muzzle"]["shape"]
-                keratin_points = zones_by_channel["keratin-skin"]["shape"]["points"]
-                self.assertLessEqual(max(point[0] for point in inner_points), 0.45)
-                self.assertTrue(0.35 <= muzzle["center"][0] <= 0.65)
-                self.assertTrue(0.2 <= muzzle["center"][1] <= 0.55)
-                self.assertGreaterEqual(min(point[0] for point in keratin_points), 0.6)
-            elif asset["logical_slot"] == "torso":
-                belly = zones_by_channel["belly"]["shape"]
-                self.assertTrue(0.35 <= belly["center"][0] <= 0.65)
-                self.assertTrue(0.35 <= belly["center"][1] <= 0.65)
-            else:
-                extremity = "hands-feet" if asset["logical_slot"] in {"arms", "legs"} else "keratin-skin"
-                extremity_points = zones_by_channel[extremity]["shape"]["points"]
-                self.assertGreaterEqual(min(point[0] for point in extremity_points), 0.6)
+        marker = importer._augmentation_transaction_path(staging)
+        transaction = json.loads(marker.read_text(encoding="utf-8"))
+        non_object = b"[]"
+        Path(transaction["recipe_backup"]).write_bytes(non_object)
+        transaction["old_recipe_file_sha256"] = hashlib.sha256(non_object).hexdigest()
+        marker.write_text(json.dumps(transaction), encoding="utf-8")
+        with self.assertRaises(importer.ImportFailure):
+            importer._recover_augmentation_transaction(staging, output)
 
     def test_decode_rgba_png_rejects_malformed_or_unbounded_inputs_as_import_failure(self) -> None:
         filtered_size = 64 * (1 + 64 * 4)
@@ -466,23 +818,69 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
                 with self.assertRaises(importer.ImportFailure):
                     importer.decode_rgba_png(data)
 
-    def test_anatomy_authoring_rejects_malformed_shapes_groups_and_channels(self) -> None:
+    def test_anatomy_authoring_requires_projection_policy_and_all_lod_audits(self) -> None:
         asset = json.loads(json.dumps(self.assets["norn-head"]))
         mutations = (
-            ("malformed polygon", lambda zone: zone["shape"].update({"points": [[-0.1, 0.0], [0.2, 0.0], [0.2, 0.2]]})),
-            ("unknown semantic group", lambda zone: zone.update({"semantic_groups": ["unknown"]})),
-            ("not owned", lambda zone: zone.update({"channel": "belly"})),
-            ("unknown shape", lambda zone: zone.update({"shape": {"kind": "rectangle"}})),
-            ("degenerate polygon", lambda zone: zone.update({"shape": {"kind": "polygon", "points": [[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]]}})),
-            ("degenerate polygon", lambda zone: zone.update({"shape": {"kind": "polygon", "points": [[0.1, 0.1], [0.8, 0.1], [0.1, 0.1]]}})),
-            ("self-intersecting polygon", lambda zone: zone.update({"shape": {"kind": "polygon", "points": [[0.1, 0.1], [0.9, 0.9], [0.1, 0.9], [0.9, 0.1]]}})),
+            lambda candidate: candidate["anatomy_authoring"].__setitem__("schema", "unreviewed"),
+            lambda candidate: candidate["anatomy_authoring"]["projection"].__setitem__(
+                "triangle_tie_break", "caller-order"
+            ),
+            lambda candidate: candidate["anatomy_authoring"]["projection"][
+                "detail_group_channels"
+            ].__setitem__("head.teeth", "belly"),
+            lambda candidate: candidate["anatomy_authoring"].__setitem__(
+                "required_channels", ["primary"]
+            ),
+            lambda candidate: candidate["anatomy_authoring"][
+                "source_projection_audit"
+            ]["lods"].pop("compact"),
+            lambda candidate: candidate["anatomy_authoring"][
+                "source_projection_audit"
+            ]["lods"]["full"].__setitem__("projection_sha256", "invalid"),
         )
-        for expected, mutation in mutations:
+        for mutation in mutations:
             candidate = json.loads(json.dumps(asset))
-            mutation(candidate["anatomy_authoring"]["zones"][0])
-            with self.subTest(expected=expected):
-                with self.assertRaisesRegex(importer.ImportFailure, expected):
+            mutation(candidate)
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(importer.ImportFailure):
                     importer.validate_anatomy_authoring(candidate)
+                    importer.validate_anatomy_source_audit(candidate)
+
+    def test_source_projected_anatomy_profile_requires_owned_channel(self) -> None:
+        asset = self.assets["norn-head"]
+        feature_name = "left-ear"
+        source_channel = asset["anatomy_authoring"]["projection"]["source_geometry"][
+            "feature_landmarks"
+        ][feature_name]["channel"]
+        self.assertEqual(
+            asset["anatomy_authoring"]["source_projection_audit"]["lods"]["full"][
+                "feature_anchor_ownership"
+            ][feature_name]["owned_channel"],
+            source_channel,
+        )
+        importer.validate_anatomy_source_audit(asset)
+
+        def remove_owned_channel(ownership: dict) -> None:
+            ownership.pop("owned_channel")
+
+        mutations = {
+            "missing": remove_owned_channel,
+            "mismatched": lambda ownership: ownership.__setitem__(
+                "owned_channel", "muzzle"
+            ),
+            "non-string": lambda ownership: ownership.__setitem__(
+                "owned_channel", 7
+            ),
+        }
+        for name, mutation in mutations.items():
+            candidate = json.loads(json.dumps(asset))
+            ownership = candidate["anatomy_authoring"]["source_projection_audit"][
+                "lods"
+            ]["full"]["feature_anchor_ownership"][feature_name]
+            mutation(ownership)
+            with self.subTest(mutation=name):
+                with self.assertRaises(importer.ImportFailure):
+                    importer.validate_anatomy_source_audit(candidate)
 
     def test_augmented_tree_requires_both_mask_dimensions_to_be_64(self) -> None:
         source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
@@ -546,7 +944,11 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
                     importer._verify_receipt_outputs(staging, candidate, self.recipe)
 
     def test_legacy_126_output_receipt_uses_the_same_source_accounting_contract(self) -> None:
-        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        staging = TEST_OUTPUT / "legacy-receipt-tree"
+        if staging.exists():
+            shutil.rmtree(staging)
+        shutil.copytree(source, staging)
         receipt = json.loads((staging / "build_receipt.json").read_text(encoding="utf-8"))
         anatomy_paths = {
             lod["anatomy_mask"]
@@ -563,6 +965,8 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
                 path for path in source["outputs"] if path not in anatomy_paths
             ]
             source["output_count"] = len(source["outputs"])
+        for relative in anatomy_paths:
+            (staging / relative).unlink()
         self.assertFalse(importer._verify_receipt_outputs(staging, receipt, self.recipe))
 
         receipt["sources"][0]["output_count"] += 1
@@ -597,16 +1001,99 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
         self.assertEqual(external_file.read_bytes(), b"outside remains unchanged")
         self.assertFalse((external / "new.bin").exists())
 
-    def test_zone_change_changes_only_anatomy_output(self) -> None:
+    def test_staged_output_path_accepts_an_importer_worker_mkdir_race(self) -> None:
+        root = TEST_OUTPUT / "worker-mkdir-race"
+        shutil.rmtree(root, ignore_errors=True)
+        root.mkdir(parents=True)
+        raced_parent = root / "shared"
+        original_mkdir = os.mkdir
+        injected = False
+
+        def create_then_report_existing(path, mode=0o777, *, dir_fd=None):
+            nonlocal injected
+            if Path(path) == raced_parent and not injected:
+                injected = True
+                if dir_fd is None:
+                    original_mkdir(path, mode)
+                else:
+                    original_mkdir(path, mode, dir_fd=dir_fd)
+                raise FileExistsError(183, "simulated concurrent mkdir", str(path))
+            if dir_fd is None:
+                return original_mkdir(path, mode)
+            return original_mkdir(path, mode, dir_fd=dir_fd)
+
+        with mock.patch.object(importer.os, "mkdir", side_effect=create_then_report_existing):
+            output = importer.staged_output_path(root, "shared/nested/output.bin")
+
+        self.assertTrue(injected)
+        self.assertEqual(output, root / "shared/nested/output.bin")
+        self.assertTrue(output.parent.is_dir())
+
+    def test_source_projection_is_bound_to_same_lod_obj_bytes(self) -> None:
         staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
         asset = self.assets["norn-head"]
-        semantic = (staging / asset["lods"][0]["semantic_mask"]).read_bytes()
+        lod = asset["lods"][0]
+        semantic = (staging / lod["semantic_mask"]).read_bytes()
+        obj = (staging / lod["generated_obj"]).read_bytes()
         profile = json.loads(json.dumps(asset["anatomy_authoring"]))
-        before = importer.anatomy_mask(semantic, profile, "head")
-        profile["zones"][2]["shape"]["center"][1] += 0.08
-        after = importer.anatomy_mask(semantic, profile, "head")
-        self.assertNotEqual(before, after)
+        before, audit = importer.anatomy_mask_with_audit(semantic, obj, profile, "head")
+        self.assertEqual(audit["obj_sha256"], hashlib.sha256(obj).hexdigest())
+        tampered = obj.replace(b"v -0.820633054", b"v -0.800633054", 1)
+        self.assertNotEqual(tampered, obj)
+        after, changed_audit = importer.anatomy_mask_with_audit(
+            semantic, tampered, profile, "head"
+        )
+        self.assertNotEqual(audit["obj_sha256"], changed_audit["obj_sha256"])
+        _, _, before_pixels = importer.decode_rgba_png(before)
+        _, _, after_pixels = importer.decode_rgba_png(after)
+        self.assertEqual(before_pixels[3::4], after_pixels[3::4])
         self.assertEqual(semantic, (staging / asset["lods"][0]["semantic_mask"]).read_bytes())
+
+    def test_source_landmark_audit_reprojects_each_landmark_with_independent_barycentrics(self) -> None:
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        for asset in self.recipe["part_assets"]:
+            self.assertIn("source_geometry", asset["anatomy_authoring"]["projection"])
+            source_geometry = asset["anatomy_authoring"]["projection"]["source_geometry"]
+            for lod in asset["lods"]:
+                triangles = []
+                positions = []
+                uvs = []
+                group = None
+                for line in (staging / lod["generated_obj"]).read_text(encoding="ascii").splitlines():
+                    fields = line.split()
+                    if not fields:
+                        continue
+                    if fields[0] == "v":
+                        positions.append(tuple(float(value) for value in fields[1:4]))
+                    elif fields[0] == "vt":
+                        uvs.append(tuple(float(value) for value in fields[1:3]))
+                    elif fields[0] == "g":
+                        group = fields[1]
+                    elif fields[0] == "f":
+                        references = [field.split("/") for field in fields[1:4]]
+                        triangles.append(
+                            {
+                                "group": group,
+                                "positions": tuple(positions[int(ref[0]) - 1] for ref in references),
+                                "uvs": tuple(uvs[int(ref[1]) - 1] for ref in references),
+                            }
+                        )
+                evidence = asset["anatomy_authoring"]["source_projection_audit"]["lods"][lod["lod"]]
+                for name, landmark in evidence["source_landmark_projections"].items():
+                    triangle = triangles[landmark["face"]]
+                    weights = landmark["weights"]
+                    self.assertAlmostEqual(sum(weights), 1.0, places=5)
+                    self.assertTrue(all(0.0 <= value <= 1.0 for value in weights))
+                    projected = [
+                        sum(weights[index] * triangle["positions"][index][axis] for index in range(3))
+                        for axis in range(3)
+                    ]
+                    self.assertEqual(landmark["group"], triangle["group"])
+                    for actual, recorded in zip(projected, landmark["projected"]):
+                        self.assertAlmostEqual(actual, recorded, places=5)
+                    self.assertEqual(len(landmark["source"]), 3)
+                    self.assertTrue(all(math.isfinite(value) for value in landmark["source"]))
+                    self.assertIn(name, source_geometry["landmarks"])
 
     def test_production_augmentation_matches_normal_build_rasterizer_for_all_lods(self) -> None:
         staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
@@ -614,6 +1101,7 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
             for lod in asset["lods"]:
                 expected = importer.anatomy_mask(
                     (staging / lod["semantic_mask"]).read_bytes(),
+                    (staging / lod["generated_obj"]).read_bytes(),
                     asset["anatomy_authoring"],
                     asset["logical_slot"],
                 )
@@ -621,7 +1109,7 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
 
     def test_every_family_and_independent_slot_combination_has_all_channels(self) -> None:
         channels_by_asset = {
-            asset["id"]: {"primary"} | {zone["channel"] for zone in asset["anatomy_authoring"]["zones"]}
+            asset["id"]: set(asset["anatomy_authoring"]["required_channels"])
             for asset in self.recipe["part_assets"]
         }
         all_channels = set(EXPECTED_ANATOMY_COLORS)
@@ -1213,6 +1701,76 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
                 with self.assertRaises(importer.ImportFailure):
                     importer._verify_receipt_outputs(staging, receipt, recipe)
 
+    def test_authority_handoff_preserves_every_preexisting_identity_path_and_digest(self) -> None:
+        authority = load_recipe()
+        candidate = json.loads(json.dumps(authority))
+        candidate["part_assets"][0]["anatomy_authoring"] = {
+            "schema": "replacement-authoring-evidence"
+        }
+        candidate["part_assets"][0]["lods"][0]["anatomy_mask_sha256"] = "1" * 64
+        candidate["part_assets"][0]["lods"][0]["socket_manifest_sha256"] = "2" * 64
+        candidate["recipe_sha256"] = canonical_recipe_digest(candidate)
+        importer._validate_authority_handoff(authority, candidate)
+
+        mutations = {
+            "asset-id": lambda recipe: recipe["part_assets"][0].__setitem__("id", "alternate-id"),
+            "extra-asset": lambda recipe: recipe["part_assets"].append(
+                json.loads(json.dumps(recipe["part_assets"][0]))
+            ),
+            "obj-path": lambda recipe: recipe["part_assets"][0]["lods"][0].__setitem__(
+                "generated_obj", "production_voxel_v1/alternate.obj"
+            ),
+            "obj-digest": lambda recipe: recipe["part_assets"][0]["lods"][0].__setitem__(
+                "generated_obj_sha256", "3" * 64
+            ),
+            "socket-path": lambda recipe: recipe["part_assets"][0]["lods"][0].__setitem__(
+                "socket_manifest", "production_voxel_v1/alternate.json"
+            ),
+            "semantic-path": lambda recipe: recipe["part_assets"][0]["lods"][0].__setitem__(
+                "semantic_mask", "production_voxel_v1/alternate_semantic.png"
+            ),
+            "semantic-digest": lambda recipe: recipe["part_assets"][0]["lods"][0].__setitem__(
+                "semantic_mask_sha256", "4" * 64
+            ),
+            "anatomy-path": lambda recipe: recipe["part_assets"][0]["lods"][0].__setitem__(
+                "anatomy_mask", "production_voxel_v1/alternate_anatomy.png"
+            ),
+        }
+        for name, mutation in mutations.items():
+            with self.subTest(name=name):
+                altered = json.loads(json.dumps(candidate))
+                mutation(altered)
+                altered["recipe_sha256"] = canonical_recipe_digest(altered)
+                with self.assertRaises(importer.ImportFailure):
+                    importer._validate_authority_handoff(authority, altered)
+
+    def test_authority_must_be_the_live_prior_output_recipe(self) -> None:
+        root = TEST_OUTPUT / "augment-live-authority"
+        if root.exists():
+            shutil.rmtree(root)
+        root.mkdir(parents=True)
+        output = root / "live-recipes.json"
+        alternate = root / "review-copy.json"
+        shutil.copy2(RECIPE_PATH, output)
+        shutil.copy2(RECIPE_PATH, alternate)
+        loaded = importer._load_live_authority_recipe(output, output)
+        self.assertEqual(loaded["recipe_sha256"], load_recipe()["recipe_sha256"])
+        with self.assertRaisesRegex(importer.ImportFailure, "live prior output"):
+            importer._load_live_authority_recipe(alternate, output)
+
+    def test_receipt_validation_rejects_unreceipted_staged_paths(self) -> None:
+        source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        staging = TEST_OUTPUT / "augment-unreceipted-extra"
+        if staging.exists():
+            shutil.rmtree(staging)
+        shutil.copytree(source, staging)
+        extra = staging / "production_voxel_v1/models/geneforge/alternate_semantic.png"
+        extra.parent.mkdir(parents=True, exist_ok=True)
+        extra.write_bytes(b"alternate staged bytes")
+        receipt = json.loads((staging / "build_receipt.json").read_text(encoding="utf-8"))
+        with self.assertRaisesRegex(importer.ImportFailure, "unreceipted staged path"):
+            importer._verify_receipt_outputs(staging, receipt, load_recipe())
+
     def test_interrupted_augmentation_promotion_recovers_a_matched_pair_at_every_phase(self) -> None:
         for phase in ("prepared", "staging-backed-up", "staging-promoted", "recipe-promoted"):
             with self.subTest(phase=phase):
@@ -1258,6 +1816,64 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
                 self.assertEqual(receipt_digest, recipe_digest)
                 self.assertFalse(importer._augmentation_transaction_path(staging).exists())
 
+    def test_cli_recovers_transaction_before_loading_the_live_recipe(self) -> None:
+        source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        root = TEST_OUTPUT / "augment-cli-startup-recovery"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        shutil.copytree(source, staging)
+        shutil.copytree(source, temporary)
+        shutil.copy2(RECIPE_PATH, output)
+        candidate = json.loads(output.read_text(encoding="utf-8"))
+        candidate["recipe_sha256"] = "2" * 64
+        recipe_temporary.write_text(json.dumps(candidate), encoding="utf-8")
+        receipt_path = temporary / "build_receipt.json"
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["recipe_sha256"] = "2" * 64
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+        with self.assertRaises(KeyboardInterrupt):
+            importer._promote_augmented_pair(
+                staging,
+                temporary,
+                backup,
+                recipe_temporary,
+                output,
+                phase_observer=lambda phase: (_ for _ in ()).throw(KeyboardInterrupt())
+                if phase == "staging-promoted"
+                else None,
+            )
+        output.write_text("{unreadable live recipe", encoding="utf-8")
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(IMPORTER),
+                "augment-anatomy",
+                "--recipes",
+                str(output),
+                "--staging",
+                str(staging),
+                "--output",
+                str(output),
+            ],
+            cwd=WORKSPACE,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assert_success(completed)
+        self.assertFalse(importer._augmentation_transaction_path(staging).exists())
+        restored = json.loads(output.read_text(encoding="utf-8"))
+        restored_receipt = json.loads(
+            (staging / "build_receipt.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(restored["recipe_sha256"], restored_receipt["recipe_sha256"])
+
     def test_augmentation_recovery_rejects_marker_controlled_external_paths(self) -> None:
         root = TEST_OUTPUT / "augment-recovery-unsafe-marker"
         external = TEST_OUTPUT / "augment-recovery-external"
@@ -1302,6 +1918,251 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
             importer._recover_augmentation_transaction(staging, output)
         self.assertEqual(sentinel.read_text(encoding="ascii"), "preserve\n")
         marker.unlink()
+
+    def test_augmentation_recovery_maps_every_malformed_marker_field_to_import_failure(self) -> None:
+        root = TEST_OUTPUT / "augment-recovery-malformed-marker"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        staging.mkdir(parents=True)
+        temporary.mkdir()
+        old_digest, new_digest = "1" * 64, "2" * 64
+        (staging / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+        )
+        (temporary / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+        )
+        output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        with self.assertRaises(KeyboardInterrupt):
+            importer._promote_augmented_pair(
+                staging,
+                temporary,
+                backup,
+                recipe_temporary,
+                output,
+                phase_observer=lambda phase: (_ for _ in ()).throw(KeyboardInterrupt())
+                if phase == "prepared"
+                else None,
+            )
+        marker = importer._augmentation_transaction_path(staging)
+        valid = json.loads(marker.read_text(encoding="utf-8"))
+        mutations = {
+            "missing-path": lambda value: value.pop("temporary"),
+            "path-type": lambda value: value.__setitem__("backup", ["not", "a", "path"]),
+            "phase-type": lambda value: value.__setitem__("phase", 7),
+            "missing-digest": lambda value: value.pop("old_recipe_sha256"),
+            "digest-type": lambda value: value.__setitem__("new_recipe_sha256", 2),
+            "digest-format": lambda value: value.__setitem__("new_recipe_sha256", "not-sha256"),
+        }
+        for name, mutation in mutations.items():
+            with self.subTest(name=name):
+                malformed = json.loads(json.dumps(valid))
+                mutation(malformed)
+                marker.write_text(json.dumps(malformed), encoding="utf-8")
+                with self.assertRaises(importer.ImportFailure):
+                    importer._recover_augmentation_transaction(staging, output)
+        marker.write_text(json.dumps(valid), encoding="utf-8")
+        importer._recover_augmentation_transaction(staging, output)
+
+    def test_augmentation_recovery_rejects_reparse_operands_before_tree_access(self) -> None:
+        root = TEST_OUTPUT / "augment-recovery-reparse-marker"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        staging.mkdir(parents=True)
+        temporary.mkdir()
+        old_digest, new_digest = "1" * 64, "2" * 64
+        (staging / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+        )
+        (temporary / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+        )
+        output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        with self.assertRaises(KeyboardInterrupt):
+            importer._promote_augmented_pair(
+                staging,
+                temporary,
+                backup,
+                recipe_temporary,
+                output,
+                phase_observer=lambda phase: (_ for _ in ()).throw(KeyboardInterrupt())
+                if phase == "prepared"
+                else None,
+            )
+        with mock.patch.object(
+            importer,
+            "_is_symlink_or_reparse",
+            side_effect=lambda path: Path(path) == temporary,
+        ):
+            with self.assertRaisesRegex(importer.ImportFailure, "reparse"):
+                importer._recover_augmentation_transaction(staging, output)
+        importer._augmentation_transaction_path(staging).unlink()
+
+    def test_augmentation_recovery_rejects_real_sibling_symlink_when_supported(self) -> None:
+        root = TEST_OUTPUT / "augment-recovery-real-reparse"
+        external = TEST_OUTPUT / "augment-recovery-real-reparse-external"
+        for path in (root, external):
+            if path.exists():
+                shutil.rmtree(path)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        staging.mkdir(parents=True)
+        temporary.mkdir()
+        external.mkdir()
+        sentinel = external / "sentinel.txt"
+        sentinel.write_text("preserve", encoding="ascii")
+        old_digest, new_digest = "1" * 64, "2" * 64
+        (staging / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+        )
+        (temporary / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+        )
+        output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        with self.assertRaises(KeyboardInterrupt):
+            importer._promote_augmented_pair(
+                staging,
+                temporary,
+                backup,
+                recipe_temporary,
+                output,
+                phase_observer=lambda phase: (_ for _ in ()).throw(KeyboardInterrupt())
+                if phase == "prepared"
+                else None,
+            )
+        shutil.rmtree(temporary)
+        try:
+            os.symlink(external, temporary, target_is_directory=True)
+        except OSError:
+            importer._augmentation_transaction_path(staging).unlink()
+            return
+        try:
+            with self.assertRaisesRegex(importer.ImportFailure, "symlink|reparse"):
+                importer._recover_augmentation_transaction(staging, output)
+            self.assertEqual(sentinel.read_text(encoding="ascii"), "preserve")
+        finally:
+            temporary.unlink()
+            importer._augmentation_transaction_path(staging).unlink()
+
+    def test_augmentation_recovery_rejects_a_tampered_rollback_tree(self) -> None:
+        root = TEST_OUTPUT / "augment-recovery-tampered-backup"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        staging.mkdir(parents=True)
+        temporary.mkdir()
+        old_digest, new_digest = "1" * 64, "2" * 64
+        (staging / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+        )
+        (temporary / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+        )
+        output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        with self.assertRaises(KeyboardInterrupt):
+            importer._promote_augmented_pair(
+                staging,
+                temporary,
+                backup,
+                recipe_temporary,
+                output,
+                phase_observer=lambda phase: (_ for _ in ()).throw(KeyboardInterrupt())
+                if phase == "staging-promoted"
+                else None,
+            )
+        (backup / "build_receipt.json").write_bytes(b"tampered rollback")
+        with self.assertRaisesRegex(importer.ImportFailure, "verified old staging"):
+            importer._recover_augmentation_transaction(staging, output)
+        importer._augmentation_transaction_path(staging).unlink()
+
+    def test_promotion_phases_cross_file_and_directory_durability_barriers(self) -> None:
+        self.assertTrue(hasattr(importer, "_flush_file"))
+        self.assertTrue(hasattr(importer, "_flush_directory"))
+        self.assertTrue(hasattr(importer, "_durable_replace"))
+        root = TEST_OUTPUT / "augment-durability-probe"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        staging.mkdir(parents=True)
+        temporary.mkdir()
+        old_digest, new_digest = "1" * 64, "2" * 64
+        (staging / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+        )
+        (temporary / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+        )
+        output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        file_barriers = []
+        directory_barriers = []
+        original_file_flush = importer._flush_file
+        original_directory_flush = importer._flush_directory
+
+        def observe_file(path):
+            file_barriers.append(Path(path).resolve())
+            return original_file_flush(path)
+
+        def observe_directory(path):
+            directory_barriers.append(Path(path).resolve())
+            return original_directory_flush(path)
+
+        with mock.patch.object(importer, "_flush_file", side_effect=observe_file), mock.patch.object(
+            importer, "_flush_directory", side_effect=observe_directory
+        ):
+            importer._promote_augmented_pair(
+                staging, temporary, backup, recipe_temporary, output
+            )
+        self.assertIn(output.resolve(), file_barriers)
+        self.assertGreaterEqual(directory_barriers.count(root.resolve()), 8)
+
+    def test_startup_cleans_only_confined_orphans_after_a_verified_live_pair(self) -> None:
+        root = TEST_OUTPUT / "augment-orphan-cleanup"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        staging.mkdir(parents=True)
+        output = root / "recipe.json"
+        digest = "a" * 64
+        (staging / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": digest}), encoding="utf-8"
+        )
+        output.write_text(json.dumps({"recipe_sha256": digest}), encoding="utf-8")
+        orphan_directory = root / "staging.augment-tmp-orphan"
+        orphan_directory.mkdir()
+        orphan_file = root / ".recipe.json.augment-rollback-orphan"
+        orphan_file.write_text("orphan", encoding="ascii")
+        unrelated = root / "preserve.txt"
+        unrelated.write_text("preserve", encoding="ascii")
+        importer._cleanup_augmentation_orphans(staging, output)
+        self.assertFalse(orphan_directory.exists())
+        self.assertFalse(orphan_file.exists())
+        self.assertEqual(unrelated.read_text(encoding="ascii"), "preserve")
 
     def test_augment_rejects_64x63_semantic_without_mutating_staging_or_recipe(self) -> None:
         source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
