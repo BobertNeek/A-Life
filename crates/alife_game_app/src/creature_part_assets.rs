@@ -12,7 +12,7 @@ use bevy::{
     asset::RenderAssetUsages,
     mesh::Indices,
     prelude::{Assets, Handle, Image, Mesh, Resource, StandardMaterial},
-    render::render_resource::PrimitiveTopology,
+    render::render_resource::{PrimitiveTopology, TextureDimension, TextureFormat},
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -62,7 +62,7 @@ impl CreaturePartAssetLibrary {
         profile: crate::ProductionFrontendProfileId,
     ) -> Result<Self, CreaturePartAssetError> {
         let mut library =
-            Self::with_coat_limits(crate::CreatureCoatCacheLimits::for_profile(profile));
+            Self::with_coat_limits(crate::CreatureCoatCacheLimits::for_profile(profile))?;
         for family in &catalog.families {
             for lod in &family.lods {
                 let pack = load_generated_part_pack(assets_root, family, lod.lod)?;
@@ -85,16 +85,18 @@ impl CreaturePartAssetLibrary {
         Ok(library)
     }
 
-    fn with_coat_limits(limits: crate::CreatureCoatCacheLimits) -> Self {
-        Self {
+    fn with_coat_limits(
+        limits: crate::CreatureCoatCacheLimits,
+    ) -> Result<Self, CreaturePartAssetError> {
+        Ok(Self {
             meshes: BTreeMap::new(),
             bounds: BTreeMap::new(),
             materials: BTreeMap::new(),
-            coat_cache: crate::CreatureCoatCache::new(limits),
+            coat_cache: crate::CreatureCoatCache::new(limits)?,
             coat_images: BTreeMap::new(),
             coat_materials: BTreeMap::new(),
             next_coat_asset_id: 1,
-        }
+        })
     }
 
     pub fn mesh(&self, key: crate::CreaturePartMeshKey) -> Option<Handle<Mesh>> {
@@ -136,6 +138,11 @@ impl CreaturePartAssetLibrary {
         image_assets: &mut Assets<Image>,
         material_assets: &mut Assets<StandardMaterial>,
     ) -> Result<CreatureCoatAssetHandles, CreaturePartAssetError> {
+        let candidate_image = image_assets
+            .get(image.id())
+            .ok_or(CreaturePartAssetError::MissingCandidateCoatImage)?;
+        validate_coat_image(candidate_image)?;
+
         let candidate = crate::CreatureCoatAssetPair::new(
             self.next_coat_asset_id,
             self.next_coat_asset_id.saturating_add(1),
@@ -201,9 +208,41 @@ impl CreaturePartAssetLibrary {
 }
 
 #[cfg(feature = "bevy-app")]
+fn validate_coat_image(image: &Image) -> Result<(), CreaturePartAssetError> {
+    let descriptor = &image.texture_descriptor;
+    let size = descriptor.size;
+    if size.width != crate::CREATURE_COAT_ATLAS_SIZE
+        || size.height != crate::CREATURE_COAT_ATLAS_SIZE
+        || size.depth_or_array_layers != 1
+        || descriptor.dimension != TextureDimension::D2
+    {
+        return Err(CreaturePartAssetError::InvalidCoatImageDimensions {
+            width: size.width,
+            height: size.height,
+            depth_or_array_layers: size.depth_or_array_layers,
+            dimension: descriptor.dimension,
+        });
+    }
+    if descriptor.format != TextureFormat::Rgba8UnormSrgb {
+        return Err(CreaturePartAssetError::InvalidCoatImageFormat {
+            format: descriptor.format,
+        });
+    }
+    let data = image
+        .data
+        .as_ref()
+        .ok_or(CreaturePartAssetError::MissingCoatImageData)?;
+    if data.len() != crate::CREATURE_COAT_RGBA_BYTES {
+        return Err(CreaturePartAssetError::InvalidCoatImageDataLength { actual: data.len() });
+    }
+    Ok(())
+}
+
+#[cfg(feature = "bevy-app")]
 impl Default for CreaturePartAssetLibrary {
     fn default() -> Self {
         Self::with_coat_limits(crate::CreatureCoatCacheLimits::comfort())
+            .expect("comfort coat-cache limits are valid")
     }
 }
 
@@ -283,10 +322,191 @@ mod coat_asset_tests {
         )
     }
 
+    fn add_image_candidate(
+        images: &mut Assets<Image>,
+        materials: &mut Assets<StandardMaterial>,
+        image: Image,
+    ) -> (Handle<Image>, Handle<StandardMaterial>) {
+        (
+            images.add(image),
+            materials.add(StandardMaterial::default()),
+        )
+    }
+
+    #[test]
+    fn acquire_rejects_oversized_image_without_mutating_assets_or_cache() {
+        let mut library =
+            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits::minimum())
+                .unwrap();
+        let mut images = Assets::<Image>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let oversized = Image::new_fill(
+            Extent3d {
+                width: crate::CREATURE_COAT_ATLAS_SIZE * 2,
+                height: crate::CREATURE_COAT_ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[17, 29, 43, 255],
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::default(),
+        );
+        let candidate = add_image_candidate(&mut images, &mut materials, oversized);
+        let image_id = candidate.0.id();
+        let material_id = candidate.1.id();
+
+        let result = library.acquire_coat_assets(
+            key(0),
+            candidate.0,
+            candidate.1,
+            &mut images,
+            &mut materials,
+        );
+
+        assert!(matches!(
+            result,
+            Err(CreaturePartAssetError::InvalidCoatImageDimensions {
+                width,
+                height,
+                depth_or_array_layers: 1,
+                dimension: TextureDimension::D2,
+            }) if width == crate::CREATURE_COAT_ATLAS_SIZE * 2
+                && height == crate::CREATURE_COAT_ATLAS_SIZE
+        ));
+        assert!(images.get(image_id).is_some());
+        assert!(materials.get(material_id).is_some());
+        assert_eq!(library.coat_handle_count(), 0);
+        assert_eq!(library.coat_rgba_bytes(), 0);
+    }
+
+    #[test]
+    fn acquire_rejects_wrong_image_format_without_mutation() {
+        let mut library =
+            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits::minimum())
+                .unwrap();
+        let mut images = Assets::<Image>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let wrong_format = Image::new_fill(
+            Extent3d {
+                width: crate::CREATURE_COAT_ATLAS_SIZE,
+                height: crate::CREATURE_COAT_ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[17, 29, 43, 255],
+            TextureFormat::Rgba8Unorm,
+            RenderAssetUsages::default(),
+        );
+        let candidate = add_image_candidate(&mut images, &mut materials, wrong_format);
+        let image_id = candidate.0.id();
+        let material_id = candidate.1.id();
+
+        let result = library.acquire_coat_assets(
+            key(0),
+            candidate.0,
+            candidate.1,
+            &mut images,
+            &mut materials,
+        );
+
+        assert!(matches!(
+            result,
+            Err(CreaturePartAssetError::InvalidCoatImageFormat {
+                format: TextureFormat::Rgba8Unorm,
+            })
+        ));
+        assert!(images.get(image_id).is_some());
+        assert!(materials.get(material_id).is_some());
+        assert_eq!(library.coat_handle_count(), 0);
+        assert_eq!(library.coat_rgba_bytes(), 0);
+    }
+
+    #[test]
+    fn acquire_rejects_wrong_image_data_length_without_mutation() {
+        let mut library =
+            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits::minimum())
+                .unwrap();
+        let mut images = Assets::<Image>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let mut wrong_length = Image::new_fill(
+            Extent3d {
+                width: crate::CREATURE_COAT_ATLAS_SIZE,
+                height: crate::CREATURE_COAT_ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[17, 29, 43, 255],
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::default(),
+        );
+        wrong_length.data = Some(vec![0; crate::CREATURE_COAT_RGBA_BYTES - 1]);
+        let candidate = add_image_candidate(&mut images, &mut materials, wrong_length);
+        let image_id = candidate.0.id();
+        let material_id = candidate.1.id();
+
+        let result = library.acquire_coat_assets(
+            key(0),
+            candidate.0,
+            candidate.1,
+            &mut images,
+            &mut materials,
+        );
+
+        assert!(matches!(
+            result,
+            Err(CreaturePartAssetError::InvalidCoatImageDataLength { actual })
+                if actual == crate::CREATURE_COAT_RGBA_BYTES - 1
+        ));
+        assert!(images.get(image_id).is_some());
+        assert!(materials.get(material_id).is_some());
+        assert_eq!(library.coat_handle_count(), 0);
+        assert_eq!(library.coat_rgba_bytes(), 0);
+    }
+
+    #[test]
+    fn acquire_rejects_image_without_cpu_data_without_mutation() {
+        let mut library =
+            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits::minimum())
+                .unwrap();
+        let mut images = Assets::<Image>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let uninitialized = Image::new_uninit(
+            Extent3d {
+                width: crate::CREATURE_COAT_ATLAS_SIZE,
+                height: crate::CREATURE_COAT_ATLAS_SIZE,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::default(),
+        );
+        let candidate = add_image_candidate(&mut images, &mut materials, uninitialized);
+        let image_id = candidate.0.id();
+        let material_id = candidate.1.id();
+
+        let result = library.acquire_coat_assets(
+            key(0),
+            candidate.0,
+            candidate.1,
+            &mut images,
+            &mut materials,
+        );
+
+        assert!(matches!(
+            result,
+            Err(CreaturePartAssetError::MissingCoatImageData)
+        ));
+        assert!(images.get(image_id).is_some());
+        assert!(materials.get(material_id).is_some());
+        assert_eq!(library.coat_handle_count(), 0);
+        assert_eq!(library.coat_rgba_bytes(), 0);
+    }
+
     #[test]
     fn duplicate_acquire_removes_unused_candidate_assets_and_reuses_identity() {
         let mut library =
-            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits::minimum());
+            CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits::minimum())
+                .unwrap();
         let mut images = Assets::<Image>::default();
         let mut materials = Assets::<StandardMaterial>::default();
         let first_candidate = add_candidate(&mut images, &mut materials);
@@ -329,7 +549,8 @@ mod coat_asset_tests {
             CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits {
                 max_entries: 1,
                 max_rgba_bytes: crate::CREATURE_COAT_RGBA_BYTES,
-            });
+            })
+            .unwrap();
         let mut images = Assets::<Image>::default();
         let mut materials = Assets::<StandardMaterial>::default();
         let first_candidate = add_candidate(&mut images, &mut materials);
@@ -346,7 +567,7 @@ mod coat_asset_tests {
         let first_image_id = first.image.id();
         let first_material_id = first.material.id();
         let second_candidate = add_candidate(&mut images, &mut materials);
-        library
+        let second = library
             .acquire_coat_assets(
                 key(10),
                 second_candidate.0,
@@ -358,6 +579,7 @@ mod coat_asset_tests {
 
         assert!(images.get(first_image_id).is_none());
         assert!(materials.get(first_material_id).is_none());
+        library.release_coat(second.selected_key).unwrap();
     }
 
     #[test]
@@ -366,7 +588,8 @@ mod coat_asset_tests {
             CreaturePartAssetLibrary::with_coat_limits(crate::CreatureCoatCacheLimits {
                 max_entries: 1,
                 max_rgba_bytes: crate::CREATURE_COAT_RGBA_BYTES,
-            });
+            })
+            .unwrap();
         let mut images = Assets::<Image>::default();
         let mut materials = Assets::<StandardMaterial>::default();
         let resident_candidate = add_candidate(&mut images, &mut materials);
@@ -470,6 +693,28 @@ pub enum CreaturePartAssetError {
     InvalidBounds(CreaturePartSlot),
     #[error("creature coat cache selected an asset pair that is not resident")]
     MissingCoatAssetPair,
+    #[error("candidate creature coat image is not present in Assets<Image>")]
+    MissingCandidateCoatImage,
+    #[error(
+        "candidate creature coat image must be 256x256x1 D2, got {width}x{height}x{depth_or_array_layers} {dimension:?}"
+    )]
+    #[cfg(feature = "bevy-app")]
+    InvalidCoatImageDimensions {
+        width: u32,
+        height: u32,
+        depth_or_array_layers: u32,
+        dimension: TextureDimension,
+    },
+    #[error("candidate creature coat image must use Rgba8UnormSrgb, got {format:?}")]
+    #[cfg(feature = "bevy-app")]
+    InvalidCoatImageFormat { format: TextureFormat },
+    #[error("candidate creature coat image must contain CPU-side RGBA data")]
+    MissingCoatImageData,
+    #[error(
+        "candidate creature coat image must contain exactly {expected} RGBA bytes, got {actual}",
+        expected = crate::CREATURE_COAT_RGBA_BYTES
+    )]
+    InvalidCoatImageDataLength { actual: usize },
     #[error(transparent)]
     CoatCache(#[from] crate::CreatureCoatCacheError),
     #[error("creature part asset IO failed: {0}")]

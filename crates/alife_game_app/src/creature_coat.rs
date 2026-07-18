@@ -147,6 +147,19 @@ impl CreatureCoatSemanticRegion {
             .into_iter()
             .find(|region| region.mask_color() == color && region.atlas_cell() == atlas_cell)
     }
+
+    const fn is_body(self) -> bool {
+        matches!(
+            self,
+            Self::Head
+                | Self::Torso
+                | Self::LeftArm
+                | Self::RightArm
+                | Self::LeftLeg
+                | Self::RightLeg
+                | Self::TailBack
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -209,41 +222,45 @@ pub const fn join_cover_atlas_region(slot: CreaturePartSlot) -> CreatureCoatAtla
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatureCoatSourceInput {
+    pub semantic_microdetail: RgbaImage,
+    pub anatomy: RgbaImage,
+}
+
+impl CreatureCoatSourceInput {
+    pub const fn new(semantic_microdetail: RgbaImage, anatomy: RgbaImage) -> Self {
+        Self {
+            semantic_microdetail,
+            anatomy,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreatureCoatSourceMasks {
-    pub head: RgbaImage,
-    pub torso: RgbaImage,
-    pub arms: RgbaImage,
-    pub legs: RgbaImage,
-    pub tail: RgbaImage,
+    pub head: CreatureCoatSourceInput,
+    pub torso: CreatureCoatSourceInput,
+    pub arms: CreatureCoatSourceInput,
+    pub legs: CreatureCoatSourceInput,
+    pub tail: CreatureCoatSourceInput,
 }
 
 impl CreatureCoatSourceMasks {
     pub fn new(
-        head: RgbaImage,
-        torso: RgbaImage,
-        arms: RgbaImage,
-        legs: RgbaImage,
-        tail: RgbaImage,
+        head: CreatureCoatSourceInput,
+        torso: CreatureCoatSourceInput,
+        arms: CreatureCoatSourceInput,
+        legs: CreatureCoatSourceInput,
+        tail: CreatureCoatSourceInput,
     ) -> Result<Self, CreatureCoatError> {
-        for (label, mask) in [
+        for (label, input) in [
             ("head", &head),
             ("torso", &torso),
             ("arms", &arms),
             ("legs", &legs),
             ("tail", &tail),
         ] {
-            if mask.dimensions()
-                != (
-                    CREATURE_COAT_SOURCE_MASK_SIZE,
-                    CREATURE_COAT_SOURCE_MASK_SIZE,
-                )
-            {
-                return Err(CreatureCoatError::InvalidMaskDimensions {
-                    label,
-                    width: mask.width(),
-                    height: mask.height(),
-                });
-            }
+            validate_source_input_dimensions(label, input)?;
         }
         Ok(Self {
             head,
@@ -254,7 +271,7 @@ impl CreatureCoatSourceMasks {
         })
     }
 
-    fn iter(&self) -> [(&'static str, &RgbaImage); 5] {
+    fn iter(&self) -> [(&'static str, &CreatureCoatSourceInput); 5] {
         [
             ("head", &self.head),
             ("torso", &self.torso),
@@ -263,6 +280,34 @@ impl CreatureCoatSourceMasks {
             ("tail", &self.tail),
         ]
     }
+}
+
+fn validate_source_input_dimensions(
+    label: &'static str,
+    input: &CreatureCoatSourceInput,
+) -> Result<(), CreatureCoatError> {
+    for (map_kind, mask) in [
+        (
+            CreatureCoatSourceMapKind::SemanticMicrodetail,
+            &input.semantic_microdetail,
+        ),
+        (CreatureCoatSourceMapKind::Anatomy, &input.anatomy),
+    ] {
+        if mask.dimensions()
+            != (
+                CREATURE_COAT_SOURCE_MASK_SIZE,
+                CREATURE_COAT_SOURCE_MASK_SIZE,
+            )
+        {
+            return Err(CreatureCoatError::InvalidMaskDimensions {
+                label,
+                map_kind,
+                width: mask.width(),
+                height: mask.height(),
+            });
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -417,6 +462,42 @@ pub enum CreatureCoatAnatomicalChannel {
     SecondaryMarking,
 }
 
+impl CreatureCoatAnatomicalChannel {
+    pub const ALL: [Self; 7] = [
+        Self::Primary,
+        Self::Belly,
+        Self::Muzzle,
+        Self::InnerEar,
+        Self::HandsFeet,
+        Self::KeratinSkin,
+        Self::SecondaryMarking,
+    ];
+
+    pub const fn mask_color(self) -> [u8; 3] {
+        match self {
+            Self::Primary => [248, 248, 248],
+            Self::Belly => [232, 176, 72],
+            Self::Muzzle => [226, 112, 128],
+            Self::InnerEar => [238, 86, 154],
+            Self::HandsFeet => [72, 174, 218],
+            Self::KeratinSkin => [64, 52, 72],
+            Self::SecondaryMarking => [84, 92, 214],
+        }
+    }
+
+    fn from_mask_color(color: [u8; 3]) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|channel| channel.mask_color() == color)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreatureCoatSourceMapKind {
+    SemanticMicrodetail,
+    Anatomy,
+}
+
 impl CreatureCoatAtlas {
     pub fn region_has_nonzero_color(&self, region: CreatureCoatAtlasRegion) -> bool {
         self.populated_regions[region_index(region)]
@@ -429,9 +510,10 @@ impl CreatureCoatAtlas {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CreatureCoatError {
-    #[error("{label} semantic mask must be 64x64 RGBA8, got {width}x{height}")]
+    #[error("{label} {map_kind:?} mask must be 64x64 RGBA8, got {width}x{height}")]
     InvalidMaskDimensions {
         label: &'static str,
+        map_kind: CreatureCoatSourceMapKind,
         width: u32,
         height: u32,
     },
@@ -452,6 +534,30 @@ pub enum CreatureCoatError {
         label: &'static str,
         region: CreatureCoatSemanticRegion,
     },
+    #[error(
+        "{label} anatomy occupancy differs from semantic/microdetail at {x},{y}: semantic={semantic_occupied}, anatomy={anatomy_occupied}"
+    )]
+    AnatomyOccupancyMismatch {
+        label: &'static str,
+        x: u32,
+        y: u32,
+        semantic_occupied: bool,
+        anatomy_occupied: bool,
+    },
+    #[error("{label} anatomy mask contains unknown occupied color {color:?} at {x},{y}")]
+    UnknownAnatomyColor {
+        label: &'static str,
+        color: [u8; 3],
+        x: u32,
+        y: u32,
+    },
+    #[error("{label} anatomy mask contains channel {channel:?} owned by another source")]
+    AnatomicalChannelOwnedByWrongSource {
+        label: &'static str,
+        channel: CreatureCoatAnatomicalChannel,
+    },
+    #[error("creature coat input is missing anatomical channel {0:?}")]
+    MissingAnatomicalChannel(CreatureCoatAnatomicalChannel),
     #[error("creature coat input is missing required semantic region {0:?}")]
     MissingSemanticRegion(CreatureCoatAtlasRegion),
 }
@@ -460,13 +566,32 @@ pub fn bake_creature_coat(
     key: CreatureCoatKey,
     masks: &CreatureCoatSourceMasks,
 ) -> Result<CreatureCoatAtlas, CreatureCoatError> {
+    for (label, input) in masks.iter() {
+        validate_source_input_dimensions(label, input)?;
+    }
     let mut semantic_pixels: Vec<Option<(CreatureCoatSemanticRegion, u8)>> =
         vec![None; (CREATURE_COAT_SOURCE_MASK_SIZE.pow(2)) as usize];
-    for (label, mask) in masks.iter() {
+    let mut anatomy_pixels: Vec<Option<(CreatureCoatAnatomicalChannel, u8)>> =
+        vec![None; (CREATURE_COAT_SOURCE_MASK_SIZE.pow(2)) as usize];
+    let mut found_anatomical_channels = [false; 7];
+    for (label, input) in masks.iter() {
+        let mask = &input.semantic_microdetail;
         let required = required_regions_for_source(label);
         let mut found = BTreeMap::new();
         for (x, y, pixel) in mask.enumerate_pixels() {
-            if pixel[3] == 0 {
+            let anatomy = input.anatomy.get_pixel(x, y);
+            let semantic_occupied = pixel[3] > 0;
+            let anatomy_occupied = anatomy[3] > 0;
+            if semantic_occupied != anatomy_occupied {
+                return Err(CreatureCoatError::AnatomyOccupancyMismatch {
+                    label,
+                    x,
+                    y,
+                    semantic_occupied,
+                    anatomy_occupied,
+                });
+            }
+            if !semantic_occupied {
                 continue;
             }
             let color = [pixel[0], pixel[1], pixel[2]];
@@ -484,6 +609,25 @@ pub fn bake_creature_coat(
             }
             found.insert(semantic, ());
             let index = (y * CREATURE_COAT_SOURCE_MASK_SIZE + x) as usize;
+            let anatomy_color = [anatomy[0], anatomy[1], anatomy[2]];
+            let channel = CreatureCoatAnatomicalChannel::from_mask_color(anatomy_color).ok_or(
+                CreatureCoatError::UnknownAnatomyColor {
+                    label,
+                    color: anatomy_color,
+                    x,
+                    y,
+                },
+            )?;
+            if !allowed_anatomical_channels_for_source(label).contains(&channel) {
+                return Err(CreatureCoatError::AnatomicalChannelOwnedByWrongSource {
+                    label,
+                    channel,
+                });
+            }
+            if semantic.is_body() {
+                found_anatomical_channels[channel as usize] = true;
+            }
+            anatomy_pixels[index] = Some((channel, anatomy[3]));
             match semantic_pixels[index] {
                 Some((existing, detail)) if existing == semantic => {
                     semantic_pixels[index] = Some((semantic, detail.max(pixel[3])));
@@ -499,6 +643,12 @@ pub fn bake_creature_coat(
             .find(|region| !found.contains_key(region))
         {
             return Err(CreatureCoatError::MissingSourceSemanticRegion { label, region });
+        }
+    }
+
+    for channel in CreatureCoatAnatomicalChannel::ALL {
+        if !found_anatomical_channels[channel as usize] {
+            return Err(CreatureCoatError::MissingAnatomicalChannel(channel));
         }
     }
 
@@ -524,7 +674,9 @@ pub fn bake_creature_coat(
             let source_y = y * CREATURE_COAT_SOURCE_MASK_SIZE / CREATURE_COAT_ATLAS_SIZE;
             let source_index = (source_y * CREATURE_COAT_SOURCE_MASK_SIZE + source_x) as usize;
             let rgb = if let Some((semantic, detail)) = semantic_pixels[source_index] {
-                let (rgb, channel) = coat_pixel(key, palette, semantic, detail, x, y);
+                let authored_anatomy = anatomy_pixels[source_index];
+                let (rgb, channel) =
+                    coat_pixel(key, palette, semantic, detail, authored_anatomy, x, y);
                 if let Some(channel) = channel {
                     channel_pixel_counts[channel as usize] += 1;
                 }
@@ -571,6 +723,39 @@ fn required_regions_for_source(label: &'static str) -> Vec<CreatureCoatSemanticR
     }
 }
 
+fn allowed_anatomical_channels_for_source(
+    label: &'static str,
+) -> &'static [CreatureCoatAnatomicalChannel] {
+    use CreatureCoatAnatomicalChannel as Channel;
+    match label {
+        "head" => &[
+            Channel::Primary,
+            Channel::Muzzle,
+            Channel::InnerEar,
+            Channel::KeratinSkin,
+            Channel::SecondaryMarking,
+        ],
+        "torso" => &[
+            Channel::Primary,
+            Channel::Belly,
+            Channel::KeratinSkin,
+            Channel::SecondaryMarking,
+        ],
+        "arms" | "legs" => &[
+            Channel::Primary,
+            Channel::HandsFeet,
+            Channel::KeratinSkin,
+            Channel::SecondaryMarking,
+        ],
+        "tail" => &[
+            Channel::Primary,
+            Channel::KeratinSkin,
+            Channel::SecondaryMarking,
+        ],
+        _ => &[],
+    }
+}
+
 fn region_index(region: CreatureCoatAtlasRegion) -> usize {
     match region {
         CreatureCoatAtlasRegion::Head => 0,
@@ -588,6 +773,7 @@ fn coat_pixel(
     palette: CreatureCoatPalette,
     semantic: CreatureCoatSemanticRegion,
     detail: u8,
+    authored_anatomy: Option<(CreatureCoatAnatomicalChannel, u8)>,
     x: u32,
     y: u32,
 ) -> ([u8; 3], Option<CreatureCoatAnatomicalChannel>) {
@@ -598,47 +784,23 @@ fn coat_pixel(
         CreatureCoatSemanticRegion::Hair => (shade_color(palette.accent, detail), None),
         CreatureCoatSemanticRegion::Lids => (shade_color(palette.secondary, detail), None),
         _ => {
-            let channel = anatomical_channel(key, semantic, x, y);
-            let color = anatomical_channel_color(channel, palette);
+            let (authored_channel, strength) =
+                authored_anatomy.expect("validated body pixels have authored anatomy");
+            let channel = if authored_channel == CreatureCoatAnatomicalChannel::SecondaryMarking
+                && !uses_secondary_marking(key, semantic, x, y)
+            {
+                CreatureCoatAnatomicalChannel::Primary
+            } else {
+                authored_channel
+            };
+            let target = anatomical_channel_color(channel, palette);
+            let color = if channel == CreatureCoatAnatomicalChannel::Primary {
+                target
+            } else {
+                mix_color(palette.primary, target, u32::from(strength) * 100 / 255)
+            };
             (shade_color(color, detail), Some(channel))
         }
-    }
-}
-
-fn anatomical_channel(
-    key: CreatureCoatKey,
-    semantic: CreatureCoatSemanticRegion,
-    x: u32,
-    y: u32,
-) -> CreatureCoatAnatomicalChannel {
-    let [column, row] = semantic.atlas_cell();
-    let local_x = x.saturating_sub(column * 64);
-    let local_y = y.saturating_sub(row * 85);
-    match semantic {
-        CreatureCoatSemanticRegion::Head if local_y < 24 && !(18..=46).contains(&local_x) => {
-            CreatureCoatAnatomicalChannel::InnerEar
-        }
-        CreatureCoatSemanticRegion::Head if local_y > 48 && (14..=50).contains(&local_x) => {
-            CreatureCoatAnatomicalChannel::Muzzle
-        }
-        CreatureCoatSemanticRegion::Torso if local_y > 18 && (14..=50).contains(&local_x) => {
-            CreatureCoatAnatomicalChannel::Belly
-        }
-        CreatureCoatSemanticRegion::LeftArm
-        | CreatureCoatSemanticRegion::RightArm
-        | CreatureCoatSemanticRegion::LeftLeg
-        | CreatureCoatSemanticRegion::RightLeg
-            if local_y > 58 =>
-        {
-            CreatureCoatAnatomicalChannel::HandsFeet
-        }
-        CreatureCoatSemanticRegion::TailBack if local_x > 48 => {
-            CreatureCoatAnatomicalChannel::KeratinSkin
-        }
-        _ if uses_secondary_marking(key, semantic, x, y) => {
-            CreatureCoatAnatomicalChannel::SecondaryMarking
-        }
-        _ => CreatureCoatAnatomicalChannel::Primary,
     }
 }
 
@@ -806,6 +968,8 @@ pub struct CreatureCoatCacheUpdate {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CreatureCoatCacheError {
+    #[error("creature coat cache limits cannot hold one exact atlas: {limits:?}")]
+    InvalidLimits { limits: CreatureCoatCacheLimits },
     #[error("creature coat key is not resident")]
     MissingKey,
     #[error("creature coat release is unbalanced")]
@@ -821,16 +985,19 @@ pub struct CreatureCoatCache {
 }
 
 impl CreatureCoatCache {
-    pub fn new(limits: CreatureCoatCacheLimits) -> Self {
-        Self {
+    pub fn new(limits: CreatureCoatCacheLimits) -> Result<Self, CreatureCoatCacheError> {
+        if limits.max_entries == 0 || limits.max_rgba_bytes < CREATURE_COAT_RGBA_BYTES {
+            return Err(CreatureCoatCacheError::InvalidLimits { limits });
+        }
+        Ok(Self {
             limits,
             entries: BTreeMap::new(),
             rgba_bytes: 0,
             clock: 0,
-        }
+        })
     }
 
-    pub fn insert(
+    fn insert(
         &mut self,
         key: CreatureCoatKey,
         pair: CreatureCoatAssetPair,
@@ -876,21 +1043,17 @@ impl CreatureCoatCache {
                 || remaining_bytes.saturating_add(CREATURE_COAT_RGBA_BYTES)
                     > self.limits.max_rgba_bytes
             {
-                if let Some((fallback_key, fallback_pair)) = self.nearest_pair(key) {
-                    if let Some(entry) = self.entries.get_mut(&fallback_key) {
-                        entry.last_used = self.clock;
-                    }
-                    return CreatureCoatCacheUpdate {
-                        selected_key: fallback_key,
-                        selected: fallback_pair,
-                        inserted: false,
-                        used_pinned_fallback: true,
-                        evicted: Vec::new(),
-                    };
-                }
+                let (fallback_key, fallback_pair) = self
+                    .nearest_pair(key)
+                    .expect("a full valid cache always has a resident fallback");
+                let entry = self
+                    .entries
+                    .get_mut(&fallback_key)
+                    .expect("the selected fallback is resident");
+                entry.last_used = self.clock;
                 return CreatureCoatCacheUpdate {
-                    selected_key: key,
-                    selected: pair,
+                    selected_key: fallback_key,
+                    selected: fallback_pair,
                     inserted: false,
                     used_pinned_fallback: true,
                     evicted: Vec::new(),
@@ -929,9 +1092,11 @@ impl CreatureCoatCache {
         pair: CreatureCoatAssetPair,
     ) -> CreatureCoatCacheUpdate {
         let update = self.insert(key, pair);
-        if let Some(entry) = self.entries.get_mut(&update.selected_key) {
-            entry.pin_count = entry.pin_count.saturating_add(1);
-        }
+        let entry = self
+            .entries
+            .get_mut(&update.selected_key)
+            .expect("cache acquisition must select a resident coat");
+        entry.pin_count = entry.pin_count.saturating_add(1);
         update
     }
 
@@ -949,16 +1114,6 @@ impl CreatureCoatCache {
 
     pub fn pin_count(&self, key: CreatureCoatKey) -> Option<usize> {
         self.entries.get(&key).map(|entry| entry.pin_count)
-    }
-
-    #[cfg(test)]
-    fn pin(&mut self, key: CreatureCoatKey) -> Result<(), CreatureCoatCacheError> {
-        let entry = self
-            .entries
-            .get_mut(&key)
-            .ok_or(CreatureCoatCacheError::MissingKey)?;
-        entry.pin_count = entry.pin_count.saturating_add(1);
-        Ok(())
     }
 
     pub fn len(&self) -> usize {
@@ -1034,6 +1189,31 @@ mod tests {
         }
     }
 
+    fn authored_anatomy(semantic_microdetail: &RgbaImage) -> RgbaImage {
+        let mut anatomy = RgbaImage::new(64, 64);
+        let primary = CreatureCoatAnatomicalChannel::Primary.mask_color();
+        for (x, y, semantic) in semantic_microdetail.enumerate_pixels() {
+            if semantic[3] > 0 {
+                anatomy.put_pixel(x, y, Rgba([primary[0], primary[1], primary[2], 255]));
+            }
+        }
+        anatomy
+    }
+
+    fn paint_anatomy_rect(
+        anatomy: &mut RgbaImage,
+        channel: CreatureCoatAnatomicalChannel,
+        x_range: std::ops::Range<u32>,
+        y_range: std::ops::Range<u32>,
+    ) {
+        let color = channel.mask_color();
+        for y in y_range {
+            for x in x_range.clone() {
+                anatomy.put_pixel(x, y, Rgba([color[0], color[1], color[2], 224]));
+            }
+        }
+    }
+
     fn source_masks() -> CreatureCoatSourceMasks {
         let mut head = RgbaImage::new(64, 64);
         for (index, region) in [
@@ -1050,18 +1230,220 @@ mod tests {
             paint_region(&mut head, region, index as u8);
         }
 
+        let mut head_anatomy = authored_anatomy(&head);
+        paint_anatomy_rect(
+            &mut head_anatomy,
+            CreatureCoatAnatomicalChannel::Muzzle,
+            4..8,
+            9..13,
+        );
+        paint_anatomy_rect(
+            &mut head_anatomy,
+            CreatureCoatAnatomicalChannel::InnerEar,
+            0..4,
+            0..4,
+        );
+        paint_anatomy_rect(
+            &mut head_anatomy,
+            CreatureCoatAnatomicalChannel::KeratinSkin,
+            12..16,
+            0..4,
+        );
+        paint_anatomy_rect(
+            &mut head_anatomy,
+            CreatureCoatAnatomicalChannel::SecondaryMarking,
+            8..12,
+            0..4,
+        );
+
         let mut torso = RgbaImage::new(64, 64);
         paint_region(&mut torso, CreatureCoatSemanticRegion::Torso, 19);
+        let mut torso_anatomy = authored_anatomy(&torso);
+        paint_anatomy_rect(
+            &mut torso_anatomy,
+            CreatureCoatAnatomicalChannel::Belly,
+            35..41,
+            27..33,
+        );
+
         let mut arms = RgbaImage::new(64, 64);
         paint_region(&mut arms, CreatureCoatSemanticRegion::LeftArm, 23);
         paint_region(&mut arms, CreatureCoatSemanticRegion::RightArm, 29);
+        let mut arms_anatomy = authored_anatomy(&arms);
+        paint_anatomy_rect(
+            &mut arms_anatomy,
+            CreatureCoatAnatomicalChannel::HandsFeet,
+            52..56,
+            35..39,
+        );
+
         let mut legs = RgbaImage::new(64, 64);
         paint_region(&mut legs, CreatureCoatSemanticRegion::LeftLeg, 31);
         paint_region(&mut legs, CreatureCoatSemanticRegion::RightLeg, 37);
+        let mut legs_anatomy = authored_anatomy(&legs);
+        paint_anatomy_rect(
+            &mut legs_anatomy,
+            CreatureCoatAnatomicalChannel::HandsFeet,
+            20..24,
+            55..59,
+        );
+
         let mut tail = RgbaImage::new(64, 64);
         paint_region(&mut tail, CreatureCoatSemanticRegion::TailBack, 41);
+        let tail_anatomy = authored_anatomy(&tail);
 
-        CreatureCoatSourceMasks::new(head, torso, arms, legs, tail).unwrap()
+        CreatureCoatSourceMasks::new(
+            CreatureCoatSourceInput::new(head, head_anatomy),
+            CreatureCoatSourceInput::new(torso, torso_anatomy),
+            CreatureCoatSourceInput::new(arms, arms_anatomy),
+            CreatureCoatSourceInput::new(legs, legs_anatomy),
+            CreatureCoatSourceInput::new(tail, tail_anatomy),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn every_source_input_requires_an_authored_anatomy_companion() {
+        let masks = source_masks();
+
+        for (_, input) in masks.iter() {
+            assert_eq!(input.semantic_microdetail.dimensions(), (64, 64));
+            assert_eq!(input.anatomy.dimensions(), (64, 64));
+        }
+    }
+
+    fn atlas_rgb_for_source_pixel(atlas: &CreatureCoatAtlas, x: u32, y: u32) -> [u8; 3] {
+        let atlas_x = x * 4 + 2;
+        let atlas_y = y * 4 + 2;
+        let offset = ((atlas_y * CREATURE_COAT_ATLAS_SIZE + atlas_x) * 4) as usize;
+        [
+            atlas.rgba[offset],
+            atlas.rgba[offset + 1],
+            atlas.rgba[offset + 2],
+        ]
+    }
+
+    #[test]
+    fn moving_authored_anatomy_pixels_moves_the_baked_channel() {
+        let first_masks = source_masks();
+        let mut moved_masks = first_masks.clone();
+        let muzzle_position = (4, 9);
+        let primary_position = (14, 14);
+        let muzzle = *moved_masks
+            .head
+            .anatomy
+            .get_pixel(muzzle_position.0, muzzle_position.1);
+        let primary = *moved_masks
+            .head
+            .anatomy
+            .get_pixel(primary_position.0, primary_position.1);
+        moved_masks
+            .head
+            .anatomy
+            .put_pixel(muzzle_position.0, muzzle_position.1, primary);
+        moved_masks
+            .head
+            .anatomy
+            .put_pixel(primary_position.0, primary_position.1, muzzle);
+
+        let first = bake_creature_coat(coat_key(), &first_masks).unwrap();
+        let moved = bake_creature_coat(coat_key(), &moved_masks).unwrap();
+
+        assert_ne!(first.rgba, moved.rgba);
+        assert_ne!(
+            atlas_rgb_for_source_pixel(&first, muzzle_position.0, muzzle_position.1),
+            atlas_rgb_for_source_pixel(&moved, muzzle_position.0, muzzle_position.1)
+        );
+        assert_ne!(
+            atlas_rgb_for_source_pixel(&first, primary_position.0, primary_position.1),
+            atlas_rgb_for_source_pixel(&moved, primary_position.0, primary_position.1)
+        );
+    }
+
+    #[test]
+    fn anatomy_occupancy_must_match_semantic_microdetail_occupancy() {
+        let mut masks = source_masks();
+        masks.head.anatomy.put_pixel(14, 14, Rgba([0, 0, 0, 0]));
+
+        assert_eq!(
+            bake_creature_coat(coat_key(), &masks),
+            Err(CreatureCoatError::AnatomyOccupancyMismatch {
+                label: "head",
+                x: 14,
+                y: 14,
+                semantic_occupied: true,
+                anatomy_occupied: false,
+            })
+        );
+    }
+
+    #[test]
+    fn occupied_anatomy_rejects_unknown_channel_colors() {
+        let mut masks = source_masks();
+        masks.head.anatomy.put_pixel(14, 14, Rgba([1, 2, 3, 255]));
+
+        assert_eq!(
+            bake_creature_coat(coat_key(), &masks),
+            Err(CreatureCoatError::UnknownAnatomyColor {
+                label: "head",
+                color: [1, 2, 3],
+                x: 14,
+                y: 14,
+            })
+        );
+    }
+
+    #[test]
+    fn anatomy_channels_reject_foreign_source_ownership() {
+        let mut masks = source_masks();
+        let belly = CreatureCoatAnatomicalChannel::Belly.mask_color();
+        masks
+            .arms
+            .anatomy
+            .put_pixel(52, 35, Rgba([belly[0], belly[1], belly[2], 255]));
+
+        assert_eq!(
+            bake_creature_coat(coat_key(), &masks),
+            Err(CreatureCoatError::AnatomicalChannelOwnedByWrongSource {
+                label: "arms",
+                channel: CreatureCoatAnatomicalChannel::Belly,
+            })
+        );
+    }
+
+    #[test]
+    fn assembled_inputs_require_every_anatomical_channel() {
+        let mut masks = source_masks();
+        let belly = CreatureCoatAnatomicalChannel::Belly.mask_color();
+        let primary = CreatureCoatAnatomicalChannel::Primary.mask_color();
+        for pixel in masks.torso.anatomy.pixels_mut() {
+            if [pixel[0], pixel[1], pixel[2]] == belly {
+                *pixel = Rgba([primary[0], primary[1], primary[2], pixel[3]]);
+            }
+        }
+
+        assert_eq!(
+            bake_creature_coat(coat_key(), &masks),
+            Err(CreatureCoatError::MissingAnatomicalChannel(
+                CreatureCoatAnatomicalChannel::Belly
+            ))
+        );
+    }
+
+    #[test]
+    fn bake_revalidates_authored_anatomy_dimensions() {
+        let mut masks = source_masks();
+        masks.tail.anatomy = RgbaImage::new(63, 64);
+
+        assert_eq!(
+            bake_creature_coat(coat_key(), &masks),
+            Err(CreatureCoatError::InvalidMaskDimensions {
+                label: "tail",
+                map_kind: CreatureCoatSourceMapKind::Anatomy,
+                width: 63,
+                height: 64,
+            })
+        );
     }
 
     #[test]
@@ -1231,7 +1613,21 @@ mod tests {
     #[test]
     fn semantic_masks_reject_regions_owned_by_another_source() {
         let mut masks = source_masks();
-        paint_region(&mut masks.torso, CreatureCoatSemanticRegion::LeftArm, 73);
+        paint_region(
+            &mut masks.torso.semantic_microdetail,
+            CreatureCoatSemanticRegion::LeftArm,
+            73,
+        );
+        let primary = CreatureCoatAnatomicalChannel::Primary.mask_color();
+        for (x, y, semantic) in masks.torso.semantic_microdetail.enumerate_pixels() {
+            if semantic[3] > 0 && masks.torso.anatomy.get_pixel(x, y)[3] == 0 {
+                masks.torso.anatomy.put_pixel(
+                    x,
+                    y,
+                    Rgba([primary[0], primary[1], primary[2], 255]),
+                );
+            }
+        }
 
         assert_eq!(
             bake_creature_coat(coat_key(), &masks),
@@ -1245,7 +1641,8 @@ mod tests {
     #[test]
     fn each_source_must_supply_its_required_regions_before_merge() {
         let mut masks = source_masks();
-        masks.arms = RgbaImage::new(64, 64);
+        masks.arms.semantic_microdetail = RgbaImage::new(64, 64);
+        masks.arms.anatomy = RgbaImage::new(64, 64);
 
         assert_eq!(
             bake_creature_coat(coat_key(), &masks),
@@ -1258,22 +1655,36 @@ mod tests {
 
     #[test]
     fn cache_reuse_returns_one_material_identity_for_an_entire_assembly() {
-        let mut cache = CreatureCoatCache::new(CreatureCoatCacheLimits::minimum());
+        let mut cache = CreatureCoatCache::new(CreatureCoatCacheLimits::minimum()).unwrap();
         let key = coat_key();
-        let first = cache.insert(key, CreatureCoatAssetPair::new(10, 20));
-        let reused = cache.insert(key, CreatureCoatAssetPair::new(11, 21));
+        let first = cache.acquire(key, CreatureCoatAssetPair::new(10, 20));
+        let reused = cache.acquire(key, CreatureCoatAssetPair::new(11, 21));
 
         assert!(first.inserted);
         assert!(!reused.inserted);
         assert_eq!(first.selected.material_id, 20);
         assert_eq!(reused.selected.material_id, 20);
         assert_eq!(cache.len(), 1);
+        assert_eq!(cache.pin_count(key), Some(2));
         assert_eq!(
             CreatureCoatAtlasRegion::ALL
                 .into_iter()
                 .map(|_| reused.selected.material_id)
                 .collect::<BTreeSet<_>>(),
             BTreeSet::from([20])
+        );
+        cache.release(first.selected_key).unwrap();
+        cache.release(reused.selected_key).unwrap();
+    }
+
+    #[test]
+    fn production_cache_api_has_no_raw_unpinned_insert() {
+        let source = include_str!("creature_coat.rs");
+        let public_insert_signature = ["    pub fn ", "insert("].concat();
+
+        assert!(
+            !source.contains(&public_insert_signature),
+            "runtime callers must use atomic acquire/release"
         );
     }
 
@@ -1313,10 +1724,31 @@ mod tests {
     }
 
     #[test]
+    fn cache_rejects_limits_that_cannot_hold_one_exact_atlas() {
+        for limits in [
+            CreatureCoatCacheLimits {
+                max_entries: 0,
+                max_rgba_bytes: CREATURE_COAT_RGBA_BYTES,
+            },
+            CreatureCoatCacheLimits {
+                max_entries: 1,
+                max_rgba_bytes: CREATURE_COAT_RGBA_BYTES - 1,
+            },
+        ] {
+            assert!(matches!(
+                CreatureCoatCache::new(limits),
+                Err(CreatureCoatCacheError::InvalidLimits { limits: rejected })
+                    if rejected == limits
+            ));
+        }
+    }
+
+    #[test]
     fn thousand_generation_churn_stays_bounded_and_never_evicts_pins() {
         let limits = CreatureCoatCacheLimits::minimum();
-        let mut cache = CreatureCoatCache::new(limits);
+        let mut cache = CreatureCoatCache::new(limits).unwrap();
         let mut pinned_pairs = BTreeSet::new();
+        let mut pinned_keys = Vec::new();
 
         for generation in 0_u16..1_000 {
             let key = CreatureCoatKey::new(
@@ -1329,10 +1761,12 @@ mod tests {
                 u64::from(generation) * 2,
                 u64::from(generation) * 2 + 1,
             );
-            let update = cache.insert(key, pair);
+            let update = cache.acquire(key, pair);
             if generation < 8 {
-                cache.pin(key).unwrap();
                 pinned_pairs.insert(update.selected);
+                pinned_keys.push(update.selected_key);
+            } else {
+                cache.release(update.selected_key).unwrap();
             }
             assert!(update
                 .evicted
@@ -1345,6 +1779,9 @@ mod tests {
         assert!(pinned_pairs.iter().all(|pair| cache.contains_pair(*pair)));
         assert_eq!(cache.len(), limits.max_entries);
         assert_eq!(cache.rgba_bytes(), limits.max_rgba_bytes);
+        for key in pinned_keys {
+            cache.release(key).unwrap();
+        }
     }
 
     #[test]
@@ -1353,7 +1790,7 @@ mod tests {
             max_entries: 2,
             max_rgba_bytes: CREATURE_COAT_RGBA_BYTES * 2,
         };
-        let mut cache = CreatureCoatCache::new(limits);
+        let mut cache = CreatureCoatCache::new(limits).unwrap();
         let first_key = CreatureCoatKey::new(source_ids(0), 2, 3, 4);
         let second_key = CreatureCoatKey::new(source_ids(5), 8, 9, 10);
         cache.acquire(first_key, CreatureCoatAssetPair::new(1, 2));
@@ -1367,13 +1804,18 @@ mod tests {
         assert_eq!(result.selected_key, first_key);
         assert_ne!(result.selected_key, requested_key);
         assert_eq!(result.selected.material_id, 2);
+        assert!(cache.contains_pair(result.selected));
+        assert_eq!(cache.pin_count(result.selected_key), Some(2));
         assert_eq!(cache.len(), 2);
         assert_eq!(cache.rgba_bytes(), CREATURE_COAT_RGBA_BYTES * 2);
+        cache.release(result.selected_key).unwrap();
+        cache.release(first_key).unwrap();
+        cache.release(second_key).unwrap();
     }
 
     #[test]
     fn acquire_is_atomic_and_release_rejects_unbalanced_underflow() {
-        let mut cache = CreatureCoatCache::new(CreatureCoatCacheLimits::minimum());
+        let mut cache = CreatureCoatCache::new(CreatureCoatCacheLimits::minimum()).unwrap();
         let key = coat_key();
         let acquired = cache.acquire(key, CreatureCoatAssetPair::new(1, 2));
 
@@ -1396,7 +1838,7 @@ mod tests {
         let requested = CreatureCoatKey::new(source_ids(100), 4, 5, 6);
         let gene_near_source_far = CreatureCoatKey::new(source_ids(0), 4, 5, 6);
         let gene_far_source_near = CreatureCoatKey::new(source_ids(99), 5, 5, 6);
-        let mut cache = CreatureCoatCache::new(limits);
+        let mut cache = CreatureCoatCache::new(limits).unwrap();
         cache.acquire(gene_near_source_far, CreatureCoatAssetPair::new(1, 2));
         cache.acquire(gene_far_source_near, CreatureCoatAssetPair::new(3, 4));
 
@@ -1404,5 +1846,10 @@ mod tests {
 
         assert!(fallback.used_pinned_fallback);
         assert_eq!(fallback.selected_key, gene_far_source_near);
+        assert!(cache.contains_pair(fallback.selected));
+        assert_eq!(cache.pin_count(fallback.selected_key), Some(2));
+        cache.release(gene_near_source_far).unwrap();
+        cache.release(fallback.selected_key).unwrap();
+        cache.release(gene_far_source_near).unwrap();
     }
 }
