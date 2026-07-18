@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import math
@@ -22,7 +24,9 @@ WORKSPACE = Path(__file__).resolve().parents[1]
 ARTIFACT_ROOT = (WORKSPACE / "target/artifacts").resolve()
 DEFAULT_BLENDER = Path(r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe")
 REQUIRED_BLENDER_VERSION = "5.1.0"
-LODS = (("full", 1, 1200), ("compact", 2, 800), ("impostor", 4, 400))
+REQUIRED_IMPORTER_VERSION = "alife.geneforge_importer.v2"
+MAX_DONOR_WORKERS = 3
+LODS = (("full", 1.0, 1200), ("compact", 0.65, 800), ("impostor", 0.35, 400))
 GROUP_COLORS = {
     "head": (230, 92, 88, 255),
     "torso": (64, 166, 184, 255),
@@ -31,6 +35,31 @@ GROUP_COLORS = {
     "left-leg": (95, 177, 104, 255),
     "right-leg": (95, 177, 104, 255),
     "tail": (154, 108, 180, 255),
+    "tail-back": (154, 108, 180, 255),
+    "head.eyes": (238, 238, 224, 255),
+    "head.lids": (184, 80, 96, 255),
+    "head.hair": (114, 84, 145, 255),
+    "head.teeth": (235, 222, 188, 255),
+    "head.tongue": (213, 92, 126, 255),
+}
+GROUP_REGIONS = {
+    group: (index % 4, index // 4)
+    for index, group in enumerate(
+        (
+            "head",
+            "head.eyes",
+            "head.lids",
+            "head.hair",
+            "head.teeth",
+            "head.tongue",
+            "torso",
+            "left-arm",
+            "right-arm",
+            "left-leg",
+            "right-leg",
+            "tail-back",
+        )
+    )
 }
 
 
@@ -64,6 +93,16 @@ def load_recipe(path: Path) -> dict:
         )
     if recipe.get("blender_version") != REQUIRED_BLENDER_VERSION:
         raise ImportFailure("recipe does not pin Blender 5.1.0")
+    if recipe.get("importer_version") != REQUIRED_IMPORTER_VERSION:
+        raise ImportFailure(f"recipe does not pin {REQUIRED_IMPORTER_VERSION}")
+    for asset in recipe.get("part_assets", []):
+        selector = asset.get("selector", {})
+        if selector.get("selection_policy") != "exact-case-sensitive-names":
+            raise ImportFailure(f"{asset.get('id')} has an unsupported selection policy")
+        if selector.get("geometry_policy") != "evaluated-depsgraph":
+            raise ImportFailure(f"{asset.get('id')} has an unsupported geometry policy")
+        if set(selector.get("object_visscripts", {})) != set(selector.get("include_objects", [])):
+            raise ImportFailure(f"{asset.get('id')} lacks exact kc3dsbpy_visscript contracts")
     return recipe
 
 
@@ -111,9 +150,24 @@ def probe_blender_version(blender: Path) -> None:
         )
 
 
+def confined_source_path(source_root: Path, relative: str, label: str) -> Path:
+    raw = Path(relative)
+    if raw.is_absolute() or any(part == ".." for part in raw.parts):
+        raise ImportFailure(f"{label} escapes --source-root: {relative}")
+    root = source_root.resolve()
+    resolved = (root / raw).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise ImportFailure(f"{label} escapes --source-root: {relative}") from error
+    return resolved
+
+
 def validate_source_files(source_root: Path, recipe: dict) -> None:
     for source in recipe["sources"]:
-        path = source_root / Path(source["blend_file"])
+        path = confined_source_path(
+            source_root, source["blend_file"], f"{source['donor']} source file"
+        )
         if not path.is_file():
             raise ImportFailure(f"missing {source['donor']} source file: {path}")
         actual = sha256_file(path).upper()
@@ -121,9 +175,20 @@ def validate_source_files(source_root: Path, recipe: dict) -> None:
             raise ImportFailure(
                 f"{source['donor']} source digest mismatch: expected {source['sha256']}, found {actual}"
             )
-        texture_root = source_root / Path(source["texture_root"])
+        texture_root = confined_source_path(
+            source_root, source["texture_root"], f"{source['donor']} texture root"
+        )
         if not texture_root.is_dir():
             raise ImportFailure(f"missing {source['donor']} texture root: {texture_root}")
+        microdetail_root = confined_source_path(
+            source_root,
+            source["microdetail_root"],
+            f"{source['donor']} microdetail root",
+        )
+        if not microdetail_root.is_dir():
+            raise ImportFailure(
+                f"missing {source['donor']} microdetail root: {microdetail_root}"
+            )
 
 
 def worker_command(
@@ -148,9 +213,17 @@ def worker_command(
         "--donor",
         source["donor"],
         "--source",
-        str(source_root / Path(source["blend_file"])),
+        str(confined_source_path(source_root, source["blend_file"], f"{source['donor']} source file")),
         "--texture-root",
-        str(source_root / Path(source["texture_root"])),
+        str(confined_source_path(source_root, source["texture_root"], f"{source['donor']} texture root")),
+        "--microdetail-root",
+        str(
+            confined_source_path(
+                source_root,
+                source["microdetail_root"],
+                f"{source['donor']} microdetail root",
+            )
+        ),
         "--recipes",
         str(recipe_path),
         "--output-json",
@@ -174,10 +247,10 @@ def run_worker(command: list[str]) -> None:
 
 
 def run_inventory_or_validation(args, recipe: dict, blender: Path) -> list[dict]:
-    results = []
     with tempfile.TemporaryDirectory(prefix="geneforge-inspect-", dir=ARTIFACT_ROOT) as temp:
         temp_root = Path(temp)
-        for source in recipe["sources"]:
+
+        def inspect_source(source: dict) -> dict:
             output = temp_root / f"{source['donor']}.json"
             run_worker(
                 worker_command(
@@ -189,8 +262,14 @@ def run_inventory_or_validation(args, recipe: dict, blender: Path) -> list[dict]
                     output,
                 )
             )
-            results.append(json.loads(output.read_text(encoding="utf-8")))
-    return results
+            return json.loads(output.read_text(encoding="utf-8"))
+
+        sources = list(recipe["sources"])
+        with ThreadPoolExecutor(
+            max_workers=min(MAX_DONOR_WORKERS, len(sources)),
+            thread_name_prefix="geneforge-inspect",
+        ) as executor:
+            return list(executor.map(inspect_source, sources))
 
 
 def command_inventory(args, recipe: dict, blender: Path) -> None:
@@ -210,7 +289,15 @@ def command_validate(args, recipe: dict, blender: Path) -> None:
     results = run_inventory_or_validation(args, recipe, blender)
     print(f"validated_sources={len(results)}")
     print(f"relinked_images={sum(item['relinked_images'] for item in results)}")
-    print("marker_ids=1..14")
+    marker_contracts = []
+    for item in results:
+        marker_ids = item["marker_ids"]
+        if marker_ids == list(range(marker_ids[0], marker_ids[-1] + 1)):
+            serialized = f"{marker_ids[0]}..{marker_ids[-1]}"
+        else:
+            serialized = ",".join(str(marker_id) for marker_id in marker_ids)
+        marker_contracts.append(f"{item['donor']}:{serialized}")
+    print("marker_ids=" + ",".join(marker_contracts))
 
 
 def command_build(args, recipe: dict, blender: Path) -> None:
@@ -220,9 +307,10 @@ def command_build(args, recipe: dict, blender: Path) -> None:
     if temporary.exists():
         shutil.rmtree(temporary)
     temporary.mkdir(parents=True)
-    receipts = []
+    sources = list(recipe["sources"])
+    max_workers = min(MAX_DONOR_WORKERS, len(sources))
     try:
-        for source in recipe["sources"]:
+        def build_source(source: dict) -> dict:
             output = temporary / f".{source['donor']}-worker.json"
             run_worker(
                 worker_command(
@@ -235,19 +323,35 @@ def command_build(args, recipe: dict, blender: Path) -> None:
                     temporary,
                 )
             )
-            receipts.append(json.loads(output.read_text(encoding="utf-8")))
+            receipt = json.loads(output.read_text(encoding="utf-8"))
             output.unlink()
+            return receipt
+
+        with ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="geneforge-build",
+        ) as executor:
+            receipts = list(executor.map(build_source, sources))
         outputs = {
             path.relative_to(temporary).as_posix(): sha256_file(path)
             for path in sorted(temporary.rglob("*"))
             if path.is_file()
         }
         receipt = {
-            "schema": "alife.geneforge_build_receipt.v1",
+            "schema": "alife.geneforge_build_receipt.v2",
             "blender_version": REQUIRED_BLENDER_VERSION,
+            "importer_version": recipe["importer_version"],
             "recipe_sha256": recipe["recipe_sha256"],
+            "source_sha256": {
+                source["donor"]: source["sha256"] for source in recipe["sources"]
+            },
             "donor_count": len(receipts),
+            "asset_count": sum(item["asset_count"] for item in receipts),
             "lods": [name for name, _, _ in LODS],
+            "worker_execution": {
+                "strategy": "bounded-parallel-donor-workers",
+                "max_workers": max_workers,
+            },
             "sources": receipts,
             "topology": {
                 key: sum(item["topology"][key] for item in receipts)
@@ -255,7 +359,8 @@ def command_build(args, recipe: dict, blender: Path) -> None:
                     "removed_degenerate_faces",
                     "removed_duplicate_vertices",
                     "removed_loose_vertices",
-                    "repaired_declared_non_manifold",
+                    "repaired_non_manifold_edges",
+                    "filled_boundary_edges",
                 )
             },
             "outputs": outputs,
@@ -312,6 +417,10 @@ def render_obj_preview(obj_path: Path, output: Path) -> None:
         raise ImportFailure(f"cannot preview empty OBJ {obj_path}")
     width = height = 256
     pixels = bytearray(bytes((38, 42, 46, 255)) * width * height)
+    draw_line(pixels, width, height, (12, 12), (243, 12), (58, 63, 68, 255))
+    draw_line(pixels, width, height, (12, 243), (243, 243), (58, 63, 68, 255))
+    draw_line(pixels, width, height, (12, 12), (12, 243), (48, 53, 58, 255))
+    draw_line(pixels, width, height, (243, 12), (243, 243), (48, 53, 58, 255))
     xs = [vertex[0] for vertex in vertices]
     ys = [vertex[1] for vertex in vertices]
     span = max(max(xs) - min(xs), max(ys) - min(ys), 1.0e-6)
@@ -323,8 +432,10 @@ def render_obj_preview(obj_path: Path, output: Path) -> None:
         for x, y, _ in vertices
     ]
     for semantic, indices in triangles:
-        color = GROUP_COLORS.get(semantic, (210, 210, 215, 255))
-        for first, second in ((0, 1), (1, 2), (2, 0)):
+        base = GROUP_COLORS.get(semantic, (210, 210, 215, 255))
+        for edge_index, (first, second) in enumerate(((0, 1), (1, 2), (2, 0))):
+            shade = (0.78, 0.9, 1.0)[edge_index]
+            color = tuple(round(channel * shade) for channel in base[:3]) + (255,)
             draw_line(pixels, width, height, projected[indices[first]], projected[indices[second]], color)
     output.write_bytes(png_bytes(width, height, bytes(pixels)))
 
@@ -332,15 +443,29 @@ def render_obj_preview(obj_path: Path, output: Path) -> None:
 def command_preview(args, recipe: dict) -> None:
     staging = ensure_artifact_path(args.staging, "preview staging input")
     output = ensure_artifact_path(args.output, "preview output")
-    output.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(
+        tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent)
+    )
     count = 0
-    for donor in (source["donor"] for source in recipe["sources"]):
-        for lod, _, _ in LODS:
-            obj = staging / f"production_voxel_v1/creature_parts/generated/geneforge/{donor}_{lod}_parts.obj"
-            if not obj.is_file():
-                raise ImportFailure(f"missing staged OBJ for preview: {obj}")
-            render_obj_preview(obj, output / f"{donor}_{lod}.png")
-            count += 1
+    try:
+        for asset in recipe["part_assets"]:
+            for lod in asset["lods"]:
+                obj = staging / lod["generated_obj"]
+                if not obj.is_file():
+                    raise ImportFailure(f"missing staged OBJ for preview: {obj}")
+                render_obj_preview(
+                    obj,
+                    temporary / f"{asset['id']}_{lod['lod']}.png",
+                )
+                count += 1
+        if output.exists():
+            shutil.rmtree(output)
+        temporary.replace(output)
+    except BaseException:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+        raise
     print(f"previews={count}")
     print(f"preview_root={output}")
 
@@ -389,6 +514,7 @@ def worker_args() -> argparse.Namespace:
     parser.add_argument("--donor", required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--texture-root", type=Path, required=True)
+    parser.add_argument("--microdetail-root", type=Path, required=True)
     parser.add_argument("--recipes", type=Path, required=True)
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--staging", type=Path)
@@ -437,6 +563,12 @@ def relink_images(bpy, texture_root: Path, object_names: set[str], donor: str) -
         if Path(bpy.path.abspath(image.filepath)).resolve() != candidate.resolve():
             image.filepath = str(candidate)
             relinked += 1
+        try:
+            image.reload()
+        except RuntimeError as error:
+            raise ImportFailure(
+                f"{donor} failed to reload texture basename {basename}: {error}"
+            ) from error
     return relinked
 
 
@@ -446,21 +578,42 @@ def selected_assets(recipe: dict, donor: str) -> list[dict]:
 
 def marker_positions(bpy, recipe: dict, donor: str) -> dict[int, tuple[float, float, float]]:
     candidates = {}
+    source = next(item for item in recipe["sources"] if item["donor"] == donor)
+    exceptions = source["audited_non_marker_properties"]
+    observed_exceptions = set()
     for obj in sorted(bpy.data.objects, key=lambda item: item.name):
-        if obj.type != "EMPTY" or "kc3dsbpy_part_marker" not in obj:
+        if "kc3dsbpy_part_marker" not in obj:
             continue
-        marker_id = int(obj["kc3dsbpy_part_marker"])
-        candidates.setdefault(marker_id, tuple(float(value) for value in obj.matrix_world.translation))
+        raw_marker_id = obj["kc3dsbpy_part_marker"]
+        if obj.type != "EMPTY":
+            if exceptions.get(obj.name) == raw_marker_id:
+                observed_exceptions.add(obj.name)
+                continue
+            raise ImportFailure(
+                f"{donor} marker property requires EMPTY object; found {obj.type} {obj.name}"
+            )
+        marker_id = int(raw_marker_id)
+        if marker_id != raw_marker_id:
+            raise ImportFailure(f"{donor} has non-integral marker ID {raw_marker_id}")
+        if marker_id <= 0:
+            raise ImportFailure(f"{donor} has invalid marker ID {marker_id}")
+        if marker_id in candidates:
+            raise ImportFailure(f"{donor} has duplicate marker ID {marker_id}")
+        candidates[marker_id] = tuple(float(value) for value in obj.matrix_world.translation)
+    if observed_exceptions != set(exceptions):
+        raise ImportFailure(
+            f"{donor} audited non-marker property set drifted: "
+            f"expected {sorted(exceptions)}, found {sorted(observed_exceptions)}"
+        )
     required = {
         marker_id
         for asset in selected_assets(recipe, donor)
         for marker_id in asset["selector"]["marker_ids"]
     }
-    invalid = set(candidates) - set(range(1, 15))
-    missing = required - set(candidates)
-    if invalid or missing:
+    if set(candidates) != required:
+        expected = "1..12" if donor == "ettin" else "1..14"
         raise ImportFailure(
-            f"marker IDs must be exactly 1..14 with all selected donor markers present; found {sorted(candidates)}"
+            f"{donor} marker IDs must be exactly {expected}; found {sorted(candidates)}"
         )
     return candidates
 
@@ -487,17 +640,36 @@ def inspect_scene(bpy, recipe: dict, donor: str, texture_root: Path) -> tuple[di
     depsgraph = bpy.context.evaluated_depsgraph_get()
     selected = []
     used_raw = []
+    evaluated_transform_objects = []
+    evaluated_deformation_objects = []
     for asset in assets:
         selector = asset["selector"]
         for name in selector["include_objects"]:
             obj = bpy.data.objects.get(name)
             if obj is None or obj.type != "MESH":
                 raise ImportFailure(f"{donor} selector {asset['id']} missing exact mesh {name}")
+            expected_visscript = selector["object_visscripts"][name]
+            actual_visscript = str(obj.get("kc3dsbpy_visscript", ""))
+            if actual_visscript != expected_visscript:
+                raise ImportFailure(
+                    f"{donor} object {name} kc3dsbpy_visscript mismatch: "
+                    f"expected {expected_visscript!r}, found {actual_visscript!r}"
+                )
             owner, mesh, raw = evaluated_mesh(
                 obj, depsgraph, selector.get("evaluated_empty_policy", {}).get(name), donor
             )
             if raw:
                 used_raw.append(name)
+            if owner is not None:
+                raw_matrix = tuple(value for row in obj.matrix_basis for value in row)
+                evaluated_matrix = tuple(value for row in owner.matrix_world for value in row)
+                if any(abs(a - b) > 1.0e-7 for a, b in zip(raw_matrix, evaluated_matrix)):
+                    evaluated_transform_objects.append(name)
+                if len(mesh.vertices) != len(obj.data.vertices) or any(
+                    (mesh.vertices[index].co - obj.data.vertices[index].co).length > 1.0e-7
+                    for index in range(min(len(mesh.vertices), len(obj.data.vertices)))
+                ):
+                    evaluated_deformation_objects.append(name)
             if owner is not None:
                 owner.to_mesh_clear()
             selected.append(name)
@@ -520,6 +692,15 @@ def inspect_scene(bpy, recipe: dict, donor: str, texture_root: Path) -> tuple[di
         "primary_uv": assets[0]["selector"]["uv_map"],
         "relinked_images": relinked,
         "validated_raw_fallbacks": sorted(used_raw),
+        "evaluated_transform_objects": sorted(set(evaluated_transform_objects)),
+        "evaluated_deformation_objects": sorted(set(evaluated_deformation_objects)),
+        "audited_non_marker_properties": sorted(
+            next(
+                source["audited_non_marker_properties"]
+                for source in recipe["sources"]
+                if source["donor"] == donor
+            )
+        ),
     }
     return inventory, markers
 
@@ -534,20 +715,44 @@ def semantic_group(asset: dict, object_name: str) -> str:
         return "left-arm" if " l" in lower or "_l" in lower else "right-arm"
     if slot == "legs":
         return "left-leg" if " l" in lower or "_l" in lower or "2l" in lower else "right-leg"
+    if slot == "tail":
+        return "tail-back"
     return slot
 
 
+def source_uv_coordinate(value: float) -> float:
+    value = float(value)
+    wrapped = value - math.floor(value)
+    if abs(wrapped) <= 1.0e-9 and value > 0.0:
+        return 1.0
+    return max(0.0, min(1.0, wrapped))
+
+
+def semantic_atlas_uv(group: str, source_uv: tuple[float, float]) -> tuple[float, float]:
+    if group not in GROUP_REGIONS:
+        raise ImportFailure(f"semantic group has no atlas region: {group}")
+    column, row = GROUP_REGIONS[group]
+    inset = 0.04
+    span = 1.0 - inset * 2.0
+    return (
+        (column + inset + span * source_uv[0]) / 4.0,
+        (row + inset + span * source_uv[1]) / 3.0,
+    )
+
+
+def semantic_source_uv(group: str, atlas_uv: tuple[float, float]) -> tuple[float, float]:
+    column, row = GROUP_REGIONS[group]
+    inset = 0.04
+    span = 1.0 - inset * 2.0
+    return (
+        max(0.0, min(1.0, (atlas_uv[0] * 4.0 - column - inset) / span)),
+        max(0.0, min(1.0, (atlas_uv[1] * 3.0 - row - inset) / span)),
+    )
+
+
 def semantic_detail_uv(group: str, corner: int) -> tuple[float, float]:
-    role = group.split(".", 1)[1]
-    center = {
-        "eyes": (0.1, 0.1),
-        "lids": (0.3, 0.1),
-        "hair": (0.5, 0.1),
-        "teeth": (0.7, 0.1),
-        "tongue": (0.9, 0.1),
-    }[role]
-    offsets = ((-0.025, -0.025), (0.025, -0.025), (0.0, 0.025))
-    return (center[0] + offsets[corner][0], center[1] + offsets[corner][1])
+    source_uvs = ((0.15, 0.15), (0.85, 0.15), (0.5, 0.85))
+    return semantic_atlas_uv(group, source_uvs[corner])
 
 
 def transform_point(matrix, coordinate) -> tuple[float, float, float]:
@@ -569,67 +774,399 @@ def triangle_normal(points) -> tuple[float, float, float] | None:
     return tuple(value / length for value in cross)
 
 
-def extract_geometry(bpy, recipe: dict, donor: str) -> tuple[dict, dict]:
+def vector_length(vector) -> float:
+    return math.sqrt(sum(value * value for value in vector))
+
+
+def normalized_vector(vector) -> tuple[float, float, float]:
+    length = vector_length(vector)
+    if not math.isfinite(length) or length <= 1.0e-12:
+        return (0.0, 1.0, 0.0)
+    return tuple(float(value / length) for value in vector)
+
+
+def face_signature(face) -> tuple:
+    return tuple(
+        sorted(
+            tuple(round(float(value), 12) for value in vertex.co)
+            for vertex in face.verts
+        )
+    )
+
+
+def stable_object_component(bm, asset_id: str, object_name: str) -> dict[int, str]:
+    bm.faces.ensure_lookup_table()
+    identity = json.dumps(
+        [asset_id, object_name],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    component_id = f"object-{hashlib.sha256(identity).hexdigest()[:20]}"
+    return {face.index: component_id for face in bm.faces}
+
+
+def remove_degenerate_and_duplicate_faces(bmesh, bm) -> int:
+    bm.faces.ensure_lookup_table()
+    removed = [face for face in bm.faces if face.calc_area() <= 1.0e-12]
+    signatures = set()
+    for face in sorted(
+        (face for face in bm.faces if face not in removed),
+        key=face_signature,
+    ):
+        signature = face_signature(face)
+        if signature in signatures:
+            removed.append(face)
+        else:
+            signatures.add(signature)
+    if removed:
+        bmesh.ops.delete(bm, geom=list(dict.fromkeys(removed)), context="FACES_ONLY")
+    return len(removed)
+
+
+def remove_loose_geometry(bmesh, bm) -> int:
+    loose = [vertex for vertex in bm.verts if not vertex.link_faces]
+    if loose:
+        bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    return len(loose)
+
+
+def repair_mesh_topology(bmesh, bm, repairs: list[str]) -> dict:
+    metrics = {
+        "removed_degenerate_faces": 0,
+        "removed_duplicate_vertices": 0,
+        "removed_loose_vertices": 0,
+        "repaired_non_manifold_edges": 0,
+        "filled_boundary_edges": 0,
+    }
+    metrics["removed_degenerate_faces"] += remove_degenerate_and_duplicate_faces(
+        bmesh, bm
+    )
+    before_vertices = len(bm.verts)
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=1.0e-12)
+    metrics["removed_duplicate_vertices"] += before_vertices - len(bm.verts)
+    metrics["removed_degenerate_faces"] += remove_degenerate_and_duplicate_faces(
+        bmesh, bm
+    )
+
+    bm.edges.ensure_lookup_table()
+    non_manifold = sorted(
+        (edge for edge in bm.edges if len(edge.link_faces) > 2),
+        key=lambda edge: tuple(
+            sorted(tuple(round(float(value), 12) for value in vertex.co) for vertex in edge.verts)
+        ),
+    )
+    if "repair-declared-non-manifold-edges" in repairs:
+        excess_faces = set()
+        for edge in non_manifold:
+            linked = sorted(edge.link_faces, key=face_signature)
+            excess_faces.update(linked[2:])
+        if excess_faces:
+            bmesh.ops.delete(
+                bm,
+                geom=sorted(excess_faces, key=face_signature),
+                context="FACES_ONLY",
+            )
+        metrics["repaired_non_manifold_edges"] += len(non_manifold)
+
+    if "repair-declared-boundary-edges" in repairs:
+        bm.edges.ensure_lookup_table()
+        boundary = sorted(
+            (edge for edge in bm.edges if len(edge.link_faces) == 1),
+            key=lambda edge: tuple(
+                sorted(
+                    tuple(round(float(value), 12) for value in vertex.co)
+                    for vertex in edge.verts
+                )
+            ),
+        )
+        if boundary:
+            bmesh.ops.holes_fill(bm, edges=boundary, sides=0)
+        metrics["filled_boundary_edges"] += len(boundary)
+
+    metrics["removed_degenerate_faces"] += remove_degenerate_and_duplicate_faces(
+        bmesh, bm
+    )
+    metrics["removed_loose_vertices"] += remove_loose_geometry(bmesh, bm)
+    if bm.faces:
+        bmesh.ops.triangulate(
+            bm,
+            faces=list(bm.faces),
+            quad_method="BEAUTY",
+            ngon_method="EAR_CLIP",
+        )
+        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bm.normal_update()
+    remaining_non_manifold = [edge for edge in bm.edges if len(edge.link_faces) > 2]
+    if remaining_non_manifold:
+        raise ImportFailure(
+            f"topology repair left {len(remaining_non_manifold)} non-manifold edges"
+        )
+    if "repair-declared-boundary-edges" in repairs:
+        remaining_boundary = [edge for edge in bm.edges if len(edge.link_faces) == 1]
+        if remaining_boundary:
+            raise ImportFailure(
+                f"topology repair left {len(remaining_boundary)} declared boundary edges"
+            )
+    return metrics
+
+
+def material_luminance(obj, material_index: int) -> float:
+    if material_index >= len(obj.material_slots):
+        return 0.5
+    material = obj.material_slots[material_index].material
+    if material is None:
+        return 0.5
+    color = material.diffuse_color
+    return max(
+        0.0,
+        min(1.0, 0.2126 * float(color[0]) + 0.7152 * float(color[1]) + 0.0722 * float(color[2])),
+    )
+
+
+def image_node_base_color_distance(material, start_node) -> int | None:
+    if material.node_tree is None:
+        return None
+    pending = [(start_node, 0)]
+    visited = set()
+    while pending:
+        node, distance = pending.pop(0)
+        pointer = node.as_pointer()
+        if pointer in visited or distance > 8:
+            continue
+        visited.add(pointer)
+        for link in material.node_tree.links:
+            if link.from_node != node:
+                continue
+            if (
+                link.to_node.type == "BSDF_PRINCIPLED"
+                and link.to_socket.name == "Base Color"
+            ):
+                return distance + 1
+            pending.append((link.to_node, distance + 1))
+    return None
+
+
+def material_source_image(material):
+    if material is None or not material.use_nodes or material.node_tree is None:
+        return None
+    auxiliary_tokens = (
+        "alpha",
+        "blend",
+        "darkness",
+        "hard",
+        "normal",
+        "rough",
+        "metal",
+        "specular",
+    )
+    candidates = []
+    for node in material.node_tree.nodes:
+        image = getattr(node, "image", None)
+        if node.type != "TEX_IMAGE" or image is None:
+            continue
+        basename = Path(image.filepath).name or image.name
+        distance = image_node_base_color_distance(material, node)
+        auxiliary = any(token in basename.casefold() for token in auxiliary_tokens)
+        candidates.append(
+            (
+                distance is None,
+                distance if distance is not None else 99,
+                auxiliary,
+                basename.casefold(),
+                node.name.casefold(),
+                image,
+            )
+        )
+    return min(candidates, key=lambda item: item[:-1])[-1] if candidates else None
+
+
+def image_luminance_grid(image, cache: dict) -> list[int]:
+    key = image.as_pointer()
+    if key in cache:
+        return cache[key]
+    width, height = int(image.size[0]), int(image.size[1])
+    if width <= 0 or height <= 0:
+        raise ImportFailure(f"linked source image is empty: {image.name}")
+    if (width, height) != (64, 64):
+        image.scale(64, 64)
+        width, height = 64, 64
+    pixels = image.pixels[:]
+    samples = []
+    for y in range(64):
+        for x in range(64):
+            offset = (y * width + x) * 4
+            luminance = (
+                0.2126 * float(pixels[offset])
+                + 0.7152 * float(pixels[offset + 1])
+                + 0.0722 * float(pixels[offset + 2])
+            )
+            samples.append(round(max(0.0, min(1.0, luminance)) * 255.0))
+    cache[key] = samples
+    return samples
+
+
+def material_texture_luminance(
+    obj,
+    material_index: int,
+    source_uv: tuple[float, float],
+    material_cache: dict,
+    image_cache: dict,
+    used_texture_files: set[str],
+) -> float | None:
+    if material_index >= len(obj.material_slots):
+        return None
+    material = obj.material_slots[material_index].material
+    if material is None:
+        return None
+    key = material.as_pointer()
+    if key not in material_cache:
+        material_cache[key] = material_source_image(material)
+    image = material_cache[key]
+    if image is None:
+        return None
+    used_texture_files.add(Path(image.filepath).name or image.name)
+    samples = image_luminance_grid(image, image_cache)
+    x = min(63, max(0, round(source_uv[0] * 63)))
+    y = min(63, max(0, round(source_uv[1] * 63)))
+    return samples[y * 64 + x] / 255.0
+
+
+def evaluated_geometry_detail(matrix, vertex, face, material_value: float) -> float:
+    normal_matrix = matrix.to_3x3()
+    world_normal = normal_matrix @ vertex.normal
+    converted = normalized_vector((world_normal.x, world_normal.z, -world_normal.y))
+    neighboring = [linked.normal for linked in vertex.link_faces]
+    curvature = 0.0
+    if neighboring:
+        curvature = sum(
+            1.0 - abs(float(face.normal.dot(other))) for other in neighboring
+        ) / len(neighboring)
+    signal = (
+        abs(converted[0]) * 0.23
+        + abs(converted[1]) * 0.31
+        + abs(converted[2]) * 0.17
+        + max(0.0, min(1.0, curvature)) * 0.19
+        + material_value * 0.10
+    )
+    return max(0.0, min(1.0, signal))
+
+
+def extract_geometry(bpy, recipe: dict, donor: str) -> tuple[dict, dict, list[str]]:
+    import bmesh
+
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    grouped = {}
+    asset_geometry = {}
     topology = {
         "removed_degenerate_faces": 0,
         "removed_duplicate_vertices": 0,
         "removed_loose_vertices": 0,
-        "repaired_declared_non_manifold": 0,
+        "repaired_non_manifold_edges": 0,
+        "filled_boundary_edges": 0,
     }
-    seen_objects = set()
+    material_cache = {}
+    image_cache = {}
+    used_texture_files = set()
     for asset in selected_assets(recipe, donor):
+        grouped = {}
         selector = asset["selector"]
         repairs = selector.get("topology_repairs", {})
         for name in selector["include_objects"]:
-            if name in seen_objects:
-                continue
-            seen_objects.add(name)
             obj = bpy.data.objects[name]
             owner, mesh, _ = evaluated_mesh(
                 obj, depsgraph, selector.get("evaluated_empty_policy", {}).get(name), donor
             )
-            mesh.calc_loop_triangles()
-            used_vertices = {loop.vertex_index for polygon in mesh.polygons for loop in mesh.loops[polygon.loop_start : polygon.loop_start + polygon.loop_total]}
-            topology["removed_loose_vertices"] += len(mesh.vertices) - len(used_vertices)
-            if name in repairs:
-                topology["repaired_declared_non_manifold"] += 1
-            uv_layer = mesh.uv_layers.get(selector["uv_map"])
-            if uv_layer is None and mesh.uv_layers:
-                uv_layer = mesh.uv_layers.active or mesh.uv_layers[0]
-            uv_fallback = selector.get("uv_fallbacks", {}).get(name)
-            if uv_layer is None and uv_fallback != "semantic-detail-region":
+            bm = bmesh.new()
+            try:
+                bm.from_mesh(mesh)
+                try:
+                    object_topology = repair_mesh_topology(
+                        bmesh, bm, repairs.get(name, [])
+                    )
+                except ImportFailure as error:
+                    raise ImportFailure(f"{donor} object {name}: {error}") from error
+                for key, value in object_topology.items():
+                    topology[key] += value
+                uv_layer = bm.loops.layers.uv.get(selector["uv_map"])
+                if uv_layer is None and bm.loops.layers.uv.keys():
+                    uv_layer = bm.loops.layers.uv.active
+                uv_fallback = selector.get("uv_fallbacks", {}).get(name)
+                if uv_layer is None and uv_fallback != "semantic-detail-region":
+                    raise ImportFailure(
+                        f"{donor} object {name} is missing UV map {selector['uv_map']}"
+                    )
+                group = semantic_group(asset, name)
+                output = grouped.setdefault(group, [])
+                matrix = owner.matrix_world if owner is not None else obj.matrix_world
+                component_by_face = stable_object_component(bm, asset["id"], name)
+                for face in sorted(bm.faces, key=face_signature):
+                    if len(face.loops) != 3:
+                        raise ImportFailure(
+                            f"{donor} object {name} was not deterministically triangulated"
+                        )
+                    points = [transform_point(matrix, loop.vert.co) for loop in face.loops]
+                    if triangle_normal(points) is None:
+                        topology["removed_degenerate_faces"] += 1
+                        continue
+                    material_value = material_luminance(obj, face.material_index)
+                    corners = []
+                    for corner_index, (loop, point) in enumerate(zip(face.loops, points)):
+                        if uv_layer is None:
+                            source_uv = None
+                            uv_value = semantic_detail_uv(group, corner_index)
+                        else:
+                            uv = loop[uv_layer].uv
+                            source_uv = (
+                                source_uv_coordinate(uv.x),
+                                source_uv_coordinate(uv.y),
+                            )
+                            uv_value = semantic_atlas_uv(
+                                group,
+                                source_uv,
+                            )
+                        detail = evaluated_geometry_detail(
+                            matrix, loop.vert, face, material_value
+                        )
+                        if source_uv is not None:
+                            texture_detail = material_texture_luminance(
+                                obj,
+                                face.material_index,
+                                source_uv,
+                                material_cache,
+                                image_cache,
+                                used_texture_files,
+                            )
+                            if texture_detail is not None:
+                                detail = texture_detail * 0.72 + detail * 0.28
+                        corners.append(
+                            (
+                                point,
+                                uv_value,
+                                detail,
+                                component_by_face[face.index],
+                                uv_layer is None,
+                            )
+                        )
+                    output.append(corners)
+            finally:
+                bm.free()
                 if owner is not None:
                     owner.to_mesh_clear()
-                raise ImportFailure(f"{donor} object {name} is missing UV map {selector['uv_map']}")
-            group = semantic_group(asset, name)
-            output = grouped.setdefault(group, [])
-            for triangle in mesh.loop_triangles:
-                loops = list(triangle.loops)
-                points = [transform_point(obj.matrix_world, mesh.vertices[mesh.loops[index].vertex_index].co) for index in loops]
-                normal = triangle_normal(points)
-                if normal is None:
-                    topology["removed_degenerate_faces"] += 1
-                    continue
-                corners = []
-                for corner_index, (loop_index, point) in enumerate(zip(loops, points)):
-                    if uv_layer is None:
-                        uv_value = semantic_detail_uv(group, corner_index)
-                    else:
-                        uv = uv_layer.data[loop_index].uv
-                        uv_value = (float(uv.x) % 1.0, float(uv.y) % 1.0)
-                    corners.append((point, uv_value, normal))
-                output.append(corners)
-            if owner is not None:
-                owner.to_mesh_clear()
-    if not grouped or not any(grouped.values()):
+        if not grouped or not any(grouped.values()):
+            raise ImportFailure(f"{donor} asset {asset['id']} selected geometry is empty")
+        asset_geometry[asset["id"]] = grouped
+    if not asset_geometry:
         raise ImportFailure(f"{donor} selected geometry is empty")
-    return grouped, topology
+    return asset_geometry, topology, sorted(used_texture_files)
 
 
-def normalization(grouped: dict, markers: dict) -> tuple[dict, dict, list[list[float]]]:
-    points = [corner[0] for triangles in grouped.values() for triangle in triangles for corner in triangle]
+def normalization(asset_geometry: dict, markers: dict) -> tuple[dict, dict, dict]:
+    points = [
+        corner[0]
+        for grouped in asset_geometry.values()
+        for triangles in grouped.values()
+        for triangle in triangles
+        for corner in triangle
+    ]
     minimum = [min(point[axis] for point in points) for axis in range(3)]
     maximum = [max(point[axis] for point in points) for axis in range(3)]
     scale = 2.0 / max(maximum[axis] - minimum[axis] for axis in range(3))
@@ -645,72 +1182,608 @@ def normalization(grouped: dict, markers: dict) -> tuple[dict, dict, list[list[f
         )
 
     transformed = {
-        group: [[(normalized(position), uv, normal) for position, uv, normal in triangle] for triangle in triangles]
-        for group, triangles in grouped.items()
+        asset_id: {
+            group: [
+                [
+                    (normalized(position), uv, detail, component, uvless)
+                    for position, uv, detail, component, uvless in triangle
+                ]
+                for triangle in triangles
+            ]
+            for group, triangles in grouped.items()
+        }
+        for asset_id, grouped in asset_geometry.items()
     }
     transformed_markers = {
         marker_id: normalized((point[0], point[2], -point[1]))
         for marker_id, point in markers.items()
     }
-    normalized_points = [corner[0] for triangles in transformed.values() for triangle in triangles for corner in triangle]
-    bounds = [
-        [min(point[axis] for point in normalized_points) for axis in range(3)],
-        [max(point[axis] for point in normalized_points) for axis in range(3)],
-    ]
+    bounds = {}
+    for asset_id, grouped in transformed.items():
+        normalized_points = [
+            corner[0]
+            for triangles in grouped.values()
+            for triangle in triangles
+            for corner in triangle
+        ]
+        bounds[asset_id] = [
+            [min(point[axis] for point in normalized_points) for axis in range(3)],
+            [max(point[axis] for point in normalized_points) for axis in range(3)],
+        ]
     return transformed, transformed_markers, bounds
 
 
-def emit_obj(grouped: dict, lod_step: int, triangle_budget: int) -> tuple[bytes, int]:
-    lines = ["# alife deterministic GeneForge export v1"]
-    vertices = []
-    indices = {}
-    faces_by_group = {}
-    duplicate_count = 0
-    sampled = {
-        group: (triangles[::lod_step] or triangles[:1])
-        for group, triangles in grouped.items()
+def topology_metrics(grouped: dict) -> dict:
+    faces = []
+    edge_faces = {}
+    component_triangle_counts = {}
+    for group in sorted(grouped):
+        for triangle in grouped[group]:
+            component = triangle[0][3]
+            if any(corner[3] != component for corner in triangle):
+                raise ImportFailure("triangle crosses stable semantic component identity")
+            positions = [tuple(round(value, 9) for value in corner[0]) for corner in triangle]
+            face_index = len(faces)
+            faces.append((group, component, positions))
+            component_triangle_counts[component] = (
+                component_triangle_counts.get(component, 0) + 1
+            )
+            for first, second in ((0, 1), (1, 2), (2, 0)):
+                edge = tuple(
+                    sorted(
+                        (
+                            (group, component, positions[first]),
+                            (group, component, positions[second]),
+                        )
+                    )
+                )
+                edge_faces.setdefault(edge, []).append(face_index)
+    if not faces:
+        raise ImportFailure("LOD geometry is empty")
+    adjacency = [set() for _ in faces]
+    for linked in edge_faces.values():
+        for face in linked:
+            adjacency[face].update(other for other in linked if other != face)
+    unseen = set(range(len(faces)))
+    components = 0
+    component_connected_counts = {}
+    while unseen:
+        components += 1
+        first = min(unseen)
+        unseen.remove(first)
+        pending = [first]
+        connected_faces = []
+        while pending:
+            current = pending.pop()
+            connected_faces.append(current)
+            for neighbor in adjacency[current]:
+                if neighbor in unseen:
+                    unseen.remove(neighbor)
+                    pending.append(neighbor)
+        declared = {faces[index][1] for index in connected_faces}
+        if len(declared) != 1:
+            raise ImportFailure(
+                "geometrically connected faces cross stable component identities"
+            )
+        component = next(iter(declared))
+        component_connected_counts[component] = (
+            component_connected_counts.get(component, 0) + 1
+        )
+    return {
+        "triangle_count": len(faces),
+        "connected_components": components,
+        "boundary_edges": sum(len(linked) == 1 for linked in edge_faces.values()),
+        "non_manifold_edges": sum(len(linked) > 2 for linked in edge_faces.values()),
+        "component_ids": sorted(component_triangle_counts),
+        "component_triangle_counts": {
+            component: component_triangle_counts[component]
+            for component in sorted(component_triangle_counts)
+        },
+        "component_connected_counts": {
+            component: component_connected_counts.get(component, 0)
+            for component in sorted(component_triangle_counts)
+        },
     }
-    sampled_total = sum(len(triangles) for triangles in sampled.values())
-    for group in sorted(sampled):
-        source_triangles = sampled[group]
-        group_budget = max(
-            1,
-            min(
-                len(source_triangles),
-                round(triangle_budget * len(source_triangles) / sampled_total),
+
+
+def component_uv_detail_grid(samples: list[tuple]) -> list[float]:
+    sums = [0.0] * (64 * 64)
+    counts = [0] * (64 * 64)
+    for _, uv, detail, uvless in samples:
+        if uvless:
+            raise ImportFailure("UV detail grid received fallback-only geometry")
+        x = min(63, max(0, round(uv[0] * 63)))
+        y = min(63, max(0, round(uv[1] * 63)))
+        index = y * 64 + x
+        sums[index] += detail
+        counts[index] += 1
+    occupied = [index for index, count in enumerate(counts) if count]
+    if not occupied:
+        raise ImportFailure("UV detail grid has no source samples")
+    values = [None] * (64 * 64)
+    queue = deque()
+    for index in occupied:
+        values[index] = sums[index] / counts[index]
+        queue.append(index)
+    while queue:
+        index = queue.popleft()
+        x, y = index % 64, index // 64
+        for next_x, next_y in ((x, y - 1), (x - 1, y), (x + 1, y), (x, y + 1)):
+            if not (0 <= next_x < 64 and 0 <= next_y < 64):
+                continue
+            next_index = next_y * 64 + next_x
+            if values[next_index] is None:
+                values[next_index] = values[index]
+                queue.append(next_index)
+    return values
+
+
+def sample_uv_detail_grid(grid: list[float], uv: tuple[float, float]) -> float:
+    x = max(0.0, min(63.0, uv[0] * 63.0))
+    y = max(0.0, min(63.0, uv[1] * 63.0))
+    x0, y0 = math.floor(x), math.floor(y)
+    x1, y1 = min(63, x0 + 1), min(63, y0 + 1)
+    tx, ty = x - x0, y - y0
+    top = grid[y0 * 64 + x0] * (1.0 - tx) + grid[y0 * 64 + x1] * tx
+    bottom = grid[y1 * 64 + x0] * (1.0 - tx) + grid[y1 * 64 + x1] * tx
+    return top * (1.0 - ty) + bottom * ty
+
+
+def decimate_asset(bpy, grouped: dict, ratio: float, triangle_budget: int) -> tuple[dict, dict]:
+    total = sum(len(triangles) for triangles in grouped.values())
+    target = min(triangle_budget, max(4, round(total * ratio)))
+    if target >= total:
+        metrics = topology_metrics(grouped)
+        return grouped, metrics
+
+    groups = sorted(grouped)
+    components = sorted(
+        {
+            (group, triangle[0][3])
+            for group, triangles in grouped.items()
+            for triangle in triangles
+        }
+    )
+    component_index = {
+        component: index for index, component in enumerate(components)
+    }
+    vertices = []
+    vertex_indices = {}
+    faces = []
+    face_uvs = []
+    face_groups = []
+    component_samples = {}
+    for group in groups:
+        for triangle in grouped[group]:
+            face = []
+            uvs = []
+            component = triangle[0][3]
+            if any(corner[3] != component for corner in triangle):
+                raise ImportFailure("LOD triangle crosses exact source object identity")
+            for position, uv, detail, _, uvless in triangle:
+                key = (group, component) + tuple(
+                    round(value, 12) for value in position
+                )
+                if key not in vertex_indices:
+                    vertex_indices[key] = len(vertices)
+                    vertices.append(position)
+                face.append(vertex_indices[key])
+                uvs.append(uv)
+                component_samples.setdefault((group, component), []).append(
+                    (position, uv, detail, uvless)
+                )
+            if len(set(face)) == 3:
+                faces.append(face)
+                face_uvs.append(uvs)
+                face_groups.append(component_index[(group, component)])
+
+    component_detail_grids = {}
+    for component, samples in component_samples.items():
+        uvless = samples[0][3]
+        if any(sample[3] != uvless for sample in samples):
+            raise ImportFailure(
+                "stable component mixes authored and fallback UV policies"
+            )
+        if not uvless:
+            component_detail_grids[component] = component_uv_detail_grid(samples)
+
+    mesh = bpy.data.meshes.new("__alife_geneforge_lod_mesh")
+    obj = bpy.data.objects.new("__alife_geneforge_lod_object", mesh)
+    materials = []
+    evaluated = None
+    try:
+        mesh.from_pydata(vertices, [], faces)
+        mesh.update()
+        uv_layer = mesh.uv_layers.new(name="alife_semantic_uv")
+        for polygon, uvs, material_index in zip(mesh.polygons, face_uvs, face_groups):
+            polygon.material_index = material_index
+            for loop_index, uv in zip(polygon.loop_indices, uvs):
+                uv_layer.data[loop_index].uv = uv
+        for index, _ in enumerate(components):
+            material = bpy.data.materials.new(f"__alife_geneforge_group_{index}")
+            materials.append(material)
+            mesh.materials.append(material)
+        bpy.context.collection.objects.link(obj)
+        modifier = obj.modifiers.new("Deterministic topology-preserving LOD", "DECIMATE")
+        modifier.decimate_type = "COLLAPSE"
+        modifier.ratio = max(0.01, min(1.0, target / total))
+        modifier.use_collapse_triangulate = True
+        modifier.use_symmetry = False
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated = obj.evaluated_get(depsgraph)
+        output_mesh = evaluated.to_mesh(
+            preserve_all_data_layers=True, depsgraph=depsgraph
+        )
+        output_mesh.calc_loop_triangles()
+        output_uv = output_mesh.uv_layers.get("alife_semantic_uv")
+        if output_uv is None:
+            raise ImportFailure("LOD decimator discarded semantic UV sampling")
+        output = {}
+        for triangle in output_mesh.loop_triangles:
+            polygon = output_mesh.polygons[triangle.polygon_index]
+            if polygon.material_index >= len(components):
+                raise ImportFailure("LOD decimator discarded semantic group identity")
+            group, component = components[polygon.material_index]
+            corners = []
+            for loop_index in triangle.loops:
+                loop = output_mesh.loops[loop_index]
+                vertex = output_mesh.vertices[loop.vertex_index]
+                point = tuple(float(value) for value in vertex.co)
+                uv = output_uv.data[loop_index].uv
+                atlas_uv = (
+                    max(0.0, min(1.0, float(uv.x))),
+                    max(0.0, min(1.0, float(uv.y))),
+                )
+                samples = component_samples[(group, component)]
+                uvless = samples[0][3]
+                if uvless:
+                    nearest = min(
+                        samples,
+                        key=lambda sample: (
+                            (sample[1][0] - atlas_uv[0]) ** 2
+                            + (sample[1][1] - atlas_uv[1]) ** 2,
+                            tuple(round(value, 12) for value in sample[0]),
+                        ),
+                    )
+                    detail = nearest[2]
+                else:
+                    detail = sample_uv_detail_grid(
+                        component_detail_grids[(group, component)], atlas_uv
+                    )
+                corners.append(
+                    (
+                        point,
+                        atlas_uv,
+                        detail,
+                        component,
+                        uvless,
+                    )
+                )
+            if triangle_normal([corner[0] for corner in corners]) is not None:
+                output.setdefault(group, []).append(corners)
+        repaired_output = {}
+        for group, component in components:
+            source_triangles = [
+                triangle
+                for triangle in grouped[group]
+                if triangle[0][3] == component
+            ]
+            candidate_triangles = [
+                triangle
+                for triangle in output.get(group, [])
+                if triangle[0][3] == component
+            ]
+            use_source = not candidate_triangles
+            if not use_source:
+                source_metrics = topology_metrics({group: source_triangles})
+                candidate_metrics = topology_metrics({group: candidate_triangles})
+                source_islands = source_metrics["component_connected_counts"].get(
+                    component, 0
+                )
+                candidate_islands = candidate_metrics[
+                    "component_connected_counts"
+                ].get(component, 0)
+                use_source = (
+                    candidate_islands < 1
+                    or candidate_islands > source_islands
+                    or candidate_metrics["non_manifold_edges"] != 0
+                    or candidate_metrics["boundary_edges"]
+                    > source_metrics["boundary_edges"]
+                )
+            repaired_output.setdefault(group, []).extend(
+                source_triangles if use_source else candidate_triangles
+            )
+        output = repaired_output
+        metrics = topology_metrics(output)
+        source_metrics = topology_metrics(grouped)
+        if metrics["triangle_count"] >= total:
+            raise ImportFailure(
+                f"LOD decimator did not reduce {total} triangles toward target {target}"
+            )
+        if metrics["non_manifold_edges"]:
+            raise ImportFailure("LOD decimator introduced non-manifold geometry")
+        if metrics["component_ids"] != source_metrics["component_ids"]:
+            raise ImportFailure("LOD decimator discarded or split a semantic component")
+        for component, count in metrics["component_connected_counts"].items():
+            if not 1 <= count <= source_metrics["component_connected_counts"][component]:
+                raise ImportFailure(
+                    "LOD decimator multiplied islands within a source object"
+                )
+        if metrics["boundary_edges"] > source_metrics["boundary_edges"]:
+            raise ImportFailure("LOD decimator introduced open component boundaries")
+        return output, metrics
+    finally:
+        if evaluated is not None:
+            evaluated.to_mesh_clear()
+        bpy.data.objects.remove(obj, do_unlink=True)
+        if mesh.name in bpy.data.meshes:
+            bpy.data.meshes.remove(mesh)
+        for material in materials:
+            if material.name in bpy.data.materials:
+                bpy.data.materials.remove(material)
+
+
+def emit_obj(grouped: dict) -> bytes:
+    lines = ["# alife deterministic GeneForge export v2"]
+    position_indices = {}
+    uv_indices = {}
+    normal_accumulators = {}
+    faces_by_component = {}
+    for group in sorted(grouped):
+        for triangle in grouped[group]:
+            points = [corner[0] for corner in triangle]
+            a = tuple(points[1][axis] - points[0][axis] for axis in range(3))
+            b = tuple(points[2][axis] - points[0][axis] for axis in range(3))
+            area_vector = (
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
+            )
+            if vector_length(area_vector) <= 1.0e-12:
+                continue
+            face = []
+            component = triangle[0][3]
+            for position, uv, _, corner_component, _ in triangle:
+                if corner_component != component:
+                    raise ImportFailure("OBJ triangle crosses stable component identity")
+                position_key = (group, component) + tuple(
+                    round(value, 9) for value in position
+                )
+                uv_key = tuple(round(value, 9) for value in uv)
+                if position_key not in position_indices:
+                    position_indices[position_key] = len(position_indices) + 1
+                if uv_key not in uv_indices:
+                    uv_indices[uv_key] = len(uv_indices) + 1
+                accumulator = normal_accumulators.setdefault(position_key, [0.0, 0.0, 0.0])
+                for axis in range(3):
+                    accumulator[axis] += area_vector[axis]
+                face.append((position_key, uv_key))
+            faces_by_component.setdefault((group, component), []).append(face)
+    normal_indices = {
+        key: index + 1 for index, key in enumerate(position_indices)
+    }
+    positions_by_index = sorted(position_indices, key=position_indices.get)
+    for key in positions_by_index:
+        lines.append("v " + " ".join(f"{value:.9f}" for value in key[2:]))
+    uvs_by_index = sorted(uv_indices, key=uv_indices.get)
+    for uv in uvs_by_index:
+        lines.append("vt " + " ".join(f"{value:.9f}" for value in uv))
+    for key in positions_by_index:
+        normal = normalized_vector(normal_accumulators[key])
+        if not all(math.isfinite(value) for value in normal):
+            raise ImportFailure("generated smooth normal is non-finite")
+        lines.append("vn " + " ".join(f"{value:.9f}" for value in normal))
+    for group, component in sorted(faces_by_component):
+        lines.append(f"g {group}")
+        lines.append(f"o {component}")
+        for face in faces_by_component[(group, component)]:
+            references = [
+                f"{position_indices[position]}/{uv_indices[uv]}/{normal_indices[position]}"
+                for position, uv in face
+            ]
+            lines.append("f " + " ".join(references))
+    return ("\n".join(lines) + "\n").encode("ascii")
+
+
+def load_microdetail_samples(bpy, microdetail_root: Path, donor: str) -> tuple[list[int], list[str]]:
+    extensions = {".bmp", ".exr", ".jpeg", ".jpg", ".png", ".tga", ".tif", ".tiff"}
+    paths = [
+        path
+        for path in sorted(microdetail_root.rglob("*"))
+        if path.is_file() and path.suffix.casefold() in extensions
+    ]
+    if not paths:
+        raise ImportFailure(f"{donor} microdetail root contains no supported images")
+    images = []
+    try:
+        for path in paths:
+            image = bpy.data.images.load(str(path), check_existing=False)
+            try:
+                image.reload()
+            except RuntimeError as error:
+                raise ImportFailure(
+                    f"{donor} failed to reload microdetail image {path.name}: {error}"
+                ) from error
+            if image.size[0] <= 0 or image.size[1] <= 0:
+                raise ImportFailure(f"{donor} microdetail image is empty: {path.name}")
+            images.append(image)
+        samples = []
+        for y in range(64):
+            for x in range(64):
+                image = images[min(len(images) - 1, x * len(images) // 64)]
+                width, height = int(image.size[0]), int(image.size[1])
+                source_x = min(width - 1, x * width // 64)
+                source_y = min(height - 1, y * height // 64)
+                offset = (source_y * width + source_x) * 4
+                rgba = image.pixels[offset : offset + 4]
+                luminance = (
+                    0.2126 * float(rgba[0])
+                    + 0.7152 * float(rgba[1])
+                    + 0.0722 * float(rgba[2])
+                )
+                samples.append(round(max(0.0, min(1.0, luminance)) * 255))
+        return samples, [path.name for path in paths]
+    finally:
+        for image in images:
+            bpy.data.images.remove(image)
+
+
+def barycentric_weights(point, triangle) -> tuple[float, float, float] | None:
+    (px, py) = point
+    (ax, ay), (bx, by), (cx, cy) = triangle
+    denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+    if abs(denominator) <= 1.0e-12:
+        return None
+    first = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / denominator
+    second = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / denominator
+    third = 1.0 - first - second
+    if min(first, second, third) < -1.0e-9:
+        return None
+    return first, second, third
+
+
+def source_microdetail_at(source_samples: list[int], source_uv) -> int:
+    x = min(63, max(0, round(source_uv[0] * 63)))
+    y = min(63, max(0, round(source_uv[1] * 63)))
+    return source_samples[y * 64 + x]
+
+
+def semantic_mask(grouped: dict, source_samples: list[int]) -> bytes:
+    width = height = 64
+    pixels = bytearray(width * height * 4)
+    for group in sorted(grouped):
+        if group not in GROUP_COLORS:
+            raise ImportFailure(f"semantic group has no mask color: {group}")
+        color = GROUP_COLORS[group][:3]
+        painted = set()
+        triangles = sorted(
+            grouped[group],
+            key=lambda triangle: (
+                triangle[0][3],
+                tuple(tuple(round(value, 9) for value in corner[1]) for corner in triangle),
+                tuple(tuple(round(value, 9) for value in corner[0]) for corner in triangle),
             ),
         )
-        triangles = [
-            source_triangles[index * len(source_triangles) // group_budget]
-            for index in range(group_budget)
-        ]
         for triangle in triangles:
-            face = []
-            for position, uv, normal in triangle:
-                key = tuple(round(value, 9) for value in (*position, *uv, *normal))
-                if key in indices:
-                    duplicate_count += 1
+            atlas_triangle = [corner[1] for corner in triangle]
+            uvless = triangle[0][4]
+            if any(corner[4] != uvless for corner in triangle):
+                raise ImportFailure("semantic triangle mixes UV fallback policies")
+            minimum_x = max(0, math.floor(min(uv[0] for uv in atlas_triangle) * width))
+            maximum_x = min(
+                width - 1, math.floor(max(uv[0] for uv in atlas_triangle) * width)
+            )
+            minimum_y = max(0, math.floor(min(uv[1] for uv in atlas_triangle) * height))
+            maximum_y = min(
+                height - 1, math.floor(max(uv[1] for uv in atlas_triangle) * height)
+            )
+            triangle_pixels = []
+            for y in range(minimum_y, maximum_y + 1):
+                for x in range(minimum_x, maximum_x + 1):
+                    atlas_uv = ((x + 0.5) / width, (y + 0.5) / height)
+                    weights = barycentric_weights(atlas_uv, atlas_triangle)
+                    if weights is not None:
+                        triangle_pixels.append((x, y, atlas_uv, weights))
+            if not triangle_pixels:
+                atlas_uv = (
+                    sum(uv[0] for uv in atlas_triangle) / 3.0,
+                    sum(uv[1] for uv in atlas_triangle) / 3.0,
+                )
+                x = min(width - 1, max(0, math.floor(atlas_uv[0] * width)))
+                y = min(height - 1, max(0, math.floor(atlas_uv[1] * height)))
+                triangle_pixels.append((x, y, atlas_uv, (1.0 / 3.0,) * 3))
+            for x, y, atlas_uv, weights in triangle_pixels:
+                geometry = sum(
+                    weights[index] * triangle[index][2] for index in range(3)
+                )
+                if uvless:
+                    alpha = round(max(0.0, min(1.0, geometry)) * 255.0)
                 else:
-                    indices[key] = len(vertices) + 1
-                    vertices.append((position, uv, normal))
-                face.append(indices[key])
-            if len(set(face)) == 3:
-                faces_by_group.setdefault(group, []).append(face)
-    for position, _, _ in vertices:
-        lines.append("v " + " ".join(f"{value:.6f}" for value in position))
-    for _, uv, _ in vertices:
-        lines.append("vt " + " ".join(f"{value:.6f}" for value in uv))
-    for _, _, normal in vertices:
-        lines.append("vn " + " ".join(f"{value:.6f}" for value in normal))
-    for group in sorted(faces_by_group):
-        lines.append(f"g {group}")
-        for face in faces_by_group[group]:
-            lines.append("f " + " ".join(f"{index}/{index}/{index}" for index in face))
-    return ("\n".join(lines) + "\n").encode("ascii"), duplicate_count
+                    source_value = source_microdetail_at(
+                        source_samples, semantic_source_uv(group, atlas_uv)
+                    )
+                    alpha = round(
+                        source_value * 0.35
+                        + max(0.0, min(1.0, geometry)) * 255.0 * 0.65
+                    )
+                offset = (y * width + x) * 4
+                pixels[offset : offset + 4] = bytes(
+                    (*color, max(1, min(255, alpha)))
+                )
+                painted.add((x, y))
+        if not painted:
+            raise ImportFailure(f"semantic group has no rasterized UV coverage: {group}")
+    return png_bytes(width, height, bytes(pixels))
+
+
+def prepared_matrix(fit: dict, translation: list[float]) -> list[float]:
+    x, y, z, w = fit["rotation_xyzw"]
+    sx, sy, sz = fit["scale"]
+    rotation = (
+        (1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)),
+        (2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)),
+        (2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)),
+    )
+    return [
+        rotation[0][0] * sx,
+        rotation[0][1] * sy,
+        rotation[0][2] * sz,
+        translation[0],
+        rotation[1][0] * sx,
+        rotation[1][1] * sy,
+        rotation[1][2] * sz,
+        translation[1],
+        rotation[2][0] * sx,
+        rotation[2][1] * sy,
+        rotation[2][2] * sz,
+        translation[2],
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ]
+
+
+def assembly_preparations(recipe: dict, asset: dict) -> list[dict]:
+    contract = recipe["assembly_contract"]
+    preparations = []
+    for family in recipe["families"]:
+        for slot, part in family["parts"].items():
+            if part["asset_id"] != asset["id"]:
+                continue
+            translation = [
+                part["fit"]["translation"][axis] + part["seam_offset"][axis]
+                for axis in range(3)
+            ]
+            predicted_error = vector_length(part["seam_offset"])
+            if predicted_error > contract["attachment_error_limit"] + 1.0e-9:
+                raise ImportFailure(
+                    f"family {family['id']} {slot} seam exceeds attachment-error bound"
+                )
+            preparations.append(
+                {
+                    "family_id": family["id"],
+                    "family_label": family["label"],
+                    "logical_slot": slot,
+                    "asset_id": asset["id"],
+                    "fit": part["fit"],
+                    "seam_offset": part["seam_offset"],
+                    "prepared_translation": translation,
+                    "prepared_matrix": prepared_matrix(part["fit"], translation),
+                    "bridge_sockets": contract["slot_sockets"][slot],
+                    "bridge_kind": f"{slot}-join-cover",
+                    "join_cover_kind": part["join_cover_kind"],
+                    "overlap_depth": contract["default_overlap_depth"],
+                    "attachment_error_bound": contract["attachment_error_limit"],
+                    "predicted_attachment_error": predicted_error,
+                }
+            )
+    return preparations
 
 
 def socket_manifest(
     recipe: dict,
+    asset: dict,
     donor: str,
     lod: str,
     markers: dict,
@@ -718,6 +1791,7 @@ def socket_manifest(
     ground_contacts,
     mask_path: str,
     topology: dict,
+    microdetail_files: list[str],
 ) -> dict:
     marker_map = {int(key): value for key, value in recipe["marker_map"].items()}
     semantic_to_id = {semantic: marker_id for marker_id, semantic in marker_map.items()}
@@ -741,13 +1815,29 @@ def socket_manifest(
         for name, semantic in socket_semantics.items()
         if semantic in semantic_to_id and semantic_to_id[semantic] in markers
     }
+    if "tail-base" not in sockets and asset["logical_slot"] == "torso":
+        torso_marker = markers[semantic_to_id["torso"]]
+        sockets["tail-base"] = {
+            "translation": [torso_marker[0], torso_marker[1], bounds[1][2]],
+            "rotation_xyzw": [0.0, 0.0, 0.0, 1.0],
+            "scale": [1.0, 1.0, 1.0],
+            "overlap_depth": recipe["assembly_contract"]["default_overlap_depth"],
+            "allowable_scale_ratio": [0.88, 1.12],
+            "pattern_phase_anchor": [0.0, 0.0],
+            "derived_from_marker_ids": [2],
+        }
     landmarks = {
         semantic: list(markers[marker_id])
         for marker_id, semantic in marker_map.items()
         if marker_id in markers
     }
+    landmarks.update(
+        {name: list(position) for name, position in asset["landmarks"].items()}
+    )
     return {
         "schema": "alife.creature_part_sockets.v2",
+        "asset_id": asset["id"],
+        "logical_slot": asset["logical_slot"],
         "donor": donor,
         "lod": lod,
         "coordinate_frame": {"handedness": "right", "up": "+Y", "forward": "-Z"},
@@ -756,77 +1846,141 @@ def socket_manifest(
         "landmarks": landmarks,
         "ground_contacts": ground_contacts,
         "semantic_mask": mask_path,
-        "topology": topology,
+        "lod_topology": topology,
+        "expected_groups": sorted(
+            {
+                semantic_group(asset, name)
+                for name in asset["selector"]["include_objects"]
+            }
+        ),
+        "microdetail": {
+            "source_files": microdetail_files,
+            "uvless_fallback": "evaluated-normal-curvature-material-output",
+        },
+        "assembly_preparation_schema": recipe["assembly_contract"]["schema"],
+        "assembly_preparations": assembly_preparations(recipe, asset),
     }
 
 
-def semantic_mask() -> bytes:
-    width = height = 64
-    colors = list(GROUP_COLORS.values())
-    pixels = bytearray()
-    for y in range(height):
-        color = colors[min(len(colors) - 1, y * len(colors) // height)]
-        pixels.extend(bytes(color) * width)
-    return png_bytes(width, height, bytes(pixels))
-
-
-def build_scene_outputs(bpy, recipe: dict, donor: str, markers: dict, staging: Path) -> dict:
-    grouped, topology = extract_geometry(bpy, recipe, donor)
-    grouped, markers, bounds = normalization(grouped, markers)
-    ground_contacts = []
+def ground_contacts(asset: dict, grouped: dict) -> list[list[float]]:
+    if asset["logical_slot"] != "legs":
+        return []
+    contacts = []
     for group in ("left-leg", "right-leg"):
-        points = [
-            corner[0]
-            for triangle in grouped[group]
-            for corner in triangle
-        ]
+        points = [corner[0] for triangle in grouped[group] for corner in triangle]
         minimum_y = min(point[1] for point in points)
         planted = [point for point in points if point[1] <= minimum_y + 1.0e-6]
-        ground_contacts.append(
+        contacts.append(
             [
                 sum(point[0] for point in planted) / len(planted),
                 minimum_y,
                 sum(point[2] for point in planted) / len(planted),
             ]
         )
-    generated_root = staging / "production_voxel_v1/creature_parts/generated/geneforge"
-    mask_root = staging / "production_voxel_v1/models/geneforge"
-    generated_root.mkdir(parents=True, exist_ok=True)
-    mask_root.mkdir(parents=True, exist_ok=True)
+    return contacts
+
+
+def geometry_bounds(grouped: dict) -> list[list[float]]:
+    points = [
+        corner[0]
+        for triangles in grouped.values()
+        for triangle in triangles
+        for corner in triangle
+    ]
+    return [
+        [min(point[axis] for point in points) for axis in range(3)],
+        [max(point[axis] for point in points) for axis in range(3)],
+    ]
+
+
+def staged_output_path(staging: Path, relative: str) -> Path:
+    raw = Path(relative)
+    if raw.is_absolute() or any(part == ".." for part in raw.parts):
+        raise ImportFailure(f"generated output escapes staging: {relative}")
+    path = (staging / raw).resolve()
+    try:
+        path.relative_to(staging.resolve())
+    except ValueError as error:
+        raise ImportFailure(f"generated output escapes staging: {relative}") from error
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def build_scene_outputs(
+    bpy,
+    recipe: dict,
+    donor: str,
+    markers: dict,
+    staging: Path,
+    microdetail_root: Path,
+) -> dict:
+    asset_geometry, topology, texture_files = extract_geometry(bpy, recipe, donor)
+    asset_geometry, markers, bounds = normalization(asset_geometry, markers)
+    source_samples, microdetail_files = load_microdetail_samples(
+        bpy, microdetail_root, donor
+    )
+    detail_source_files = sorted(set(texture_files) | set(microdetail_files))
     outputs = []
-    duplicate_total = 0
-    for lod, step, triangle_budget in LODS:
-        obj_path = generated_root / f"{donor}_{lod}_parts.obj"
-        socket_path = generated_root / f"{donor}_{lod}_sockets.json"
-        mask_path = mask_root / f"{donor}_{lod}_semantic.png"
-        obj_bytes, duplicates = emit_obj(grouped, step, triangle_budget)
-        duplicate_total += duplicates
-        obj_path.write_bytes(obj_bytes)
-        relative_mask = mask_path.relative_to(staging).as_posix()
-        socket_path.write_text(
-            json.dumps(
-                socket_manifest(
-                    recipe,
-                    donor,
-                    lod,
-                    markers,
-                    bounds,
-                    ground_contacts,
-                    relative_mask,
-                    topology,
-                ),
-                indent=2,
-                sort_keys=True,
+    assets = selected_assets(recipe, donor)
+    for asset in assets:
+        grouped = asset_geometry[asset["id"]]
+        lod_contracts = {lod["lod"]: lod for lod in asset["lods"]}
+        previous_topology = None
+        for lod, ratio, triangle_budget in LODS:
+            try:
+                lod_grouped, lod_topology = decimate_asset(
+                    bpy, grouped, ratio, triangle_budget
+                )
+            except ImportFailure as error:
+                raise ImportFailure(
+                    f"{donor} asset {asset['id']} LOD {lod}: {error}"
+                ) from error
+            if previous_topology is not None:
+                if lod_topology["triangle_count"] >= previous_topology["triangle_count"]:
+                    raise ImportFailure(
+                        f"{donor} asset {asset['id']} LOD {lod}: triangle count did not decrease strictly"
+                    )
+                for component, count in lod_topology[
+                    "component_connected_counts"
+                ].items():
+                    if count > previous_topology["component_connected_counts"][component]:
+                        raise ImportFailure(
+                            f"{donor} asset {asset['id']} LOD {lod}: source-object islands increased"
+                        )
+            previous_topology = lod_topology
+            contract = lod_contracts[lod]
+            lod_bounds = geometry_bounds(lod_grouped)
+            contacts = ground_contacts(asset, lod_grouped)
+            obj_path = staged_output_path(staging, contract["generated_obj"])
+            socket_path = staged_output_path(staging, contract["socket_manifest"])
+            mask_path = staged_output_path(staging, contract["semantic_mask"])
+            obj_path.write_bytes(emit_obj(lod_grouped))
+            socket_path.write_text(
+                json.dumps(
+                    socket_manifest(
+                        recipe,
+                        asset,
+                        donor,
+                        lod,
+                        markers,
+                        lod_bounds,
+                        contacts,
+                        contract["semantic_mask"],
+                        lod_topology,
+                        detail_source_files,
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
             )
-            + "\n",
-            encoding="utf-8",
-        )
-        mask_path.write_bytes(semantic_mask())
-        outputs.extend((obj_path, socket_path, mask_path))
-    topology["removed_duplicate_vertices"] = duplicate_total
+            mask_path.write_bytes(semantic_mask(lod_grouped, source_samples))
+            outputs.extend((obj_path, socket_path, mask_path))
     return {
         "donor": donor,
         "topology": topology,
+        "asset_count": len(assets),
         "output_count": len(outputs),
         "outputs": [path.relative_to(staging).as_posix() for path in outputs],
     }
@@ -844,7 +1998,14 @@ def blender_worker_main() -> None:
     else:
         if args.staging is None:
             raise ImportFailure("build worker requires staging")
-        payload = build_scene_outputs(bpy, recipe, args.donor, markers, args.staging)
+        payload = build_scene_outputs(
+            bpy,
+            recipe,
+            args.donor,
+            markers,
+            args.staging,
+            args.microdetail_root,
+        )
         payload["relinked_images"] = inventory["relinked_images"]
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(

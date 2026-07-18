@@ -41,6 +41,7 @@ enum CreaturePartBuilderCommand {
     },
     ValidateGeneForgeStaging {
         staging: PathBuf,
+        recipes: PathBuf,
     },
     Preview {
         catalog: PathBuf,
@@ -121,7 +122,10 @@ impl CreaturePartBuilderCommand {
                         "GeneForge staging must be under target/artifacts/creature_parts".into(),
                     );
                 }
-                Ok(Self::ValidateGeneForgeStaging { staging })
+                let recipes = options.get("recipes").map(PathBuf::from).ok_or_else(|| {
+                    "validate-geneforge-staging requires an external --recipes catalog".to_string()
+                })?;
+                Ok(Self::ValidateGeneForgeStaging { staging, recipes })
             }
             "preview" => {
                 let output = PathBuf::from(
@@ -169,12 +173,13 @@ impl CreaturePartBuilderCommand {
                 staging,
             } => build(&catalog, family.map(CreaturePartFamilyId), &staging),
             Self::Validate { catalog } => validate(&catalog),
-            Self::ValidateGeneForgeStaging { staging } => {
-                let receipt = validate_geneforge_staging(&staging)?;
+            Self::ValidateGeneForgeStaging { staging, recipes } => {
+                let receipt = validate_geneforge_staging(&staging, &recipes)?;
                 println!(
-                    "validated_geneforge_staging={} donors={} lods={} objs={} masks={} bytes={}",
+                    "validated_geneforge_staging={} donors={} assets={} lods={} objs={} masks={} bytes={}",
                     staging.display(),
                     receipt.donor_count,
+                    receipt.asset_count,
                     receipt.lod_count,
                     receipt.obj_count,
                     receipt.mask_count,
@@ -899,8 +904,16 @@ mod tests {
             "validate-geneforge-staging",
             "--staging",
             "target/artifacts/creature_parts/geneforge-staging",
+            "--recipes",
+            "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
         ])
         .is_ok());
+        assert!(CreaturePartBuilderCommand::parse_for_test([
+            "validate-geneforge-staging",
+            "--staging",
+            "target/artifacts/creature_parts/geneforge-staging",
+        ])
+        .is_err());
     }
 
     #[test]

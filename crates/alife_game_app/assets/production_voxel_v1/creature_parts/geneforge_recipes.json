@@ -2,8 +2,8 @@
   "schema": "alife.geneforge_creature_part_catalog.v2",
   "schema_version": 2,
   "blender_version": "5.1.0",
-  "importer_version": "alife.geneforge_importer.v1",
-  "recipe_sha256": "f26b1be2d9537aeaec7742eebb2dd663b41ef87a46281a1c077ddd68fe7d09a5",
+  "importer_version": "alife.geneforge_importer.v2",
+  "recipe_sha256": "9f871b3716a1c32a5a6d998b7a5cb64a395e1ca8fb84566dc944f848c3ac5da9",
   "marker_map": {
     "1": "head",
     "2": "torso",
@@ -20,12 +20,26 @@
     "13": "tail-root",
     "14": "tail-tip"
   },
+  "assembly_contract": {
+    "schema": "alife.geneforge_family_assembly.v1",
+    "attachment_error_limit": 0.025,
+    "default_overlap_depth": 0.02,
+    "slot_sockets": {
+      "head": ["neck"],
+      "torso": ["neck", "left-shoulder", "right-shoulder", "left-hip", "right-hip", "tail-base"],
+      "arms": ["left-shoulder", "right-shoulder"],
+      "legs": ["left-hip", "right-hip"],
+      "tail": ["tail-base"]
+    }
+  },
   "sources": [
     {
       "donor": "norn",
       "blend_file": "Norn/Geneforge_r4.0_Norn.blend",
       "sha256": "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A",
       "texture_root": "Norn/Blueberry Norns Example/Geneforge Textures",
+      "microdetail_root": "Norn/Alpha Textures",
+      "audited_non_marker_properties": {},
       "source_url": "https://eem.foo/geneforge/",
       "author": "Eem Foo",
       "license": "MIT",
@@ -36,6 +50,10 @@
       "blend_file": "Ettin/geneforge_r4.0_ettin.blend",
       "sha256": "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B",
       "texture_root": "Ettin/Teal Ettin Textures",
+      "microdetail_root": "Ettin/Alpha Textures",
+      "audited_non_marker_properties": {
+        "head1_Ettin_angry": 0
+      },
       "source_url": "https://eem.foo/geneforge/",
       "author": "Eem Foo",
       "license": "MIT",
@@ -46,6 +64,8 @@
       "blend_file": "Grendel/geneforge_r4.0_grendel.blend",
       "sha256": "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62",
       "texture_root": "Grendel/Purple Grendels Textures",
+      "microdetail_root": "Grendel/Alpha Textures",
+      "audited_non_marker_properties": {},
       "source_url": "https://eem.foo/geneforge/",
       "author": "Eem Foo",
       "license": "MIT",
@@ -87,11 +107,18 @@
         "uv_map": "UVMap",
         "object_visscripts": {
           "Head1.normal": "part=Head&normal",
+          "Eye_L": "part=Head",
+          "Eye_R": "part=Head",
+          "Lid_L": "part=Head",
+          "Lid_R": "part=Head",
           "ear_2L_chichi": "part=Head&normal",
           "ear_2R_chichi": "part=Head&&normal|sad|angry",
           "Teeth_T": "part=Head",
           "Teeth_B": "part=Head&!sad&!sleepy",
-          "tongue": "part=Head"
+          "tongue": "part=Head",
+          "Bald Patch": "part=Head",
+          "mouthback_patched": "part=Head",
+          "Hair_m_civet": "part=Head&male"
         }
       },
       "groups": {
@@ -127,27 +154,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_head_full_semantic.png",
           "generated_obj_sha256": "ba8abaa7b790aa36bcafc759c59d2fecd3d629b51038d1690c5fb36420e7bc71",
           "socket_manifest_sha256": "dabfd355cef30bde966db65d0d7854d7436919717d7793328301ee593efc7435",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_head_compact_semantic.png",
           "generated_obj_sha256": "d6408c1e2551ba3599bf8ab834846a134dc0c9b6db248c925c9da4b1b2db5b78",
           "socket_manifest_sha256": "ef65db0131eae0e830f3674854701b5cf2bcf75356e00c8e379e51c5e0f05305",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_head_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_head_impostor_semantic.png",
           "generated_obj_sha256": "27c4b84b982fdf3c604453cc87154106bbbdc1eeeb140d32fd32ef6d91863fd3",
           "socket_manifest_sha256": "c4bcf0dd040462690b336d63e66cd2b3e9cdbc555fd20914e20c2867cf4f870b",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -264,27 +291,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_torso_full_semantic.png",
           "generated_obj_sha256": "ba8abaa7b790aa36bcafc759c59d2fecd3d629b51038d1690c5fb36420e7bc71",
           "socket_manifest_sha256": "dabfd355cef30bde966db65d0d7854d7436919717d7793328301ee593efc7435",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_torso_compact_semantic.png",
           "generated_obj_sha256": "d6408c1e2551ba3599bf8ab834846a134dc0c9b6db248c925c9da4b1b2db5b78",
           "socket_manifest_sha256": "ef65db0131eae0e830f3674854701b5cf2bcf75356e00c8e379e51c5e0f05305",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_torso_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_torso_impostor_semantic.png",
           "generated_obj_sha256": "27c4b84b982fdf3c604453cc87154106bbbdc1eeeb140d32fd32ef6d91863fd3",
           "socket_manifest_sha256": "c4bcf0dd040462690b336d63e66cd2b3e9cdbc555fd20914e20c2867cf4f870b",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -417,27 +444,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_arms_full_semantic.png",
           "generated_obj_sha256": "ba8abaa7b790aa36bcafc759c59d2fecd3d629b51038d1690c5fb36420e7bc71",
           "socket_manifest_sha256": "dabfd355cef30bde966db65d0d7854d7436919717d7793328301ee593efc7435",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_arms_compact_semantic.png",
           "generated_obj_sha256": "d6408c1e2551ba3599bf8ab834846a134dc0c9b6db248c925c9da4b1b2db5b78",
           "socket_manifest_sha256": "ef65db0131eae0e830f3674854701b5cf2bcf75356e00c8e379e51c5e0f05305",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_arms_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_arms_impostor_semantic.png",
           "generated_obj_sha256": "27c4b84b982fdf3c604453cc87154106bbbdc1eeeb140d32fd32ef6d91863fd3",
           "socket_manifest_sha256": "c4bcf0dd040462690b336d63e66cd2b3e9cdbc555fd20914e20c2867cf4f870b",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -517,8 +544,10 @@
         "object_visscripts": {
           "Thigh_L": "part=LeftThigh",
           "Shin_L": "part=LeftShin",
+          "Foot_2L": "part=LeftFoot&pitch_id=0",
           "Thigh_R": "part=RightThigh",
-          "Shin_R": "part=RightShin"
+          "Shin_R": "part=RightShin",
+          "Foot_2R": "part=RightFoot&pitch_id=0"
         }
       },
       "groups": {
@@ -566,27 +595,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_legs_full_semantic.png",
           "generated_obj_sha256": "ba8abaa7b790aa36bcafc759c59d2fecd3d629b51038d1690c5fb36420e7bc71",
           "socket_manifest_sha256": "dabfd355cef30bde966db65d0d7854d7436919717d7793328301ee593efc7435",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_legs_compact_semantic.png",
           "generated_obj_sha256": "d6408c1e2551ba3599bf8ab834846a134dc0c9b6db248c925c9da4b1b2db5b78",
           "socket_manifest_sha256": "ef65db0131eae0e830f3674854701b5cf2bcf75356e00c8e379e51c5e0f05305",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_legs_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_legs_impostor_semantic.png",
           "generated_obj_sha256": "27c4b84b982fdf3c604453cc87154106bbbdc1eeeb140d32fd32ef6d91863fd3",
           "socket_manifest_sha256": "c4bcf0dd040462690b336d63e66cd2b3e9cdbc555fd20914e20c2867cf4f870b",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -676,6 +705,14 @@
         },
         "object_visscripts": {
           "head1_Ettin_normal": "part=Head&mode=0&normal",
+          "Eye L": "part=Head&mode=0",
+          "Eye R": "part=Head&mode=0",
+          "Eyelid L": "part=Head&mode=0",
+          "Eyelid R": "part=Head&mode=0",
+          "Teeth T": "part=Head&mode=0",
+          "Teeth B": "part=Head&mode=0",
+          "tongue": "part=Head&mode=0",
+          "Mouth Inner": "part=Head&mode=0",
           "Hair m": "part=Head&mode=0"
         }
       },
@@ -712,27 +749,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_head_full_semantic.png",
           "generated_obj_sha256": "d058ca67e9dda6a618e6459426bf19e2fd2c97061d549b7e569f5e9b0634b3fd",
           "socket_manifest_sha256": "ce558b305e0ef0b60e0df8858dcf7c5bd2ed4713df361ca64fb395df9b4638fc",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_head_compact_semantic.png",
           "generated_obj_sha256": "4cd434091e837f6bb06d7df85f6616dc94ecf9c88c3cc90c160ee0999a145a8e",
           "socket_manifest_sha256": "bbe3abdae84c382bb032e14286895ca35b1e1998316b2cdabc99fdd328e5fbaf",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_head_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_head_impostor_semantic.png",
           "generated_obj_sha256": "13f0ee12f8a1ae8dca275c0fe1a80d965eeeba7a95c5d6ec8d0e2dc2c0717523",
           "socket_manifest_sha256": "a95dd28806a75a3dd4980a58c134aca91023cb881c2a0d63d691284a9c81b64d",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -849,27 +886,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_torso_full_semantic.png",
           "generated_obj_sha256": "d058ca67e9dda6a618e6459426bf19e2fd2c97061d549b7e569f5e9b0634b3fd",
           "socket_manifest_sha256": "ce558b305e0ef0b60e0df8858dcf7c5bd2ed4713df361ca64fb395df9b4638fc",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_torso_compact_semantic.png",
           "generated_obj_sha256": "4cd434091e837f6bb06d7df85f6616dc94ecf9c88c3cc90c160ee0999a145a8e",
           "socket_manifest_sha256": "bbe3abdae84c382bb032e14286895ca35b1e1998316b2cdabc99fdd328e5fbaf",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_torso_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_torso_impostor_semantic.png",
           "generated_obj_sha256": "13f0ee12f8a1ae8dca275c0fe1a80d965eeeba7a95c5d6ec8d0e2dc2c0717523",
           "socket_manifest_sha256": "a95dd28806a75a3dd4980a58c134aca91023cb881c2a0d63d691284a9c81b64d",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -953,6 +990,9 @@
         "topology_repairs": {
           "radius L": [
             "repair-declared-non-manifold-edges"
+          ],
+          "radius R": [
+            "repair-declared-non-manifold-edges"
           ]
         },
         "object_visscripts": {
@@ -1007,27 +1047,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_arms_full_semantic.png",
           "generated_obj_sha256": "d058ca67e9dda6a618e6459426bf19e2fd2c97061d549b7e569f5e9b0634b3fd",
           "socket_manifest_sha256": "ce558b305e0ef0b60e0df8858dcf7c5bd2ed4713df361ca64fb395df9b4638fc",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_arms_compact_semantic.png",
           "generated_obj_sha256": "4cd434091e837f6bb06d7df85f6616dc94ecf9c88c3cc90c160ee0999a145a8e",
           "socket_manifest_sha256": "bbe3abdae84c382bb032e14286895ca35b1e1998316b2cdabc99fdd328e5fbaf",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_arms_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_arms_impostor_semantic.png",
           "generated_obj_sha256": "13f0ee12f8a1ae8dca275c0fe1a80d965eeeba7a95c5d6ec8d0e2dc2c0717523",
           "socket_manifest_sha256": "a95dd28806a75a3dd4980a58c134aca91023cb881c2a0d63d691284a9c81b64d",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -1107,8 +1147,10 @@
         "object_visscripts": {
           "Thigh L": "part=LeftThigh&mode=0",
           "Shin L": "part=LeftShin&mode=0",
+          "Foot_2L": "part=LeftFoot&pitch_id=0",
           "Thigh R": "part=RightThigh&mode=0",
-          "Shin R": "part=RightShin&mode=0"
+          "Shin R": "part=RightShin&mode=0",
+          "Foot_2R": "part=RightFoot&pitch_id=0"
         }
       },
       "groups": {
@@ -1156,27 +1198,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_legs_full_semantic.png",
           "generated_obj_sha256": "d058ca67e9dda6a618e6459426bf19e2fd2c97061d549b7e569f5e9b0634b3fd",
           "socket_manifest_sha256": "ce558b305e0ef0b60e0df8858dcf7c5bd2ed4713df361ca64fb395df9b4638fc",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_legs_compact_semantic.png",
           "generated_obj_sha256": "4cd434091e837f6bb06d7df85f6616dc94ecf9c88c3cc90c160ee0999a145a8e",
           "socket_manifest_sha256": "bbe3abdae84c382bb032e14286895ca35b1e1998316b2cdabc99fdd328e5fbaf",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/ettin_legs_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/ettin_legs_impostor_semantic.png",
           "generated_obj_sha256": "13f0ee12f8a1ae8dca275c0fe1a80d965eeeba7a95c5d6ec8d0e2dc2c0717523",
           "socket_manifest_sha256": "a95dd28806a75a3dd4980a58c134aca91023cb881c2a0d63d691284a9c81b64d",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -1276,7 +1318,13 @@
           "Eye_R": "part=head",
           "Lid_L_Closed": "part=Head&!eyes",
           "Lid_R_Closed": "part=Head&!eyes",
-          "Hair m": "part=Head&male"
+          "Hair m": "part=Head&male",
+          "ear 2L": "part=Head&normal",
+          "ear 2R": "part=Head&normal",
+          "teeth B": "part=head&normal",
+          "teeth T": "part=head&normal",
+          "extra teeth": "part=head&normal",
+          "tongue.001": "part=head&normal"
         }
       },
       "groups": {
@@ -1312,27 +1360,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_head_full_semantic.png",
           "generated_obj_sha256": "5d45f3460a558b6926ef247d45156d778e57d3896ffda2c49e441bcf06f6d6fd",
           "socket_manifest_sha256": "db955e5d2fceeb4521ab9ad65783d531142e610379150be68d1b3e094088d2d1",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_head_compact_semantic.png",
           "generated_obj_sha256": "96b41d220e791e62dc3630fc940249b8cac1c8c949c5e2b6e25176bc1a04eb81",
           "socket_manifest_sha256": "d89ccf71ca99d9f59634ae6a08bea78619329a7dab46f7e743d680f07c51ce04",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_head_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_head_impostor_semantic.png",
           "generated_obj_sha256": "377fa0b40ba52541c5b4e5f166593db8c409a81660a92557aaccf96201f01327",
           "socket_manifest_sha256": "eb127fdd47bcd82eb5f630b8885643da27faa9ecf1372fa5e794be5f356096de",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -1451,27 +1499,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_torso_full_semantic.png",
           "generated_obj_sha256": "5d45f3460a558b6926ef247d45156d778e57d3896ffda2c49e441bcf06f6d6fd",
           "socket_manifest_sha256": "db955e5d2fceeb4521ab9ad65783d531142e610379150be68d1b3e094088d2d1",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_torso_compact_semantic.png",
           "generated_obj_sha256": "96b41d220e791e62dc3630fc940249b8cac1c8c949c5e2b6e25176bc1a04eb81",
           "socket_manifest_sha256": "d89ccf71ca99d9f59634ae6a08bea78619329a7dab46f7e743d680f07c51ce04",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_torso_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_torso_impostor_semantic.png",
           "generated_obj_sha256": "377fa0b40ba52541c5b4e5f166593db8c409a81660a92557aaccf96201f01327",
           "socket_manifest_sha256": "eb127fdd47bcd82eb5f630b8885643da27faa9ecf1372fa5e794be5f356096de",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -1555,6 +1603,9 @@
         "topology_repairs": {
           "radius L": [
             "repair-declared-non-manifold-edges"
+          ],
+          "radius R": [
+            "repair-declared-non-manifold-edges"
           ]
         },
         "object_visscripts": {
@@ -1609,27 +1660,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_arms_full_semantic.png",
           "generated_obj_sha256": "5d45f3460a558b6926ef247d45156d778e57d3896ffda2c49e441bcf06f6d6fd",
           "socket_manifest_sha256": "db955e5d2fceeb4521ab9ad65783d531142e610379150be68d1b3e094088d2d1",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_arms_compact_semantic.png",
           "generated_obj_sha256": "96b41d220e791e62dc3630fc940249b8cac1c8c949c5e2b6e25176bc1a04eb81",
           "socket_manifest_sha256": "d89ccf71ca99d9f59634ae6a08bea78619329a7dab46f7e743d680f07c51ce04",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_arms_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_arms_impostor_semantic.png",
           "generated_obj_sha256": "377fa0b40ba52541c5b4e5f166593db8c409a81660a92557aaccf96201f01327",
           "socket_manifest_sha256": "eb127fdd47bcd82eb5f630b8885643da27faa9ecf1372fa5e794be5f356096de",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -1709,8 +1760,10 @@
         "object_visscripts": {
           "Thigh L": "part=LeftThigh",
           "Shin L": "part=LeftShin",
+          "foot 2L": "part=leftfoot&pitch_id=0",
           "Thigh R": "part=RightThigh",
-          "Shin R": "part=RightShin"
+          "Shin R": "part=RightShin",
+          "foot 2R": "part=RightFoot&pitch_id=0"
         }
       },
       "groups": {
@@ -1758,27 +1811,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_legs_full_semantic.png",
           "generated_obj_sha256": "5d45f3460a558b6926ef247d45156d778e57d3896ffda2c49e441bcf06f6d6fd",
           "socket_manifest_sha256": "db955e5d2fceeb4521ab9ad65783d531142e610379150be68d1b3e094088d2d1",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_legs_compact_semantic.png",
           "generated_obj_sha256": "96b41d220e791e62dc3630fc940249b8cac1c8c949c5e2b6e25176bc1a04eb81",
           "socket_manifest_sha256": "d89ccf71ca99d9f59634ae6a08bea78619329a7dab46f7e743d680f07c51ce04",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_legs_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_legs_impostor_semantic.png",
           "generated_obj_sha256": "377fa0b40ba52541c5b4e5f166593db8c409a81660a92557aaccf96201f01327",
           "socket_manifest_sha256": "eb127fdd47bcd82eb5f630b8885643da27faa9ecf1372fa5e794be5f356096de",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -1877,27 +1930,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_tail_full_semantic.png",
           "generated_obj_sha256": "ba8abaa7b790aa36bcafc759c59d2fecd3d629b51038d1690c5fb36420e7bc71",
           "socket_manifest_sha256": "dabfd355cef30bde966db65d0d7854d7436919717d7793328301ee593efc7435",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_tail_compact_semantic.png",
           "generated_obj_sha256": "d6408c1e2551ba3599bf8ab834846a134dc0c9b6db248c925c9da4b1b2db5b78",
           "socket_manifest_sha256": "ef65db0131eae0e830f3674854701b5cf2bcf75356e00c8e379e51c5e0f05305",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/norn_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/norn_tail_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/norn_tail_impostor_semantic.png",
           "generated_obj_sha256": "27c4b84b982fdf3c604453cc87154106bbbdc1eeeb140d32fd32ef6d91863fd3",
           "socket_manifest_sha256": "c4bcf0dd040462690b336d63e66cd2b3e9cdbc555fd20914e20c2867cf4f870b",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
@@ -1955,7 +2008,10 @@
         },
         "mirror_policy": "evaluated-source",
         "uv_map": "UVChannel_1",
-        "object_visscripts": {}
+        "object_visscripts": {
+          "tail.0": "part=TailRoot&pitch_id=0",
+          "tailend.0": "part=TailTip&pitch_id=0"
+        }
       },
       "groups": {
         "tail-back": "tail-back"
@@ -1983,27 +2039,27 @@
       "lods": [
         {
           "lod": "full",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_full_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_full_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_full_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_full_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_tail_full_semantic.png",
           "generated_obj_sha256": "5d45f3460a558b6926ef247d45156d778e57d3896ffda2c49e441bcf06f6d6fd",
           "socket_manifest_sha256": "db955e5d2fceeb4521ab9ad65783d531142e610379150be68d1b3e094088d2d1",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "compact",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_compact_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_compact_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_compact_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_compact_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_tail_compact_semantic.png",
           "generated_obj_sha256": "96b41d220e791e62dc3630fc940249b8cac1c8c949c5e2b6e25176bc1a04eb81",
           "socket_manifest_sha256": "d89ccf71ca99d9f59634ae6a08bea78619329a7dab46f7e743d680f07c51ce04",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"
         },
         {
           "lod": "impostor",
-          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_parts.obj",
-          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_impostor_sockets.json",
-          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_impostor_semantic.png",
+          "generated_obj": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_impostor_parts.obj",
+          "socket_manifest": "production_voxel_v1/creature_parts/generated/geneforge/grendel_tail_impostor_sockets.json",
+          "semantic_mask": "production_voxel_v1/models/geneforge/grendel_tail_impostor_semantic.png",
           "generated_obj_sha256": "377fa0b40ba52541c5b4e5f166593db8c409a81660a92557aaccf96201f01327",
           "socket_manifest_sha256": "eb127fdd47bcd82eb5f630b8885643da27faa9ecf1372fa5e794be5f356096de",
           "semantic_mask_sha256": "623330894003c13c20847755b59ac4cf6afd1d6873974c199f75e0befdc0d0e7"

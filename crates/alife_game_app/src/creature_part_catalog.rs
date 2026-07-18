@@ -393,6 +393,8 @@ pub struct GeneForgeSourceDefinition {
     pub blend_file: String,
     pub sha256: String,
     pub texture_root: String,
+    pub microdetail_root: String,
+    pub audited_non_marker_properties: BTreeMap<String, i32>,
     pub source_url: String,
     pub author: String,
     pub license: String,
@@ -642,6 +644,60 @@ pub struct GeneForgeCreatureFamilyDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GeneForgeAssemblyContract {
+    pub schema: String,
+    pub attachment_error_limit: f32,
+    pub default_overlap_depth: f32,
+    pub slot_sockets: BTreeMap<CreaturePartSlotKey, Vec<String>>,
+}
+
+impl GeneForgeAssemblyContract {
+    fn validate(&self) -> Result<(), GeneForgeCatalogError> {
+        let expected = BTreeMap::from([
+            (CreaturePartSlotKey::Head, vec!["neck"]),
+            (
+                CreaturePartSlotKey::Torso,
+                vec![
+                    "neck",
+                    "left-shoulder",
+                    "right-shoulder",
+                    "left-hip",
+                    "right-hip",
+                    "tail-base",
+                ],
+            ),
+            (
+                CreaturePartSlotKey::Arms,
+                vec!["left-shoulder", "right-shoulder"],
+            ),
+            (CreaturePartSlotKey::Legs, vec!["left-hip", "right-hip"]),
+            (CreaturePartSlotKey::Tail, vec!["tail-base"]),
+        ]);
+        let actual = self
+            .slot_sockets
+            .iter()
+            .map(|(slot, sockets)| {
+                (
+                    *slot,
+                    sockets.iter().map(String::as_str).collect::<Vec<_>>(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        if self.schema != "alife.geneforge_family_assembly.v1"
+            || self.attachment_error_limit != 0.025
+            || !self.default_overlap_depth.is_finite()
+            || !(0.005..=0.25).contains(&self.default_overlap_depth)
+            || actual != expected
+        {
+            return Err(GeneForgeCatalogError::InvalidCatalogMetadata {
+                reason: "invalid family assembly bridge/seam contract",
+            });
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeneForgeCreaturePartCatalog {
     pub schema: String,
     pub schema_version: u16,
@@ -650,6 +706,7 @@ pub struct GeneForgeCreaturePartCatalog {
     /// SHA-256 of key-sorted compact JSON with this field replaced by 64 zeroes.
     pub recipe_sha256: String,
     pub marker_map: BTreeMap<u8, GeneForgeMarkerSemantic>,
+    pub assembly_contract: GeneForgeAssemblyContract,
     pub sources: Vec<GeneForgeSourceDefinition>,
     pub part_assets: Vec<GeneForgePartAssetDefinition>,
     pub families: Vec<GeneForgeCreatureFamilyDefinition>,
@@ -673,7 +730,7 @@ impl GeneForgeCreaturePartCatalog {
         {
             return Err(GeneForgeCatalogError::Schema);
         }
-        if self.importer_version != "alife.geneforge_importer.v1" {
+        if self.importer_version != "alife.geneforge_importer.v2" {
             return Err(GeneForgeCatalogError::InvalidCatalogMetadata {
                 reason: "unexpected importer version",
             });
@@ -705,6 +762,7 @@ impl GeneForgeCreaturePartCatalog {
                 reason: "marker map must be the stable semantic 1..=14 contract",
             });
         }
+        self.assembly_contract.validate()?;
         if self.sources.is_empty() || self.part_assets.is_empty() || self.families.is_empty() {
             return Err(GeneForgeCatalogError::Empty);
         }
@@ -720,6 +778,7 @@ impl GeneForgeCreaturePartCatalog {
             if !valid_sha256(&source.sha256)
                 || !valid_relative_path(&source.blend_file)
                 || !valid_relative_path(&source.texture_root)
+                || !valid_relative_path(&source.microdetail_root)
                 || source.source_url.trim().is_empty()
                 || source.author.trim().is_empty()
                 || source.license.trim().is_empty()
@@ -783,6 +842,19 @@ impl GeneForgeCreaturePartCatalog {
                 .iter()
                 .map(String::as_str)
                 .collect::<BTreeSet<_>>();
+            if asset
+                .selector
+                .object_visscripts
+                .keys()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>()
+                != selected
+            {
+                return Err(GeneForgeCatalogError::InvalidAsset {
+                    asset: asset.id.clone(),
+                    reason: "every selected object needs an exact kc3dsbpy_visscript contract",
+                });
+            }
             if asset
                 .selector
                 .topology_repairs
@@ -926,6 +998,24 @@ impl GeneForgeCreaturePartCatalog {
                         });
                     }
                 }
+            }
+        }
+
+        for (donor, expected_markers) in [
+            (GeneForgeDonorId::Norn, BTreeSet::from_iter(1_u8..=14)),
+            (GeneForgeDonorId::Ettin, BTreeSet::from_iter(1_u8..=12)),
+            (GeneForgeDonorId::Grendel, BTreeSet::from_iter(1_u8..=14)),
+        ] {
+            let actual = self
+                .part_assets
+                .iter()
+                .filter(|asset| asset.donor == donor)
+                .flat_map(|asset| asset.selector.marker_ids.iter().copied())
+                .collect::<BTreeSet<_>>();
+            if actual != expected_markers {
+                return Err(GeneForgeCatalogError::InvalidCatalogMetadata {
+                    reason: "donor marker selection does not match the exact audited set",
+                });
             }
         }
 
@@ -1140,26 +1230,35 @@ fn required_landmarks(logical_slot: CreaturePartSlotKey) -> BTreeSet<GeneForgeLa
 }
 
 fn source_matches_pinned_attribution(source: &GeneForgeSourceDefinition) -> bool {
-    let (blend_file, sha256, texture_root) = match source.donor {
-        GeneForgeDonorId::Norn => (
-            "Norn/Geneforge_r4.0_Norn.blend",
-            "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A",
-            "Norn/Blueberry Norns Example/Geneforge Textures",
-        ),
-        GeneForgeDonorId::Ettin => (
-            "Ettin/geneforge_r4.0_ettin.blend",
-            "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B",
-            "Ettin/Teal Ettin Textures",
-        ),
-        GeneForgeDonorId::Grendel => (
-            "Grendel/geneforge_r4.0_grendel.blend",
-            "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62",
-            "Grendel/Purple Grendels Textures",
-        ),
-    };
+    let (blend_file, sha256, texture_root, microdetail_root, non_marker_properties) =
+        match source.donor {
+            GeneForgeDonorId::Norn => (
+                "Norn/Geneforge_r4.0_Norn.blend",
+                "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A",
+                "Norn/Blueberry Norns Example/Geneforge Textures",
+                "Norn/Alpha Textures",
+                BTreeMap::new(),
+            ),
+            GeneForgeDonorId::Ettin => (
+                "Ettin/geneforge_r4.0_ettin.blend",
+                "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B",
+                "Ettin/Teal Ettin Textures",
+                "Ettin/Alpha Textures",
+                BTreeMap::from([("head1_Ettin_angry".to_string(), 0)]),
+            ),
+            GeneForgeDonorId::Grendel => (
+                "Grendel/geneforge_r4.0_grendel.blend",
+                "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62",
+                "Grendel/Purple Grendels Textures",
+                "Grendel/Alpha Textures",
+                BTreeMap::new(),
+            ),
+        };
     source.blend_file == blend_file
         && source.sha256 == sha256
         && source.texture_root == texture_root
+        && source.microdetail_root == microdetail_root
+        && source.audited_non_marker_properties == non_marker_properties
         && source.source_url == "https://eem.foo/geneforge/"
         && source.author == "Eem Foo"
         && source.license == "MIT"
@@ -1513,6 +1612,8 @@ mod tests {
                     sha256: "B6E5C1BC0E0EC69995748B211F45EFF787B9162DBC4856A1AB7F48F3E610FB4A"
                         .into(),
                     texture_root: "Norn/Blueberry Norns Example/Geneforge Textures".into(),
+                    microdetail_root: "Norn/Alpha Textures".into(),
+                    audited_non_marker_properties: BTreeMap::new(),
                     source_url: "https://eem.foo/geneforge/".into(),
                     author: "Eem Foo".into(),
                     license: "MIT".into(),
@@ -1524,6 +1625,11 @@ mod tests {
                     sha256: "CC1D2AA1D310BCEA3D39FE495BF756A9B3650ECF0F3C9EEE8AC8488609202B0B"
                         .into(),
                     texture_root: "Ettin/Teal Ettin Textures".into(),
+                    microdetail_root: "Ettin/Alpha Textures".into(),
+                    audited_non_marker_properties: BTreeMap::from([(
+                        "head1_Ettin_angry".into(),
+                        0,
+                    )]),
                     source_url: "https://eem.foo/geneforge/".into(),
                     author: "Eem Foo".into(),
                     license: "MIT".into(),
@@ -1535,6 +1641,8 @@ mod tests {
                     sha256: "3289BBD6D7CAEDF7CCA44175E63B60B4140D26EE2E86CCAD7A89FA8724132E62"
                         .into(),
                     texture_root: "Grendel/Purple Grendels Textures".into(),
+                    microdetail_root: "Grendel/Alpha Textures".into(),
+                    audited_non_marker_properties: BTreeMap::new(),
                     source_url: "https://eem.foo/geneforge/".into(),
                     author: "Eem Foo".into(),
                     license: "MIT".into(),
@@ -1542,10 +1650,10 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(catalog.importer_version, "alife.geneforge_importer.v1");
+        assert_eq!(catalog.importer_version, "alife.geneforge_importer.v2");
         assert_eq!(
             catalog.recipe_sha256,
-            "f26b1be2d9537aeaec7742eebb2dd663b41ef87a46281a1c077ddd68fe7d09a5"
+            "9f871b3716a1c32a5a6d998b7a5cb64a395e1ca8fb84566dc944f848c3ac5da9"
         );
 
         for asset in &catalog.part_assets {
