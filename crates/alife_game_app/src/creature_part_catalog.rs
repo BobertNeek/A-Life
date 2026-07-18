@@ -1342,6 +1342,7 @@ fn validate_anatomy_authoring(asset: &GeneForgePartAssetDefinition) -> Result<()
 }
 
 fn valid_anatomy_shape(shape: &GeneForgeAnatomyShape) -> bool {
+    const POLYGON_AREA_EPSILON: f32 = 1.0e-6;
     let unit = |value: f32| value.is_finite() && (0.0..=1.0).contains(&value);
     match shape {
         GeneForgeAnatomyShape::Ellipse { center, radius } => {
@@ -1350,9 +1351,78 @@ fn valid_anatomy_shape(shape: &GeneForgeAnatomyShape) -> bool {
                 && radius.iter().all(|value| *value > 0.0)
         }
         GeneForgeAnatomyShape::Polygon { points } => {
-            points.len() >= 3 && points.iter().flatten().copied().all(unit)
+            points.len() >= 3
+                && points.iter().flatten().copied().all(unit)
+                && points
+                    .iter()
+                    .enumerate()
+                    .all(|(index, point)| !points[..index].contains(point))
+                && points.iter().enumerate().all(|(index, start)| {
+                    let end = points[(index + 1) % points.len()];
+                    let dx = end[0] - start[0];
+                    let dy = end[1] - start[1];
+                    dx * dx + dy * dy > POLYGON_AREA_EPSILON * POLYGON_AREA_EPSILON
+                })
+                && !(0..points.len()).any(|first| {
+                    let first_next = (first + 1) % points.len();
+                    ((first + 1)..points.len()).any(|second| {
+                        let second_next = (second + 1) % points.len();
+                        ![second, second_next].contains(&first)
+                            && ![second, second_next].contains(&first_next)
+                            && anatomy_segments_intersect(
+                                points[first],
+                                points[first_next],
+                                points[second],
+                                points[second_next],
+                                POLYGON_AREA_EPSILON,
+                            )
+                    })
+                })
+                // Smaller normalized-UV areas are not raster-stable at 64x64.
+                && points
+                    .iter()
+                    .enumerate()
+                    .map(|(index, start)| {
+                        let end = points[(index + 1) % points.len()];
+                        start[0] * end[1] - end[0] * start[1]
+                    })
+                    .sum::<f32>()
+                    .abs()
+                    * 0.5
+                    > POLYGON_AREA_EPSILON
         }
     }
+}
+
+fn anatomy_segments_intersect(
+    a: [f32; 2],
+    b: [f32; 2],
+    c: [f32; 2],
+    d: [f32; 2],
+    epsilon: f32,
+) -> bool {
+    let orientation = |p: [f32; 2], q: [f32; 2], r: [f32; 2]| {
+        (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+    };
+    let on_segment = |p: [f32; 2], q: [f32; 2], r: [f32; 2]| {
+        q[0] >= p[0].min(r[0]) - epsilon
+            && q[0] <= p[0].max(r[0]) + epsilon
+            && q[1] >= p[1].min(r[1]) - epsilon
+            && q[1] <= p[1].max(r[1]) + epsilon
+    };
+    let values = [
+        orientation(a, b, c),
+        orientation(a, b, d),
+        orientation(c, d, a),
+        orientation(c, d, b),
+    ];
+    if (values[0] > 0.0) != (values[1] > 0.0) && (values[2] > 0.0) != (values[3] > 0.0) {
+        return true;
+    }
+    (values[0].abs() <= epsilon && on_segment(a, c, b))
+        || (values[1].abs() <= epsilon && on_segment(a, d, b))
+        || (values[2].abs() <= epsilon && on_segment(c, a, d))
+        || (values[3].abs() <= epsilon && on_segment(c, b, d))
 }
 
 fn required_semantic_regions(
@@ -2184,6 +2254,23 @@ mod tests {
             path.validate(),
             Err(GeneForgeCatalogError::InvalidAssetLodPath { .. })
         ));
+    }
+
+    #[test]
+    fn geneforge_v2_rejects_repeated_collinear_and_self_intersecting_polygons() {
+        for points in [
+            vec![[0.1, 0.1], [0.8, 0.1], [0.1, 0.1]],
+            vec![[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]],
+            vec![[0.1, 0.1], [0.9, 0.9], [0.1, 0.9], [0.9, 0.1]],
+        ] {
+            let mut catalog = load_geneforge_creature_part_catalog().unwrap();
+            catalog.part_assets[0].anatomy_authoring.zones[0].shape =
+                GeneForgeAnatomyShape::Polygon { points };
+            assert!(matches!(
+                catalog.validate(),
+                Err(GeneForgeCatalogError::InvalidAsset { .. })
+            ));
+        }
     }
 
     #[test]

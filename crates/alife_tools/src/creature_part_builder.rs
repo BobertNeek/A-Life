@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Component, Path};
+use std::io::Cursor;
+use std::path::{Component, Path, PathBuf};
 
 use alife_game_app::{
     CreaturePartFamilyDefinition, CreaturePartLodId, CreaturePartSlot, CutPlane, CutVolume,
@@ -8,6 +9,7 @@ use alife_game_app::{
     GeneForgePartAssetDefinition, SocketFrame,
 };
 use alife_world::CreaturePartSlotKey;
+use image::ImageDecoder;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -132,7 +134,16 @@ struct GeneForgeBuildReceipt {
     asset_count: usize,
     lods: Vec<String>,
     worker_execution: GeneForgeWorkerExecution,
+    sources: Vec<GeneForgeSourceBuildReceipt>,
     outputs: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeneForgeSourceBuildReceipt {
+    donor: String,
+    asset_count: usize,
+    output_count: usize,
+    outputs: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -317,6 +328,18 @@ pub fn validate_geneforge_staging(
     recipe_path: &Path,
 ) -> Result<GeneForgeStagingValidation, CreaturePartBuilderError> {
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let canonical_staging_root = fs::canonicalize(staging_root).map_err(|error| {
+        fail(format!(
+            "failed canonicalizing staging root {}: {error}",
+            staging_root.display()
+        ))
+    })?;
+    if !canonical_staging_root.is_dir() {
+        return Err(fail(format!(
+            "staging root is not a directory: {}",
+            staging_root.display()
+        )));
+    }
     let recipe_text = fs::read_to_string(recipe_path).map_err(|error| {
         fail(format!(
             "failed reading external GeneForge recipe {}: {error}",
@@ -355,7 +378,11 @@ pub fn validate_geneforge_staging(
     let mut mask_contracts = BTreeMap::new();
     let mut anatomy_contracts = BTreeMap::new();
     let mut output_digest_contracts = BTreeMap::new();
+    let mut source_output_contracts = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut source_asset_counts = BTreeMap::<String, usize>::new();
     for (asset_index, asset) in catalog.part_assets.iter().enumerate() {
+        let donor = donor_name(asset.donor).to_string();
+        *source_asset_counts.entry(donor.clone()).or_default() += 1;
         if asset.lods.len() != 3 {
             return Err(fail(format!(
                 "asset {} does not declare three LODs",
@@ -373,6 +400,10 @@ pub fn validate_geneforge_staging(
                 if !expected_outputs.insert(relative.clone()) {
                     return Err(fail(format!("duplicate recipe output path {relative}")));
                 }
+                source_output_contracts
+                    .entry(donor.clone())
+                    .or_default()
+                    .insert(relative.clone());
             }
             obj_contracts.insert(lod.generated_obj.clone(), (asset_index, lod_index));
             socket_contracts.insert(lod.socket_manifest.clone(), (asset_index, lod_index));
@@ -402,7 +433,8 @@ pub fn validate_geneforge_staging(
         ));
     }
 
-    let receipt_path = staging_root.join("build_receipt.json");
+    let receipt_path =
+        confined_existing_staged_path(&canonical_staging_root, "build_receipt.json")?;
     let receipt_bytes = fs::read(&receipt_path).map_err(|error| {
         fail(format!(
             "missing build receipt {}: {error}",
@@ -439,20 +471,26 @@ pub fn validate_geneforge_staging(
             "build receipt outputs do not exactly match the external recipe paths".to_string(),
         ));
     }
+    validate_receipt_source_accounting(
+        &receipt,
+        &source_output_contracts,
+        &source_asset_counts,
+        &expected_outputs,
+    )?;
 
     let mut total_bytes = receipt_bytes.len() as u64;
     for relative in &expected_outputs {
-        let path = staging_root.join(relative);
-        let metadata = fs::metadata(&path).map_err(|error| {
-            let kind = if relative.ends_with("_anatomy.png") {
-                "anatomy mask"
-            } else if relative.ends_with(".png") {
-                "semantic mask"
-            } else {
-                "output"
-            };
-            fail(format!("missing {kind} {relative}: {error}"))
-        })?;
+        let kind = if relative.ends_with("_anatomy.png") {
+            "anatomy mask"
+        } else if relative.ends_with(".png") {
+            "semantic mask"
+        } else {
+            "output"
+        };
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)
+            .map_err(|error| fail(format!("missing {kind} {relative}: {error}")))?;
+        let metadata = fs::metadata(&path)
+            .map_err(|error| fail(format!("missing {kind} {relative}: {error}")))?;
         if metadata.len() > 512 * 1024 {
             return Err(fail(format!(
                 "output {relative} exceeds the 512 KiB per-file budget"
@@ -467,7 +505,8 @@ pub fn validate_geneforge_staging(
     }
 
     for (relative, (asset_index, _)) in &mask_contracts {
-        let bytes = fs::read(staging_root.join(relative))
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let bytes = fs::read(path)
             .map_err(|error| fail(format!("failed reading semantic mask {relative}: {error}")))?;
         let expected_colors = expected_asset_semantic_colors(&catalog.part_assets[*asset_index])?;
         validate_semantic_mask_png_bytes(relative, &bytes, &expected_colors)?;
@@ -475,12 +514,15 @@ pub fn validate_geneforge_staging(
     for (relative, (asset_index, lod_index)) in &anatomy_contracts {
         let asset = &catalog.part_assets[*asset_index];
         let semantic_relative = &asset.lods[*lod_index].semantic_mask;
-        let semantic = fs::read(staging_root.join(semantic_relative)).map_err(|error| {
+        let semantic_path =
+            confined_existing_staged_path(&canonical_staging_root, semantic_relative)?;
+        let semantic = fs::read(semantic_path).map_err(|error| {
             fail(format!(
                 "failed reading semantic mask {semantic_relative}: {error}"
             ))
         })?;
-        let anatomy = fs::read(staging_root.join(relative))
+        let anatomy_path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let anatomy = fs::read(anatomy_path)
             .map_err(|error| fail(format!("failed reading anatomy mask {relative}: {error}")))?;
         validate_anatomy_mask_png_bytes(relative, &semantic, &anatomy, asset.logical_slot)?;
     }
@@ -489,7 +531,8 @@ pub fn validate_geneforge_staging(
     for (relative, (asset_index, lod_index)) in &obj_contracts {
         let asset = &catalog.part_assets[*asset_index];
         let expected_groups = expected_asset_groups(asset);
-        let summary = validate_staged_obj(&staging_root.join(relative), &expected_groups)?;
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let summary = validate_staged_obj(&path, &expected_groups)?;
         obj_summaries.insert((*asset_index, *lod_index), summary);
     }
 
@@ -501,8 +544,8 @@ pub fn validate_geneforge_staging(
             .get(&(*asset_index, *lod_index))
             .ok_or_else(|| fail(format!("socket manifest has no matching OBJ: {relative}")))?;
         validate_staged_socket_manifest(
-            staging_root,
-            &staging_root.join(relative),
+            &canonical_staging_root,
+            &confined_existing_staged_path(&canonical_staging_root, relative)?,
             &catalog,
             asset,
             lod,
@@ -540,7 +583,8 @@ pub fn validate_geneforge_staging(
     }
 
     for (relative, expected) in &output_digest_contracts {
-        let bytes = fs::read(staging_root.join(relative)).map_err(|error| {
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let bytes = fs::read(path).map_err(|error| {
             fail(format!(
                 "failed reading {relative} for external catalog digest: {error}"
             ))
@@ -554,7 +598,8 @@ pub fn validate_geneforge_staging(
     }
 
     for (relative, expected) in &receipt.outputs {
-        let bytes = fs::read(staging_root.join(relative))
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let bytes = fs::read(path)
             .map_err(|error| fail(format!("failed reading {relative} for digest: {error}")))?;
         let actual = sha256_hex(&bytes);
         if !expected.eq_ignore_ascii_case(&actual) {
@@ -587,6 +632,109 @@ fn validate_relative_staging_path(relative: &str) -> Result<(), CreaturePartBuil
         )));
     }
     Ok(())
+}
+
+fn validate_receipt_source_accounting(
+    receipt: &GeneForgeBuildReceipt,
+    expected_by_donor: &BTreeMap<String, BTreeSet<String>>,
+    expected_asset_counts: &BTreeMap<String, usize>,
+    expected_outputs: &BTreeSet<String>,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |reason: &str| {
+        CreaturePartBuilderError::Staging(format!("receipt source accounting {reason}"))
+    };
+    if receipt.sources.len() != expected_by_donor.len() {
+        return Err(fail("has an invalid donor count"));
+    }
+    let mut donors = BTreeSet::new();
+    let mut union = BTreeSet::new();
+    for source in &receipt.sources {
+        if !donors.insert(source.donor.clone()) {
+            return Err(fail("contains a duplicate donor"));
+        }
+        let source_outputs = source.outputs.iter().cloned().collect::<BTreeSet<_>>();
+        if source_outputs.len() != source.outputs.len() {
+            return Err(fail("contains a duplicate donor-owned output path"));
+        }
+        if source.asset_count
+            != expected_asset_counts
+                .get(&source.donor)
+                .copied()
+                .unwrap_or(0)
+            || source.output_count != source.outputs.len()
+            || expected_by_donor.get(&source.donor) != Some(&source_outputs)
+        {
+            return Err(fail("does not match exact donor-owned outputs"));
+        }
+        for relative in source_outputs {
+            if !union.insert(relative) {
+                return Err(fail("duplicates an output across donors"));
+            }
+        }
+    }
+    if donors != expected_by_donor.keys().cloned().collect::<BTreeSet<_>>()
+        || union != *expected_outputs
+    {
+        return Err(fail("union does not equal the top-level output set"));
+    }
+    Ok(())
+}
+
+pub fn canonical_path_is_within(canonical_root: &Path, canonical_candidate: &Path) -> bool {
+    canonical_candidate.starts_with(canonical_root)
+}
+
+fn confined_existing_staged_path(
+    canonical_staging_root: &Path,
+    relative: &str,
+) -> Result<PathBuf, CreaturePartBuilderError> {
+    validate_relative_staging_path(relative)?;
+    let mut candidate = canonical_staging_root.to_path_buf();
+    for component in Path::new(relative).components() {
+        match component {
+            Component::CurDir => continue,
+            Component::Normal(component) => candidate.push(component),
+            _ => {
+                return Err(CreaturePartBuilderError::Staging(format!(
+                    "output path escapes staging: {relative}"
+                )))
+            }
+        }
+        let metadata = fs::symlink_metadata(&candidate).map_err(|error| {
+            CreaturePartBuilderError::Staging(format!("missing staged output {relative}: {error}"))
+        })?;
+        if metadata_is_symlink_or_reparse(&metadata) {
+            return Err(CreaturePartBuilderError::Staging(format!(
+                "staged output contains a symlink or reparse point: {relative}"
+            )));
+        }
+    }
+    let canonical = fs::canonicalize(&candidate).map_err(|error| {
+        CreaturePartBuilderError::Staging(format!(
+            "failed canonicalizing staged output {relative}: {error}"
+        ))
+    })?;
+    if !canonical_path_is_within(canonical_staging_root, &canonical) {
+        return Err(CreaturePartBuilderError::Staging(format!(
+            "staged output escapes canonical staging root: {relative}"
+        )));
+    }
+    Ok(canonical)
+}
+
+fn metadata_is_symlink_or_reparse(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    false
 }
 
 fn expected_asset_groups(asset: &GeneForgePartAssetDefinition) -> BTreeSet<String> {
@@ -988,26 +1136,14 @@ fn validate_staged_socket_manifest(
             "non-leg shared asset unexpectedly declares ground contacts".to_string(),
         ));
     }
-    let mask_relative = Path::new(&manifest.semantic_mask);
-    let anatomy_relative = Path::new(&manifest.anatomy_mask);
-    if mask_relative.is_absolute()
-        || mask_relative
-            .components()
-            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
-        || manifest.semantic_mask != lod.semantic_mask
-        || manifest.anatomy_mask != lod.anatomy_mask
-        || anatomy_relative.is_absolute()
-        || anatomy_relative
-            .components()
-            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
-        || !staging_root.join(mask_relative).is_file()
-        || !staging_root.join(anatomy_relative).is_file()
-    {
+    if manifest.semantic_mask != lod.semantic_mask || manifest.anatomy_mask != lod.anatomy_mask {
         return Err(fail(format!(
             "semantic/anatomy mask reference is missing or unsafe: {}, {}",
             manifest.semantic_mask, manifest.anatomy_mask
         )));
     }
+    confined_existing_staged_path(staging_root, &manifest.semantic_mask)?;
+    confined_existing_staged_path(staging_root, &manifest.anatomy_mask)?;
     if manifest.expected_groups != obj.groups {
         return Err(fail(
             "socket manifest semantic groups do not match the OBJ".to_string(),
@@ -1169,12 +1305,13 @@ fn validate_assembly_preparations(
                 .ok_or_else(|| {
                     fail("assembly bridge geometry target torso LOD is missing".to_string())
                 })?;
-            let bytes =
-                fs::read(staging_root.join(&torso_lod.socket_manifest)).map_err(|error| {
-                    fail(format!(
-                        "assembly bridge geometry target torso manifest is missing: {error}"
-                    ))
-                })?;
+            let torso_manifest_path =
+                confined_existing_staged_path(staging_root, &torso_lod.socket_manifest)?;
+            let bytes = fs::read(torso_manifest_path).map_err(|error| {
+                fail(format!(
+                    "assembly bridge geometry target torso manifest is missing: {error}"
+                ))
+            })?;
             Some(
                 serde_json::from_slice::<StagedSocketManifest>(&bytes).map_err(|error| {
                     fail(format!(
@@ -1423,23 +1560,425 @@ fn near(left: f64, right: f64) -> bool {
     (left - right).abs() <= 1.0e-6
 }
 
+fn decode_deterministic_rgba8_png(
+    label: &str,
+    kind: &str,
+    bytes: &[u8],
+) -> Result<Vec<u8>, CreaturePartBuilderError> {
+    const WIDTH: usize = 64;
+    const HEIGHT: usize = 64;
+    const PIXEL_BYTES: usize = WIDTH * HEIGHT * 4;
+    const FILTERED_BYTES: usize = HEIGHT * (1 + WIDTH * 4);
+    let fail =
+        |reason: String| CreaturePartBuilderError::Staging(format!("{kind} {label} {reason}"));
+    let compressed = deterministic_png_idat(bytes).map_err(&fail)?;
+    let filtered = inflate_zlib_bounded(&compressed, FILTERED_BYTES).map_err(&fail)?;
+    if filtered.len() != FILTERED_BYTES {
+        return Err(fail(format!(
+            "has invalid decoded row length: expected {FILTERED_BYTES}, found {}",
+            filtered.len()
+        )));
+    }
+    for row in 0..HEIGHT {
+        if filtered[row * (1 + WIDTH * 4)] != 0 {
+            return Err(fail("must use deterministic filter zero rows".to_string()));
+        }
+    }
+
+    let decoder = image::codecs::png::PngDecoder::new(Cursor::new(bytes))
+        .map_err(|error| fail(format!("is not a valid PNG: {error}")))?;
+    if decoder.dimensions() != (WIDTH as u32, HEIGHT as u32)
+        || decoder.color_type() != image::ColorType::Rgba8
+        || decoder.total_bytes() != PIXEL_BYTES as u64
+    {
+        return Err(fail(
+            "must be exactly 64x64 native deterministic RGBA8".to_string(),
+        ));
+    }
+    let mut pixels = vec![0; PIXEL_BYTES];
+    decoder
+        .read_image(&mut pixels)
+        .map_err(|error| fail(format!("failed native RGBA8 decode: {error}")))?;
+    if pixels.len() != PIXEL_BYTES {
+        return Err(fail("has an invalid decoded pixel length".to_string()));
+    }
+    Ok(pixels)
+}
+
+fn deterministic_png_idat(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    const SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+    if bytes.len() < SIGNATURE.len() || &bytes[..8] != SIGNATURE {
+        return Err("is not a PNG".to_string());
+    }
+    let mut offset = 8_usize;
+    let mut saw_ihdr = false;
+    let mut saw_iend = false;
+    let mut compressed = Vec::new();
+    while offset < bytes.len() {
+        if bytes.len() - offset < 12 {
+            return Err("has a truncated PNG chunk".to_string());
+        }
+        let length = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+        let chunk_end = offset
+            .checked_add(12)
+            .and_then(|value| value.checked_add(length))
+            .ok_or_else(|| "has an overflowing PNG chunk".to_string())?;
+        if chunk_end > bytes.len() {
+            return Err("has a truncated PNG chunk payload".to_string());
+        }
+        let chunk_kind = &bytes[offset + 4..offset + 8];
+        let payload = &bytes[offset + 8..offset + 8 + length];
+        match chunk_kind {
+            b"IHDR" => {
+                if saw_ihdr || length != 13 {
+                    return Err("has invalid IHDR structure".to_string());
+                }
+                saw_ihdr = true;
+                let width = u32::from_be_bytes(payload[0..4].try_into().unwrap());
+                let height = u32::from_be_bytes(payload[4..8].try_into().unwrap());
+                if width != 64 || height != 64 || payload[8..] != [8, 6, 0, 0, 0] {
+                    return Err("must be exactly 64x64 native deterministic RGBA8".to_string());
+                }
+            }
+            b"IDAT" => {
+                if !saw_ihdr {
+                    return Err("has IDAT before IHDR".to_string());
+                }
+                if compressed.len() + payload.len() > 512 * 1024 {
+                    return Err("has oversized compressed PNG data".to_string());
+                }
+                compressed.extend_from_slice(payload);
+            }
+            b"IEND" => {
+                if length != 0 {
+                    return Err("has invalid IEND structure".to_string());
+                }
+                saw_iend = true;
+                break;
+            }
+            _ => {}
+        }
+        offset = chunk_end;
+    }
+    if !saw_ihdr || !saw_iend || compressed.is_empty() {
+        return Err("is missing required PNG chunks".to_string());
+    }
+    Ok(compressed)
+}
+
+struct DeflateBitReader<'a> {
+    bytes: &'a [u8],
+    bit_offset: usize,
+}
+
+impl<'a> DeflateBitReader<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self {
+            bytes,
+            bit_offset: 0,
+        }
+    }
+
+    fn read_bits(&mut self, count: usize) -> Result<u32, String> {
+        if count > 24 || self.bit_offset + count > self.bytes.len() * 8 {
+            return Err("has truncated DEFLATE data".to_string());
+        }
+        let mut value = 0_u32;
+        for bit in 0..count {
+            let byte = self.bytes[self.bit_offset / 8];
+            value |= u32::from((byte >> (self.bit_offset % 8)) & 1) << bit;
+            self.bit_offset += 1;
+        }
+        Ok(value)
+    }
+
+    fn align_to_byte(&mut self) {
+        self.bit_offset = (self.bit_offset + 7) & !7;
+    }
+
+    fn consumed_bytes(&self) -> usize {
+        self.bit_offset.div_ceil(8)
+    }
+}
+
+struct DeflateHuffmanTree {
+    entries: Vec<(u32, u8, u16)>,
+    maximum_length: u8,
+}
+
+impl DeflateHuffmanTree {
+    fn from_lengths(lengths: &[u8]) -> Result<Self, String> {
+        let mut counts = [0_u16; 16];
+        for length in lengths {
+            if *length > 15 {
+                return Err("has an invalid DEFLATE Huffman code length".to_string());
+            }
+            counts[*length as usize] += 1;
+        }
+        counts[0] = 0;
+        if counts.iter().all(|count| *count == 0) {
+            return Err("has an empty DEFLATE Huffman tree".to_string());
+        }
+        let mut remaining = 1_i32;
+        for count in counts.iter().skip(1) {
+            remaining = (remaining << 1) - i32::from(*count);
+            if remaining < 0 {
+                return Err("has an oversubscribed DEFLATE Huffman tree".to_string());
+            }
+        }
+        let mut next_code = [0_u32; 16];
+        let mut code = 0_u32;
+        for bits in 1..=15 {
+            code = (code + u32::from(counts[bits - 1])) << 1;
+            next_code[bits] = code;
+        }
+        let mut entries = Vec::new();
+        let mut maximum_length = 0_u8;
+        for (symbol, length) in lengths.iter().copied().enumerate() {
+            if length == 0 {
+                continue;
+            }
+            let canonical = next_code[length as usize];
+            next_code[length as usize] += 1;
+            entries.push((reverse_low_bits(canonical, length), length, symbol as u16));
+            maximum_length = maximum_length.max(length);
+        }
+        Ok(Self {
+            entries,
+            maximum_length,
+        })
+    }
+
+    fn decode(&self, reader: &mut DeflateBitReader<'_>) -> Result<u16, String> {
+        let mut code = 0_u32;
+        for length in 1..=self.maximum_length {
+            code |= reader.read_bits(1)? << (length - 1);
+            if let Some((_, _, symbol)) = self
+                .entries
+                .iter()
+                .find(|(entry, entry_length, _)| *entry_length == length && *entry == code)
+            {
+                return Ok(*symbol);
+            }
+        }
+        Err("has an invalid DEFLATE Huffman symbol".to_string())
+    }
+}
+
+fn reverse_low_bits(mut value: u32, count: u8) -> u32 {
+    let mut reversed = 0_u32;
+    for _ in 0..count {
+        reversed = (reversed << 1) | (value & 1);
+        value >>= 1;
+    }
+    reversed
+}
+
+fn inflate_zlib_bounded(data: &[u8], output_limit: usize) -> Result<Vec<u8>, String> {
+    if data.len() < 6 {
+        return Err("has truncated zlib data".to_string());
+    }
+    let cmf = data[0];
+    let flags = data[1];
+    if cmf & 0x0f != 8
+        || cmf >> 4 > 7
+        || ((u16::from(cmf) << 8) | u16::from(flags)) % 31 != 0
+        || flags & 0x20 != 0
+    {
+        return Err("has an unsupported zlib header".to_string());
+    }
+    let deflate = &data[2..data.len() - 4];
+    let mut reader = DeflateBitReader::new(deflate);
+    let mut output = Vec::with_capacity(output_limit);
+    loop {
+        let final_block = reader.read_bits(1)? != 0;
+        match reader.read_bits(2)? {
+            0 => inflate_stored_block(&mut reader, &mut output, output_limit)?,
+            1 => {
+                let (literal, distance) = fixed_deflate_trees()?;
+                inflate_huffman_block(&mut reader, &literal, &distance, &mut output, output_limit)?;
+            }
+            2 => {
+                let (literal, distance) = dynamic_deflate_trees(&mut reader)?;
+                inflate_huffman_block(&mut reader, &literal, &distance, &mut output, output_limit)?;
+            }
+            _ => return Err("uses a reserved DEFLATE block type".to_string()),
+        }
+        if final_block {
+            break;
+        }
+    }
+    if reader.consumed_bytes() != deflate.len() {
+        return Err("has trailing DEFLATE bytes".to_string());
+    }
+    let expected_adler = u32::from_be_bytes(data[data.len() - 4..].try_into().unwrap());
+    if adler32_bytes(&output) != expected_adler {
+        return Err("has an invalid zlib checksum".to_string());
+    }
+    Ok(output)
+}
+
+fn inflate_stored_block(
+    reader: &mut DeflateBitReader<'_>,
+    output: &mut Vec<u8>,
+    output_limit: usize,
+) -> Result<(), String> {
+    reader.align_to_byte();
+    let length = reader.read_bits(16)? as u16;
+    let complement = reader.read_bits(16)? as u16;
+    if length != !complement {
+        return Err("has an invalid stored DEFLATE block length".to_string());
+    }
+    if output.len() + usize::from(length) > output_limit {
+        return Err("exceeds the bounded PNG decode size".to_string());
+    }
+    for _ in 0..length {
+        output.push(reader.read_bits(8)? as u8);
+    }
+    Ok(())
+}
+
+fn fixed_deflate_trees() -> Result<(DeflateHuffmanTree, DeflateHuffmanTree), String> {
+    let literal_lengths = (0..288)
+        .map(|symbol| match symbol {
+            0..=143 => 8,
+            144..=255 => 9,
+            256..=279 => 7,
+            _ => 8,
+        })
+        .collect::<Vec<_>>();
+    Ok((
+        DeflateHuffmanTree::from_lengths(&literal_lengths)?,
+        DeflateHuffmanTree::from_lengths(&[5; 32])?,
+    ))
+}
+
+fn dynamic_deflate_trees(
+    reader: &mut DeflateBitReader<'_>,
+) -> Result<(DeflateHuffmanTree, DeflateHuffmanTree), String> {
+    let literal_count = reader.read_bits(5)? as usize + 257;
+    let distance_count = reader.read_bits(5)? as usize + 1;
+    let code_length_count = reader.read_bits(4)? as usize + 4;
+    let order = [
+        16_usize, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
+    ];
+    let mut code_lengths = [0_u8; 19];
+    for index in 0..code_length_count {
+        code_lengths[order[index]] = reader.read_bits(3)? as u8;
+    }
+    let code_length_tree = DeflateHuffmanTree::from_lengths(&code_lengths)?;
+    let required = literal_count + distance_count;
+    let mut lengths = Vec::with_capacity(required);
+    while lengths.len() < required {
+        match code_length_tree.decode(reader)? {
+            symbol @ 0..=15 => lengths.push(symbol as u8),
+            16 => {
+                let previous = *lengths
+                    .last()
+                    .ok_or_else(|| "repeats a missing DEFLATE code length".to_string())?;
+                let repeat = reader.read_bits(2)? as usize + 3;
+                lengths.extend(std::iter::repeat_n(previous, repeat));
+            }
+            17 => {
+                let repeat = reader.read_bits(3)? as usize + 3;
+                lengths.extend(std::iter::repeat_n(0, repeat));
+            }
+            18 => {
+                let repeat = reader.read_bits(7)? as usize + 11;
+                lengths.extend(std::iter::repeat_n(0, repeat));
+            }
+            _ => return Err("has an invalid DEFLATE code-length symbol".to_string()),
+        }
+        if lengths.len() > required {
+            return Err("has overflowing DEFLATE code lengths".to_string());
+        }
+    }
+    if lengths.get(256).copied().unwrap_or(0) == 0 {
+        return Err("has no DEFLATE end-of-block symbol".to_string());
+    }
+    let distance_lengths = lengths.split_off(literal_count);
+    Ok((
+        DeflateHuffmanTree::from_lengths(&lengths)?,
+        DeflateHuffmanTree::from_lengths(&distance_lengths)?,
+    ))
+}
+
+fn inflate_huffman_block(
+    reader: &mut DeflateBitReader<'_>,
+    literal_tree: &DeflateHuffmanTree,
+    distance_tree: &DeflateHuffmanTree,
+    output: &mut Vec<u8>,
+    output_limit: usize,
+) -> Result<(), String> {
+    const LENGTH_BASE: [usize; 29] = [
+        3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115,
+        131, 163, 195, 227, 258,
+    ];
+    const LENGTH_EXTRA: [usize; 29] = [
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
+    ];
+    const DISTANCE_BASE: [usize; 30] = [
+        1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537,
+        2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
+    ];
+    const DISTANCE_EXTRA: [usize; 30] = [
+        0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12,
+        13, 13,
+    ];
+    loop {
+        let symbol = literal_tree.decode(reader)?;
+        match symbol {
+            0..=255 => {
+                if output.len() == output_limit {
+                    return Err("exceeds the bounded PNG decode size".to_string());
+                }
+                output.push(symbol as u8);
+            }
+            256 => return Ok(()),
+            257..=285 => {
+                let length_index = usize::from(symbol - 257);
+                let length = LENGTH_BASE[length_index]
+                    + reader.read_bits(LENGTH_EXTRA[length_index])? as usize;
+                let distance_symbol = distance_tree.decode(reader)? as usize;
+                if distance_symbol >= DISTANCE_BASE.len() {
+                    return Err("has an invalid DEFLATE distance symbol".to_string());
+                }
+                let distance = DISTANCE_BASE[distance_symbol]
+                    + reader.read_bits(DISTANCE_EXTRA[distance_symbol])? as usize;
+                if distance == 0 || distance > output.len() || output.len() + length > output_limit
+                {
+                    return Err("has an invalid bounded DEFLATE back-reference".to_string());
+                }
+                for _ in 0..length {
+                    let value = output[output.len() - distance];
+                    output.push(value);
+                }
+            }
+            _ => return Err("has a reserved DEFLATE length symbol".to_string()),
+        }
+    }
+}
+
+fn adler32_bytes(bytes: &[u8]) -> u32 {
+    let mut a = 1_u32;
+    let mut b = 0_u32;
+    for byte in bytes {
+        a = (a + u32::from(*byte)) % 65_521;
+        b = (b + a) % 65_521;
+    }
+    (b << 16) | a
+}
+
 fn validate_semantic_mask_png_bytes(
     label: &str,
     bytes: &[u8],
     expected_colors: &BTreeSet<[u8; 3]>,
 ) -> Result<(), CreaturePartBuilderError> {
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
-    let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
-        .map_err(|error| fail(format!("semantic mask {label} is not a valid PNG: {error}")))?
-        .to_rgba8();
-    if image.dimensions() != (64, 64) {
-        return Err(fail(format!(
-            "semantic mask {label} must be exactly 64x64 RGBA8"
-        )));
-    }
+    let pixels = decode_deterministic_rgba8_png(label, "semantic mask", bytes)?;
     let mut semantic_colors = BTreeSet::new();
     let mut microdetail = BTreeSet::new();
-    for pixel in image.pixels() {
+    for pixel in pixels.chunks_exact(4) {
         if pixel[3] == 0 {
             continue;
         }
@@ -1466,31 +2005,22 @@ fn validate_anatomy_mask_png_bytes(
     logical_slot: CreaturePartSlotKey,
 ) -> Result<(), CreaturePartBuilderError> {
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
-    let semantic = image::load_from_memory_with_format(semantic_bytes, image::ImageFormat::Png)
-        .map_err(|error| {
-            fail(format!(
-                "semantic mask paired with {label} is invalid: {error}"
-            ))
-        })?
-        .to_rgba8();
-    let anatomy = image::load_from_memory_with_format(anatomy_bytes, image::ImageFormat::Png)
-        .map_err(|error| fail(format!("anatomy mask {label} is not a valid PNG: {error}")))?
-        .to_rgba8();
-    if semantic.dimensions() != (64, 64) || anatomy.dimensions() != (64, 64) {
-        return Err(fail(format!(
-            "anatomy mask {label} and its semantic mask must be exactly 64x64 RGBA8"
-        )));
-    }
+    let semantic = decode_deterministic_rgba8_png(
+        label,
+        "semantic mask paired with anatomy mask",
+        semantic_bytes,
+    )?;
+    let anatomy = decode_deterministic_rgba8_png(label, "anatomy mask", anatomy_bytes)?;
     let (required, allowed) = anatomy_channels_for_slot(logical_slot);
     let mut used = BTreeSet::new();
-    for (semantic_pixel, anatomy_pixel) in semantic.pixels().zip(anatomy.pixels()) {
+    for (semantic_pixel, anatomy_pixel) in semantic.chunks_exact(4).zip(anatomy.chunks_exact(4)) {
         if (semantic_pixel[3] > 0) != (anatomy_pixel[3] > 0) {
             return Err(fail(format!(
                 "anatomy mask {label} occupancy does not match its semantic mask"
             )));
         }
         if anatomy_pixel[3] == 0 {
-            if anatomy_pixel.0 != [0, 0, 0, 0] {
+            if anatomy_pixel != [0, 0, 0, 0] {
                 return Err(fail(format!(
                     "anatomy mask {label} has a nonzero transparent pixel"
                 )));
@@ -2483,13 +3013,12 @@ fn scale(vector: [f64; 3], scalar: f64) -> [f64; 3] {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-
     use alife_game_app::{
         load_geneforge_creature_part_catalog, load_production_creature_part_catalog,
         CreaturePartLodId,
     };
-    use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+    use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+    use image::{ExtendedColorType, ImageEncoder, Rgba, RgbaImage};
 
     use super::*;
 
@@ -2674,15 +3203,11 @@ f 22/1/1 23/2/1 24/3/1
     #[test]
     fn creature_part_builder_mask_contract_rejects_uniform_microdetail() {
         let image = RgbaImage::from_pixel(64, 64, Rgba([230, 92, 88, 127]));
-        let mut bytes = Cursor::new(Vec::new());
-        DynamicImage::ImageRgba8(image)
-            .write_to(&mut bytes, ImageFormat::Png)
-            .unwrap();
+        let bytes = deterministic_test_png(&image);
 
         let expected_colors = BTreeSet::from([[230, 92, 88]]);
         let error =
-            validate_semantic_mask_png_bytes("uniform.png", bytes.get_ref(), &expected_colors)
-                .unwrap_err();
+            validate_semantic_mask_png_bytes("uniform.png", &bytes, &expected_colors).unwrap_err();
         assert!(error.to_string().contains("microdetail"));
     }
 
@@ -2698,19 +3223,25 @@ f 22/1/1 23/2/1 24/3/1
             let color = colors[(y as usize / 16).min(colors.len() - 1)];
             Rgba([color[0], color[1], color[2], 32 + ((x + y) % 192) as u8])
         });
-        let mut bytes = Cursor::new(Vec::new());
-        DynamicImage::ImageRgba8(image)
-            .write_to(&mut bytes, ImageFormat::Png)
-            .unwrap();
+        let bytes = deterministic_test_png(&image);
 
         let expected_colors = BTreeSet::from([[64, 166, 184]]);
-        let error = validate_semantic_mask_png_bytes(
-            "torso-stripes.png",
-            bytes.get_ref(),
-            &expected_colors,
-        )
-        .unwrap_err();
+        let error = validate_semantic_mask_png_bytes("torso-stripes.png", &bytes, &expected_colors)
+            .unwrap_err();
         assert!(error.to_string().contains("semantic colors"));
+    }
+
+    fn deterministic_test_png(image: &RgbaImage) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        PngEncoder::new_with_quality(&mut bytes, CompressionType::Best, FilterType::NoFilter)
+            .write_image(
+                image.as_raw(),
+                image.width(),
+                image.height(),
+                ExtendedColorType::Rgba8,
+            )
+            .unwrap();
+        bytes
     }
 
     #[test]

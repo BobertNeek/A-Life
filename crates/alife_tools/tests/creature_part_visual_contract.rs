@@ -1,10 +1,11 @@
 use std::fs;
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use alife_tools::creature_part_builder::{sha256_hex, validate_geneforge_staging};
-use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+use alife_tools::creature_part_builder::{
+    canonical_path_is_within, sha256_hex, validate_geneforge_staging,
+};
+use image::{Rgba, RgbaImage};
 use serde_json::Value;
 
 fn workspace_path(relative: &str) -> PathBuf {
@@ -338,11 +339,7 @@ fn staged_validator_rejects_missing_masks_and_budget_overrun() {
             pixel[3] = 127;
         }
     }
-    let mut bytes = Cursor::new(Vec::new());
-    DynamicImage::ImageRgba8(image)
-        .write_to(&mut bytes, ImageFormat::Png)
-        .unwrap();
-    fs::write(mask, bytes.into_inner()).unwrap();
+    write_test_rgba_png(&mask, &image, 0);
     assert_rejected(&root, "microdetail");
 
     let root = mutation_root("budget");
@@ -367,7 +364,7 @@ fn staged_validator_rejects_anatomy_corruption_path_and_digest_drift() {
     let mut image = image::open(&anatomy).unwrap().to_rgba8();
     let pixel = image.pixels_mut().find(|pixel| pixel[3] > 0).unwrap();
     pixel.0 = [1, 2, 3, pixel[3]];
-    image.save(&anatomy).unwrap();
+    write_test_rgba_png(&anatomy, &image, 0);
     assert_rejected(&root, "unknown channel color");
 
     let root = mutation_root("anatomy-source-ownership");
@@ -376,7 +373,7 @@ fn staged_validator_rejects_anatomy_corruption_path_and_digest_drift() {
     let mut image = image::open(&anatomy).unwrap().to_rgba8();
     let pixel = image.pixels_mut().find(|pixel| pixel[3] > 0).unwrap();
     pixel.0 = [226, 112, 128, pixel[3]];
-    image.save(&anatomy).unwrap();
+    write_test_rgba_png(&anatomy, &image, 0);
     assert_rejected(&root, "source channel ownership");
 
     let root = mutation_root("anatomy-required-coverage");
@@ -388,7 +385,7 @@ fn staged_validator_rejects_anatomy_corruption_path_and_digest_drift() {
             pixel.0[..3].copy_from_slice(&[248, 248, 248]);
         }
     }
-    image.save(&anatomy).unwrap();
+    write_test_rgba_png(&anatomy, &image, 0);
     assert_rejected(&root, "required source channel coverage");
 
     let root = mutation_root("anatomy-occupancy");
@@ -397,7 +394,7 @@ fn staged_validator_rejects_anatomy_corruption_path_and_digest_drift() {
     let mut image = image::open(&anatomy).unwrap().to_rgba8();
     let pixel = image.pixels_mut().find(|pixel| pixel[3] > 0).unwrap();
     pixel.0 = [0, 0, 0, 0];
-    image.save(&anatomy).unwrap();
+    write_test_rgba_png(&anatomy, &image, 0);
     assert_rejected(&root, "occupancy");
 
     let root = mutation_root("anatomy-socket-path");
@@ -413,7 +410,7 @@ fn staged_validator_rejects_anatomy_corruption_path_and_digest_drift() {
     let mut image = image::open(&anatomy).unwrap().to_rgba8();
     let pixel = image.pixels_mut().find(|pixel| pixel[3] > 0).unwrap();
     pixel[3] = pixel[3].saturating_sub(1).max(1);
-    image.save(&anatomy).unwrap();
+    write_test_rgba_png(&anatomy, &image, 0);
     rewrite_receipt_digest(&root, &anatomy);
     assert_rejected(&root, "external catalog digest drift");
 
@@ -504,11 +501,7 @@ fn staged_validator_rejects_component_loss_and_asset_independent_mask_colors() {
         let color = colors[(y as usize / 16).min(colors.len() - 1)];
         Rgba([color[0], color[1], color[2], 32 + ((x + y) % 192) as u8])
     });
-    let mut bytes = Cursor::new(Vec::new());
-    DynamicImage::ImageRgba8(image)
-        .write_to(&mut bytes, ImageFormat::Png)
-        .unwrap();
-    fs::write(mask, bytes.into_inner()).unwrap();
+    write_test_rgba_png(&mask, &image, 0);
     assert_rejected(&root, "semantic colors");
 }
 
@@ -624,6 +617,84 @@ fn staged_validator_binds_external_recipe_sources_importer_and_assembly_metadata
     );
 }
 
+#[test]
+fn staged_validator_binds_each_receipt_source_to_its_exact_donor_outputs() {
+    assert_receipt_source_mutation_rejected("source-stale-count", |receipt| {
+        receipt["sources"][0]["asset_count"] = serde_json::json!(999);
+    });
+    assert_receipt_source_mutation_rejected("source-missing-path", |receipt| {
+        receipt["sources"][0]["outputs"]
+            .as_array_mut()
+            .unwrap()
+            .pop();
+        let count = receipt["sources"][0]["output_count"].as_u64().unwrap();
+        receipt["sources"][0]["output_count"] = serde_json::json!(count - 1);
+    });
+    assert_receipt_source_mutation_rejected("source-wrong-donor", |receipt| {
+        let donor = receipt["sources"][1]["donor"].clone();
+        receipt["sources"][0]["donor"] = donor;
+    });
+    assert_receipt_source_mutation_rejected("source-duplicate-path", |receipt| {
+        let duplicate = receipt["sources"][0]["outputs"][0].clone();
+        receipt["sources"][0]["outputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(duplicate);
+        let count = receipt["sources"][0]["output_count"].as_u64().unwrap();
+        receipt["sources"][0]["output_count"] = serde_json::json!(count + 1);
+    });
+    assert_receipt_source_mutation_rejected("source-union-drift", |receipt| {
+        let wrong = receipt["sources"][1]["outputs"][0].clone();
+        receipt["sources"][0]["outputs"][0] = wrong;
+    });
+}
+
+#[test]
+fn staged_validator_requires_native_rgba8_and_filter_zero_png_rows() {
+    for (name, color_type, filter) in [
+        ("semantic-rgb", 2_u8, 0_u8),
+        ("semantic-indexed", 3_u8, 0_u8),
+        ("semantic-grayscale", 0_u8, 0_u8),
+        ("semantic-filter-sub", 6_u8, 1_u8),
+    ] {
+        let root = mutation_root(name);
+        copy_tree(&fixture_staging(), &root);
+        let mask = first_named_output(&root, "_semantic.png");
+        let rgba = image::open(&mask).unwrap().to_rgba8().into_raw();
+        fs::write(&mask, test_png_bytes(64, 64, color_type, filter, &rgba)).unwrap();
+        rewrite_receipt_digest(&root, &mask);
+        let expected = if filter == 0 {
+            "deterministic RGBA8"
+        } else {
+            "filter zero"
+        };
+        assert_rejected(&root, expected);
+    }
+}
+
+#[test]
+fn staged_validator_rejects_symlink_or_reparse_output_escape() {
+    let root = mutation_root("symlink-output-escape");
+    copy_tree(&fixture_staging(), &root);
+    let staged_output = first_named_output(&root, "_anatomy.png");
+    let external_root = mutation_root("symlink-output-external");
+    fs::create_dir_all(&external_root).unwrap();
+    let external = external_root.join("outside.png");
+    fs::copy(&staged_output, &external).unwrap();
+    let external_before = fs::read(&external).unwrap();
+    assert!(!canonical_path_is_within(
+        &fs::canonicalize(&root).unwrap(),
+        &fs::canonicalize(&external).unwrap(),
+    ));
+
+    fs::remove_file(&staged_output).unwrap();
+    if create_file_symlink(&external, &staged_output).is_err() {
+        return;
+    }
+    assert_rejected(&root, "symlink or reparse");
+    assert_eq!(fs::read(&external).unwrap(), external_before);
+}
+
 fn write_recipe_with_canonical_digest(path: &Path, mut recipe: Value) -> String {
     recipe["recipe_sha256"] = serde_json::json!("0".repeat(64));
     let digest = sha256_hex(&serde_json::to_vec(&recipe).unwrap());
@@ -642,6 +713,121 @@ fn rewrite_receipt_digest(root: &Path, changed: &Path) {
         .replace('\\', "/");
     receipt["outputs"][relative] = serde_json::json!(sha256_hex(&fs::read(changed).unwrap()));
     fs::write(receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+}
+
+fn assert_receipt_source_mutation_rejected(name: &str, mutation: impl FnOnce(&mut Value)) {
+    let root = mutation_root(name);
+    copy_tree(&fixture_staging(), &root);
+    let receipt_path = root.join("build_receipt.json");
+    let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    mutation(&mut receipt);
+    fs::write(receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+    assert_rejected(&root, "receipt source accounting");
+}
+
+fn test_png_bytes(width: u32, height: u32, color_type: u8, filter: u8, rgba: &[u8]) -> Vec<u8> {
+    let channels = match color_type {
+        0 | 3 => 1,
+        2 => 3,
+        6 => 4,
+        _ => unreachable!(),
+    };
+    let mut rows = Vec::with_capacity(height as usize * (1 + width as usize * channels));
+    for y in 0..height as usize {
+        rows.push(filter);
+        let mut unfiltered = Vec::with_capacity(width as usize * channels);
+        for x in 0..width as usize {
+            let source = (y * width as usize + x) * 4;
+            match color_type {
+                0 => unfiltered.push(rgba[source]),
+                2 => unfiltered.extend_from_slice(&rgba[source..source + 3]),
+                3 => unfiltered.push(0),
+                6 => unfiltered.extend_from_slice(&rgba[source..source + 4]),
+                _ => unreachable!(),
+            }
+        }
+        if filter == 1 {
+            for index in (0..unfiltered.len()).rev() {
+                let left = index
+                    .checked_sub(channels)
+                    .map_or(0, |left_index| unfiltered[left_index]);
+                unfiltered[index] = unfiltered[index].wrapping_sub(left);
+            }
+        }
+        rows.extend_from_slice(&unfiltered);
+    }
+
+    let mut output = b"\x89PNG\r\n\x1a\n".to_vec();
+    let mut ihdr = Vec::with_capacity(13);
+    ihdr.extend_from_slice(&width.to_be_bytes());
+    ihdr.extend_from_slice(&height.to_be_bytes());
+    ihdr.extend_from_slice(&[8, color_type, 0, 0, 0]);
+    append_png_chunk(&mut output, b"IHDR", &ihdr);
+    if color_type == 3 {
+        append_png_chunk(&mut output, b"PLTE", &[0, 0, 0]);
+    }
+    append_png_chunk(&mut output, b"IDAT", &stored_zlib(&rows));
+    append_png_chunk(&mut output, b"IEND", &[]);
+    output
+}
+
+fn write_test_rgba_png(path: &Path, image: &RgbaImage, filter: u8) {
+    fs::write(
+        path,
+        test_png_bytes(image.width(), image.height(), 6, filter, image.as_raw()),
+    )
+    .unwrap();
+}
+
+fn append_png_chunk(output: &mut Vec<u8>, kind: &[u8; 4], payload: &[u8]) {
+    output.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+    output.extend_from_slice(kind);
+    output.extend_from_slice(payload);
+    let mut crc_input = kind.to_vec();
+    crc_input.extend_from_slice(payload);
+    output.extend_from_slice(&crc32(&crc_input).to_be_bytes());
+}
+
+fn stored_zlib(bytes: &[u8]) -> Vec<u8> {
+    assert!(bytes.len() <= u16::MAX as usize);
+    let length = bytes.len() as u16;
+    let mut output = vec![0x78, 0x01, 0x01];
+    output.extend_from_slice(&length.to_le_bytes());
+    output.extend_from_slice(&(!length).to_le_bytes());
+    output.extend_from_slice(bytes);
+    output.extend_from_slice(&adler32(bytes).to_be_bytes());
+    output
+}
+
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xedb8_8320 & 0_u32.wrapping_sub(crc & 1));
+        }
+    }
+    !crc
+}
+
+fn adler32(bytes: &[u8]) -> u32 {
+    let mut a = 1_u32;
+    let mut b = 0_u32;
+    for byte in bytes {
+        a = (a + u32::from(*byte)) % 65_521;
+        b = (b + a) % 65_521;
+    }
+    (b << 16) | a
+}
+
+#[cfg(unix)]
+fn create_file_symlink(source: &Path, destination: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(source, destination)
+}
+
+#[cfg(windows)]
+fn create_file_symlink(source: &Path, destination: &Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_file(source, destination)
 }
 
 fn rewrite_all_receipt_digests(root: &Path) {

@@ -328,6 +328,9 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
             ("unknown semantic group", lambda zone: zone.update({"semantic_groups": ["unknown"]})),
             ("not owned", lambda zone: zone.update({"channel": "belly"})),
             ("unknown shape", lambda zone: zone.update({"shape": {"kind": "rectangle"}})),
+            ("degenerate polygon", lambda zone: zone.update({"shape": {"kind": "polygon", "points": [[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]]}})),
+            ("degenerate polygon", lambda zone: zone.update({"shape": {"kind": "polygon", "points": [[0.1, 0.1], [0.8, 0.1], [0.1, 0.1]]}})),
+            ("self-intersecting polygon", lambda zone: zone.update({"shape": {"kind": "polygon", "points": [[0.1, 0.1], [0.9, 0.9], [0.1, 0.9], [0.9, 0.1]]}})),
         )
         for expected, mutation in mutations:
             candidate = json.loads(json.dumps(asset))
@@ -335,6 +338,119 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 with self.assertRaisesRegex(importer.ImportFailure, expected):
                     importer.validate_anatomy_authoring(candidate)
+
+    def test_augmented_tree_requires_both_mask_dimensions_to_be_64(self) -> None:
+        source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        for width, height in ((64, 63), (63, 64)):
+            staging = TEST_OUTPUT / f"augment-rectangular-mask-{width}x{height}"
+            if staging.exists():
+                shutil.rmtree(staging)
+            shutil.copytree(source, staging)
+            recipe = json.loads(json.dumps(self.recipe))
+            lod = recipe["part_assets"][0]["lods"][0]
+            for field in ("semantic_mask", "anatomy_mask"):
+                path = staging / lod[field]
+                original_width, original_height, pixels = importer.decode_rgba_png(
+                    path.read_bytes()
+                )
+                self.assertEqual((original_width, original_height), (64, 64))
+                resized = bytearray(width * height * 4)
+                for row in range(height):
+                    source_row = min(row, original_height - 1)
+                    copied_width = min(width, original_width)
+                    resized[row * width * 4 : (row * width + copied_width) * 4] = pixels[
+                        source_row * original_width * 4 : (source_row * original_width + copied_width) * 4
+                    ]
+                path.write_bytes(importer.png_bytes(width, height, bytes(resized)))
+            with self.subTest(dimensions=(width, height)):
+                with self.assertRaisesRegex(importer.ImportFailure, "64x64"):
+                    importer._validate_augmented_tree(staging, recipe)
+
+    def test_receipt_sources_are_exactly_bound_to_donor_owned_outputs(self) -> None:
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        receipt = json.loads((staging / "build_receipt.json").read_text(encoding="utf-8"))
+
+        def stale_count(candidate: dict) -> None:
+            candidate["sources"][0]["asset_count"] += 1
+
+        def missing_path(candidate: dict) -> None:
+            candidate["sources"][0]["outputs"].pop()
+            candidate["sources"][0]["output_count"] -= 1
+
+        def wrong_donor(candidate: dict) -> None:
+            candidate["sources"][0]["donor"] = candidate["sources"][1]["donor"]
+
+        def duplicate_path(candidate: dict) -> None:
+            candidate["sources"][0]["outputs"].append(candidate["sources"][0]["outputs"][0])
+            candidate["sources"][0]["output_count"] += 1
+
+        def union_drift(candidate: dict) -> None:
+            candidate["sources"][0]["outputs"][0] = candidate["sources"][1]["outputs"][0]
+
+        for label, mutation in (
+            ("stale count", stale_count),
+            ("missing path", missing_path),
+            ("wrong donor", wrong_donor),
+            ("duplicate path", duplicate_path),
+            ("union drift", union_drift),
+        ):
+            candidate = json.loads(json.dumps(receipt))
+            mutation(candidate)
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(importer.ImportFailure, "receipt source accounting"):
+                    importer._verify_receipt_outputs(staging, candidate, self.recipe)
+
+    def test_legacy_126_output_receipt_uses_the_same_source_accounting_contract(self) -> None:
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        receipt = json.loads((staging / "build_receipt.json").read_text(encoding="utf-8"))
+        anatomy_paths = {
+            lod["anatomy_mask"]
+            for asset in self.recipe["part_assets"]
+            for lod in asset["lods"]
+        }
+        receipt["outputs"] = {
+            path: digest
+            for path, digest in receipt["outputs"].items()
+            if path not in anatomy_paths
+        }
+        for source in receipt["sources"]:
+            source["outputs"] = [
+                path for path in source["outputs"] if path not in anatomy_paths
+            ]
+            source["output_count"] = len(source["outputs"])
+        self.assertFalse(importer._verify_receipt_outputs(staging, receipt, self.recipe))
+
+        receipt["sources"][0]["output_count"] += 1
+        with self.assertRaisesRegex(importer.ImportFailure, "receipt source accounting"):
+            importer._verify_receipt_outputs(staging, receipt, self.recipe)
+
+    def test_staging_containment_helpers_reject_external_and_reparse_paths(self) -> None:
+        root = TEST_OUTPUT / "containment-root"
+        external = TEST_OUTPUT / "containment-external"
+        shutil.rmtree(root, ignore_errors=True)
+        shutil.rmtree(external, ignore_errors=True)
+        root.mkdir(parents=True)
+        external.mkdir(parents=True)
+        external_file = external / "outside.bin"
+        external_file.write_bytes(b"outside remains unchanged")
+        self.assertFalse(
+            importer.canonical_path_is_within(root.resolve(), external_file.resolve())
+        )
+
+        linked_file = root / "linked.bin"
+        linked_directory = root / "linked-directory"
+        try:
+            os.symlink(external_file, linked_file)
+            os.symlink(external, linked_directory, target_is_directory=True)
+        except OSError:
+            return
+
+        with self.assertRaisesRegex(importer.ImportFailure, "symlink|reparse"):
+            importer.confined_existing_staged_path(root, "linked.bin", "test output")
+        with self.assertRaisesRegex(importer.ImportFailure, "symlink|reparse"):
+            importer.staged_output_path(root, "linked-directory/new.bin")
+        self.assertEqual(external_file.read_bytes(), b"outside remains unchanged")
+        self.assertFalse((external / "new.bin").exists())
 
     def test_zone_change_changes_only_anatomy_output(self) -> None:
         staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
@@ -916,6 +1032,55 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("exactly 126 legacy or 168 augmented outputs", completed.stderr)
         self.assertEqual(before, tree_digest(staging))
+
+    def test_augment_rejects_64x63_semantic_without_mutating_staging_or_recipe(self) -> None:
+        source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        staging = TEST_OUTPUT / "augment-rectangular-no-mutation"
+        if staging.exists():
+            shutil.rmtree(staging)
+        shutil.copytree(source, staging)
+        recipe_path = TEST_OUTPUT / "augment-rectangular-recipes.json"
+        recipe = json.loads(RECIPE_PATH.read_text(encoding="utf-8"))
+        lod = recipe["part_assets"][0]["lods"][0]
+        semantic_path = staging / lod["semantic_mask"]
+        width, height, pixels = importer.decode_rgba_png(semantic_path.read_bytes())
+        self.assertEqual((width, height), (64, 64))
+        semantic_path.write_bytes(importer.png_bytes(64, 63, pixels[: 64 * 63 * 4]))
+        semantic_digest = hashlib.sha256(semantic_path.read_bytes()).hexdigest()
+        lod["semantic_mask_sha256"] = semantic_digest
+        recipe["recipe_sha256"] = canonical_recipe_digest(recipe)
+        recipe_path.write_text(json.dumps(recipe, indent=2) + "\n", encoding="utf-8")
+
+        receipt_path = staging / "build_receipt.json"
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["outputs"][lod["semantic_mask"]] = semantic_digest
+        receipt["recipe_sha256"] = recipe["recipe_sha256"]
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        before_staging = tree_digest(staging)
+        before_recipe = recipe_path.read_bytes()
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(IMPORTER),
+                "augment-anatomy",
+                "--recipes",
+                str(recipe_path),
+                "--staging",
+                str(staging),
+                "--output",
+                str(recipe_path),
+            ],
+            cwd=WORKSPACE,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("64x64", completed.stderr)
+        self.assertEqual(tree_digest(staging), before_staging)
+        self.assertEqual(recipe_path.read_bytes(), before_recipe)
 
     def test_atomic_pair_replace_rolls_back_first_destination_on_second_failure(self) -> None:
         root = TEST_OUTPUT / "atomic-pair-replace"

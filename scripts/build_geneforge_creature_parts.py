@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -26,6 +27,8 @@ DEFAULT_BLENDER = Path(r"C:\Program Files\Blender Foundation\Blender 5.1\blender
 REQUIRED_BLENDER_VERSION = "5.1.0"
 REQUIRED_IMPORTER_VERSION = "alife.geneforge_importer.v2"
 MAX_DONOR_WORKERS = 3
+ANATOMY_POLYGON_AREA_EPSILON = 1.0e-6
+FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
 LODS = (("full", 1.0, 1200), ("compact", 0.65, 800), ("impostor", 0.35, 400))
 GROUP_COLORS = {
     "head": (230, 92, 88, 255),
@@ -172,6 +175,11 @@ def validate_anatomy_authoring(asset: dict) -> None:
             points = shape.get("points")
             if not isinstance(points, list) or len(points) < 3 or any(not _unit_pair(point) for point in points):
                 raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has malformed polygon")
+            polygon_error = _anatomy_polygon_error(points)
+            if polygon_error is not None:
+                raise ImportFailure(
+                    f"{asset.get('id')} anatomy zone {zone_id} has {polygon_error}"
+                )
         else:
             raise ImportFailure(f"{asset.get('id')} anatomy zone {zone_id} has unknown shape")
     missing = REQUIRED_ANATOMY_CHANNELS[slot] - authored_channels
@@ -187,6 +195,63 @@ def _positive_unit_pair(value) -> bool:
     return _unit_pair(value) and all(v > 0.0 for v in value)
 
 
+def _anatomy_polygon_error(points: list[list[float]]) -> str | None:
+    if len({tuple(point) for point in points}) != len(points):
+        return "degenerate polygon with repeated vertices"
+    for index, start in enumerate(points):
+        end = points[(index + 1) % len(points)]
+        if math.dist(start, end) <= ANATOMY_POLYGON_AREA_EPSILON:
+            return "degenerate polygon edge"
+    for first in range(len(points)):
+        first_next = (first + 1) % len(points)
+        for second in range(first + 1, len(points)):
+            second_next = (second + 1) % len(points)
+            if first in (second, second_next) or first_next in (second, second_next):
+                continue
+            if _segments_intersect(
+                points[first], points[first_next], points[second], points[second_next]
+            ):
+                return "self-intersecting polygon"
+    twice_area = abs(
+        sum(
+            start[0] * end[1] - end[0] * start[1]
+            for start, end in zip(points, points[1:] + points[:1])
+        )
+    )
+    # Normalized UV polygons at or below this area are not raster-stable at 64x64.
+    if twice_area * 0.5 <= ANATOMY_POLYGON_AREA_EPSILON:
+        return "degenerate polygon area"
+    return None
+
+
+def _segments_intersect(a: list[float], b: list[float], c: list[float], d: list[float]) -> bool:
+    def orientation(p, q, r) -> float:
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+    def on_segment(p, q, r) -> bool:
+        return (
+            min(p[0], r[0]) - ANATOMY_POLYGON_AREA_EPSILON
+            <= q[0]
+            <= max(p[0], r[0]) + ANATOMY_POLYGON_AREA_EPSILON
+            and min(p[1], r[1]) - ANATOMY_POLYGON_AREA_EPSILON
+            <= q[1]
+            <= max(p[1], r[1]) + ANATOMY_POLYGON_AREA_EPSILON
+        )
+
+    values = (orientation(a, b, c), orientation(a, b, d), orientation(c, d, a), orientation(c, d, b))
+    if (values[0] > 0.0) != (values[1] > 0.0) and (values[2] > 0.0) != (values[3] > 0.0):
+        return True
+    return any(
+        abs(value) <= ANATOMY_POLYGON_AREA_EPSILON and on_segment(start, point, end)
+        for value, start, point, end in (
+            (values[0], a, c, b),
+            (values[1], a, d, b),
+            (values[2], c, a, d),
+            (values[3], c, b, d),
+        )
+    )
+
+
 def ensure_artifact_path(path: Path, label: str) -> Path:
     resolved = path.resolve()
     try:
@@ -194,6 +259,89 @@ def ensure_artifact_path(path: Path, label: str) -> Path:
     except ValueError as error:
         raise ImportFailure(f"{label} must stay under {ARTIFACT_ROOT}") from error
     return resolved
+
+
+def canonical_path_is_within(canonical_root: Path, canonical_candidate: Path) -> bool:
+    try:
+        canonical_candidate.relative_to(canonical_root)
+    except ValueError:
+        return False
+    return True
+
+
+def _relative_staged_path(relative: str | Path) -> Path:
+    raw = Path(relative)
+    if (
+        raw.is_absolute()
+        or not raw.parts
+        or any(part == ".." for part in raw.parts)
+    ):
+        raise ImportFailure(f"generated output escapes staging: {relative}")
+    return raw
+
+
+def _is_symlink_or_reparse(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    return stat.S_ISLNK(metadata.st_mode) or bool(
+        getattr(metadata, "st_file_attributes", 0) & FILE_ATTRIBUTE_REPARSE_POINT
+    )
+
+
+def _canonical_staging_root(staging: Path) -> Path:
+    try:
+        root = staging.resolve(strict=True)
+    except OSError as error:
+        raise ImportFailure(f"staging root is missing or inaccessible: {staging}") from error
+    if not root.is_dir():
+        raise ImportFailure(f"staging root is not a directory: {staging}")
+    return root
+
+
+def confined_existing_staged_path(staging: Path, relative: str | Path, label: str) -> Path:
+    raw = _relative_staged_path(relative)
+    root = _canonical_staging_root(staging)
+    candidate = root
+    for component in raw.parts:
+        candidate = candidate / component
+        if _is_symlink_or_reparse(candidate):
+            raise ImportFailure(
+                f"{label} contains a symlink or reparse point: {raw.as_posix()}"
+            )
+        try:
+            candidate.lstat()
+        except OSError as error:
+            raise ImportFailure(f"missing {label}: {raw.as_posix()}") from error
+    try:
+        canonical = candidate.resolve(strict=True)
+    except OSError as error:
+        raise ImportFailure(f"missing {label}: {raw.as_posix()}") from error
+    if not canonical_path_is_within(root, canonical):
+        raise ImportFailure(f"{label} escapes canonical staging root: {raw.as_posix()}")
+    if not canonical.is_file():
+        raise ImportFailure(f"{label} is not a regular file: {raw.as_posix()}")
+    return canonical
+
+
+def _assert_tree_has_no_reparse_entries(staging: Path) -> None:
+    root = _canonical_staging_root(staging)
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+        except OSError as error:
+            raise ImportFailure(f"cannot inspect staged directory: {directory}") from error
+        for entry in entries:
+            path = Path(entry.path)
+            if _is_symlink_or_reparse(path):
+                raise ImportFailure(
+                    f"staged tree contains a symlink or reparse point: {path.relative_to(root)}"
+                )
+            if entry.is_dir(follow_symlinks=False):
+                pending.append(path)
 
 
 def discover_blender(explicit: Path | None) -> Path:
@@ -414,8 +562,15 @@ def command_build(args, recipe: dict, blender: Path) -> None:
         ) as executor:
             receipts = list(executor.map(build_source, sources))
         postprocess_assembly_preparations(recipe, temporary)
+        _assert_tree_has_no_reparse_entries(temporary)
         outputs = {
-            path.relative_to(temporary).as_posix(): sha256_file(path)
+            path.relative_to(temporary).as_posix(): sha256_file(
+                confined_existing_staged_path(
+                    temporary,
+                    path.relative_to(temporary),
+                    "newly built staged output",
+                )
+            )
             for path in sorted(temporary.rglob("*"))
             if path.is_file()
         }
@@ -447,9 +602,10 @@ def command_build(args, recipe: dict, blender: Path) -> None:
             },
             "outputs": outputs,
         }
-        (temporary / "build_receipt.json").write_text(
+        staged_output_path(temporary, "build_receipt.json").write_text(
             json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+        _verify_receipt_outputs(temporary, receipt, recipe)
         if staging.exists():
             shutil.rmtree(staging)
         temporary.replace(staging)
@@ -625,6 +781,7 @@ def render_obj_preview(obj_path: Path, output: Path) -> None:
 
 def command_preview(args, recipe: dict) -> None:
     staging = ensure_artifact_path(args.staging, "preview staging input")
+    _assert_tree_has_no_reparse_entries(staging)
     output = ensure_artifact_path(args.output, "preview output")
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(
@@ -634,9 +791,9 @@ def command_preview(args, recipe: dict) -> None:
     try:
         for asset in recipe["part_assets"]:
             for lod in asset["lods"]:
-                obj = staging / lod["generated_obj"]
-                if not obj.is_file():
-                    raise ImportFailure(f"missing staged OBJ for preview: {obj}")
+                obj = confined_existing_staged_path(
+                    staging, lod["generated_obj"], "staged OBJ for preview"
+                )
                 render_obj_preview(
                     obj,
                     temporary / f"{asset['id']}_{lod['lod']}.png",
@@ -655,10 +812,12 @@ def command_preview(args, recipe: dict) -> None:
 
 def command_bind_output_digests(args, recipe: dict) -> None:
     staging = ensure_artifact_path(args.staging, "digest-binding staging input")
-    receipt_path = staging / "build_receipt.json"
-    if not receipt_path.is_file():
-        raise ImportFailure(f"missing staged build receipt: {receipt_path}")
+    _assert_tree_has_no_reparse_entries(staging)
+    receipt_path = confined_existing_staged_path(
+        staging, "build_receipt.json", "staged build receipt"
+    )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    _verify_receipt_outputs(staging, receipt, recipe)
     bound_outputs = {}
     for asset in recipe["part_assets"]:
         for lod in asset["lods"]:
@@ -669,12 +828,10 @@ def command_bind_output_digests(args, recipe: dict) -> None:
                 ("anatomy_mask", "anatomy_mask_sha256"),
             ):
                 relative = lod[path_field]
-                raw = Path(relative)
-                if raw.is_absolute() or any(part == ".." for part in raw.parts):
-                    raise ImportFailure(f"generated output escapes staging: {relative}")
-                path = staging / raw
-                if not path.is_file():
-                    raise ImportFailure(f"missing generated output for digest binding: {relative}")
+                raw = _relative_staged_path(relative)
+                path = confined_existing_staged_path(
+                    staging, raw, "generated output for digest binding"
+                )
                 digest = sha256_file(path)
                 lod[digest_field] = digest
                 bound_outputs[raw.as_posix()] = digest
@@ -709,29 +866,126 @@ def command_bind_output_digests(args, recipe: dict) -> None:
     print(f"recipe_output={output}")
 
 
-def _verify_receipt_outputs(staging: Path, receipt: dict) -> None:
+def _expected_receipt_outputs(recipe: dict, include_anatomy: bool) -> dict[str, set[str]]:
+    fields = ["generated_obj", "socket_manifest", "semantic_mask"]
+    if include_anatomy:
+        fields.append("anatomy_mask")
+    expected = {source["donor"]: set() for source in recipe["sources"]}
+    for asset in recipe["part_assets"]:
+        donor = asset["donor"]
+        if donor not in expected:
+            raise ImportFailure(f"recipe asset has unknown donor: {donor}")
+        for lod in asset["lods"]:
+            for field in fields:
+                expected[donor].add(_relative_staged_path(lod[field]).as_posix())
+    return expected
+
+
+def _verify_receipt_outputs(staging: Path, receipt: dict, recipe: dict) -> bool:
     if receipt.get("schema") != "alife.geneforge_build_receipt.v2":
         raise ImportFailure("augment-anatomy requires a v2 build receipt")
     outputs = receipt.get("outputs")
-    if not isinstance(outputs, dict):
+    if not isinstance(outputs, dict) or any(
+        not isinstance(relative, str) or not isinstance(digest, str)
+        for relative, digest in outputs.items()
+    ):
         raise ImportFailure("build receipt outputs are missing")
+    output_set = set(outputs)
+    legacy_by_donor = _expected_receipt_outputs(recipe, False)
+    augmented_by_donor = _expected_receipt_outputs(recipe, True)
+    legacy_outputs = set().union(*legacy_by_donor.values())
+    augmented_outputs = set().union(*augmented_by_donor.values())
+    expected_lod_count = len(recipe["part_assets"]) * len(LODS)
+    if (
+        len(legacy_outputs) != expected_lod_count * 3
+        or len(augmented_outputs) != expected_lod_count * 4
+        or len(legacy_by_donor) != len(recipe["sources"])
+    ):
+        raise ImportFailure("receipt source accounting recipe paths or donors are not unique")
+    if output_set == legacy_outputs:
+        expected_by_donor = legacy_by_donor
+        include_anatomy = False
+    elif output_set == augmented_outputs:
+        expected_by_donor = augmented_by_donor
+        include_anatomy = True
+    else:
+        raise ImportFailure(
+            "existing build receipt must contain exactly 126 legacy or 168 augmented outputs"
+        )
+
+    expected_donors = set(expected_by_donor)
+    sources = receipt.get("sources")
+    if not isinstance(sources, list) or len(sources) != len(expected_donors):
+        raise ImportFailure("receipt source accounting has an invalid donor set")
+    by_donor = {}
+    union = set()
+    for source in sources:
+        if not isinstance(source, dict) or not isinstance(source.get("donor"), str):
+            raise ImportFailure("receipt source accounting has invalid source metadata")
+        donor = source["donor"]
+        if donor in by_donor:
+            raise ImportFailure("receipt source accounting contains duplicate donors")
+        source_outputs = source.get("outputs")
+        if not isinstance(source_outputs, list) or any(
+            not isinstance(relative, str) for relative in source_outputs
+        ):
+            raise ImportFailure("receipt source accounting has invalid output paths")
+        source_set = set(source_outputs)
+        expected_asset_count = sum(
+            asset["donor"] == donor for asset in recipe["part_assets"]
+        )
+        if (
+            donor not in expected_by_donor
+            or source.get("asset_count") != expected_asset_count
+            or source.get("output_count") != len(source_outputs)
+            or len(source_set) != len(source_outputs)
+            or source_set != expected_by_donor.get(donor)
+            or union.intersection(source_set)
+        ):
+            raise ImportFailure(
+                f"receipt source accounting does not match donor-owned outputs: {donor}"
+            )
+        by_donor[donor] = source
+        union.update(source_set)
+    if set(by_donor) != expected_donors or union != output_set:
+        raise ImportFailure("receipt source accounting union does not match top-level outputs")
+    if (
+        receipt.get("donor_count") != len(expected_donors)
+        or receipt.get("asset_count") != len(recipe["part_assets"])
+    ):
+        raise ImportFailure("receipt source accounting has stale top-level counts")
+
     for relative, expected in outputs.items():
-        path = staging / Path(relative)
-        if not path.is_file() or sha256_file(path) != expected:
+        path = confined_existing_staged_path(staging, relative, "staged receipt output")
+        if sha256_file(path) != expected:
             raise ImportFailure(f"existing staged output digest mismatch: {relative}")
+    return include_anatomy
 
 
 def _validate_augmented_tree(staging: Path, recipe: dict) -> dict[str, str]:
     outputs = {}
+    output_sizes = {}
+    _assert_tree_has_no_reparse_entries(staging)
     if len(recipe["part_assets"]) != 14:
         raise ImportFailure("anatomy augmentation requires 14 production assets")
     for asset in recipe["part_assets"]:
         for lod in asset["lods"]:
-            semantic_path = staging / Path(lod["semantic_mask"])
-            anatomy_path = staging / Path(lod["anatomy_mask"])
-            semantic_size, _, semantic = decode_rgba_png(semantic_path.read_bytes())
-            anatomy_size, _, anatomy = decode_rgba_png(anatomy_path.read_bytes())
-            if semantic_size != 64 or anatomy_size != 64:
+            semantic_path = confined_existing_staged_path(
+                staging, lod["semantic_mask"], "semantic staging mask"
+            )
+            anatomy_path = confined_existing_staged_path(
+                staging, lod["anatomy_mask"], "anatomy staging mask"
+            )
+            semantic_width, semantic_height, semantic = decode_rgba_png(
+                semantic_path.read_bytes()
+            )
+            anatomy_width, anatomy_height, anatomy = decode_rgba_png(
+                anatomy_path.read_bytes()
+            )
+            if (
+                (semantic_width, semantic_height) != (64, 64)
+                or (anatomy_width, anatomy_height) != (64, 64)
+            ):
                 raise ImportFailure("semantic/anatomy staging masks must be 64x64")
             used = set()
             for offset in range(0, len(semantic), 4):
@@ -753,49 +1007,76 @@ def _validate_augmented_tree(staging: Path, recipe: dict) -> dict[str, str]:
             missing = REQUIRED_ANATOMY_CHANNELS[asset["logical_slot"]] - used
             if missing:
                 raise ImportFailure(f"{asset['id']} {lod['lod']} anatomy coverage lacks {sorted(missing)}")
-            socket = json.loads((staging / Path(lod["socket_manifest"])).read_text(encoding="utf-8"))
+            socket_path = confined_existing_staged_path(
+                staging, lod["socket_manifest"], "socket staging manifest"
+            )
+            socket = json.loads(socket_path.read_text(encoding="utf-8"))
             if socket.get("schema") != "alife.creature_part_sockets.v2" or socket.get("anatomy_mask") != lod["anatomy_mask"]:
                 raise ImportFailure(f"socket anatomy metadata mismatch: {lod['socket_manifest']}")
             for field in ("generated_obj", "socket_manifest", "semantic_mask", "anatomy_mask"):
-                relative = Path(lod[field])
-                path = staging / relative
-                if not path.is_file():
-                    raise ImportFailure(f"missing augmented output: {lod[field]}")
-                if path.stat().st_size > 512 * 1024:
+                relative = _relative_staged_path(lod[field])
+                path = confined_existing_staged_path(
+                    staging, relative, "augmented output"
+                )
+                size = path.stat().st_size
+                if size > 512 * 1024:
                     raise ImportFailure(f"augmented output exceeds 512 KiB: {lod[field]}")
                 outputs[relative.as_posix()] = sha256_file(path)
+                output_sizes[relative.as_posix()] = size
     if len(outputs) != 168:
         raise ImportFailure(f"augmented output set must contain 168 files; found {len(outputs)}")
-    if sum((staging / Path(relative)).stat().st_size for relative in outputs) > 8 * 1024 * 1024:
+    if sum(output_sizes.values()) > 8 * 1024 * 1024:
         raise ImportFailure("augmented production pack exceeds 8 MiB")
     return outputs
 
 
+def _final_receipt_sources(receipt: dict, recipe: dict) -> list[dict]:
+    existing = {source["donor"]: source for source in receipt["sources"]}
+    expected = _expected_receipt_outputs(recipe, True)
+    sources = []
+    for source_contract in recipe["sources"]:
+        donor = source_contract["donor"]
+        source = dict(existing[donor])
+        donor_outputs = [
+            lod[field]
+            for asset in recipe["part_assets"]
+            if asset["donor"] == donor
+            for lod in asset["lods"]
+            for field in (
+                "generated_obj",
+                "socket_manifest",
+                "semantic_mask",
+                "anatomy_mask",
+            )
+        ]
+        if set(donor_outputs) != expected[donor]:
+            raise ImportFailure(
+                f"receipt source accounting generation drifted for donor: {donor}"
+            )
+        source["donor"] = donor
+        source["asset_count"] = sum(
+            asset["donor"] == donor for asset in recipe["part_assets"]
+        )
+        source["output_count"] = len(donor_outputs)
+        source["outputs"] = donor_outputs
+        sources.append(source)
+    return sources
+
+
 def command_augment_anatomy(args, recipe: dict) -> None:
     staging = ensure_artifact_path(args.staging, "anatomy staging input")
-    receipt_path = staging / "build_receipt.json"
-    if not receipt_path.is_file():
-        raise ImportFailure(f"missing staged build receipt: {receipt_path}")
+    _assert_tree_has_no_reparse_entries(staging)
+    receipt_path = confined_existing_staged_path(
+        staging, "build_receipt.json", "staged build receipt"
+    )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    _verify_receipt_outputs(staging, receipt)
-    legacy_outputs = {
-        lod[field]
-        for asset in recipe["part_assets"]
-        for lod in asset["lods"]
-        for field in ("generated_obj", "socket_manifest", "semantic_mask")
-    }
-    augmented_outputs = legacy_outputs | {
-        lod["anatomy_mask"]
-        for asset in recipe["part_assets"]
-        for lod in asset["lods"]
-    }
-    receipt_outputs = set(receipt["outputs"])
-    if receipt_outputs not in (legacy_outputs, augmented_outputs):
-        raise ImportFailure(
-            "existing build receipt must contain exactly 126 legacy or 168 augmented outputs"
-        )
+    _verify_receipt_outputs(staging, receipt, recipe)
     old_stable = {
-        lod[field]: sha256_file(staging / Path(lod[field]))
+        lod[field]: sha256_file(
+            confined_existing_staged_path(
+                staging, lod[field], "stable staged OBJ or semantic mask"
+            )
+        )
         for asset in recipe["part_assets"]
         for lod in asset["lods"]
         for field in ("generated_obj", "semantic_mask")
@@ -808,14 +1089,18 @@ def command_augment_anatomy(args, recipe: dict) -> None:
         shutil.rmtree(temporary)
     if backup.exists():
         shutil.rmtree(backup)
-    shutil.copytree(staging, temporary)
+    shutil.copytree(staging, temporary, symlinks=True)
     try:
         for asset in recipe["part_assets"]:
             for lod in asset["lods"]:
-                semantic_path = temporary / Path(lod["semantic_mask"])
+                semantic_path = confined_existing_staged_path(
+                    temporary, lod["semantic_mask"], "semantic staging mask"
+                )
                 anatomy_path = staged_output_path(temporary, lod["anatomy_mask"])
                 anatomy_path.write_bytes(anatomy_mask(semantic_path.read_bytes(), asset["anatomy_authoring"], asset["logical_slot"]))
-                socket_path = temporary / Path(lod["socket_manifest"])
+                socket_path = confined_existing_staged_path(
+                    temporary, lod["socket_manifest"], "socket staging manifest"
+                )
                 socket = json.loads(socket_path.read_text(encoding="utf-8"))
                 if socket.get("schema") != "alife.creature_part_sockets.v2" or socket.get("semantic_mask") != lod["semantic_mask"]:
                     raise ImportFailure(f"existing socket manifest is incompatible: {lod['socket_manifest']}")
@@ -834,17 +1119,18 @@ def command_augment_anatomy(args, recipe: dict) -> None:
         recipe["recipe_sha256"] = canonical_recipe_digest(recipe)
         receipt["recipe_sha256"] = recipe["recipe_sha256"]
         receipt["outputs"] = outputs
-        for source in receipt.get("sources", []):
-            donor_outputs = [
-                lod[field]
-                for asset in recipe["part_assets"] if asset["donor"] == source["donor"]
-                for lod in asset["lods"]
-                for field in ("generated_obj", "socket_manifest", "semantic_mask", "anatomy_mask")
-            ]
-            source["outputs"] = donor_outputs
-            source["output_count"] = len(donor_outputs)
-        (temporary / "build_receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        after_stable = {relative: sha256_file(temporary / Path(relative)) for relative in old_stable}
+        receipt["sources"] = _final_receipt_sources(receipt, recipe)
+        staged_output_path(temporary, "build_receipt.json").write_text(
+            json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        after_stable = {
+            relative: sha256_file(
+                confined_existing_staged_path(
+                    temporary, relative, "stable augmented OBJ or semantic mask"
+                )
+            )
+            for relative in old_stable
+        }
         if after_stable != old_stable:
             raise ImportFailure("augment-anatomy changed existing OBJ or semantic bytes")
         recipe_temporary.write_text(json.dumps(recipe, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
@@ -857,7 +1143,11 @@ def command_augment_anatomy(args, recipe: dict) -> None:
                 shutil.rmtree(staging)
             backup.replace(staging)
             raise
-        shutil.rmtree(backup)
+        try:
+            shutil.rmtree(backup)
+        except OSError:
+            # Both final replacements are committed; stale rollback cleanup is non-fatal.
+            pass
     except BaseException:
         if temporary.exists():
             shutil.rmtree(temporary)
@@ -2415,7 +2705,13 @@ def assembly_preparations(
 
 def postprocess_assembly_preparations(recipe: dict, staging: Path) -> None:
     assets = {asset["id"]: asset for asset in recipe["part_assets"]}
-    paths = sorted(staging.rglob("*_sockets.json"))
+    _assert_tree_has_no_reparse_entries(staging)
+    paths = [
+        confined_existing_staged_path(
+            staging, path.relative_to(staging), "staged socket manifest"
+        )
+        for path in sorted(staging.rglob("*_sockets.json"))
+    ]
     manifests = {}
     manifest_paths = {}
     for path in paths:
@@ -2564,12 +2860,35 @@ def geometry_bounds(grouped: dict) -> list[list[float]]:
 
 
 def staged_output_path(staging: Path, relative: str) -> Path:
-    raw = Path(relative)
-    if raw.is_absolute() or any(part == ".." for part in raw.parts):
-        raise ImportFailure(f"generated output escapes staging: {relative}")
-    path = staging.resolve() / raw
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
+    raw = _relative_staged_path(relative)
+    root = _canonical_staging_root(staging)
+    parent = root
+    for component in raw.parent.parts:
+        parent = parent / component
+        if _is_symlink_or_reparse(parent):
+            raise ImportFailure(
+                f"generated output parent contains a symlink or reparse point: {relative}"
+            )
+        try:
+            parent.lstat()
+        except FileNotFoundError:
+            parent.mkdir()
+        canonical_parent = parent.resolve(strict=True)
+        if not canonical_path_is_within(root, canonical_parent):
+            raise ImportFailure(f"generated output escapes canonical staging: {relative}")
+    path = root / raw
+    if _is_symlink_or_reparse(path):
+        raise ImportFailure(
+            f"generated output contains a symlink or reparse point: {relative}"
+        )
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return path
+    canonical = path.resolve(strict=True)
+    if not canonical_path_is_within(root, canonical):
+        raise ImportFailure(f"generated output escapes canonical staging: {relative}")
+    return canonical
 
 
 def build_scene_outputs(
