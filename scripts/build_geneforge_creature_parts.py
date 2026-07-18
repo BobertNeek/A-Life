@@ -332,6 +332,7 @@ def command_build(args, recipe: dict, blender: Path) -> None:
             thread_name_prefix="geneforge-build",
         ) as executor:
             receipts = list(executor.map(build_source, sources))
+        postprocess_assembly_preparations(recipe, temporary)
         outputs = {
             path.relative_to(temporary).as_posix(): sha256_file(path)
             for path in sorted(temporary.rglob("*"))
@@ -470,13 +471,116 @@ def command_preview(args, recipe: dict) -> None:
     print(f"preview_root={output}")
 
 
+def command_bind_output_digests(args, recipe: dict) -> None:
+    staging = ensure_artifact_path(args.staging, "digest-binding staging input")
+    receipt_path = staging / "build_receipt.json"
+    if not receipt_path.is_file():
+        raise ImportFailure(f"missing staged build receipt: {receipt_path}")
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    bound_outputs = {}
+    for asset in recipe["part_assets"]:
+        for lod in asset["lods"]:
+            for path_field, digest_field in (
+                ("generated_obj", "generated_obj_sha256"),
+                ("socket_manifest", "socket_manifest_sha256"),
+                ("semantic_mask", "semantic_mask_sha256"),
+            ):
+                relative = lod[path_field]
+                raw = Path(relative)
+                if raw.is_absolute() or any(part == ".." for part in raw.parts):
+                    raise ImportFailure(f"generated output escapes staging: {relative}")
+                path = staging / raw
+                if not path.is_file():
+                    raise ImportFailure(f"missing generated output for digest binding: {relative}")
+                digest = sha256_file(path)
+                lod[digest_field] = digest
+                bound_outputs[raw.as_posix()] = digest
+    if set(receipt.get("outputs", {})) != set(bound_outputs):
+        raise ImportFailure(
+            "build receipt outputs do not exactly match the recipe digest-binding paths"
+        )
+    recipe["recipe_sha256"] = canonical_recipe_digest(recipe)
+    receipt["recipe_sha256"] = recipe["recipe_sha256"]
+    receipt["outputs"] = bound_outputs
+
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    recipe_temporary = output.with_name(f".{output.name}.tmp-{os.getpid()}")
+    receipt_temporary = receipt_path.with_name(
+        f".{receipt_path.name}.tmp-{os.getpid()}"
+    )
+    recipe_temporary.write_text(
+        json.dumps(recipe, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+    )
+    receipt_temporary.write_text(
+        json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    atomic_replace_pair(
+        recipe_temporary,
+        output,
+        receipt_temporary,
+        receipt_path,
+    )
+    print(f"bound_outputs={len(bound_outputs)}")
+    print(f"recipe_sha256={recipe['recipe_sha256']}")
+    print(f"recipe_output={output}")
+
+
+def atomic_replace_pair(
+    first_temporary: Path,
+    first_destination: Path,
+    second_temporary: Path,
+    second_destination: Path,
+) -> None:
+    destinations = (first_destination, second_destination)
+    backups = []
+    for index, destination in enumerate(destinations):
+        backup = destination.with_name(
+            f".{destination.name}.rollback-{os.getpid()}-{index}"
+        )
+        backup.unlink(missing_ok=True)
+        if destination.is_file():
+            shutil.copy2(destination, backup)
+            backups.append(backup)
+        else:
+            backups.append(None)
+    first_replaced = False
+    try:
+        os.replace(first_temporary, first_destination)
+        first_replaced = True
+        os.replace(second_temporary, second_destination)
+    except BaseException:
+        if first_replaced:
+            if backups[0] is None:
+                first_destination.unlink(missing_ok=True)
+            else:
+                os.replace(backups[0], first_destination)
+        raise
+    finally:
+        first_temporary.unlink(missing_ok=True)
+        second_temporary.unlink(missing_ok=True)
+        for backup in backups:
+            if backup is not None:
+                backup.unlink(missing_ok=True)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("inventory", "validate-sources", "build", "preview"):
+    for command in (
+        "inventory",
+        "validate-sources",
+        "build",
+        "preview",
+        "bind-output-digests",
+    ):
         child = subparsers.add_parser(command)
-        child.add_argument("--source-root", type=Path, required=True)
         child.add_argument("--recipes", type=Path, required=True)
+        if command == "bind-output-digests":
+            child.add_argument("--staging", type=Path, required=True)
+            child.add_argument("--output", type=Path, required=True)
+            continue
+        child.add_argument("--source-root", type=Path, required=True)
         child.add_argument("--blender-exe", type=Path)
         if command == "inventory":
             child.add_argument("--output", type=Path, required=True)
@@ -490,9 +594,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def outer_main() -> None:
     args = build_parser().parse_args()
-    args.source_root = args.source_root.resolve()
     args.recipes = args.recipes.resolve()
     recipe = load_recipe(args.recipes)
+    if args.command == "bind-output-digests":
+        command_bind_output_digests(args, recipe)
+        return
+    args.source_root = args.source_root.resolve()
     blender = discover_blender(args.blender_exe)
     probe_blender_version(blender)
     validate_source_files(args.source_root, recipe)
@@ -1716,6 +1823,84 @@ def semantic_mask(grouped: dict, source_samples: list[int]) -> bytes:
     return png_bytes(width, height, bytes(pixels))
 
 
+def prepare_bridge_overlap_geometry(
+    grouped: dict,
+    sockets: dict,
+    socket_names: list[str],
+    overlap_depth: float,
+) -> tuple[dict, list[dict]]:
+    if not math.isfinite(overlap_depth) or overlap_depth <= 0.0:
+        raise ImportFailure("bridge overlap depth must be finite and positive")
+    prepared = {
+        group: [tuple(tuple(corner) for corner in triangle) for triangle in triangles]
+        for group, triangles in grouped.items()
+    }
+    evidence = []
+    for socket_name in socket_names:
+        if socket_name not in sockets:
+            raise ImportFailure(f"bridge preparation is missing socket {socket_name}")
+        target = tuple(float(value) for value in sockets[socket_name]["translation"])
+        unique_positions = sorted(
+            {
+                tuple(corner[0])
+                for triangles in prepared.values()
+                for triangle in triangles
+                for corner in triangle
+            },
+            key=lambda point: (
+                sum((point[axis] - target[axis]) ** 2 for axis in range(3)),
+                tuple(round(value, 12) for value in point),
+            ),
+        )
+        if not unique_positions:
+            raise ImportFailure(f"bridge preparation {socket_name} has no source vertices")
+        selected = unique_positions[: min(3, len(unique_positions))]
+        centroid = tuple(
+            sum(point[axis] for point in unique_positions) / len(unique_positions)
+            for axis in range(3)
+        )
+        replacements = {}
+        applied_depths = []
+        for point in selected:
+            direction = tuple(target[axis] - point[axis] for axis in range(3))
+            distance = vector_length(direction)
+            if distance <= 1.0e-12:
+                direction = tuple(target[axis] - centroid[axis] for axis in range(3))
+                distance = vector_length(direction)
+            if distance <= 1.0e-12:
+                direction = (0.0, 1.0, 0.0)
+                distance = 1.0
+            applied = min(overlap_depth, max(overlap_depth * 0.25, distance * 0.5))
+            unit = tuple(value / distance for value in direction)
+            moved = tuple(point[axis] + unit[axis] * applied for axis in range(3))
+            replacements[point] = moved
+            applied_depths.append(applied)
+        prepared = {
+            group: [
+                tuple(
+                    (replacements.get(tuple(corner[0]), tuple(corner[0])), *corner[1:])
+                    for corner in triangle
+                )
+                for triangle in triangles
+            ]
+            for group, triangles in prepared.items()
+        }
+        for previous in evidence:
+            previous_anchor = tuple(previous["prepared_anchor"])
+            if previous_anchor in replacements:
+                previous["prepared_anchor"] = list(replacements[previous_anchor])
+        evidence.append(
+            {
+                "socket": socket_name,
+                "prepared_vertex_count": len(replacements),
+                "applied_overlap_depth": max(applied_depths),
+                "original_anchor": list(selected[0]),
+                "prepared_anchor": list(replacements[selected[0]]),
+            }
+        )
+    return prepared, evidence
+
+
 def prepared_matrix(fit: dict, translation: list[float]) -> list[float]:
     x, y, z, w = fit["rotation_xyzw"]
     sx, sy, sz = fit["scale"]
@@ -1744,21 +1929,114 @@ def prepared_matrix(fit: dict, translation: list[float]) -> list[float]:
     ]
 
 
-def assembly_preparations(recipe: dict, asset: dict) -> list[dict]:
+def transform_affine_point(matrix: list[float], point) -> list[float]:
+    return [
+        sum(matrix[row * 4 + axis] * point[axis] for axis in range(3))
+        + matrix[row * 4 + 3]
+        for row in range(3)
+    ]
+
+
+def assembly_preparations(
+    recipe: dict,
+    asset: dict,
+    manifest: dict,
+    manifests: dict,
+) -> list[dict]:
     contract = recipe["assembly_contract"]
     preparations = []
     for family in recipe["families"]:
         for slot, part in family["parts"].items():
             if part["asset_id"] != asset["id"]:
                 continue
-            translation = [
+            sockets = contract["slot_sockets"][slot]
+            source_anchors = [manifest["sockets"][name]["translation"] for name in sockets]
+            torso_asset_id = family["parts"]["torso"]["asset_id"]
+            torso_manifest = manifests[(torso_asset_id, manifest["lod"])]
+            authored_offset = [
                 part["fit"]["translation"][axis] + part["seam_offset"][axis]
                 for axis in range(3)
             ]
-            predicted_error = vector_length(part["seam_offset"])
+            if slot == "torso":
+                translation = authored_offset
+            else:
+                target_anchors = [
+                    torso_manifest["sockets"][name]["translation"] for name in sockets
+                ]
+                source_centroid = [
+                    sum(anchor[axis] for anchor in source_anchors) / len(source_anchors)
+                    for axis in range(3)
+                ]
+                target_centroid = [
+                    sum(anchor[axis] for anchor in target_anchors) / len(target_anchors)
+                    for axis in range(3)
+                ]
+                linear_source = transform_affine_point(
+                    prepared_matrix(part["fit"], [0.0, 0.0, 0.0]),
+                    source_centroid,
+                )
+                translation = [
+                    target_centroid[axis] + authored_offset[axis] - linear_source[axis]
+                    for axis in range(3)
+                ]
+            matrix = prepared_matrix(part["fit"], translation)
+            source_geometry = {
+                entry["socket"]: entry for entry in manifest["bridge_geometry"]
+            }
+            bridges = []
+            for socket_name, source_anchor in zip(sockets, source_anchors):
+                if slot == "torso":
+                    bridge_matrix = matrix
+                    transformed = transform_affine_point(bridge_matrix, source_anchor)
+                    target_anchor = list(transformed)
+                else:
+                    target_anchor = [
+                        torso_manifest["sockets"][socket_name]["translation"][axis]
+                        + authored_offset[axis]
+                        for axis in range(3)
+                    ]
+                    linear_source = transform_affine_point(
+                        prepared_matrix(part["fit"], [0.0, 0.0, 0.0]),
+                        source_anchor,
+                    )
+                    bridge_translation = [
+                        target_anchor[axis] - linear_source[axis] for axis in range(3)
+                    ]
+                    bridge_matrix = prepared_matrix(part["fit"], bridge_translation)
+                    transformed = transform_affine_point(bridge_matrix, source_anchor)
+                residual = vector_length(
+                    tuple(transformed[axis] - target_anchor[axis] for axis in range(3))
+                )
+                geometry = source_geometry[socket_name]
+                runtime_group = {
+                    "neck": "head",
+                    "left-shoulder": "left-arm",
+                    "right-shoulder": "right-arm",
+                    "left-hip": "left-leg",
+                    "right-hip": "right-leg",
+                    "tail-base": "tail-back",
+                }[socket_name]
+                if slot == "torso":
+                    runtime_group = "torso"
+                if runtime_group not in manifest["expected_groups"]:
+                    raise ImportFailure(
+                        f"family {family['id']} {slot} socket {socket_name} has no runtime OBJ group {runtime_group}"
+                    )
+                bridges.append(
+                    {
+                        **geometry,
+                        "runtime_group": runtime_group,
+                        "source_anchor": list(source_anchor),
+                        "target_anchor": target_anchor,
+                        "transformed_source_anchor": transformed,
+                        "prepared_matrix": bridge_matrix,
+                        "residual": residual,
+                    }
+                )
+            predicted_error = max(bridge["residual"] for bridge in bridges)
             if predicted_error > contract["attachment_error_limit"] + 1.0e-9:
                 raise ImportFailure(
-                    f"family {family['id']} {slot} seam exceeds attachment-error bound"
+                    f"family {family['id']} {slot} transformed sockets exceed attachment-error bound: {predicted_error:.9f}"
                 )
             preparations.append(
                 {
@@ -1769,30 +2047,54 @@ def assembly_preparations(recipe: dict, asset: dict) -> list[dict]:
                     "fit": part["fit"],
                     "seam_offset": part["seam_offset"],
                     "prepared_translation": translation,
-                    "prepared_matrix": prepared_matrix(part["fit"], translation),
-                    "bridge_sockets": contract["slot_sockets"][slot],
+                    "prepared_matrix": matrix,
+                    "bridge_sockets": sockets,
                     "bridge_kind": f"{slot}-join-cover",
                     "join_cover_kind": part["join_cover_kind"],
+                    "transform_mode": (
+                        "per-group-socket-transforms"
+                        if slot in {"arms", "legs"}
+                        else "slot-transform"
+                    ),
+                    "target_torso_asset_id": torso_asset_id,
                     "overlap_depth": contract["default_overlap_depth"],
                     "attachment_error_bound": contract["attachment_error_limit"],
                     "predicted_attachment_error": predicted_error,
+                    "bridge_geometry": bridges,
                 }
             )
     return preparations
 
 
-def socket_manifest(
-    recipe: dict,
-    asset: dict,
-    donor: str,
-    lod: str,
-    markers: dict,
-    bounds,
-    ground_contacts,
-    mask_path: str,
-    topology: dict,
-    microdetail_files: list[str],
-) -> dict:
+def postprocess_assembly_preparations(recipe: dict, staging: Path) -> None:
+    assets = {asset["id"]: asset for asset in recipe["part_assets"]}
+    paths = sorted(staging.rglob("*_sockets.json"))
+    manifests = {}
+    manifest_paths = {}
+    for path in paths:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        key = (manifest["asset_id"], manifest["lod"])
+        if key in manifests:
+            raise ImportFailure(f"duplicate staged socket manifest {key}")
+        manifests[key] = manifest
+        manifest_paths[key] = path
+    expected = len(recipe["part_assets"]) * len(LODS)
+    if len(manifests) != expected:
+        raise ImportFailure(
+            f"assembly preparation expected {expected} socket manifests; found {len(manifests)}"
+        )
+    for key in sorted(manifests):
+        manifest = manifests[key]
+        asset = assets[manifest["asset_id"]]
+        manifest["assembly_preparations"] = assembly_preparations(
+            recipe, asset, manifest, manifests
+        )
+        manifest_paths[key].write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
+
+def generated_sockets(recipe: dict, asset: dict, markers: dict, bounds) -> dict:
     marker_map = {int(key): value for key, value in recipe["marker_map"].items()}
     semantic_to_id = {semantic: marker_id for marker_id, semantic in marker_map.items()}
     socket_semantics = {
@@ -1826,6 +2128,24 @@ def socket_manifest(
             "pattern_phase_anchor": [0.0, 0.0],
             "derived_from_marker_ids": [2],
         }
+    return sockets
+
+
+def socket_manifest(
+    recipe: dict,
+    asset: dict,
+    donor: str,
+    lod: str,
+    markers: dict,
+    bounds,
+    ground_contacts,
+    mask_path: str,
+    topology: dict,
+    microdetail_files: list[str],
+    bridge_geometry: list[dict],
+) -> dict:
+    marker_map = {int(key): value for key, value in recipe["marker_map"].items()}
+    sockets = generated_sockets(recipe, asset, markers, bounds)
     landmarks = {
         semantic: list(markers[marker_id])
         for marker_id, semantic in marker_map.items()
@@ -1858,7 +2178,8 @@ def socket_manifest(
             "uvless_fallback": "evaluated-normal-curvature-material-output",
         },
         "assembly_preparation_schema": recipe["assembly_contract"]["schema"],
-        "assembly_preparations": assembly_preparations(recipe, asset),
+        "bridge_geometry": bridge_geometry,
+        "assembly_preparations": [],
     }
 
 
@@ -1897,11 +2218,7 @@ def staged_output_path(staging: Path, relative: str) -> Path:
     raw = Path(relative)
     if raw.is_absolute() or any(part == ".." for part in raw.parts):
         raise ImportFailure(f"generated output escapes staging: {relative}")
-    path = (staging / raw).resolve()
-    try:
-        path.relative_to(staging.resolve())
-    except ValueError as error:
-        raise ImportFailure(f"generated output escapes staging: {relative}") from error
+    path = staging.resolve() / raw
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -1949,6 +2266,14 @@ def build_scene_outputs(
                         )
             previous_topology = lod_topology
             contract = lod_contracts[lod]
+            initial_bounds = geometry_bounds(lod_grouped)
+            sockets = generated_sockets(recipe, asset, markers, initial_bounds)
+            lod_grouped, bridge_geometry = prepare_bridge_overlap_geometry(
+                lod_grouped,
+                sockets,
+                recipe["assembly_contract"]["slot_sockets"][asset["logical_slot"]],
+                recipe["assembly_contract"]["default_overlap_depth"],
+            )
             lod_bounds = geometry_bounds(lod_grouped)
             contacts = ground_contacts(asset, lod_grouped)
             obj_path = staged_output_path(staging, contract["generated_obj"])
@@ -1968,6 +2293,7 @@ def build_scene_outputs(
                         contract["semantic_mask"],
                         lod_topology,
                         detail_source_files,
+                        bridge_geometry,
                     ),
                     indent=2,
                     sort_keys=True,

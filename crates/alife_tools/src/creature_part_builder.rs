@@ -169,12 +169,14 @@ struct StagedSocketManifest {
     expected_groups: BTreeSet<String>,
     microdetail: StagedMicrodetail,
     assembly_preparation_schema: String,
+    bridge_geometry: Vec<StagedGeometryPreparation>,
     assembly_preparations: Vec<StagedAssemblyPreparation>,
 }
 
 #[derive(Debug)]
 struct StagedObjSummary {
     bounds: StagedBounds,
+    positions: Vec<[f64; 3]>,
     groups: BTreeSet<String>,
     topology: StagedObjTopology,
 }
@@ -209,9 +211,36 @@ struct StagedAssemblyPreparation {
     bridge_sockets: Vec<String>,
     bridge_kind: String,
     join_cover_kind: String,
+    transform_mode: String,
+    target_torso_asset_id: String,
     overlap_depth: f64,
     attachment_error_bound: f64,
     predicted_attachment_error: f64,
+    bridge_geometry: Vec<StagedAssemblyBridgeEvidence>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedGeometryPreparation {
+    socket: String,
+    prepared_vertex_count: usize,
+    applied_overlap_depth: f64,
+    original_anchor: [f64; 3],
+    prepared_anchor: [f64; 3],
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedAssemblyBridgeEvidence {
+    socket: String,
+    runtime_group: String,
+    prepared_vertex_count: usize,
+    applied_overlap_depth: f64,
+    original_anchor: [f64; 3],
+    prepared_anchor: [f64; 3],
+    source_anchor: [f64; 3],
+    target_anchor: [f64; 3],
+    transformed_source_anchor: [f64; 3],
+    prepared_matrix: [f64; 16],
+    residual: f64,
 }
 
 impl SourceObjMesh {
@@ -292,7 +321,7 @@ pub fn validate_geneforge_staging(
             recipe_path.display()
         ))
     })?;
-    let catalog: GeneForgeCreaturePartCatalog = serde_json::from_str(&recipe_text)
+    let catalog = GeneForgeCreaturePartCatalog::from_json_str(&recipe_text)
         .map_err(|error| fail(format!("invalid external GeneForge recipe: {error}")))?;
     let canonical_digest = canonical_recipe_sha256(&recipe_text)?;
     if !catalog
@@ -322,6 +351,7 @@ pub fn validate_geneforge_staging(
     let mut obj_contracts = BTreeMap::new();
     let mut socket_contracts = BTreeMap::new();
     let mut mask_contracts = BTreeMap::new();
+    let mut output_digest_contracts = BTreeMap::new();
     for (asset_index, asset) in catalog.part_assets.iter().enumerate() {
         if asset.lods.len() != 3 {
             return Err(fail(format!(
@@ -339,6 +369,14 @@ pub fn validate_geneforge_staging(
             obj_contracts.insert(lod.generated_obj.clone(), (asset_index, lod_index));
             socket_contracts.insert(lod.socket_manifest.clone(), (asset_index, lod_index));
             mask_contracts.insert(lod.semantic_mask.clone(), (asset_index, lod_index));
+            output_digest_contracts
+                .insert(lod.generated_obj.clone(), lod.generated_obj_sha256.clone());
+            output_digest_contracts.insert(
+                lod.socket_manifest.clone(),
+                lod.socket_manifest_sha256.clone(),
+            );
+            output_digest_contracts
+                .insert(lod.semantic_mask.clone(), lod.semantic_mask_sha256.clone());
         }
     }
     if expected_outputs.len() != 14 * 3 * 3
@@ -473,6 +511,20 @@ pub fn validate_geneforge_staging(
             &compact.topology,
             &impostor.topology,
         )?;
+    }
+
+    for (relative, expected) in &output_digest_contracts {
+        let bytes = fs::read(staging_root.join(relative)).map_err(|error| {
+            fail(format!(
+                "failed reading {relative} for external catalog digest: {error}"
+            ))
+        })?;
+        let actual = sha256_hex(&bytes);
+        if !expected.eq_ignore_ascii_case(&actual) {
+            return Err(fail(format!(
+                "external catalog digest drift for {relative}: expected {expected}, found {actual}"
+            )));
+        }
     }
 
     for (relative, expected) in &receipt.outputs {
@@ -771,6 +823,7 @@ fn validate_staged_obj(
     }
     Ok(StagedObjSummary {
         bounds,
+        positions,
         groups,
         topology,
     })
@@ -943,20 +996,65 @@ fn validate_staged_socket_manifest(
             "semantic mask lacks source-derived microdetail provenance".to_string(),
         ));
     }
-    validate_assembly_preparations(&manifest, catalog, asset, lod.lod, full_preparations)?;
+    validate_assembly_preparations(
+        staging_root,
+        &manifest,
+        catalog,
+        asset,
+        lod.lod,
+        obj,
+        full_preparations,
+    )?;
     Ok(())
 }
 
 fn validate_assembly_preparations(
+    staging_root: &Path,
     manifest: &StagedSocketManifest,
     catalog: &GeneForgeCreaturePartCatalog,
     asset: &GeneForgePartAssetDefinition,
     lod: CreaturePartLodId,
+    obj: &StagedObjSummary,
     full_preparations: &mut BTreeSet<(u16, String)>,
 ) -> Result<(), CreaturePartBuilderError> {
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
     if manifest.assembly_preparation_schema != catalog.assembly_contract.schema {
         return Err(fail("assembly preparation schema drift".to_string()));
+    }
+    let required_sockets = &catalog.assembly_contract.slot_sockets[&asset.logical_slot];
+    let mut observed_geometry = BTreeMap::new();
+    for geometry in &manifest.bridge_geometry {
+        if observed_geometry
+            .insert(geometry.socket.clone(), geometry)
+            .is_some()
+            || !required_sockets.contains(&geometry.socket)
+            || geometry.prepared_vertex_count == 0
+            || !geometry.applied_overlap_depth.is_finite()
+            || geometry.applied_overlap_depth <= 0.0
+            || geometry.applied_overlap_depth
+                > f64::from(catalog.assembly_contract.default_overlap_depth) + 1.0e-9
+            || !geometry
+                .original_anchor
+                .into_iter()
+                .chain(geometry.prepared_anchor)
+                .all(f64::is_finite)
+            || vector_distance(geometry.original_anchor, geometry.prepared_anchor) <= 1.0e-9
+            || !obj
+                .positions
+                .iter()
+                .any(|position| vector_distance(*position, geometry.prepared_anchor) <= 1.0e-6)
+        {
+            return Err(fail(
+                "assembly bridge geometry is not bound to prepared OBJ vertices".to_string(),
+            ));
+        }
+    }
+    if observed_geometry.keys().cloned().collect::<BTreeSet<_>>()
+        != required_sockets.iter().cloned().collect::<BTreeSet<_>>()
+    {
+        return Err(fail(
+            "assembly bridge geometry socket set drift".to_string(),
+        ));
     }
     let expected = catalog
         .families
@@ -987,6 +1085,14 @@ fn validate_assembly_preparations(
             ));
         };
         let slot = slot_name(asset.logical_slot);
+        let expected_transform_mode = if matches!(
+            asset.logical_slot,
+            CreaturePartSlotKey::Arms | CreaturePartSlotKey::Legs
+        ) {
+            "per-group-socket-transforms"
+        } else {
+            "slot-transform"
+        };
         if !observed.insert((prepared.family_id, prepared.logical_slot.clone()))
             || prepared.family_label != family.label
             || prepared.logical_slot != slot
@@ -995,6 +1101,7 @@ fn validate_assembly_preparations(
                 != catalog.assembly_contract.slot_sockets[&asset.logical_slot]
             || prepared.bridge_kind != format!("{slot}-join-cover")
             || prepared.join_cover_kind != part.join_cover_kind
+            || prepared.transform_mode != expected_transform_mode
             || !near(
                 prepared.overlap_depth,
                 f64::from(catalog.assembly_contract.default_overlap_depth),
@@ -1006,9 +1113,54 @@ fn validate_assembly_preparations(
         {
             return Err(fail("assembly preparation metadata drift".to_string()));
         }
-        let expected_translation: [f64; 3] = std::array::from_fn(|axis| {
+        let authored_offset: [f64; 3] = std::array::from_fn(|axis| {
             f64::from(part.fit.translation[axis] + part.seam_offset[axis])
         });
+        let torso_part = &family.parts[&CreaturePartSlotKey::Torso];
+        if prepared.target_torso_asset_id != torso_part.asset_id.0 {
+            return Err(fail(
+                "assembly bridge geometry target torso drift".to_string(),
+            ));
+        }
+        let target_manifest = if asset.logical_slot == CreaturePartSlotKey::Torso {
+            None
+        } else {
+            let torso_asset = catalog.asset(&torso_part.asset_id).ok_or_else(|| {
+                fail("assembly bridge geometry references an unknown torso asset".to_string())
+            })?;
+            let torso_lod = torso_asset
+                .lods
+                .iter()
+                .find(|entry| entry.lod == lod)
+                .ok_or_else(|| {
+                    fail("assembly bridge geometry target torso LOD is missing".to_string())
+                })?;
+            let bytes =
+                fs::read(staging_root.join(&torso_lod.socket_manifest)).map_err(|error| {
+                    fail(format!(
+                        "assembly bridge geometry target torso manifest is missing: {error}"
+                    ))
+                })?;
+            Some(
+                serde_json::from_slice::<StagedSocketManifest>(&bytes).map_err(|error| {
+                    fail(format!(
+                        "assembly bridge geometry target torso manifest is invalid: {error}"
+                    ))
+                })?,
+            )
+        };
+        let source_centroid = socket_centroid(manifest, &prepared.bridge_sockets)?;
+        let expected_translation = if let Some(target) = &target_manifest {
+            let target_centroid = socket_centroid(target, &prepared.bridge_sockets)?;
+            let linear = prepared_matrix(&prepared.fit, [0.0; 3]);
+            let transformed_source = transform_matrix_point(linear, source_centroid);
+            std::array::from_fn(|axis| {
+                target_centroid[axis] + authored_offset[axis] - transformed_source[axis]
+            })
+        } else {
+            authored_offset
+        };
+        let expected_matrix = prepared_matrix(&prepared.fit, expected_translation);
         if !socket_matches(&prepared.fit, part.fit)
             || !(0..3).all(|axis| {
                 near(
@@ -1022,21 +1174,104 @@ fn validate_assembly_preparations(
                     expected_translation[axis],
                 )
             })
-            || !prepared.prepared_matrix.into_iter().all(f64::is_finite)
-            || !near(prepared.prepared_matrix[3], expected_translation[0])
-            || !near(prepared.prepared_matrix[7], expected_translation[1])
-            || !near(prepared.prepared_matrix[11], expected_translation[2])
         {
             return Err(fail(
                 "assembly preparation fit or seam transform drift".to_string(),
             ));
         }
-        let predicted = part
-            .seam_offset
-            .into_iter()
-            .map(|value| f64::from(value).powi(2))
-            .sum::<f64>()
-            .sqrt();
+        if !prepared.prepared_matrix.into_iter().all(f64::is_finite)
+            || !prepared
+                .prepared_matrix
+                .into_iter()
+                .zip(expected_matrix)
+                .all(|(actual, expected)| near(actual, expected))
+        {
+            return Err(fail(
+                "assembly preparation prepared matrix drift".to_string(),
+            ));
+        }
+        if prepared.bridge_geometry.len() != prepared.bridge_sockets.len() {
+            return Err(fail(
+                "assembly bridge geometry evidence count drift".to_string(),
+            ));
+        }
+        let mut bridge_sockets = BTreeSet::new();
+        let mut predicted = 0.0_f64;
+        for bridge in &prepared.bridge_geometry {
+            let source_socket = manifest.sockets.get(&bridge.socket).ok_or_else(|| {
+                fail("assembly bridge geometry source socket is missing".to_string())
+            })?;
+            let prepared_geometry = observed_geometry.get(&bridge.socket).ok_or_else(|| {
+                fail("assembly bridge geometry has no prepared vertex evidence".to_string())
+            })?;
+            let expected_runtime_group =
+                runtime_group_for_socket(asset.logical_slot, &bridge.socket).ok_or_else(|| {
+                    fail("assembly bridge geometry socket has no runtime OBJ group".to_string())
+                })?;
+            let expected_target = if let Some(target) = &target_manifest {
+                let target_socket = target.sockets.get(&bridge.socket).ok_or_else(|| {
+                    fail("assembly bridge geometry target socket is missing".to_string())
+                })?;
+                std::array::from_fn(|axis| target_socket.translation[axis] + authored_offset[axis])
+            } else {
+                transform_matrix_point(prepared.prepared_matrix, bridge.source_anchor)
+            };
+            let expected_bridge_matrix = if target_manifest.is_some() {
+                let linear = prepared_matrix(&prepared.fit, [0.0; 3]);
+                let linear_source = transform_matrix_point(linear, bridge.source_anchor);
+                let translation =
+                    std::array::from_fn(|axis| expected_target[axis] - linear_source[axis]);
+                prepared_matrix(&prepared.fit, translation)
+            } else {
+                prepared.prepared_matrix
+            };
+            let transformed = transform_matrix_point(expected_bridge_matrix, bridge.source_anchor);
+            let residual = vector_distance(transformed, expected_target);
+            if !bridge_sockets.insert(bridge.socket.clone())
+                || !prepared.bridge_sockets.contains(&bridge.socket)
+                || bridge.runtime_group != expected_runtime_group
+                || !manifest.expected_groups.contains(expected_runtime_group)
+                || bridge.prepared_vertex_count != prepared_geometry.prepared_vertex_count
+                || !near(
+                    bridge.applied_overlap_depth,
+                    prepared_geometry.applied_overlap_depth,
+                )
+                || !vectors_near(bridge.original_anchor, prepared_geometry.original_anchor)
+                || !vectors_near(bridge.prepared_anchor, prepared_geometry.prepared_anchor)
+                || !vectors_near(bridge.source_anchor, source_socket.translation)
+                || !vectors_near(bridge.target_anchor, expected_target)
+                || !vectors_near(bridge.transformed_source_anchor, transformed)
+                || !bridge.prepared_matrix.into_iter().all(f64::is_finite)
+                || !bridge
+                    .prepared_matrix
+                    .into_iter()
+                    .zip(expected_bridge_matrix)
+                    .all(|(actual, expected)| near(actual, expected))
+                || !near(bridge.residual, residual)
+                || !bridge
+                    .source_anchor
+                    .into_iter()
+                    .chain(bridge.target_anchor)
+                    .chain(bridge.transformed_source_anchor)
+                    .all(f64::is_finite)
+            {
+                return Err(fail(
+                    "assembly bridge geometry transformed socket evidence drift".to_string(),
+                ));
+            }
+            predicted = predicted.max(residual);
+        }
+        if bridge_sockets
+            != prepared
+                .bridge_sockets
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        {
+            return Err(fail(
+                "assembly bridge geometry socket evidence drift".to_string(),
+            ));
+        }
         if !near(prepared.predicted_attachment_error, predicted)
             || prepared.predicted_attachment_error > prepared.attachment_error_bound + 1.0e-9
         {
@@ -1063,6 +1298,91 @@ fn socket_matches(actual: &StagedSocket, expected: SocketFrame) -> bool {
             f64::from(expected.rotation_xyzw[axis]),
         )
     }) && (0..3).all(|axis| near(actual.scale[axis], f64::from(expected.scale[axis])))
+}
+
+fn prepared_matrix(fit: &StagedSocket, translation: [f64; 3]) -> [f64; 16] {
+    let [x, y, z, w] = fit.rotation_xyzw;
+    let [sx, sy, sz] = fit.scale;
+    [
+        (1.0 - 2.0 * (y * y + z * z)) * sx,
+        (2.0 * (x * y - z * w)) * sy,
+        (2.0 * (x * z + y * w)) * sz,
+        translation[0],
+        (2.0 * (x * y + z * w)) * sx,
+        (1.0 - 2.0 * (x * x + z * z)) * sy,
+        (2.0 * (y * z - x * w)) * sz,
+        translation[1],
+        (2.0 * (x * z - y * w)) * sx,
+        (2.0 * (y * z + x * w)) * sy,
+        (1.0 - 2.0 * (x * x + y * y)) * sz,
+        translation[2],
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ]
+}
+
+fn transform_matrix_point(matrix: [f64; 16], point: [f64; 3]) -> [f64; 3] {
+    std::array::from_fn(|row| {
+        (0..3)
+            .map(|axis| matrix[row * 4 + axis] * point[axis])
+            .sum::<f64>()
+            + matrix[row * 4 + 3]
+    })
+}
+
+fn socket_centroid(
+    manifest: &StagedSocketManifest,
+    socket_names: &[String],
+) -> Result<[f64; 3], CreaturePartBuilderError> {
+    if socket_names.is_empty() {
+        return Err(CreaturePartBuilderError::Staging(
+            "assembly bridge geometry has no sockets".to_string(),
+        ));
+    }
+    let mut centroid = [0.0; 3];
+    for name in socket_names {
+        let socket = manifest.sockets.get(name).ok_or_else(|| {
+            CreaturePartBuilderError::Staging(format!(
+                "assembly bridge geometry socket {name} is missing"
+            ))
+        })?;
+        for (axis, value) in centroid.iter_mut().enumerate() {
+            *value += socket.translation[axis];
+        }
+    }
+    for value in &mut centroid {
+        *value /= socket_names.len() as f64;
+    }
+    Ok(centroid)
+}
+
+fn vector_distance(left: [f64; 3], right: [f64; 3]) -> f64 {
+    (0..3)
+        .map(|axis| (left[axis] - right[axis]).powi(2))
+        .sum::<f64>()
+        .sqrt()
+}
+
+fn vectors_near(left: [f64; 3], right: [f64; 3]) -> bool {
+    (0..3).all(|axis| near(left[axis], right[axis]))
+}
+
+fn runtime_group_for_socket(
+    logical_slot: CreaturePartSlotKey,
+    socket: &str,
+) -> Option<&'static str> {
+    match (logical_slot, socket) {
+        (CreaturePartSlotKey::Head, "neck") => Some("head"),
+        (CreaturePartSlotKey::Torso, _) => Some("torso"),
+        (CreaturePartSlotKey::Arms, "left-shoulder") => Some("left-arm"),
+        (CreaturePartSlotKey::Arms, "right-shoulder") => Some("right-arm"),
+        (CreaturePartSlotKey::Legs, "left-hip") => Some("left-leg"),
+        (CreaturePartSlotKey::Legs, "right-hip") => Some("right-leg"),
+        (CreaturePartSlotKey::Tail, "tail-base") => Some("tail-back"),
+        _ => None,
+    }
 }
 
 fn near(left: f64, right: f64) -> bool {
@@ -1306,9 +1626,15 @@ fn validate_topology_preserving_lods(
             ));
         }
     }
-    if compact.boundary_edges > full.boundary_edges || impostor.boundary_edges > full.boundary_edges
-    {
-        return Err(fail("LOD introduced open component boundaries"));
+    if compact.boundary_edges > full.boundary_edges {
+        return Err(fail(
+            "Full->Compact LOD introduced open component boundaries",
+        ));
+    }
+    if impostor.boundary_edges > compact.boundary_edges {
+        return Err(fail(
+            "Compact->Impostor LOD introduced open component boundaries",
+        ));
     }
     Ok(())
 }
@@ -1335,7 +1661,7 @@ fn canonical_recipe_sha256(text: &str) -> Result<String, CreaturePartBuilderErro
     Ok(sha256_hex(&canonical))
 }
 
-fn sha256_hex(input: &[u8]) -> String {
+pub fn sha256_hex(input: &[u8]) -> String {
     const INITIAL: [u32; 8] = [
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
         0x5be0cd19,
@@ -2313,6 +2639,28 @@ f 22/1/1 23/2/1 24/3/1
         let impostor = topology(30, 1);
 
         validate_topology_preserving_lods("fixture-head", &full, &compact, &impostor).unwrap();
+    }
+
+    #[test]
+    fn creature_part_builder_rejects_boundary_growth_only_between_compact_and_impostor() {
+        let topology = |triangles, boundaries| StagedObjTopology {
+            triangle_count: triangles,
+            connected_components: 1,
+            boundary_edges: boundaries,
+            non_manifold_edges: 0,
+            component_ids: BTreeSet::from(["object-a".to_string()]),
+            component_triangle_counts: BTreeMap::from([("object-a".to_string(), triangles)]),
+            component_connected_counts: BTreeMap::from([("object-a".to_string(), 1)]),
+        };
+        let error = validate_topology_preserving_lods(
+            "compact-impostor-boundary-regression",
+            &topology(12, 8),
+            &topology(8, 2),
+            &topology(4, 6),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Compact->Impostor"), "{error}");
     }
 
     #[test]

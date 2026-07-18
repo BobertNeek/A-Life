@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -13,7 +14,16 @@ import struct
 import subprocess
 import sys
 import unittest
+from unittest import mock
 import zlib
+
+
+IMPORTER_MODULE_SPEC = importlib.util.spec_from_file_location(
+    "build_geneforge_creature_parts", Path(__file__).with_name("build_geneforge_creature_parts.py")
+)
+assert IMPORTER_MODULE_SPEC is not None and IMPORTER_MODULE_SPEC.loader is not None
+importer = importlib.util.module_from_spec(IMPORTER_MODULE_SPEC)
+IMPORTER_MODULE_SPEC.loader.exec_module(importer)
 
 
 WORKSPACE = Path(__file__).resolve().parents[1]
@@ -655,6 +665,81 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
                 for key in ("generated_obj", "socket_manifest", "semantic_mask"):
                     self.assertTrue((staging / lod[key]).is_file())
 
+    def test_bind_output_digests_writes_external_contract_and_updates_receipt(self) -> None:
+        staging = self.valid_staging()
+        source_recipe = FIXTURE_ROOT / "valid/fixture_recipes.json"
+        output_recipe = TEST_OUTPUT / "bound-output-recipes.json"
+        source_before = source_recipe.read_bytes()
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(IMPORTER),
+                "bind-output-digests",
+                "--recipes",
+                str(source_recipe),
+                "--staging",
+                str(staging),
+                "--output",
+                str(output_recipe),
+            ],
+            cwd=WORKSPACE,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assert_success(completed)
+        self.assertEqual(source_recipe.read_bytes(), source_before)
+        bound = json.loads(output_recipe.read_text(encoding="utf-8"))
+        self.assertEqual(bound["recipe_sha256"], canonical_recipe_digest(bound))
+        for asset in bound["part_assets"]:
+            for lod in asset["lods"]:
+                for path_field, digest_field in (
+                    ("generated_obj", "generated_obj_sha256"),
+                    ("socket_manifest", "socket_manifest_sha256"),
+                    ("semantic_mask", "semantic_mask_sha256"),
+                    ):
+                    self.assertEqual(
+                        lod[digest_field],
+                        hashlib.sha256((staging / lod[path_field]).read_bytes()).hexdigest(),
+                    )
+        receipt = json.loads((staging / "build_receipt.json").read_text(encoding="utf-8"))
+        self.assertEqual(receipt["recipe_sha256"], bound["recipe_sha256"])
+
+    def test_atomic_pair_replace_rolls_back_first_destination_on_second_failure(self) -> None:
+        root = TEST_OUTPUT / "atomic-pair-replace"
+        root.mkdir(parents=True, exist_ok=True)
+        first_destination = root / "recipe.json"
+        second_destination = root / "build_receipt.json"
+        first_temporary = root / ".recipe.new"
+        second_temporary = root / ".receipt.new"
+        first_destination.write_text("old recipe\n", encoding="ascii")
+        second_destination.write_text("old receipt\n", encoding="ascii")
+        first_temporary.write_text("new recipe\n", encoding="ascii")
+        second_temporary.write_text("new receipt\n", encoding="ascii")
+        real_replace = os.replace
+        calls = 0
+
+        def fail_second(source, destination):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("injected second replacement failure")
+            return real_replace(source, destination)
+
+        with mock.patch.object(importer.os, "replace", side_effect=fail_second):
+            with self.assertRaisesRegex(OSError, "injected second replacement failure"):
+                importer.atomic_replace_pair(
+                    first_temporary,
+                    first_destination,
+                    second_temporary,
+                    second_destination,
+                )
+        self.assertEqual(first_destination.read_text(encoding="ascii"), "old recipe\n")
+        self.assertEqual(second_destination.read_text(encoding="ascii"), "old receipt\n")
+        self.assertFalse(first_temporary.exists())
+        self.assertFalse(second_temporary.exists())
+
     def test_repaired_geometry_has_smooth_normals_and_connected_lods(self) -> None:
         staging = self.valid_staging()
         for asset in load_recipe()["part_assets"]:
@@ -822,11 +907,15 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
             )
             for prepared in manifest["assembly_preparations"]:
                 observed.add((prepared["family_id"], prepared["logical_slot"]))
-                expected_translation = [
-                    prepared["fit"]["translation"][axis] + prepared["seam_offset"][axis]
-                    for axis in range(3)
-                ]
-                self.assertEqual(prepared["prepared_translation"], expected_translation)
+                expected_mode = (
+                    "per-group-socket-transforms"
+                    if prepared["logical_slot"] in {"arms", "legs"}
+                    else "slot-transform"
+                )
+                self.assertEqual(prepared["transform_mode"], expected_mode)
+                self.assertTrue(
+                    all(math.isfinite(value) for value in prepared["prepared_translation"])
+                )
                 self.assertTrue(prepared["bridge_sockets"])
                 self.assertTrue(prepared["bridge_kind"])
                 self.assertTrue(prepared["join_cover_kind"])
@@ -835,7 +924,96 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
                     recipe["assembly_contract"]["attachment_error_limit"],
                 )
                 self.assertEqual(len(prepared["prepared_matrix"]), 16)
+                self.assertEqual(prepared["prepared_matrix"][12:], [0.0, 0.0, 0.0, 1.0])
+                self.assertEqual(
+                    [
+                        prepared["prepared_matrix"][3],
+                        prepared["prepared_matrix"][7],
+                        prepared["prepared_matrix"][11],
+                    ],
+                    prepared["prepared_translation"],
+                )
+                self.assertTrue(prepared["bridge_geometry"])
+                residuals = []
+                for bridge in prepared["bridge_geometry"]:
+                    self.assertIn(bridge["socket"], prepared["bridge_sockets"])
+                    self.assertGreater(bridge["prepared_vertex_count"], 0)
+                    self.assertGreater(bridge["applied_overlap_depth"], 0.0)
+                    self.assertLessEqual(
+                        bridge["applied_overlap_depth"], prepared["overlap_depth"]
+                    )
+                    self.assertEqual(len(bridge["prepared_anchor"]), 3)
+                    self.assertEqual(len(bridge["source_anchor"]), 3)
+                    self.assertEqual(len(bridge["target_anchor"]), 3)
+                    self.assertEqual(len(bridge["transformed_source_anchor"]), 3)
+                    self.assertEqual(len(bridge["prepared_matrix"]), 16)
+                    self.assertEqual(
+                        bridge["prepared_matrix"][12:], [0.0, 0.0, 0.0, 1.0]
+                    )
+                    expected_group = {
+                        "neck": "head",
+                        "left-shoulder": "left-arm",
+                        "right-shoulder": "right-arm",
+                        "left-hip": "left-leg",
+                        "right-hip": "right-leg",
+                        "tail-base": "tail-back",
+                    }.get(bridge["socket"], "torso")
+                    if prepared["logical_slot"] == "torso":
+                        expected_group = "torso"
+                    self.assertEqual(bridge["runtime_group"], expected_group)
+                    self.assertIn(bridge["runtime_group"], manifest["expected_groups"])
+                    transformed = [
+                        sum(
+                            bridge["prepared_matrix"][row * 4 + axis]
+                            * bridge["source_anchor"][axis]
+                            for axis in range(3)
+                        )
+                        + bridge["prepared_matrix"][row * 4 + 3]
+                        for row in range(3)
+                    ]
+                    for actual, expected_coordinate in zip(
+                        bridge["transformed_source_anchor"], transformed
+                    ):
+                        self.assertAlmostEqual(actual, expected_coordinate, places=7)
+                    residual = math.sqrt(
+                        sum(
+                            (transformed[axis] - bridge["target_anchor"][axis]) ** 2
+                            for axis in range(3)
+                        )
+                    )
+                    self.assertAlmostEqual(bridge["residual"], residual, places=7)
+                    residuals.append(residual)
+                self.assertAlmostEqual(
+                    prepared["predicted_attachment_error"], max(residuals), places=7
+                )
+                self.assertLessEqual(
+                    prepared["predicted_attachment_error"],
+                    prepared["attachment_error_bound"],
+                )
         self.assertEqual(observed, expected)
+
+    def test_bridge_preparation_moves_source_geometry_within_overlap_bound(self) -> None:
+        source = {
+            "torso": [
+                (((0.0, 0.0, 0.0), (0.0, 0.0), 0.5),
+                 ((1.0, 0.0, 0.0), (1.0, 0.0), 0.5),
+                 ((0.0, 1.0, 0.0), (0.0, 1.0), 0.5)),
+            ]
+        }
+        prepared, evidence = importer.prepare_bridge_overlap_geometry(
+            source,
+            {"neck": {"translation": [0.0, 0.0, 1.0]}},
+            ["neck"],
+            0.02,
+        )
+        before = {corner[0] for triangle in source["torso"] for corner in triangle}
+        after = {corner[0] for triangle in prepared["torso"] for corner in triangle}
+        self.assertNotEqual(after, before)
+        self.assertEqual(evidence[0]["socket"], "neck")
+        self.assertGreater(evidence[0]["prepared_vertex_count"], 0)
+        self.assertGreater(evidence[0]["applied_overlap_depth"], 0.0)
+        self.assertLessEqual(evidence[0]["applied_overlap_depth"], 0.02)
+        self.assertIn(tuple(evidence[0]["prepared_anchor"]), after)
 
     def test_preview_emits_nonempty_pngs_for_every_donor_and_lod(self) -> None:
         staging = TEST_OUTPUT / "staging-preview"

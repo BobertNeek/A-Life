@@ -1,8 +1,9 @@
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
-use alife_tools::creature_part_builder::validate_geneforge_staging;
+use alife_tools::creature_part_builder::{sha256_hex, validate_geneforge_staging};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use serde_json::Value;
 
@@ -48,11 +49,56 @@ fn walk(root: &Path) -> Vec<PathBuf> {
 }
 
 fn fixture_staging() -> PathBuf {
-    workspace_path("target/artifacts/geneforge-import-tests/staging-a")
+    validator_fixture().join("staging")
 }
 
 fn fixture_recipe() -> PathBuf {
-    workspace_path("target/artifacts/geneforge-import-fixture/valid/fixture_recipes.json")
+    validator_fixture().join("fixture_recipes.json")
+}
+
+fn validator_fixture() -> &'static PathBuf {
+    static FIXTURE: OnceLock<PathBuf> = OnceLock::new();
+    FIXTURE.get_or_init(|| {
+        let source = workspace_path("target/artifacts/geneforge-import-tests/staging-a");
+        assert!(
+            source.join("build_receipt.json").is_file(),
+            "run python scripts/test_geneforge_creature_recipes.py first"
+        );
+        let root = workspace_path("target/artifacts/creature_parts/validator-fixture");
+        let staging = root.join("staging");
+        copy_tree(&source, &staging);
+
+        let mut recipe: Value =
+            serde_json::from_slice(&fs::read(production_recipe()).unwrap()).unwrap();
+        for asset in recipe["part_assets"].as_array_mut().unwrap() {
+            for lod in asset["lods"].as_array_mut().unwrap() {
+                for (path_field, digest_field) in [
+                    ("generated_obj", "generated_obj_sha256"),
+                    ("socket_manifest", "socket_manifest_sha256"),
+                    ("semantic_mask", "semantic_mask_sha256"),
+                ] {
+                    let relative = lod[path_field].as_str().unwrap();
+                    lod[digest_field] =
+                        serde_json::json!(sha256_hex(&fs::read(staging.join(relative)).unwrap()));
+                }
+            }
+        }
+        let recipe_path = root.join("fixture_recipes.json");
+        fs::create_dir_all(&root).unwrap();
+        let recipe_digest = write_recipe_with_canonical_digest(&recipe_path, recipe.clone());
+
+        let receipt_path = staging.join("build_receipt.json");
+        let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+        receipt["recipe_sha256"] = serde_json::json!(recipe_digest);
+        receipt["source_sha256"] = serde_json::json!({
+            "norn": recipe["sources"][0]["sha256"].as_str().unwrap(),
+            "ettin": recipe["sources"][1]["sha256"].as_str().unwrap(),
+            "grendel": recipe["sources"][2]["sha256"].as_str().unwrap(),
+        });
+        fs::write(&receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+        rewrite_all_receipt_digests(&staging);
+        root
+    })
 }
 
 fn production_recipe() -> PathBuf {
@@ -412,4 +458,105 @@ fn staged_validator_binds_external_recipe_sources_importer_and_assembly_metadata
         value["lod_topology"]["connected_components"] = serde_json::json!(999)
     });
     assert_rejected(&root, "topology");
+
+    let root = mutation_root("external-output-digest");
+    copy_tree(&source, &root);
+    let obj = first_with_extension(&root, "obj");
+    fs::write(
+        &obj,
+        [
+            fs::read(&obj).unwrap(),
+            b"# receipt-backed replacement\n".to_vec(),
+        ]
+        .concat(),
+    )
+    .unwrap();
+    rewrite_receipt_digest(&root, &obj);
+    assert_rejected(&root, "external catalog digest");
+
+    let root = mutation_root("prepared-matrix-linear");
+    copy_tree(&source, &root);
+    mutate_socket(&root, |value| {
+        value["assembly_preparations"][0]["prepared_matrix"][0] = serde_json::json!(9.0)
+    });
+    rewrite_all_receipt_digests(&root);
+    assert_rejected(&root, "prepared matrix");
+
+    let root = mutation_root("prepared-matrix-bottom-row");
+    copy_tree(&source, &root);
+    mutate_socket(&root, |value| {
+        value["assembly_preparations"][0]["prepared_matrix"][15] = serde_json::json!(2.0)
+    });
+    rewrite_all_receipt_digests(&root);
+    assert_rejected(&root, "prepared matrix");
+
+    let root = mutation_root("bridge-target-anchor");
+    copy_tree(&source, &root);
+    mutate_socket(&root, |value| {
+        value["assembly_preparations"][0]["bridge_geometry"][0]["target_anchor"][0] =
+            serde_json::json!(99.0)
+    });
+    rewrite_all_receipt_digests(&root);
+    assert_rejected(&root, "bridge geometry");
+
+    let root = mutation_root("bridge-runtime-group");
+    copy_tree(&source, &root);
+    mutate_socket(&root, |value| {
+        value["assembly_preparations"][0]["bridge_geometry"][0]["runtime_group"] =
+            serde_json::json!("wrong-group")
+    });
+    rewrite_all_receipt_digests(&root);
+    assert_rejected(&root, "bridge geometry");
+
+    let root = mutation_root("full-catalog-validation");
+    copy_tree(&source, &root);
+    let mut recipe: Value = serde_json::from_slice(&fs::read(fixture_recipe()).unwrap()).unwrap();
+    recipe["families"][0]["parts"]["head"]["fit"]["scale"] = serde_json::json!([1.0, 1.01, 1.0]);
+    let recipe_digest =
+        write_recipe_with_canonical_digest(&root.join("fixture_recipes.json"), recipe);
+    let receipt_path = root.join("build_receipt.json");
+    let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    receipt["recipe_sha256"] = serde_json::json!(recipe_digest);
+    fs::write(receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+    assert_rejected_with_recipe(
+        &root,
+        &root.join("fixture_recipes.json"),
+        "invalid external GeneForge recipe",
+    );
+}
+
+fn write_recipe_with_canonical_digest(path: &Path, mut recipe: Value) -> String {
+    recipe["recipe_sha256"] = serde_json::json!("0".repeat(64));
+    let digest = sha256_hex(&serde_json::to_vec(&recipe).unwrap());
+    recipe["recipe_sha256"] = serde_json::json!(digest.clone());
+    fs::write(path, serde_json::to_vec_pretty(&recipe).unwrap()).unwrap();
+    digest
+}
+
+fn rewrite_receipt_digest(root: &Path, changed: &Path) {
+    let receipt_path = root.join("build_receipt.json");
+    let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    let relative = changed
+        .strip_prefix(root)
+        .unwrap()
+        .to_string_lossy()
+        .replace('\\', "/");
+    receipt["outputs"][relative] = serde_json::json!(sha256_hex(&fs::read(changed).unwrap()));
+    fs::write(receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+}
+
+fn rewrite_all_receipt_digests(root: &Path) {
+    let receipt_path = root.join("build_receipt.json");
+    let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    let paths = receipt["outputs"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    for relative in paths {
+        receipt["outputs"][&relative] =
+            serde_json::json!(sha256_hex(&fs::read(root.join(&relative)).unwrap()));
+    }
+    fs::write(receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
 }
