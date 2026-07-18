@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Deterministic Blender 5.1 importer for staged GeneForge creature parts."""
+"""Deterministic Blender 5.1 importer for staged GeneForge creature parts.
+
+Path confinement assumes one importer/validator owns a staging tree at a time.
+Callers must not run a concurrent filesystem mutator that can swap checked path
+components between validation and open; symlink and Windows reparse components
+are rejected at each normal access boundary.
+"""
 
 from __future__ import annotations
 
@@ -29,6 +35,11 @@ REQUIRED_IMPORTER_VERSION = "alife.geneforge_importer.v2"
 MAX_DONOR_WORKERS = 3
 ANATOMY_POLYGON_AREA_EPSILON = 1.0e-6
 FILE_ATTRIBUTE_REPARSE_POINT = 0x0400
+MAX_STAGED_FILE_BYTES = 512 * 1024
+PNG_WIDTH = 64
+PNG_HEIGHT = 64
+PNG_FILTERED_BYTES = PNG_HEIGHT * (1 + PNG_WIDTH * 4)
+ANATOMY_TRANSACTION_SCHEMA = "alife.geneforge_anatomy_transaction.v1"
 LODS = (("full", 1.0, 1200), ("compact", 0.65, 800), ("impostor", 0.35, 400))
 GROUP_COLORS = {
     "head": (230, 92, 88, 255),
@@ -130,6 +141,8 @@ def load_recipe(path: Path) -> dict:
         if set(selector.get("object_visscripts", {})) != set(selector.get("include_objects", [])):
             raise ImportFailure(f"{asset.get('id')} lacks exact kc3dsbpy_visscript contracts")
         validate_anatomy_authoring(asset)
+        if "source_audit" in asset["anatomy_authoring"]:
+            validate_anatomy_source_audit(asset)
         for lod in asset.get("lods", []):
             for field in ("anatomy_mask", "anatomy_mask_sha256"):
                 if field not in lod:
@@ -185,6 +198,23 @@ def validate_anatomy_authoring(asset: dict) -> None:
     missing = REQUIRED_ANATOMY_CHANNELS[slot] - authored_channels
     if missing:
         raise ImportFailure(f"{asset.get('id')} anatomy profile lacks channels: {sorted(missing)}")
+
+
+def validate_anatomy_source_audit(asset: dict) -> None:
+    audit = asset.get("anatomy_authoring", {}).get("source_audit")
+    if (
+        not isinstance(audit, dict)
+        or audit.get("schema") != "alife.geneforge_anatomy_source_audit.v1"
+        or audit.get("semantic_lod") != "full"
+        or not re.fullmatch(r"[0-9a-f]{64}", str(audit.get("semantic_occupancy_sha256", "")))
+        or not isinstance(audit.get("occupied_pixels"), int)
+        or audit.get("occupied_pixels", 0) <= 0
+        or audit.get("landmarks") != sorted(asset.get("landmarks", {}))
+        or audit.get("landmark_positions") != asset.get("landmarks")
+        or not isinstance(audit.get("semantic_groups"), dict)
+        or not isinstance(audit.get("channel_atlas_bounds"), dict)
+    ):
+        raise ImportFailure(f"{asset.get('id')} has invalid source anatomy audit evidence")
 
 
 def _unit_pair(value) -> bool:
@@ -605,7 +635,9 @@ def command_build(args, recipe: dict, blender: Path) -> None:
         staged_output_path(temporary, "build_receipt.json").write_text(
             json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
-        _verify_receipt_outputs(temporary, receipt, recipe)
+        _verify_receipt_outputs(
+            temporary, receipt, recipe, require_recipe_output_digests=False
+        )
         if staging.exists():
             shutil.rmtree(staging)
         temporary.replace(staging)
@@ -628,39 +660,83 @@ def png_bytes(width: int, height: int, pixels: bytes) -> bytes:
 
 
 def decode_rgba_png(data: bytes) -> tuple[int, int, bytes]:
-    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+    if len(data) > MAX_STAGED_FILE_BYTES:
+        raise ImportFailure("anatomy source PNG exceeds 512 KiB")
+    if len(data) < 8 or data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ImportFailure("anatomy source is not a PNG")
     offset = 8
     width = height = None
     compressed = bytearray()
+    saw_iend = False
+    saw_idat = False
     while offset < len(data):
-        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        if len(data) - offset < 12:
+            raise ImportFailure("anatomy source PNG has a truncated chunk header")
+        length = int.from_bytes(data[offset : offset + 4], "big")
+        chunk_end = offset + 12 + length
+        if chunk_end > len(data):
+            raise ImportFailure("anatomy source PNG has a truncated chunk payload")
         kind = data[offset + 4 : offset + 8]
         payload = data[offset + 8 : offset + 8 + length]
-        if zlib.crc32(kind + payload) & 0xFFFFFFFF != struct.unpack(">I", data[offset + 8 + length : offset + 12 + length])[0]:
+        expected_crc = int.from_bytes(data[offset + 8 + length : chunk_end], "big")
+        if zlib.crc32(kind + payload) & 0xFFFFFFFF != expected_crc:
             raise ImportFailure("anatomy source PNG has an invalid chunk checksum")
-        offset += 12 + length
+        offset = chunk_end
+        if width is None and kind != b"IHDR":
+            raise ImportFailure("anatomy source PNG must begin with IHDR")
         if kind == b"IHDR":
-            width, height, depth, color, compression, filtering, interlace = struct.unpack(">IIBBBBB", payload)
-            if (depth, color, compression, filtering, interlace) != (8, 6, 0, 0, 0):
-                raise ImportFailure("anatomy source PNG must be deterministic RGBA8")
+            if width is not None or length != 13 or saw_idat:
+                raise ImportFailure("anatomy source PNG has invalid IHDR structure")
+            width, height, depth, color, compression, filtering, interlace = struct.unpack(
+                ">IIBBBBB", payload
+            )
+            if (width, height, depth, color, compression, filtering, interlace) != (
+                PNG_WIDTH,
+                PNG_HEIGHT,
+                8,
+                6,
+                0,
+                0,
+                0,
+            ):
+                raise ImportFailure("anatomy source PNG must be exactly 64x64 native deterministic RGBA8")
         elif kind == b"IDAT":
+            if width is None:
+                raise ImportFailure("anatomy source PNG has IDAT before IHDR")
+            saw_idat = True
+            if len(compressed) + length > MAX_STAGED_FILE_BYTES:
+                raise ImportFailure("anatomy source PNG has oversized compressed data")
             compressed.extend(payload)
         elif kind == b"IEND":
+            if length != 0:
+                raise ImportFailure("anatomy source PNG has invalid IEND structure")
+            saw_iend = True
             break
-    if width is None or height is None:
-        raise ImportFailure("anatomy source PNG is missing IHDR")
-    raw = zlib.decompress(bytes(compressed))
-    stride = width * 4
-    if len(raw) != height * (stride + 1):
+    if width is None or height is None or not saw_idat or not saw_iend:
+        raise ImportFailure("anatomy source PNG is missing required chunks")
+    if offset != len(data):
+        raise ImportFailure("anatomy source PNG has trailing bytes after IEND")
+    try:
+        decoder = zlib.decompressobj()
+        raw = decoder.decompress(bytes(compressed), PNG_FILTERED_BYTES + 1)
+    except zlib.error as error:
+        raise ImportFailure(f"anatomy source PNG has invalid zlib data: {error}") from error
+    if len(raw) > PNG_FILTERED_BYTES or decoder.unconsumed_tail:
+        raise ImportFailure("anatomy source PNG exceeds the bounded decoded size")
+    if not decoder.eof:
+        raise ImportFailure("anatomy source PNG has a truncated zlib stream")
+    if decoder.unused_data:
+        raise ImportFailure("anatomy source PNG has trailing zlib data")
+    stride = PNG_WIDTH * 4
+    if len(raw) != PNG_FILTERED_BYTES:
         raise ImportFailure("anatomy source PNG has invalid decompressed length")
     pixels = bytearray()
-    for row in range(height):
+    for row in range(PNG_HEIGHT):
         start = row * (stride + 1)
         if raw[start] != 0:
             raise ImportFailure("anatomy source PNG must use deterministic filter zero")
         pixels.extend(raw[start + 1 : start + 1 + stride])
-    return width, height, bytes(pixels)
+    return PNG_WIDTH, PNG_HEIGHT, bytes(pixels)
 
 
 def _point_in_polygon(point: tuple[float, float], vertices: list[list[float]]) -> bool:
@@ -817,7 +893,9 @@ def command_bind_output_digests(args, recipe: dict) -> None:
         staging, "build_receipt.json", "staged build receipt"
     )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    _verify_receipt_outputs(staging, receipt, recipe)
+    _verify_receipt_outputs(
+        staging, receipt, recipe, require_recipe_output_digests=False
+    )
     bound_outputs = {}
     for asset in recipe["part_assets"]:
         for lod in asset["lods"]:
@@ -881,9 +959,17 @@ def _expected_receipt_outputs(recipe: dict, include_anatomy: bool) -> dict[str, 
     return expected
 
 
-def _verify_receipt_outputs(staging: Path, receipt: dict, recipe: dict) -> bool:
+def _verify_receipt_outputs(
+    staging: Path,
+    receipt: dict,
+    recipe: dict,
+    *,
+    require_recipe_output_digests: bool = True,
+) -> bool:
     if receipt.get("schema") != "alife.geneforge_build_receipt.v2":
         raise ImportFailure("augment-anatomy requires a v2 build receipt")
+    if receipt.get("recipe_sha256", "").lower() != recipe.get("recipe_sha256", "").lower():
+        raise ImportFailure("build receipt recipe digest does not match the input recipe")
     outputs = receipt.get("outputs")
     if not isinstance(outputs, dict) or any(
         not isinstance(relative, str) or not isinstance(digest, str)
@@ -955,10 +1041,29 @@ def _verify_receipt_outputs(staging: Path, receipt: dict, recipe: dict) -> bool:
     ):
         raise ImportFailure("receipt source accounting has stale top-level counts")
 
+    recipe_digests = {}
+    for asset in recipe["part_assets"]:
+        for lod in asset["lods"]:
+            for path_field, digest_field in (
+                ("generated_obj", "generated_obj_sha256"),
+                ("socket_manifest", "socket_manifest_sha256"),
+                ("semantic_mask", "semantic_mask_sha256"),
+                ("anatomy_mask", "anatomy_mask_sha256"),
+            ):
+                relative = _relative_staged_path(lod[path_field]).as_posix()
+                if relative in output_set:
+                    recipe_digests[relative] = lod[digest_field].lower()
+    if set(recipe_digests) != output_set:
+        raise ImportFailure("input recipe does not bind every existing receipt output")
     for relative, expected in outputs.items():
         path = confined_existing_staged_path(staging, relative, "staged receipt output")
-        if sha256_file(path) != expected:
+        if path.stat().st_size > MAX_STAGED_FILE_BYTES:
+            raise ImportFailure(f"existing staged output exceeds 512 KiB: {relative}")
+        actual = sha256_file(path)
+        if actual != expected.lower():
             raise ImportFailure(f"existing staged output digest mismatch: {relative}")
+        if require_recipe_output_digests and actual != recipe_digests[relative]:
+            raise ImportFailure(f"input recipe output digest mismatch: {relative}")
     return include_anatomy
 
 
@@ -1063,14 +1168,162 @@ def _final_receipt_sources(receipt: dict, recipe: dict) -> list[dict]:
     return sources
 
 
+def _augmentation_transaction_path(staging: Path) -> Path:
+    return staging.with_name(f".{staging.name}.augment-transaction.json")
+
+
+def _durable_json_write(path: Path, payload: dict) -> None:
+    temporary = path.with_name(f".{path.name}.write-{os.getpid()}")
+    with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+        json.dump(payload, stream, indent=2, sort_keys=True)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+
+
+def _pair_recipe_digest(path: Path, label: str) -> str:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ImportFailure(f"{label} is unreadable: {path}") from error
+    digest = payload.get("recipe_sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+        raise ImportFailure(f"{label} has no valid recipe digest: {path}")
+    return digest.lower()
+
+
+def _write_augmentation_phase(marker: Path, transaction: dict, phase: str) -> None:
+    transaction["phase"] = phase
+    _durable_json_write(marker, transaction)
+
+
+def _recover_augmentation_transaction(staging: Path, output: Path) -> None:
+    marker = _augmentation_transaction_path(staging)
+    if not marker.exists():
+        return
+    try:
+        transaction = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ImportFailure(f"anatomy transaction marker is unreadable: {marker}") from error
+    if transaction.get("schema") != ANATOMY_TRANSACTION_SCHEMA:
+        raise ImportFailure(f"anatomy transaction marker has an unsupported schema: {marker}")
+    expected_staging = str(staging.resolve(strict=False))
+    expected_output = str(output.resolve(strict=False))
+    if transaction.get("staging") != expected_staging or transaction.get("output") != expected_output:
+        raise ImportFailure("anatomy transaction marker does not match requested staging/output")
+
+    temporary = Path(transaction["temporary"])
+    backup = Path(transaction["backup"])
+    recipe_temporary = Path(transaction["recipe_temporary"])
+    recipe_backup = Path(transaction["recipe_backup"])
+    expected_paths = (
+        (temporary, staging.parent.resolve(), f"{staging.name}.augment-tmp-"),
+        (backup, staging.parent.resolve(), f"{staging.name}.augment-rollback-"),
+        (recipe_temporary, output.parent.resolve(), f".{output.name}.augment-tmp-"),
+        (recipe_backup, output.parent.resolve(), f".{output.name}.augment-rollback-"),
+    )
+    for path, parent, prefix in expected_paths:
+        if path.parent.resolve(strict=False) != parent or not path.name.startswith(prefix):
+            raise ImportFailure("anatomy transaction marker contains an unsafe recovery path")
+    old_digest = transaction["old_recipe_sha256"]
+    new_digest = transaction["new_recipe_sha256"]
+    live_staging_digest = (
+        _pair_recipe_digest(staging / "build_receipt.json", "live staging receipt")
+        if (staging / "build_receipt.json").is_file()
+        else None
+    )
+    live_recipe_digest = _pair_recipe_digest(output, "live recipe") if output.is_file() else None
+
+    if live_staging_digest == new_digest and live_recipe_digest == new_digest:
+        if backup.exists():
+            shutil.rmtree(backup)
+    else:
+        if live_staging_digest == new_digest and staging.exists():
+            shutil.rmtree(staging)
+        if backup.exists():
+            backup.replace(staging)
+        if live_recipe_digest == new_digest and recipe_backup.is_file():
+            os.replace(recipe_backup, output)
+        recovered_staging = _pair_recipe_digest(
+            staging / "build_receipt.json", "recovered staging receipt"
+        )
+        recovered_recipe = _pair_recipe_digest(output, "recovered recipe")
+        if recovered_staging != old_digest or recovered_recipe != old_digest:
+            raise ImportFailure("anatomy transaction recovery could not restore a matched pair")
+
+    if temporary.exists():
+        shutil.rmtree(temporary)
+    recipe_temporary.unlink(missing_ok=True)
+    recipe_backup.unlink(missing_ok=True)
+    marker.unlink(missing_ok=True)
+
+
+def _promote_augmented_pair(
+    staging: Path,
+    temporary: Path,
+    backup: Path,
+    recipe_temporary: Path,
+    output: Path,
+    phase_observer=None,
+) -> None:
+    marker = _augmentation_transaction_path(staging)
+    recipe_backup = output.with_name(f".{output.name}.augment-rollback-{os.getpid()}")
+    shutil.copy2(output, recipe_backup)
+    transaction = {
+        "schema": ANATOMY_TRANSACTION_SCHEMA,
+        "phase": "prepared",
+        "staging": str(staging.resolve(strict=False)),
+        "temporary": str(temporary.resolve(strict=False)),
+        "backup": str(backup.resolve(strict=False)),
+        "output": str(output.resolve(strict=False)),
+        "recipe_temporary": str(recipe_temporary.resolve(strict=False)),
+        "recipe_backup": str(recipe_backup.resolve(strict=False)),
+        "old_recipe_sha256": _pair_recipe_digest(output, "existing recipe"),
+        "new_recipe_sha256": _pair_recipe_digest(recipe_temporary, "new recipe"),
+    }
+    new_receipt_digest = _pair_recipe_digest(
+        temporary / "build_receipt.json", "new staging receipt"
+    )
+    if new_receipt_digest != transaction["new_recipe_sha256"]:
+        raise ImportFailure("new staging receipt and recipe are not a matched pair")
+    _write_augmentation_phase(marker, transaction, "prepared")
+    if phase_observer is not None:
+        phase_observer("prepared")
+
+    staging.replace(backup)
+    _write_augmentation_phase(marker, transaction, "staging-backed-up")
+    if phase_observer is not None:
+        phase_observer("staging-backed-up")
+
+    temporary.replace(staging)
+    _write_augmentation_phase(marker, transaction, "staging-promoted")
+    if phase_observer is not None:
+        phase_observer("staging-promoted")
+
+    os.replace(recipe_temporary, output)
+    _write_augmentation_phase(marker, transaction, "recipe-promoted")
+    if phase_observer is not None:
+        phase_observer("recipe-promoted")
+    _recover_augmentation_transaction(staging, output)
+
+
 def command_augment_anatomy(args, recipe: dict) -> None:
     staging = ensure_artifact_path(args.staging, "anatomy staging input")
+    output = args.output.resolve()
+    _recover_augmentation_transaction(staging, output)
+    recipe = load_recipe(args.recipes)
+    authority_recipe = (
+        load_recipe(args.authority_recipes)
+        if getattr(args, "authority_recipes", None) is not None
+        else recipe
+    )
     _assert_tree_has_no_reparse_entries(staging)
     receipt_path = confined_existing_staged_path(
         staging, "build_receipt.json", "staged build receipt"
     )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    _verify_receipt_outputs(staging, receipt, recipe)
+    _verify_receipt_outputs(staging, receipt, authority_recipe)
     old_stable = {
         lod[field]: sha256_file(
             confined_existing_staged_path(
@@ -1083,7 +1336,6 @@ def command_augment_anatomy(args, recipe: dict) -> None:
     }
     temporary = staging.with_name(staging.name + f".augment-tmp-{os.getpid()}")
     backup = staging.with_name(staging.name + f".augment-rollback-{os.getpid()}")
-    output = args.output.resolve()
     recipe_temporary = output.with_name(f".{output.name}.augment-tmp-{os.getpid()}")
     if temporary.exists():
         shutil.rmtree(temporary)
@@ -1134,20 +1386,13 @@ def command_augment_anatomy(args, recipe: dict) -> None:
         if after_stable != old_stable:
             raise ImportFailure("augment-anatomy changed existing OBJ or semantic bytes")
         recipe_temporary.write_text(json.dumps(recipe, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-        staging.replace(backup)
         try:
-            temporary.replace(staging)
-            os.replace(recipe_temporary, output)
+            _promote_augmented_pair(
+                staging, temporary, backup, recipe_temporary, output
+            )
         except BaseException:
-            if staging.exists():
-                shutil.rmtree(staging)
-            backup.replace(staging)
+            _recover_augmentation_transaction(staging, output)
             raise
-        try:
-            shutil.rmtree(backup)
-        except OSError:
-            # Both final replacements are committed; stale rollback cleanup is non-fatal.
-            pass
     except BaseException:
         if temporary.exists():
             shutil.rmtree(temporary)
@@ -1213,6 +1458,8 @@ def build_parser() -> argparse.ArgumentParser:
         if command in ("bind-output-digests", "augment-anatomy"):
             child.add_argument("--staging", type=Path, required=True)
             child.add_argument("--output", type=Path, required=True)
+            if command == "augment-anatomy":
+                child.add_argument("--authority-recipes", type=Path)
             continue
         child.add_argument("--source-root", type=Path, required=True)
         child.add_argument("--blender-exe", type=Path)

@@ -199,6 +199,7 @@ dependencies = [
  "alife_school",
  "alife_semantic",
  "alife_world",
+ "flate2",
  "image",
  "serde",
  "serde_json",

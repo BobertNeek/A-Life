@@ -114,6 +114,20 @@ def canonical_recipe_digest(recipe: dict) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def png_with_chunks(chunks: list[tuple[bytes, bytes]]) -> bytes:
+    output = bytearray(b"\x89PNG\r\n\x1a\n")
+    for kind, payload in chunks:
+        output.extend(struct.pack(">I", len(payload)))
+        output.extend(kind)
+        output.extend(payload)
+        output.extend(struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF))
+    return bytes(output)
+
+
+def rgba8_ihdr(width: int = 64, height: int = 64) -> bytes:
+    return struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+
+
 def read_rgba_png(path: Path) -> tuple[int, int, bytes]:
     data = path.read_bytes()
     if not data.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -320,6 +334,137 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
             self.assertEqual(semantic_alpha > 0, anatomy_alpha > 0)
         used = {tuple(anatomy_pixels[i : i + 3]) for i in range(0, len(anatomy_pixels), 4) if anatomy_pixels[i + 3]}
         self.assertTrue(set(EXPECTED_ANATOMY_COLORS.values()) >= used)
+
+    def test_production_anatomy_profiles_are_independently_audited_and_localized(self) -> None:
+        recipe = load_recipe()
+        staging = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        authored_profiles = set()
+        for asset in recipe["part_assets"]:
+            profile = asset["anatomy_authoring"]
+            audit = profile["source_audit"]
+            self.assertEqual(audit["schema"], "alife.geneforge_anatomy_source_audit.v1")
+            self.assertEqual(audit["semantic_lod"], "full")
+            self.assertEqual(audit["landmarks"], sorted(asset["landmarks"]))
+            authored = json.dumps(
+                [
+                    {key: value for key, value in zone.items() if key != "id"}
+                    for zone in profile["zones"]
+                ],
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            self.assertNotIn(authored, authored_profiles, asset["id"])
+            authored_profiles.add(authored)
+
+            full = next(lod for lod in asset["lods"] if lod["lod"] == "full")
+            width, height, semantic = importer.decode_rgba_png(
+                (staging / full["semantic_mask"]).read_bytes()
+            )
+            occupancy = bytes(1 if semantic[offset + 3] else 0 for offset in range(0, len(semantic), 4))
+            self.assertEqual((width, height), (64, 64))
+            self.assertEqual(audit["semantic_occupancy_sha256"], hashlib.sha256(occupancy).hexdigest())
+            self.assertEqual(audit["occupied_pixels"], sum(occupancy))
+            color_to_group = {
+                tuple(color): group for group, color in EXPECTED_GROUP_COLORS.items()
+            }
+            audited_groups: dict[str, list[tuple[float, float]]] = {}
+            for y in range(64):
+                for x in range(64):
+                    offset = (y * 64 + x) * 4
+                    if semantic[offset + 3]:
+                        group = color_to_group[tuple(semantic[offset : offset + 3])]
+                        local_uv = importer.semantic_source_uv(
+                            group, ((x + 0.5) / 64, (y + 0.5) / 64)
+                        )
+                        audited_groups.setdefault(group, []).append(local_uv)
+            self.assertEqual(set(audit["semantic_groups"]), set(audited_groups))
+            for group, points in audited_groups.items():
+                recorded = audit["semantic_groups"][group]
+                self.assertEqual(recorded["occupied_pixels"], len(points))
+                actual_bounds = [
+                    min(point[0] for point in points),
+                    min(point[1] for point in points),
+                    max(point[0] for point in points),
+                    max(point[1] for point in points),
+                ]
+                for actual, expected in zip(actual_bounds, recorded["local_uv_bounds"]):
+                    self.assertAlmostEqual(actual, expected, places=5)
+
+            anatomy = importer.anatomy_mask(
+                (staging / full["semantic_mask"]).read_bytes(), profile, asset["logical_slot"]
+            )
+            _, _, pixels = importer.decode_rgba_png(anatomy)
+            channel_points: dict[str, list[tuple[float, float]]] = {}
+            color_to_channel = {value: key for key, value in EXPECTED_ANATOMY_COLORS.items()}
+            for y in range(64):
+                for x in range(64):
+                    offset = (y * 64 + x) * 4
+                    if pixels[offset + 3]:
+                        channel = color_to_channel[tuple(pixels[offset : offset + 3])]
+                        channel_points.setdefault(channel, []).append(((x + 0.5) / 64, (y + 0.5) / 64))
+            for channel, expected_bounds in audit["channel_atlas_bounds"].items():
+                points = channel_points[channel]
+                actual = [
+                    min(point[0] for point in points),
+                    min(point[1] for point in points),
+                    max(point[0] for point in points),
+                    max(point[1] for point in points),
+                ]
+                for value, lower, upper in zip(actual, expected_bounds[0], expected_bounds[1]):
+                    self.assertGreaterEqual(value, lower, (asset["id"], channel, actual))
+                    self.assertLessEqual(value, upper, (asset["id"], channel, actual))
+
+            zones_by_channel = {
+                zone["channel"]: zone for zone in profile["zones"]
+            }
+            secondary_points = zones_by_channel["secondary-marking"]["shape"]["points"]
+            self.assertLessEqual(max(point[0] for point in secondary_points), 0.4)
+            if asset["logical_slot"] == "head":
+                inner_points = zones_by_channel["inner-ear"]["shape"]["points"]
+                muzzle = zones_by_channel["muzzle"]["shape"]
+                keratin_points = zones_by_channel["keratin-skin"]["shape"]["points"]
+                self.assertLessEqual(max(point[0] for point in inner_points), 0.45)
+                self.assertTrue(0.35 <= muzzle["center"][0] <= 0.65)
+                self.assertTrue(0.2 <= muzzle["center"][1] <= 0.55)
+                self.assertGreaterEqual(min(point[0] for point in keratin_points), 0.6)
+            elif asset["logical_slot"] == "torso":
+                belly = zones_by_channel["belly"]["shape"]
+                self.assertTrue(0.35 <= belly["center"][0] <= 0.65)
+                self.assertTrue(0.35 <= belly["center"][1] <= 0.65)
+            else:
+                extremity = "hands-feet" if asset["logical_slot"] in {"arms", "legs"} else "keratin-skin"
+                extremity_points = zones_by_channel[extremity]["shape"]["points"]
+                self.assertGreaterEqual(min(point[0] for point in extremity_points), 0.6)
+
+    def test_decode_rgba_png_rejects_malformed_or_unbounded_inputs_as_import_failure(self) -> None:
+        filtered_size = 64 * (1 + 64 * 4)
+        valid_rows = b"".join(b"\0" + bytes(64 * 4) for _ in range(64))
+        malformed = {
+            "truncated-header": b"\x89PNG\r\n\x1a\n\0\0",
+            "truncated-payload": png_with_chunks([(b"IHDR", rgba8_ihdr())])[:-2],
+            "chunk-before-ihdr": png_with_chunks(
+                [(b"tEXt", b"early"), (b"IHDR", rgba8_ihdr()), (b"IDAT", zlib.compress(valid_rows)), (b"IEND", b"")]
+            ),
+            "wrong-native-size": png_with_chunks(
+                [(b"IHDR", rgba8_ihdr(65, 64)), (b"IDAT", zlib.compress(valid_rows)), (b"IEND", b"")]
+            ),
+            "truncated-zlib": png_with_chunks(
+                [(b"IHDR", rgba8_ihdr()), (b"IDAT", zlib.compress(valid_rows)[:-2]), (b"IEND", b"")]
+            ),
+            "trailing-zlib": png_with_chunks(
+                [(b"IHDR", rgba8_ihdr()), (b"IDAT", zlib.compress(valid_rows) + b"trailing"), (b"IEND", b"")]
+            ),
+            "decoded-bomb": png_with_chunks(
+                [(b"IHDR", rgba8_ihdr()), (b"IDAT", zlib.compress(bytes(filtered_size + 4096))), (b"IEND", b"")]
+            ),
+            "trailing-png": png_with_chunks(
+                [(b"IHDR", rgba8_ihdr()), (b"IDAT", zlib.compress(valid_rows)), (b"IEND", b"")]
+            ) + b"trailing",
+        }
+        for name, data in malformed.items():
+            with self.subTest(name=name):
+                with self.assertRaises(importer.ImportFailure):
+                    importer.decode_rgba_png(data)
 
     def test_anatomy_authoring_rejects_malformed_shapes_groups_and_channels(self) -> None:
         asset = json.loads(json.dumps(self.assets["norn-head"]))
@@ -1032,6 +1177,131 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("exactly 126 legacy or 168 augmented outputs", completed.stderr)
         self.assertEqual(before, tree_digest(staging))
+
+    def test_augment_preflight_binds_receipt_and_every_existing_recipe_digest(self) -> None:
+        source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"
+        for name, mutation in (
+            ("receipt-recipe", "receipt"),
+            ("rebound-obj", "obj"),
+            ("rebound-socket", "socket"),
+            ("rebound-semantic", "semantic"),
+            ("rebound-anatomy", "anatomy"),
+        ):
+            with self.subTest(name=name):
+                staging = TEST_OUTPUT / f"augment-authority-{name}"
+                if staging.exists():
+                    shutil.rmtree(staging)
+                shutil.copytree(source, staging)
+                recipe = load_recipe()
+                receipt_path = staging / "build_receipt.json"
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                receipt["recipe_sha256"] = recipe["recipe_sha256"]
+                if mutation == "receipt":
+                    receipt["recipe_sha256"] = "0" * 64
+                else:
+                    lod = recipe["part_assets"][0]["lods"][0]
+                    field = {
+                        "obj": "generated_obj",
+                        "socket": "socket_manifest",
+                        "semantic": "semantic_mask",
+                        "anatomy": "anatomy_mask",
+                    }[mutation]
+                    path = staging / lod[field]
+                    path.write_bytes(path.read_bytes() + b"tampered")
+                    receipt["outputs"][lod[field]] = hashlib.sha256(path.read_bytes()).hexdigest()
+                receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+                with self.assertRaises(importer.ImportFailure):
+                    importer._verify_receipt_outputs(staging, receipt, recipe)
+
+    def test_interrupted_augmentation_promotion_recovers_a_matched_pair_at_every_phase(self) -> None:
+        for phase in ("prepared", "staging-backed-up", "staging-promoted", "recipe-promoted"):
+            with self.subTest(phase=phase):
+                root = TEST_OUTPUT / f"augment-recovery-{phase}"
+                if root.exists():
+                    shutil.rmtree(root)
+                staging = root / "staging"
+                temporary = root / "staging.augment-tmp-test"
+                backup = root / "staging.augment-rollback-test"
+                output = root / "recipe.json"
+                recipe_temporary = root / ".recipe.json.augment-tmp-test"
+                staging.mkdir(parents=True)
+                temporary.mkdir()
+                old_digest = "1" * 64
+                new_digest = "2" * 64
+                (staging / "build_receipt.json").write_text(
+                    json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+                )
+                (temporary / "build_receipt.json").write_text(
+                    json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+                )
+                output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+                recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+
+                def interrupt(observed: str) -> None:
+                    if observed == phase:
+                        raise KeyboardInterrupt(observed)
+
+                with self.assertRaises(KeyboardInterrupt):
+                    importer._promote_augmented_pair(
+                        staging,
+                        temporary,
+                        backup,
+                        recipe_temporary,
+                        output,
+                        phase_observer=interrupt,
+                    )
+                importer._recover_augmentation_transaction(staging, output)
+                receipt_digest = json.loads(
+                    (staging / "build_receipt.json").read_text(encoding="utf-8")
+                )["recipe_sha256"]
+                recipe_digest = json.loads(output.read_text(encoding="utf-8"))["recipe_sha256"]
+                self.assertEqual(receipt_digest, recipe_digest)
+                self.assertFalse(importer._augmentation_transaction_path(staging).exists())
+
+    def test_augmentation_recovery_rejects_marker_controlled_external_paths(self) -> None:
+        root = TEST_OUTPUT / "augment-recovery-unsafe-marker"
+        external = TEST_OUTPUT / "augment-recovery-external"
+        for path in (root, external):
+            if path.exists():
+                shutil.rmtree(path)
+        staging = root / "staging"
+        temporary = root / "staging.augment-tmp-test"
+        backup = root / "staging.augment-rollback-test"
+        output = root / "recipe.json"
+        recipe_temporary = root / ".recipe.json.augment-tmp-test"
+        staging.mkdir(parents=True)
+        temporary.mkdir()
+        external.mkdir()
+        sentinel = external / "sentinel.txt"
+        sentinel.write_text("preserve\n", encoding="ascii")
+        old_digest, new_digest = "1" * 64, "2" * 64
+        (staging / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+        )
+        (temporary / "build_receipt.json").write_text(
+            json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+        )
+        output.write_text(json.dumps({"recipe_sha256": old_digest}), encoding="utf-8")
+        recipe_temporary.write_text(json.dumps({"recipe_sha256": new_digest}), encoding="utf-8")
+        with self.assertRaises(KeyboardInterrupt):
+            importer._promote_augmented_pair(
+                staging,
+                temporary,
+                backup,
+                recipe_temporary,
+                output,
+                phase_observer=lambda phase: (_ for _ in ()).throw(KeyboardInterrupt())
+                if phase == "prepared"
+                else None,
+            )
+        marker = importer._augmentation_transaction_path(staging)
+        transaction = json.loads(marker.read_text(encoding="utf-8"))
+        transaction["temporary"] = str(external.resolve())
+        marker.write_text(json.dumps(transaction), encoding="utf-8")
+        with self.assertRaisesRegex(importer.ImportFailure, "unsafe recovery path"):
+            importer._recover_augmentation_transaction(staging, output)
+        self.assertEqual(sentinel.read_text(encoding="ascii"), "preserve\n")
+        marker.unlink()
 
     def test_augment_rejects_64x63_semantic_without_mutating_staging_or_recipe(self) -> None:
         source = WORKSPACE / "target/artifacts/creature_parts/geneforge-staging"

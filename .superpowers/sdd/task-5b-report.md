@@ -181,3 +181,99 @@ Independent review changed files:
 - `crates/alife_tools/src/bin/creature_part_builder.rs`
 - `crates/alife_tools/tests/creature_part_visual_contract.rs`
 - `.superpowers/sdd/task-5b-report.md`
+
+## Final Review Fixes (2026-07-18)
+
+### RED
+
+Focused regressions were added before production edits.
+
+- Python authority/decoder/anatomy/recovery command: `FAILED (failures=7,
+  errors=9)`. Receipt recipe drift and rebound OBJ/socket/semantic/anatomy bytes
+  were accepted; truncated PNGs escaped as `struct.error`/`zlib.error`; trailing
+  zlib/PNG data was accepted; source audits and promotion recovery APIs were
+  absent.
+- Rust decoder architecture test: `FAILED`, because `alife_tools/Cargo.toml`
+  did not directly declare `flate2 = "=1.1.9"` and the handwritten inflater
+  remained.
+- The four injected promotion interruptions all raised `AttributeError` before
+  implementation because no durable promotion/recovery contract existed.
+- The self-review marker-path regression was reverse-run with its guard removed:
+  `FAILED`, because recovery accepted an external cleanup path. Restoring the
+  guard made the same focused test pass.
+
+The first full Python integration run after authority hardening found eight
+fixture-build failures. Root cause: recipe output-digest authority had been
+applied to newly generated fixture outputs before `bind-output-digests`.
+Receipt/path/self-hash validation remains shared, while catalog digest authority
+is now required specifically by augmentation preflight. The focused build plus
+authority tests then passed before the full suite was rerun.
+
+### Fix
+
+- `augment-anatomy` now requires the receipt recipe digest to match its
+  authority recipe and compares every existing receipt output against both its
+  receipt hash and corresponding recipe hash before any copy or rewrite. The
+  optional `--authority-recipes` handoff supports a reviewed authoring revision
+  while preserving the prior receipt as content authority.
+- Python PNG parsing now caps input at 512 KiB, requires first-chunk native
+  64x64 RGBA8 IHDR, checks every chunk bound and CRC, bounds zlib output to the
+  exact 16,448 filtered bytes plus one detection byte, and rejects truncation,
+  non-EOF, trailing zlib bytes, trailing PNG bytes, nonzero filters, and wrong
+  decoded length as `ImportFailure`.
+- Rust now directly uses locked `flate2 1.1.9` with a 16,449-byte read cap and
+  exact `total_in` consumption. The handwritten DEFLATE reader/Huffman trees
+  were removed. First-chunk native IHDR, chunk bounds/CRC, exact IEND, filter
+  zero, and native image decoding remain enforced.
+- All 14 assets now have distinct per-asset zone geometry plus
+  `alife.geneforge_anatomy_source_audit.v1` evidence derived from the actual
+  full-LOD semantic occupancy, semantic-group local UV bounds, declared source
+  landmarks, channel localization bounds, and occupied pixel counts. Tests
+  enforce profile uniqueness and anatomical localization independent of the
+  recorded output bounds.
+- Promotion now writes and fsyncs a versioned transaction marker and records
+  `prepared`, `staging-backed-up`, `staging-promoted`, and `recipe-promoted`.
+  Startup recovery deterministically finalizes a matched new pair or restores
+  the matched old pair. Recovery rejects marker-controlled paths outside the
+  expected staging/recipe sibling names.
+- Python module and Rust confinement comments document the no-concurrent-mutator
+  assumption. Normal accesses continue to reject symlink and Windows reparse
+  components.
+
+### GREEN
+
+Final environment used `CARGO_TARGET_DIR=D:\A life\target`,
+`CARGO_BUILD_JOBS=1`, and `RUST_TEST_THREADS=1`.
+
+- `python scripts/test_geneforge_creature_recipes.py`: PASS, 59 tests in
+  161.327s.
+- `cargo test -p alife_game_app creature_part_catalog --lib -j 1 --offline`:
+  PASS, 23 tests.
+- `cargo test -p alife_tools creature_part_builder --lib -j 1 --offline`:
+  PASS, 14 tests.
+- `cargo test -p alife_tools --test creature_part_visual_contract -j 1
+  --offline`: PASS, 11 tests, including fixture and real staging.
+- Real staging CLI: PASS, 3 donors, 14 assets, 42 LODs, 42 OBJ, 42 semantic
+  masks, 42 anatomy masks, 4,315,432 bytes including receipt.
+- Independent hash proof: 84 protected OBJ+semantic outputs, 0 mismatches;
+  all 168 receipt outputs, 0 mismatches; recipe and receipt digest matched at
+  `8c8f0015bf67bab6ddf2f6da5dafb7221d61e458fc3f477e5a7c0385d2bb0eb2`.
+- `cargo fmt --all -- --check`: PASS.
+- `git diff --check`: PASS, line-ending conversion warnings only.
+
+Ignored controller audit image, inspected at original resolution with no text
+overlap:
+
+`target/artifacts/creature_parts/task-5b-anatomy-audit-contact-sheet.png`
+
+Final tracked changes:
+
+- `.superpowers/sdd/task-5b-report.md`
+- `Cargo.lock`
+- `crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json`
+- `crates/alife_game_app/src/creature_part_catalog.rs`
+- `crates/alife_tools/Cargo.toml`
+- `crates/alife_tools/src/creature_part_builder.rs`
+- `crates/alife_tools/tests/creature_part_visual_contract.rs`
+- `scripts/build_geneforge_creature_parts.py`
+- `scripts/test_geneforge_creature_recipes.py`

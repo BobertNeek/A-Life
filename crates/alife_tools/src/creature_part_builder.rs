@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
 use alife_game_app::{
@@ -9,6 +9,7 @@ use alife_game_app::{
     GeneForgePartAssetDefinition, SocketFrame,
 };
 use alife_world::CreaturePartSlotKey;
+use flate2::bufread::ZlibDecoder;
 use image::ImageDecoder;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -688,6 +689,8 @@ fn confined_existing_staged_path(
     canonical_staging_root: &Path,
     relative: &str,
 ) -> Result<PathBuf, CreaturePartBuilderError> {
+    // Confinement assumes no concurrent mutator swaps components after this
+    // check. Every ordinary access rechecks symlink and Windows reparse state.
     validate_relative_staging_path(relative)?;
     let mut candidate = canonical_staging_root.to_path_buf();
     for component in Path::new(relative).components() {
@@ -1628,6 +1631,17 @@ fn deterministic_png_idat(bytes: &[u8]) -> Result<Vec<u8>, String> {
         }
         let chunk_kind = &bytes[offset + 4..offset + 8];
         let payload = &bytes[offset + 8..offset + 8 + length];
+        let expected_crc = u32::from_be_bytes(
+            bytes[offset + 8 + length..offset + 12 + length]
+                .try_into()
+                .unwrap(),
+        );
+        if png_chunk_crc32(chunk_kind, payload) != expected_crc {
+            return Err("has an invalid PNG chunk checksum".to_string());
+        }
+        if !saw_ihdr && chunk_kind != b"IHDR" {
+            return Err("must begin with IHDR".to_string());
+        }
         match chunk_kind {
             b"IHDR" => {
                 if saw_ihdr || length != 13 {
@@ -1654,6 +1668,7 @@ fn deterministic_png_idat(bytes: &[u8]) -> Result<Vec<u8>, String> {
                     return Err("has invalid IEND structure".to_string());
                 }
                 saw_iend = true;
+                offset = chunk_end;
                 break;
             }
             _ => {}
@@ -1663,310 +1678,38 @@ fn deterministic_png_idat(bytes: &[u8]) -> Result<Vec<u8>, String> {
     if !saw_ihdr || !saw_iend || compressed.is_empty() {
         return Err("is missing required PNG chunks".to_string());
     }
+    if offset != bytes.len() {
+        return Err("has trailing bytes after IEND".to_string());
+    }
     Ok(compressed)
 }
 
-struct DeflateBitReader<'a> {
-    bytes: &'a [u8],
-    bit_offset: usize,
-}
-
-impl<'a> DeflateBitReader<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self {
-            bytes,
-            bit_offset: 0,
+fn png_chunk_crc32(kind: &[u8], payload: &[u8]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in kind.iter().chain(payload) {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xedb8_8320 & 0_u32.wrapping_sub(crc & 1));
         }
     }
-
-    fn read_bits(&mut self, count: usize) -> Result<u32, String> {
-        if count > 24 || self.bit_offset + count > self.bytes.len() * 8 {
-            return Err("has truncated DEFLATE data".to_string());
-        }
-        let mut value = 0_u32;
-        for bit in 0..count {
-            let byte = self.bytes[self.bit_offset / 8];
-            value |= u32::from((byte >> (self.bit_offset % 8)) & 1) << bit;
-            self.bit_offset += 1;
-        }
-        Ok(value)
-    }
-
-    fn align_to_byte(&mut self) {
-        self.bit_offset = (self.bit_offset + 7) & !7;
-    }
-
-    fn consumed_bytes(&self) -> usize {
-        self.bit_offset.div_ceil(8)
-    }
-}
-
-struct DeflateHuffmanTree {
-    entries: Vec<(u32, u8, u16)>,
-    maximum_length: u8,
-}
-
-impl DeflateHuffmanTree {
-    fn from_lengths(lengths: &[u8]) -> Result<Self, String> {
-        let mut counts = [0_u16; 16];
-        for length in lengths {
-            if *length > 15 {
-                return Err("has an invalid DEFLATE Huffman code length".to_string());
-            }
-            counts[*length as usize] += 1;
-        }
-        counts[0] = 0;
-        if counts.iter().all(|count| *count == 0) {
-            return Err("has an empty DEFLATE Huffman tree".to_string());
-        }
-        let mut remaining = 1_i32;
-        for count in counts.iter().skip(1) {
-            remaining = (remaining << 1) - i32::from(*count);
-            if remaining < 0 {
-                return Err("has an oversubscribed DEFLATE Huffman tree".to_string());
-            }
-        }
-        let mut next_code = [0_u32; 16];
-        let mut code = 0_u32;
-        for bits in 1..=15 {
-            code = (code + u32::from(counts[bits - 1])) << 1;
-            next_code[bits] = code;
-        }
-        let mut entries = Vec::new();
-        let mut maximum_length = 0_u8;
-        for (symbol, length) in lengths.iter().copied().enumerate() {
-            if length == 0 {
-                continue;
-            }
-            let canonical = next_code[length as usize];
-            next_code[length as usize] += 1;
-            entries.push((reverse_low_bits(canonical, length), length, symbol as u16));
-            maximum_length = maximum_length.max(length);
-        }
-        Ok(Self {
-            entries,
-            maximum_length,
-        })
-    }
-
-    fn decode(&self, reader: &mut DeflateBitReader<'_>) -> Result<u16, String> {
-        let mut code = 0_u32;
-        for length in 1..=self.maximum_length {
-            code |= reader.read_bits(1)? << (length - 1);
-            if let Some((_, _, symbol)) = self
-                .entries
-                .iter()
-                .find(|(entry, entry_length, _)| *entry_length == length && *entry == code)
-            {
-                return Ok(*symbol);
-            }
-        }
-        Err("has an invalid DEFLATE Huffman symbol".to_string())
-    }
-}
-
-fn reverse_low_bits(mut value: u32, count: u8) -> u32 {
-    let mut reversed = 0_u32;
-    for _ in 0..count {
-        reversed = (reversed << 1) | (value & 1);
-        value >>= 1;
-    }
-    reversed
+    !crc
 }
 
 fn inflate_zlib_bounded(data: &[u8], output_limit: usize) -> Result<Vec<u8>, String> {
-    if data.len() < 6 {
-        return Err("has truncated zlib data".to_string());
-    }
-    let cmf = data[0];
-    let flags = data[1];
-    if cmf & 0x0f != 8
-        || cmf >> 4 > 7
-        || ((u16::from(cmf) << 8) | u16::from(flags)) % 31 != 0
-        || flags & 0x20 != 0
-    {
-        return Err("has an unsupported zlib header".to_string());
-    }
-    let deflate = &data[2..data.len() - 4];
-    let mut reader = DeflateBitReader::new(deflate);
+    let decoder = ZlibDecoder::new(Cursor::new(data));
+    let mut bounded = decoder.take((output_limit + 1) as u64);
     let mut output = Vec::with_capacity(output_limit);
-    loop {
-        let final_block = reader.read_bits(1)? != 0;
-        match reader.read_bits(2)? {
-            0 => inflate_stored_block(&mut reader, &mut output, output_limit)?,
-            1 => {
-                let (literal, distance) = fixed_deflate_trees()?;
-                inflate_huffman_block(&mut reader, &literal, &distance, &mut output, output_limit)?;
-            }
-            2 => {
-                let (literal, distance) = dynamic_deflate_trees(&mut reader)?;
-                inflate_huffman_block(&mut reader, &literal, &distance, &mut output, output_limit)?;
-            }
-            _ => return Err("uses a reserved DEFLATE block type".to_string()),
-        }
-        if final_block {
-            break;
-        }
-    }
-    if reader.consumed_bytes() != deflate.len() {
-        return Err("has trailing DEFLATE bytes".to_string());
-    }
-    let expected_adler = u32::from_be_bytes(data[data.len() - 4..].try_into().unwrap());
-    if adler32_bytes(&output) != expected_adler {
-        return Err("has an invalid zlib checksum".to_string());
-    }
-    Ok(output)
-}
-
-fn inflate_stored_block(
-    reader: &mut DeflateBitReader<'_>,
-    output: &mut Vec<u8>,
-    output_limit: usize,
-) -> Result<(), String> {
-    reader.align_to_byte();
-    let length = reader.read_bits(16)? as u16;
-    let complement = reader.read_bits(16)? as u16;
-    if length != !complement {
-        return Err("has an invalid stored DEFLATE block length".to_string());
-    }
-    if output.len() + usize::from(length) > output_limit {
+    bounded
+        .read_to_end(&mut output)
+        .map_err(|error| format!("has invalid zlib/DEFLATE data: {error}"))?;
+    let decoder = bounded.into_inner();
+    if output.len() > output_limit {
         return Err("exceeds the bounded PNG decode size".to_string());
     }
-    for _ in 0..length {
-        output.push(reader.read_bits(8)? as u8);
+    if decoder.total_in() != data.len() as u64 {
+        return Err("has a truncated stream or trailing zlib data".to_string());
     }
-    Ok(())
-}
-
-fn fixed_deflate_trees() -> Result<(DeflateHuffmanTree, DeflateHuffmanTree), String> {
-    let literal_lengths = (0..288)
-        .map(|symbol| match symbol {
-            0..=143 => 8,
-            144..=255 => 9,
-            256..=279 => 7,
-            _ => 8,
-        })
-        .collect::<Vec<_>>();
-    Ok((
-        DeflateHuffmanTree::from_lengths(&literal_lengths)?,
-        DeflateHuffmanTree::from_lengths(&[5; 32])?,
-    ))
-}
-
-fn dynamic_deflate_trees(
-    reader: &mut DeflateBitReader<'_>,
-) -> Result<(DeflateHuffmanTree, DeflateHuffmanTree), String> {
-    let literal_count = reader.read_bits(5)? as usize + 257;
-    let distance_count = reader.read_bits(5)? as usize + 1;
-    let code_length_count = reader.read_bits(4)? as usize + 4;
-    let order = [
-        16_usize, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
-    ];
-    let mut code_lengths = [0_u8; 19];
-    for index in 0..code_length_count {
-        code_lengths[order[index]] = reader.read_bits(3)? as u8;
-    }
-    let code_length_tree = DeflateHuffmanTree::from_lengths(&code_lengths)?;
-    let required = literal_count + distance_count;
-    let mut lengths = Vec::with_capacity(required);
-    while lengths.len() < required {
-        match code_length_tree.decode(reader)? {
-            symbol @ 0..=15 => lengths.push(symbol as u8),
-            16 => {
-                let previous = *lengths
-                    .last()
-                    .ok_or_else(|| "repeats a missing DEFLATE code length".to_string())?;
-                let repeat = reader.read_bits(2)? as usize + 3;
-                lengths.extend(std::iter::repeat_n(previous, repeat));
-            }
-            17 => {
-                let repeat = reader.read_bits(3)? as usize + 3;
-                lengths.extend(std::iter::repeat_n(0, repeat));
-            }
-            18 => {
-                let repeat = reader.read_bits(7)? as usize + 11;
-                lengths.extend(std::iter::repeat_n(0, repeat));
-            }
-            _ => return Err("has an invalid DEFLATE code-length symbol".to_string()),
-        }
-        if lengths.len() > required {
-            return Err("has overflowing DEFLATE code lengths".to_string());
-        }
-    }
-    if lengths.get(256).copied().unwrap_or(0) == 0 {
-        return Err("has no DEFLATE end-of-block symbol".to_string());
-    }
-    let distance_lengths = lengths.split_off(literal_count);
-    Ok((
-        DeflateHuffmanTree::from_lengths(&lengths)?,
-        DeflateHuffmanTree::from_lengths(&distance_lengths)?,
-    ))
-}
-
-fn inflate_huffman_block(
-    reader: &mut DeflateBitReader<'_>,
-    literal_tree: &DeflateHuffmanTree,
-    distance_tree: &DeflateHuffmanTree,
-    output: &mut Vec<u8>,
-    output_limit: usize,
-) -> Result<(), String> {
-    const LENGTH_BASE: [usize; 29] = [
-        3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115,
-        131, 163, 195, 227, 258,
-    ];
-    const LENGTH_EXTRA: [usize; 29] = [
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
-    ];
-    const DISTANCE_BASE: [usize; 30] = [
-        1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537,
-        2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
-    ];
-    const DISTANCE_EXTRA: [usize; 30] = [
-        0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12,
-        13, 13,
-    ];
-    loop {
-        let symbol = literal_tree.decode(reader)?;
-        match symbol {
-            0..=255 => {
-                if output.len() == output_limit {
-                    return Err("exceeds the bounded PNG decode size".to_string());
-                }
-                output.push(symbol as u8);
-            }
-            256 => return Ok(()),
-            257..=285 => {
-                let length_index = usize::from(symbol - 257);
-                let length = LENGTH_BASE[length_index]
-                    + reader.read_bits(LENGTH_EXTRA[length_index])? as usize;
-                let distance_symbol = distance_tree.decode(reader)? as usize;
-                if distance_symbol >= DISTANCE_BASE.len() {
-                    return Err("has an invalid DEFLATE distance symbol".to_string());
-                }
-                let distance = DISTANCE_BASE[distance_symbol]
-                    + reader.read_bits(DISTANCE_EXTRA[distance_symbol])? as usize;
-                if distance == 0 || distance > output.len() || output.len() + length > output_limit
-                {
-                    return Err("has an invalid bounded DEFLATE back-reference".to_string());
-                }
-                for _ in 0..length {
-                    let value = output[output.len() - distance];
-                    output.push(value);
-                }
-            }
-            _ => return Err("has a reserved DEFLATE length symbol".to_string()),
-        }
-    }
-}
-
-fn adler32_bytes(bytes: &[u8]) -> u32 {
-    let mut a = 1_u32;
-    let mut b = 0_u32;
-    for byte in bytes {
-        a = (a + u32::from(*byte)) % 65_521;
-        b = (b + a) % 65_521;
-    }
-    (b << 16) | a
+    Ok(output)
 }
 
 fn validate_semantic_mask_png_bytes(

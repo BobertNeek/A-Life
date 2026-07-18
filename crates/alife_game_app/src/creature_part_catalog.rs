@@ -1896,7 +1896,7 @@ mod tests {
         assert_eq!(catalog.importer_version, "alife.geneforge_importer.v2");
         assert_eq!(
             catalog.recipe_sha256,
-            "85b3a060ac11529d3d57db816de3eb41c773ac825d8cda9ab0bbcb909cf25b74"
+            "8c8f0015bf67bab6ddf2f6da5dafb7221d61e458fc3f477e5a7c0385d2bb0eb2"
         );
 
         for asset in &catalog.part_assets {

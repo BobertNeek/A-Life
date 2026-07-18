@@ -670,6 +670,37 @@ fn staged_validator_requires_native_rgba8_and_filter_zero_png_rows() {
         };
         assert_rejected(&root, expected);
     }
+
+    let root = mutation_root("semantic-chunk-before-ihdr");
+    copy_tree(&fixture_staging(), &root);
+    let mask = first_named_output(&root, "_semantic.png");
+    let original = fs::read(&mask).unwrap();
+    let mut reordered = original[..8].to_vec();
+    append_png_chunk(&mut reordered, b"tEXt", b"early");
+    reordered.extend_from_slice(&original[8..]);
+    fs::write(&mask, reordered).unwrap();
+    rewrite_receipt_digest(&root, &mask);
+    assert_rejected(&root, "begin with IHDR");
+}
+
+#[test]
+fn png_validation_uses_the_locked_flate2_decoder_instead_of_handwritten_deflate() {
+    let crate_root = workspace_path("crates/alife_tools");
+    let manifest = fs::read_to_string(crate_root.join("Cargo.toml")).unwrap();
+    let implementation =
+        fs::read_to_string(crate_root.join("src/creature_part_builder.rs")).unwrap();
+    assert!(manifest.contains("flate2 = \"=1.1.9\""));
+    for handwritten in [
+        "DeflateBitReader",
+        "DeflateHuffmanTree",
+        "inflate_stored_block",
+        "dynamic_deflate_trees",
+    ] {
+        assert!(
+            !implementation.contains(handwritten),
+            "handwritten inflater remains: {handwritten}"
+        );
+    }
 }
 
 #[test]
