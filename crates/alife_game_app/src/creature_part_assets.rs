@@ -33,7 +33,6 @@ pub struct GeneratedPartObjPack {
 pub struct CreaturePartAssetLibrary {
     meshes: BTreeMap<crate::CreaturePartMeshKey, Handle<Mesh>>,
     bounds: BTreeMap<crate::CreaturePartMeshKey, CreatureVisualBounds>,
-    materials: BTreeMap<crate::CreaturePartMaterialKey, Handle<StandardMaterial>>,
     coat_cache: crate::CreatureCoatCache,
     coat_images: BTreeMap<u64, Handle<Image>>,
     coat_materials: BTreeMap<u64, Handle<StandardMaterial>>,
@@ -68,14 +67,17 @@ impl CreaturePartAssetLibrary {
                 let pack = load_generated_part_pack(assets_root, family, lod.lod)?;
                 for (slot, part) in pack.parts {
                     let key = crate::CreaturePartMeshKey {
-                        family: family.id,
+                        asset_id: crate::CreaturePartAssetId(format!(
+                            "legacy-family-{}",
+                            family.id.0
+                        )),
                         lod: lod.lod,
-                        slot,
+                        runtime_group: legacy_runtime_group(slot).to_string(),
                     };
                     let bounds = part
                         .bevy_bounds()
                         .ok_or(CreaturePartAssetError::InvalidBounds(slot))?;
-                    library.bounds.insert(key, bounds);
+                    library.bounds.insert(key.clone(), bounds);
                     library
                         .meshes
                         .insert(key, mesh_assets.add(part.into_mesh()));
@@ -91,7 +93,6 @@ impl CreaturePartAssetLibrary {
         Ok(Self {
             meshes: BTreeMap::new(),
             bounds: BTreeMap::new(),
-            materials: BTreeMap::new(),
             coat_cache: crate::CreatureCoatCache::new(limits)?,
             coat_images: BTreeMap::new(),
             coat_materials: BTreeMap::new(),
@@ -107,27 +108,8 @@ impl CreaturePartAssetLibrary {
         self.bounds.get(&key).copied()
     }
 
-    pub fn material(
-        &self,
-        key: crate::CreaturePartMaterialKey,
-    ) -> Option<Handle<StandardMaterial>> {
-        self.materials.get(&key).cloned()
-    }
-
-    pub fn cache_material(
-        &mut self,
-        key: crate::CreaturePartMaterialKey,
-        material: Handle<StandardMaterial>,
-    ) -> Handle<StandardMaterial> {
-        self.materials.entry(key).or_insert(material).clone()
-    }
-
     pub fn mesh_handle_count(&self) -> usize {
         self.meshes.len()
-    }
-
-    pub fn material_handle_count(&self) -> usize {
-        self.materials.len()
     }
 
     pub fn acquire_coat_assets(
@@ -208,6 +190,19 @@ impl CreaturePartAssetLibrary {
 }
 
 #[cfg(feature = "bevy-app")]
+fn legacy_runtime_group(slot: CreaturePartSlot) -> &'static str {
+    match slot {
+        CreaturePartSlot::Head => "head",
+        CreaturePartSlot::Torso => "torso",
+        CreaturePartSlot::LeftArm => "left-arm",
+        CreaturePartSlot::RightArm => "right-arm",
+        CreaturePartSlot::LeftLeg => "left-leg",
+        CreaturePartSlot::RightLeg => "right-leg",
+        CreaturePartSlot::TailBack => "tail-back",
+    }
+}
+
+#[cfg(feature = "bevy-app")]
 fn validate_coat_image(image: &Image) -> Result<(), CreaturePartAssetError> {
     let descriptor = &image.texture_descriptor;
     let size = descriptor.size;
@@ -272,6 +267,36 @@ impl PartMeshData {
         }
         let bounds = CreatureVisualBounds::new(min, max);
         bounds.is_valid().then_some(bounds)
+    }
+}
+
+#[cfg(test)]
+mod task6_identity_tests {
+    use std::collections::BTreeSet;
+
+    use crate::{CreaturePartAssetId, CreaturePartLodId, CreaturePartMeshKey};
+
+    #[test]
+    fn mesh_identity_is_asset_lod_and_runtime_group_only() {
+        let shared = CreaturePartAssetId("norn-head".into());
+        let keys = BTreeSet::from([
+            CreaturePartMeshKey {
+                asset_id: shared.clone(),
+                lod: CreaturePartLodId::Full,
+                runtime_group: "head".into(),
+            },
+            CreaturePartMeshKey {
+                asset_id: shared.clone(),
+                lod: CreaturePartLodId::Full,
+                runtime_group: "head".into(),
+            },
+            CreaturePartMeshKey {
+                asset_id: shared,
+                lod: CreaturePartLodId::Compact,
+                runtime_group: "head".into(),
+            },
+        ]);
+        assert_eq!(keys.len(), 2);
     }
 }
 

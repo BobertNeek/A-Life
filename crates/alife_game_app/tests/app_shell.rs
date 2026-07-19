@@ -2,9 +2,10 @@ use std::path::PathBuf;
 
 use alife_core::PolicyBackend;
 use alife_game_app::{
+    load_geneforge_creature_part_catalog, resolve_creature_part_display_sources,
     run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, AppShellLaunchConfig,
     GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode, GraphicalPlaygroundLaunchConfig,
-    ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    LifecycleSaveState, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
 };
 
 fn p34_fixture_root() -> PathBuf {
@@ -93,7 +94,7 @@ fn lifecycle_lineage_birth_inherits_and_mutates_appearance_genes() {
         })
         .collect::<Vec<_>>();
 
-    let part_catalog = alife_game_app::load_production_creature_part_catalog().unwrap();
+    let part_catalog = load_geneforge_creature_part_catalog().unwrap();
     assert!(alife_game_app::part_sources_are_ordinary_compatible(
         &offspring.appearance.part_sources,
         &part_catalog
@@ -136,4 +137,38 @@ fn lifecycle_lineage_birth_inherits_and_mutates_appearance_genes() {
         offspring.appearance.signature_line(),
         parents[1].appearance.signature_line()
     );
+}
+
+#[test]
+fn display_resolution_keeps_unknown_saved_part_id_byte_for_byte() {
+    let summary = run_lifecycle_lineage_smoke().unwrap();
+    let mut save = LifecycleSaveState::from_summary(&summary).unwrap();
+    save.records[0].appearance.part_sources.head = alife_world::CreaturePartFamilyId(999);
+    let before = save.to_json_string_pretty().unwrap();
+
+    let display = resolve_creature_part_display_sources(
+        save.records[0].appearance.part_sources,
+        &load_geneforge_creature_part_catalog().unwrap(),
+    )
+    .unwrap();
+
+    assert!(display.warning.is_some());
+    assert_eq!(display.saved_sources.head.0, 999);
+    assert_eq!(save.to_json_string_pretty().unwrap(), before);
+    assert_eq!(
+        LifecycleSaveState::from_json_str(&before).unwrap().records[0]
+            .appearance
+            .part_sources
+            .head
+            .0,
+        999
+    );
+
+    for family in 8..=11 {
+        save.records[0].appearance.part_sources =
+            alife_world::CreaturePartSources::coherent(alife_world::CreaturePartFamilyId(family));
+        let json = save.to_json_string_pretty().unwrap();
+        let roundtrip = LifecycleSaveState::from_json_str(&json).unwrap();
+        assert_eq!(roundtrip.records[0].appearance.part_sources.torso.0, family);
+    }
 }
