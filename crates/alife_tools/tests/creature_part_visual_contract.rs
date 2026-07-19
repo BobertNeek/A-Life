@@ -113,6 +113,46 @@ fn validator_fixture() -> &'static PathBuf {
             .status()
             .unwrap();
         assert!(status.success(), "fixture anatomy augmentation failed");
+        let status = Command::new("python")
+            .arg(workspace_path("scripts/build_geneforge_creature_parts.py"))
+            .arg("augment-cross-torso")
+            .arg("--recipes")
+            .arg(&recipe_path)
+            .arg("--staging")
+            .arg(&staging)
+            .arg("--output")
+            .arg(&recipe_path)
+            .status()
+            .unwrap();
+        assert!(status.success(), "fixture cross-torso augmentation failed");
+        root
+    })
+}
+
+fn real_validator_fixture() -> &'static PathBuf {
+    static FIXTURE: OnceLock<PathBuf> = OnceLock::new();
+    FIXTURE.get_or_init(|| {
+        let root = workspace_path("target/artifacts/creature_parts/validator-real");
+        let staging = root.join("staging");
+        copy_tree(
+            &workspace_path("target/artifacts/creature_parts/geneforge-staging"),
+            &staging,
+        );
+        let recipe = root.join("geneforge_recipes.cross-torso.json");
+        fs::create_dir_all(&root).unwrap();
+        fs::copy(production_recipe(), &recipe).unwrap();
+        let status = Command::new("python")
+            .arg(workspace_path("scripts/build_geneforge_creature_parts.py"))
+            .arg("augment-cross-torso")
+            .arg("--recipes")
+            .arg(&recipe)
+            .arg("--staging")
+            .arg(&staging)
+            .arg("--output")
+            .arg(&recipe)
+            .status()
+            .unwrap();
+        assert!(status.success(), "real cross-torso augmentation failed");
         root
     })
 }
@@ -212,18 +252,125 @@ fn fixture_and_real_staged_outputs_pass_the_complete_visual_contract() {
     assert_eq!(fixture_receipt.mask_count, 42);
     assert_eq!(fixture_receipt.anatomy_mask_count, 42);
 
-    let real = workspace_path("target/artifacts/creature_parts/geneforge-staging");
+    let real_root = real_validator_fixture();
+    let real = real_root.join("staging");
+    let real_recipe = real_root.join("geneforge_recipes.cross-torso.json");
     assert!(
         real.join("build_receipt.json").is_file(),
         "run the real Task 4 staged build before this integration gate"
     );
-    let real_receipt = validate_geneforge_staging(&real, &production_recipe()).unwrap();
+    let real_receipt = validate_geneforge_staging(&real, &real_recipe).unwrap();
     assert_eq!(real_receipt.donor_count, 3);
     assert_eq!(real_receipt.asset_count, 14);
     assert_eq!(real_receipt.lod_count, 42);
     assert_eq!(real_receipt.mask_count, 42);
     assert_eq!(real_receipt.anatomy_mask_count, 42);
     assert!(real_receipt.total_bytes <= 8 * 1024 * 1024);
+}
+
+#[test]
+fn staged_validator_exposes_task_5c_group_accounting_and_stable_hash_contract() {
+    let validation = validate_geneforge_staging(&fixture_staging(), &fixture_recipe()).unwrap();
+    assert_eq!(validation.canonical_slot_records, 180);
+    assert_eq!(validation.cross_torso_slot_records, 288);
+    assert_eq!(validation.canonical_group_keys, 252);
+    assert_eq!(validation.cross_torso_group_keys, 432);
+    assert_eq!(validation.total_group_keys, 684);
+
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(fixture_staging().join("build_receipt.json")).unwrap())
+            .unwrap();
+    let stable = &receipt["assembly_preparation"]["stable_hashes"];
+    assert_eq!(stable["obj"].as_object().unwrap().len(), 42);
+    assert_eq!(stable["semantic"].as_object().unwrap().len(), 42);
+    assert_eq!(stable["anatomy"].as_object().unwrap().len(), 42);
+}
+
+#[test]
+fn staged_validator_rejects_task_5c_identity_count_and_stable_hash_mutations() {
+    for (name, field, replacement) in [
+        ("family", "source_family_id", serde_json::json!(99)),
+        (
+            "source-asset",
+            "source_asset_id",
+            serde_json::json!("grendel-head"),
+        ),
+        (
+            "target-torso",
+            "target_torso_asset_id",
+            serde_json::json!("unknown-torso"),
+        ),
+        ("lod", "lod", serde_json::json!("missing")),
+        (
+            "runtime-group",
+            "runtime_group",
+            serde_json::json!("left-arm"),
+        ),
+        ("socket", "socket", serde_json::json!("left-shoulder")),
+        (
+            "transform-space",
+            "transform_space",
+            serde_json::json!("wrong-space"),
+        ),
+        (
+            "schema-digest",
+            "schema_digest",
+            serde_json::json!("0".repeat(64)),
+        ),
+        ("residual", "residual", serde_json::json!(0.025_001)),
+    ] {
+        let root = mutation_root(&format!("task-5c-{name}"));
+        copy_tree(&fixture_staging(), &root);
+        mutate_socket_matching(
+            &root,
+            |file| file.contains("_head_full_sockets.json"),
+            |value| {
+                value["assembly_preparations"][0]["group_transforms"][0][field] = replacement;
+            },
+        );
+        rewrite_all_receipt_digests(&root);
+        assert_rejected(&root, "assembly");
+    }
+
+    let root = mutation_root("task-5c-duplicate-key");
+    copy_tree(&fixture_staging(), &root);
+    mutate_socket_matching(
+        &root,
+        |file| file.contains("_head_full_sockets.json"),
+        |value| {
+            let duplicate = value["assembly_preparations"][0]["group_transforms"][0].clone();
+            value["assembly_preparations"][0]["group_transforms"]
+                .as_array_mut()
+                .unwrap()
+                .push(duplicate);
+        },
+    );
+    rewrite_all_receipt_digests(&root);
+    assert_rejected(&root, "group count");
+
+    let root = mutation_root("task-5c-count");
+    copy_tree(&fixture_staging(), &root);
+    let receipt_path = root.join("build_receipt.json");
+    let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    receipt["assembly_preparation"]["total_group_keys"] = serde_json::json!(683);
+    fs::write(&receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+    assert_rejected(&root, "metadata drift");
+
+    let root = mutation_root("task-5c-stable-hash");
+    copy_tree(&fixture_staging(), &root);
+    let receipt_path = root.join("build_receipt.json");
+    let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    let path = receipt["assembly_preparation"]["stable_hashes"]["obj"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .next()
+        .unwrap()
+        .clone();
+    receipt["assembly_preparation"]["stable_hashes"]["obj"][path] =
+        serde_json::json!("0".repeat(64));
+    fs::write(&receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+    assert_rejected(&root, "stable OBJ hash receipt digest drift");
 }
 
 #[test]

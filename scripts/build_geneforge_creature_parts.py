@@ -47,6 +47,71 @@ ANATOMY_TRIANGLE_TIE_BREAK = (
 )
 ANATOMY_CLASSIFIER = "source-geometry-feature-anchors.v3"
 ANATOMY_TRANSACTION_SCHEMA = "alife.geneforge_anatomy_transaction.v2"
+PREPARATION_SCHEMA = "alife.geneforge_assembly_preparation.v2"
+PREPARATION_VERSION = 2
+PREPARATION_AUGMENTOR_VERSION = "alife.geneforge_assembly_augmentor.v1"
+PREPARATION_TRANSFORM_SPACE = "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+PREPARATION_MATRIX_LAYOUT = (
+    "row-major-4x4-affine;point=[x,y,z,1];translation=[3,7,11];bottom-row=[0,0,0,1]"
+)
+PREPARATION_KEY_FIELDS = [
+    "source_family_id",
+    "source_asset_id",
+    "target_torso_asset_id",
+    "lod",
+    "runtime_group",
+    "socket",
+]
+PREPARATION_RECORD_FIELDS = PREPARATION_KEY_FIELDS + [
+    "transform_space",
+    "schema_digest",
+    "prepared_matrix",
+    "residual",
+]
+PREPARATION_LOD_ORDER = ["full", "compact", "impostor"]
+PREPARATION_RUNTIME_GROUP_ORDER = [
+    "head",
+    "torso",
+    "left-arm",
+    "right-arm",
+    "left-leg",
+    "right-leg",
+    "tail-back",
+]
+PREPARATION_SOCKET_ORDER = [
+    "neck",
+    "left-shoulder",
+    "right-shoulder",
+    "left-hip",
+    "right-hip",
+    "tail-base",
+    "torso-frame",
+]
+PREPARATION_TORSO_ASSETS = ["norn-torso", "ettin-torso", "grendel-torso"]
+PREPARATION_GROUP_SOCKET = {
+    "head": "neck",
+    "torso": "torso-frame",
+    "left-arm": "left-shoulder",
+    "right-arm": "right-shoulder",
+    "left-leg": "left-hip",
+    "right-leg": "right-hip",
+    "tail-back": "tail-base",
+}
+PREPARATION_GROUP_FOR_SOCKET = {
+    "neck": "head",
+    "left-shoulder": "left-arm",
+    "right-shoulder": "right-arm",
+    "left-hip": "left-leg",
+    "right-hip": "right-leg",
+    "tail-base": "tail-back",
+}
+PREPARATION_SLOT_GROUPS = {
+    "head": ["head"],
+    "torso": ["torso"],
+    "arms": ["left-arm", "right-arm"],
+    "legs": ["left-leg", "right-leg"],
+    "tail": ["tail-back"],
+}
 LODS = (("full", 1.0, 1200), ("compact", 0.65, 800), ("impostor", 0.35, 400))
 GROUP_COLORS = {
     "head": (230, 92, 88, 255),
@@ -149,6 +214,64 @@ def canonical_recipe_digest(recipe: dict) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def preparation_schema_digest(contract: dict) -> str:
+    descriptor = dict(contract)
+    descriptor["schema_digest"] = "0" * 64
+    payload = json.dumps(
+        descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def preparation_contract() -> dict:
+    contract = {
+        "schema": PREPARATION_SCHEMA,
+        "version": PREPARATION_VERSION,
+        "augmentor_version": PREPARATION_AUGMENTOR_VERSION,
+        "transform_space": PREPARATION_TRANSFORM_SPACE,
+        "matrix_layout": PREPARATION_MATRIX_LAYOUT,
+        "key_fields": list(PREPARATION_KEY_FIELDS),
+        "required_record_fields": list(PREPARATION_RECORD_FIELDS),
+        "lod_order": list(PREPARATION_LOD_ORDER),
+        "runtime_group_order": list(PREPARATION_RUNTIME_GROUP_ORDER),
+        "socket_order": list(PREPARATION_SOCKET_ORDER),
+        "residual_limit": 0.025,
+        "schema_digest": "0" * 64,
+    }
+    contract["schema_digest"] = preparation_schema_digest(contract)
+    return contract
+
+
+def preparation_key(record: dict) -> str:
+    return "|".join(str(record[field]) for field in PREPARATION_KEY_FIELDS)
+
+
+def preparation_sort_key(record: dict) -> tuple:
+    target_order = {asset: index for index, asset in enumerate(PREPARATION_TORSO_ASSETS)}
+    lod_order = {lod: index for index, lod in enumerate(PREPARATION_LOD_ORDER)}
+    group_order = {
+        group: index for index, group in enumerate(PREPARATION_RUNTIME_GROUP_ORDER)
+    }
+    socket_order = {socket: index for index, socket in enumerate(PREPARATION_SOCKET_ORDER)}
+    return (
+        int(record["source_family_id"]),
+        str(record["source_asset_id"]),
+        target_order.get(record["target_torso_asset_id"], 999),
+        lod_order.get(record["lod"], 999),
+        group_order.get(record["runtime_group"], 999),
+        socket_order.get(record["socket"], 999),
+    )
+
+
+def validate_preparation_contract(recipe: dict) -> dict:
+    contract = recipe.get("assembly_preparation_contract")
+    if not isinstance(contract, dict) or contract != preparation_contract():
+        raise ImportFailure("recipe assembly preparation contract is missing or invalid")
+    if recipe.get("group_key_counts") != {"canonical": 252, "cross_torso": 432, "total": 684}:
+        raise ImportFailure("recipe assembly preparation group-key counts are invalid")
+    return contract
+
+
 def load_recipe(path: Path, *, validate_current_anatomy: bool = True) -> dict:
     recipe = json.loads(path.read_text(encoding="utf-8"))
     actual = canonical_recipe_digest(recipe)
@@ -160,6 +283,7 @@ def load_recipe(path: Path, *, validate_current_anatomy: bool = True) -> dict:
         raise ImportFailure("recipe does not pin Blender 5.1.0")
     if recipe.get("importer_version") != REQUIRED_IMPORTER_VERSION:
         raise ImportFailure(f"recipe does not pin {REQUIRED_IMPORTER_VERSION}")
+    validate_preparation_contract(recipe)
     for asset in recipe.get("part_assets", []):
         selector = asset.get("selector", {})
         if selector.get("selection_policy") != "exact-case-sensitive-names":
@@ -742,6 +866,10 @@ def command_build(args, recipe: dict, blender: Path) -> None:
         ) as executor:
             receipts = list(executor.map(build_source, sources))
         postprocess_assembly_preparations(recipe, temporary)
+        staged_manifests, _ = _staged_socket_manifests(temporary, recipe)
+        canonical_preparation = validate_preparation_metadata(
+            recipe, staged_manifests, require_cross_torso=False
+        )
         _assert_tree_has_no_reparse_entries(temporary)
         outputs = {
             path.relative_to(temporary).as_posix(): sha256_file(
@@ -779,6 +907,17 @@ def command_build(args, recipe: dict, blender: Path) -> None:
                     "repaired_non_manifold_edges",
                     "filled_boundary_edges",
                 )
+            },
+            "assembly_preparation": {
+                "schema": recipe["assembly_preparation_contract"]["schema"],
+                "augmentor_version": recipe["assembly_preparation_contract"]["augmentor_version"],
+                "schema_digest": recipe["assembly_preparation_contract"]["schema_digest"],
+                "canonical_slot_records": canonical_preparation["canonical_slot_records"],
+                "cross_torso_slot_records": 0,
+                "canonical_group_keys": canonical_preparation["canonical_group_keys"],
+                "cross_torso_group_keys": 0,
+                "total_group_keys": canonical_preparation["total_group_keys"],
+                "stable_hashes": _stable_output_hashes(temporary, recipe),
             },
             "outputs": outputs,
         }
@@ -2771,6 +2910,246 @@ def _promote_augmented_pair(
     _recover_augmentation_transaction(staging, output)
 
 
+def _staged_socket_manifests(staging: Path, recipe: dict) -> tuple[dict, dict]:
+    manifests = {}
+    paths = {}
+    for asset in recipe["part_assets"]:
+        for lod in asset["lods"]:
+            relative = lod["socket_manifest"]
+            path = confined_existing_staged_path(staging, relative, "socket manifest")
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            key = (asset["id"], lod["lod"])
+            if key in manifests or manifest.get("asset_id") != asset["id"] or manifest.get("lod") != lod["lod"]:
+                raise ImportFailure("staging socket manifest identity does not match the recipe")
+            manifests[key] = manifest
+            paths[key] = path
+    if len(manifests) != 42:
+        raise ImportFailure(f"staging must contain exactly 42 socket manifests; found {len(manifests)}")
+    return manifests, paths
+
+
+def _stable_output_hashes(staging: Path, recipe: dict) -> dict[str, dict[str, str]]:
+    stable = {"obj": {}, "semantic": {}, "anatomy": {}}
+    fields = {
+        "obj": "generated_obj",
+        "semantic": "semantic_mask",
+        "anatomy": "anatomy_mask",
+    }
+    for asset in recipe["part_assets"]:
+        for lod in asset["lods"]:
+            for kind, field in fields.items():
+                relative = lod[field]
+                stable[kind][relative] = sha256_file(
+                    confined_existing_staged_path(staging, relative, f"stable {kind} output")
+                )
+    if any(len(values) != 42 for values in stable.values()):
+        raise ImportFailure("stable output capture must contain 42 OBJ, semantic, and anatomy hashes")
+    return stable
+
+
+def _all_staged_output_hashes(staging: Path, recipe: dict) -> dict[str, str]:
+    outputs = {}
+    for asset in recipe["part_assets"]:
+        for lod in asset["lods"]:
+            for field in ("generated_obj", "socket_manifest", "semantic_mask", "anatomy_mask"):
+                relative = lod[field]
+                outputs[relative] = sha256_file(
+                    confined_existing_staged_path(staging, relative, "augmented output")
+                )
+    if len(outputs) != 168:
+        raise ImportFailure(f"augmented output set must contain 168 files; found {len(outputs)}")
+    return outputs
+
+
+def _materialize_cross_torso_preparations(recipe: dict, staging: Path) -> dict:
+    manifests, manifest_paths = _staged_socket_manifests(staging, recipe)
+    assets = {asset["id"]: asset for asset in recipe["part_assets"]}
+    contract = validate_preparation_contract(recipe)
+    for key in sorted(manifests):
+        manifest = manifests[key]
+        asset = assets[manifest["asset_id"]]
+        manifest["assembly_preparation_schema"] = contract["schema"]
+        manifest["assembly_preparation_schema_digest"] = contract["schema_digest"]
+        manifest["assembly_preparations"] = assembly_preparations(
+            recipe, asset, manifest, manifests
+        )
+        manifest["cross_torso_preparations"] = []
+        if asset["logical_slot"] != "torso":
+            for family in recipe["families"]:
+                if family["parts"][asset["logical_slot"]]["asset_id"] != asset["id"]:
+                    continue
+                canonical_target = family["parts"]["torso"]["asset_id"]
+                for target in PREPARATION_TORSO_ASSETS:
+                    if target == canonical_target:
+                        continue
+                    manifest["cross_torso_preparations"].extend(
+                        assembly_preparations(
+                            recipe,
+                            asset,
+                            manifest,
+                            manifests,
+                            family_filter=family["id"],
+                            target_torso_asset_id=target,
+                        )
+                    )
+        manifest["assembly_preparation_population"] = "canonical-plus-cross-torso"
+        manifest["cross_torso_preparations"] = sorted(
+            manifest["cross_torso_preparations"],
+            key=lambda item: (
+                item["family_id"],
+                item["source_asset_id"],
+                PREPARATION_TORSO_ASSETS.index(item["target_torso_asset_id"]),
+                PREPARATION_LOD_ORDER.index(item["lod"]),
+            ),
+        )
+    summary = validate_preparation_metadata(recipe, manifests)
+    for key in sorted(manifests):
+        manifest_paths[key].write_text(
+            json.dumps(manifests[key], indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    return summary
+
+
+def command_augment_cross_torso(args) -> None:
+    staging = ensure_artifact_path(args.staging, "cross-torso staging input")
+    live_output_argument = Path(args.output)
+    if _is_symlink_or_reparse(live_output_argument):
+        raise ImportFailure("cross-torso recipe output is a symlink or reparse point")
+    output = live_output_argument.resolve(strict=False)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output_created = False
+    if not output.exists():
+        shutil.copy2(args.recipes, output)
+        output_created = True
+    try:
+        _recover_augmentation_transaction(staging, output)
+        recipe = load_recipe(args.recipes, validate_current_anatomy=False)
+        _assert_tree_has_no_reparse_entries(staging)
+        receipt_path = confined_existing_staged_path(
+            staging, "build_receipt.json", "staged build receipt"
+        )
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        _verify_receipt_outputs(staging, receipt, recipe)
+        old_stable = _stable_output_hashes(staging, recipe)
+        old_socket = {
+            lod["socket_manifest"]: sha256_file(
+                confined_existing_staged_path(
+                    staging, lod["socket_manifest"], "stable socket manifest"
+                )
+            )
+            for asset in recipe["part_assets"]
+            for lod in asset["lods"]
+        }
+    except BaseException:
+        if output_created:
+            output.unlink(missing_ok=True)
+        raise
+    temporary = staging.with_name(staging.name + f".augment-tmp-{os.getpid()}")
+    backup = staging.with_name(staging.name + f".augment-rollback-{os.getpid()}")
+    recipe_temporary = output.with_name(f".{output.name}.augment-tmp-{os.getpid()}")
+    promoted = False
+    try:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+        if backup.exists():
+            shutil.rmtree(backup)
+        shutil.copytree(staging, temporary, symlinks=True)
+        summary = _materialize_cross_torso_preparations(recipe, temporary)
+        outputs = _all_staged_output_hashes(temporary, recipe)
+        after_stable = _stable_output_hashes(temporary, recipe)
+        if after_stable != old_stable:
+            raise ImportFailure("cross-torso augmentation changed OBJ, semantic, or anatomy bytes")
+        socket_after = {
+            lod["socket_manifest"]: outputs[lod["socket_manifest"]]
+            for asset in recipe["part_assets"]
+            for lod in asset["lods"]
+        }
+        if set(socket_after) != set(old_socket):
+            raise ImportFailure("cross-torso augmentation socket-manifest set drifted")
+        changed_socket_count = sum(
+            old_socket[path] != socket_after[path] for path in old_socket
+        )
+        if changed_socket_count not in (0, 42):
+            raise ImportFailure("cross-torso augmentation did not change every socket-manifest digest")
+        for asset in recipe["part_assets"]:
+            for lod in asset["lods"]:
+                for path_field, digest_field in (
+                    ("generated_obj", "generated_obj_sha256"),
+                    ("socket_manifest", "socket_manifest_sha256"),
+                    ("semantic_mask", "semantic_mask_sha256"),
+                    ("anatomy_mask", "anatomy_mask_sha256"),
+                ):
+                    lod[digest_field] = outputs[lod[path_field]]
+        stable = {
+            kind: dict(sorted(values.items())) for kind, values in after_stable.items()
+        }
+        preparation_receipt = {
+            "schema": recipe["assembly_preparation_contract"]["schema"],
+            "augmentor_version": recipe["assembly_preparation_contract"]["augmentor_version"],
+            "schema_digest": recipe["assembly_preparation_contract"]["schema_digest"],
+            "canonical_slot_records": summary["canonical_slot_records"],
+            "cross_torso_slot_records": summary["cross_torso_slot_records"],
+            "canonical_group_keys": summary["canonical_group_keys"],
+            "cross_torso_group_keys": summary["cross_torso_group_keys"],
+            "total_group_keys": summary["total_group_keys"],
+            "stable_hashes": stable,
+        }
+        if changed_socket_count == 0:
+            if (
+                recipe.get("assembly_preparation") != preparation_receipt
+                or receipt.get("assembly_preparation") != preparation_receipt
+                or receipt.get("outputs") != outputs
+            ):
+                raise ImportFailure(
+                    "already augmented metadata does not match the validated cross-torso result"
+                )
+            shutil.rmtree(temporary)
+            print("cross_torso_slot_records=288")
+            print("canonical_group_keys=252")
+            print("cross_torso_group_keys=432")
+            print("total_group_keys=684")
+            print("unchanged_obj_semantic_anatomy=126")
+            print("changed_socket_manifests=0")
+            print(f"outputs={len(receipt['outputs'])}")
+            print(f"recipe_sha256={recipe['recipe_sha256']}")
+            return
+        recipe["assembly_preparation"] = preparation_receipt
+        recipe["recipe_sha256"] = canonical_recipe_digest(recipe)
+        receipt["recipe_sha256"] = recipe["recipe_sha256"]
+        receipt["outputs"] = outputs
+        receipt["sources"] = _final_receipt_sources(receipt, recipe)
+        receipt["assembly_preparation"] = preparation_receipt
+        staged_output_path(temporary, "build_receipt.json").write_text(
+            json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        recipe_temporary.write_text(
+            json.dumps(recipe, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+        )
+        _promote_augmented_pair(
+            staging,
+            temporary,
+            backup,
+            recipe_temporary,
+            output,
+        )
+        promoted = True
+    except BaseException:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+        recipe_temporary.unlink(missing_ok=True)
+        if output_created and not promoted and output.exists():
+            output.unlink()
+        raise
+    print("cross_torso_slot_records=288")
+    print("canonical_group_keys=252")
+    print("cross_torso_group_keys=432")
+    print("total_group_keys=684")
+    print("unchanged_obj_semantic_anatomy=126")
+    print("changed_socket_manifests=42")
+    print(f"outputs={len(receipt['outputs'])}")
+    print(f"recipe_sha256={recipe['recipe_sha256']}")
+
+
 def command_augment_anatomy(args) -> None:
     staging = ensure_artifact_path(args.staging, "anatomy staging input")
     live_output_argument = Path(args.output)
@@ -2943,10 +3322,11 @@ def build_parser() -> argparse.ArgumentParser:
         "preview",
         "bind-output-digests",
         "augment-anatomy",
+        "augment-cross-torso",
     ):
         child = subparsers.add_parser(command)
         child.add_argument("--recipes", type=Path, required=True)
-        if command in ("bind-output-digests", "augment-anatomy"):
+        if command in ("bind-output-digests", "augment-anatomy", "augment-cross-torso"):
             child.add_argument("--staging", type=Path, required=True)
             child.add_argument("--output", type=Path, required=True)
             if command == "augment-anatomy":
@@ -2969,6 +3349,9 @@ def outer_main() -> None:
     args.recipes = args.recipes.resolve()
     if args.command == "augment-anatomy":
         command_augment_anatomy(args)
+        return
+    if args.command == "augment-cross-torso":
+        command_augment_cross_torso(args)
         return
     recipe = load_recipe(args.recipes)
     if args.command == "bind-output-digests":
@@ -4312,21 +4695,99 @@ def transform_affine_point(matrix: list[float], point) -> list[float]:
     ]
 
 
+def group_transforms_for_preparation(
+    recipe: dict, asset: dict, preparation: dict
+) -> list[dict]:
+    contract = recipe["assembly_preparation_contract"]
+    slot = preparation["logical_slot"]
+    transforms = []
+    if slot == "torso":
+        evidence = []
+        for bridge in preparation["bridge_geometry"]:
+            evidence.append(
+                {
+                    "socket": bridge["socket"],
+                    "source_anchor": bridge["source_anchor"],
+                    "target_anchor": bridge["target_anchor"],
+                    "transformed_source_anchor": bridge["transformed_source_anchor"],
+                    "residual": bridge["residual"],
+                    "prepared_vertex_count": bridge["prepared_vertex_count"],
+                    "applied_overlap_depth": bridge["applied_overlap_depth"],
+                }
+            )
+        transforms.append(
+            {
+                "source_family_id": preparation["family_id"],
+                "source_asset_id": asset["id"],
+                "target_torso_asset_id": preparation["target_torso_asset_id"],
+                "lod": preparation["lod"],
+                "runtime_group": "torso",
+                "socket": "torso-frame",
+                "transform_space": contract["transform_space"],
+                "schema_digest": contract["schema_digest"],
+                "prepared_matrix": preparation["prepared_matrix"],
+                "residual": preparation["predicted_attachment_error"],
+                "fit": preparation["fit"],
+                "seam_offset": preparation["seam_offset"],
+                "overlap_depth": preparation["overlap_depth"],
+                "attachment_error_bound": preparation["attachment_error_bound"],
+                "bridge_kind": preparation["bridge_kind"],
+                "join_cover_kind": preparation["join_cover_kind"],
+                "socket_evidence": sorted(
+                    evidence,
+                    key=lambda item: PREPARATION_SOCKET_ORDER.index(item["socket"]),
+                ),
+            }
+        )
+    else:
+        for bridge in preparation["bridge_geometry"]:
+            transforms.append(
+                {
+                    "source_family_id": preparation["family_id"],
+                    "source_asset_id": asset["id"],
+                    "target_torso_asset_id": preparation["target_torso_asset_id"],
+                    "lod": preparation["lod"],
+                    "runtime_group": bridge["runtime_group"],
+                    "socket": bridge["socket"],
+                    "transform_space": contract["transform_space"],
+                    "schema_digest": contract["schema_digest"],
+                    "prepared_matrix": bridge["prepared_matrix"],
+                    "residual": bridge["residual"],
+                    "fit": preparation["fit"],
+                    "seam_offset": preparation["seam_offset"],
+                    "overlap_depth": preparation["overlap_depth"],
+                    "attachment_error_bound": preparation["attachment_error_bound"],
+                    "bridge_kind": preparation["bridge_kind"],
+                    "join_cover_kind": preparation["join_cover_kind"],
+                    "bridge_geometry": [bridge],
+                    "socket_evidence": [],
+                }
+            )
+    return sorted(transforms, key=preparation_sort_key)
+
+
 def assembly_preparations(
     recipe: dict,
     asset: dict,
     manifest: dict,
     manifests: dict,
+    *,
+    family_filter: int | None = None,
+    target_torso_asset_id: str | None = None,
 ) -> list[dict]:
     contract = recipe["assembly_contract"]
     preparations = []
     for family in recipe["families"]:
+        if family_filter is not None and family["id"] != family_filter:
+            continue
         for slot, part in family["parts"].items():
             if part["asset_id"] != asset["id"]:
                 continue
+            if target_torso_asset_id is not None and slot == "torso":
+                continue
             sockets = contract["slot_sockets"][slot]
             source_anchors = [manifest["sockets"][name]["translation"] for name in sockets]
-            torso_asset_id = family["parts"]["torso"]["asset_id"]
+            torso_asset_id = target_torso_asset_id or family["parts"]["torso"]["asset_id"]
             torso_manifest = manifests[(torso_asset_id, manifest["lod"])]
             authored_offset = [
                 part["fit"]["translation"][axis] + part["seam_offset"][axis]
@@ -4413,12 +4874,13 @@ def assembly_preparations(
                 raise ImportFailure(
                     f"family {family['id']} {slot} transformed sockets exceed attachment-error bound: {predicted_error:.9f}"
                 )
-            preparations.append(
-                {
+            preparation = {
                     "family_id": family["id"],
                     "family_label": family["label"],
                     "logical_slot": slot,
                     "asset_id": asset["id"],
+                    "source_asset_id": asset["id"],
+                    "lod": manifest["lod"],
                     "fit": part["fit"],
                     "seam_offset": part["seam_offset"],
                     "prepared_translation": translation,
@@ -4437,12 +4899,27 @@ def assembly_preparations(
                     "predicted_attachment_error": predicted_error,
                     "bridge_geometry": bridges,
                 }
+            preparation["preparation_kind"] = (
+                "cross-torso" if target_torso_asset_id is not None else "canonical"
             )
-    return preparations
+            preparation["group_transforms"] = group_transforms_for_preparation(
+                recipe, asset, preparation
+            )
+            preparations.append(preparation)
+    return sorted(
+        preparations,
+        key=lambda item: (
+            item["family_id"],
+            item["source_asset_id"],
+            PREPARATION_TORSO_ASSETS.index(item["target_torso_asset_id"]),
+            PREPARATION_LOD_ORDER.index(item["lod"]),
+        ),
+    )
 
 
 def postprocess_assembly_preparations(recipe: dict, staging: Path) -> None:
     assets = {asset["id"]: asset for asset in recipe["part_assets"]}
+    contract = validate_preparation_contract(recipe)
     _assert_tree_has_no_reparse_entries(staging)
     paths = [
         confined_existing_staged_path(
@@ -4467,12 +4944,217 @@ def postprocess_assembly_preparations(recipe: dict, staging: Path) -> None:
     for key in sorted(manifests):
         manifest = manifests[key]
         asset = assets[manifest["asset_id"]]
+        manifest["assembly_preparation_schema"] = contract["schema"]
+        manifest["assembly_preparation_schema_digest"] = contract["schema_digest"]
         manifest["assembly_preparations"] = assembly_preparations(
             recipe, asset, manifest, manifests
         )
+        manifest["cross_torso_preparations"] = []
+        manifest["assembly_preparation_population"] = "canonical-only"
         manifest_paths[key].write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+    validate_preparation_metadata(recipe, manifests, require_cross_torso=False)
+
+
+def _validate_prepared_matrix(matrix, label: str) -> None:
+    if (
+        not isinstance(matrix, list)
+        or len(matrix) != 16
+        or not all(isinstance(value, (int, float)) and math.isfinite(value) for value in matrix)
+        or matrix[12:] != [0.0, 0.0, 0.0, 1.0]
+    ):
+        raise ImportFailure(f"{label} is not a finite row-major affine matrix")
+
+
+def _validate_preparation_group(
+    recipe: dict,
+    manifest: dict,
+    asset: dict,
+    family: dict,
+    slot_record: dict,
+    group: dict,
+    expected_kind: str,
+) -> str:
+    contract = recipe["assembly_preparation_contract"]
+    slot = asset["logical_slot"]
+    if (
+        group.get("source_family_id") != family["id"]
+        or group.get("source_asset_id") != asset["id"]
+        or group.get("target_torso_asset_id") != slot_record["target_torso_asset_id"]
+        or group.get("lod") != manifest["lod"]
+        or group.get("transform_space") != contract["transform_space"]
+        or group.get("schema_digest") != contract["schema_digest"]
+    ):
+        raise ImportFailure("assembly group transform identity or contract drift")
+    if group.get("runtime_group") not in PREPARATION_SLOT_GROUPS[slot]:
+        raise ImportFailure("assembly group transform runtime group is incompatible with its slot")
+    expected_socket = PREPARATION_GROUP_SOCKET[group["runtime_group"]]
+    if group.get("socket") != expected_socket:
+        raise ImportFailure("assembly group transform socket identity drift")
+    if expected_kind == "cross-torso" and slot == "torso":
+        raise ImportFailure("cross-torso preparation unexpectedly contains a torso slot")
+    _validate_prepared_matrix(group.get("prepared_matrix"), "assembly group transform")
+    residual = group.get("residual")
+    if not isinstance(residual, (int, float)) or not math.isfinite(residual) or not (0.0 <= residual <= contract["residual_limit"] + 1.0e-12):
+        raise ImportFailure("assembly group transform residual exceeds 0.025")
+    if group["runtime_group"] != "torso" and group["runtime_group"] not in manifest["expected_groups"]:
+        raise ImportFailure("assembly group transform is absent from the source OBJ groups")
+    if group["runtime_group"] == "torso":
+        evidence = group.get("socket_evidence")
+        if not isinstance(evidence, list) or [item.get("socket") for item in evidence] != PREPARATION_SOCKET_ORDER[:6]:
+            raise ImportFailure("torso group transform must deduplicate six socket evidences")
+        for item in evidence:
+            if (
+                not isinstance(item, dict)
+                or item.get("socket") not in PREPARATION_SOCKET_ORDER[:6]
+                or not all(
+                    isinstance(value, (int, float)) and math.isfinite(value)
+                    for vector in (
+                        item.get("source_anchor"),
+                        item.get("target_anchor"),
+                        item.get("transformed_source_anchor"),
+                    )
+                    if isinstance(vector, list) and len(vector) == 3
+                    for value in vector
+                )
+                or not all(
+                    isinstance(value, (int, float)) and math.isfinite(value)
+                    for value in item.get("source_anchor", [])
+                )
+                or len(item.get("source_anchor", [])) != 3
+                or len(item.get("target_anchor", [])) != 3
+                or len(item.get("transformed_source_anchor", [])) != 3
+                or not isinstance(item.get("prepared_vertex_count"), int)
+                or item["prepared_vertex_count"] <= 0
+                or not isinstance(item.get("residual"), (int, float))
+                or not math.isfinite(item["residual"])
+                or item["residual"] > contract["residual_limit"] + 1.0e-12
+            ):
+                raise ImportFailure("torso socket evidence is invalid")
+    return preparation_key(group)
+
+
+def validate_preparation_metadata(
+    recipe: dict, manifests: dict, *, require_cross_torso: bool = True
+) -> dict:
+    contract = validate_preparation_contract(recipe)
+    assets = {asset["id"]: asset for asset in recipe["part_assets"]}
+    families = {family["id"]: family for family in recipe["families"]}
+    canonical_slots = []
+    cross_slots = []
+    canonical_groups = []
+    cross_groups = []
+    for key in sorted(manifests):
+        manifest = manifests[key]
+        asset = assets.get(manifest.get("asset_id"))
+        if asset is None:
+            raise ImportFailure("assembly preparation references an unknown asset")
+        if (
+            manifest.get("assembly_preparation_schema") != contract["schema"]
+            or manifest.get("assembly_preparation_schema_digest") != contract["schema_digest"]
+            or not isinstance(manifest.get("cross_torso_preparations"), list)
+        ):
+            raise ImportFailure("socket manifest lacks the v2 assembly preparation contract")
+        for expected_kind, records, output in (
+            ("canonical", manifest.get("assembly_preparations", []), canonical_slots),
+            ("cross-torso", manifest["cross_torso_preparations"], cross_slots),
+        ):
+            for slot_record in records:
+                family = families.get(slot_record.get("family_id"))
+                if family is None:
+                    raise ImportFailure("assembly preparation references an unknown family")
+                slot = asset["logical_slot"]
+                canonical_target = family["parts"]["torso"]["asset_id"]
+                target = slot_record.get("target_torso_asset_id")
+                expected_targets = (
+                    {canonical_target}
+                    if expected_kind == "canonical"
+                    else set(PREPARATION_TORSO_ASSETS) - {canonical_target}
+                )
+                if (
+                    slot_record.get("preparation_kind") != expected_kind
+                    or slot_record.get("source_asset_id") != asset["id"]
+                    or slot_record.get("asset_id") != asset["id"]
+                    or slot_record.get("lod") != manifest["lod"]
+                    or target not in expected_targets
+                    or (expected_kind == "cross-torso" and slot == "torso")
+                    or len(slot_record.get("group_transforms", []))
+                    != len(PREPARATION_SLOT_GROUPS[slot])
+                ):
+                    raise ImportFailure("assembly preparation slot identity or group count drift")
+                output.append(slot_record)
+                for group in slot_record["group_transforms"]:
+                    key_value = _validate_preparation_group(
+                        recipe, manifest, asset, family, slot_record, group, expected_kind
+                    )
+                    (cross_groups if expected_kind == "cross-torso" else canonical_groups).append(
+                        key_value
+                    )
+                group_keys = [preparation_key(group) for group in slot_record["group_transforms"]]
+                if group_keys != sorted(group_keys, key=lambda value: preparation_sort_key(next(
+                    group for group in slot_record["group_transforms"] if preparation_key(group) == value
+                ))):
+                    raise ImportFailure("assembly group transforms are not deterministically sorted")
+        if asset["logical_slot"] == "torso" and manifest["cross_torso_preparations"]:
+            raise ImportFailure("torso asset manifest contains cross-torso preparations")
+    expected_cross_slots = 288 if require_cross_torso else 0
+    expected_cross_groups = 432 if require_cross_torso else 0
+    if len(canonical_slots) != 180 or len(cross_slots) != expected_cross_slots:
+        raise ImportFailure(
+            f"assembly preparation slot counts must be 180/{expected_cross_slots}; found {len(canonical_slots)}/{len(cross_slots)}"
+        )
+    if len(canonical_groups) != 252 or len(cross_groups) != expected_cross_groups:
+        raise ImportFailure(
+            f"assembly preparation group counts must be 252/{expected_cross_groups}; found {len(canonical_groups)}/{len(cross_groups)}"
+        )
+    if len(set(canonical_groups)) != 252 or len(set(cross_groups)) != expected_cross_groups:
+        raise ImportFailure("assembly preparation group keys contain duplicates")
+    expected_total_groups = 684 if require_cross_torso else 252
+    if len(set(canonical_groups + cross_groups)) != expected_total_groups:
+        raise ImportFailure(
+            f"assembly preparation group keys do not form {expected_total_groups} unique records"
+        )
+    by_source = {}
+    matrices_by_source = {}
+    for group in canonical_groups + cross_groups:
+        fields = group.split("|")
+        if fields[4] == "torso":
+            continue
+        base = "|".join(fields[:2] + fields[3:])
+        by_source.setdefault(base, {})[fields[2]] = group
+        matrices_by_source.setdefault(base, {})[fields[2]] = tuple(
+            next(
+                candidate["prepared_matrix"]
+                for manifest in manifests.values()
+                for records in (
+                    manifest["assembly_preparations"],
+                    manifest["cross_torso_preparations"],
+                )
+                for slot_record in records
+                for candidate in slot_record["group_transforms"]
+                if preparation_key(candidate) == group
+            )
+        )
+    expected_target_count = 3 if require_cross_torso else 1
+    expected_targets = set(PREPARATION_TORSO_ASSETS) if require_cross_torso else None
+    for base, targets in by_source.items():
+        if expected_targets is not None and set(targets) != expected_targets:
+            raise ImportFailure("source group does not resolve against all three torso targets")
+        if len(set(targets.values())) != expected_target_count:
+            raise ImportFailure("target torso identity was collapsed into a shared group key")
+        matrices = matrices_by_source[base]
+        if require_cross_torso and len(set(matrices.values())) != len(PREPARATION_TORSO_ASSETS):
+            raise ImportFailure("assembly preparation matrix aliases target torso IDs")
+    return {
+        "canonical_slot_records": len(canonical_slots),
+        "cross_torso_slot_records": len(cross_slots),
+        "canonical_group_keys": len(canonical_groups),
+        "cross_torso_group_keys": len(cross_groups),
+        "total_group_keys": len(set(canonical_groups + cross_groups)),
+        "canonical_keys": sorted(canonical_groups),
+        "cross_torso_keys": sorted(cross_groups),
+    }
 
 
 def generated_sockets(recipe: dict, asset: dict, markers: dict, bounds) -> dict:
@@ -4560,9 +5242,11 @@ def socket_manifest(
             "source_files": microdetail_files,
             "uvless_fallback": "evaluated-normal-curvature-material-output",
         },
-        "assembly_preparation_schema": recipe["assembly_contract"]["schema"],
+        "assembly_preparation_schema": recipe["assembly_preparation_contract"]["schema"],
+        "assembly_preparation_schema_digest": recipe["assembly_preparation_contract"]["schema_digest"],
         "bridge_geometry": bridge_geometry,
         "assembly_preparations": [],
+        "cross_torso_preparations": [],
     }
 
 

@@ -104,6 +104,56 @@ REQUIRED_FEATURE_ANCHORS = {
     },
     "tail": {"tail-tip": ("keratin-skin", "tail-back")},
 }
+PREPARATION_SCHEMA = "alife.geneforge_assembly_preparation.v2"
+PREPARATION_AUGMENTOR = "alife.geneforge_assembly_augmentor.v1"
+PREPARATION_TRANSFORM_SPACE = "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+PREPARATION_MATRIX_LAYOUT = (
+    "row-major-4x4-affine;point=[x,y,z,1];translation=[3,7,11];bottom-row=[0,0,0,1]"
+)
+PREPARATION_LODS = ["full", "compact", "impostor"]
+PREPARATION_GROUPS = [
+    "head",
+    "torso",
+    "left-arm",
+    "right-arm",
+    "left-leg",
+    "right-leg",
+    "tail-back",
+]
+PREPARATION_SOCKETS = [
+    "neck",
+    "left-shoulder",
+    "right-shoulder",
+    "left-hip",
+    "right-hip",
+    "tail-base",
+    "torso-frame",
+]
+PREPARATION_KEY_FIELDS = [
+    "source_family_id",
+    "source_asset_id",
+    "target_torso_asset_id",
+    "lod",
+    "runtime_group",
+    "socket",
+]
+PREPARATION_RECORD_FIELDS = PREPARATION_KEY_FIELDS + [
+    "transform_space",
+    "schema_digest",
+    "prepared_matrix",
+    "residual",
+]
+TORSO_ASSETS = ["norn-torso", "ettin-torso", "grendel-torso"]
+NON_TORSO_SLOTS = {"head", "arms", "legs", "tail"}
+GROUP_SOCKET = {
+    "head": "neck",
+    "torso": "torso-frame",
+    "left-arm": "left-shoulder",
+    "right-arm": "right-shoulder",
+    "left-leg": "left-hip",
+    "right-leg": "right-hip",
+    "tail-back": "tail-base",
+}
 AUDITED_NEVER_OR_INVALID = {
     "ear_4L_chichi",
     "Ear_4L_civet",
@@ -129,6 +179,29 @@ def canonical_recipe_digest(recipe: dict) -> str:
         canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("ascii")
     return hashlib.sha256(payload).hexdigest()
+
+
+def preparation_schema_digest(contract: dict) -> str:
+    descriptor = dict(contract)
+    descriptor["schema_digest"] = "0" * 64
+    payload = json.dumps(
+        descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def preparation_key(record: dict) -> str:
+    return "|".join(
+        str(record[field])
+        for field in (
+            "source_family_id",
+            "source_asset_id",
+            "target_torso_asset_id",
+            "lod",
+            "runtime_group",
+            "socket",
+        )
+    )
 
 
 def png_with_chunks(chunks: list[tuple[bytes, bytes]]) -> bytes:
@@ -1331,6 +1404,48 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
             with self.subTest(asset=asset_id):
                 self.assertTrue(required_roles <= self.assets[asset_id]["detail_groups"].keys())
 
+    def test_task_5c_preparation_contract_and_family_target_accounting(self) -> None:
+        contract = self.recipe.get("assembly_preparation_contract")
+        self.assertIsInstance(contract, dict)
+        self.assertEqual(contract["schema"], PREPARATION_SCHEMA)
+        self.assertEqual(contract["version"], 2)
+        self.assertEqual(contract["augmentor_version"], PREPARATION_AUGMENTOR)
+        self.assertEqual(contract["transform_space"], PREPARATION_TRANSFORM_SPACE)
+        self.assertEqual(contract["matrix_layout"], PREPARATION_MATRIX_LAYOUT)
+        self.assertEqual(contract["key_fields"], PREPARATION_KEY_FIELDS)
+        self.assertEqual(contract["required_record_fields"], PREPARATION_RECORD_FIELDS)
+        self.assertEqual(contract["lod_order"], PREPARATION_LODS)
+        self.assertEqual(contract["runtime_group_order"], PREPARATION_GROUPS)
+        self.assertEqual(contract["socket_order"], PREPARATION_SOCKETS)
+        self.assertEqual(contract["residual_limit"], 0.025)
+        self.assertEqual(contract["schema_digest"], preparation_schema_digest(contract))
+        self.assertEqual(
+            self.recipe["group_key_counts"],
+            {"canonical": 252, "cross_torso": 432, "total": 684},
+        )
+
+        for family in self.recipe["families"]:
+            canonical_torso = family["parts"]["torso"]["asset_id"]
+            self.assertIn(canonical_torso, TORSO_ASSETS)
+            self.assertEqual(
+                len(set(TORSO_ASSETS) - {canonical_torso}),
+                2,
+                msg="family target accounting must retain two alternate torso choices",
+            )
+            for slot, part in family["parts"].items():
+                if slot in NON_TORSO_SLOTS:
+                    self.assertNotEqual(part["asset_id"], "ettin-tail")
+
+    def test_task_5c_importer_registers_blender_free_augmentation_command(self) -> None:
+        parser = importer.build_parser()
+        commands = parser._subparsers._group_actions[0].choices
+        self.assertIn("augment-cross-torso", commands)
+        action = commands["augment-cross-torso"]
+        self.assertNotIn(
+            "source_root",
+            {child.dest for child in action._actions},
+        )
+
 
 def tree_digest(root: Path) -> dict[str, str]:
     return {
@@ -1418,6 +1533,296 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
                 self.run_importer("build", extra=("--staging", str(staging)))
             )
         return staging
+
+    def test_augment_cross_torso_is_deterministic_no_blender_and_preserves_stable_bytes(self) -> None:
+        source = self.valid_staging()
+        root = TEST_OUTPUT / "cross-torso-determinism"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        shutil.copytree(source, staging)
+        recipe = root / "fixture_recipes.json"
+        shutil.copy2(FIXTURE_ROOT / "valid/fixture_recipes.json", recipe)
+        self.assert_success(
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(IMPORTER),
+                    "bind-output-digests",
+                    "--staging",
+                    str(staging),
+                    "--recipes",
+                    str(recipe),
+                    "--output",
+                    str(recipe),
+                ],
+                cwd=WORKSPACE,
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONUTF8": "1"},
+            )
+        )
+        output = root / "fixture_recipes.cross-torso.json"
+        before = tree_digest(staging)
+        before_sockets = {
+            relative: digest
+            for relative, digest in before.items()
+            if relative.endswith("_sockets.json")
+        }
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(IMPORTER),
+                "augment-cross-torso",
+                "--staging",
+                str(staging),
+                "--recipes",
+                str(recipe),
+                "--output",
+                str(output),
+            ],
+            cwd=WORKSPACE,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assert_success(completed)
+        augmented_tree = tree_digest(staging)
+        augmented_recipe = output.read_bytes()
+        payload = json.loads(augmented_recipe)
+        receipt = json.loads((staging / "build_receipt.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["group_key_counts"], {"canonical": 252, "cross_torso": 432, "total": 684})
+        self.assertEqual(receipt["donor_count"], 3)
+        self.assertEqual(receipt["asset_count"], 14)
+        self.assertEqual(len(receipt["outputs"]), 168)
+        preparation = receipt["assembly_preparation"]
+        self.assertEqual(preparation["canonical_group_keys"], 252)
+        self.assertEqual(preparation["cross_torso_group_keys"], 432)
+        self.assertEqual(preparation["total_group_keys"], 684)
+        self.assertEqual(len(preparation["stable_hashes"]["obj"]), 42)
+        self.assertEqual(len(preparation["stable_hashes"]["semantic"]), 42)
+        self.assertEqual(len(preparation["stable_hashes"]["anatomy"]), 42)
+        self.assertTrue(set(before_sockets) <= set(augmented_tree))
+        self.assertEqual(len(before_sockets), 42)
+        self.assertTrue(all(before_sockets[path] != augmented_tree[path] for path in before_sockets))
+        stable_suffixes = {
+            "obj": "_parts.obj",
+            "semantic": "_semantic.png",
+            "anatomy": "_anatomy.png",
+        }
+        for kind, suffix in stable_suffixes.items():
+            before_kind = {
+                path: digest for path, digest in before.items() if path.endswith(suffix)
+            }
+            after_kind = {
+                path: digest for path, digest in augmented_tree.items() if path.endswith(suffix)
+            }
+            with self.subTest(stable_kind=kind):
+                self.assertEqual(len(before_kind), 42)
+                self.assertEqual(after_kind, before_kind)
+                self.assertEqual(preparation["stable_hashes"][kind], before_kind)
+
+        canonical_slots = 0
+        cross_slots = 0
+        canonical_keys = []
+        cross_keys = []
+        for asset in payload["part_assets"]:
+            for lod in asset["lods"]:
+                manifest = json.loads((staging / lod["socket_manifest"]).read_text(encoding="utf-8"))
+                canonical_slots += len(manifest["assembly_preparations"])
+                cross_slots += len(manifest["cross_torso_preparations"])
+                for records in (
+                    manifest["assembly_preparations"],
+                    manifest["cross_torso_preparations"],
+                ):
+                    self.assertEqual(
+                        records,
+                        sorted(
+                            records,
+                            key=lambda item: (
+                                item["family_id"],
+                                item["source_asset_id"],
+                                importer.PREPARATION_TORSO_ASSETS.index(
+                                    item["target_torso_asset_id"]
+                                ),
+                                importer.PREPARATION_LOD_ORDER.index(item["lod"]),
+                            ),
+                        ),
+                    )
+                    for slot in records:
+                        self.assertEqual(
+                            slot["group_transforms"],
+                            sorted(
+                                slot["group_transforms"],
+                                key=importer.preparation_sort_key,
+                            ),
+                        )
+                canonical_keys.extend(
+                    preparation_key(group)
+                    for slot in manifest["assembly_preparations"]
+                    for group in slot["group_transforms"]
+                )
+                cross_keys.extend(
+                    preparation_key(group)
+                    for slot in manifest["cross_torso_preparations"]
+                    for group in slot["group_transforms"]
+                )
+        self.assertEqual((canonical_slots, cross_slots), (180, 288))
+        self.assertEqual(len(canonical_keys), 252)
+        self.assertEqual(len(cross_keys), 432)
+        self.assertEqual(len(set(canonical_keys + cross_keys)), 684)
+
+        manifests, _ = importer._staged_socket_manifests(staging, payload)
+        by_source = {}
+        for manifest in manifests.values():
+            for records in (
+                manifest["assembly_preparations"],
+                manifest["cross_torso_preparations"],
+            ):
+                for slot in records:
+                    for group in slot["group_transforms"]:
+                        if group["runtime_group"] == "torso":
+                            continue
+                        base = (
+                            group["source_family_id"],
+                            group["source_asset_id"],
+                            group["lod"],
+                            group["runtime_group"],
+                            group["socket"],
+                        )
+                        by_source.setdefault(base, []).append(group)
+        self.assertEqual(len(by_source), 216)
+        for groups in by_source.values():
+            self.assertEqual(len(groups), 3)
+            self.assertEqual(len({tuple(group["prepared_matrix"]) for group in groups}), 3)
+        aliased = next(iter(by_source.values()))
+        aliased[1]["prepared_matrix"] = list(aliased[0]["prepared_matrix"])
+        with self.assertRaisesRegex(importer.ImportFailure, "aliases target torso"):
+            importer.validate_preparation_metadata(payload, manifests)
+
+        second_before_tree = tree_digest(staging)
+        second_before_recipe = output.read_bytes()
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(IMPORTER),
+                "augment-cross-torso",
+                "--staging",
+                str(staging),
+                "--recipes",
+                str(output),
+                "--output",
+                str(output),
+            ],
+            cwd=WORKSPACE,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assert_success(completed)
+        self.assertEqual(tree_digest(staging), second_before_tree)
+        self.assertEqual(output.read_bytes(), second_before_recipe)
+
+    def test_augment_cross_torso_rejects_blender_and_subprocess_use(self) -> None:
+        source = self.valid_staging()
+        root = TEST_OUTPUT / "cross-torso-no-blender"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        shutil.copytree(source, staging)
+        recipe = root / "fixture_recipes.json"
+        shutil.copy2(FIXTURE_ROOT / "valid/fixture_recipes.json", recipe)
+        self.assert_success(
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(IMPORTER),
+                    "bind-output-digests",
+                    "--staging",
+                    str(staging),
+                    "--recipes",
+                    str(recipe),
+                    "--output",
+                    str(recipe),
+                ],
+                cwd=WORKSPACE,
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONUTF8": "1"},
+            )
+        )
+        output = root / "fixture_recipes.cross-torso.json"
+        args = mock.Mock(staging=staging, recipes=recipe, output=output)
+        with (
+            mock.patch.object(importer, "discover_blender", side_effect=AssertionError("Blender")),
+            mock.patch.object(importer.subprocess, "run", side_effect=AssertionError("subprocess")),
+        ):
+            importer.command_augment_cross_torso(args)
+        self.assertTrue(output.is_file())
+
+    def test_augment_cross_torso_failure_preserves_staging_sentinel(self) -> None:
+        source = self.valid_staging()
+        root = TEST_OUTPUT / "cross-torso-atomic-failure"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        shutil.copytree(source, staging)
+        recipe = root / "fixture_recipes.json"
+        shutil.copy2(FIXTURE_ROOT / "valid/fixture_recipes.json", recipe)
+        self.assert_success(
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(IMPORTER),
+                    "bind-output-digests",
+                    "--staging",
+                    str(staging),
+                    "--recipes",
+                    str(recipe),
+                    "--output",
+                    str(recipe),
+                ],
+                cwd=WORKSPACE,
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONUTF8": "1"},
+            )
+        )
+        sentinel = staging / "task-5c-sentinel.txt"
+        sentinel.write_text("preserve exactly\n", encoding="ascii")
+        before_tree = tree_digest(staging)
+        before_recipe = recipe.read_bytes()
+        output = root / "fixture_recipes.cross-torso.json"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(IMPORTER),
+                "augment-cross-torso",
+                "--staging",
+                str(staging),
+                "--recipes",
+                str(recipe),
+                "--output",
+                str(output),
+            ],
+            cwd=WORKSPACE,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("unreceipted staged path", completed.stderr)
+        self.assertEqual(tree_digest(staging), before_tree)
+        self.assertEqual(recipe.read_bytes(), before_recipe)
+        self.assertFalse(output.exists())
+        self.assertFalse(list(root.glob("staging.augment-tmp-*")))
+        self.assertFalse(list(root.glob("staging.augment-rollback-*")))
 
     def test_inventory_reports_fixture_features_and_exact_names(self) -> None:
         output = TEST_OUTPUT / "inventory.json"
@@ -2410,8 +2815,13 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
             self.assertEqual(manifest["asset_id"], asset["id"])
             self.assertEqual(
                 manifest["assembly_preparation_schema"],
-                "alife.geneforge_family_assembly.v1",
+                "alife.geneforge_assembly_preparation.v2",
             )
+            self.assertEqual(
+                manifest["assembly_preparation_schema_digest"],
+                recipe["assembly_preparation_contract"]["schema_digest"],
+            )
+            self.assertEqual(manifest["assembly_preparation_population"], "canonical-only")
             for prepared in manifest["assembly_preparations"]:
                 observed.add((prepared["family_id"], prepared["logical_slot"]))
                 expected_mode = (
