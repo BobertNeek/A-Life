@@ -2889,25 +2889,30 @@ def _promote_augmented_pair(
         != transaction["new_recipe_sha256"]
     ):
         raise ImportFailure("staging receipt and recipe generations are not matched pairs")
-    _write_augmentation_phase(marker, transaction, "prepared")
-    if phase_observer is not None:
-        phase_observer("prepared")
+    try:
+        _write_augmentation_phase(marker, transaction, "prepared")
+        if phase_observer is not None:
+            phase_observer("prepared")
 
-    _durable_replace(staging, backup)
-    _write_augmentation_phase(marker, transaction, "staging-backed-up")
-    if phase_observer is not None:
-        phase_observer("staging-backed-up")
+        _durable_replace(staging, backup)
+        _write_augmentation_phase(marker, transaction, "staging-backed-up")
+        if phase_observer is not None:
+            phase_observer("staging-backed-up")
 
-    _durable_replace(temporary, staging)
-    _write_augmentation_phase(marker, transaction, "staging-promoted")
-    if phase_observer is not None:
-        phase_observer("staging-promoted")
+        _durable_replace(temporary, staging)
+        _write_augmentation_phase(marker, transaction, "staging-promoted")
+        if phase_observer is not None:
+            phase_observer("staging-promoted")
 
-    _durable_replace(recipe_temporary, output)
-    _write_augmentation_phase(marker, transaction, "recipe-promoted")
-    if phase_observer is not None:
-        phase_observer("recipe-promoted")
-    _recover_augmentation_transaction(staging, output)
+        _durable_replace(recipe_temporary, output)
+        _write_augmentation_phase(marker, transaction, "recipe-promoted")
+        if phase_observer is not None:
+            phase_observer("recipe-promoted")
+        _recover_augmentation_transaction(staging, output)
+    except Exception:
+        if marker.exists():
+            _recover_augmentation_transaction(staging, output)
+        raise
 
 
 def _staged_socket_manifests(staging: Path, recipe: dict) -> tuple[dict, dict]:
@@ -4967,6 +4972,111 @@ def _validate_prepared_matrix(matrix, label: str) -> None:
         raise ImportFailure(f"{label} is not a finite row-major affine matrix")
 
 
+def _preparation_oracle_records(recipe: dict, manifests: dict) -> dict[tuple, dict]:
+    assets = {asset["id"]: asset for asset in recipe["part_assets"]}
+    records = {}
+    for manifest_key in sorted(manifests):
+        manifest = manifests[manifest_key]
+        asset = assets[manifest["asset_id"]]
+        candidates = assembly_preparations(recipe, asset, manifest, manifests)
+        if asset["logical_slot"] != "torso":
+            for family in recipe["families"]:
+                if family["parts"][asset["logical_slot"]]["asset_id"] != asset["id"]:
+                    continue
+                canonical_target = family["parts"]["torso"]["asset_id"]
+                for target in PREPARATION_TORSO_ASSETS:
+                    if target != canonical_target:
+                        candidates.extend(
+                            assembly_preparations(
+                                recipe,
+                                asset,
+                                manifest,
+                                manifests,
+                                family_filter=family["id"],
+                                target_torso_asset_id=target,
+                            )
+                        )
+        for candidate in candidates:
+            key = (
+                candidate["preparation_kind"],
+                candidate["family_id"],
+                candidate["source_asset_id"],
+                candidate["target_torso_asset_id"],
+                candidate["lod"],
+            )
+            if key in records:
+                raise ImportFailure("assembly preparation oracle contains duplicate records")
+            records[key] = candidate
+    return records
+
+
+def _oracle_values_match(actual, expected, *, tolerance: float = 1.0e-9) -> bool:
+    if isinstance(expected, (int, float)) and not isinstance(expected, bool):
+        return (
+            isinstance(actual, (int, float))
+            and not isinstance(actual, bool)
+            and math.isfinite(actual)
+            and math.isclose(actual, expected, rel_tol=0.0, abs_tol=tolerance)
+        )
+    if isinstance(expected, list):
+        return isinstance(actual, list) and len(actual) == len(expected) and all(
+            _oracle_values_match(left, right, tolerance=tolerance)
+            for left, right in zip(actual, expected)
+        )
+    return actual == expected
+
+
+def _validate_preparation_oracle(actual: dict, expected: dict) -> None:
+    for field in (
+        "fit",
+        "seam_offset",
+        "prepared_translation",
+        "prepared_matrix",
+        "predicted_attachment_error",
+    ):
+        if not _oracle_values_match(actual.get(field), expected[field]):
+            raise ImportFailure(f"assembly preparation {field} drift from socket oracle")
+
+    actual_bridges = actual.get("bridge_geometry")
+    expected_bridges = expected["bridge_geometry"]
+    if not isinstance(actual_bridges, list) or len(actual_bridges) != len(expected_bridges):
+        raise ImportFailure("assembly preparation bridge evidence count drift")
+    for actual_bridge, expected_bridge in zip(actual_bridges, expected_bridges):
+        for field in (
+            "socket",
+            "runtime_group",
+            "source_anchor",
+            "target_anchor",
+            "transformed_source_anchor",
+            "prepared_matrix",
+            "residual",
+            "prepared_vertex_count",
+            "applied_overlap_depth",
+            "original_anchor",
+            "prepared_anchor",
+        ):
+            if not _oracle_values_match(actual_bridge.get(field), expected_bridge[field]):
+                raise ImportFailure(
+                    f"assembly preparation bridge {field} drift from socket oracle"
+                )
+
+    actual_groups = actual.get("group_transforms")
+    expected_groups = expected["group_transforms"]
+    if not isinstance(actual_groups, list) or len(actual_groups) != len(expected_groups):
+        raise ImportFailure("assembly group transform oracle count drift")
+    for actual_group, expected_group in zip(actual_groups, expected_groups):
+        for field in (
+            "prepared_matrix",
+            "residual",
+            "bridge_geometry",
+            "socket_evidence",
+        ):
+            if not _oracle_values_match(actual_group.get(field), expected_group.get(field)):
+                raise ImportFailure(
+                    f"assembly group {field} drift from independent socket oracle"
+                )
+
+
 def _validate_preparation_group(
     recipe: dict,
     manifest: dict,
@@ -5045,6 +5155,7 @@ def validate_preparation_metadata(
     cross_slots = []
     canonical_groups = []
     cross_groups = []
+    oracle_records = _preparation_oracle_records(recipe, manifests)
     for key in sorted(manifests):
         manifest = manifests[key]
         asset = assets.get(manifest.get("asset_id"))
@@ -5083,6 +5194,17 @@ def validate_preparation_metadata(
                     != len(PREPARATION_SLOT_GROUPS[slot])
                 ):
                     raise ImportFailure("assembly preparation slot identity or group count drift")
+                oracle_key = (
+                    expected_kind,
+                    family["id"],
+                    asset["id"],
+                    target,
+                    manifest["lod"],
+                )
+                expected_record = oracle_records.get(oracle_key)
+                if expected_record is None:
+                    raise ImportFailure("assembly preparation has no independent socket oracle")
+                _validate_preparation_oracle(slot_record, expected_record)
                 output.append(slot_record)
                 for group in slot_record["group_transforms"]:
                     key_value = _validate_preparation_group(

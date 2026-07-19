@@ -287,6 +287,49 @@ fn staged_validator_exposes_task_5c_group_accounting_and_stable_hash_contract() 
 }
 
 #[test]
+fn staged_validator_accepts_only_complete_canonical_or_augmented_populations() {
+    let canonical = workspace_path("target/artifacts/creature_parts/geneforge-staging");
+    let canonical_validation =
+        validate_geneforge_staging(&canonical, &production_recipe()).unwrap();
+    assert_eq!(canonical_validation.canonical_slot_records, 180);
+    assert_eq!(canonical_validation.cross_torso_slot_records, 0);
+    assert_eq!(canonical_validation.canonical_group_keys, 252);
+    assert_eq!(canonical_validation.cross_torso_group_keys, 0);
+    assert_eq!(canonical_validation.total_group_keys, 252);
+
+    let augmented_validation =
+        validate_geneforge_staging(&fixture_staging(), &fixture_recipe()).unwrap();
+    assert_eq!(augmented_validation.total_group_keys, 684);
+
+    let partial = mutation_root("task-5c-partial-population");
+    copy_tree(&fixture_staging(), &partial);
+    mutate_socket_matching(
+        &partial,
+        |file| file.contains("_head_full_sockets.json"),
+        |value| {
+            value["cross_torso_preparations"]
+                .as_array_mut()
+                .unwrap()
+                .pop();
+        },
+    );
+    rewrite_all_receipt_digests(&partial);
+    assert_rejected(&partial, "cross-torso preparation count drift");
+
+    let mixed = mutation_root("task-5c-mixed-population");
+    copy_tree(&fixture_staging(), &mixed);
+    mutate_socket_matching(
+        &mixed,
+        |file| file.contains("_head_full_sockets.json"),
+        |value| {
+            value["assembly_preparation_population"] = serde_json::json!("canonical-only");
+        },
+    );
+    rewrite_all_receipt_digests(&mixed);
+    assert_rejected(&mixed, "mixed assembly preparation population");
+}
+
+#[test]
 fn staged_validator_rejects_task_5c_identity_count_and_stable_hash_mutations() {
     for (name, field, replacement) in [
         ("family", "source_family_id", serde_json::json!(99)),
@@ -354,7 +397,7 @@ fn staged_validator_rejects_task_5c_identity_count_and_stable_hash_mutations() {
     let mut receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
     receipt["assembly_preparation"]["total_group_keys"] = serde_json::json!(683);
     fs::write(&receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
-    assert_rejected(&root, "metadata drift");
+    assert_rejected(&root, "partial assembly preparation population");
 
     let root = mutation_root("task-5c-stable-hash");
     copy_tree(&fixture_staging(), &root);
