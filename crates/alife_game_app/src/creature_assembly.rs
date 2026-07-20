@@ -1,6 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::{Path, PathBuf},
+};
 
 use alife_world::{CreaturePartFamilyId, CreaturePartSlotKey, CreaturePartSources};
+use serde::Deserialize;
 use thiserror::Error;
 
 use crate::{
@@ -119,6 +124,10 @@ pub enum CreatureAssemblyError {
     MissingGeneForgePart(CreaturePartFamilyId),
     #[error("GeneForge catalog is missing asset {0:?}")]
     MissingGeneForgeAsset(CreaturePartAssetId),
+    #[error("missing GeneForge assembly preparation file: {path}")]
+    MissingPreparationFile { path: PathBuf },
+    #[error("invalid GeneForge assembly preparation file {path}: {message}")]
+    InvalidPreparationFile { path: PathBuf, message: String },
 }
 
 /// Renderer-only compatibility adapter. Task 7 owns its removal and cutover.
@@ -355,6 +364,86 @@ impl GeneForgeAssemblyPreparationIndex {
                 .collect(),
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct StoredPreparationManifest {
+    assembly_preparations: Vec<StoredAssemblyPreparation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoredAssemblyPreparation {
+    group_transforms: Vec<StoredGroupTransform>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoredGroupTransform {
+    #[serde(flatten)]
+    record: GeneForgeGroupTransform,
+    #[serde(default)]
+    bridge_geometry: Vec<StoredSocketEvidence>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoredSocketEvidence {
+    socket: String,
+    source_anchor: [f64; 3],
+    target_anchor: [f64; 3],
+    transformed_source_anchor: [f64; 3],
+    residual: f64,
+    prepared_vertex_count: usize,
+    applied_overlap_depth: f64,
+}
+
+pub fn load_geneforge_assembly_preparation_index(
+    assets_root: &Path,
+    catalog: &GeneForgeCreaturePartCatalog,
+) -> Result<GeneForgeAssemblyPreparationIndex, CreatureAssemblyError> {
+    let mut records = Vec::new();
+    for asset in &catalog.part_assets {
+        for lod in &asset.lods {
+            let path = assets_root.join(&lod.socket_manifest);
+            let text = fs::read_to_string(&path).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    CreatureAssemblyError::MissingPreparationFile { path: path.clone() }
+                } else {
+                    CreatureAssemblyError::InvalidPreparationFile {
+                        path: path.clone(),
+                        message: error.to_string(),
+                    }
+                }
+            })?;
+            let manifest: StoredPreparationManifest =
+                serde_json::from_str(&text).map_err(|error| {
+                    CreatureAssemblyError::InvalidPreparationFile {
+                        path: path.clone(),
+                        message: error.to_string(),
+                    }
+                })?;
+            for preparation in manifest.assembly_preparations {
+                for stored in preparation.group_transforms {
+                    let mut record = stored.record;
+                    if record.socket_evidence.is_empty() {
+                        record.socket_evidence = stored
+                            .bridge_geometry
+                            .into_iter()
+                            .map(|evidence| GeneForgeSocketEvidence {
+                                socket: evidence.socket,
+                                source_anchor: evidence.source_anchor,
+                                target_anchor: evidence.target_anchor,
+                                transformed_source_anchor: evidence.transformed_source_anchor,
+                                residual: evidence.residual,
+                                prepared_vertex_count: evidence.prepared_vertex_count,
+                                applied_overlap_depth: evidence.applied_overlap_depth,
+                            })
+                            .collect();
+                    }
+                    records.push(record);
+                }
+            }
+        }
+    }
+    GeneForgeAssemblyPreparationIndex::new(catalog, records)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -647,6 +736,14 @@ fn validate_preparation_evidence(
         });
     }
     for evidence in &record.socket_evidence {
+        let socket_matches = evidence.socket == record.socket
+            || (record.runtime_group == "torso"
+                && record.socket == "torso-frame"
+                && catalog
+                    .assembly_contract
+                    .slot_sockets
+                    .get(&CreaturePartSlotKey::Torso)
+                    .is_some_and(|sockets| sockets.contains(&evidence.socket)));
         let finite = evidence
             .source_anchor
             .into_iter()
@@ -660,7 +757,7 @@ fn validate_preparation_evidence(
         let measured_residual =
             euclidean_distance(evidence.transformed_source_anchor, evidence.target_anchor);
         if !finite
-            || evidence.socket != record.socket
+            || !socket_matches
             || evidence.prepared_vertex_count == 0
             || !(0.0..=catalog.assembly_preparation_contract.residual_limit)
                 .contains(&evidence.residual)

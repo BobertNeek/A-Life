@@ -623,6 +623,38 @@ fn invalid_asset(message: &'static str) -> GameAppShellError {
 mod tests {
     use super::*;
 
+    const GENEFORGE_RECIPE_PATH: &str =
+        "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json";
+    const GENEFORGE_LICENSE_PATH: &str =
+        "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md";
+    const GENEFORGE_OUTPUT_COUNT: usize = 168;
+
+    fn collect_recipe_output_paths(value: &serde_json::Value, output: &mut BTreeSet<String>) {
+        match value {
+            serde_json::Value::Object(fields) => {
+                for (key, value) in fields {
+                    if matches!(
+                        key.as_str(),
+                        "generated_obj" | "socket_manifest" | "semantic_mask" | "anatomy_mask"
+                    ) {
+                        let path = value
+                            .as_str()
+                            .unwrap_or_else(|| panic!("{key} must contain a string path"));
+                        output.insert(format!("crates/alife_game_app/assets/{path}"));
+                    } else {
+                        collect_recipe_output_paths(value, output);
+                    }
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    collect_recipe_output_paths(value, output);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn fixture_manifest() -> ProductionVoxelAssetManifest {
         serde_json::from_str(
             &std::fs::read_to_string(default_production_asset_manifest_path()).unwrap(),
@@ -643,6 +675,84 @@ mod tests {
         assert!(summary.display_only_vfx);
         assert!(summary.adaptive_vfx);
         assert!(summary.no_renderer_authority);
+    }
+
+    #[test]
+    fn geneforge_manifest_is_an_exact_bounded_recipe_bound_production_pack() {
+        let root = ca12_workspace_root();
+        let recipe: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(GENEFORGE_RECIPE_PATH)).unwrap(),
+        )
+        .unwrap();
+        let recipe_digest = recipe["recipe_sha256"]
+            .as_str()
+            .expect("GeneForge recipe must carry its canonical digest");
+        let importer_version = recipe["importer_version"]
+            .as_str()
+            .expect("GeneForge recipe must pin its importer");
+        let mut expected_paths = BTreeSet::new();
+        collect_recipe_output_paths(&recipe, &mut expected_paths);
+        assert_eq!(expected_paths.len(), GENEFORGE_OUTPUT_COUNT);
+
+        let manifest = fixture_manifest();
+        let entries = manifest
+            .entries
+            .iter()
+            .filter(|entry| expected_paths.contains(&entry.local_path))
+            .collect::<Vec<_>>();
+        assert_eq!(entries.len(), GENEFORGE_OUTPUT_COUNT);
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.local_path.clone())
+                .collect::<BTreeSet<_>>(),
+            expected_paths
+        );
+        assert!(entries.iter().map(|entry| entry.size_bytes).sum::<u64>() <= 8 * 1024 * 1024);
+        for entry in entries {
+            let generator = entry.generator.as_ref().expect("generated source receipt");
+            assert_eq!(entry.source, "https://eem.foo/geneforge/");
+            assert_eq!(entry.license, "MIT");
+            assert_eq!(entry.license_ref, GENEFORGE_LICENSE_PATH);
+            assert_eq!(entry.author, "Eem Foo");
+            assert!(entry.generated && !entry.external && entry.final_art && !entry.placeholder);
+            assert_eq!(generator.tool, importer_version);
+            assert_eq!(generator.config_path, GENEFORGE_RECIPE_PATH);
+            assert!(generator.seed.contains(recipe_digest));
+            assert_eq!(
+                entry.replacement_policy,
+                "regenerate-from-pinned-geneforge-sources-and-validated-v2-recipe"
+            );
+        }
+    }
+
+    #[test]
+    fn superseded_whole_body_pack_is_absent_from_production_assets() {
+        let root = ca12_workspace_root();
+        let generated =
+            root.join("crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated");
+        let stale_generated = std::fs::read_dir(generated)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().is_file())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(
+            stale_generated.is_empty(),
+            "superseded generated family files remain: {stale_generated:?}"
+        );
+
+        let models = root.join("crates/alife_game_app/assets/production_voxel_v1/models");
+        let stale_surfaces = std::fs::read_dir(models)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("T_") && name.ends_with(".png"))
+            .collect::<Vec<_>>();
+        assert!(
+            stale_surfaces.is_empty(),
+            "superseded whole-body surfaces remain: {stale_surfaces:?}"
+        );
     }
 
     #[test]
