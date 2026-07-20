@@ -103,7 +103,7 @@ mod task3_capacity_budget_red_tests {
                 execution.required_max_dynamic_uniform_buffers_per_pipeline_layout(),
                 execution.required_max_compute_workgroup_storage_size(),
             ),
-            (8, 12, 4, 8, 16_384),
+            (8, 12, 4, 8, 16_352),
             "wrong stage/dynamic/workgroup-storage floors for {:?}",
             expected.id,
         );

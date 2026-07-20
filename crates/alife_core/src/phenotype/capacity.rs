@@ -99,7 +99,7 @@ impl BrainExecutionBudget {
             required_max_uniform_buffers_per_shader_stage: 12,
             required_max_dynamic_storage_buffers_per_pipeline_layout: 4,
             required_max_dynamic_uniform_buffers_per_pipeline_layout: 8,
-            required_max_compute_workgroup_storage_size: 16_384,
+            required_max_compute_workgroup_storage_size: 16_352,
             required_max_compute_workgroup_size_x: 256,
             required_max_compute_workgroup_size_y: 256,
             required_max_compute_workgroup_size_z: 64,
