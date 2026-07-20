@@ -36,7 +36,7 @@ use super::{
 
 const PENDING_TRANSACTION_SCHEMA_VERSION: u16 = 1;
 
-fn current_backend_provenance(
+pub(crate) fn current_backend_provenance(
     backend: &GpuClosedLoopBackend,
     capacity: &BrainCapacityClass,
 ) -> Result<GpuBackendProvenanceSave, GameAppShellError> {

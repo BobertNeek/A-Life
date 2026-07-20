@@ -9,9 +9,10 @@ use std::fs;
 use std::path::Path;
 
 use alife_core::{
-    BrainCapacityClass, BrainClassId, BrainPhenotype, BrainScaleTier, PhenotypeHash, PolicyBackend,
+    BrainCapacityClass, BrainClassId, BrainScaleTier, PhenotypeHash, PolicyBackend,
     ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
 };
+pub use alife_core::{PhenotypeEvidenceManifest, GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA};
 use alife_gpu_backend::{
     GpuClosedLoopBackend, GpuHardwareReceipt, GPU_HARDWARE_RECEIPT_SCHEMA_VERSION,
 };
@@ -26,6 +27,8 @@ use crate::{
 
 mod canonical;
 use canonical::*;
+mod benchmark;
+pub use benchmark::*;
 mod learning_sleep;
 pub use learning_sleep::*;
 mod memory_grounding;
@@ -37,7 +40,6 @@ pub const GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA: u16 = 1;
 pub const GPU_SLICE_A_RAW: u16 = 1;
 pub const GPU_SLICE_B_RAW: u16 = 2;
 pub const GPU_EVIDENCE_PASSING_STATUS_RAW: u16 = 1;
-pub const GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA: u16 = 1;
 pub const GPU_SLICE_A_FIXTURE_SCHEMA: u16 = 1;
 pub const GPU_SLICE_A_MAX_TICKS: u32 = 4_096;
 pub const GPU_SLICE_A_REPLAY_TOLERANCE: f32 = 1.0e-6;
@@ -45,13 +47,7 @@ pub const GPU_SLICE_A_REPLAY_TOLERANCE: f32 = 1.0e-6;
 const GPU_EVIDENCE_MAX_ARTIFACT_BYTES: u64 = 4 * 1024 * 1024;
 const GPU_EVIDENCE_ORGANISM_ID: alife_core::OrganismId = alife_core::OrganismId(1);
 
-const MANIFEST_DOMAIN: &[u8] = b"alife.gpu.evidence.phenotype-manifest.v1";
 const ARTIFACT_DOMAIN: &[u8] = b"alife.gpu.evidence.slice-a-artifact.v1";
-const LOBE_LAYOUT_DOMAIN: &[u8] = b"alife.gpu.evidence.lobe-layout.v1";
-const PROJECTION_PLAN_DOMAIN: &[u8] = b"alife.gpu.evidence.projection-plan.v1";
-const SYNAPSE_PAYLOAD_DOMAIN: &[u8] = b"alife.gpu.evidence.synapse-payload.v1";
-const PLASTICITY_NONE_DOMAIN: &[u8] = b"alife.gpu.evidence.plasticity-plan.none.v1";
-const REPLAY_CAPTURE_NONE_DOMAIN: &[u8] = b"alife.gpu.evidence.replay-capture.none.v1";
 const ADAPTER_IDENTITY_DOMAIN: &[u8] = b"alife.gpu.evidence.adapter-identity.v1";
 const INITIAL_STATE_DOMAIN: &[u8] = b"alife.gpu.evidence.initial-state.v1";
 const FRAME_SEQUENCE_DOMAIN: &[u8] = b"alife.gpu.evidence.frame-sequence.v1";
@@ -98,24 +94,6 @@ pub struct GpuSliceEvidenceHeader {
     pub phenotype_hash: PhenotypeHash,
     pub phenotype_manifest_digest: [u64; 4],
     pub capacity_digest: [u64; 4],
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PhenotypeEvidenceManifest {
-    pub schema_version: u16,
-    pub class_id_raw: u16,
-    pub phenotype_sensor_profile_raw: u16,
-    pub phenotype_hash: PhenotypeHash,
-    pub compile_inputs_digest: [u64; 4],
-    pub capacity_digest: [u64; 4],
-    pub lobe_layout_digest: [u64; 4],
-    pub projection_plan_digest: [u64; 4],
-    pub synapse_payload_digest: [u64; 4],
-    pub encoder_plan_digest: [u64; 4],
-    pub decoder_plan_digest: [u64; 4],
-    pub plasticity_plan_digest: [u64; 4],
-    pub replay_capture_plan_digest: [u64; 4],
-    pub manifest_digest: [u64; 4],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -218,85 +196,6 @@ impl GpuClosedLoopAcceptanceOptions {
     }
 }
 
-impl PhenotypeEvidenceManifest {
-    pub fn from_phenotype(
-        phenotype: &BrainPhenotype,
-        capacity: &BrainCapacityClass,
-    ) -> Result<Self, GpuEvidenceError> {
-        phenotype.validate_against(capacity)?;
-        let mut manifest = Self {
-            schema_version: GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA,
-            class_id_raw: phenotype.brain_class_id().raw(),
-            phenotype_sensor_profile_raw: phenotype.sensor_profile().raw(),
-            phenotype_hash: phenotype.phenotype_hash(),
-            compile_inputs_digest: phenotype.compiler_inputs_digest(),
-            capacity_digest: capacity.canonical_digest(),
-            lobe_layout_digest: lobe_layout_digest(phenotype),
-            projection_plan_digest: projection_plan_digest(phenotype),
-            synapse_payload_digest: synapse_payload_digest(phenotype)?,
-            encoder_plan_digest: phenotype.sensor_encoder().canonical_digest(),
-            decoder_plan_digest: phenotype.candidate_decoder().canonical_digest(),
-            plasticity_plan_digest: explicit_none_digest(PLASTICITY_NONE_DOMAIN),
-            replay_capture_plan_digest: explicit_none_digest(REPLAY_CAPTURE_NONE_DOMAIN),
-            manifest_digest: [0; 4],
-        };
-        manifest.manifest_digest = manifest.recompute_manifest_digest();
-        manifest.validate(capacity)?;
-        Ok(manifest)
-    }
-
-    pub fn from_learning_phenotype(
-        phenotype: &BrainPhenotype,
-        capacity: &BrainCapacityClass,
-    ) -> Result<Self, GpuEvidenceError> {
-        phenotype.validate_against(capacity)?;
-        let mut manifest = Self {
-            schema_version: GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA,
-            class_id_raw: phenotype.brain_class_id().raw(),
-            phenotype_sensor_profile_raw: phenotype.sensor_profile().raw(),
-            phenotype_hash: phenotype.phenotype_hash(),
-            compile_inputs_digest: phenotype.compiler_inputs_digest(),
-            capacity_digest: capacity.canonical_digest(),
-            lobe_layout_digest: lobe_layout_digest(phenotype),
-            projection_plan_digest: projection_plan_digest(phenotype),
-            synapse_payload_digest: synapse_payload_digest(phenotype)?,
-            encoder_plan_digest: phenotype.sensor_encoder().canonical_digest(),
-            decoder_plan_digest: phenotype.candidate_decoder().canonical_digest(),
-            plasticity_plan_digest: phenotype.plasticity_plan_digest(),
-            replay_capture_plan_digest: phenotype.replay_capture_plan().canonical_digest(),
-            manifest_digest: [0; 4],
-        };
-        manifest.manifest_digest = manifest.recompute_manifest_digest();
-        manifest.validate(capacity)?;
-        Ok(manifest)
-    }
-
-    pub fn recompute_manifest_digest(&self) -> [u64; 4] {
-        let mut digest = new_manifest_digest();
-        encode_manifest_without_digest(&mut digest, self);
-        digest.finish256()
-    }
-
-    fn validate(&self, capacity: &BrainCapacityClass) -> Result<(), GpuEvidenceError> {
-        capacity.validate_contract()?;
-        SensorProfile::try_from_raw(self.phenotype_sensor_profile_raw)?;
-        if self.schema_version != GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA
-            || self.class_id_raw != capacity.id().raw()
-            || self.capacity_digest != capacity.canonical_digest()
-            || self.phenotype_hash == PhenotypeHash([0; 4])
-            || self.manifest_digest != self.recompute_manifest_digest()
-            || manifest_component_digests(self)
-                .into_iter()
-                .any(|digest| digest == [0; 4])
-        {
-            return Err(GpuEvidenceError::Contract(
-                "phenotype evidence manifest is inconsistent",
-            ));
-        }
-        Ok(())
-    }
-}
-
 impl GpuSliceAAcceptanceReceipt {
     pub fn recompute_artifact_digest(&self) -> Result<[u64; 4], GpuEvidenceError> {
         let mut digest = new_artifact_digest();
@@ -334,7 +233,8 @@ impl GpuSliceAAcceptanceReceipt {
 
     fn validate(&self, require_clean_source: bool) -> Result<(), GpuEvidenceError> {
         self.capacity.validate_contract()?;
-        self.phenotype_manifest.validate(&self.capacity)?;
+        self.phenotype_manifest
+            .validate_for_capacity(&self.capacity)?;
         let expected_slug = capacity_slug(self.capacity.id())?;
         if self.header.artifact_schema != GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA
             || self.header.slice_raw != GPU_SLICE_A_RAW

@@ -19,6 +19,7 @@ mod persistent_address;
 mod record;
 mod topology_compile;
 
+pub use crate::evidence_digest::PhenotypeEvidenceManifest;
 pub use budgets::{CompiledBudgets, GlobalPhenotypeBudgetReceipt, RouteBudgetReceipt};
 pub use capacity::{BrainCapacityClass, BrainExecutionBudget, REQUIRED_GPU_FEATURE_MASK};
 pub use compiled::{

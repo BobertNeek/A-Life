@@ -10,6 +10,7 @@ pub mod canonical_digest;
 pub mod chemistry;
 pub mod diagnostics;
 pub mod error;
+pub mod evidence_digest;
 pub mod experience;
 pub mod foundation;
 pub mod genome;
@@ -65,6 +66,10 @@ pub use chemistry::{
 };
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
+pub use evidence_digest::{
+    lobe_layout_evidence_digest, projection_plan_evidence_digest, synapse_payload_evidence_digest,
+    PhenotypeEvidenceManifest, GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA,
+};
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
     ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,

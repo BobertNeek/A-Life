@@ -12,7 +12,7 @@ use alife_core::{
     PerceptionFrame, PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome,
     PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
     SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState, Tick,
-    TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, Validate,
+    TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, Validate, Vec3f,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -29,8 +29,9 @@ use crate::{
     merge_gpu_checkpoint_manifest_entries, AppShellLaunchConfig, GameAppShellError,
     GpuBrainAuthorityTelemetry, GpuBrainCheckpointWrite, GpuBrainSidecarCapture,
     GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
-    GpuSleepConsolidationDriver, GpuSleepScheduler, LiveBrainCausalStage, LiveBrainTickSummary,
-    RetainedLearningCapture, G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+    GpuSleepConsolidationDriver, GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage,
+    LiveBrainTickSummary, RetainedLearningCapture, G03_LIVE_BRAIN_LOOP_SCHEMA,
+    G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
 
 #[derive(Debug, Clone)]
@@ -49,6 +50,31 @@ struct GpuLiveCheckpointDurability {
     store: GpuCheckpointAssetStore,
     durable_manifest: GpuDurableSaveManifest,
     published: GpuLoadedSaveManifest,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GpuLiveRuntimeConstructionOptions {
+    homeostatic_parameters: HomeostaticParameters,
+    schedule_sleep: bool,
+    birth_template_organism_id: Option<OrganismId>,
+}
+
+impl GpuLiveRuntimeConstructionOptions {
+    const fn production() -> Self {
+        Self {
+            homeostatic_parameters: HomeostaticParameters::reference(),
+            schedule_sleep: true,
+            birth_template_organism_id: None,
+        }
+    }
+
+    const fn benchmark(homeostatic_parameters: HomeostaticParameters) -> Self {
+        Self {
+            homeostatic_parameters,
+            schedule_sleep: false,
+            birth_template_organism_id: Some(OrganismId(1)),
+        }
+    }
 }
 
 impl GpuLiveCheckpointDurability {
@@ -338,6 +364,9 @@ pub struct GpuLiveBrainRuntime {
     deterministic_seed: u64,
     brain_class: BrainScaleTier,
     sensor_profile: SensorProfile,
+    homeostatic_parameters: HomeostaticParameters,
+    schedule_sleep: bool,
+    birth_template_organism_id: Option<OrganismId>,
     sealed_patches: Vec<ExperiencePatch>,
     last_learning_receipts: Vec<GpuLearningReceipt>,
     last_activity_work_receipts: Vec<BrainWorkReceipt>,
@@ -446,11 +475,60 @@ impl GpuLiveBrainRuntime {
         brain_class: BrainScaleTier,
         sensor_profile: SensorProfile,
     ) -> Result<Self, GameAppShellError> {
+        Self::new_profiled_with_parameters(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            sensor_profile,
+            GpuLiveRuntimeConstructionOptions::production(),
+        )
+    }
+
+    pub(crate) fn new_benchmark_profiled(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
+    ) -> Result<Self, GameAppShellError> {
+        let mut parameters = HomeostaticParameters::reference();
+        parameters.hunger_drift_per_update = 0.0;
+        parameters.fatigue_drift_per_update = 0.0;
+        parameters.loneliness_drift_per_update = 0.0;
+        parameters.curiosity_drift_per_update = 0.0;
+        parameters.reproductive_drift_per_update = 0.0;
+        parameters.brain_atp_drain_per_update = 0.0;
+        parameters.sleep_pressure_drift_per_update = 0.0;
+        parameters.catatonia_brain_atp_threshold = 0.0;
+        parameters.fatigue_sleep_threshold = 1.0;
+        parameters.sleep_pressure_threshold = 1.0;
+        parameters.pain_frustration_threshold = 1.0;
+        parameters.validate_contract()?;
+        Self::new_profiled_with_parameters(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            sensor_profile,
+            GpuLiveRuntimeConstructionOptions::benchmark(parameters),
+        )
+    }
+
+    fn new_profiled_with_parameters(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
+        options: GpuLiveRuntimeConstructionOptions,
+    ) -> Result<Self, GameAppShellError> {
         if deterministic_seed == 0 || brain_class.neuron_count().is_none() {
             return Err(GameAppShellError::Core(
                 ScaffoldContractError::PhenotypeCompile,
             ));
         }
+        options.homeostatic_parameters.validate_contract()?;
         let mut runtime = Self {
             backend,
             handles: BTreeMap::new(),
@@ -462,6 +540,9 @@ impl GpuLiveBrainRuntime {
             deterministic_seed,
             brain_class,
             sensor_profile,
+            homeostatic_parameters: options.homeostatic_parameters,
+            schedule_sleep: options.schedule_sleep,
+            birth_template_organism_id: options.birth_template_organism_id,
             sealed_patches: Vec::new(),
             last_learning_receipts: Vec::new(),
             last_activity_work_receipts: Vec::new(),
@@ -546,6 +627,9 @@ impl GpuLiveBrainRuntime {
             deterministic_seed,
             brain_class,
             sensor_profile,
+            homeostatic_parameters: HomeostaticParameters::reference(),
+            schedule_sleep: true,
+            birth_template_organism_id: None,
             sealed_patches: Vec::new(),
             last_learning_receipts: Vec::new(),
             last_activity_work_receipts: Vec::new(),
@@ -1081,6 +1165,7 @@ impl GpuLiveBrainRuntime {
 
         let tick_before = self.world.tick();
         let tick_after = Tick::new(tick_before.raw().saturating_add(1));
+        let homeostatic_parameters = self.homeostatic_parameters;
         let mut batch = Vec::with_capacity(self.handles.len());
         let mut summaries_by_organism = BTreeMap::new();
         let mut persist_sleep_boundary = false;
@@ -1097,15 +1182,20 @@ impl GpuLiveBrainRuntime {
                 .residents
                 .get_mut(&raw)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            Self::synchronize_resident_tick(resident, tick_before)?;
+            Self::synchronize_resident_tick(resident, tick_before, homeostatic_parameters)?;
             let sleep_before = resident.sleep_scheduler.state();
             let phase_before = sleep_before.phase;
+            // Throughput trials suppress sleep phases but keep the production
+            // work-cost ledger. Applying the existing sleep-rate recovery in
+            // that explicit profile prevents ecology energy exhaustion from
+            // truncating the fixed 1,280-tick neural measurement protocol.
+            let recover_brain_atp = phase_before != SleepPhase::Awake || !self.schedule_sleep;
             self.backend.charge_world_brain_atp_tick(
                 handle,
                 tick_before.raw(),
-                phase_before != SleepPhase::Awake,
+                recover_brain_atp,
             )?;
-            let sleep_event = {
+            let sleep_event = if self.schedule_sleep {
                 let mut routed_driver = RoutedGpuSleepDriver {
                     backend: &mut self.backend,
                     handle,
@@ -1114,10 +1204,22 @@ impl GpuLiveBrainRuntime {
                 resident.sleep_scheduler.scheduled_tick(
                     OrganismId(raw),
                     &resident.homeostasis,
-                    HomeostaticParameters::reference(),
+                    homeostatic_parameters,
                     tick_before,
                     &mut routed_driver,
                 )?
+            } else {
+                if phase_before != SleepPhase::Awake {
+                    return Err(ScaffoldContractError::MissingPhaseData.into());
+                }
+                GpuSleepScheduleEvent {
+                    tick: tick_before,
+                    phase: SleepPhase::Awake,
+                    cycle_id: sleep_before.last_consolidated_cycle_id,
+                    transition: None,
+                    consolidation_kind_raw: sleep_before.consolidation.kind_raw(),
+                    selected_action: None,
+                }
             };
             let sleep_after = resident.sleep_scheduler.state();
             if sleep_after != sleep_before {
@@ -1138,9 +1240,9 @@ impl GpuLiveBrainRuntime {
                 && sleep_event.transition.is_none();
             if !remains_dispatchable || retained_learning_pending {
                 if sleep_event.phase == SleepPhase::Awake {
-                    Self::advance_failed_resident(resident, tick_after)?;
+                    Self::advance_failed_resident(resident, tick_after, homeostatic_parameters)?;
                 } else {
-                    Self::advance_sleeping_resident(resident, tick_after)?;
+                    Self::advance_sleeping_resident(resident, tick_after, homeostatic_parameters)?;
                 }
                 summaries_by_organism.insert(
                     raw,
@@ -1198,7 +1300,7 @@ impl GpuLiveBrainRuntime {
                 Err(error) => {
                     self.last_memory_preparation_errors
                         .push((OrganismId(raw), error));
-                    Self::advance_failed_resident(resident, tick_after)?;
+                    Self::advance_failed_resident(resident, tick_after, homeostatic_parameters)?;
                     summaries_by_organism.insert(
                         raw,
                         Self::preparation_failure_summary(
@@ -1259,6 +1361,35 @@ impl GpuLiveBrainRuntime {
 
     pub fn sealed_patches(&self) -> &[ExperiencePatch] {
         &self.sealed_patches
+    }
+
+    /// Switches an explicit no-sleep benchmark fixture from its populated
+    /// stimulus phase to an isolated phase. The world still owns the resulting
+    /// unscored candidate set; this method never supplies a score or action.
+    pub(crate) fn enter_isolated_benchmark_phase(&mut self) -> Result<(), GameAppShellError> {
+        if self.schedule_sleep {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame.into());
+        }
+        let mut agent_ordinal = 0_u32;
+        let mut stimulus_ordinal = 0_u32;
+        for object in self.world.object_snapshots() {
+            let position = if object.organism_id.is_some() {
+                let position = Vec3f::new(agent_ordinal as f32 * 1_024.0, 0.0, 0.0);
+                agent_ordinal = agent_ordinal
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                position
+            } else {
+                let position =
+                    Vec3f::new(-1_000_000.0 - stimulus_ordinal as f32 * 1_024.0, 0.0, 0.0);
+                stimulus_ordinal = stimulus_ordinal
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                position
+            };
+            self.world.editor_move_object(object.id, position)?;
+        }
+        Ok(())
     }
 
     /// Engine-neutral world snapshot paired with an explicit GPU checkpoint.
@@ -1360,6 +1491,24 @@ impl GpuLiveBrainRuntime {
         self.backend.hardware_receipt()
     }
 
+    pub(crate) fn take_completed_neural_timing_sample(
+        &mut self,
+    ) -> Option<alife_gpu_backend::GpuNeuralTimingSample> {
+        self.backend.take_completed_neural_timing_sample()
+    }
+
+    pub(crate) const fn admission_receipt(&self) -> &alife_gpu_backend::GpuAdmissionReceipt {
+        self.backend.admission_receipt()
+    }
+
+    pub(crate) fn runtime_profile_digest(&self) -> Result<[u64; 4], GameAppShellError> {
+        Ok(self.backend.runtime_profile().canonical_digest()?)
+    }
+
+    pub(crate) const fn activity_policy_digest(&self) -> [u64; 4] {
+        self.backend.activity_policy().policy_digest
+    }
+
     pub fn authority_telemetry(&self) -> GpuBrainAuthorityTelemetry {
         let mut telemetry = GpuBrainAuthorityTelemetry::pending(
             self.brain_class
@@ -1423,7 +1572,7 @@ impl GpuLiveBrainRuntime {
         let (phenotype, genome, development) = compile_gpu_birth_components(
             self.deterministic_seed,
             self.brain_class,
-            organism_id,
+            self.birth_template_organism_id.unwrap_or(organism_id),
             self.world.tick(),
             self.sensor_profile,
         )?;
@@ -1452,13 +1601,13 @@ impl GpuLiveBrainRuntime {
     fn synchronize_resident_tick(
         resident: &mut ResidentCognition,
         tick: Tick,
+        parameters: HomeostaticParameters,
     ) -> Result<(), ScaffoldContractError> {
         if resident.homeostasis.tick != tick {
-            resident.homeostasis = resident.homeostasis.advance(
-                tick,
-                HomeostaticDelta::zero(),
-                HomeostaticParameters::reference(),
-            )?;
+            resident.homeostasis =
+                resident
+                    .homeostasis
+                    .advance(tick, HomeostaticDelta::zero(), parameters)?;
             resident.development.age_ticks = tick;
         }
         Ok(())
@@ -1467,11 +1616,12 @@ impl GpuLiveBrainRuntime {
     fn advance_sleeping_resident(
         resident: &mut ResidentCognition,
         tick_after: Tick,
+        parameters: HomeostaticParameters,
     ) -> Result<(), ScaffoldContractError> {
         resident.homeostasis = resident.homeostasis.advance(
             tick_after,
             HomeostaticDelta::sleep_recovery_per_tick(),
-            HomeostaticParameters::reference(),
+            parameters,
         )?;
         resident.development.age_ticks = tick_after;
         Ok(())
@@ -1480,12 +1630,12 @@ impl GpuLiveBrainRuntime {
     fn advance_failed_resident(
         resident: &mut ResidentCognition,
         tick_after: Tick,
+        parameters: HomeostaticParameters,
     ) -> Result<(), ScaffoldContractError> {
-        resident.homeostasis = resident.homeostasis.advance(
-            tick_after,
-            HomeostaticDelta::zero(),
-            HomeostaticParameters::reference(),
-        )?;
+        resident.homeostasis =
+            resident
+                .homeostasis
+                .advance(tick_after, HomeostaticDelta::zero(), parameters)?;
         resident.development.age_ticks = tick_after;
         Ok(())
     }
@@ -1823,7 +1973,7 @@ impl GpuLiveBrainRuntime {
         resident.homeostasis = resident.homeostasis.advance(
             outcome_tick,
             patch.outcome().homeostatic_delta,
-            HomeostaticParameters::reference(),
+            self.homeostatic_parameters,
         )?;
         resident.development.age_ticks = outcome_tick;
         resident.next_sequence = resident

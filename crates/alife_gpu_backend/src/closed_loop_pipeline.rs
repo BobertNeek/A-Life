@@ -36,6 +36,31 @@ enum BatchLifecycleStage {
     EligibilityRecorded,
 }
 
+pub(crate) struct GpuTimedFastPlasticityResult {
+    pub records: Vec<GpuFastPlasticityCommitRecord>,
+    pub timestamp_delta_ticks: u64,
+}
+
+pub(crate) struct GpuTimestampQueryResources<'a> {
+    query_set: &'a wgpu::QuerySet,
+    resolve_buffer: &'a wgpu::Buffer,
+    readback_buffer: &'a wgpu::Buffer,
+}
+
+impl<'a> GpuTimestampQueryResources<'a> {
+    pub(crate) const fn new(
+        query_set: &'a wgpu::QuerySet,
+        resolve_buffer: &'a wgpu::Buffer,
+        readback_buffer: &'a wgpu::Buffer,
+    ) -> Self {
+        Self {
+            query_set,
+            resolve_buffer,
+            readback_buffer,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PendingBatchAuthority {
     nonce: u64,
@@ -1649,7 +1674,8 @@ impl GpuClosedLoopPipelines {
         queue: &wgpu::Queue,
         buffers: &GpuFixedClassArenaBuffers,
         entries: &[GpuFastPlasticityBatchEntry<'_>],
-    ) -> Result<Vec<GpuFastPlasticityCommitRecord>, GpuClosedLoopError> {
+        timestamp: GpuTimestampQueryResources<'_>,
+    ) -> Result<GpuTimedFastPlasticityResult, GpuClosedLoopError> {
         self.authority.ensure_healthy()?;
         if self.authority.pending.is_some()
             || entries.is_empty()
@@ -1781,6 +1807,16 @@ impl GpuClosedLoopPipelines {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("closed-loop-fast-plasticity-batch"),
         });
+        {
+            let _timestamp_start = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("closed-loop-fast-plasticity-timestamp-start"),
+                timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
+                    query_set: timestamp.query_set,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: None,
+                }),
+            });
+        }
         for (label, pipeline, groups) in [
             (
                 "closed-loop-initialize-fast-plasticity-pass",
@@ -1811,6 +1847,24 @@ impl GpuClosedLoopPipelines {
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.dispatch_workgroups(groups, rows, 1);
         }
+        {
+            let _timestamp_end = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("closed-loop-fast-plasticity-timestamp-end"),
+                timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
+                    query_set: timestamp.query_set,
+                    beginning_of_pass_write_index: None,
+                    end_of_pass_write_index: Some(1),
+                }),
+            });
+        }
+        encoder.resolve_query_set(timestamp.query_set, 0..2, timestamp.resolve_buffer, 0);
+        encoder.copy_buffer_to_buffer(
+            timestamp.resolve_buffer,
+            0,
+            timestamp.readback_buffer,
+            0,
+            16,
+        );
         for (row, entry) in entries.iter().enumerate() {
             encoder.copy_buffer_to_buffer(
                 neural[6],
@@ -1830,6 +1884,15 @@ impl GpuClosedLoopPipelines {
                 let _ = sender.send(result);
             },
         );
+        let (timestamp_sender, timestamp_receiver) = mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            timestamp.readback_buffer,
+            wgpu::MapMode::Read,
+            0..16,
+            move |result| {
+                let _ = timestamp_sender.send(result);
+            },
+        );
         let submission = queue.submit(Some(command_buffer));
         if device
             .poll(wgpu::PollType::Wait {
@@ -1838,10 +1901,33 @@ impl GpuClosedLoopPipelines {
             })
             .is_err()
             || receiver.recv().ok().and_then(Result::ok).is_none()
+            || timestamp_receiver
+                .recv()
+                .ok()
+                .and_then(Result::ok)
+                .is_none()
         {
             buffers.compact_readback().unmap();
+            timestamp.readback_buffer.unmap();
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
+        let timestamp_mapped = timestamp.readback_buffer.slice(..16).get_mapped_range();
+        let timestamp_begin = u64::from_le_bytes(
+            timestamp_mapped[0..8]
+                .try_into()
+                .map_err(|_| GpuClosedLoopError::SubmissionFailed)?,
+        );
+        let timestamp_end = u64::from_le_bytes(
+            timestamp_mapped[8..16]
+                .try_into()
+                .map_err(|_| GpuClosedLoopError::SubmissionFailed)?,
+        );
+        drop(timestamp_mapped);
+        timestamp.readback_buffer.unmap();
+        let timestamp_delta_ticks = timestamp_end
+            .checked_sub(timestamp_begin)
+            .filter(|ticks| *ticks != 0)
+            .ok_or(GpuClosedLoopError::SubmissionFailed)?;
         let mapped = buffers
             .compact_readback()
             .slice(..readback_bytes as u64)
@@ -1892,7 +1978,10 @@ impl GpuClosedLoopPipelines {
             }
             records.push(record);
         }
-        Ok(records)
+        Ok(GpuTimedFastPlasticityResult {
+            records,
+            timestamp_delta_ticks,
+        })
     }
 
     pub(crate) fn discard_pending_eligibility(

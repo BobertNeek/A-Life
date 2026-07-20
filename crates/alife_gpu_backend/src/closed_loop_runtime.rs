@@ -28,8 +28,8 @@ use crate::{
     GpuFixedSlotRanges, GpuLearningReceipt, GpuMemoryContextDispatchReceipt,
     GpuMemoryContextUpload, GpuOutcomeCreditRecord, GpuPendingEligibilityRecord,
     GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget, GpuRuntimeProfile,
-    GpuValidatedClassBatch, PendingEligibilityDiscardReceipt, PendingEligibilityIdentity,
-    PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
+    GpuTimestampQueryResources, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
+    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 
 pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
@@ -75,10 +75,7 @@ impl ExactGpuTimestampPeriod {
     }
 
     fn elapsed_ns(self, begin: u64, end: u64) -> Result<u64, ScaffoldContractError> {
-        let ticks = end
-            .checked_sub(begin)
-            .filter(|ticks| *ticks != 0)
-            .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?;
+        let ticks = self.delta_ticks(begin, end)?;
         let scaled = u128::from(ticks)
             .checked_mul(u128::from(self.significand))
             .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?;
@@ -99,6 +96,36 @@ impl ExactGpuTimestampPeriod {
             }
         };
         u64::try_from(nanoseconds).map_err(|_| ScaffoldContractError::GpuTimestampQueryUnavailable)
+    }
+
+    fn delta_ticks(self, begin: u64, end: u64) -> Result<u64, ScaffoldContractError> {
+        end.checked_sub(begin)
+            .filter(|ticks| *ticks != 0)
+            .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)
+    }
+
+    fn period_ns_q24(self) -> Result<u64, ScaffoldContractError> {
+        let exponent = i32::from(self.binary_exponent) + 24;
+        let scaled = u128::from(self.significand);
+        let rounded = if exponent >= 0 {
+            scaled
+                .checked_shl(exponent as u32)
+                .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?
+        } else {
+            let shift = exponent.unsigned_abs();
+            if shift >= u128::BITS {
+                0
+            } else {
+                scaled
+                    .checked_add(1_u128 << (shift - 1))
+                    .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?
+                    >> shift
+            }
+        };
+        u64::try_from(rounded)
+            .ok()
+            .filter(|value| *value != 0)
+            .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)
     }
 }
 
@@ -145,7 +172,7 @@ impl GpuTimestampResources {
         })
     }
 
-    fn read_elapsed_ns(&self) -> Result<u64, ScaffoldContractError> {
+    fn read_delta_and_elapsed_ns(&self) -> Result<(u64, u64), ScaffoldContractError> {
         let mapped = self
             .readback_buffer
             .slice(..GPU_TIMESTAMP_READBACK_BYTES)
@@ -163,7 +190,14 @@ impl GpuTimestampResources {
         );
         drop(mapped);
         self.readback_buffer.unmap();
-        self.period.elapsed_ns(begin, end)
+        Ok((
+            self.period.delta_ticks(begin, end)?,
+            self.period.elapsed_ns(begin, end)?,
+        ))
+    }
+
+    fn period_ns_q24(&self) -> Result<u64, ScaffoldContractError> {
+        self.period.period_ns_q24()
     }
 }
 
@@ -291,6 +325,24 @@ pub struct GpuClosedLoopTick {
     pub work: BrainWorkReceipt,
     pub compact_readback_bytes: usize,
     pub hardware_receipt_generation: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuNeuralTimingSample {
+    pub dispatch_generation: u64,
+    pub class_id_raw: u16,
+    pub population: u32,
+    pub inference_timestamp_ticks: u64,
+    pub plasticity_timestamp_ticks: u64,
+    pub timestamp_period_ns_q24: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PendingInferenceTiming {
+    dispatch_generation: u64,
+    class_id_raw: Option<u16>,
+    population: u32,
+    inference_timestamp_ticks: u64,
 }
 
 /// One finalized candidate-memory context bound to an exact live brain handle
@@ -884,6 +936,7 @@ pub struct GpuClosedLoopBackend {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     timestamp_resources: GpuTimestampResources,
+    plasticity_timestamp_resources: GpuTimestampResources,
     pub(crate) device_lost: Arc<AtomicBool>,
     kernels: Arc<GpuClosedLoopKernelSet>,
     pub(crate) state: GpuBackendState,
@@ -904,6 +957,8 @@ pub struct GpuClosedLoopBackend {
     perception_upload_count: u64,
     completed_selection_count: u64,
     last_compact_readback_bytes: usize,
+    pending_inference_timing: Option<PendingInferenceTiming>,
+    completed_neural_timing: Option<GpuNeuralTimingSample>,
     pub(crate) next_sleep_job_id: u64,
     pub(crate) sleep_jobs: BTreeMap<u64, crate::GpuSleepJobState>,
     pub(crate) committed_sleep: BTreeMap<(u16, u32, u32, u64), crate::GpuSleepConsolidationReceipt>,
@@ -937,6 +992,8 @@ impl GpuClosedLoopBackend {
         let activity_policy = BrainActivityPolicyV1::production_v1();
         activity_policy.validate_contract()?;
         let timestamp_resources = GpuTimestampResources::new(&required.device, &required.queue)?;
+        let plasticity_timestamp_resources =
+            GpuTimestampResources::new(&required.device, &required.queue)?;
         let kernels =
             GpuClosedLoopKernelSet::new(&required.device).map_err(map_gpu_contract_error)?;
         Ok(Self {
@@ -946,6 +1003,7 @@ impl GpuClosedLoopBackend {
             device: required.device,
             queue: required.queue,
             timestamp_resources,
+            plasticity_timestamp_resources,
             device_lost: required.lost,
             kernels,
             state: GpuBackendState::Ready,
@@ -966,6 +1024,8 @@ impl GpuClosedLoopBackend {
             perception_upload_count: 0,
             completed_selection_count: 0,
             last_compact_readback_bytes: 0,
+            pending_inference_timing: None,
+            completed_neural_timing: None,
             next_sleep_job_id: 1,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
@@ -1006,6 +1066,10 @@ impl GpuClosedLoopBackend {
 
     pub const fn completed_selection_count(&self) -> u64 {
         self.completed_selection_count
+    }
+
+    pub fn take_completed_neural_timing_sample(&mut self) -> Option<GpuNeuralTimingSample> {
+        self.completed_neural_timing.take()
     }
 
     pub fn brain_atp_q16(&self, handle: GpuBrainHandle) -> Result<u32, ScaffoldContractError> {
@@ -1406,10 +1470,15 @@ impl GpuClosedLoopBackend {
                 &self.queue,
                 &bucket.buffers,
                 &gpu_entries,
+                GpuTimestampQueryResources::new(
+                    &self.plasticity_timestamp_resources.query_set,
+                    &self.plasticity_timestamp_resources.resolve_buffer,
+                    &self.plasticity_timestamp_resources.readback_buffer,
+                ),
             )
         };
-        let gpu_records = match gpu_result {
-            Ok(records) => records,
+        let gpu_timed_result = match gpu_result {
+            Ok(result) => result,
             Err(GpuClosedLoopError::MalformedUpload | GpuClosedLoopError::StaleOrForeignHandle) => {
                 return Err(ScaffoldContractError::LearningEvidenceMismatch);
             }
@@ -1418,6 +1487,7 @@ impl GpuClosedLoopBackend {
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
         };
+        let gpu_records = gpu_timed_result.records;
         if gpu_records.len() != prepared.len() {
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
@@ -1497,6 +1567,32 @@ impl GpuClosedLoopBackend {
             });
         }
         self.last_compact_readback_bytes = readback_bytes;
+        if let Some(pending) = self.pending_inference_timing {
+            let dispatch_generation = receipts
+                .first()
+                .map(|receipt| receipt.dispatch_generation)
+                .unwrap_or(0);
+            if pending.dispatch_generation == dispatch_generation
+                && pending.class_id_raw == Some(class_id)
+                && usize::try_from(pending.population).ok() == Some(receipts.len())
+            {
+                let inference_period_ns_q24 = self.timestamp_resources.period_ns_q24()?;
+                let plasticity_period_ns_q24 =
+                    self.plasticity_timestamp_resources.period_ns_q24()?;
+                if inference_period_ns_q24 != plasticity_period_ns_q24 {
+                    return Err(ScaffoldContractError::GpuTimestampQueryUnavailable);
+                }
+                self.completed_neural_timing = Some(GpuNeuralTimingSample {
+                    dispatch_generation,
+                    class_id_raw: class_id,
+                    population: pending.population,
+                    inference_timestamp_ticks: pending.inference_timestamp_ticks,
+                    plasticity_timestamp_ticks: gpu_timed_result.timestamp_delta_ticks,
+                    timestamp_period_ns_q24: inference_period_ns_q24,
+                });
+                self.pending_inference_timing = None;
+            }
+        }
         Ok(receipts)
     }
 
@@ -1584,6 +1680,12 @@ impl GpuClosedLoopBackend {
         resident.transaction_generation = next_transaction_generation;
         resident.pending_eligibility = None;
         resident.pending_eligibility_record = None;
+        if self
+            .pending_inference_timing
+            .is_some_and(|pending| pending.dispatch_generation == identity.dispatch_generation())
+        {
+            self.pending_inference_timing = None;
+        }
         Ok(PendingEligibilityDiscardReceipt::new(
             *identity,
             self.hardware.generation,
@@ -1773,6 +1875,8 @@ impl GpuClosedLoopBackend {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let timing_class_id =
+            (grouped.len() == 1).then(|| *grouped.keys().next().expect("one grouped class exists"));
         let mut dispatches = Vec::with_capacity(grouped.len());
         for (class_id, original_indices) in grouped {
             let bucket = self
@@ -1990,21 +2094,22 @@ impl GpuClosedLoopBackend {
             });
         }
 
-        let completed_gpu_time_ns = match self.timestamp_resources.read_elapsed_ns() {
-            Ok(elapsed) => elapsed,
-            Err(error) => {
-                for dispatch in &dispatches {
-                    self.class_buckets
-                        .get(&dispatch.class_id)
-                        .expect("submitted bucket exists")
-                        .buffers
-                        .compact_readback()
-                        .unmap();
+        let (inference_timestamp_ticks, completed_gpu_time_ns) =
+            match self.timestamp_resources.read_delta_and_elapsed_ns() {
+                Ok(timing) => timing,
+                Err(error) => {
+                    for dispatch in &dispatches {
+                        self.class_buckets
+                            .get(&dispatch.class_id)
+                            .expect("submitted bucket exists")
+                            .buffers
+                            .compact_readback()
+                            .unmap();
+                    }
+                    self.poison_submitted_dispatches(&dispatches);
+                    return Err(error);
                 }
-                self.poison_submitted_dispatches(&dispatches);
-                return Err(error);
-            }
-        };
+            };
 
         for index in 0..dispatches.len() {
             let dispatch = &dispatches[index];
@@ -2368,6 +2473,14 @@ impl GpuClosedLoopBackend {
         self.last_compact_readback_bytes = total_readback_bytes;
         self.next_dispatch_generation = next_dispatch_generation;
         self.completed_selection_count = next_completed_selection_count;
+        self.completed_neural_timing = None;
+        self.pending_inference_timing = Some(PendingInferenceTiming {
+            dispatch_generation: dispatch_generation.get(),
+            class_id_raw: timing_class_id,
+            population: u32::try_from(batch.len())
+                .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?,
+            inference_timestamp_ticks,
+        });
         Ok(prepared_ticks)
     }
 

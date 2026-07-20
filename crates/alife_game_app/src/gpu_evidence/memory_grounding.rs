@@ -200,7 +200,7 @@ impl GpuMemoryGroundingEvidenceReceipt {
         capacity.validate_contract()?;
         self.sensor_profile.validate_contract()?;
         let profile = self.sensor_profile.profile()?;
-        self.phenotype_manifest.validate(&capacity)?;
+        self.phenotype_manifest.validate_for_capacity(&capacity)?;
         let expected_artifact_slug = slice_c_artifact_slug(profile, capacity.id())?;
         if self.header.common.artifact_schema != GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA
             || self.header.common.slice_raw != GPU_SLICE_C_RAW

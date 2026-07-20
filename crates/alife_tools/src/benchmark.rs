@@ -4,6 +4,8 @@
 //! population-tier harness. It intentionally does not require Bevy, wgpu, or
 //! GPU devices, and it does not optimize runtime internals.
 
+pub mod gpu_closed_loop;
+
 use std::{
     fs,
     path::{Path, PathBuf},

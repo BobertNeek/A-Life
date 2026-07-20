@@ -233,7 +233,8 @@ impl GpuSliceBAcceptanceReceipt {
 
     fn validate(&self, require_clean_source: bool) -> Result<(), GpuEvidenceError> {
         self.capacity.validate_contract()?;
-        self.phenotype_manifest.validate(&self.capacity)?;
+        self.phenotype_manifest
+            .validate_for_capacity(&self.capacity)?;
         let signed_opposite = self.reward_target_signed_delta * self.pain_target_signed_delta < 0.0;
         let restore = &self.restore;
         if self.header.artifact_schema != GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA

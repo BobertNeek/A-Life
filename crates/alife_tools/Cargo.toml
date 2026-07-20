@@ -7,7 +7,7 @@ repository.workspace = true
 
 [dependencies]
 alife_core.workspace = true
-alife_game_app = { path = "../alife_game_app", default-features = false }
+alife_game_app = { path = "../alife_game_app", default-features = false, features = ["gpu-runtime"] }
 alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_school = { path = "../alife_school" }
 alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider"], optional = true }
@@ -21,3 +21,9 @@ thiserror.workspace = true
 [features]
 default = []
 semantic-demo = ["dep:alife_semantic"]
+
+[dev-dependencies]
+alife_gpu_backend = { path = "../alife_gpu_backend", features = ["gpu-tests"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }

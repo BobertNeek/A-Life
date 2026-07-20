@@ -12,6 +12,7 @@ pub use content_store::{merge_gpu_checkpoint_manifest_entries, GpuCheckpointAsse
 pub use durable_manifest::{
     GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSaveManifestCasOutcome, GpuSaveManifestDigest,
 };
+pub(crate) use state_codec::current_backend_provenance;
 pub use state_codec::{
     GpuBrainCheckpointWrite, GpuBrainSidecarCapture, RestoredGpuBrainCheckpoint,
     RestoredRetainedLearning, RetainedLearningCapture,
