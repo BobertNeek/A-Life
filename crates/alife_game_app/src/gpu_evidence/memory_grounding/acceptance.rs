@@ -944,7 +944,7 @@ fn filtered_behavior_draft(
         source.sensor_profile(),
         source.sensory().clone(),
         source.body(),
-        source.homeostasis().clone(),
+        *source.homeostasis(),
         candidates,
         source.profile_provenance(),
         source.grounded_object_slots().to_vec(),

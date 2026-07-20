@@ -107,7 +107,7 @@ fn save_for_sleep(sleep: SleepState) -> GpuBrainSaveState {
             .unwrap();
     let topology =
         TopologySidecarSaveSummary::from_sidecar(&topology_sidecar, asset("topology")).unwrap();
-    let tracked_objects = TrackedObjectRegistry::new(0xA11F_E, 1_024)
+    let tracked_objects = TrackedObjectRegistry::new(0x000A_11FE, 1_024)
         .unwrap()
         .save_state(organism_id)
         .unwrap();

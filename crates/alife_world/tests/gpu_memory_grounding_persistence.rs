@@ -44,7 +44,7 @@ fn descriptor(seed: f32) -> StablePhysicalDescriptor {
 
 fn populated_registry() -> (TrackedObjectRegistry, OrganismId) {
     let organism = OrganismId(9);
-    let mut registry = TrackedObjectRegistry::new(0xA11F_E, 4).unwrap();
+    let mut registry = TrackedObjectRegistry::new(0x000A_11FE, 4).unwrap();
     registry
         .observe(
             organism,
@@ -136,7 +136,7 @@ fn tracker_save_dto_is_portable_and_world_entity_free() {
 
 #[test]
 fn tracker_restores_multiple_organism_local_streams_without_collision() {
-    let world_seed = 0xA11F_E;
+    let world_seed = 0x000A_11FE;
     let first = OrganismId(9);
     let second = OrganismId(10);
     let mut registry = TrackedObjectRegistry::new(world_seed, 4).unwrap();

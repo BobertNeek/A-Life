@@ -452,7 +452,7 @@ pub fn load_gpu_slice_a_evidence(
 pub enum ValidatedGpuEvidence {
     SliceA(GpuSliceAAcceptanceReceipt),
     SliceB(GpuSliceBAcceptanceReceipt),
-    SliceC(GpuMemoryGroundingEvidenceReceipt),
+    SliceC(Box<GpuMemoryGroundingEvidenceReceipt>),
 }
 
 impl ValidatedGpuEvidence {
@@ -504,7 +504,9 @@ pub fn validate_gpu_evidence_file(
     match slice_raw {
         GPU_SLICE_A_RAW => load_gpu_slice_a_evidence(input).map(ValidatedGpuEvidence::SliceA),
         GPU_SLICE_B_RAW => load_gpu_slice_b_evidence(input).map(ValidatedGpuEvidence::SliceB),
-        GPU_SLICE_C_RAW => load_gpu_slice_c_evidence(input).map(ValidatedGpuEvidence::SliceC),
+        GPU_SLICE_C_RAW => load_gpu_slice_c_evidence(input)
+            .map(Box::new)
+            .map(ValidatedGpuEvidence::SliceC),
         other => Err(GpuEvidenceError::UnsupportedSlice(other)),
     }
 }

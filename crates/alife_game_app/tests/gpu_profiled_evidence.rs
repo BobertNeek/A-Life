@@ -20,6 +20,11 @@ use alife_game_app::{
 };
 use alife_gpu_backend::{GpuHardwareReceipt, GPU_HARDWARE_RECEIPT_SCHEMA_VERSION};
 
+#[test]
+fn validated_gpu_evidence_keeps_large_receipts_out_of_the_enum_storage() {
+    assert!(std::mem::size_of::<ValidatedGpuEvidence>() <= 1_400);
+}
+
 fn profile_identity(profile: SensorProfile) -> SensorProfileIdentity {
     SensorProfileIdentity {
         profile_id: profile.into(),
@@ -216,7 +221,7 @@ fn slice_c_loader_roundtrips_through_the_shared_validating_loader() {
 
     assert_eq!(load_gpu_slice_c_evidence(&path).unwrap(), receipt);
     let shared = validate_gpu_evidence_file(GPU_SLICE_C_RAW, &path).unwrap();
-    assert!(matches!(shared, ValidatedGpuEvidence::SliceC(value) if value == receipt));
+    assert!(matches!(shared, ValidatedGpuEvidence::SliceC(value) if *value == receipt));
 
     fs::remove_file(path).unwrap();
 }
