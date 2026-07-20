@@ -253,7 +253,11 @@ fn packed_record(
         sensory_abi_version: alife_core::SchemaVersions::CURRENT.sensory_abi.raw(),
         action_abi_version: alife_core::SchemaVersions::CURRENT.action_abi.raw(),
         flags: if success { PACKED_FLAG_SUCCESS } else { 0 },
-        reserved_header: 0,
+        sensor_profile_id: alife_core::SensorProfile::PrivilegedAffordanceV1.raw(),
+        sensor_profile_schema_version: alife_core::SchemaVersions::current_for(
+            alife_core::SchemaKind::SensorProfile,
+        )
+        .raw(),
         organism_id: 1,
         sequence_id: start_tick,
         pre_action_tick: start_tick,
