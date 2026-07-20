@@ -118,12 +118,16 @@ fn benchmark_row_fixture(
         GpuBenchmarkStatus::Completed | GpuBenchmarkStatus::Missed
     );
     let sample_count = protocol.measured_ticks as usize;
-    let samples = executed
-        .then(|| vec![1_u64; sample_count])
-        .unwrap_or_default();
-    let neural_ns = executed
-        .then(|| vec![2_u64; sample_count])
-        .unwrap_or_default();
+    let samples = if executed {
+        vec![1_u64; sample_count]
+    } else {
+        Vec::new()
+    };
+    let neural_ns = if executed {
+        vec![2_u64; sample_count]
+    } else {
+        Vec::new()
+    };
     let events = u64::from(protocol.measured_ticks) * u64::from(target.population);
     let mut row = GpuClosedLoopBenchmarkRow {
         schema_version: 1,
@@ -211,6 +215,42 @@ fn gpu_closed_loop_target_matrix_is_exact_and_sorted() {
 }
 
 #[test]
+fn population_scaling_reuses_one_class_profile_phenotype() {
+    let protocol = GpuClosedLoopBenchmarkProtocolV1::canonical();
+    for capacity in [
+        BrainCapacityClass::n512(),
+        BrainCapacityClass::n1024(),
+        BrainCapacityClass::n2048(),
+    ] {
+        for sensor_profile in [
+            SensorProfile::PrivilegedAffordanceV1,
+            SensorProfile::GroundedObjectSlotsV1,
+        ] {
+            let class_id_raw = capacity.id().raw();
+            let sensor_profile_id_raw = sensor_profile.raw();
+            let compile = |population| {
+                compile_gpu_closed_loop_benchmark_phenotype(GpuClosedLoopBenchmarkTrialOptions {
+                    capacity,
+                    sensor_profile,
+                    population,
+                    fixture_seed: protocol.row_seed(
+                        class_id_raw,
+                        sensor_profile_id_raw,
+                        population,
+                    ),
+                    warmup_ticks: protocol.warmup_ticks,
+                    measured_ticks: protocol.measured_ticks,
+                })
+                .unwrap()
+            };
+            let population_one = compile(1);
+            let population_five_hundred = compile(500);
+            assert_eq!(population_one, population_five_hundred);
+        }
+    }
+}
+
+#[test]
 fn gpu_closed_loop_nearest_rank_p95_uses_exact_protocol_rank() {
     let mut samples = (0_u64..1_024).rev().collect::<Vec<_>>();
     assert_eq!(nearest_rank_p95(&mut samples).unwrap(), 972);
@@ -218,7 +258,7 @@ fn gpu_closed_loop_nearest_rank_p95_uses_exact_protocol_rank() {
 
     let mut equal = vec![41_u64; 1_024];
     assert_eq!(nearest_rank_p95(&mut equal).unwrap(), 41);
-    assert!(nearest_rank_p95(&mut vec![]).is_err());
+    assert!(nearest_rank_p95(&mut []).is_err());
     assert!(nearest_rank_p95(&mut vec![1; 1_023]).is_err());
 }
 

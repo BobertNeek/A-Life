@@ -15,6 +15,8 @@ use crate::{
     GameAppShellError, GpuLiveBrainRuntime,
 };
 
+const BENCHMARK_PHENOTYPE_REFERENCE_POPULATION: u32 = 1;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuClosedLoopBenchmarkTrialOptions {
     pub capacity: BrainCapacityClass,
@@ -124,10 +126,11 @@ pub fn run_gpu_closed_loop_benchmark_trial(
         Err(error) => return Err(GameAppShellError::Core(error).into()),
     };
     let backend_provenance = current_backend_provenance(&backend, &options.capacity)?;
+    let phenotype_seed = benchmark_phenotype_seed(options)?;
     let mut runtime = match GpuLiveBrainRuntime::new_benchmark_profiled(
         backend,
         world,
-        options.fixture_seed,
+        phenotype_seed,
         tier,
         options.sensor_profile,
     ) {
@@ -266,7 +269,7 @@ pub fn compile_gpu_closed_loop_benchmark_phenotype(
     let options = options.validate()?;
     let tier = tier_for_capacity(options.capacity)?;
     let (phenotype, _, _) = compile_gpu_birth_components(
-        options.fixture_seed,
+        benchmark_phenotype_seed(options)?,
         tier,
         OrganismId(1),
         Tick::ZERO,
@@ -281,6 +284,23 @@ pub fn compile_gpu_closed_loop_benchmark_phenotype(
         )?,
         active_synapses,
     })
+}
+
+/// Keeps the compiled brain fixed while population changes, so a scaling row
+/// measures population rather than a different random phenotype. The canonical
+/// row seed is still used unchanged for the world and recorded trial identity;
+/// XOR-removing the requested population and inserting the reference
+/// population deterministically recovers the population-one phenotype seed.
+fn benchmark_phenotype_seed(
+    options: GpuClosedLoopBenchmarkTrialOptions,
+) -> Result<u64, ScaffoldContractError> {
+    let seed = options.fixture_seed
+        ^ u64::from(options.population)
+        ^ u64::from(BENCHMARK_PHENOTYPE_REFERENCE_POPULATION);
+    if seed == 0 {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    Ok(seed)
 }
 
 fn validate_complete_awake_tick(
