@@ -4912,10 +4912,11 @@ pub fn build_production_voxel_frontend_app_shell(
     #[cfg(feature = "gpu-runtime")]
     {
         let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;
-        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required().map_err(|error| {
-            GameAppShellError::NeuralBackendUnavailable {
-                message: error.to_string(),
-            }
+        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
+            message: error.to_string(),
         })?;
         let runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
         let telemetry = runtime.authority_telemetry();

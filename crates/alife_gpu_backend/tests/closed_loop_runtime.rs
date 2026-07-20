@@ -3,7 +3,7 @@ mod support;
 use std::fs;
 
 use alife_core::ScaffoldContractError;
-use alife_gpu_backend::{GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopRuntimeConfig};
+use alife_gpu_backend::{GpuBrainHandle, GpuClosedLoopBackend, GpuRuntimeProfile};
 
 fn runtime_source() -> String {
     fs::read_to_string(concat!(
@@ -42,14 +42,17 @@ fn without_rust_comments(source: &str) -> String {
 
 #[test]
 fn required_gpu_api_is_public_without_constructing_a_device() {
-    let _factory: fn() -> Result<GpuClosedLoopBackend, ScaffoldContractError> =
+    let _factory: fn(GpuRuntimeProfile) -> Result<GpuClosedLoopBackend, ScaffoldContractError> =
         GpuClosedLoopBackend::new_required;
     let _opaque_capability = std::mem::size_of::<GpuBrainHandle>();
-    let config = GpuClosedLoopRuntimeConfig::default();
-    assert_eq!(config.n512_slots, 64);
-    assert_eq!(config.n1024_slots, 16);
-    assert_eq!(config.n2048_slots, 4);
-    assert_eq!(config.aggregate_resident_ceiling_bytes, 128 * 1024 * 1024);
+    let profile = GpuRuntimeProfile::production_v1();
+    assert_eq!(profile.logical_neural_heap_budget_bytes, 512 * 1024 * 1024);
+    assert_eq!(
+        profile.physical_allocation_ceiling_bytes,
+        1024 * 1024 * 1024
+    );
+    assert_eq!(profile.max_hot_brains, 500);
+    assert_eq!(profile.growth_chunk_slots, 4);
 }
 
 #[test]
@@ -170,8 +173,8 @@ mod hardware {
         BrainCapacityClass, OrganismId, PerceptionFrame, ScaffoldContractError, SensorProfile,
     };
     use alife_gpu_backend::{
-        GpuBackendState, GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopRuntimeConfig,
-        GpuClosedLoopTick, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+        GpuBackendState, GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopTick,
+        GpuRuntimeProfile, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
     };
 
     use super::support::{
@@ -180,18 +183,12 @@ mod hardware {
         phenotype_for_capacity_at_maturation,
     };
 
-    fn small_config() -> GpuClosedLoopRuntimeConfig {
-        GpuClosedLoopRuntimeConfig {
-            n512_slots: 4,
-            n1024_slots: 2,
-            n2048_slots: 2,
-            aggregate_resident_ceiling_bytes: 128 * 1024 * 1024,
-        }
+    fn small_profile() -> GpuRuntimeProfile {
+        super::support::scaling::bounded_profile(128 * 1024 * 1024, 128 * 1024 * 1024, 8, 2)
     }
 
     fn required_backend() -> GpuClosedLoopBackend {
-        GpuClosedLoopBackend::new_required_with_config(small_config())
-            .expect("local required GPU backend")
+        GpuClosedLoopBackend::new_required(small_profile()).expect("local required GPU backend")
     }
 
     fn discard_tick(backend: &mut GpuClosedLoopBackend, tick: &GpuClosedLoopTick) {
@@ -289,14 +286,10 @@ mod hardware {
     }
 
     #[test]
-    fn fixed_class_arena_allocates_lazily_rejects_exhaustion_and_never_grows() {
-        let config = GpuClosedLoopRuntimeConfig {
-            n512_slots: 2,
-            n1024_slots: 1,
-            n2048_slots: 1,
-            aggregate_resident_ceiling_bytes: 128 * 1024 * 1024,
-        };
-        let mut backend = GpuClosedLoopBackend::new_required_with_config(config).unwrap();
+    fn class_arena_allocates_lazily_grows_in_chunks_and_obeys_the_global_profile() {
+        let profile =
+            super::support::scaling::bounded_profile(128 * 1024 * 1024, 128 * 1024 * 1024, 2, 1);
+        let mut backend = GpuClosedLoopBackend::new_required(profile).unwrap();
         assert_eq!(backend.allocated_class_arena_count_for_test(), 0);
         backend
             .insert_brain(OrganismId(1), n512_phenotype(21))
@@ -305,6 +298,15 @@ mod hardware {
         backend
             .insert_brain(OrganismId(2), n512_phenotype(22))
             .unwrap();
+        assert_eq!(backend.admission_receipt().allocation_generation, 2);
+        assert_eq!(
+            backend
+                .admission_receipt()
+                .last_event
+                .expect("second admission event")
+                .event_kind_raw,
+            1
+        );
         let before = backend.runtime_counters_for_test();
         assert!(backend
             .insert_brain(OrganismId(3), n512_phenotype(23))
@@ -315,14 +317,9 @@ mod hardware {
     }
 
     #[test]
-    fn too_small_aggregate_resident_ceiling_rejects_without_any_runtime_mutation() {
-        let config = GpuClosedLoopRuntimeConfig {
-            n512_slots: 1,
-            n1024_slots: 1,
-            n2048_slots: 1,
-            aggregate_resident_ceiling_bytes: 1,
-        };
-        let mut backend = GpuClosedLoopBackend::new_required_with_config(config).unwrap();
+    fn too_small_physical_ceiling_rejects_without_any_runtime_mutation() {
+        let profile = super::support::scaling::bounded_profile(128 * 1024 * 1024, 1, 1, 1);
+        let mut backend = GpuClosedLoopBackend::new_required(profile).unwrap();
         assert_eq!(backend.allocated_class_arena_count_for_test(), 0);
         let before = backend.runtime_counters_for_test();
         assert!(backend

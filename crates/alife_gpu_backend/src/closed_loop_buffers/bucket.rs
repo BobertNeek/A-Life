@@ -119,6 +119,10 @@ impl GpuBrainSlot {
     pub const fn brain_slot_index(&self) -> u32 {
         self.brain_slot_index
     }
+
+    pub(crate) fn rebind_bucket_ownership(&mut self, bucket_ownership_token: u64) {
+        self.bucket_ownership_token = bucket_ownership_token;
+    }
 }
 
 #[derive(Debug)]
@@ -135,6 +139,37 @@ pub struct GpuClassBucketPlan {
 }
 
 impl GpuClassBucketPlan {
+    pub fn for_phenotype(phenotype: &BrainPhenotype) -> Result<Self, GpuClosedLoopError> {
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())
+            .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
+        phenotype
+            .validate_against(&capacity)
+            .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
+        let mut plan = Self::new(capacity, 1)?;
+        plan.insert_phenotype(0, 1, phenotype)?;
+        Ok(plan)
+    }
+
+    pub fn slot_allocation_receipt(
+        &self,
+    ) -> Result<crate::GpuSlotAllocationReceipt, GpuClosedLoopError> {
+        GpuFixedClassArenaPlan::new(self.capacity, 1, u64::MAX)?.slot_allocation_receipt()
+    }
+
+    pub fn validate_adapter(
+        phenotype: &BrainPhenotype,
+        runtime: &crate::GpuRuntimeBudget,
+    ) -> Result<(), GpuClosedLoopError> {
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())
+            .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
+        phenotype
+            .validate_against(&capacity)
+            .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
+        runtime
+            .validate_for(capacity.execution())
+            .map_err(|_| GpuClosedLoopError::CapacityExceeded)
+    }
+
     pub fn new(
         capacity: BrainCapacityClass,
         slot_capacity: u32,
@@ -1958,6 +1993,138 @@ impl GpuFixedClassArenaPlan {
     pub(crate) const fn aggregate_resident_bytes(&self) -> u64 {
         self.sizes.aggregate
     }
+    pub(crate) fn slot_allocation_receipt(
+        &self,
+    ) -> Result<crate::GpuSlotAllocationReceipt, GpuClosedLoopError> {
+        let layout = &self.relative_layout;
+        let range_bytes = |range: &Range<u32>| -> Result<u64, GpuClosedLoopError> {
+            u64::from(
+                range
+                    .end
+                    .checked_sub(range.start)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )
+            .checked_mul(4)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+        };
+        let sum_ranges = |ranges: &[&Range<u32>]| -> Result<u64, GpuClosedLoopError> {
+            ranges.iter().try_fold(0_u64, |sum, range| {
+                sum.checked_add(range_bytes(range)?)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)
+            })
+        };
+
+        let immutable_topology_bytes = (std::mem::size_of::<GpuBrainSlotRecord>() as u64)
+            .checked_add(std::mem::size_of::<GpuPhenotypeIdentityRecord>() as u64)
+            .and_then(|value| value.checked_add(u64::from(layout.sleep_parameter_words.end) * 4))
+            .and_then(|value| value.checked_add(u64::from(layout.alpha_words.end) * 4))
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let activation_bytes = sum_ranges(&[
+            &layout.activation_a_words,
+            &layout.activation_b_words,
+            &layout.accumulator_words,
+            &layout.encoded_input_words,
+        ])?;
+        let learning_bytes = sum_ranges(&[
+            &layout.homeostasis_words,
+            &layout.lifetime_weight_words,
+            &layout.fast_weight_words,
+            &layout.recurrent_eligibility_words,
+            &layout.decoder_eligibility_words,
+            &layout.lifetime_weight_bank_1_words,
+            &layout.fast_weight_bank_1_words,
+            &layout.recurrent_eligibility_bank_1_words,
+            &layout.decoder_eligibility_bank_1_words,
+            &layout.learning_state_words,
+            &layout.pending_eligibility_words,
+            &layout.replay_event_words,
+            &layout.replay_sample_words,
+            &layout.replay_span_words,
+        ])?;
+        let candidate_and_memory_bytes = range_bytes(&layout.candidate_logit_words)?;
+        let dispatch_row_bytes = (crate::GPU_ACTIVE_DISPATCH_ROW_WORDS as u64)
+            .checked_mul(4)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let compact_readback_bytes = crate::GPU_COMPACT_READBACK_CAPACITY_PER_ROW_BYTES as u64;
+        let diagnostic_and_readback_bytes = sum_ranges(&[
+            &layout.diagnostic_words,
+            &layout.selection_words,
+            &layout.extension_words,
+        ])?
+        .checked_add(dispatch_row_bytes)
+        .and_then(|value| value.checked_add(compact_readback_bytes))
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let candidates = u64::from(self.capacity.execution().max_candidates());
+        let staging_words = 77_u64
+            .checked_add(
+                candidates
+                    .checked_mul(u64::from(
+                        self.capacity.execution().max_decoder_input_lanes(),
+                    ))
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )
+            .and_then(|value| value.checked_add(candidates * 4))
+            .and_then(|value| value.checked_add(crate::GPU_PENDING_ELIGIBILITY_WORDS as u64))
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let staging_bytes = staging_words
+            .checked_mul(4)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let components = crate::GpuSlotComponentBytes {
+            immutable_topology_bytes,
+            activation_bytes,
+            learning_bytes,
+            candidate_and_memory_bytes,
+            diagnostic_and_readback_bytes,
+            staging_bytes,
+        };
+        let logical_slot_commit_bytes = components
+            .checked_sum()
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let slot_count = u64::from(self.slot_capacity);
+        let per_slot_physical_without_shared = (std::mem::size_of::<GpuBrainSlotRecord>() as u64)
+            .checked_add(std::mem::size_of::<GpuPhenotypeIdentityRecord>() as u64)
+            .and_then(|value| value.checked_add(u64::from(self.strides.immutable_plan_words) * 4))
+            .and_then(|value| value.checked_add(u64::from(self.strides.immutable_weight_words) * 4))
+            .and_then(|value| value.checked_add(u64::from(self.strides.mutable_state_words) * 4))
+            .and_then(|value| value.checked_add(dispatch_row_bytes))
+            .and_then(|value| value.checked_add(staging_bytes))
+            .and_then(|value| value.checked_add(compact_readback_bytes))
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let alignment_padding_bytes = per_slot_physical_without_shared
+            .checked_sub(logical_slot_commit_bytes)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let active_frame_bytes = staging_bytes
+            .checked_mul(slot_count)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let shared_class_bytes = self
+            .sizes
+            .upload_staging
+            .checked_add(
+                self.sizes
+                    .frame_payload_words
+                    .saturating_sub(active_frame_bytes),
+            )
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let receipt = crate::GpuSlotAllocationReceipt::new(
+            self.capacity.id().raw(),
+            components,
+            alignment_padding_bytes,
+            shared_class_bytes,
+        )
+        .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+        let reconciled = shared_class_bytes
+            .checked_add(
+                logical_slot_commit_bytes
+                    .checked_add(alignment_padding_bytes)
+                    .and_then(|value| value.checked_mul(slot_count))
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        if reconciled != self.sizes.aggregate {
+            return Err(GpuClosedLoopError::LayoutMismatch);
+        }
+        Ok(receipt)
+    }
     #[allow(dead_code)]
     pub(crate) const fn ownership_token(&self) -> u64 {
         self.arena_ownership_token
@@ -2692,6 +2859,53 @@ impl GpuFixedClassArenaBuffers {
         Ok(())
     }
 
+    pub(crate) fn record_persistent_prefix_copy_to(
+        &self,
+        target: &Self,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<(), GpuClosedLoopError> {
+        if self.max_neurons != target.max_neurons
+            || self.slot_capacity > target.slot_capacity
+            || self.sizes.brain_slots > target.sizes.brain_slots
+            || self.sizes.phenotype_identities > target.sizes.phenotype_identities
+            || self.sizes.immutable_plan_words > target.sizes.immutable_plan_words
+            || self.sizes.immutable_weight_words > target.sizes.immutable_weight_words
+            || self.sizes.mutable_state_words > target.sizes.mutable_state_words
+        {
+            return Err(GpuClosedLoopError::CapacityExceeded);
+        }
+        for (source, destination, bytes) in [
+            (
+                &self.brain_slots,
+                &target.brain_slots,
+                self.sizes.brain_slots,
+            ),
+            (
+                &self.phenotype_identities,
+                &target.phenotype_identities,
+                self.sizes.phenotype_identities,
+            ),
+            (
+                &self.immutable_plan_words,
+                &target.immutable_plan_words,
+                self.sizes.immutable_plan_words,
+            ),
+            (
+                &self.immutable_weight_words,
+                &target.immutable_weight_words,
+                self.sizes.immutable_weight_words,
+            ),
+            (
+                &self.mutable_state_words,
+                &target.mutable_state_words,
+                self.sizes.mutable_state_words,
+            ),
+        ] {
+            encoder.copy_buffer_to_buffer(source, 0, destination, 0, bytes);
+        }
+        Ok(())
+    }
+
     fn validate_ranges(&self, ranges: &GpuFixedSlotRanges) -> Result<(), GpuClosedLoopError> {
         if ranges.arena_ownership_token != self.arena_ownership_token
             || ranges.slot >= self.slot_capacity
@@ -2886,9 +3100,12 @@ mod fixed_arena_tests {
             plan.sizes.compact_readback,
             u64::from(slots) * crate::GPU_FAST_PLASTICITY_COMMIT_BYTES as u64
         );
-        assert!(
-            crate::GPU_FAST_PLASTICITY_COMMIT_BYTES >= crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES
-        );
+        const {
+            assert!(
+                crate::GPU_FAST_PLASTICITY_COMMIT_BYTES
+                    >= crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+            );
+        }
     }
 
     #[test]

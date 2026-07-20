@@ -4,6 +4,8 @@
 //! executes neural math, supplies a neural oracle, or falls back from GPU authority.
 #![allow(dead_code)] // Shared by integration targets that intentionally use disjoint helpers.
 
+pub mod scaling;
+
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, AlphaMask, BodySnapshot,
     BrainCapacityClass, BrainGenome, BrainPhenotype, CandidateActionFamily, CandidateFeatureVector,
@@ -291,7 +293,9 @@ impl GpuTestBrain {
         organism_id: OrganismId,
         phenotype: BrainPhenotype,
     ) -> Result<Self, alife_core::ScaffoldContractError> {
-        let mut backend = alife_gpu_backend::GpuClosedLoopBackend::new_required()?;
+        let mut backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )?;
         let handle = backend.insert_brain(organism_id, phenotype)?;
         Ok(Self { backend, handle })
     }

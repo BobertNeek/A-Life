@@ -190,7 +190,8 @@ fn run_gpu_memory_grounding_acceptance_with_provenance(
     let phenotype_manifest =
         PhenotypeEvidenceManifest::from_learning_phenotype(&phenotype, &options.capacity)?;
 
-    let mut backend = GpuClosedLoopBackend::new_required()?;
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?;
     let behavior = run_behavior_probe(
         &mut backend,
         options,

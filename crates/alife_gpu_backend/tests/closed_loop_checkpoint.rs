@@ -103,7 +103,9 @@ fn pending_checkpoint_roundtrip_rebinds_private_receipt_and_resolves_exactly_onc
         true,
         2,
     );
-    let mut source = GpuClosedLoopBackend::new_required().unwrap();
+    let mut source =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let source_handle = source.insert_brain(organism, phenotype.clone()).unwrap();
     source
         .tick_batch(&[(source_handle, frame.clone())])
@@ -113,7 +115,9 @@ fn pending_checkpoint_roundtrip_rebinds_private_receipt_and_resolves_exactly_onc
         .unwrap();
     let checkpoint_digest = snapshot.canonical_digest();
 
-    let mut restored = GpuClosedLoopBackend::new_required().unwrap();
+    let mut restored =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let receipt = restored
         .restore_brain(
             organism,
@@ -158,7 +162,9 @@ fn pending_checkpoint_roundtrip_rebinds_private_receipt_and_resolves_exactly_onc
 fn learned_checkpoint_roundtrip_preserves_logits_and_replay_guard() {
     let organism = alife_core::OrganismId(71_002);
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
-    let mut source = GpuClosedLoopBackend::new_required().unwrap();
+    let mut source =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let source_handle = source.insert_brain(organism, phenotype.clone()).unwrap();
     let learning_frame = support::perception_frame_for_profile_at_tick(
         organism.raw(),
@@ -182,7 +188,9 @@ fn learned_checkpoint_roundtrip_preserves_logits_and_replay_guard() {
         .snapshot_brain(source_handle, Tick::new(5_001))
         .unwrap();
     let digest = snapshot.canonical_digest();
-    let mut restored = GpuClosedLoopBackend::new_required().unwrap();
+    let mut restored =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let restore = restored
         .restore_brain(
             organism,
@@ -227,7 +235,9 @@ fn learned_checkpoint_roundtrip_preserves_logits_and_replay_guard() {
 fn completed_sleep_staging_restores_and_commits_one_physical_swap() {
     let organism = alife_core::OrganismId(71_003);
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
-    let mut source = GpuClosedLoopBackend::new_required().unwrap();
+    let mut source =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handle = source.insert_brain(organism, phenotype.clone()).unwrap();
     let frame = support::perception_frame_for_profile_at_tick(
         organism.raw(),
@@ -259,7 +269,9 @@ fn completed_sleep_staging_restores_and_commits_one_physical_swap() {
         .unwrap();
     let snapshot = source.snapshot_brain(handle, Tick::new(6_001)).unwrap();
 
-    let mut restored = GpuClosedLoopBackend::new_required().unwrap();
+    let mut restored =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let restore = restored
         .restore_brain(
             organism,

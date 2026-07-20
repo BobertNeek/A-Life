@@ -618,7 +618,8 @@ fn run_trial(
     tier: BrainScaleTier,
     expected_phenotype_hash: PhenotypeHash,
 ) -> Result<TrialEvidence, GpuEvidenceError> {
-    let backend = GpuClosedLoopBackend::new_required()?;
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?;
     let world = acceptance_world(options.deterministic_seed)?;
     let mut runtime = GpuLiveBrainRuntime::new_profiled(
         backend,

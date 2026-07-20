@@ -92,7 +92,9 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         .unwrap()
         .save_state(organism_id)
         .unwrap();
-    let mut source = GpuClosedLoopBackend::new_required().expect("required Vulkan adapter");
+    let mut source =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter");
     let handle = source.insert_brain(organism_id, phenotype.clone()).unwrap();
     let write = store
         .capture_brain(
@@ -116,7 +118,9 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
     merge_gpu_checkpoint_manifest_entries(&mut manifest, write.manifest_entries).unwrap();
     manifest.validate_with_root(&asset_root).unwrap();
 
-    let mut target = GpuClosedLoopBackend::new_required().expect("required Vulkan adapter");
+    let mut target =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter");
     let restored = store
         .restore_brain(&mut target, &manifest, &write.save_state)
         .unwrap();
@@ -150,7 +154,8 @@ fn assert_learned_awake_profile_roundtrip(
         .build()
         .unwrap();
     let mut source = GpuLiveBrainRuntime::new_profiled(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         world,
         learning_seed,
         BrainScaleTier::Nano512,
@@ -201,7 +206,8 @@ fn assert_learned_awake_profile_roundtrip(
         SensorProfile::GroundedObjectSlotsV1 => SensorProfile::PrivilegedAffordanceV1.into(),
     };
     let mismatch = GpuLiveBrainRuntime::restore_with_checkpoints(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         world_at_checkpoint.clone(),
         learning_seed,
         BrainScaleTier::Nano512,
@@ -220,7 +226,8 @@ fn assert_learned_awake_profile_roundtrip(
     );
 
     let mut restored = GpuLiveBrainRuntime::restore_with_checkpoints(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         world_at_checkpoint,
         learning_seed,
         BrainScaleTier::Nano512,
@@ -378,7 +385,8 @@ fn learned_runtime(tier: BrainScaleTier) -> GpuLiveBrainRuntime {
         .build()
         .unwrap();
     let mut runtime = GpuLiveBrainRuntime::new(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         world,
         LEARNING_SEED,
         tier,
@@ -491,7 +499,8 @@ fn assert_restore_case(tier: BrainScaleTier, case: RestoreCase) {
     merge_gpu_checkpoint_manifest_entries(&mut manifest, write.manifest_entries).unwrap();
 
     let mut restored = GpuLiveBrainRuntime::restore_with_checkpoints(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         world,
         7_701,
         tier,
@@ -638,7 +647,8 @@ fn manual_portable_checkpoint_atomically_restores_awake_fast_learning() {
         .with_brain_policy(PolicyBackend::NeuralClosedLoopGpu);
     let organism_id = OrganismId(1);
     let mut runtime = GpuLiveBrainRuntime::from_p34_launch(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         &launch,
     )
     .unwrap();
@@ -665,7 +675,8 @@ fn manual_portable_checkpoint_atomically_restores_awake_fast_learning() {
     let mut restore_launch = launch.clone();
     restore_launch.save_path = manual_path;
     let mut restored = GpuLiveBrainRuntime::from_p34_launch(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         &restore_launch,
     )
     .unwrap();
@@ -693,7 +704,8 @@ fn production_save_persists_recovered_submission_and_atomically_promotes_complet
         .with_brain_policy(PolicyBackend::NeuralClosedLoopGpu);
     let organism_id = OrganismId(1);
     let mut runtime = GpuLiveBrainRuntime::from_p34_launch(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         &launch,
     )
     .unwrap();
@@ -724,7 +736,8 @@ fn production_save_persists_recovered_submission_and_atomically_promotes_complet
     drop(runtime);
 
     let mut recovered = GpuLiveBrainRuntime::from_p34_launch(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         &launch,
     )
     .unwrap();
@@ -777,7 +790,8 @@ fn production_save_persists_recovered_submission_and_atomically_promotes_complet
     drop(recovered);
 
     let mut after_cas = GpuLiveBrainRuntime::from_p34_launch(
-        GpuClosedLoopBackend::new_required().expect("required Vulkan adapter"),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
         &launch,
     )
     .unwrap();

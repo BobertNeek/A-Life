@@ -3,6 +3,7 @@
 use alife_core::NeuralComputeBackend;
 
 pub mod buffers;
+pub mod closed_loop_admission;
 pub mod closed_loop_buffers;
 pub mod closed_loop_checkpoint;
 pub mod closed_loop_learning;
@@ -27,6 +28,7 @@ pub use buffers::{
     GPU_ROUTING_DESCRIPTOR_BYTES, GPU_SERIALIZATION_ENDIANNESS, GPU_SUPERTILE_MASK_BYTES,
     GPU_TILE_METADATA_BYTES,
 };
+pub use closed_loop_admission::*;
 pub use closed_loop_buffers::*;
 pub use closed_loop_checkpoint::*;
 pub use closed_loop_learning::*;

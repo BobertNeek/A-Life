@@ -11,7 +11,9 @@ use alife_world::HeadlessScenarioBuilder;
 #[test]
 fn live_gpu_sleep_submits_commits_wakes_and_retains_learning() {
     let organism_id = OrganismId(1);
-    let backend = GpuClosedLoopBackend::new_required().expect("required Vulkan adapter");
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter");
     let world = HeadlessScenarioBuilder::new(7_701)
         .agent("sleeper", organism_id, Vec3f::ZERO)
         .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.9)

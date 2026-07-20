@@ -23,7 +23,7 @@ use alife_gpu_backend::{
 #[cfg(feature = "gpu-tests")]
 use alife_gpu_backend::{
     GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput, GpuClosedLoopMemoryTickInput,
-    GpuClosedLoopRuntimeConfig, GpuClosedLoopTick,
+    GpuClosedLoopTick,
 };
 
 #[cfg(feature = "gpu-tests")]
@@ -34,7 +34,7 @@ fn memory_draft_from_frame(frame: &alife_core::PerceptionFrame) -> PerceptionFra
         frame.sensor_profile(),
         frame.sensory().clone(),
         frame.body(),
-        frame.homeostasis().clone(),
+        *frame.homeostasis(),
         frame.candidates().to_vec(),
         frame.profile_provenance(),
         frame.grounded_object_slots().to_vec(),
@@ -503,7 +503,7 @@ fn active_dispatch_rows_reserve_one_exact_memory_context_header() {
 fn perception_payload_uses_the_compiled_memory_decoder_stride() {
     let capacity = BrainCapacityClass::n512();
     let phenotype = support::phenotype_for_capacity_at_maturation(
-        capacity.clone(),
+        capacity,
         0xC600_0004,
         0.35,
         SensorProfile::GroundedObjectSlotsV1,
@@ -583,7 +583,7 @@ fn phenotype_upload_owns_a_complete_family_major_memory_weight_map() {
 fn slot_extension_points_at_the_uploaded_memory_plan_and_map() {
     let capacity = BrainCapacityClass::n512();
     let phenotype = support::phenotype_for_capacity_at_maturation(
-        capacity.clone(),
+        capacity,
         0xC600_0002,
         0.35,
         SensorProfile::GroundedObjectSlotsV1,
@@ -625,7 +625,7 @@ fn finalized_memory_upload_binds_base_context_final_and_perception_header_identi
         source.sensor_profile(),
         source.sensory().clone(),
         source.body(),
-        source.homeostasis().clone(),
+        *source.homeostasis(),
         source.candidates().to_vec(),
         source.profile_provenance(),
         source.grounded_object_slots().to_vec(),
@@ -639,7 +639,7 @@ fn finalized_memory_upload_binds_base_context_final_and_perception_header_identi
 
     let capacity = BrainCapacityClass::n512();
     let phenotype = support::phenotype_for_capacity_at_maturation(
-        capacity.clone(),
+        capacity,
         0xC600_0003,
         0.35,
         SensorProfile::GroundedObjectSlotsV1,
@@ -690,7 +690,7 @@ fn finalized_memory_context_runs_inside_the_authoritative_gpu_batch() {
             frame.sensor_profile(),
             frame.sensory().clone(),
             frame.body(),
-            frame.homeostasis().clone(),
+            *frame.homeostasis(),
             frame.candidates().to_vec(),
             frame.profile_provenance(),
             frame.grounded_object_slots().to_vec(),
@@ -735,7 +735,7 @@ fn required_runtime_dispatches_finalized_memory_and_returns_its_exact_binding() 
         source.sensor_profile(),
         source.sensory().clone(),
         source.body(),
-        source.homeostasis().clone(),
+        *source.homeostasis(),
         source.candidates().to_vec(),
         source.profile_provenance(),
         source.grounded_object_slots().to_vec(),
@@ -752,12 +752,12 @@ fn required_runtime_dispatches_finalized_memory_and_returns_its_exact_binding() 
         0.35,
         SensorProfile::GroundedObjectSlotsV1,
     );
-    let mut backend = GpuClosedLoopBackend::new_required_with_config(GpuClosedLoopRuntimeConfig {
-        n512_slots: 1,
-        n1024_slots: 1,
-        n2048_slots: 1,
-        aggregate_resident_ceiling_bytes: 128 * 1024 * 1024,
-    })
+    let mut backend = GpuClosedLoopBackend::new_required(support::scaling::bounded_profile(
+        128 * 1024 * 1024,
+        128 * 1024 * 1024,
+        1,
+        1,
+    ))
     .unwrap();
     let handle = backend
         .insert_brain(frame.organism_id(), phenotype)
@@ -795,12 +795,12 @@ fn evidence_logit_snapshot_is_bound_to_the_pending_frame() {
         SensorProfile::GroundedObjectSlotsV1,
     );
     let (frame, recall) = conditioned_memory_frame(817, &phenotype);
-    let mut backend = GpuClosedLoopBackend::new_required_with_config(GpuClosedLoopRuntimeConfig {
-        n512_slots: 1,
-        n1024_slots: 1,
-        n2048_slots: 1,
-        aggregate_resident_ceiling_bytes: 128 * 1024 * 1024,
-    })
+    let mut backend = GpuClosedLoopBackend::new_required(support::scaling::bounded_profile(
+        128 * 1024 * 1024,
+        128 * 1024 * 1024,
+        1,
+        1,
+    ))
     .unwrap();
     let handle = backend
         .insert_brain(frame.organism_id(), phenotype)
@@ -921,12 +921,12 @@ fn sealed_outcome_changes_the_selected_memory_decoder_fast_weights_immediately()
     );
     let (frame, recall) = conditioned_memory_frame_with_candidate_count(816, &phenotype, 1);
     let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
-    let mut backend = GpuClosedLoopBackend::new_required_with_config(GpuClosedLoopRuntimeConfig {
-        n512_slots: 1,
-        n1024_slots: 1,
-        n2048_slots: 1,
-        aggregate_resident_ceiling_bytes: 128 * 1024 * 1024,
-    })
+    let mut backend = GpuClosedLoopBackend::new_required(support::scaling::bounded_profile(
+        128 * 1024 * 1024,
+        128 * 1024 * 1024,
+        1,
+        1,
+    ))
     .unwrap();
     let handle = backend
         .insert_brain(frame.organism_id(), phenotype.clone())

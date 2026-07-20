@@ -2440,17 +2440,14 @@ impl GpuClosedLoopPipelines {
             {
                 return None;
             }
-            let candidate_base = match usize::try_from(learning_header.candidate_offset)
+            let candidate_base = usize::try_from(learning_header.candidate_offset)
                 .ok()
                 .and_then(|base| {
                     usize::try_from(selection.candidate_index)
                         .ok()
                         .and_then(|index| index.checked_mul(GPU_CANDIDATE_RECORD_WORDS))
                         .and_then(|offset| base.checked_add(offset))
-                }) {
-                Some(base) => base,
-                None => return None,
-            };
+                })?;
             let candidate_end = match candidate_base.checked_add(GPU_CANDIDATE_RECORD_WORDS) {
                 Some(end) if end <= batch.dispatch_header_words.len() => end,
                 _ => return None,
@@ -2461,7 +2458,7 @@ impl GpuClosedLoopPipelines {
                 Ok(candidate) => candidate,
                 Err(_) => return None,
             };
-            let digest_base = match usize::try_from(learning_header.decoder_learning_input_offset)
+            let digest_base = usize::try_from(learning_header.decoder_learning_input_offset)
                 .ok()
                 .and_then(|base| {
                     usize::try_from(learning_header.candidate_count)
@@ -2476,10 +2473,7 @@ impl GpuClosedLoopPipelines {
                         .ok()
                         .and_then(|index| index.checked_mul(4))
                         .and_then(|offset| base.checked_add(offset))
-                }) {
-                Some(base) => base,
-                None => return None,
-            };
+                })?;
             let digest_end = match digest_base.checked_add(4) {
                 Some(end) if end <= batch.frame_payload_words.len() => end,
                 _ => return None,
@@ -2489,13 +2483,9 @@ impl GpuClosedLoopPipelines {
                 Ok(index) => index,
                 Err(_) => return None,
             };
-            let family = match u8::try_from(candidate.family)
+            let family = u8::try_from(candidate.family)
                 .ok()
-                .and_then(|raw| alife_core::CandidateActionFamily::try_from_raw(raw).ok())
-            {
-                Some(family) => family,
-                None => return None,
-            };
+                .and_then(|raw| alife_core::CandidateActionFamily::try_from_raw(raw).ok())?;
             expected.candidate_index_and_family =
                 crate::pack_candidate_index_and_family(candidate_index, family);
             expected.action_id = candidate.action_id;

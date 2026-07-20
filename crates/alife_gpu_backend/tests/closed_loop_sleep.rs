@@ -103,7 +103,9 @@ fn learned_backend(
     alife_core::BrainPhenotype,
 ) {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handle = backend
         .insert_brain(alife_core::OrganismId(organism_raw), phenotype.clone())
         .unwrap();
@@ -353,7 +355,9 @@ fn wake_starts_with_no_pre_sleep_eligibility_or_replay_rows() {
 #[test]
 fn two_same_class_sleep_jobs_do_not_cross_write_slots() {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handle_a = backend
         .insert_brain(alife_core::OrganismId(5_005), phenotype.clone())
         .unwrap();
@@ -411,7 +415,9 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
 
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organisms = [alife_core::OrganismId(5_008), alife_core::OrganismId(5_009)];
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handles =
         organisms.map(|organism| backend.insert_brain(organism, phenotype.clone()).unwrap());
 

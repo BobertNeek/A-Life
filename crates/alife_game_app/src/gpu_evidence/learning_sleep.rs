@@ -522,7 +522,7 @@ fn run_immediate_learning_probe(
     ];
     let mut backend = evidence_stage(
         "create immediate-learning GPU backend",
-        GpuClosedLoopBackend::new_required(),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1()),
     )?;
     let handles = ids
         .map(|organism| backend.insert_brain(organism, phenotype.clone()))
@@ -722,7 +722,7 @@ fn run_replay_restore_probe(
     let organism_id = OrganismId(21);
     let mut source_backend = evidence_stage(
         "create replay probe GPU backend",
-        GpuClosedLoopBackend::new_required(),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1()),
     )?;
     let source_handle = evidence_stage(
         "insert replay source brain",
@@ -795,7 +795,7 @@ fn run_replay_restore_probe(
 
     let mut replayed_backend = evidence_stage(
         "create exact-replay restore backend",
-        GpuClosedLoopBackend::new_required(),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1()),
     )?;
     let replayed_restore = evidence_stage(
         "restore exact pre-sleep checkpoint",
@@ -838,7 +838,7 @@ fn run_replay_restore_probe(
     let zero_snapshot = GpuBrainCheckpointSnapshot::try_from_parts(zero_parts)?;
     let mut zero_backend = evidence_stage(
         "create zero-sample restore backend",
-        GpuClosedLoopBackend::new_required(),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1()),
     )?;
     let zero_restore = evidence_stage(
         "restore zero-sample pre-sleep checkpoint",
@@ -1075,7 +1075,8 @@ fn run_replay_restore_probe(
     drop(replayed_backend);
     drop(zero_backend);
 
-    let restored_backend = GpuClosedLoopBackend::new_required()?;
+    let restored_backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?;
     let mut restored = evidence_stage(
         "construct live runtime from submitted checkpoint",
         GpuLiveBrainRuntime::restore_with_checkpoints(
@@ -1408,7 +1409,7 @@ fn select_evidence_candidate_profile(
     let organism_id = OrganismId(10);
     let mut backend = evidence_stage(
         "create candidate-selector GPU backend",
-        GpuClosedLoopBackend::new_required(),
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1()),
     )?;
     let adapter_identity = adapter_identity_digest(backend.hardware_receipt());
     let handle = evidence_stage(
@@ -1795,7 +1796,8 @@ fn validate_checkpoint_payloads(
     store: &GpuCheckpointAssetStore,
     save: &PortableSaveFile,
 ) -> Result<(), GpuEvidenceError> {
-    let mut backend = GpuClosedLoopBackend::new_required()?;
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?;
     for state in save
         .creatures
         .iter()

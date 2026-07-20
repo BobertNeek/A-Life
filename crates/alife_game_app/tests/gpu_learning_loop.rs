@@ -8,7 +8,9 @@ use alife_world::HeadlessScenarioBuilder;
 
 #[test]
 fn live_loop_seals_before_gpu_learning_commit() {
-    let backend = GpuClosedLoopBackend::new_required().expect("required GPU adapter");
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required GPU adapter");
     let world = HeadlessScenarioBuilder::new(9_201)
         .agent("learner", OrganismId(1), Vec3f::ZERO)
         .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)

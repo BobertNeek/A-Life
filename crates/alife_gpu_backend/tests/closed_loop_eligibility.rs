@@ -5,9 +5,9 @@ use alife_core::{
     SensorProfile,
 };
 use alife_gpu_backend::{
-    GpuClosedLoopBackend, GpuClosedLoopError, GpuClosedLoopRuntimeConfig,
-    GpuEligibilityDiscardRecord, GpuLearningHeader, GpuPendingEligibilityRecord,
-    GpuPhenotypeUpload, CLOSED_LOOP_ELIGIBILITY_WGSL, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+    GpuClosedLoopBackend, GpuClosedLoopError, GpuEligibilityDiscardRecord, GpuLearningHeader,
+    GpuPendingEligibilityRecord, GpuPhenotypeUpload, CLOSED_LOOP_ELIGIBILITY_WGSL,
+    GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
 };
 
 mod support;
@@ -202,12 +202,12 @@ fn eligibility_shader_parses_and_exposes_the_transaction_entries() {
 
 #[test]
 fn pending_transaction_blocks_the_next_frame_until_gpu_discard() {
-    let mut backend = GpuClosedLoopBackend::new_required_with_config(GpuClosedLoopRuntimeConfig {
-        n512_slots: 2,
-        n1024_slots: 1,
-        n2048_slots: 1,
-        aggregate_resident_ceiling_bytes: 128 * 1024 * 1024,
-    })
+    let mut backend = GpuClosedLoopBackend::new_required(support::scaling::bounded_profile(
+        128 * 1024 * 1024,
+        128 * 1024 * 1024,
+        2,
+        2,
+    ))
     .expect("required Vulkan backend");
     let handle = backend
         .insert_brain(OrganismId(1), support::n512_phenotype(71))
@@ -284,12 +284,12 @@ fn pending_transaction_blocks_the_next_frame_until_gpu_discard() {
 
 #[test]
 fn discard_rejects_a_foreign_pending_identity_without_mutating_either_transaction() {
-    let mut backend = GpuClosedLoopBackend::new_required_with_config(GpuClosedLoopRuntimeConfig {
-        n512_slots: 2,
-        n1024_slots: 1,
-        n2048_slots: 1,
-        aggregate_resident_ceiling_bytes: 128 * 1024 * 1024,
-    })
+    let mut backend = GpuClosedLoopBackend::new_required(support::scaling::bounded_profile(
+        128 * 1024 * 1024,
+        128 * 1024 * 1024,
+        2,
+        2,
+    ))
     .expect("required Vulkan backend");
     let first_handle = backend
         .insert_brain(OrganismId(1), support::n512_phenotype(72))
@@ -331,12 +331,12 @@ fn discard_rejects_a_foreign_pending_identity_without_mutating_either_transactio
 
 #[test]
 fn retirement_requires_the_pending_eligibility_transaction_to_be_resolved() {
-    let mut backend = GpuClosedLoopBackend::new_required_with_config(GpuClosedLoopRuntimeConfig {
-        n512_slots: 2,
-        n1024_slots: 1,
-        n2048_slots: 1,
-        aggregate_resident_ceiling_bytes: 128 * 1024 * 1024,
-    })
+    let mut backend = GpuClosedLoopBackend::new_required(support::scaling::bounded_profile(
+        128 * 1024 * 1024,
+        128 * 1024 * 1024,
+        2,
+        2,
+    ))
     .expect("required Vulkan backend");
     let handle = backend
         .insert_brain(OrganismId(1), support::n512_phenotype(74))

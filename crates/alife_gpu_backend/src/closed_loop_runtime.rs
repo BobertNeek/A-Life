@@ -18,14 +18,14 @@ use alife_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    GpuActiveBatchUpload, GpuBrainSlot, GpuClosedLoopError, GpuClosedLoopKernelSet,
-    GpuClosedLoopPipelines, GpuCompactMapTicket, GpuFastPlasticityBatchEntry,
-    GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers, GpuFixedClassArenaPlan,
-    GpuFixedSlotRanges, GpuLearningReceipt, GpuMemoryContextDispatchReceipt,
-    GpuMemoryContextUpload, GpuOutcomeCreditRecord, GpuPendingEligibilityRecord,
-    GpuPerceptionUpload, GpuPreparedActiveBatch, GpuValidatedClassBatch,
-    PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
-    GPU_CLOSED_LOOP_LAYOUT_VERSION,
+    GpuActiveBatchUpload, GpuAdmissionReceipt, GpuAllocationEventKind, GpuAllocationEventReceipt,
+    GpuBrainSlot, GpuClosedLoopError, GpuClosedLoopKernelSet, GpuClosedLoopPipelines,
+    GpuCompactMapTicket, GpuFastPlasticityBatchEntry, GpuFixedActiveBatchEntry,
+    GpuFixedClassArenaBuffers, GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuLearningReceipt,
+    GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload, GpuOutcomeCreditRecord,
+    GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
+    GpuRuntimeProfile, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
+    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 
 pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
@@ -34,51 +34,8 @@ pub const GPU_FEATURE_DIGEST_DOMAIN: &[u8] = b"alife.gpu.hardware.features.v1";
 pub const GPU_LIMITS_DIGEST_DOMAIN: &[u8] = b"alife.gpu.hardware.limits.v1";
 
 const BACKEND_VERSION: &str = env!("CARGO_PKG_VERSION");
-const DEFAULT_RESIDENT_CEILING_BYTES: u64 = 128 * 1024 * 1024;
-
 static NEXT_BACKEND_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_HARDWARE_RECEIPT_GENERATION: AtomicU64 = AtomicU64::new(1);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuClosedLoopRuntimeConfig {
-    pub n512_slots: u32,
-    pub n1024_slots: u32,
-    pub n2048_slots: u32,
-    pub aggregate_resident_ceiling_bytes: u64,
-}
-
-impl Default for GpuClosedLoopRuntimeConfig {
-    fn default() -> Self {
-        Self {
-            n512_slots: 64,
-            n1024_slots: 16,
-            n2048_slots: 4,
-            aggregate_resident_ceiling_bytes: DEFAULT_RESIDENT_CEILING_BYTES,
-        }
-    }
-}
-
-impl GpuClosedLoopRuntimeConfig {
-    fn validate(self) -> Result<Self, ScaffoldContractError> {
-        if self.n512_slots == 0
-            || self.n1024_slots == 0
-            || self.n2048_slots == 0
-            || self.aggregate_resident_ceiling_bytes == 0
-        {
-            return Err(ScaffoldContractError::NeuralBackendUnavailable);
-        }
-        Ok(self)
-    }
-
-    fn slots_for_class(self, class_id: BrainClassId) -> Result<u32, ScaffoldContractError> {
-        match class_id.raw() {
-            1 => Ok(self.n512_slots),
-            2 => Ok(self.n1024_slots),
-            3 => Ok(self.n2048_slots),
-            _ => Err(ScaffoldContractError::UnsupportedProductionBrainClass),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuHardwareReceipt {
@@ -614,6 +571,73 @@ impl ClassBucketRuntime {
         Ok((slot, generation))
     }
 
+    fn grow(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        kernels: Arc<GpuClosedLoopKernelSet>,
+        new_plan: GpuFixedClassArenaPlan,
+    ) -> Result<(), GpuClosedLoopError> {
+        let old_capacity = self.plan.slot_capacity();
+        let new_capacity = new_plan.slot_capacity();
+        if new_capacity <= old_capacity || new_plan.capacity().id() != self.plan.capacity().id() {
+            return Err(GpuClosedLoopError::CapacityExceeded);
+        }
+
+        let active_sides = self
+            .slots
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, resident)| {
+                resident.as_ref().map(|resident| {
+                    let generation = resident.brain_slot.record().slot_generation;
+                    self.pipelines
+                        .slot_active_side(slot as u32, generation)
+                        .map(|side| (slot as u32, generation, side))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let new_buffers = GpuFixedClassArenaBuffers::allocate(device, &new_plan)?;
+        let mut new_pipelines = GpuClosedLoopPipelines::from_shared_kernel_set_for_fixed_arena(
+            device,
+            &new_buffers,
+            kernels,
+        )?;
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("closed-loop-runtime-grow-class-arena"),
+        });
+        self.buffers
+            .record_persistent_prefix_copy_to(&new_buffers, &mut encoder)?;
+        let submission = queue.submit(Some(encoder.finish()));
+        device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
+
+        for (slot, generation, side) in active_sides {
+            new_pipelines.restore_slot_active_side(slot, generation, side)?;
+        }
+        let new_count =
+            usize::try_from(new_capacity).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+        self.slots.resize_with(new_count, || None);
+        self.generations.resize(new_count, 0);
+        self.free_slots.extend((old_capacity..new_capacity).rev());
+        for (slot, resident) in self.slots.iter_mut().enumerate() {
+            if let Some(resident) = resident {
+                resident
+                    .brain_slot
+                    .rebind_bucket_ownership(new_plan.ownership_token());
+                resident.ranges = new_plan.slot_ranges(slot as u32)?;
+            }
+        }
+        self.plan = new_plan;
+        self.buffers = new_buffers;
+        self.pipelines = new_pipelines;
+        Ok(())
+    }
+
     pub(crate) fn contains(&self, handle: GpuBrainHandle) -> bool {
         self.slots
             .get(handle.slot as usize)
@@ -639,12 +663,7 @@ struct PreparedClassDispatch {
 fn capacity_for_promoted_class(
     class_id: BrainClassId,
 ) -> Result<BrainCapacityClass, ScaffoldContractError> {
-    match class_id.raw() {
-        1 => Ok(BrainCapacityClass::n512()),
-        2 => Ok(BrainCapacityClass::n1024()),
-        3 => Ok(BrainCapacityClass::n2048()),
-        _ => Err(ScaffoldContractError::UnsupportedProductionBrainClass),
-    }
+    BrainCapacityClass::production_for_id(class_id)
 }
 
 pub(crate) fn map_gpu_contract_error(error: GpuClosedLoopError) -> ScaffoldContractError {
@@ -670,10 +689,12 @@ pub struct GpuClosedLoopBackend {
     pub(crate) device_lost: Arc<AtomicBool>,
     kernels: Arc<GpuClosedLoopKernelSet>,
     pub(crate) state: GpuBackendState,
-    config: GpuClosedLoopRuntimeConfig,
+    runtime_profile: GpuRuntimeProfile,
+    runtime_budget: GpuRuntimeBudget,
+    admission: GpuAdmissionReceipt,
     pub(crate) class_buckets: BTreeMap<u16, ClassBucketRuntime>,
+    slot_generation_watermarks: BTreeMap<(u16, u32), u32>,
     organisms: BTreeMap<u64, GpuBrainHandle>,
-    resident_bytes: u64,
     pub(crate) next_dispatch_generation: u64,
     force_device_lost_after_submit: bool,
     #[cfg(feature = "gpu-tests")]
@@ -690,29 +711,30 @@ pub struct GpuClosedLoopBackend {
 }
 
 impl GpuClosedLoopBackend {
-    pub fn new_required() -> Result<Self, ScaffoldContractError> {
-        Self::new_required_with_config(GpuClosedLoopRuntimeConfig::default())
-    }
-
-    pub fn new_required_with_config(
-        config: GpuClosedLoopRuntimeConfig,
-    ) -> Result<Self, ScaffoldContractError> {
-        Self::new_with_factory_and_config(&WgpuDeviceFactory, config)
+    pub fn new_required(profile: GpuRuntimeProfile) -> Result<Self, ScaffoldContractError> {
+        Self::new_with_factory_and_profile(&WgpuDeviceFactory, profile)
     }
 
     #[cfg(test)]
     fn new_with_factory(factory: &impl GpuDeviceFactory) -> Result<Self, ScaffoldContractError> {
-        Self::new_with_factory_and_config(factory, GpuClosedLoopRuntimeConfig::default())
+        Self::new_with_factory_and_profile(factory, GpuRuntimeProfile::production_v1())
     }
 
-    fn new_with_factory_and_config(
+    fn new_with_factory_and_profile(
         factory: &impl GpuDeviceFactory,
-        config: GpuClosedLoopRuntimeConfig,
+        profile: GpuRuntimeProfile,
     ) -> Result<Self, ScaffoldContractError> {
-        let config = config.validate()?;
+        profile.validate_contract()?;
         let required = acquire_required_gpu(factory)?;
         let backend_instance_id = next_backend_instance_id()
             .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+        let runtime_budget = GpuRuntimeBudget::from_device(
+            profile,
+            required.device.features(),
+            &required.device.limits(),
+            required.hardware.limits_digest,
+        )?;
+        let admission = GpuAdmissionReceipt::empty(runtime_budget);
         let kernels =
             GpuClosedLoopKernelSet::new(&required.device).map_err(map_gpu_contract_error)?;
         Ok(Self {
@@ -724,10 +746,12 @@ impl GpuClosedLoopBackend {
             device_lost: required.lost,
             kernels,
             state: GpuBackendState::Ready,
-            config,
+            runtime_profile: profile,
+            runtime_budget,
+            admission,
             class_buckets: BTreeMap::new(),
+            slot_generation_watermarks: BTreeMap::new(),
             organisms: BTreeMap::new(),
-            resident_bytes: 0,
             next_dispatch_generation: 1,
             force_device_lost_after_submit: false,
             #[cfg(feature = "gpu-tests")]
@@ -746,6 +770,18 @@ impl GpuClosedLoopBackend {
 
     pub const fn hardware_receipt(&self) -> &GpuHardwareReceipt {
         &self.hardware
+    }
+
+    pub const fn runtime_profile(&self) -> &GpuRuntimeProfile {
+        &self.runtime_profile
+    }
+
+    pub const fn runtime_budget(&self) -> &GpuRuntimeBudget {
+        &self.runtime_budget
+    }
+
+    pub const fn admission_receipt(&self) -> &GpuAdmissionReceipt {
+        &self.admission
     }
 
     pub const fn state(&self) -> &GpuBackendState {
@@ -1690,6 +1726,140 @@ impl GpuClosedLoopBackend {
         Ok(prepared_ticks)
     }
 
+    fn current_admission_snapshot(&self) -> Result<GpuAdmissionReceipt, ScaffoldContractError> {
+        let mut logical_committed_bytes = 0_u64;
+        let mut physical_allocated_bytes = 0_u64;
+        let mut physical_unused_retained_bytes = 0_u64;
+        let mut physical_shared_bytes = 0_u64;
+        let mut physical_alignment_slack_bytes = 0_u64;
+        let mut live_brains = 0_u32;
+        for bucket in self.class_buckets.values() {
+            let receipt = bucket
+                .plan
+                .slot_allocation_receipt()
+                .map_err(map_gpu_contract_error)?;
+            let live = u64::try_from(bucket.slots.iter().filter(|slot| slot.is_some()).count())
+                .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+            let slots = u64::from(bucket.plan.slot_capacity());
+            let unused = slots
+                .checked_sub(live)
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            logical_committed_bytes = logical_committed_bytes
+                .checked_add(
+                    receipt
+                        .logical_slot_commit_bytes
+                        .checked_mul(live)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+                )
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            physical_unused_retained_bytes = physical_unused_retained_bytes
+                .checked_add(
+                    receipt
+                        .logical_slot_commit_bytes
+                        .checked_mul(unused)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+                )
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            physical_shared_bytes = physical_shared_bytes
+                .checked_add(receipt.shared_class_bytes)
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            physical_alignment_slack_bytes = physical_alignment_slack_bytes
+                .checked_add(
+                    receipt
+                        .alignment_padding_bytes
+                        .checked_mul(slots)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+                )
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            physical_allocated_bytes = physical_allocated_bytes
+                .checked_add(bucket.plan.aggregate_resident_bytes())
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            live_brains = live_brains
+                .checked_add(
+                    u32::try_from(live)
+                        .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?,
+                )
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        }
+        let logical_available_bytes = self
+            .runtime_budget
+            .logical_neural_heap_budget_bytes
+            .checked_sub(logical_committed_bytes)
+            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        let receipt = GpuAdmissionReceipt {
+            schema_version: 1,
+            runtime: self.runtime_budget,
+            logical_committed_bytes,
+            logical_available_bytes,
+            physical_allocated_bytes,
+            physical_unused_retained_bytes,
+            physical_shared_bytes,
+            physical_alignment_slack_bytes,
+            peak_logical_committed_bytes: self
+                .admission
+                .peak_logical_committed_bytes
+                .max(logical_committed_bytes),
+            peak_physical_allocated_bytes: self
+                .admission
+                .peak_physical_allocated_bytes
+                .max(physical_allocated_bytes),
+            live_brains,
+            max_hot_brains: self.runtime_budget.max_hot_brains,
+            allocation_generation: 0,
+            last_event: None,
+        };
+        receipt.validate_contract()?;
+        Ok(receipt)
+    }
+
+    fn commit_admission_event(
+        &mut self,
+        kind: GpuAllocationEventKind,
+        handle: GpuBrainHandle,
+        transient_peak_physical_bytes: u64,
+    ) -> Result<(), ScaffoldContractError> {
+        let before = self.admission.clone();
+        let mut after = self.current_admission_snapshot()?;
+        after.allocation_generation = before
+            .allocation_generation
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        after.peak_logical_committed_bytes = before
+            .peak_logical_committed_bytes
+            .max(after.logical_committed_bytes);
+        after.peak_physical_allocated_bytes = before
+            .peak_physical_allocated_bytes
+            .max(after.physical_allocated_bytes)
+            .max(transient_peak_physical_bytes);
+        after.last_event = Some(GpuAllocationEventReceipt::new(
+            kind,
+            handle.class_id.raw(),
+            handle.slot,
+            handle.generation,
+            &before,
+            &after,
+        )?);
+        after.validate_contract()?;
+        self.admission = after;
+        Ok(())
+    }
+
+    fn validate_logical_admission(
+        &self,
+        slot_receipt: &crate::GpuSlotAllocationReceipt,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.admission.live_brains >= self.runtime_budget.max_hot_brains
+            || self
+                .admission
+                .logical_committed_bytes
+                .checked_add(slot_receipt.logical_slot_commit_bytes)
+                .is_none_or(|bytes| bytes > self.runtime_budget.logical_neural_heap_budget_bytes)
+        {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        Ok(())
+    }
+
     pub fn insert_brain(
         &mut self,
         organism_id: OrganismId,
@@ -1708,55 +1878,153 @@ impl GpuClosedLoopBackend {
         phenotype
             .validate_against(&capacity)
             .map_err(|_| ScaffoldContractError::GpuLayoutMismatch)?;
+        self.runtime_budget.validate_for(capacity.execution())?;
+        crate::GpuClassBucketPlan::validate_adapter(&phenotype, &self.runtime_budget)
+            .map_err(map_gpu_contract_error)?;
+        let slot_receipt = GpuFixedClassArenaPlan::new(
+            capacity,
+            1,
+            self.runtime_budget.physical_allocation_ceiling_bytes,
+        )
+        .map_err(map_gpu_contract_error)?
+        .slot_allocation_receipt()
+        .map_err(map_gpu_contract_error)?;
+        self.validate_logical_admission(&slot_receipt)?;
         let class_raw = class_id.raw();
-        let (slot, generation, upload, new_bucket) = if self.class_buckets.contains_key(&class_raw)
-        {
-            let bucket = self
-                .class_buckets
-                .get(&class_raw)
-                .expect("existing class key resolves");
-            let (slot, generation) = bucket.next_free_slot()?;
-            let upload = bucket
-                .plan
-                .prepare_slot_upload(slot, generation, &phenotype)
-                .map_err(map_gpu_contract_error)?;
-            (slot, generation, upload, None)
-        } else {
-            let slot_capacity = self.config.slots_for_class(class_id)?;
-            let remaining = self
-                .config
-                .aggregate_resident_ceiling_bytes
-                .checked_sub(self.resident_bytes)
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            let plan = GpuFixedClassArenaPlan::new(capacity, slot_capacity, remaining)
-                .map_err(map_gpu_contract_error)?;
-            let next_resident_bytes = self
-                .resident_bytes
-                .checked_add(plan.aggregate_resident_bytes())
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            if next_resident_bytes > self.config.aggregate_resident_ceiling_bytes {
-                return Err(ScaffoldContractError::NeuralBackendUnavailable);
-            }
-            let slot = 0;
-            let generation = 1;
-            let upload = plan
-                .prepare_slot_upload(slot, generation, &phenotype)
-                .map_err(map_gpu_contract_error)?;
-            let bucket =
-                ClassBucketRuntime::from_plan(&self.device, Arc::clone(&self.kernels), plan)
+        let current_physical = self.admission.physical_allocated_bytes;
+        let (slot, generation, upload, event_kind, transient_peak_physical_bytes) =
+            if self.class_buckets.contains_key(&class_raw) {
+                let has_free_slot = self
+                    .class_buckets
+                    .get(&class_raw)
+                    .is_some_and(|bucket| !bucket.free_slots.is_empty());
+                if has_free_slot {
+                    let bucket = self
+                        .class_buckets
+                        .get(&class_raw)
+                        .expect("existing class key resolves");
+                    let (slot, generation) = bucket.next_free_slot()?;
+                    let upload = bucket
+                        .plan
+                        .prepare_slot_upload(slot, generation, &phenotype)
+                        .map_err(map_gpu_contract_error)?;
+                    (
+                        slot,
+                        generation,
+                        upload,
+                        GpuAllocationEventKind::AdmitFromRetainedSlot,
+                        current_physical,
+                    )
+                } else {
+                    let old_capacity = self
+                        .class_buckets
+                        .get(&class_raw)
+                        .expect("existing class key resolves")
+                        .plan
+                        .slot_capacity();
+                    let growth = u32::from(self.runtime_profile.growth_chunk_slots).min(
+                        self.runtime_profile
+                            .max_hot_brains
+                            .checked_sub(old_capacity)
+                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+                    );
+                    if growth == 0 {
+                        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                    }
+                    let new_capacity = old_capacity
+                        .checked_add(growth)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    let new_plan = GpuFixedClassArenaPlan::new(
+                        capacity,
+                        new_capacity,
+                        self.runtime_budget.physical_allocation_ceiling_bytes,
+                    )
                     .map_err(map_gpu_contract_error)?;
-            debug_assert_eq!(bucket.next_free_slot()?, (slot, generation));
-            (
-                slot,
-                generation,
-                upload,
-                Some((bucket, next_resident_bytes)),
-            )
-        };
-        if let Some((bucket, next_resident_bytes)) = new_bucket {
-            self.class_buckets.insert(class_raw, bucket);
-            self.resident_bytes = next_resident_bytes;
-        }
+                    let transient_peak = current_physical
+                        .checked_add(new_plan.aggregate_resident_bytes())
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    if transient_peak > self.runtime_budget.physical_allocation_ceiling_bytes {
+                        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                    }
+                    let slot = old_capacity;
+                    let generation = 1;
+                    let upload = new_plan
+                        .prepare_slot_upload(slot, generation, &phenotype)
+                        .map_err(map_gpu_contract_error)?;
+                    self.class_buckets
+                        .get_mut(&class_raw)
+                        .expect("existing class key resolves")
+                        .grow(
+                            &self.device,
+                            &self.queue,
+                            Arc::clone(&self.kernels),
+                            new_plan,
+                        )
+                        .map_err(map_gpu_contract_error)?;
+                    (
+                        slot,
+                        generation,
+                        upload,
+                        GpuAllocationEventKind::AdmitFromNewChunk,
+                        transient_peak,
+                    )
+                }
+            } else {
+                let slot_capacity = u32::from(self.runtime_profile.growth_chunk_slots)
+                    .min(self.runtime_profile.max_hot_brains);
+                let plan = GpuFixedClassArenaPlan::new(
+                    capacity,
+                    slot_capacity,
+                    self.runtime_budget.physical_allocation_ceiling_bytes,
+                )
+                .map_err(map_gpu_contract_error)?;
+                let transient_peak = current_physical
+                    .checked_add(plan.aggregate_resident_bytes())
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                if transient_peak > self.runtime_budget.physical_allocation_ceiling_bytes {
+                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                }
+                let (slot, generation) = (0..slot_capacity)
+                    .find_map(|slot| {
+                        let previous = self
+                            .slot_generation_watermarks
+                            .get(&(class_raw, slot))
+                            .copied()
+                            .unwrap_or(0);
+                        previous.checked_add(1).map(|generation| (slot, generation))
+                    })
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                let upload = plan
+                    .prepare_slot_upload(slot, generation, &phenotype)
+                    .map_err(map_gpu_contract_error)?;
+                let mut bucket =
+                    ClassBucketRuntime::from_plan(&self.device, Arc::clone(&self.kernels), plan)
+                        .map_err(map_gpu_contract_error)?;
+                for candidate_slot in 0..slot_capacity {
+                    if let Some(previous) = self
+                        .slot_generation_watermarks
+                        .get(&(class_raw, candidate_slot))
+                        .copied()
+                    {
+                        bucket.generations[candidate_slot as usize] = previous;
+                        if previous == u32::MAX {
+                            bucket.retired.insert(candidate_slot);
+                            bucket
+                                .free_slots
+                                .retain(|free_slot| *free_slot != candidate_slot);
+                        }
+                    }
+                }
+                debug_assert_eq!(bucket.next_free_slot()?, (slot, generation));
+                self.class_buckets.insert(class_raw, bucket);
+                (
+                    slot,
+                    generation,
+                    upload,
+                    GpuAllocationEventKind::AdmitFromNewChunk,
+                    transient_peak,
+                )
+            };
         let bucket = self
             .class_buckets
             .get_mut(&class_raw)
@@ -1838,7 +2106,16 @@ impl GpuClosedLoopBackend {
             pending_eligibility: None,
             pending_eligibility_record: None,
         });
+        self.slot_generation_watermarks
+            .insert((class_raw, slot), generation);
         self.organisms.insert(organism_id.0, handle);
+        if self
+            .commit_admission_event(event_kind, handle, transient_peak_physical_bytes)
+            .is_err()
+        {
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         Ok(handle)
     }
 
@@ -1854,57 +2131,80 @@ impl GpuClosedLoopBackend {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
         let class_raw = handle.class_id.raw();
-        let bucket = self
-            .class_buckets
-            .get_mut(&class_raw)
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if !bucket.contains(handle) {
-            return Err(ScaffoldContractError::BrainOwnershipMismatch);
-        }
-        let resident = bucket.slots[handle.slot as usize]
-            .as_ref()
-            .expect("validated occupied slot");
-        if resident.pending_eligibility.is_some() || resident.pending_eligibility_record.is_some() {
-            return Err(ScaffoldContractError::LearningReplayRejected);
-        }
-        let ranges = resident.ranges.clone();
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("closed-loop-runtime-slot-scrub"),
-            });
-        bucket
-            .buffers
-            .record_full_slot_scrub(&mut encoder, &ranges)
-            .map_err(map_gpu_contract_error)?;
-        let submission = self.queue.submit(Some(encoder.finish()));
-        if self
-            .device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .is_err()
-            || self.device_lost.load(Ordering::Acquire)
+        let transient_peak_physical_bytes = self.admission.physical_allocated_bytes;
         {
-            self.mark_device_lost();
-            return Err(ScaffoldContractError::NeuralBackendUnavailable);
-        }
-        if bucket
-            .pipelines
-            .retire_slot_active_side(handle.slot, handle.generation)
-            .is_err()
-        {
-            self.mark_device_lost();
-            return Err(ScaffoldContractError::NeuralBackendUnavailable);
-        }
-        bucket.slots[handle.slot as usize] = None;
-        if handle.generation == u32::MAX {
-            bucket.retired.insert(handle.slot);
-        } else {
-            bucket.free_slots.push(handle.slot);
+            let bucket = self
+                .class_buckets
+                .get_mut(&class_raw)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            if !bucket.contains(handle) {
+                return Err(ScaffoldContractError::BrainOwnershipMismatch);
+            }
+            let resident = bucket.slots[handle.slot as usize]
+                .as_ref()
+                .expect("validated occupied slot");
+            if resident.pending_eligibility.is_some()
+                || resident.pending_eligibility_record.is_some()
+            {
+                return Err(ScaffoldContractError::LearningReplayRejected);
+            }
+            let ranges = resident.ranges.clone();
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("closed-loop-runtime-slot-scrub"),
+                });
+            bucket
+                .buffers
+                .record_full_slot_scrub(&mut encoder, &ranges)
+                .map_err(map_gpu_contract_error)?;
+            let submission = self.queue.submit(Some(encoder.finish()));
+            if self
+                .device
+                .poll(wgpu::PollType::Wait {
+                    submission_index: Some(submission),
+                    timeout: None,
+                })
+                .is_err()
+                || self.device_lost.load(Ordering::Acquire)
+            {
+                self.mark_device_lost();
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+            if bucket
+                .pipelines
+                .retire_slot_active_side(handle.slot, handle.generation)
+                .is_err()
+            {
+                self.mark_device_lost();
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+            bucket.slots[handle.slot as usize] = None;
+            if handle.generation == u32::MAX {
+                bucket.retired.insert(handle.slot);
+            } else {
+                bucket.free_slots.push(handle.slot);
+            }
         }
         self.organisms.remove(&handle.organism_id.0);
+        let drop_empty_chunk = self.runtime_profile.retain_empty_chunks == 0
+            && self
+                .class_buckets
+                .get(&class_raw)
+                .is_some_and(|bucket| bucket.slots.iter().all(Option::is_none));
+        let event_kind = if drop_empty_chunk {
+            self.class_buckets.remove(&class_raw);
+            GpuAllocationEventKind::ReleaseAndDropEmptyChunk
+        } else {
+            GpuAllocationEventKind::ReleaseToRetainedSlot
+        };
+        if self
+            .commit_admission_event(event_kind, handle, transient_peak_physical_bytes)
+            .is_err()
+        {
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         Ok(())
     }
 

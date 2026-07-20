@@ -248,7 +248,9 @@ fn plasticity_wgsl_parses_with_four_passes_and_exactly_seven_heap_bindings() {
 fn rewarding_outcome_changes_next_encounter_before_sleep() {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organism = alife_core::OrganismId(4_101);
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handle = backend.insert_brain(organism, phenotype).unwrap();
     let first_frame = support::perception_frame_for_profile_at_tick(
         organism.raw(),
@@ -305,7 +307,9 @@ fn modulator_credit_changes_the_next_encounter_relative_to_a_sealed_neutral_outc
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organism_a = alife_core::OrganismId(4_111);
     let organism_b = alife_core::OrganismId(4_112);
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handle_a = backend.insert_brain(organism_a, phenotype.clone()).unwrap();
     let handle_b = backend.insert_brain(organism_b, phenotype).unwrap();
     for exposure in 0_u64..8 {
@@ -418,7 +422,9 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
         alife_core::OrganismId(4_132),
         alife_core::OrganismId(4_133),
     ];
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handles =
         organisms.map(|organism| backend.insert_brain(organism, phenotype.clone()).unwrap());
     for exposure in 0_u64..8 {
@@ -526,7 +532,9 @@ fn reward_and_pain_change_the_next_decision_in_opposite_directions() {
 fn decoder_credit_is_selected_family_and_selected_feature_specific() {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organism = alife_core::OrganismId(4_141);
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
     for exposure in 0_u64..8 {
         let frame = support::perception_frame_for_profile_at_tick(
@@ -597,7 +605,9 @@ fn decoder_credit_is_selected_family_and_selected_feature_specific() {
 fn replayed_sealed_credit_is_rejected_without_blocking_a_later_tick() {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organism = alife_core::OrganismId(4_121);
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handle = backend.insert_brain(organism, phenotype).unwrap();
     let frame = support::perception_frame_for_profile_at_tick(
         organism.raw(),
@@ -638,7 +648,9 @@ fn replayed_sealed_credit_is_rejected_without_blocking_a_later_tick() {
 fn foreign_outcome_is_rejected_before_gpu_mutation_and_preserves_both_pending_rows() {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organisms = [alife_core::OrganismId(4_151), alife_core::OrganismId(4_152)];
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handles =
         organisms.map(|organism| backend.insert_brain(organism, phenotype.clone()).unwrap());
     let frames = organisms.map(|organism| {
@@ -697,7 +709,9 @@ fn foreign_outcome_is_rejected_before_gpu_mutation_and_preserves_both_pending_ro
 fn abi_conversion_uses_only_validated_sealed_credit() {
     let phenotype = support::controlled_n512_phenotype_at_maturation(0.35);
     let organism = alife_core::OrganismId(4_102);
-    let mut backend = GpuClosedLoopBackend::new_required().unwrap();
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
     let handle = backend.insert_brain(organism, phenotype).unwrap();
     let frame = support::perception_frame_for_profile_at_tick(
         organism.raw(),

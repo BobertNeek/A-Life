@@ -2395,7 +2395,10 @@ mod tests {
 
     #[test]
     fn organism_despawn_retires_its_gpu_handle_before_slot_reuse() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(91)
             .agent("one", OrganismId(1), Vec3f::ZERO)
             .agent("two", OrganismId(2), Vec3f::new(2.0, 0.0, 0.0))
@@ -2424,7 +2427,10 @@ mod tests {
 
     #[test]
     fn fatigued_runtime_enters_sleep_before_gpu_dispatch_and_emits_no_action() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(90)
             .agent("sleeper", OrganismId(1), Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
@@ -2462,7 +2468,10 @@ mod tests {
 
     #[test]
     fn mixed_sleeping_and_awake_residents_dispatch_only_the_awake_brain() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(901)
             .agent("sleeper", OrganismId(1), Vec3f::ZERO)
             .agent("awake", OrganismId(2), Vec3f::new(2.0, 0.0, 0.0))
@@ -2497,7 +2506,10 @@ mod tests {
 
     #[test]
     fn completed_sleep_cycle_wakes_once_and_dispatch_resumes_next_tick() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(902)
             .agent("sleeper", OrganismId(1), Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
@@ -2542,7 +2554,10 @@ mod tests {
 
     #[test]
     fn gpu_tick_executes_and_seals_neural_evidence_before_world_advance() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(92)
             .agent("agent", OrganismId(1), Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
@@ -2581,7 +2596,10 @@ mod tests {
 
     #[test]
     fn failed_sealing_discards_the_exact_pending_eligibility_and_next_tick_recovers() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(93)
             .agent("agent", OrganismId(1), Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
@@ -2608,7 +2626,10 @@ mod tests {
     #[cfg(feature = "gpu-tests")]
     #[test]
     fn failed_pre_seal_discard_is_typed_and_leaves_pending_credit_intact() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(9_306)
             .agent("agent", OrganismId(1), Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
@@ -2639,7 +2660,10 @@ mod tests {
 
     #[test]
     fn tampered_selected_candidate_is_rejected_before_world_execution() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let organism_id = OrganismId(1);
         let world = HeadlessScenarioBuilder::new(9_307)
             .agent("agent", organism_id, Vec3f::ZERO)
@@ -2689,7 +2713,10 @@ mod tests {
 
     #[test]
     fn failed_batch_sealing_clears_every_abandoned_pending_transaction() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(94)
             .agent("one", OrganismId(1), Vec3f::ZERO)
             .agent("two", OrganismId(2), Vec3f::new(2.0, 0.0, 0.0))
@@ -2717,7 +2744,10 @@ mod tests {
 
     #[test]
     fn world_illegality_is_sealed_as_negative_credit_and_learned() {
-        let backend = GpuClosedLoopBackend::new_required().expect("required GPU");
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(95)
             .agent("agent", OrganismId(1), Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)

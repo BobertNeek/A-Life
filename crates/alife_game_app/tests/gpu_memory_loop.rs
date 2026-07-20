@@ -12,7 +12,9 @@ use alife_world::HeadlessScenarioBuilder;
 
 #[test]
 fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
-    let backend = GpuClosedLoopBackend::new_required().expect("required GPU adapter");
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required GPU adapter");
     let world = HeadlessScenarioBuilder::new(9_301)
         .agent("learner", OrganismId(1), Vec3f::ZERO)
         .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
@@ -64,7 +66,9 @@ fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
 
 #[test]
 fn memory_sidecars_are_isolated_by_organism_not_gpu_handle() {
-    let backend = GpuClosedLoopBackend::new_required().expect("required GPU adapter");
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required GPU adapter");
     let world = HeadlessScenarioBuilder::new(9_302)
         .agent("first", OrganismId(1), Vec3f::new(-1.0, 0.0, 0.0))
         .agent("second", OrganismId(2), Vec3f::new(1.0, 0.0, 0.0))
@@ -110,7 +114,9 @@ fn memory_sidecars_are_isolated_by_organism_not_gpu_handle() {
 #[cfg(feature = "gpu-tests")]
 #[test]
 fn one_memory_preparation_rejection_does_not_abort_an_unrelated_organism() {
-    let backend = GpuClosedLoopBackend::new_required().expect("required GPU adapter");
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required GPU adapter");
     let world = HeadlessScenarioBuilder::new(9_303)
         .agent("rejected", OrganismId(1), Vec3f::new(-1.0, 0.0, 0.0))
         .agent("healthy", OrganismId(2), Vec3f::new(1.0, 0.0, 0.0))
@@ -147,7 +153,9 @@ fn one_memory_preparation_rejection_does_not_abort_an_unrelated_organism() {
 #[cfg(feature = "gpu-tests")]
 #[test]
 fn post_seal_learning_rejection_retains_credit_and_still_observes_memory_and_topology() {
-    let backend = GpuClosedLoopBackend::new_required().expect("required GPU adapter");
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required GPU adapter");
     let organism_id = OrganismId(1);
     let world = HeadlessScenarioBuilder::new(9_304)
         .agent("learner", organism_id, Vec3f::ZERO)
@@ -191,7 +199,9 @@ fn post_seal_learning_rejection_retains_credit_and_still_observes_memory_and_top
 #[cfg(feature = "gpu-tests")]
 #[test]
 fn three_failed_retries_force_recovery_sleep_without_a_second_dispatch() {
-    let backend = GpuClosedLoopBackend::new_required().expect("required GPU adapter");
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required GPU adapter");
     let organism_id = OrganismId(1);
     let world = HeadlessScenarioBuilder::new(9_305)
         .agent("learner", organism_id, Vec3f::ZERO)
