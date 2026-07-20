@@ -11,8 +11,9 @@ use std::collections::BTreeMap;
 use alife_gpu_backend::{
     validate_dispatch_dimensions, GpuBufferAccess, GpuClassBucketBufferRole, GpuClassBucketBuffers,
     GpuClosedLoopError, GpuClosedLoopPipelines, CLOSED_LOOP_ABI_WGSL,
-    CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL, CLOSED_LOOP_ENCODE_WGSL, CLOSED_LOOP_RECURRENT_WGSL,
-    GPU_ACTIVE_DISPATCH_ROW_WORDS, GPU_ACTIVE_SIDE_DIAGNOSTIC_LANE,
+    CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL, CLOSED_LOOP_DECODE_WGSL, CLOSED_LOOP_ELIGIBILITY_WGSL,
+    CLOSED_LOOP_ENCODE_WGSL, CLOSED_LOOP_MEMORY_CONTEXT_WGSL, CLOSED_LOOP_PLASTICITY_WGSL,
+    CLOSED_LOOP_RECURRENT_WGSL, GPU_ACTIVE_DISPATCH_ROW_WORDS, GPU_ACTIVE_SIDE_DIAGNOSTIC_LANE,
 };
 use naga::{
     AddressSpace, Arena, Binding, BuiltIn, Expression, Function, Handle, ScalarKind, ShaderStage,
@@ -37,6 +38,16 @@ fn entry_body<'a>(source: &'a str, name: &str) -> &'a str {
     let marker = format!("fn {name}");
     let start = source.find(&marker).expect("required WGSL function");
     &source[start..]
+}
+
+fn function_definition<'a>(source: &'a str, name: &str, next: &str) -> &'a str {
+    let start = source
+        .find(&format!("fn {name}"))
+        .expect("required WGSL function");
+    let relative_end = source[start..]
+        .find(&format!("fn {next}"))
+        .expect("following WGSL function");
+    &source[start..start + relative_end]
 }
 
 #[derive(Default)]
@@ -231,7 +242,11 @@ fn each_shader_concatenates_the_canonical_abi_prefix_exactly_once() {
     assert_eq!(CLOSED_LOOP_ABI_WGSL.matches(abi_anchor).count(), 1);
     for source in [
         CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
+        CLOSED_LOOP_DECODE_WGSL,
+        CLOSED_LOOP_ELIGIBILITY_WGSL,
         CLOSED_LOOP_ENCODE_WGSL,
+        CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
+        CLOSED_LOOP_PLASTICITY_WGSL,
         CLOSED_LOOP_RECURRENT_WGSL,
     ] {
         assert!(source.starts_with(CLOSED_LOOP_ABI_WGSL));
@@ -257,12 +272,58 @@ fn each_shader_concatenates_the_canonical_abi_prefix_exactly_once() {
 }
 
 #[test]
+fn slot_extension_and_learning_state_helpers_load_every_exact_word_once() {
+    let extension = compact(function_definition(
+        CLOSED_LOOP_ABI_WGSL,
+        "load_slot_extension",
+        "load_slot_learning_state",
+    ));
+    let learning = compact(function_definition(
+        CLOSED_LOOP_ABI_WGSL,
+        "load_slot_learning_state",
+        "active_weight_bases",
+    ));
+    assert_eq!(extension.matches("load_state_u32(base)").count(), 1);
+    assert_eq!(learning.matches("load_state_u32(base)").count(), 1);
+    for index in 1..20 {
+        assert_eq!(
+            extension
+                .matches(&format!("load_state_u32(base+{index}u)"))
+                .count(),
+            1,
+            "extension word {index}"
+        );
+    }
+    for index in 1..24 {
+        assert_eq!(
+            learning
+                .matches(&format!("load_state_u32(base+{index}u)"))
+                .count(),
+            1,
+            "learning-state word {index}"
+        );
+    }
+    for helper in [
+        "active_weight_bases",
+        "inactive_weight_bases",
+        "active_eligibility_bases",
+        "inactive_eligibility_bases",
+    ] {
+        assert!(CLOSED_LOOP_ABI_WGSL.contains(&format!("fn {helper}")));
+    }
+}
+
+#[test]
 fn naga_reflection_matches_the_exact_seven_heap_bindings_and_access_modes() {
     let expected_manifest = GpuClassBucketBuffers::neural_binding_manifest();
     assert_eq!(expected_manifest.len(), 7);
     for source in [
         CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
+        CLOSED_LOOP_DECODE_WGSL,
+        CLOSED_LOOP_ELIGIBILITY_WGSL,
         CLOSED_LOOP_ENCODE_WGSL,
+        CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
+        CLOSED_LOOP_PLASTICITY_WGSL,
         CLOSED_LOOP_RECURRENT_WGSL,
     ] {
         let module = validated_module(source);
@@ -299,7 +360,10 @@ fn naga_reflection_matches_the_exact_seven_heap_bindings_and_access_modes() {
 fn mutable_heap_is_atomic_u32_while_dispatch_headers_remain_read_only() {
     for source in [
         CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
+        CLOSED_LOOP_DECODE_WGSL,
+        CLOSED_LOOP_ELIGIBILITY_WGSL,
         CLOSED_LOOP_ENCODE_WGSL,
+        CLOSED_LOOP_PLASTICITY_WGSL,
         CLOSED_LOOP_RECURRENT_WGSL,
     ] {
         let module = validated_module(source);
@@ -356,7 +420,17 @@ fn dispatch_dimension_boundaries_are_checked_without_truncation() {
         validate_dispatch_dimensions(u32::MAX, 1, 65_535),
         Err(GpuClosedLoopError::CapacityExceeded)
     );
-    assert_eq!(GPU_ACTIVE_DISPATCH_ROW_WORDS, 272);
+    assert_eq!(GPU_ACTIVE_DISPATCH_ROW_WORDS, 308);
+    for source in [
+        CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
+        CLOSED_LOOP_DECODE_WGSL,
+        CLOSED_LOOP_ELIGIBILITY_WGSL,
+        CLOSED_LOOP_ENCODE_WGSL,
+        CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
+        CLOSED_LOOP_RECURRENT_WGSL,
+    ] {
+        assert!(compact(source).contains("constACTIVE_DISPATCH_ROW_WORDS:u32=308u;"));
+    }
 }
 
 #[test]
@@ -436,8 +510,9 @@ fn recurrent_shader_uses_target_major_csr_and_never_projection_provenance_for_we
         "route_metadata_offset",
         "genetic_weight_offset",
         "alpha_offset",
-        "lifetime_weight_offset",
-        "fast_weight_offset",
+        "active_weight_bases(",
+        "weight_bases.lifetime",
+        "weight_bases.fast",
     ] {
         assert!(
             body.contains(required),
@@ -506,7 +581,10 @@ fn every_microstep_keeps_current_input_and_updates_dynamics_homeostasis_and_diag
 fn shaders_do_not_use_float_atomics_or_cpu_neural_authority() {
     for source in [
         CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
+        CLOSED_LOOP_DECODE_WGSL,
+        CLOSED_LOOP_ELIGIBILITY_WGSL,
         CLOSED_LOOP_ENCODE_WGSL,
+        CLOSED_LOOP_PLASTICITY_WGSL,
         CLOSED_LOOP_RECURRENT_WGSL,
     ] {
         let lower = source.to_ascii_lowercase();
@@ -575,8 +653,8 @@ fn production_pipeline_surface_has_no_decode_select_or_cpu_neural_types() {
     for required in [
         "pub struct GpuClosedLoopPipelines",
         "pub fn submit_encode_and_microsteps",
-        "Task 6",
-        "diagnostic lane 3",
+        "closed-loop-finalize-pending-eligibility-pass",
+        "record.status != 1",
         "closed-loop-clear-diagnostics-pass",
     ] {
         assert!(

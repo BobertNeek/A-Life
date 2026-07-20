@@ -148,8 +148,8 @@ fn ca12_app_bundle_manifest_discovers_assets_shaders_and_placeholder_art() {
     );
     assert_eq!(summary.environment_scenarios, 3);
     assert_eq!(summary.config_entries, 6);
-    assert_eq!(summary.shader_assets, 11);
-    assert_eq!(summary.discovered_shader_assets, 11);
+    assert_eq!(summary.shader_assets, 15);
+    assert_eq!(summary.discovered_shader_assets, 15);
     assert_eq!(summary.placeholder_art_entries, 10);
     assert_eq!(summary.alpha_art_entries, 36);
     assert!(summary.alpha_art_required_roles_present);

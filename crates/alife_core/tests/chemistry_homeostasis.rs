@@ -191,6 +191,35 @@ fn baseline_drift_decay_and_pain_frustration_spikes_are_deterministic() {
 }
 
 #[test]
+fn sleep_recovery_delta_reduces_fatigue_and_sleep_pressure_while_restoring_atp() {
+    let exhausted = HomeostaticSnapshot::new(
+        Tick::new(30),
+        DriveSnapshot {
+            fatigue: 0.99,
+            brain_atp: 0.2,
+            ..DriveSnapshot::baseline()
+        },
+        EndocrineSnapshot {
+            sleep_pressure: 0.99,
+            ..EndocrineSnapshot::baseline()
+        },
+    )
+    .unwrap();
+
+    let recovered = exhausted
+        .advance(
+            Tick::new(31),
+            HomeostaticDelta::sleep_recovery_per_tick(),
+            HomeostaticParameters::reference(),
+        )
+        .unwrap();
+
+    assert!(recovered.drives.fatigue < exhausted.drives.fatigue);
+    assert!(recovered.drives.brain_atp > exhausted.drives.brain_atp);
+    assert!(recovered.hormones.sleep_pressure < exhausted.hormones.sleep_pressure);
+}
+
+#[test]
 fn recovery_triggers_cover_hyperactivity_catatonia_sleep_pain_and_safe_idle() {
     let params = HomeostaticParameters::reference();
 

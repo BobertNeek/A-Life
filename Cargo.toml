@@ -11,6 +11,7 @@ repository = "https://github.com/BobertNeek/A-Life"
 [workspace.dependencies]
 alife_core = { path = "crates/alife_core" }
 bevy = { version = "=0.18.0", default-features = false }
+bincode = { version = "2.0.1", features = ["serde"] }
 bitflags = "2.13.0"
 blake3 = "1.8.2"
 bytemuck = { version = "1.25.0", features = ["derive"] }

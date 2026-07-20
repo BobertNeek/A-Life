@@ -1,22 +1,48 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
-    ActionProposal, ActionTarget, AffordanceBits, BodySnapshot, BrainClassSpec, BrainGenome,
-    BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
-    CognitiveEdge, ConceptBindings, ConceptCell, ConceptCellId, Confidence, ContextFeatureFlags,
-    ContradictionType, CuriosityBias, DevelopmentState, DriveBinding, DriveChannel, DurationTicks,
-    EdgeRelationKind, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    GapResolutionStatus, GaussianClusterId, GaussianContextRef, GaussianSalienceEntry, HeardToken,
-    HomeostaticDelta, HomeostaticSnapshot, Intensity, LobeKind, NormalizedScalar, OrganismId,
-    PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
-    ScaffoldContractError, SemanticContextRef, SemanticSalienceEntry, SensorProfile,
-    SensoryChannels, SensorySnapshot, SignedValence, SocialAgentSnapshot,
-    TeacherFeedbackObservation, TeacherPerceptionChannel, Tick, TopologicalMap,
-    TopologicalMapConfig, Validate, Vec3f, Velocity, WeightSplitContract, WorldEntityId,
-    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+    ActionCandidate, ActionId, ActionKind, ActionTarget, AffordanceBits, BodySnapshot,
+    BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateObservationRef,
+    CognitiveEdge, CognitiveSimplex, CognitiveSimplexId, ConceptBindings, ConceptCell,
+    ConceptCellId, Confidence, ContextFeatureFlags, ContradictionType, CuriosityBias,
+    DevelopmentState, DriveBinding, DriveChannel, DurationTicks, EdgeRelationKind, ExperiencePatch,
+    ExperiencePatchBuilder, ExperienceSequenceId, GapResolutionStatus, GaussianClusterId,
+    GaussianContextRef, GaussianSalienceEntry, HeardToken, HomeostaticDelta, HomeostaticSnapshot,
+    LobeKind, MemoryBank, MemoryBankConfig, NeuralActionSelection, NormalizedScalar, OrganismId,
+    PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome, PhysicalContactKind,
+    PostActionOutcome, ScaffoldContractError, SemanticContextRef, SemanticSalienceEntry,
+    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+    SignedValence, SocialAgentSnapshot, TeacherFeedbackObservation, TeacherPerceptionChannel, Tick,
+    TopologicalMap, TopologicalMapConfig, TopologySidecar, TopologyUpdate, TrackedObjectId,
+    Validate, Vec3f, Velocity, WorldEntityId, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
 fn organism() -> OrganismId {
     OrganismId(7)
+}
+
+fn grounded_profile() -> alife_core::SensorProfileIdentity {
+    SensorProfileProvenance::new(
+        SensorProfile::GroundedObjectSlotsV1,
+        SensoryAbiVersion::CURRENT,
+        Tick::ZERO,
+    )
+    .unwrap()
+    .identity()
+}
+
+#[test]
+fn simplex_constructor_canonicalizes_repeated_concept_ids() {
+    let concept = ConceptCellId(1);
+    let simplex = CognitiveSimplex::new(
+        CognitiveSimplexId(1),
+        vec![concept, concept],
+        SignedValence::new(0.0).unwrap(),
+        NormalizedScalar::new(0.1).unwrap(),
+        NormalizedScalar::new(0.2).unwrap(),
+        Tick::new(1),
+    )
+    .unwrap();
+
+    assert_eq!(simplex.concept_ids, vec![concept]);
 }
 
 fn sequence(raw: u64) -> ExperienceSequenceId {
@@ -44,20 +70,8 @@ fn development(genome: &BrainGenome) -> DevelopmentState {
     ])
 }
 
-fn weight_split(spec: &BrainClassSpec, genome: &BrainGenome) -> WeightSplitContract {
-    WeightSplitContract::for_brain_class(
-        spec.id,
-        spec.max_active_synapses,
-        spec.max_active_microtiles,
-        genome.genetic_prior_seed,
-    )
-    .unwrap()
-}
-
 fn sensory(tick: Tick, organism_id: OrganismId, target: WorldEntityId) -> SensorySnapshot {
-    let mut visual = [0.0; SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT];
-    visual[0] = 0.9;
-    visual[7] = 0.35;
+    let visual = [0.0; SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT];
     let channels = SensoryChannels::try_from_groups(
         visual,
         [0.25; alife_core::SENSORY_AUDITORY_CHANNEL_COUNT],
@@ -65,7 +79,7 @@ fn sensory(tick: Tick, organism_id: OrganismId, target: WorldEntityId) -> Sensor
         [0.2; alife_core::SENSORY_TACTILE_CHANNEL_COUNT],
         NormalizedScalar::new(0.05).unwrap(),
         NormalizedScalar::new(0.7).unwrap(),
-        AffordanceBits::FOOD | AffordanceBits::TOOL,
+        AffordanceBits::NONE,
     )
     .unwrap();
     let mut snapshot = SensorySnapshot::new(
@@ -136,6 +150,27 @@ fn pre_action_at(
 ) -> alife_core::PreActionSnapshot {
     let spec = brain_spec();
     let genome = genome(&spec);
+    let (frame, _) = grounded_frame_at(tick, organism_id, target);
+    alife_core::PreActionSnapshot::from_neural_frame(
+        sequence_id,
+        spec.id,
+        PhenotypeHash([1, 2, 3, 4]),
+        genome.id,
+        genome.schema_version,
+        development(&genome),
+        frame,
+    )
+    .unwrap()
+}
+
+fn grounded_frame_at(
+    tick: Tick,
+    organism_id: OrganismId,
+    target: WorldEntityId,
+) -> (
+    alife_core::PerceptionFrame,
+    alife_core::FinalizedMemoryRecall,
+) {
     let body = BodySnapshot {
         pose: alife_core::Pose {
             translation: Vec3f::new(1.0, 2.0, 3.0),
@@ -144,11 +179,28 @@ fn pre_action_at(
         velocity: Velocity::ZERO,
     };
     let homeostasis = HomeostaticSnapshot::baseline(tick);
+    let slot = alife_core::GroundedObjectSlotV1 {
+        slot_index: 0,
+        tracked_object_id: TrackedObjectId(target.raw()),
+        bearing: [0.0, 0.5],
+        distance: 0.5,
+        relative_velocity: [0.0; 3],
+        color: [0.2, 0.4, 0.7],
+        material: [0.3, 0.5, 0.1],
+        shape: [0.6, 0.2, 0.4],
+        chemical: [0.0, 0.1, 0.0],
+        contact: 0.0,
+        proprioception: [0.0; 2],
+        temperature: 0.1,
+        terrain: [0.2, 0.3],
+        confidence: Confidence::new(0.9).unwrap(),
+    };
     let candidate_target = ActionTarget::new(Some(target), Some(Vec3f::new(0.0, 0.0, 1.0)));
-    let perception = PerceptionFrame::new(
+    let features = slot.candidate_features().unwrap();
+    let draft = PerceptionFrameDraft::new(
         organism_id,
         tick,
-        SensorProfile::PrivilegedAffordanceV1,
+        SensorProfile::GroundedObjectSlotsV1,
         sensory(tick, organism_id, target),
         body,
         homeostasis,
@@ -158,9 +210,9 @@ fn pre_action_at(
                 ActionId(300),
                 ActionKind::Move,
                 CandidateActionFamily::Approach,
-                CandidateObservationRef::None,
+                CandidateObservationRef::ObjectSlot(0),
                 candidate_target,
-                CandidateFeatureVector::zero(),
+                features,
                 Confidence::new(0.8).unwrap(),
                 NormalizedScalar::new(0.0).unwrap(),
                 DurationTicks::new(4),
@@ -172,9 +224,9 @@ fn pre_action_at(
                 ActionId(400),
                 ActionKind::Interact,
                 CandidateActionFamily::Contact,
-                CandidateObservationRef::None,
+                CandidateObservationRef::ObjectSlot(0),
                 candidate_target,
-                CandidateFeatureVector::zero(),
+                features,
                 Confidence::new(0.8).unwrap(),
                 NormalizedScalar::new(0.0).unwrap(),
                 DurationTicks::new(4),
@@ -182,40 +234,24 @@ fn pre_action_at(
             )
             .unwrap(),
         ],
+        SensorProfileProvenance::new(
+            SensorProfile::GroundedObjectSlotsV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        vec![slot],
     )
     .unwrap();
-    alife_core::PreActionSnapshot::from_heuristic_frame(
-        sequence_id,
-        perception,
-        spec.clone(),
-        genome.clone(),
-        development(&genome),
-        weight_split(&spec, &genome),
-        alife_core::MemoryExpectancySnapshot {
-            expected_valence: SignedValence::new(0.25).unwrap(),
-            predicted_drive_delta: alife_core::DriveDelta::zero(),
-            affordance_bias: NormalizedScalar::new(0.2).unwrap(),
-            danger_bias: NormalizedScalar::new(0.1).unwrap(),
-            safety_bias: NormalizedScalar::new(0.4).unwrap(),
-            salience_hint: NormalizedScalar::new(0.3).unwrap(),
-        },
+    let memory = MemoryBank::new(
+        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
     )
-    .unwrap()
-}
-
-fn proposal(action_id: u32, kind: ActionKind, score: f32, target: WorldEntityId) -> ActionProposal {
-    ActionProposal::new(
-        ActionId::new(action_id).unwrap(),
-        kind,
-        score,
-        Confidence::new(0.8).unwrap(),
-        None,
-        0b101,
-        ActionTarget::new(Some(target), Some(Vec3f::new(0.0, 0.0, 1.0))),
-        NormalizedScalar::new(0.5).unwrap(),
-    )
-    .unwrap()
-    .with_intensity(Intensity::new(0.7).unwrap())
+    .unwrap();
+    memory
+        .recall_frame(&draft)
+        .unwrap()
+        .finalize(draft)
+        .unwrap()
 }
 
 fn decision_at(
@@ -224,22 +260,28 @@ fn decision_at(
     sequence_id: ExperienceSequenceId,
     target: WorldEntityId,
 ) -> alife_core::DecisionSnapshot {
-    let proposals = vec![
-        proposal(300, ActionKind::Move, 0.35, target),
-        proposal(400, ActionKind::Interact, 0.75, target),
-    ];
-    let decision = cpu_reference_arbitrate(
-        organism_id,
-        &proposals,
-        ActionArbitrationConfig {
-            default_duration_ticks: DurationTicks::new(4),
-            ..ActionArbitrationConfig::default()
+    let (frame, recall) = grounded_frame_at(tick, organism_id, target);
+    let command = frame.candidates()[1]
+        .to_command(organism_id, Confidence::new(0.8).unwrap())
+        .unwrap();
+    alife_core::DecisionSnapshot::from_neural_selection(
+        sequence_id,
+        PhenotypeHash([1, 2, 3, 4]),
+        sequence_id.raw(),
+        (sequence_id.raw() & 1) as u8,
+        &frame,
+        NeuralActionSelection {
+            candidate_index: 1,
+            logit: 0.75,
+            confidence: Confidence::new(0.8).unwrap(),
+            active_tiles: 8,
+            active_synapses: 64,
         },
+        command,
     )
-    .unwrap();
-
-    alife_core::DecisionSnapshot::from_action_decision(sequence_id, tick, proposals, decision)
-        .unwrap()
+    .unwrap()
+    .with_finalized_memory_recall(&frame, &recall, 1)
+    .unwrap()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -318,23 +360,35 @@ fn patch(
         .unwrap()
 }
 
-fn map() -> TopologicalMap {
-    TopologicalMap::new(TopologicalMapConfig {
-        max_concepts: 16,
-        max_edges: 32,
-        max_simplexes: 16,
-        max_unresolved_gaps: 8,
-        edge_decay_per_tick: NormalizedScalar::new(0.1).unwrap(),
-    })
+fn map() -> TopologySidecar {
+    TopologySidecar::new_profiled(
+        organism(),
+        grounded_profile(),
+        TopologicalMapConfig {
+            max_concepts: 16,
+            max_edges: 32,
+            max_simplexes: 16,
+            max_unresolved_gaps: 8,
+            edge_decay_per_tick: NormalizedScalar::new(0.1).unwrap(),
+        },
+    )
     .unwrap()
+}
+
+fn observe(map: &mut TopologySidecar, patch: &ExperiencePatch) -> TopologyUpdate {
+    let receipt = map.observe_sealed_patch(patch);
+    assert!(!receipt.rejected_invalid);
+    assert!(!receipt.replay_rejected);
+    receipt.update.unwrap()
 }
 
 #[test]
 fn concept_creation_from_sealed_patch_records_grounded_multimodal_bindings() {
     let mut map = map();
-    let update = map
-        .apply_patch(&patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false))
-        .unwrap();
+    let update = observe(
+        &mut map,
+        &patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false),
+    );
 
     assert_eq!(update.primary_concept_id, ConceptCellId(1));
     assert_eq!(
@@ -345,7 +399,7 @@ fn concept_creation_from_sealed_patch_records_grounded_multimodal_bindings() {
     assert_eq!(map.simplexes().len(), 1);
 
     let concept = map.concept(update.primary_concept_id).unwrap();
-    assert!(concept.bindings.objects.contains(&WorldEntityId(2)));
+    assert!(concept.bindings.objects.contains(&TrackedObjectId(2)));
     assert!(concept.bindings.words.contains(&101));
     assert!(concept.bindings.words.contains(&202));
     assert!(concept
@@ -361,7 +415,7 @@ fn concept_creation_from_sealed_patch_records_grounded_multimodal_bindings() {
     assert_eq!(concept.bindings.emotions.observation_count, 1);
     assert_eq!(concept.bindings.locations[0], Vec3f::new(1.0, 2.0, 3.0));
     assert!(concept.bindings.agents.contains(&OrganismId(8)));
-    assert!(concept.bindings.affordances.contains(AffordanceBits::FOOD));
+    assert_eq!(concept.bindings.affordances, AffordanceBits::NONE);
     assert!(concept.bindings.semantic_refs.contains(&ConceptCellId(33)));
     assert!(concept
         .bindings
@@ -373,14 +427,16 @@ fn concept_creation_from_sealed_patch_records_grounded_multimodal_bindings() {
 #[test]
 fn repeated_patch_strengthens_existing_concept_and_edge() {
     let mut map = map();
-    let first = map
-        .apply_patch(&patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false))
-        .unwrap();
+    let first = observe(
+        &mut map,
+        &patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false),
+    );
     let first_edge_strength = map.edge(first.edge_ids[0]).unwrap().strength.raw();
 
-    let second = map
-        .apply_patch(&patch(100, 20, WorldEntityId(2), true, 0.25, 0.2, false))
-        .unwrap();
+    let second = observe(
+        &mut map,
+        &patch(100, 20, WorldEntityId(2), true, 0.25, 0.2, false),
+    );
     let strengthened = map.edge(first.edge_ids[0]).unwrap();
 
     assert_eq!(first.primary_concept_id, second.primary_concept_id);
@@ -397,12 +453,15 @@ fn repeated_patch_strengthens_existing_concept_and_edge() {
 #[test]
 fn contradictory_outcome_creates_unresolved_gap_and_raises_curiosity_bias() {
     let mut map = map();
-    map.apply_patch(&patch(99, 10, WorldEntityId(2), true, 0.35, 0.05, false))
-        .unwrap();
+    observe(
+        &mut map,
+        &patch(99, 10, WorldEntityId(2), true, 0.35, 0.05, false),
+    );
 
-    let update = map
-        .apply_patch(&patch(100, 20, WorldEntityId(2), false, -0.6, 0.9, true))
-        .unwrap();
+    let update = observe(
+        &mut map,
+        &patch(100, 20, WorldEntityId(2), false, -0.6, 0.9, true),
+    );
 
     assert_eq!(update.gap_ids.len(), 1);
     let gap = map.gap(update.gap_ids[0]).unwrap();
@@ -421,46 +480,60 @@ fn contradictory_outcome_creates_unresolved_gap_and_raises_curiosity_bias() {
 }
 
 #[test]
-fn bounded_map_behavior_rejects_growth_without_resizing() {
-    let mut map = TopologicalMap::new(TopologicalMapConfig {
-        max_concepts: 2,
-        max_edges: 2,
-        max_simplexes: 2,
-        max_unresolved_gaps: 1,
-        edge_decay_per_tick: NormalizedScalar::new(0.0).unwrap(),
-    })
+fn bounded_map_behavior_degrades_without_resizing() {
+    let mut map = TopologySidecar::new_profiled(
+        organism(),
+        grounded_profile(),
+        TopologicalMapConfig {
+            max_concepts: 2,
+            max_edges: 2,
+            max_simplexes: 2,
+            max_unresolved_gaps: 1,
+            edge_decay_per_tick: NormalizedScalar::new(0.0).unwrap(),
+        },
+    )
     .unwrap();
 
-    map.apply_patch(&patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false))
-        .unwrap();
-
-    assert_eq!(
-        map.apply_patch(&patch(100, 20, WorldEntityId(3), true, 0.25, 0.2, false)),
-        Err(ScaffoldContractError::TopologyCapacityExceeded)
+    observe(
+        &mut map,
+        &patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false),
     );
+
+    let degraded =
+        map.observe_sealed_patch(&patch(100, 20, WorldEntityId(3), true, 0.25, 0.2, false));
+    assert!(!degraded.rejected_invalid);
+    assert!(!degraded.degradations.is_empty());
+    assert!(degraded.after_counts.within(map.config()));
 }
 
 #[test]
 fn repeated_dynamic_observations_summarize_without_binding_capacity_failure() {
-    let mut map = TopologicalMap::new(TopologicalMapConfig::default()).unwrap();
+    let mut map = TopologySidecar::new_profiled(
+        organism(),
+        grounded_profile(),
+        TopologicalMapConfig::default(),
+    )
+    .unwrap();
 
     for offset in 0..128 {
-        map.apply_patch(&patch(
-            200 + offset,
-            20 + offset,
-            WorldEntityId(2),
-            true,
-            0.25,
-            0.2,
-            false,
-        ))
-        .unwrap();
+        observe(
+            &mut map,
+            &patch(
+                200 + offset,
+                20 + offset,
+                WorldEntityId(2),
+                true,
+                0.25,
+                0.2,
+                false,
+            ),
+        );
     }
 
     let target_concept = map
         .concepts()
         .iter()
-        .find(|concept| concept.bindings.objects.contains(&WorldEntityId(2)))
+        .find(|concept| concept.bindings.objects.contains(&TrackedObjectId(2)))
         .expect("target object concept should be retained");
     assert!(
         target_concept.bindings.drives.len() <= 11,
@@ -482,10 +555,14 @@ fn id_allocation_is_deterministic_for_same_patch_sequence() {
     let mut second = map();
 
     for map in [&mut first, &mut second] {
-        map.apply_patch(&patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false))
-            .unwrap();
-        map.apply_patch(&patch(100, 20, WorldEntityId(3), true, 0.3, 0.25, false))
-            .unwrap();
+        observe(
+            map,
+            &patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false),
+        );
+        observe(
+            map,
+            &patch(100, 20, WorldEntityId(3), true, 0.3, 0.25, false),
+        );
     }
 
     let first_ids: Vec<_> = first.concepts().iter().map(|concept| concept.id).collect();
@@ -500,9 +577,10 @@ fn id_allocation_is_deterministic_for_same_patch_sequence() {
 #[test]
 fn edge_decay_and_strengthening_are_bounded_and_deterministic() {
     let mut map = map();
-    let update = map
-        .apply_patch(&patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false))
-        .unwrap();
+    let update = observe(
+        &mut map,
+        &patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false),
+    );
     let edge_id = update.edge_ids[0];
     let original = map.edge(edge_id).unwrap().strength.raw();
 
@@ -511,8 +589,10 @@ fn edge_decay_and_strengthening_are_bounded_and_deterministic() {
     assert!(decayed < original);
     assert!(decayed >= 0.0);
 
-    map.apply_patch(&patch(100, 20, WorldEntityId(2), true, 0.25, 0.2, false))
-        .unwrap();
+    observe(
+        &mut map,
+        &patch(100, 20, WorldEntityId(2), true, 0.25, 0.2, false),
+    );
     let restrengthened = map.edge(edge_id).unwrap().strength.raw();
     assert!(restrengthened > decayed);
     assert!(restrengthened <= 1.0);
@@ -521,7 +601,7 @@ fn edge_decay_and_strengthening_are_bounded_and_deterministic() {
 #[test]
 fn invalid_ids_and_nan_or_out_of_range_values_are_rejected() {
     let bad_bindings = ConceptBindings {
-        objects: vec![WorldEntityId::INVALID],
+        objects: vec![TrackedObjectId::INVALID],
         ..ConceptBindings::default()
     };
     assert_eq!(
@@ -573,10 +653,14 @@ fn topology_curiosity_api_does_not_produce_or_bypass_action_commands() {
     returns_biases_only(TopologicalMap::curiosity_biases);
 
     let mut map = map();
-    map.apply_patch(&patch(99, 10, WorldEntityId(2), true, 0.35, 0.05, false))
-        .unwrap();
-    map.apply_patch(&patch(100, 20, WorldEntityId(2), false, -0.6, 0.9, true))
-        .unwrap();
+    observe(
+        &mut map,
+        &patch(99, 10, WorldEntityId(2), true, 0.35, 0.05, false),
+    );
+    observe(
+        &mut map,
+        &patch(100, 20, WorldEntityId(2), false, -0.6, 0.9, true),
+    );
 
     let biases = map.curiosity_biases();
     let bias = &biases[0];

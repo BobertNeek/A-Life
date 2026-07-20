@@ -20,12 +20,20 @@ use thiserror::Error;
 use crate::{
     appearance::CreatureAppearanceGenome,
     ecology::EcologyState,
+    grounded_sensing::GroundedPhysicalProperties,
     headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
     legacy_neural_policy_v1::LegacyBackendConfigV1,
     persistent_voxel::{
         migrated_voxel_backend_for_world, PersistentVoxelProfileId, PersistentVoxelWorldSaveState,
     },
+    tracked_objects::{
+        PhysicalTrackingKey, PhysicalTrackingProvenance,
+        PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
+    },
 };
+
+mod gpu_brain;
+pub use gpu_brain::*;
 
 pub const P34_SAVE_FILE_SCHEMA: &str = "alife.p34.save_file.v1";
 pub const P34_SAVE_FILE_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.save.0;
@@ -38,6 +46,7 @@ pub const BRAIN_POLICY_CONFIG_SCHEMA_VERSION: u16 = 1;
 pub const P34_MAX_INLINE_SAVE_BYTES: u64 = 64 * 1024;
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA: &str = "alife.fvr06.gpu_runtime_state.v1";
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION: u16 = 1;
+pub const WORLD_OBJECT_SAVE_SCHEMA_VERSION: u16 = 1;
 
 #[derive(Debug, Error)]
 pub enum PersistenceError {
@@ -815,6 +824,8 @@ pub struct CreatureSaveState {
     pub mind: CreatureMindSaveSummary,
     pub weights: WeightLayerSaveSummary,
     pub learning: LearningTraceSaveSummary,
+    #[serde(default)]
+    pub gpu_brain: Option<GpuBrainSaveState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -848,8 +859,9 @@ pub struct AdapterRemapTable {
     pub entries: Vec<AdapterRemapEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WorldObjectSaveState {
+    pub schema_version: u16,
     pub id: WorldEntityId,
     pub label: String,
     pub kind: WorldObjectKind,
@@ -863,19 +875,199 @@ pub struct WorldObjectSaveState {
     pub teacher_channel: Option<TeacherPerceptionChannel>,
     pub consumed: bool,
     pub carried_by: Option<OrganismId>,
+    pub grounded_physical: GroundedPhysicalProperties,
+    pub tracking_provenance: PhysicalTrackingProvenance,
+    pub tracking_key: PhysicalTrackingKey,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct WorldSaveState {
     pub seed: u64,
     pub tick: Tick,
     pub next_entity_id: u64,
+    pub next_spawn_sequence: u64,
     pub objects: Vec<WorldObjectSaveState>,
     pub last_touched_entities: Vec<WorldEntityId>,
     #[serde(default)]
     pub ecology: EcologyState,
     #[serde(default)]
     pub voxel_backend: Option<PersistentVoxelWorldSaveState>,
+}
+
+#[derive(Deserialize)]
+struct WorldObjectSaveWire {
+    #[serde(default)]
+    schema_version: Option<u16>,
+    id: WorldEntityId,
+    label: String,
+    kind: WorldObjectKind,
+    organism_id: Option<OrganismId>,
+    position: Vec3f,
+    radius: f32,
+    nutrition: f32,
+    hazard_pain: f32,
+    token_id: Option<u32>,
+    social_affinity: f32,
+    teacher_channel: Option<TeacherPerceptionChannel>,
+    consumed: bool,
+    carried_by: Option<OrganismId>,
+    #[serde(default)]
+    grounded_physical: Option<GroundedPhysicalProperties>,
+    #[serde(default)]
+    tracking_provenance: Option<PhysicalTrackingProvenance>,
+    #[serde(default)]
+    tracking_key: Option<PhysicalTrackingKey>,
+}
+
+impl WorldObjectSaveWire {
+    fn into_current(
+        self,
+        world_seed: u64,
+        canonical_spawn_sequence: u64,
+    ) -> Result<WorldObjectSaveState, &'static str> {
+        let (grounded_physical, tracking_provenance, tracking_key) = match (
+            self.schema_version,
+            self.grounded_physical,
+            self.tracking_provenance,
+            self.tracking_key,
+        ) {
+            (
+                Some(WORLD_OBJECT_SAVE_SCHEMA_VERSION),
+                Some(physical),
+                Some(provenance),
+                Some(key),
+            ) => {
+                physical
+                    .validate_contract()
+                    .map_err(|_| "invalid grounded physical properties")?;
+                provenance
+                    .validate_contract()
+                    .map_err(|_| "invalid physical tracking provenance")?;
+                if provenance.world_seed != world_seed || key != provenance.canonical_key() {
+                    return Err("physical tracking provenance does not match world or key");
+                }
+                (physical, provenance, key)
+            }
+            (None, None, None, None) => {
+                let provenance = PhysicalTrackingProvenance {
+                    schema_version: PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
+                    world_seed,
+                    zone_id: 0,
+                    spawn_sequence: canonical_spawn_sequence,
+                    lineage_key: self.organism_id.map_or(0, OrganismId::raw),
+                };
+                let key = provenance.canonical_key();
+                (
+                    GroundedPhysicalProperties::deterministic_default(canonical_spawn_sequence),
+                    provenance,
+                    key,
+                )
+            }
+            (Some(_), _, _, _) => return Err("unsupported world-object save schema"),
+            _ => return Err("partial grounded world-object provenance is forbidden"),
+        };
+        Ok(WorldObjectSaveState {
+            schema_version: WORLD_OBJECT_SAVE_SCHEMA_VERSION,
+            id: self.id,
+            label: self.label,
+            kind: self.kind,
+            organism_id: self.organism_id,
+            position: self.position,
+            radius: self.radius,
+            nutrition: self.nutrition,
+            hazard_pain: self.hazard_pain,
+            token_id: self.token_id,
+            social_affinity: self.social_affinity,
+            teacher_channel: self.teacher_channel,
+            consumed: self.consumed,
+            carried_by: self.carried_by,
+            grounded_physical,
+            tracking_provenance,
+            tracking_key,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for WorldObjectSaveState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = WorldObjectSaveWire::deserialize(deserializer)?;
+        let world_seed = wire
+            .tracking_provenance
+            .map(|provenance| provenance.world_seed)
+            .ok_or_else(|| D::Error::custom("legacy world object requires world save context"))?;
+        let spawn_sequence = wire
+            .tracking_provenance
+            .map(|provenance| provenance.spawn_sequence)
+            .ok_or_else(|| D::Error::custom("missing physical tracking provenance"))?;
+        wire.into_current(world_seed, spawn_sequence)
+            .map_err(D::Error::custom)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorldSaveState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wire {
+            seed: u64,
+            tick: Tick,
+            next_entity_id: u64,
+            #[serde(default)]
+            next_spawn_sequence: Option<u64>,
+            objects: Vec<WorldObjectSaveWire>,
+            last_touched_entities: Vec<WorldEntityId>,
+            #[serde(default)]
+            ecology: EcologyState,
+            #[serde(default)]
+            voxel_backend: Option<PersistentVoxelWorldSaveState>,
+        }
+
+        let mut wire = Wire::deserialize(deserializer)?;
+        wire.objects.sort_by(|left, right| {
+            left.id
+                .raw()
+                .cmp(&right.id.raw())
+                .then_with(|| left.label.cmp(&right.label))
+        });
+        let mut objects = Vec::with_capacity(wire.objects.len());
+        for (index, object) in wire.objects.into_iter().enumerate() {
+            let spawn_sequence = u64::try_from(index)
+                .ok()
+                .and_then(|value| value.checked_add(1))
+                .ok_or_else(|| D::Error::custom("world object count exceeds identity space"))?;
+            objects.push(
+                object
+                    .into_current(wire.seed, spawn_sequence)
+                    .map_err(D::Error::custom)?,
+            );
+        }
+        let max_spawn_sequence = objects
+            .iter()
+            .map(|object| object.tracking_provenance.spawn_sequence)
+            .max()
+            .unwrap_or(0);
+        let next_spawn_sequence = match wire.next_spawn_sequence {
+            Some(value) => value,
+            None => max_spawn_sequence
+                .checked_add(1)
+                .ok_or_else(|| D::Error::custom("world spawn identity space exhausted"))?,
+        };
+        Ok(Self {
+            seed: wire.seed,
+            tick: wire.tick,
+            next_entity_id: wire.next_entity_id,
+            next_spawn_sequence,
+            objects,
+            last_touched_entities: wire.last_touched_entities,
+            ecology: wire.ecology,
+            voxel_backend: wire.voxel_backend,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1012,7 +1204,7 @@ impl PortableSaveFile {
             self.packed_log_schema_version,
         )?;
         for creature in &self.creatures {
-            creature.validate(&self.assets)?;
+            creature.validate(&self.assets, self.world.seed)?;
         }
         for asset_id in self
             .generated_weight_asset_refs
@@ -1026,6 +1218,31 @@ impl PortableSaveFile {
 
     pub fn restore_headless_world(&self) -> Result<HeadlessWorld, PersistenceError> {
         self.world.restore()
+    }
+
+    /// Replaces only the engine-neutral world snapshot while preserving the
+    /// save's configuration, assets, creatures, school state, adapter remaps,
+    /// and renderer-owned voxel snapshot. GPU checkpoint publication uses this
+    /// at an explicit sealed boundary so the world tick and every brain
+    /// checkpoint remain one atomic portable-save generation.
+    pub fn replace_headless_world_snapshot(
+        &mut self,
+        world: &HeadlessWorld,
+    ) -> Result<(), PersistenceError> {
+        if world.seed() != self.deterministic_seed || world.seed() != self.config.deterministic_seed
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "deterministic_seed",
+                message: "replacement world must preserve the save seed",
+            });
+        }
+        let voxel_backend = self.world.voxel_backend.clone();
+        self.world = WorldSaveState::from_parts(world.persistence_parts());
+        self.world.voxel_backend = voxel_backend;
+        if let Some(gpu_runtime) = self.gpu_runtime.as_mut() {
+            gpu_runtime.last_safe_checkpoint.world_tick = self.world.tick;
+        }
+        Ok(())
     }
 
     pub fn require_voxel_backend(
@@ -1100,7 +1317,7 @@ impl MigrationHook {
 }
 
 impl CreatureSaveState {
-    fn validate(&self, assets: &AssetManifest) -> Result<(), PersistenceError> {
+    fn validate(&self, assets: &AssetManifest, world_seed: u64) -> Result<(), PersistenceError> {
         self.organism_id.validate()?;
         self.genome_id.validate()?;
         if self.brain_class.neuron_count().is_none() {
@@ -1117,6 +1334,30 @@ impl CreatureSaveState {
                 field: "learning.lamarckian_mode_enabled",
                 message: "portable P34 saves keep Lamarckian inheritance default-off",
             });
+        }
+        if let Some(gpu_brain) = &self.gpu_brain {
+            gpu_brain.validate()?;
+            gpu_brain.validate_asset_manifest(assets)?;
+            let expected_class = match self.brain_class {
+                BrainScaleTier::Nano512 => alife_core::BrainCapacityClass::N512_ID,
+                BrainScaleTier::Small1024 => alife_core::BrainCapacityClass::N1024_ID,
+                BrainScaleTier::Standard2048 => alife_core::BrainCapacityClass::N2048_ID,
+                _ => {
+                    return Err(PersistenceError::InvalidConfig {
+                        field: "creature.gpu_brain.capacity_class_id",
+                        message: "GPU checkpoint requires a promoted production brain class",
+                    });
+                }
+            };
+            if gpu_brain.organism_id != self.organism_id
+                || gpu_brain.capacity_class_id != expected_class
+                || gpu_brain.tracked_objects.world_seed != world_seed
+            {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.gpu_brain",
+                    message: "GPU checkpoint identity must match its creature record",
+                });
+            }
         }
         Ok(())
     }
@@ -1204,6 +1445,7 @@ impl WorldSaveState {
             seed: parts.seed,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
+            next_spawn_sequence: parts.next_spawn_sequence,
             objects: parts
                 .objects
                 .into_iter()
@@ -1225,14 +1467,25 @@ impl WorldSaveState {
         let mut ids = BTreeSet::new();
         let mut labels = BTreeSet::new();
         let mut max_id = 0_u64;
+        let mut spawn_sequences = BTreeSet::new();
+        let mut max_spawn_sequence = 0_u64;
         for object in &self.objects {
             object.validate()?;
             if !ids.insert(object.id.raw()) || !labels.insert(object.label.clone()) {
                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
             }
             max_id = max_id.max(object.id.raw());
+            if object.tracking_provenance.world_seed != self.seed
+                || !spawn_sequences.insert(object.tracking_provenance.spawn_sequence)
+            {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+            max_spawn_sequence = max_spawn_sequence.max(object.tracking_provenance.spawn_sequence);
         }
         if self.next_entity_id <= max_id || (self.objects.is_empty() && self.next_entity_id == 0) {
+            return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+        }
+        if self.next_spawn_sequence == 0 || self.next_spawn_sequence <= max_spawn_sequence {
             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
         }
         for touched in &self.last_touched_entities {
@@ -1267,6 +1520,7 @@ impl WorldSaveState {
             seed: self.seed,
             tick: self.tick,
             next_entity_id: self.next_entity_id,
+            next_spawn_sequence: self.next_spawn_sequence,
             objects: self
                 .objects
                 .iter()
@@ -1282,6 +1536,13 @@ impl WorldSaveState {
 
 impl WorldObjectSaveState {
     fn validate(&self) -> Result<(), PersistenceError> {
+        if self.schema_version != WORLD_OBJECT_SAVE_SCHEMA_VERSION {
+            return Err(PersistenceError::SchemaVersion {
+                schema: "alife.world_object.v1",
+                expected: WORLD_OBJECT_SAVE_SCHEMA_VERSION,
+                actual: self.schema_version,
+            });
+        }
         self.id.validate()?;
         if self.label.is_empty() {
             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
@@ -1293,6 +1554,11 @@ impl WorldObjectSaveState {
             id.validate()?;
         }
         self.position.validate()?;
+        self.grounded_physical.validate_contract()?;
+        self.tracking_provenance.validate_contract()?;
+        if self.tracking_key != self.tracking_provenance.canonical_key() {
+            return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+        }
         for value in [
             self.radius,
             self.nutrition,
@@ -1321,6 +1587,7 @@ impl WorldObjectSaveState {
 impl From<WorldObject> for WorldObjectSaveState {
     fn from(value: WorldObject) -> Self {
         Self {
+            schema_version: WORLD_OBJECT_SAVE_SCHEMA_VERSION,
             id: value.id,
             label: value.label,
             kind: value.kind,
@@ -1334,6 +1601,9 @@ impl From<WorldObject> for WorldObjectSaveState {
             teacher_channel: value.teacher_channel,
             consumed: value.consumed,
             carried_by: value.carried_by,
+            grounded_physical: value.grounded_physical,
+            tracking_provenance: value.tracking_provenance,
+            tracking_key: value.tracking_key,
         }
     }
 }
@@ -1354,6 +1624,9 @@ impl From<WorldObjectSaveState> for WorldObject {
             teacher_channel: value.teacher_channel,
             consumed: value.consumed,
             carried_by: value.carried_by,
+            grounded_physical: value.grounded_physical,
+            tracking_provenance: value.tracking_provenance,
+            tracking_key: value.tracking_key,
         }
     }
 }

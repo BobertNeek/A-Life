@@ -13,6 +13,8 @@ mod encoder;
 mod inputs;
 mod io_compile;
 mod layout_compile;
+mod learning;
+mod memory_channel;
 mod persistent_address;
 mod record;
 mod topology_compile;
@@ -27,6 +29,10 @@ pub use compiler::PhenotypeCompiler;
 pub use decoder::{AuxiliaryDecoderPlan, CandidateDecoderFamilyPlan, CandidateDecoderPlan};
 pub use encoder::{SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourceGroup};
 pub use inputs::PhenotypeCompilerInputs;
+pub use learning::{
+    PlasticityReceptorPlan, ReplayCapturePlan, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,
+};
+pub use memory_channel::MemoryChannelPlan;
 pub use persistent_address::{
     PersistentAddressMap, PersistentDecoderAddress, PersistentDecoderAddressEntry,
     PersistentNeuronAddress, PersistentNeuronAddressEntry, PersistentProjectionAddress,

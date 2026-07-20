@@ -72,12 +72,12 @@ fn gpu_soak_plan_marks_hardware_checks_manual_and_boundary_scoped() {
     let plan = read_workspace_file("docs/gpu_soak_performance_plan.md");
 
     for required in [
-        "CPU reference path remains the correctness oracle",
+        "Production neural causality is GPU-authoritative",
         "cargo test -p alife_gpu_backend --features gpu-tests --test static_forward_parity -- --ignored --nocapture",
-        "cargo test -p alife_gpu_backend --features gpu-tests --test plasticity_oja_parity -- --ignored --nocapture",
+        "cargo test -p alife_gpu_backend --features gpu-tests --test closed_loop_fast_plasticity -j 1 -- --nocapture",
         "cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime",
         "Unknown is preferable to fabricated data",
-        "The CI/default release gate does not require GPU hardware",
+        "Neural release and promotion gates require current",
     ] {
         assert!(
             plan.contains(required),

@@ -10,7 +10,8 @@ use alife_core::{
 };
 
 use crate::{
-    headless::HEADLESS_CONTACT_RADIUS, HeadlessActionIds, HeadlessSensoryReport, VisibleWorldEntity,
+    headless::HEADLESS_CONTACT_RADIUS, GroundedSensingFrame, HeadlessActionIds,
+    HeadlessSensoryReport, VisibleWorldEntity,
 };
 
 pub const HEADLESS_VISION_RADIUS: f32 = 8.0;
@@ -74,17 +75,14 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
             DurationTicks::new(1),
         )?);
 
-        for (object_slot, entity) in visible.into_iter().enumerate() {
+        for entity in visible {
             let features = features_for(report, entity)?;
             let target_position = add(
                 report.core_snapshot.observer_position,
                 entity.relative_position,
             );
             let target = ActionTarget::new(Some(entity.id), Some(target_position));
-            let observation = CandidateObservationRef::ObjectSlot(
-                u16::try_from(object_slot)
-                    .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-            );
+            let observation = CandidateObservationRef::None;
             for (action_id, kind, family, effort) in [
                 (
                     ActionKind::Inspect.canonical_id(),
@@ -127,6 +125,103 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
                     target,
                     features,
                     Confidence::new(1.0)?,
+                    NormalizedScalar::new(effort)?,
+                    DurationTicks::new(1),
+                    DurationTicks::new(1),
+                )?);
+            }
+        }
+        Ok(candidates)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GroundedCandidateEnumerator;
+
+impl GroundedCandidateEnumerator {
+    pub fn enumerate_candidates(
+        &self,
+        grounded: &GroundedSensingFrame,
+    ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+        if grounded.slots().len() != grounded.transports().len()
+            || grounded.slots().len() > alife_core::MAX_GROUNDED_OBJECT_SLOTS
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+
+        let mut candidates =
+            Vec::with_capacity(1 + grounded.slots().len().min(MAX_CANDIDATE_OBJECTS) * 5);
+        candidates.push(ActionCandidate::new(
+            0,
+            ActionKind::Idle.canonical_id(),
+            ActionKind::Idle,
+            CandidateActionFamily::Idle,
+            CandidateObservationRef::None,
+            ActionTarget::NONE,
+            CandidateFeatureVector::zero(),
+            Confidence::new(1.0)?,
+            NormalizedScalar::new(0.0)?,
+            DurationTicks::new(1),
+            DurationTicks::new(1),
+        )?);
+
+        for (slot, transport) in grounded
+            .slots()
+            .iter()
+            .zip(grounded.transports())
+            .take(MAX_CANDIDATE_OBJECTS)
+        {
+            if slot.slot_index != transport.slot_index {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+            let features = slot.candidate_features()?;
+            let target = ActionTarget::new(
+                Some(transport.transport_entity),
+                Some(transport.target_position),
+            );
+            let observation = CandidateObservationRef::ObjectSlot(slot.slot_index);
+            for (action_id, kind, family, effort) in [
+                (
+                    ActionKind::Inspect.canonical_id(),
+                    ActionKind::Inspect,
+                    CandidateActionFamily::Inspect,
+                    0.1,
+                ),
+                (
+                    HeadlessActionIds::APPROACH,
+                    ActionKind::Move,
+                    CandidateActionFamily::Approach,
+                    0.3,
+                ),
+                (
+                    HeadlessActionIds::FLEE,
+                    ActionKind::Move,
+                    CandidateActionFamily::Avoid,
+                    0.3,
+                ),
+                (
+                    HeadlessActionIds::EAT,
+                    ActionKind::Interact,
+                    CandidateActionFamily::Ingest,
+                    0.2,
+                ),
+                (
+                    HeadlessActionIds::GRAB,
+                    ActionKind::Interact,
+                    CandidateActionFamily::Contact,
+                    0.2,
+                ),
+            ] {
+                candidates.push(ActionCandidate::new(
+                    u16::try_from(candidates.len())
+                        .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+                    action_id,
+                    kind,
+                    family,
+                    observation,
+                    target,
+                    features,
+                    slot.confidence,
                     NormalizedScalar::new(effort)?,
                     DurationTicks::new(1),
                     DurationTicks::new(1),

@@ -1,4 +1,4 @@
-const ACTIVE_DISPATCH_ROW_WORDS:u32 = 272u;
+const ACTIVE_DISPATCH_ROW_WORDS:u32 = 308u;
 const INVALID_LOGIT_BITS:u32 = 0x7fc00001u;
 const DECODER_SCHEMA_VERSION:u32 = 1u;
 
@@ -23,6 +23,9 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
   if (!validate_slice_a_slot(header.brain_slot_index, header)) { return; }
   let brain = brain_slots[header.brain_slot_index];
+  let extension = load_slot_extension(brain);
+  let learning = load_slot_learning_state(extension);
+  let weight_bases = active_weight_bases(brain, extension, learning);
   let candidate = gid.x;
   if (candidate >= header.candidate_count) { return; }
   let candidate_record = load_candidate(header.candidate_offset + candidate * 8u);
@@ -30,7 +33,8 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   let frame_word_count = arrayLength(&frame_payload_words);
   var valid = decoder.schema_version == DECODER_SCHEMA_VERSION
     && decoder.feature_count == 24u
-    && decoder.flattened_input_lane_count == decoder.feature_count
+    && decoder.flattened_input_lane_count >= decoder.feature_count
+    && decoder.flattened_input_lane_count <= 64u
     && decoder.family_offset == brain.decoder_family_offset
     && decoder.family_count == 8u
     && span_within(decoder.motor_start, decoder.motor_width, brain.neuron_count)
@@ -74,8 +78,8 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
       let feature = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + map.input_lane]);
       let genetic = bitcast<f32>(immutable_weight_words[brain.genetic_weight_offset + map.global_synapse_id]);
       let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset + map.global_synapse_id]);
-      let lifetime = load_state_f32(brain.lifetime_weight_offset + map.global_synapse_id);
-      let fast = load_state_f32(brain.fast_weight_offset + map.global_synapse_id);
+      let lifetime = load_state_f32(weight_bases.lifetime + map.global_synapse_id);
+      let fast = load_state_f32(weight_bases.fast + map.global_synapse_id);
       logit += motor * feature * (genetic + lifetime + alpha * fast);
       valid = finite_decode(logit);
     }

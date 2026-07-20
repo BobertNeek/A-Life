@@ -76,7 +76,7 @@ pub(super) fn synapse_payload_digest(
             CompiledSynapseKind::Recurrent => digest.write_u8(0),
             CompiledSynapseKind::Decoder(coordinate) => {
                 digest.write_u8(1);
-                digest.write_u8(coordinate.head().raw());
+                digest.write_u32(coordinate.head().raw());
                 digest.write_u8(coordinate.family().raw());
                 digest.write_u16(coordinate.input_lane());
                 digest.write_u16(coordinate.motor_index());

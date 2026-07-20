@@ -8,6 +8,7 @@ repository.workspace = true
 [dependencies]
 alife_core.workspace = true
 bytemuck.workspace = true
+naga = { version = "29.0.3", features = ["wgsl-in"] }
 pollster.workspace = true
 serde.workspace = true
 wgpu.workspace = true
@@ -15,6 +16,3 @@ wgpu.workspace = true
 [features]
 default = []
 gpu-tests = []
-
-[dev-dependencies]
-naga = { version = "29.0.3", features = ["wgsl-in"] }

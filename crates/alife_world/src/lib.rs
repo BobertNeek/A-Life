@@ -5,21 +5,25 @@ use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
 pub mod appearance;
 pub mod candidate_enumerator;
 pub mod ecology;
+pub mod grounded_sensing;
 pub mod headless;
 mod legacy_neural_policy_v1;
 pub mod persistence;
 pub mod persistent_voxel;
 pub mod procedural_chunks;
 pub mod scenario;
+pub mod tracked_objects;
 
 pub use appearance::*;
 pub use candidate_enumerator::*;
 pub use ecology::*;
+pub use grounded_sensing::*;
 pub use headless::*;
 pub use persistence::*;
 pub use persistent_voxel::*;
 pub use procedural_chunks::*;
 pub use scenario::*;
+pub use tracked_objects::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActionLegality {

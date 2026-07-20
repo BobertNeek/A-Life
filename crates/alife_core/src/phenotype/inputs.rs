@@ -9,8 +9,8 @@ use crate::{
     Validate,
 };
 
-const INPUTS_SCHEMA_VERSION: u16 = 2;
-const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v2";
+const INPUTS_SCHEMA_VERSION: u16 = 3;
+const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v3";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PhenotypeCompilerInputs {
@@ -82,10 +82,10 @@ impl PhenotypeCompilerInputs {
     pub const fn foundation_abi(&self) -> &FoundationAbiBinding {
         &self.foundation_abi
     }
-    pub(super) const fn genome(&self) -> &BrainGenome {
+    pub const fn genome(&self) -> &BrainGenome {
         &self.genome
     }
-    pub(super) const fn development(&self) -> &DevelopmentState {
+    pub const fn development(&self) -> &DevelopmentState {
         &self.development
     }
 
@@ -270,6 +270,19 @@ fn encode_genome(
         d.write_f32(row.learning_rate_scale.raw())?;
         d.write_bool(row.plasticity_enabled);
     }
+    let plasticity = g.plasticity_parameters();
+    d.write_u16(plasticity.schema_version());
+    d.write_f32(plasticity.eligibility_decay())?;
+    d.write_f32(plasticity.base_learning_rate())?;
+    d.write_f32(plasticity.normalization_rate())?;
+    d.write_f32(plasticity.sleep_replay_rate())?;
+    d.write_f32(plasticity.modulator_sign())?;
+    let (fast_min, fast_max) = plasticity.fast_bounds();
+    d.write_f32(fast_min)?;
+    d.write_f32(fast_max)?;
+    d.write_f32(plasticity.sleep_staging_rate())?;
+    d.write_f32(plasticity.sleep_weight_limit())?;
+    d.write_f32(plasticity.sleep_fast_decay_rate())?;
     d.write_sequence_len(g.endocrine_constants.len());
     for row in &g.endocrine_constants {
         d.write_u8(row.kind.raw());

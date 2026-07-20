@@ -157,5 +157,7 @@ mod capacity;
 #[path = "phenotype_compiler/causal_routing.rs"]
 mod causal_routing;
 
+#[path = "phenotype_compiler/learning.rs"]
+mod learning;
 #[path = "phenotype_compiler/plans_persistence.rs"]
 mod plans_persistence;

@@ -7,11 +7,12 @@ use crate::{
     ensure_current_version, ActionCommand, ActionId, ActionKind, ActionTarget,
     CanonicalDigestBuilder, CompressedSemanticCode, Confidence, ContextStreams, DriveSnapshot,
     DurationTicks, EndocrineSnapshot, EnvironmentStreamEntry, GaussianContextRef,
-    GaussianSalienceEntry, HeardToken, HomeostaticSnapshot, Intensity, LanguageContextSnapshot,
-    NormalizedScalar, OrganismId, Pose, Quatf, ScaffoldContractError, SchemaKind, SchemaVersions,
-    SemanticContextRef, SemanticSalienceEntry, SensoryChannels, SensorySnapshot,
-    SocialAgentSnapshot, SocialContextSnapshot, SocialProximityEntry, TeacherPerceptionChannel,
-    Tick, Validate, Vec3f, Velocity, VocalizedToken,
+    GaussianSalienceEntry, GroundedObjectSlotV1, HeardToken, HomeostaticSnapshot, Intensity,
+    LanguageContextSnapshot, NormalizedScalar, OrganismId, Pose, Quatf, ScaffoldContractError,
+    SchemaKind, SchemaVersions, SemanticContextRef, SemanticSalienceEntry, SensorProfileProvenance,
+    SensoryChannels, SensorySnapshot, SocialAgentSnapshot, SocialContextSnapshot,
+    SocialProximityEntry, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
+    VocalizedToken, MAX_GROUNDED_OBJECT_SLOTS,
 };
 
 pub const CANDIDATE_FEATURE_COUNT: usize = 24;
@@ -322,6 +323,8 @@ pub struct PerceptionFrameDraft {
     body: BodySnapshot,
     homeostasis: HomeostaticSnapshot,
     candidates: Vec<ActionCandidate>,
+    profile_provenance: SensorProfileProvenance,
+    grounded_object_slots: Vec<GroundedObjectSlotV1>,
     base_digest: PerceptionBaseDigest,
 }
 
@@ -341,6 +344,7 @@ pub struct PerceptionFrame {
 }
 
 impl PerceptionFrameDraft {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         organism_id: OrganismId,
         tick: Tick,
@@ -349,6 +353,8 @@ impl PerceptionFrameDraft {
         body: BodySnapshot,
         homeostasis: HomeostaticSnapshot,
         candidates: Vec<ActionCandidate>,
+        profile_provenance: SensorProfileProvenance,
+        grounded_object_slots: Vec<GroundedObjectSlotV1>,
     ) -> Result<Self, ScaffoldContractError> {
         let schema_version = SchemaVersions::CURRENT.perception.raw();
         validate_frame_base(
@@ -360,6 +366,8 @@ impl PerceptionFrameDraft {
             body,
             &homeostasis,
             &candidates,
+            profile_provenance,
+            &grounded_object_slots,
         )?;
         let base_digest = compute_base_digest(
             schema_version,
@@ -370,6 +378,8 @@ impl PerceptionFrameDraft {
             body,
             &homeostasis,
             &candidates,
+            profile_provenance,
+            &grounded_object_slots,
         );
         Ok(Self {
             schema_version,
@@ -380,6 +390,8 @@ impl PerceptionFrameDraft {
             body,
             homeostasis,
             candidates,
+            profile_provenance,
+            grounded_object_slots,
             base_digest,
         })
     }
@@ -416,6 +428,14 @@ impl PerceptionFrameDraft {
         &self.candidates
     }
 
+    pub const fn profile_provenance(&self) -> SensorProfileProvenance {
+        self.profile_provenance
+    }
+
+    pub fn grounded_object_slots(&self) -> &[GroundedObjectSlotV1] {
+        &self.grounded_object_slots
+    }
+
     pub const fn base_digest(&self) -> PerceptionBaseDigest {
         self.base_digest
     }
@@ -450,6 +470,8 @@ impl Validate for PerceptionFrameDraft {
             self.body,
             &self.homeostasis,
             &self.candidates,
+            self.profile_provenance,
+            &self.grounded_object_slots,
         )?;
         let expected = compute_base_digest(
             self.schema_version,
@@ -460,6 +482,8 @@ impl Validate for PerceptionFrameDraft {
             self.body,
             &self.homeostasis,
             &self.candidates,
+            self.profile_provenance,
+            &self.grounded_object_slots,
         );
         if expected == self.base_digest {
             Ok(())
@@ -484,6 +508,8 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             body: BodySnapshot,
             homeostasis: HomeostaticSnapshot,
             candidates: Vec<ActionCandidate>,
+            profile_provenance: SensorProfileProvenance,
+            grounded_object_slots: Vec<GroundedObjectSlotV1>,
             base_digest: PerceptionBaseDigest,
         }
 
@@ -497,6 +523,8 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             wire.body,
             &wire.homeostasis,
             &wire.candidates,
+            wire.profile_provenance,
+            &wire.grounded_object_slots,
         )
         .map_err(D::Error::custom)?;
         let expected = compute_base_digest(
@@ -508,6 +536,8 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             wire.body,
             &wire.homeostasis,
             &wire.candidates,
+            wire.profile_provenance,
+            &wire.grounded_object_slots,
         );
         if expected != wire.base_digest {
             return Err(D::Error::custom("perception base digest mismatch"));
@@ -521,6 +551,8 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             body: wire.body,
             homeostasis: wire.homeostasis,
             candidates: wire.candidates,
+            profile_provenance: wire.profile_provenance,
+            grounded_object_slots: wire.grounded_object_slots,
             base_digest: wire.base_digest,
         })
     }
@@ -615,6 +647,7 @@ impl<'de> Deserialize<'de> for PerceptionContextBlock {
 }
 
 impl PerceptionFrame {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         organism_id: OrganismId,
         tick: Tick,
@@ -623,6 +656,8 @@ impl PerceptionFrame {
         body: BodySnapshot,
         homeostasis: HomeostaticSnapshot,
         candidates: Vec<ActionCandidate>,
+        profile_provenance: SensorProfileProvenance,
+        grounded_object_slots: Vec<GroundedObjectSlotV1>,
     ) -> Result<Self, ScaffoldContractError> {
         PerceptionFrameDraft::new(
             organism_id,
@@ -632,6 +667,8 @@ impl PerceptionFrame {
             body,
             homeostasis,
             candidates,
+            profile_provenance,
+            grounded_object_slots,
         )?
         .finalize(PerceptionContextBlock::empty())
     }
@@ -662,6 +699,14 @@ impl PerceptionFrame {
 
     pub fn candidates(&self) -> &[ActionCandidate] {
         &self.base.candidates
+    }
+
+    pub const fn profile_provenance(&self) -> SensorProfileProvenance {
+        self.base.profile_provenance
+    }
+
+    pub fn grounded_object_slots(&self) -> &[GroundedObjectSlotV1] {
+        &self.base.grounded_object_slots
     }
 
     pub fn context(&self) -> &PerceptionContextBlock {
@@ -748,6 +793,8 @@ fn validate_frame_base(
     body: BodySnapshot,
     homeostasis: &HomeostaticSnapshot,
     candidates: &[ActionCandidate],
+    profile_provenance: SensorProfileProvenance,
+    grounded_object_slots: &[GroundedObjectSlotV1],
 ) -> Result<(), ScaffoldContractError> {
     ensure_current_version(SchemaKind::Perception, schema_version)
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
@@ -763,18 +810,70 @@ fn validate_frame_base(
     homeostasis
         .validate_contract()
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
+    profile_provenance
+        .validate_contract()
+        .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
     if sensory.organism_id != organism_id
         || sensory.tick != tick
         || homeostasis.tick != tick
+        || profile_provenance.profile != sensor_profile
+        || profile_provenance.source_tick != tick
+        || profile_provenance.sensory_abi_version != sensory.abi_version
         || candidates.is_empty()
         || candidates.len() > MAX_ACTION_CANDIDATES
+        || grounded_object_slots.len() > MAX_GROUNDED_OBJECT_SLOTS
     {
         return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
+    for (expected_index, slot) in grounded_object_slots.iter().enumerate() {
+        slot.validate_contract()?;
+        if usize::from(slot.slot_index) != expected_index {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
     }
     for (expected_index, candidate) in candidates.iter().enumerate() {
         candidate.validate_contract()?;
         if usize::from(candidate.candidate_index) != expected_index {
             return Err(ScaffoldContractError::InvalidActionCandidate);
+        }
+    }
+    match sensor_profile {
+        SensorProfile::PrivilegedAffordanceV1 => {
+            if !grounded_object_slots.is_empty()
+                || candidates
+                    .iter()
+                    .any(|candidate| candidate.observation != CandidateObservationRef::None)
+            {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+        }
+        SensorProfile::GroundedObjectSlotsV1 => {
+            if sensory
+                .channels
+                .visual_affordance
+                .iter()
+                .any(|value| *value != 0.0)
+                || sensory.channels.nearby_affordances.raw() != 0
+            {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+            for candidate in candidates {
+                match (candidate.family, candidate.observation) {
+                    (CandidateActionFamily::Idle, CandidateObservationRef::None) => {}
+                    (CandidateActionFamily::Idle, CandidateObservationRef::ObjectSlot(_))
+                    | (_, CandidateObservationRef::None) => {
+                        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+                    }
+                    (_, CandidateObservationRef::ObjectSlot(slot_index)) => {
+                        let slot = grounded_object_slots
+                            .get(usize::from(slot_index))
+                            .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
+                        if candidate.features != slot.candidate_features()? {
+                            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+                        }
+                    }
+                }
+            }
         }
     }
     Ok(())
@@ -788,14 +887,33 @@ fn validate_context(
     ensure_current_version(SchemaKind::Perception, schema_version)
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
     PerceptionContextKind::try_from_raw(context_kind.raw())?;
-    if context_kind == PerceptionContextKind::None && !values.is_empty() {
-        return Err(ScaffoldContractError::InvalidPerceptionFrame);
-    }
-    if values
-        .iter()
-        .any(|value| !value.is_finite() || !(-1.0..=1.0).contains(value))
-    {
-        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    match context_kind {
+        PerceptionContextKind::None => {
+            if !values.is_empty() {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+        }
+        PerceptionContextKind::EpisodicCandidateV1 => {
+            if values.is_empty()
+                || !values
+                    .chunks_exact(crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE)
+                    .remainder()
+                    .is_empty()
+            {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+            for row in values.chunks_exact(crate::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE) {
+                if row[..14]
+                    .iter()
+                    .any(|value| !value.is_finite() || !(-1.0..=1.0).contains(value))
+                    || row[14..]
+                        .iter()
+                        .any(|value| !value.is_finite() || !(0.0..=u16::MAX as f32).contains(value))
+                {
+                    return Err(ScaffoldContractError::InvalidPerceptionFrame);
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -810,12 +928,15 @@ fn compute_base_digest(
     body: BodySnapshot,
     homeostasis: &HomeostaticSnapshot,
     candidates: &[ActionCandidate],
+    profile_provenance: SensorProfileProvenance,
+    grounded_object_slots: &[GroundedObjectSlotV1],
 ) -> PerceptionBaseDigest {
     let mut builder = CanonicalDigestBuilder::new(PERCEPTION_BASE_DOMAIN);
     builder.write_u16(schema_version);
     builder.write_u64(organism_id.raw());
     builder.write_u64(tick.raw());
     builder.write_u16(sensor_profile.raw());
+    encode_profile_provenance(&mut builder, profile_provenance);
     encode_sensory_snapshot(&mut builder, sensory)
         .expect("validated sensory snapshots have canonical finite fields");
     encode_body_snapshot(&mut builder, body)
@@ -827,7 +948,43 @@ fn compute_base_digest(
         encode_action_candidate(&mut builder, candidate)
             .expect("validated action candidates have canonical finite fields");
     }
+    builder.write_sequence_len(grounded_object_slots.len());
+    for slot in grounded_object_slots {
+        encode_grounded_object_slot(&mut builder, slot)
+            .expect("validated grounded object slots have canonical finite fields");
+    }
     PerceptionBaseDigest(builder.finish256())
+}
+
+fn encode_profile_provenance(
+    builder: &mut CanonicalDigestBuilder,
+    provenance: SensorProfileProvenance,
+) {
+    builder.write_u16(provenance.schema_version);
+    builder.write_u16(provenance.profile.raw());
+    builder.write_u16(provenance.sensory_abi_version.raw());
+    builder.write_u64(provenance.source_tick.raw());
+}
+
+fn encode_grounded_object_slot(
+    builder: &mut CanonicalDigestBuilder,
+    slot: &GroundedObjectSlotV1,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u16(slot.slot_index);
+    builder.write_u64(slot.tracked_object_id.raw());
+    encode_f32_values(builder, &slot.bearing)?;
+    builder.write_f32(slot.distance)?;
+    encode_f32_values(builder, &slot.relative_velocity)?;
+    encode_f32_values(builder, &slot.color)?;
+    encode_f32_values(builder, &slot.material)?;
+    encode_f32_values(builder, &slot.shape)?;
+    encode_f32_values(builder, &slot.chemical)?;
+    builder.write_f32(slot.contact)?;
+    encode_f32_values(builder, &slot.proprioception)?;
+    builder.write_f32(slot.temperature)?;
+    encode_f32_values(builder, &slot.terrain)?;
+    builder.write_f32(slot.confidence.raw())?;
+    Ok(())
 }
 
 fn compute_context_digest(

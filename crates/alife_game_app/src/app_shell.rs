@@ -24,6 +24,10 @@ pub enum GameAppShellError {
     InvalidGraphicalLaunch { message: &'static str },
     #[error("required neural GPU backend unavailable: {message}")]
     NeuralBackendUnavailable { message: String },
+    #[error(
+        "GPU checkpoint manifest compare-and-swap conflict: expected {expected}, found {actual}"
+    )]
+    GpuCheckpointManifestConflict { expected: String, actual: String },
     #[error("invalid production voxel frontend launch: {message}")]
     InvalidProductionFrontend { message: String },
     #[error("environment launcher error: {message}")]

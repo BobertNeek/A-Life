@@ -171,7 +171,7 @@ mod hardware {
     };
     use alife_gpu_backend::{
         GpuBackendState, GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopRuntimeConfig,
-        GpuClosedLoopTick, GPU_CLOSED_LOOP_LAYOUT_VERSION,
+        GpuClosedLoopTick, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
     };
 
     use super::support::{
@@ -194,6 +194,24 @@ mod hardware {
             .expect("local required GPU backend")
     }
 
+    fn discard_tick(backend: &mut GpuClosedLoopBackend, tick: &GpuClosedLoopTick) {
+        let receipt = backend
+            .discard_pending_eligibility(tick.handle, tick.pending_eligibility.identity())
+            .expect("non-learning runtime fixture explicitly discards staged eligibility");
+        assert_eq!(
+            receipt.discarded_staging_generation,
+            tick.pending_eligibility
+                .identity()
+                .staging_eligibility_generation()
+        );
+    }
+
+    fn discard_ticks(backend: &mut GpuClosedLoopBackend, ticks: &[GpuClosedLoopTick]) {
+        for tick in ticks {
+            discard_tick(backend, tick);
+        }
+    }
+
     fn assert_tick_identity(
         tick: &GpuClosedLoopTick,
         handle: GpuBrainHandle,
@@ -203,7 +221,10 @@ mod hardware {
         assert_eq!(tick.handle, handle);
         assert_eq!(tick.base_digest, frame.base_digest());
         assert_eq!(tick.frame_digest, frame.frame_digest());
-        assert_eq!(tick.compact_readback_bytes, 48);
+        assert_eq!(
+            tick.compact_readback_bytes,
+            GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+        );
         assert_eq!(tick.hardware_receipt_generation, receipt_generation);
         assert_ne!(tick.dispatch_generation, 0);
         assert!(tick.active_activation_side <= 1);
@@ -381,8 +402,13 @@ mod hardware {
         assert!(ticks
             .iter()
             .all(|tick| tick.dispatch_generation == ticks[0].dispatch_generation));
-        assert!(ticks.iter().all(|tick| tick.compact_readback_bytes == 48));
-        assert_eq!(backend.last_compact_readback_bytes_for_test(), 3 * 48);
+        assert!(ticks
+            .iter()
+            .all(|tick| tick.compact_readback_bytes == GPU_CLOSED_LOOP_TICK_READBACK_BYTES));
+        assert_eq!(
+            backend.last_compact_readback_bytes_for_test(),
+            3 * GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+        );
         assert_eq!(backend.completed_dispatch_count(), 1);
         assert_eq!(backend.perception_upload_count(), 3);
         assert_eq!(backend.completed_selection_count(), 3);
@@ -434,7 +460,10 @@ mod hardware {
                 &frame,
                 backend.hardware_receipt().generation,
             );
-            assert_eq!(backend.last_compact_readback_bytes_for_test(), 48);
+            assert_eq!(
+                backend.last_compact_readback_bytes_for_test(),
+                GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+            );
         }
         assert_eq!(backend.completed_dispatch_count(), 2);
         assert_eq!(backend.completed_selection_count(), 2);
@@ -468,7 +497,7 @@ mod hardware {
     }
 
     #[test]
-    fn all_invalid_row_commits_dispatch_and_side_but_returns_no_partial_selections() {
+    fn post_submit_receipt_corruption_fails_stop_without_partial_selections() {
         let mut backend = required_backend();
         let first = backend
             .insert_brain(OrganismId(1), n512_phenotype(111))
@@ -495,36 +524,56 @@ mod hardware {
             backend
                 .tick_batch(&[(first, first_frame), (second, second_frame)])
                 .unwrap_err(),
-            ScaffoldContractError::InvalidDecisionEvidence
+            ScaffoldContractError::NeuralBackendUnavailable
         );
-        assert!(matches!(backend.state(), GpuBackendState::Ready));
-        assert_eq!(backend.completed_dispatch_count(), 1);
+        assert!(matches!(
+            backend.state(),
+            GpuBackendState::DeviceLost { .. }
+        ));
+        assert_eq!(backend.completed_dispatch_count(), 0);
         assert_eq!(backend.perception_upload_count(), 2);
         assert_eq!(backend.completed_selection_count(), 0);
-        assert_eq!(backend.last_compact_readback_bytes_for_test(), 2 * 48);
+        assert_eq!(backend.last_compact_readback_bytes_for_test(), 0);
+    }
 
-        let next_first = perception_frame_for_profile_at_tick(
+    #[test]
+    fn post_validation_pending_identity_corruption_fails_stop_without_orphaning_gpu_state() {
+        let mut backend = required_backend();
+        let first = backend
+            .insert_brain(OrganismId(1), n512_phenotype(113))
+            .unwrap();
+        let second = backend
+            .insert_brain(OrganismId(2), n512_phenotype(114))
+            .unwrap();
+        backend.force_pending_identity_mismatch_after_next_decode_for_test(second);
+        let first_frame = perception_frame_for_profile_at_tick(
             1,
             101,
             SensorProfile::PrivilegedAffordanceV1,
-            false,
+            true,
             2,
         );
-        let next_second = perception_frame_for_profile_at_tick(
+        let second_frame = perception_frame_for_profile_at_tick(
             2,
             101,
             SensorProfile::PrivilegedAffordanceV1,
-            false,
+            true,
             2,
         );
-        let ticks = backend
-            .tick_batch(&[(first, next_first), (second, next_second)])
-            .unwrap();
-        assert_eq!(ticks[0].active_activation_side, 0);
-        assert_eq!(ticks[1].active_activation_side, 0);
-        assert_eq!(backend.completed_dispatch_count(), 2);
-        assert_eq!(backend.perception_upload_count(), 4);
-        assert_eq!(backend.completed_selection_count(), 2);
+
+        assert_eq!(
+            backend
+                .tick_batch(&[(first, first_frame), (second, second_frame)])
+                .unwrap_err(),
+            ScaffoldContractError::NeuralBackendUnavailable
+        );
+        assert!(matches!(
+            backend.state(),
+            GpuBackendState::DeviceLost { .. }
+        ));
+        assert_eq!(backend.completed_dispatch_count(), 0);
+        assert_eq!(backend.completed_selection_count(), 0);
+        assert_eq!(backend.last_compact_readback_bytes_for_test(), 0);
     }
 
     #[test]
@@ -556,6 +605,7 @@ mod hardware {
             .tick_batch(&[(first, frame_a.clone()), (second, frame_b.clone())])
             .unwrap();
         let baseline_generation = baseline[0].dispatch_generation;
+        discard_ticks(&mut backend, &baseline);
         let before = (
             backend.completed_dispatch_count(),
             backend.completed_selection_count(),
@@ -690,6 +740,7 @@ mod hardware {
         );
         let first_tick = backend.tick_batch(&[(first, first_frame)]).unwrap();
         assert_eq!(first_tick[0].active_activation_side, 1);
+        discard_ticks(&mut backend, &first_tick);
         backend.remove_brain(first).unwrap();
         assert_eq!(
             backend.remove_brain(first).unwrap_err(),
@@ -780,6 +831,7 @@ mod hardware {
             ),
             expected_b
         );
+        discard_ticks(&mut backend, &first);
 
         let frame_a_2 = perception_frame_for_profile_at_tick(
             1,
@@ -799,6 +851,7 @@ mod hardware {
             ),
             expected_a
         );
+        discard_ticks(&mut backend, &only_a);
 
         let frame_a_3 = perception_frame_for_profile_at_tick(
             1,
@@ -844,6 +897,7 @@ mod hardware {
         let control_first = control
             .tick_batch(&[(control_b, frame_b_1.clone())])
             .unwrap();
+        discard_ticks(&mut control, &control_first);
         let control_third = control
             .tick_batch(&[(control_b, frame_b_3.clone())])
             .unwrap();
@@ -932,8 +986,16 @@ mod hardware {
             assert_eq!(first.active_activation_side, second.active_activation_side);
             assert_eq!(first.base_digest, second.base_digest);
             assert_eq!(first.frame_digest, second.frame_digest);
-            assert_eq!(first.compact_readback_bytes, 48);
-            assert_eq!(second.compact_readback_bytes, 48);
+            assert_eq!(
+                first.compact_readback_bytes,
+                GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+            );
+            assert_eq!(
+                second.compact_readback_bytes,
+                GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+            );
+            discard_tick(&mut first_backend, &first);
+            discard_tick(&mut second_backend, &second);
         }
     }
 

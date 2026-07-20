@@ -1,5 +1,5 @@
 
-const ACTIVE_DISPATCH_ROW_WORDS:u32 = 272u;
+const ACTIVE_DISPATCH_ROW_WORDS:u32 = 308u;
 override microstep_index:u32 = 0u;
 
 fn is_finite(value:f32) -> bool {
@@ -35,6 +35,9 @@ fn recurrent_microstep(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
   if (!validate_slice_a_slot(header.brain_slot_index, header)) { return; }
   let brain = brain_slots[header.brain_slot_index];
+  let extension = load_slot_extension(brain);
+  let learning = load_slot_learning_state(extension);
+  let weight_bases = active_weight_bases(brain, extension, learning);
   if (microstep_index >= brain.microstep_count || microstep_index >= header.microstep_count) { return; }
   let target_index = gid.x;
   if (target_index >= brain.neuron_count) { return; }
@@ -59,8 +62,8 @@ fn recurrent_microstep(@builtin(global_invocation_id) gid:vec3<u32>) {
     active_rows += 1u;
     let genetic = bitcast<f32>(immutable_weight_words[brain.genetic_weight_offset + cursor]);
     let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset + cursor]);
-    let lifetime = load_state_f32(brain.lifetime_weight_offset + cursor);
-    let fast = load_state_f32(brain.fast_weight_offset + cursor);
+    let lifetime = load_state_f32(weight_bases.lifetime + cursor);
+    let fast = load_state_f32(weight_bases.fast + cursor);
     let effective = genetic + lifetime + alpha * fast;
     recurrent_sum += load_state_f32(source_base + source) * effective;
   }

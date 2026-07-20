@@ -14,9 +14,9 @@ mod prelude {
         CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch, GapResolutionStatus,
         GaussianClusterId, GenomeId, HomeostaticParameters, HomeostaticSnapshot, Intensity,
         LineageId, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
-        PolicyBackend, PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt,
-        ReferenceActionFailure, ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel,
-        TeacherPerceptionChannel, Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
+        PolicyBackend, ReferenceActionFailure, ScaffoldContractError, SleepPhase,
+        TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, UnresolvedGapId, Validate,
+        Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
         Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -87,6 +87,9 @@ pub use creature_assembly::*;
 mod live_brain_bridge;
 pub(crate) use live_brain_bridge::proposal;
 pub use live_brain_bridge::*;
+
+mod gpu_sleep_scheduler;
+pub use gpu_sleep_scheduler::*;
 
 mod camera_inspector;
 pub use camera_inspector::*;
@@ -286,6 +289,11 @@ pub use graphical_gpu_runtime_controller::*;
 mod gpu_live_runtime;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_live_runtime::*;
+
+#[cfg(feature = "gpu-runtime")]
+mod gpu_checkpoint_assets;
+#[cfg(feature = "gpu-runtime")]
+pub use gpu_checkpoint_assets::*;
 
 #[cfg(feature = "gpu-runtime")]
 mod gpu_evidence;

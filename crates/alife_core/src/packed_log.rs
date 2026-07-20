@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     ensure_current_version, validate_finite, validate_finite_slice, ActionKind, BrainScaleTier,
     DriveSnapshot, EndocrineSnapshot, ExperiencePatch, PhysicalContactKind, ScaffoldContractError,
-    SchemaKind, SchemaVersions, TeacherPerceptionChannel, Validate,
+    SchemaKind, SchemaVersions, SensorProfileId, SensorProfileIdentity, TeacherPerceptionChannel,
+    Validate,
 };
 
 pub const PACKED_EXPERIENCE_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.packed_log.0;
@@ -166,7 +167,8 @@ pub struct PackedExperienceFrame {
     pub sensory_abi_version: u16,
     pub action_abi_version: u16,
     pub flags: u32,
-    pub reserved_header: u32,
+    pub sensor_profile_id: u16,
+    pub sensor_profile_schema_version: u16,
     pub organism_id: u64,
     pub sequence_id: u64,
     pub pre_action_tick: u64,
@@ -219,6 +221,9 @@ impl PackedExperienceFrame {
         self.validate_contract()?;
         Ok(PackedExperienceSummary {
             schema_version: self.schema_version,
+            sensor_profile_id: self.sensor_profile_id,
+            sensor_profile_schema_version: self.sensor_profile_schema_version,
+            sensory_abi_version: self.sensory_abi_version,
             organism_id: self.organism_id,
             sequence_id: self.sequence_id,
             pre_action_tick: self.pre_action_tick,
@@ -249,7 +254,7 @@ impl PackedExperienceFrame {
 impl Validate for PackedExperienceFrame {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         Self::require_schema_version(self.schema_version)?;
-        if self.experience_schema_version != 1
+        if !matches!(self.experience_schema_version, 1 | 2)
             && self.experience_schema_version != SchemaVersions::CURRENT.experience.raw()
         {
             return Err(ScaffoldContractError::IncompatibleAbi {
@@ -258,7 +263,12 @@ impl Validate for PackedExperienceFrame {
                 actual: self.experience_schema_version,
             });
         }
-        ensure_current_version(SchemaKind::SensoryAbi, self.sensory_abi_version)?;
+        SensorProfileIdentity {
+            profile_id: SensorProfileId(self.sensor_profile_id),
+            profile_schema_version: self.sensor_profile_schema_version,
+            sensory_abi_version: self.sensory_abi_version,
+        }
+        .validate_contract()?;
         ensure_current_version(SchemaKind::ActionAbi, self.action_abi_version)?;
         if self.flags & !PACKED_KNOWN_FLAGS != 0 {
             return Err(ScaffoldContractError::ScalarOutOfRange);
@@ -290,6 +300,9 @@ impl Validate for PackedExperienceFrame {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PackedExperienceSummary {
     pub schema_version: u16,
+    pub sensor_profile_id: u16,
+    pub sensor_profile_schema_version: u16,
+    pub sensory_abi_version: u16,
     pub organism_id: u64,
     pub sequence_id: u64,
     pub pre_action_tick: u64,
@@ -511,13 +524,15 @@ impl ExperiencePacker {
         let target_entity_id = selected.target_entity.map_or(0, |id| id.raw());
         let flags = build_flags(patch);
         let side_buffers = PackedSideBuffers::from_records(builder.into_records())?;
+        let sensor_profile = patch.header().sensor_profile.identity();
         let frame = PackedExperienceFrame {
             schema_version: PACKED_EXPERIENCE_SCHEMA_VERSION,
             experience_schema_version: patch.header().abi_version,
             sensory_abi_version: pre.sensory().abi_version.raw(),
             action_abi_version: decision.action_abi_version,
             flags,
-            reserved_header: 0,
+            sensor_profile_id: sensor_profile.profile_id.raw(),
+            sensor_profile_schema_version: sensor_profile.profile_schema_version,
             organism_id: patch.header().organism_id.raw(),
             sequence_id: patch.header().sequence_id.raw(),
             pre_action_tick: pre.tick.raw(),

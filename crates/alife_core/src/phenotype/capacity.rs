@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::{BrainClassId, CanonicalDigestBuilder, ScaffoldContractError, CANDIDATE_FEATURE_COUNT};
 
 const CAPACITY_SCHEMA_VERSION: u16 = 1;
-const GPU_LAYOUT_VERSION: u16 = 2;
+const GPU_LAYOUT_VERSION: u16 = 3;
 const REQUIRED_LIMITS_SCHEMA_VERSION: u16 = 1;
 const CAPACITY_DIGEST_DOMAIN: &[u8] = b"alife.brain.capacity.v1";
 

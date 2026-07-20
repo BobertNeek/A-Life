@@ -26,3 +26,10 @@ Rules:
   N2048 speech and memory decoder weights remain in the single immutable
   authoritative payload but cannot enter candidate arbitration before their
   dedicated reviewed WGSL passes are implemented.
+- Closed-loop layout v3 stores lifetime weights, fast weights, recurrent
+  eligibility, and decoder eligibility in separate double banks. Every slot
+  extension and learning-state offset must be host-validated against its exact
+  immutable or mutable arena before upload or dispatch.
+- A successful waking dispatch owns exactly one pending eligibility transaction.
+  The matching sealed outcome must apply it, or the caller must explicitly
+  discard it, before another tick or slot retirement.

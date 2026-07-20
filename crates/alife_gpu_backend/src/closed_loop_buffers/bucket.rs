@@ -1,13 +1,21 @@
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use alife_core::{BrainCapacityClass, BrainPhenotype, MAX_ACTION_CANDIDATES};
+use crate::closed_loop_memory::GpuMemoryChannelPlan;
+use alife_core::{
+    BrainCapacityClass, BrainPhenotype, MAX_ACTION_CANDIDATES, MAX_REPLAY_CAPTURE_SYNAPSES,
+};
 use bytemuck::Zeroable;
 
 use super::{
-    GpuBrainSlotRecord, GpuClosedLoopError, GpuPhenotypeIdentityRecord, GpuPhenotypeUpload,
-    GPU_NO_EXTENSION_SENTINEL,
+    GpuBrainSlotExtensionRecord, GpuBrainSlotRecord, GpuClosedLoopError,
+    GpuDecoderEligibilityMetadata, GpuPhenotypeIdentityRecord, GpuPhenotypeUpload,
+    GpuPlasticityReceptorRecord, GpuReplayCaptureIdentityRecord, GpuReplaySynapseSpanRecord,
+    GpuSleepParameterRecord, GpuSlotLearningStateRecord, GpuSynapseLearningMetadata,
+    GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_NO_EXTENSION_SENTINEL,
 };
+
+const GPU_PENDING_ELIGIBILITY_RECORD_WORDS: u32 = 36;
 
 static NEXT_BUCKET_OWNERSHIP_TOKEN: AtomicU64 = AtomicU64::new(1);
 static NEXT_BUFFER_SET_TOKEN: AtomicU64 = AtomicU64::new(1);
@@ -26,6 +34,13 @@ pub struct GpuTypedCounts {
     pub decoder_plans: usize,
     pub decoder_families: usize,
     pub decoder_weight_indices: usize,
+    pub memory_channel_plans: usize,
+    pub memory_weight_indices: usize,
+    pub plasticity_receptors: usize,
+    pub synapse_learning_metadata: usize,
+    pub decoder_eligibility_metadata: usize,
+    pub replay_capture_synapses: usize,
+    pub sleep_parameters: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +57,13 @@ pub struct GpuSlotWordRanges {
     pub decoder_plan_words: Range<u32>,
     pub decoder_family_words: Range<u32>,
     pub decoder_weight_index_words: Range<u32>,
+    pub memory_channel_plan_words: Range<u32>,
+    pub memory_weight_index_words: Range<u32>,
+    pub receptor_words: Range<u32>,
+    pub synapse_learning_metadata_words: Range<u32>,
+    pub decoder_eligibility_metadata_words: Range<u32>,
+    pub replay_plan_identity_words: Range<u32>,
+    pub sleep_parameter_words: Range<u32>,
     pub genetic_weight_words: Range<u32>,
     pub alpha_words: Range<u32>,
     pub activation_a_words: Range<u32>,
@@ -52,10 +74,20 @@ pub struct GpuSlotWordRanges {
     pub fast_weight_words: Range<u32>,
     pub recurrent_eligibility_words: Range<u32>,
     pub decoder_eligibility_words: Range<u32>,
+    pub lifetime_weight_bank_1_words: Range<u32>,
+    pub fast_weight_bank_1_words: Range<u32>,
+    pub recurrent_eligibility_bank_1_words: Range<u32>,
+    pub decoder_eligibility_bank_1_words: Range<u32>,
     pub encoded_input_words: Range<u32>,
     pub candidate_logit_words: Range<u32>,
     pub diagnostic_words: Range<u32>,
     pub selection_words: Range<u32>,
+    pub extension_words: Range<u32>,
+    pub learning_state_words: Range<u32>,
+    pub pending_eligibility_words: Range<u32>,
+    pub replay_event_words: Range<u32>,
+    pub replay_sample_words: Range<u32>,
+    pub replay_span_words: Range<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +96,7 @@ pub struct GpuBrainSlot {
     identity: GpuPhenotypeIdentityRecord,
     counts: GpuTypedCounts,
     ranges: GpuSlotWordRanges,
+    decoder_input_stride: u32,
     brain_slot_index: u32,
     bucket_ownership_token: u64,
 }
@@ -79,6 +112,9 @@ impl GpuBrainSlot {
     }
     pub const fn word_ranges(&self) -> &GpuSlotWordRanges {
         &self.ranges
+    }
+    pub const fn decoder_input_stride(&self) -> u32 {
+        self.decoder_input_stride
     }
     pub const fn brain_slot_index(&self) -> u32 {
         self.brain_slot_index
@@ -172,6 +208,13 @@ impl GpuClassBucketPlan {
             decoder_plans: upload.decoder_plans.len(),
             decoder_families: upload.decoder_families.len(),
             decoder_weight_indices: upload.decoder_weight_indices.len(),
+            memory_channel_plans: upload.memory_channel_plans.len(),
+            memory_weight_indices: upload.memory_weight_indices.len(),
+            plasticity_receptors: upload.plasticity_receptors.len(),
+            synapse_learning_metadata: upload.synapse_learning_metadata.len(),
+            decoder_eligibility_metadata: upload.decoder_eligibility_metadata.len(),
+            replay_capture_synapses: upload.replay_capture_local_synapse_ids.len(),
+            sleep_parameters: upload.sleep_parameters.len(),
         };
 
         let p0 = u32_len(&self.immutable_plan_words)?;
@@ -191,6 +234,27 @@ impl GpuClassBucketPlan {
         let decoder_family_words = span(decoder_plan_words.end, counts.decoder_families * 8)?;
         let decoder_weight_index_words =
             span(decoder_family_words.end, counts.decoder_weight_indices * 4)?;
+        let memory_channel_plan_words = span(
+            decoder_weight_index_words.end,
+            counts.memory_channel_plans * 8,
+        )?;
+        let memory_weight_index_words =
+            span(memory_channel_plan_words.end, counts.memory_weight_indices)?;
+        let receptor_words = span(
+            memory_weight_index_words.end,
+            counts.plasticity_receptors * 8,
+        )?;
+        let synapse_learning_metadata_words =
+            span(receptor_words.end, counts.synapse_learning_metadata * 8)?;
+        let decoder_eligibility_metadata_words = span(
+            synapse_learning_metadata_words.end,
+            counts.decoder_eligibility_metadata * 8,
+        )?;
+        let replay_plan_identity_words = span(decoder_eligibility_metadata_words.end, 8)?;
+        let sleep_parameter_words = span(
+            replay_plan_identity_words.end,
+            counts.sleep_parameters * (std::mem::size_of::<GpuSleepParameterRecord>() / 4),
+        )?;
 
         let w0 = u32_len(&self.immutable_weight_words)?;
         let genetic_weight_words = span(w0, upload.genetic_weights.len())?;
@@ -200,7 +264,7 @@ impl GpuClassBucketPlan {
         let n = phenotype.neuron_count() as usize;
         let total = upload.genetic_weights.len();
         let recurrent = upload.source_indices.len();
-        let decoder = upload.decoder_weight_indices.len();
+        let decoder = upload.decoder_eligibility_metadata.len();
         let activation_a_words = span(m0, n)?;
         let activation_b_words = span(activation_a_words.end, n)?;
         let accumulator_words = span(activation_b_words.end, n)?;
@@ -209,10 +273,33 @@ impl GpuClassBucketPlan {
         let fast_weight_words = span(lifetime_weight_words.end, total)?;
         let recurrent_eligibility_words = span(fast_weight_words.end, recurrent)?;
         let decoder_eligibility_words = span(recurrent_eligibility_words.end, decoder)?;
-        let encoded_input_words = span(decoder_eligibility_words.end, n)?;
+        let lifetime_weight_bank_1_words = span(decoder_eligibility_words.end, total)?;
+        let fast_weight_bank_1_words = span(lifetime_weight_bank_1_words.end, total)?;
+        let recurrent_eligibility_bank_1_words = span(fast_weight_bank_1_words.end, recurrent)?;
+        let decoder_eligibility_bank_1_words =
+            span(recurrent_eligibility_bank_1_words.end, decoder)?;
+        let encoded_input_words = span(decoder_eligibility_bank_1_words.end, n)?;
         let candidate_logit_words = span(encoded_input_words.end, MAX_ACTION_CANDIDATES)?;
         let diagnostic_words = span(candidate_logit_words.end, 4)?;
         let selection_words = span(diagnostic_words.end, 12)?;
+        let extension_words = span(selection_words.end, 20)?;
+        let learning_state_words = span(extension_words.end, 24)?;
+        let pending_eligibility_words = span(
+            learning_state_words.end,
+            GPU_PENDING_ELIGIBILITY_RECORD_WORDS as usize,
+        )?;
+        let replay_event_words = span(
+            pending_eligibility_words.end,
+            phenotype.replay_capture_plan().event_capacity() as usize * 24,
+        )?;
+        let replay_sample_words = span(
+            replay_event_words.end,
+            phenotype.replay_capture_plan().sample_capacity() as usize,
+        )?;
+        let replay_span_words = span(
+            replay_sample_words.end,
+            phenotype.replay_capture_plan().global_synapse_ids().len() * 4,
+        )?;
         let ranges = GpuSlotWordRanges {
             encoder_plan_words,
             encoder_assignment_words,
@@ -226,6 +313,13 @@ impl GpuClassBucketPlan {
             decoder_plan_words,
             decoder_family_words,
             decoder_weight_index_words,
+            memory_channel_plan_words,
+            memory_weight_index_words,
+            receptor_words,
+            synapse_learning_metadata_words,
+            decoder_eligibility_metadata_words,
+            replay_plan_identity_words,
+            sleep_parameter_words,
             genetic_weight_words,
             alpha_words,
             activation_a_words,
@@ -236,18 +330,28 @@ impl GpuClassBucketPlan {
             fast_weight_words,
             recurrent_eligibility_words,
             decoder_eligibility_words,
+            lifetime_weight_bank_1_words,
+            fast_weight_bank_1_words,
+            recurrent_eligibility_bank_1_words,
+            decoder_eligibility_bank_1_words,
             encoded_input_words,
             candidate_logit_words,
             diagnostic_words,
             selection_words,
+            extension_words,
+            learning_state_words,
+            pending_eligibility_words,
+            replay_event_words,
+            replay_sample_words,
+            replay_span_words,
         };
 
-        validate_heap_word_end(&self.capacity, ranges.decoder_weight_index_words.end)?;
+        validate_heap_word_end(&self.capacity, ranges.sleep_parameter_words.end)?;
         validate_heap_word_end(&self.capacity, ranges.alpha_words.end)?;
-        validate_heap_word_end(&self.capacity, ranges.selection_words.end)?;
+        validate_heap_word_end(&self.capacity, ranges.replay_span_words.end)?;
         self.immutable_plan_words
             .try_reserve_exact(
-                (ranges.decoder_weight_index_words.end - ranges.encoder_plan_words.start) as usize,
+                (ranges.sleep_parameter_words.end - ranges.encoder_plan_words.start) as usize,
             )
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         self.immutable_weight_words
@@ -257,7 +361,7 @@ impl GpuClassBucketPlan {
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         self.mutable_state_words
             .try_reserve_exact(
-                (ranges.selection_words.end - ranges.activation_a_words.start) as usize,
+                (ranges.replay_span_words.end - ranges.activation_a_words.start) as usize,
             )
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
 
@@ -297,12 +401,62 @@ impl GpuClassBucketPlan {
         for row in &upload.decoder_weight_indices {
             push_record(&mut self.immutable_plan_words, row);
         }
+        for row in &upload.memory_channel_plans {
+            push_record(&mut self.immutable_plan_words, row);
+        }
+        self.immutable_plan_words
+            .extend_from_slice(&upload.memory_weight_indices);
+        for row in &upload.plasticity_receptors {
+            push_record(&mut self.immutable_plan_words, row);
+        }
+        for row in &upload.synapse_learning_metadata {
+            push_record(&mut self.immutable_plan_words, row);
+        }
+        for row in &upload.decoder_eligibility_metadata {
+            push_record(&mut self.immutable_plan_words, row);
+        }
+        push_record(
+            &mut self.immutable_plan_words,
+            &upload.replay_capture_identity,
+        );
+        for row in &upload.sleep_parameters {
+            push_record(&mut self.immutable_plan_words, row);
+        }
         self.immutable_weight_words
             .extend(upload.genetic_weights.iter().map(|v| v.to_bits()));
         self.immutable_weight_words
             .extend(upload.alpha.iter().map(|v| v.to_bits()));
         self.mutable_state_words
-            .resize(ranges.selection_words.end as usize, 0);
+            .resize(ranges.replay_span_words.end as usize, 0);
+        let extension = make_slot_extension(&ranges, &counts, recurrent as u32)?;
+        store_pod_at(
+            &mut self.mutable_state_words,
+            0,
+            ranges.extension_words.start,
+            &extension,
+        )?;
+        let learning_state = make_learning_state(
+            &ranges,
+            phenotype.replay_capture_plan().event_capacity(),
+            phenotype.replay_capture_plan().sample_capacity(),
+            counts.replay_capture_synapses as u32,
+        );
+        store_pod_at(
+            &mut self.mutable_state_words,
+            0,
+            ranges.learning_state_words.start,
+            &learning_state,
+        )?;
+        let replay_spans = make_replay_spans(
+            &upload.replay_capture_local_synapse_ids,
+            phenotype.replay_capture_plan().event_capacity(),
+        )?;
+        store_pod_slice_at(
+            &mut self.mutable_state_words,
+            0,
+            ranges.replay_span_words.start,
+            &replay_spans,
+        )?;
 
         let record = GpuBrainSlotRecord {
             // This field binds the executable heap ordering to the capacity's GPU layout ABI.
@@ -338,7 +492,7 @@ impl GpuClassBucketPlan {
             diagnostic_offset: ranges.diagnostic_words.start,
             selection_offset: ranges.selection_words.start,
             neuron_homeostasis_offset: ranges.homeostasis_words.start,
-            extension_record_offset: GPU_NO_EXTENSION_SENTINEL,
+            extension_record_offset: ranges.extension_words.start,
             reserved: [0; 3],
         };
         record.validate_slice_a()?;
@@ -347,6 +501,7 @@ impl GpuClassBucketPlan {
             identity: upload.identity,
             counts,
             ranges,
+            decoder_input_stride: upload.decoder_plans[0].flattened_input_lane_count,
             brain_slot_index: slot,
             bucket_ownership_token: self.bucket_ownership_token,
         };
@@ -409,6 +564,17 @@ impl GpuClassBucketPlan {
             {
                 return Err(GpuClosedLoopError::MalformedUpload);
             }
+            validate_learning_slot_layout(
+                &brain.record,
+                &brain.counts,
+                &brain.ranges,
+                &self.immutable_plan_words,
+                0,
+                &self.immutable_weight_words,
+                0,
+                &self.mutable_state_words,
+                0,
+            )?;
         }
         Ok(())
     }
@@ -513,6 +679,627 @@ fn validate_heap_word_end(
 }
 fn push_record<T: bytemuck::Pod>(words: &mut Vec<u32>, record: &T) {
     words.extend_from_slice(bytemuck::cast_slice(std::slice::from_ref(record)));
+}
+
+fn make_slot_extension(
+    ranges: &GpuSlotWordRanges,
+    counts: &GpuTypedCounts,
+    recurrent_synapse_count: u32,
+) -> Result<GpuBrainSlotExtensionRecord, GpuClosedLoopError> {
+    Ok(GpuBrainSlotExtensionRecord {
+        schema_version: GPU_CLOSED_LOOP_LAYOUT_VERSION,
+        projection_count: u32::try_from(counts.projections)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+        decoder_synapse_local_start: recurrent_synapse_count,
+        decoder_synapse_count: u32::try_from(counts.decoder_eligibility_metadata)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+        receptor_offset: ranges.receptor_words.start,
+        decoder_input_plan_offset: ranges.decoder_plan_words.start,
+        decoder_metadata_offset: ranges.decoder_eligibility_metadata_words.start,
+        synapse_metadata_offset: ranges.synapse_learning_metadata_words.start,
+        recurrent_eligibility_bank_1_offset: ranges.recurrent_eligibility_bank_1_words.start,
+        decoder_eligibility_bank_1_offset: ranges.decoder_eligibility_bank_1_words.start,
+        fast_bank_1_offset: ranges.fast_weight_bank_1_words.start,
+        lifetime_bank_1_offset: ranges.lifetime_weight_bank_1_words.start,
+        sleep_parameter_offset: ranges.sleep_parameter_words.start,
+        memory_plan_offset: if counts.memory_channel_plans == 1 {
+            ranges.memory_channel_plan_words.start
+        } else {
+            GPU_NO_EXTENSION_SENTINEL
+        },
+        memory_weight_map_offset: if counts.memory_weight_indices > 0 {
+            ranges.memory_weight_index_words.start
+        } else {
+            GPU_NO_EXTENSION_SENTINEL
+        },
+        learning_state_offset: ranges.learning_state_words.start,
+        pending_eligibility_offset: ranges.pending_eligibility_words.start,
+        replay_plan_identity_offset: ranges.replay_plan_identity_words.start,
+        reserved0: 0,
+        reserved1: 0,
+    })
+}
+
+fn make_learning_state(
+    ranges: &GpuSlotWordRanges,
+    replay_event_capacity: u32,
+    replay_sample_capacity: u32,
+    replay_span_count: u32,
+) -> GpuSlotLearningStateRecord {
+    GpuSlotLearningStateRecord {
+        schema_version: u32::from(alife_core::SchemaVersions::CURRENT.learning.raw()),
+        active_weight_bank: 0,
+        active_eligibility_bank: 0,
+        pending_valid: 0,
+        active_weight_generation_lo: 1,
+        active_weight_generation_hi: 0,
+        active_eligibility_generation_lo: 1,
+        active_eligibility_generation_hi: 0,
+        inactive_eligibility_generation_lo: 0,
+        inactive_eligibility_generation_hi: 0,
+        replay_generation_lo: 1,
+        replay_generation_hi: 0,
+        replay_cursor: 0,
+        replay_event_count: 0,
+        replay_event_capacity,
+        replay_sample_capacity,
+        replay_span_count,
+        replay_event_rows_offset: ranges.replay_event_words.start,
+        replay_sample_offset: ranges.replay_sample_words.start,
+        replay_span_offset: ranges.replay_span_words.start,
+        replay_plan_identity_offset: ranges.replay_plan_identity_words.start,
+        pending_eligibility_offset: ranges.pending_eligibility_words.start,
+        transaction_generation_lo: 1,
+        transaction_generation_hi: 0,
+    }
+}
+
+fn make_replay_spans(
+    local_synapse_ids: &[u32],
+    event_capacity: u32,
+) -> Result<Vec<GpuReplaySynapseSpanRecord>, GpuClosedLoopError> {
+    local_synapse_ids
+        .iter()
+        .enumerate()
+        .map(|(index, local_synapse_id)| {
+            let index = u32::try_from(index).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+            Ok(GpuReplaySynapseSpanRecord {
+                local_synapse_id: *local_synapse_id,
+                sample_start: index
+                    .checked_mul(event_capacity)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+                sample_count: 0,
+                reserved: 0,
+            })
+        })
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_learning_slot_layout(
+    record: &GpuBrainSlotRecord,
+    counts: &GpuTypedCounts,
+    ranges: &GpuSlotWordRanges,
+    immutable_plan_words: &[u32],
+    immutable_plan_base: u32,
+    immutable_weight_words: &[u32],
+    immutable_weight_base: u32,
+    mutable_state_words: &[u32],
+    mutable_state_base: u32,
+) -> Result<(), GpuClosedLoopError> {
+    let synapse_count = usize::try_from(record.synapse_count)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+    let recurrent_count = usize::try_from(record.recurrent_synapse_count)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+    let decoder_count = synapse_count
+        .checked_sub(recurrent_count)
+        .ok_or(GpuClosedLoopError::MalformedUpload)?;
+    if counts.synapse_learning_metadata != synapse_count
+        || counts.decoder_eligibility_metadata != decoder_count
+        || counts.plasticity_receptors == 0
+        || counts.memory_channel_plans != 1
+        || counts.memory_weight_indices == 0
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    validate_active_range(
+        immutable_weight_words,
+        immutable_weight_base,
+        &ranges.genetic_weight_words,
+        synapse_count,
+    )?;
+    validate_active_range(
+        immutable_weight_words,
+        immutable_weight_base,
+        &ranges.alpha_words,
+        synapse_count,
+    )?;
+    for (range, active_words) in [
+        (
+            &ranges.memory_channel_plan_words,
+            counts.memory_channel_plans * 8,
+        ),
+        (
+            &ranges.memory_weight_index_words,
+            counts.memory_weight_indices,
+        ),
+        (&ranges.receptor_words, counts.plasticity_receptors * 8),
+        (
+            &ranges.synapse_learning_metadata_words,
+            counts.synapse_learning_metadata * 8,
+        ),
+        (
+            &ranges.decoder_eligibility_metadata_words,
+            counts.decoder_eligibility_metadata * 8,
+        ),
+        (&ranges.replay_plan_identity_words, 8),
+        (
+            &ranges.sleep_parameter_words,
+            counts.sleep_parameters * (std::mem::size_of::<GpuSleepParameterRecord>() / 4),
+        ),
+    ] {
+        validate_active_range(
+            immutable_plan_words,
+            immutable_plan_base,
+            range,
+            active_words,
+        )?;
+    }
+    for (range, active_words) in [
+        (&ranges.lifetime_weight_words, synapse_count),
+        (&ranges.fast_weight_words, synapse_count),
+        (&ranges.recurrent_eligibility_words, recurrent_count),
+        (&ranges.decoder_eligibility_words, decoder_count),
+        (&ranges.lifetime_weight_bank_1_words, synapse_count),
+        (&ranges.fast_weight_bank_1_words, synapse_count),
+        (&ranges.recurrent_eligibility_bank_1_words, recurrent_count),
+        (&ranges.decoder_eligibility_bank_1_words, decoder_count),
+        (
+            &ranges.extension_words,
+            std::mem::size_of::<GpuBrainSlotExtensionRecord>() / 4,
+        ),
+        (
+            &ranges.learning_state_words,
+            std::mem::size_of::<GpuSlotLearningStateRecord>() / 4,
+        ),
+        (
+            &ranges.pending_eligibility_words,
+            GPU_PENDING_ELIGIBILITY_RECORD_WORDS as usize,
+        ),
+    ] {
+        validate_active_range(mutable_state_words, mutable_state_base, range, active_words)?;
+    }
+
+    if record.genetic_weight_offset != ranges.genetic_weight_words.start
+        || record.alpha_offset != ranges.alpha_words.start
+        || record.lifetime_weight_offset != ranges.lifetime_weight_words.start
+        || record.fast_weight_offset != ranges.fast_weight_words.start
+        || record.recurrent_eligibility_offset != ranges.recurrent_eligibility_words.start
+        || record.decoder_eligibility_offset != ranges.decoder_eligibility_words.start
+        || record.extension_record_offset != ranges.extension_words.start
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    let extension: GpuBrainSlotExtensionRecord = read_pod_at(
+        mutable_state_words,
+        mutable_state_base,
+        ranges.extension_words.start,
+    )?;
+    if extension.schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION
+        || extension.projection_count
+            != u32::try_from(counts.projections)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+        || extension.decoder_synapse_local_start != record.recurrent_synapse_count
+        || extension.decoder_synapse_count
+            != u32::try_from(decoder_count).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+        || extension.receptor_offset != ranges.receptor_words.start
+        || extension.decoder_input_plan_offset != ranges.decoder_plan_words.start
+        || extension.decoder_metadata_offset != ranges.decoder_eligibility_metadata_words.start
+        || extension.synapse_metadata_offset != ranges.synapse_learning_metadata_words.start
+        || extension.recurrent_eligibility_bank_1_offset
+            != ranges.recurrent_eligibility_bank_1_words.start
+        || extension.decoder_eligibility_bank_1_offset
+            != ranges.decoder_eligibility_bank_1_words.start
+        || extension.fast_bank_1_offset != ranges.fast_weight_bank_1_words.start
+        || extension.lifetime_bank_1_offset != ranges.lifetime_weight_bank_1_words.start
+        || extension.sleep_parameter_offset != ranges.sleep_parameter_words.start
+        || extension.memory_plan_offset != ranges.memory_channel_plan_words.start
+        || extension.memory_weight_map_offset != ranges.memory_weight_index_words.start
+        || extension.learning_state_offset != ranges.learning_state_words.start
+        || extension.pending_eligibility_offset != ranges.pending_eligibility_words.start
+        || extension.replay_plan_identity_offset != ranges.replay_plan_identity_words.start
+        || extension.reserved0 != 0
+        || extension.reserved1 != 0
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    let state: GpuSlotLearningStateRecord = read_pod_at(
+        mutable_state_words,
+        mutable_state_base,
+        extension.learning_state_offset,
+    )?;
+    let learning_schema = u32::from(alife_core::SchemaVersions::CURRENT.learning.raw());
+    let active_weight_generation = join_u64(
+        state.active_weight_generation_lo,
+        state.active_weight_generation_hi,
+    );
+    let active_eligibility_generation = join_u64(
+        state.active_eligibility_generation_lo,
+        state.active_eligibility_generation_hi,
+    );
+    let replay_generation = join_u64(state.replay_generation_lo, state.replay_generation_hi);
+    let transaction_generation = join_u64(
+        state.transaction_generation_lo,
+        state.transaction_generation_hi,
+    );
+    if state.schema_version != learning_schema
+        || state.active_weight_bank > 1
+        || state.active_eligibility_bank > 1
+        || state.pending_valid > 1
+        || active_weight_generation == 0
+        || active_eligibility_generation == 0
+        || replay_generation == 0
+        || transaction_generation == 0
+        || state.replay_event_capacity == 0
+        || state.replay_span_count
+            != u32::try_from(counts.replay_capture_synapses)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+        || state.replay_span_count == 0
+        || state.replay_sample_capacity
+            != state
+                .replay_event_capacity
+                .checked_mul(state.replay_span_count)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?
+        || state.replay_cursor >= state.replay_event_capacity
+        || state.replay_event_count > state.replay_event_capacity
+        || state.replay_event_rows_offset != ranges.replay_event_words.start
+        || state.replay_sample_offset != ranges.replay_sample_words.start
+        || state.replay_span_offset != ranges.replay_span_words.start
+        || state.replay_plan_identity_offset != ranges.replay_plan_identity_words.start
+        || state.pending_eligibility_offset != ranges.pending_eligibility_words.start
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    let event_words = usize::try_from(state.replay_event_capacity)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+        .checked_mul(std::mem::size_of::<super::GpuReplayEventRecord>() / 4)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    validate_active_range(
+        mutable_state_words,
+        mutable_state_base,
+        &ranges.replay_event_words,
+        event_words,
+    )?;
+    validate_active_range(
+        mutable_state_words,
+        mutable_state_base,
+        &ranges.replay_sample_words,
+        usize::try_from(state.replay_sample_capacity)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+    )?;
+    validate_active_range(
+        mutable_state_words,
+        mutable_state_base,
+        &ranges.replay_span_words,
+        usize::try_from(state.replay_span_count)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+            .checked_mul(std::mem::size_of::<GpuReplaySynapseSpanRecord>() / 4)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+    )?;
+
+    let receptors = read_pod_prefix::<GpuPlasticityReceptorRecord>(
+        immutable_plan_words,
+        immutable_plan_base,
+        &ranges.receptor_words,
+        counts.plasticity_receptors,
+    )?;
+    for receptor in &receptors {
+        let finite = [
+            receptor.eligibility_decay,
+            receptor.learning_rate,
+            receptor.sleep_replay_rate,
+            receptor.normalization_rate,
+            receptor.modulator_sign,
+            receptor.fast_min,
+            receptor.fast_max,
+        ]
+        .into_iter()
+        .all(f32::is_finite);
+        if !finite
+            || !(0.0..=1.0).contains(&receptor.eligibility_decay)
+            || !(0.0..=1.0).contains(&receptor.learning_rate)
+            || !(0.0..=1.0).contains(&receptor.sleep_replay_rate)
+            || !(0.0..=1.0).contains(&receptor.normalization_rate)
+            || !matches!(receptor.modulator_sign, -1.0 | 1.0)
+            || !(-8.0..=8.0).contains(&receptor.fast_min)
+            || !(-8.0..=8.0).contains(&receptor.fast_max)
+            || receptor.fast_min >= receptor.fast_max
+            || receptor.reserved.to_bits() != 0
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+    }
+    let disabled_receptor = receptors
+        .first()
+        .ok_or(GpuClosedLoopError::MalformedUpload)?;
+    if disabled_receptor.learning_rate.to_bits() != 0
+        || disabled_receptor.sleep_replay_rate.to_bits() != 0
+        || disabled_receptor.normalization_rate.to_bits() != 0
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    let synapse_metadata = read_pod_prefix::<GpuSynapseLearningMetadata>(
+        immutable_plan_words,
+        immutable_plan_base,
+        &ranges.synapse_learning_metadata_words,
+        synapse_count,
+    )?;
+    for (index, row) in synapse_metadata.iter().enumerate() {
+        let index = u32::try_from(index).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let recurrent = index < record.recurrent_synapse_count;
+        let expected_eligibility = if recurrent {
+            index
+        } else {
+            index - record.recurrent_synapse_count
+        };
+        let expected_decoder_metadata = if recurrent {
+            u32::MAX
+        } else {
+            expected_eligibility
+        };
+        if row.global_synapse_id != index
+            || row.kind != if recurrent { 1 } else { 2 }
+            || row.source_neuron >= record.neuron_count
+            || row.target_neuron >= record.neuron_count
+            || usize::try_from(row.receptor_index)
+                .ok()
+                .is_none_or(|value| value >= receptors.len())
+            || row.eligibility_local_index != expected_eligibility
+            || row.decoder_metadata_local_or_max != expected_decoder_metadata
+            || row.reserved != 0
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+    }
+
+    let decoder_metadata = read_pod_prefix::<GpuDecoderEligibilityMetadata>(
+        immutable_plan_words,
+        immutable_plan_base,
+        &ranges.decoder_eligibility_metadata_words,
+        decoder_count,
+    )?;
+    for (index, row) in decoder_metadata.iter().enumerate() {
+        let local = u32::try_from(index).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let global = record
+            .recurrent_synapse_count
+            .checked_add(local)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let synapse = synapse_metadata
+            .get(global as usize)
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        if row.global_synapse_id != global
+            || !(1..=3).contains(&row.decoder_head)
+            || row.family >= 8
+            || row.receptor_index != synapse.receptor_index
+            || row.eligibility_local_index != local
+            || row.reserved != 0
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+    }
+
+    let memory_plan: GpuMemoryChannelPlan = read_pod_at(
+        immutable_plan_words,
+        immutable_plan_base,
+        ranges.memory_channel_plan_words.start,
+    )?;
+    if memory_plan.schema_version != 1
+        || memory_plan.target_latent_lane_start != 24
+        || memory_plan.family_value_lane_start != 32
+        || memory_plan.decoder_input_stride != 36
+        || memory_plan.max_candidate_gain.to_bits() != 0.5_f32.to_bits()
+        || memory_plan.memory_decoder_synapse_count as usize != counts.memory_weight_indices
+        || counts.memory_weight_indices < 96
+        || !counts.memory_weight_indices.is_multiple_of(8)
+        || memory_plan.reserved != [0; 2]
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let memory_map = validate_active_range(
+        immutable_plan_words,
+        immutable_plan_base,
+        &ranges.memory_weight_index_words,
+        counts.memory_weight_indices,
+    )?;
+    let rows_per_family = counts.memory_weight_indices / 8;
+    let mut seen_memory_rows = vec![false; decoder_count];
+    for (map_index, global_synapse_id) in memory_map.iter().copied().enumerate() {
+        let decoder_local = global_synapse_id
+            .checked_sub(record.recurrent_synapse_count)
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        let expected_family = map_index / rows_per_family;
+        let metadata = decoder_metadata
+            .get(decoder_local)
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        if seen_memory_rows[decoder_local]
+            || metadata.global_synapse_id != global_synapse_id
+            || metadata.decoder_head != 2
+            || metadata.family as usize != expected_family
+            || !(24..36).contains(&metadata.input_lane)
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        seen_memory_rows[decoder_local] = true;
+    }
+    if decoder_metadata
+        .iter()
+        .enumerate()
+        .any(|(index, metadata)| (metadata.decoder_head == 2) != seen_memory_rows[index])
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    let replay_identity: GpuReplayCaptureIdentityRecord = read_pod_at(
+        immutable_plan_words,
+        immutable_plan_base,
+        ranges.replay_plan_identity_words.start,
+    )?;
+    if replay_identity
+        .replay_capture_plan_digest
+        .iter()
+        .all(|word| *word == 0)
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    if counts.sleep_parameters != 1 {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let sleep: GpuSleepParameterRecord = read_pod_at(
+        immutable_plan_words,
+        immutable_plan_base,
+        ranges.sleep_parameter_words.start,
+    )?;
+    if sleep.schema_version
+        != u32::from(
+            alife_core::SchemaVersions::CURRENT
+                .sleep_consolidation
+                .raw(),
+        )
+        || ![
+            sleep.staging_rate,
+            sleep.weight_limit,
+            sleep.fast_decay_rate,
+        ]
+        .into_iter()
+        .all(f32::is_finite)
+        || !(0.0..=1.0).contains(&sleep.staging_rate)
+        || sleep.staging_rate == 0.0
+        || !(0.0..=8.0).contains(&sleep.weight_limit)
+        || sleep.weight_limit == 0.0
+        || !(0.0..=1.0).contains(&sleep.fast_decay_rate)
+        || sleep.eligibility_reset_policy != 1
+        || sleep.replay_consume_policy != 1
+        || sleep.reserved != [0; 2]
+    {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+
+    let replay_spans = read_pod_prefix::<GpuReplaySynapseSpanRecord>(
+        mutable_state_words,
+        mutable_state_base,
+        &ranges.replay_span_words,
+        counts.replay_capture_synapses,
+    )?;
+    let mut seen = vec![false; synapse_count];
+    for (index, span) in replay_spans.iter().enumerate() {
+        let local = usize::try_from(span.local_synapse_id)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+        let expected_start = u32::try_from(index)
+            .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
+            .checked_mul(state.replay_event_capacity)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let receptor = synapse_metadata
+            .get(local)
+            .and_then(|metadata| receptors.get(metadata.receptor_index as usize));
+        if local >= seen.len()
+            || seen[local]
+            || span.sample_start != expected_start
+            || span.sample_count > state.replay_event_count
+            || span.sample_count > state.replay_event_capacity
+            || span.reserved != 0
+            || receptor.is_none_or(|row| {
+                row.learning_rate == 0.0
+                    && row.sleep_replay_rate == 0.0
+                    && row.normalization_rate == 0.0
+            })
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        seen[local] = true;
+    }
+    Ok(())
+}
+
+fn validate_active_range<'a>(
+    heap: &'a [u32],
+    heap_base: u32,
+    range: &Range<u32>,
+    active_words: usize,
+) -> Result<&'a [u32], GpuClosedLoopError> {
+    if range.start > range.end || range.start < heap_base {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let heap_words =
+        u32::try_from(heap.len()).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+    let heap_end = heap_base
+        .checked_add(heap_words)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    if range.end > heap_end {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let local_start = usize::try_from(range.start - heap_base)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+    let allocated_words = usize::try_from(range.end - range.start)
+        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+    if allocated_words < active_words {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let active_end = local_start
+        .checked_add(active_words)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let allocated_end = local_start
+        .checked_add(allocated_words)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let allocated = heap
+        .get(local_start..allocated_end)
+        .ok_or(GpuClosedLoopError::MalformedUpload)?;
+    if allocated[active_words..].iter().any(|word| *word != 0) {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    heap.get(local_start..active_end)
+        .ok_or(GpuClosedLoopError::MalformedUpload)
+}
+
+fn read_pod_at<T: bytemuck::Pod + Copy>(
+    heap: &[u32],
+    heap_base: u32,
+    absolute_start: u32,
+) -> Result<T, GpuClosedLoopError> {
+    let words = std::mem::size_of::<T>() / 4;
+    let range = absolute_start
+        ..absolute_start
+            .checked_add(u32::try_from(words).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let words = validate_active_range(heap, heap_base, &range, words)?;
+    Ok(bytemuck::pod_read_unaligned(bytemuck::cast_slice(words)))
+}
+
+fn read_pod_prefix<T: bytemuck::Pod + Copy>(
+    heap: &[u32],
+    heap_base: u32,
+    range: &Range<u32>,
+    count: usize,
+) -> Result<Vec<T>, GpuClosedLoopError> {
+    let words_per_record = std::mem::size_of::<T>() / 4;
+    let active_words = count
+        .checked_mul(words_per_record)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    let words = validate_active_range(heap, heap_base, range, active_words)?;
+    words
+        .chunks_exact(words_per_record)
+        .map(|chunk| Ok(bytemuck::pod_read_unaligned(bytemuck::cast_slice(chunk))))
+        .collect()
+}
+
+const fn join_u64(lo: u32, hi: u32) -> u64 {
+    lo as u64 | ((hi as u64) << 32)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -663,7 +1450,7 @@ impl GpuClassBucketBuffers {
                 group: 0,
                 binding: 5,
                 role: FramePayloadWords,
-                access: ReadOnly,
+                access: ReadWrite,
                 neural_pipeline_bindable: true,
                 minimum_binding_size_bytes: 4,
             },
@@ -842,7 +1629,10 @@ impl GpuFixedClassArenaPlan {
         let n = execution.max_neurons();
         let total = execution.max_total_synapses();
         let recurrent = execution.max_recurrent_synapses();
-        let decoder = execution.max_action_decoder_synapses();
+        let candidate_decoder = execution.max_action_decoder_synapses();
+        let decoder = candidate_decoder
+            .checked_add(execution.max_memory_decoder_synapses())
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let tiles = execution.max_active_tiles();
         let candidates = u32::from(execution.max_candidates());
         let encoder_assignments = n
@@ -891,9 +1681,37 @@ impl GpuFixedClassArenaPlan {
         let decoder_family_words = span_u32(&mut cursor, 8 * 8)?;
         let decoder_weight_index_words = span_u32(
             &mut cursor,
-            decoder
+            candidate_decoder
                 .checked_mul(4)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+        )?;
+        let memory_channel_plan_words = span_u32(&mut cursor, 8)?;
+        let memory_weight_index_words =
+            span_u32(&mut cursor, execution.max_memory_decoder_synapses())?;
+        let receptor_words = span_u32(
+            &mut cursor,
+            tiles
+                .checked_add(4)
+                .and_then(|count| count.checked_mul(8))
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+        )?;
+        let synapse_learning_metadata_words = span_u32(
+            &mut cursor,
+            total
+                .checked_mul(8)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+        )?;
+        let decoder_eligibility_metadata_words = span_u32(
+            &mut cursor,
+            decoder
+                .checked_mul(8)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+        )?;
+        let replay_plan_identity_words = span_u32(&mut cursor, 8)?;
+        let sleep_parameter_words = span_u32(
+            &mut cursor,
+            u32::try_from(std::mem::size_of::<GpuSleepParameterRecord>() / 4)
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let immutable_plan_stride =
             align_words(cursor, execution.storage_offset_alignment_bytes())?;
@@ -917,10 +1735,33 @@ impl GpuFixedClassArenaPlan {
         let fast_weight_words = span_u32(&mut cursor, total)?;
         let recurrent_eligibility_words = span_u32(&mut cursor, recurrent)?;
         let decoder_eligibility_words = span_u32(&mut cursor, decoder)?;
+        let lifetime_weight_bank_1_words = span_u32(&mut cursor, total)?;
+        let fast_weight_bank_1_words = span_u32(&mut cursor, total)?;
+        let recurrent_eligibility_bank_1_words = span_u32(&mut cursor, recurrent)?;
+        let decoder_eligibility_bank_1_words = span_u32(&mut cursor, decoder)?;
         let encoded_input_words = span_u32(&mut cursor, n)?;
         let candidate_logit_words = span_u32(&mut cursor, candidates)?;
         let diagnostic_words = span_u32(&mut cursor, 4)?;
         let selection_words = span_u32(&mut cursor, 12)?;
+        let extension_words = span_u32(&mut cursor, 20)?;
+        let learning_state_words = span_u32(&mut cursor, 24)?;
+        let pending_eligibility_words =
+            span_u32(&mut cursor, GPU_PENDING_ELIGIBILITY_RECORD_WORDS)?;
+        let replay_event_words = span_u32(
+            &mut cursor,
+            execution
+                .max_replay_events()
+                .checked_mul(24)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+        )?;
+        let replay_sample_words =
+            span_u32(&mut cursor, execution.max_replay_eligibility_samples())?;
+        let replay_span_words = span_u32(
+            &mut cursor,
+            MAX_REPLAY_CAPTURE_SYNAPSES
+                .checked_mul(4)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+        )?;
         let mutable_state_stride = align_words(cursor, execution.storage_offset_alignment_bytes())?;
 
         let relative_layout = GpuSlotWordRanges {
@@ -936,6 +1777,13 @@ impl GpuFixedClassArenaPlan {
             decoder_plan_words,
             decoder_family_words,
             decoder_weight_index_words,
+            memory_channel_plan_words,
+            memory_weight_index_words,
+            receptor_words,
+            synapse_learning_metadata_words,
+            decoder_eligibility_metadata_words,
+            replay_plan_identity_words,
+            sleep_parameter_words,
             genetic_weight_words,
             alpha_words,
             activation_a_words,
@@ -946,10 +1794,20 @@ impl GpuFixedClassArenaPlan {
             fast_weight_words,
             recurrent_eligibility_words,
             decoder_eligibility_words,
+            lifetime_weight_bank_1_words,
+            fast_weight_bank_1_words,
+            recurrent_eligibility_bank_1_words,
+            decoder_eligibility_bank_1_words,
             encoded_input_words,
             candidate_logit_words,
             diagnostic_words,
             selection_words,
+            extension_words,
+            learning_state_words,
+            pending_eligibility_words,
+            replay_event_words,
+            replay_sample_words,
+            replay_span_words,
         };
         let strides = GpuFixedSlotStrides {
             encoder_assignment_count: encoder_assignments,
@@ -981,17 +1839,37 @@ impl GpuFixedClassArenaPlan {
         let frame_words_per_row = 77_u64
             .checked_add(
                 u64::from(candidates)
-                    .checked_mul(u64::from(execution.candidate_feature_count()))
+                    .checked_mul(u64::from(execution.max_decoder_input_lanes()))
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
             )
+            .and_then(|value| value.checked_add(u64::from(candidates) * 4))
+            .and_then(|value| value.checked_add(crate::GPU_PENDING_ELIGIBILITY_WORDS as u64))
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-        let frame_payload_words = checked_mul_bytes(
+        let active_frame_payload_words = checked_mul_bytes(
             slot_count,
             frame_words_per_row
                 .checked_mul(4)
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
-        let compact_readback = checked_mul_bytes(slot_count, 48)?;
+        let sleep_frame_words = 44_u64
+            .checked_add(
+                u64::from(execution.max_replay_events())
+                    .checked_mul(24)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )
+            .and_then(|value| value.checked_add(u64::from(MAX_REPLAY_CAPTURE_SYNAPSES) * 4))
+            .and_then(|value| {
+                value.checked_add(u64::from(execution.max_replay_eligibility_samples()))
+            })
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let sleep_frame_payload_bytes = sleep_frame_words
+            .checked_mul(4)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        let frame_payload_words = active_frame_payload_words.max(sleep_frame_payload_bytes);
+        let compact_readback = checked_mul_bytes(
+            slot_count,
+            crate::GPU_COMPACT_READBACK_CAPACITY_PER_ROW_BYTES as u64,
+        )?;
         let upload_staging = immutable_plan_words
             .checked_div(slot_count)
             .and_then(|value| value.checked_add(immutable_weight_words / slot_count))
@@ -1119,6 +1997,13 @@ impl GpuFixedClassArenaPlan {
             &mut layout.decoder_plan_words,
             &mut layout.decoder_family_words,
             &mut layout.decoder_weight_index_words,
+            &mut layout.memory_channel_plan_words,
+            &mut layout.memory_weight_index_words,
+            &mut layout.receptor_words,
+            &mut layout.synapse_learning_metadata_words,
+            &mut layout.decoder_eligibility_metadata_words,
+            &mut layout.replay_plan_identity_words,
+            &mut layout.sleep_parameter_words,
         ] {
             shift_range(range, plan_base)?;
         }
@@ -1134,10 +2019,20 @@ impl GpuFixedClassArenaPlan {
             &mut layout.fast_weight_words,
             &mut layout.recurrent_eligibility_words,
             &mut layout.decoder_eligibility_words,
+            &mut layout.lifetime_weight_bank_1_words,
+            &mut layout.fast_weight_bank_1_words,
+            &mut layout.recurrent_eligibility_bank_1_words,
+            &mut layout.decoder_eligibility_bank_1_words,
             &mut layout.encoded_input_words,
             &mut layout.candidate_logit_words,
             &mut layout.diagnostic_words,
             &mut layout.selection_words,
+            &mut layout.extension_words,
+            &mut layout.learning_state_words,
+            &mut layout.pending_eligibility_words,
+            &mut layout.replay_event_words,
+            &mut layout.replay_sample_words,
+            &mut layout.replay_span_words,
         ] {
             shift_range(range, mutable_base)?;
         }
@@ -1178,6 +2073,13 @@ impl GpuFixedClassArenaPlan {
             decoder_plans: upload.decoder_plans.len(),
             decoder_families: upload.decoder_families.len(),
             decoder_weight_indices: upload.decoder_weight_indices.len(),
+            memory_channel_plans: upload.memory_channel_plans.len(),
+            memory_weight_indices: upload.memory_weight_indices.len(),
+            plasticity_receptors: upload.plasticity_receptors.len(),
+            synapse_learning_metadata: upload.synapse_learning_metadata.len(),
+            decoder_eligibility_metadata: upload.decoder_eligibility_metadata.len(),
+            replay_capture_synapses: upload.replay_capture_local_synapse_ids.len(),
+            sleep_parameters: upload.sleep_parameters.len(),
         };
         let encoder_ceiling = usize::try_from(self.strides.encoder_assignment_count)
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
@@ -1193,6 +2095,18 @@ impl GpuFixedClassArenaPlan {
             || counts.decoder_plans != 1
             || counts.decoder_families > 8
             || counts.decoder_weight_indices > execution.max_action_decoder_synapses() as usize
+            || counts.memory_channel_plans != 1
+            || counts.memory_weight_indices == 0
+            || counts.memory_weight_indices > execution.max_memory_decoder_synapses() as usize
+            || counts.plasticity_receptors > execution.max_active_tiles() as usize + 4
+            || counts.synapse_learning_metadata > execution.max_total_synapses() as usize
+            || counts.decoder_eligibility_metadata
+                > execution
+                    .max_action_decoder_synapses()
+                    .saturating_add(execution.max_memory_decoder_synapses())
+                    as usize
+            || counts.replay_capture_synapses > MAX_REPLAY_CAPTURE_SYNAPSES as usize
+            || counts.sleep_parameters != 1
             || upload.genetic_weights.len() > execution.max_total_synapses() as usize
             || upload.alpha.len() != upload.genetic_weights.len()
         {
@@ -1301,6 +2215,48 @@ impl GpuFixedClassArenaPlan {
             ranges.layout.decoder_weight_index_words.start,
             &upload.decoder_weight_indices,
         )?;
+        store_pod_slice_at(
+            &mut immutable_plan_words,
+            plan_base,
+            ranges.layout.memory_channel_plan_words.start,
+            &upload.memory_channel_plans,
+        )?;
+        store_words_at(
+            &mut immutable_plan_words,
+            plan_base,
+            ranges.layout.memory_weight_index_words.start,
+            &upload.memory_weight_indices,
+        )?;
+        store_pod_slice_at(
+            &mut immutable_plan_words,
+            plan_base,
+            ranges.layout.receptor_words.start,
+            &upload.plasticity_receptors,
+        )?;
+        store_pod_slice_at(
+            &mut immutable_plan_words,
+            plan_base,
+            ranges.layout.synapse_learning_metadata_words.start,
+            &upload.synapse_learning_metadata,
+        )?;
+        store_pod_slice_at(
+            &mut immutable_plan_words,
+            plan_base,
+            ranges.layout.decoder_eligibility_metadata_words.start,
+            &upload.decoder_eligibility_metadata,
+        )?;
+        store_pod_at(
+            &mut immutable_plan_words,
+            plan_base,
+            ranges.layout.replay_plan_identity_words.start,
+            &upload.replay_capture_identity,
+        )?;
+        store_pod_slice_at(
+            &mut immutable_plan_words,
+            plan_base,
+            ranges.layout.sleep_parameter_words.start,
+            &upload.sleep_parameters,
+        )?;
 
         let mut immutable_weight_words = vec![0_u32; self.strides.immutable_weight_words as usize];
         let weight_base = ranges.immutable_weight_words.start;
@@ -1325,6 +2281,43 @@ impl GpuFixedClassArenaPlan {
             weight_base,
             ranges.layout.alpha_words.start,
             &alpha,
+        )?;
+        let mut mutable_state_words = vec![0_u32; self.strides.mutable_state_words as usize];
+        let mutable_base = ranges.mutable_state_words.start;
+        let extension = make_slot_extension(
+            &ranges.layout,
+            &counts,
+            u32::try_from(upload.source_indices.len())
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+        )?;
+        store_pod_at(
+            &mut mutable_state_words,
+            mutable_base,
+            ranges.layout.extension_words.start,
+            &extension,
+        )?;
+        let learning_state = make_learning_state(
+            &ranges.layout,
+            phenotype.replay_capture_plan().event_capacity(),
+            phenotype.replay_capture_plan().sample_capacity(),
+            u32::try_from(upload.replay_capture_local_synapse_ids.len())
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
+        );
+        store_pod_at(
+            &mut mutable_state_words,
+            mutable_base,
+            ranges.layout.learning_state_words.start,
+            &learning_state,
+        )?;
+        let replay_spans = make_replay_spans(
+            &upload.replay_capture_local_synapse_ids,
+            phenotype.replay_capture_plan().event_capacity(),
+        )?;
+        store_pod_slice_at(
+            &mut mutable_state_words,
+            mutable_base,
+            ranges.layout.replay_span_words.start,
+            &replay_spans,
         )?;
         let record = GpuBrainSlotRecord {
             schema_version: u32::from(upload.gpu_layout_version),
@@ -1359,15 +2352,27 @@ impl GpuFixedClassArenaPlan {
             diagnostic_offset: ranges.layout.diagnostic_words.start,
             selection_offset: ranges.layout.selection_words.start,
             neuron_homeostasis_offset: ranges.layout.homeostasis_words.start,
-            extension_record_offset: GPU_NO_EXTENSION_SENTINEL,
+            extension_record_offset: ranges.layout.extension_words.start,
             reserved: [0; 3],
         };
         record.validate_slice_a()?;
+        validate_learning_slot_layout(
+            &record,
+            &counts,
+            &ranges.layout,
+            &immutable_plan_words,
+            plan_base,
+            &immutable_weight_words,
+            weight_base,
+            &mutable_state_words,
+            mutable_base,
+        )?;
         let brain_slot = GpuBrainSlot {
             record,
             identity: upload.identity,
             counts,
             ranges: ranges.layout.clone(),
+            decoder_input_stride: upload.decoder_plans[0].flattened_input_lane_count,
             brain_slot_index: slot,
             bucket_ownership_token: self.arena_ownership_token,
         };
@@ -1377,6 +2382,7 @@ impl GpuFixedClassArenaPlan {
             ranges,
             immutable_plan_words,
             immutable_weight_words,
+            mutable_state_words,
         })
     }
 
@@ -1405,6 +2411,7 @@ pub(crate) struct GpuFixedSlotUpload {
     ranges: GpuFixedSlotRanges,
     immutable_plan_words: Vec<u32>,
     immutable_weight_words: Vec<u32>,
+    mutable_state_words: Vec<u32>,
 }
 
 impl GpuFixedSlotUpload {
@@ -1602,6 +2609,8 @@ impl GpuFixedClassArenaBuffers {
                 != upload.ranges.immutable_plan_words.len() as u64 * 4
             || upload.immutable_weight_words.len() as u64 * 4
                 != upload.ranges.immutable_weight_words.len() as u64 * 4
+            || upload.mutable_state_words.len() as u64 * 4
+                != upload.ranges.mutable_state_words.len() as u64 * 4
         {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
@@ -1624,6 +2633,27 @@ impl GpuFixedClassArenaBuffers {
             &self.immutable_weight_words,
             u64::from(upload.ranges.immutable_weight_words.start) * 4,
             bytemuck::cast_slice(&upload.immutable_weight_words),
+        );
+        Ok(())
+    }
+
+    pub(crate) fn write_mutable_slot_upload(
+        &self,
+        queue: &wgpu::Queue,
+        upload: &GpuFixedSlotUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        if upload.arena_ownership_token != self.arena_ownership_token
+            || upload.ranges.arena_ownership_token != self.arena_ownership_token
+            || upload.ranges.slot >= self.slot_capacity
+            || upload.mutable_state_words.len() as u64 * 4
+                != upload.ranges.mutable_state_words.len() as u64 * 4
+        {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+        queue.write_buffer(
+            &self.mutable_state_words,
+            u64::from(upload.ranges.mutable_state_words.start) * 4,
+            bytemuck::cast_slice(&upload.mutable_state_words),
         );
         Ok(())
     }
@@ -1802,12 +2832,18 @@ mod fixed_arena_tests {
     use super::*;
     use alife_core::{
         BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick,
+        MAX_REPLAY_CAPTURE_SYNAPSES,
     };
 
     #[test]
     fn fixed_slot_ranges_are_disjoint_and_ceiling_derived_for_every_promoted_class() {
         for capacity in BrainCapacityClass::production_classes() {
             let plan = GpuFixedClassArenaPlan::new(capacity, 4, 512 * 1024 * 1024).unwrap();
+            assert_eq!(
+                plan.relative_layout.replay_span_words.end
+                    - plan.relative_layout.replay_span_words.start,
+                MAX_REPLAY_CAPTURE_SYNAPSES * 4
+            );
             assert_eq!(
                 plan.strides().encoder_assignment_count,
                 capacity.execution().max_neurons() * 2
@@ -1837,6 +2873,22 @@ mod fixed_arena_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn fixed_arena_readback_covers_the_largest_gpu_transaction_per_slot() {
+        let slots = 3_u32;
+        let plan =
+            GpuFixedClassArenaPlan::new(BrainCapacityClass::n512(), slots, 512 * 1024 * 1024)
+                .unwrap();
+
+        assert_eq!(
+            plan.sizes.compact_readback,
+            u64::from(slots) * crate::GPU_FAST_PLASTICITY_COMMIT_BYTES as u64
+        );
+        assert!(
+            crate::GPU_FAST_PLASTICITY_COMMIT_BYTES >= crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+        );
     }
 
     #[test]
@@ -1895,7 +2947,7 @@ mod fixed_arena_tests {
     }
 
     #[test]
-    fn fixed_slot_upload_is_relocated_to_its_reserved_ranges_without_cpu_mutable_state() {
+    fn fixed_slot_upload_relocates_immutable_and_initial_learning_state() {
         let capacity = BrainCapacityClass::n512();
         let genome = BrainGenome::scaffold(701, capacity.id());
         let development =
@@ -1931,9 +2983,148 @@ mod fixed_arena_tests {
             upload.immutable_weight_words.len(),
             plan.strides().immutable_weight_words as usize
         );
+        assert_eq!(
+            upload.mutable_state_words.len(),
+            plan.strides().mutable_state_words as usize
+        );
+        let mutable_base = ranges.mutable_state_words.start;
+        let extension_local = (upload.record().extension_record_offset - mutable_base) as usize;
+        let extension = GpuBrainSlotExtensionRecord::from_words(
+            &upload.mutable_state_words[extension_local
+                ..extension_local + std::mem::size_of::<GpuBrainSlotExtensionRecord>() / 4],
+        )
+        .unwrap();
+        assert_eq!(extension.schema_version, GPU_CLOSED_LOOP_LAYOUT_VERSION);
+        assert_eq!(
+            extension.fast_bank_1_offset,
+            ranges.layout.fast_weight_bank_1_words.start
+        );
+        assert_eq!(
+            extension.lifetime_bank_1_offset,
+            ranges.layout.lifetime_weight_bank_1_words.start
+        );
+        let state_local = (extension.learning_state_offset - mutable_base) as usize;
+        let state = GpuSlotLearningStateRecord::from_words(
+            &upload.mutable_state_words
+                [state_local..state_local + std::mem::size_of::<GpuSlotLearningStateRecord>() / 4],
+        )
+        .unwrap();
+        assert_eq!(state.active_weight_bank, 0);
+        assert_eq!(state.active_eligibility_bank, 0);
+        assert_eq!(state.pending_valid, 0);
+        assert_eq!(
+            state.replay_event_capacity,
+            phenotype.replay_capture_plan().event_capacity()
+        );
+        assert_eq!(
+            state.replay_sample_capacity,
+            phenotype.replay_capture_plan().sample_capacity()
+        );
+        for range in [
+            &ranges.layout.lifetime_weight_words,
+            &ranges.layout.fast_weight_words,
+            &ranges.layout.recurrent_eligibility_words,
+            &ranges.layout.decoder_eligibility_words,
+            &ranges.layout.lifetime_weight_bank_1_words,
+            &ranges.layout.fast_weight_bank_1_words,
+            &ranges.layout.recurrent_eligibility_bank_1_words,
+            &ranges.layout.decoder_eligibility_bank_1_words,
+        ] {
+            let local_start = (range.start - mutable_base) as usize;
+            let local_end = (range.end - mutable_base) as usize;
+            assert!(upload.mutable_state_words[local_start..local_end]
+                .iter()
+                .all(|word| *word == 0));
+        }
         assert!(
             upload.counts().encoder_assignments
                 <= (capacity.execution().max_neurons() * 2) as usize
+        );
+    }
+
+    #[test]
+    fn append_bucket_rejects_corrupted_learning_extension_offsets() {
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(702, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let mut plan = GpuClassBucketPlan::new(capacity, 1).unwrap();
+        let slot = plan.insert_phenotype(0, 1, &phenotype).unwrap();
+        plan.validate().unwrap();
+
+        let extension_start = slot.record().extension_record_offset as usize;
+        let fast_bank_1_word = extension_start
+            + std::mem::offset_of!(GpuBrainSlotExtensionRecord, fast_bank_1_offset) / 4;
+        plan.mutable_state_words[fast_bank_1_word] = slot.word_ranges().fast_weight_words.start;
+
+        assert_eq!(plan.validate(), Err(GpuClosedLoopError::MalformedUpload));
+    }
+
+    #[test]
+    fn append_bucket_rejects_corrupted_learning_state_selectors() {
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(703, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let mut plan = GpuClassBucketPlan::new(capacity, 1).unwrap();
+        let slot = plan.insert_phenotype(0, 1, &phenotype).unwrap();
+        let state_start = slot.word_ranges().learning_state_words.start as usize;
+        let active_weight_bank_word =
+            state_start + std::mem::offset_of!(GpuSlotLearningStateRecord, active_weight_bank) / 4;
+        plan.mutable_state_words[active_weight_bank_word] = 2;
+
+        assert_eq!(plan.validate(), Err(GpuClosedLoopError::MalformedUpload));
+    }
+
+    #[test]
+    fn fixed_slot_validator_rejects_cross_heap_learning_offsets() {
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(704, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let plan = GpuFixedClassArenaPlan::new(capacity, 2, 512 * 1024 * 1024).unwrap();
+        let mut upload = plan.prepare_slot_upload(1, 11, &phenotype).unwrap();
+        let mutable_base = upload.ranges.mutable_state_words.start;
+        let extension_local = (upload.record().extension_record_offset - mutable_base) as usize;
+        let receptor_offset_word = extension_local
+            + std::mem::offset_of!(GpuBrainSlotExtensionRecord, receptor_offset) / 4;
+        upload.mutable_state_words[receptor_offset_word] =
+            upload.ranges.layout.fast_weight_words.start;
+
+        assert_eq!(
+            validate_learning_slot_layout(
+                upload.record(),
+                upload.counts(),
+                &upload.ranges.layout,
+                &upload.immutable_plan_words,
+                upload.ranges.immutable_plan_words.start,
+                &upload.immutable_weight_words,
+                upload.ranges.immutable_weight_words.start,
+                &upload.mutable_state_words,
+                mutable_base,
+            ),
+            Err(GpuClosedLoopError::MalformedUpload)
         );
     }
 }

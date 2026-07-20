@@ -1,4 +1,4 @@
-const ACTIVE_DISPATCH_ROW_WORDS:u32 = 272u;
+const ACTIVE_DISPATCH_ROW_WORDS:u32 = 308u;
 
 @compute @workgroup_size(1)
 fn clear_diagnostics(@builtin(global_invocation_id) gid:vec3<u32>) {

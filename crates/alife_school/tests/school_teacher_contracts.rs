@@ -6,8 +6,9 @@ use alife_core::{
     ExperiencePatchBuilder, ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity,
     LobeKind, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeHash,
     PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PreActionSnapshot,
-    ScaffoldContractError, SensorProfile, SensoryChannels, SensorySnapshot, SignedValence,
-    TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, Vec3f, Velocity, WorldEntityId,
+    ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, SignedValence, TeacherLessonResponseChannel,
+    TeacherPerceptionChannel, Tick, Vec3f, Velocity, WorldEntityId,
 };
 use alife_school::{
     Curriculum, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -78,6 +79,13 @@ fn neural_patch() -> ExperiencePatch {
         },
         HomeostaticSnapshot::baseline(tick),
         vec![candidate],
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
     )
     .unwrap();
     let selection = NeuralActionSelection {

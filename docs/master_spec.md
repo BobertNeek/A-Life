@@ -591,7 +591,28 @@ Core sensory groups:
 - written/glyph fields,
 - lesson/environment markers.
 
-Early implementations can use clean symbolic sensory channels as developmental scaffolding, but the spec must record them as perception channels, not hidden truth injection. Later systems can replace clean channels with more raw sensors while preserving semantic ABI versions.
+Two production profiles are explicit and separately provenanced.
+`PrivilegedAffordanceV1` may expose versioned ecological affordance channels as
+a developmental and ablation profile. `GroundedObjectSlotsV1` exposes bounded
+generic object slots containing bearing, distance, relative velocity, color,
+material, shape, chemical gradients, contact, proprioception, temperature, and
+terrain. Grounded slots contain no food, hazard, teacher, lesson, nutrition,
+toxicity, or object-class truth channel. Every perception frame, sealed patch,
+save, benchmark, and behavioral receipt records the exact profile identity,
+profile schema, sensory ABI, and source tick where transaction evidence needs
+it.
+
+Grounded object identity is organism-local and stable through a versioned
+tracked-object binding derived from portable physical provenance. Raw world
+entity IDs remain command-transport data only and never enter neural features,
+memory queries, topology bindings, or durable sidecar identity. Grounded slots
+and their equal generic candidate families are extracted from one authoritative
+world snapshot before memory retrieval and GPU dispatch.
+
+Clean symbolic sensory channels may still be used as developmental scaffolding,
+but they must remain explicitly labelled privileged perception rather than
+hidden truth injection. Later systems can replace clean channels with more raw
+sensors while preserving versioned profile identities.
 
 ETF/codebook anchors are versioned. They are useful for sensory invariance and migration. They are not a guarantee that all internal representations are frozen. The association brain may adapt; the sensory ABI should remain stable enough that adaptation does not scramble the world.
 
@@ -717,7 +738,21 @@ Core memory layers:
 - external artifacts: books, signs, maps, cultural records.
 - school mastery ledger: concept-level test outcomes.
 
-Every production dispatch uses `W_effective = W_genetic + W_lifetime + alpha * H_fast`. Candidate-conditional episodic retrieval is attached to the same-tick perception frame. Automatic GPU sleep consolidation promotes bounded fast content into lifetime weights and may prepare a safe double-buffered structural swap; no CPU H-shadow is the consolidation authority.
+Every production dispatch uses `W_effective = W_genetic + W_lifetime + alpha * H_fast`. Episodic recall uses a versioned, fixed-width state-action-target query for every candidate. It returns a bounded target-local latent and exact-family value row for that candidate; no candidate-invariant memory or topology scalar is added to all action scores. Candidate memory enters only through explicit GPU candidate-decoder channels and does not enter recurrent/global state in Slice C.
+
+Recall queries bind the immutable pre-context `PerceptionBaseDigest`. The exact
+ordered candidate-local rows are finalized once into the perception context,
+after which GPU dispatch, selection evidence, episodic decision keys, and the
+sealed patch bind the distinct final `PerceptionFrameDigest`. A context row or
+key from another base frame, candidate, profile, organism, or tick is rejected
+before world execution.
+
+Memory banks are portable organism-owned sidecars with deterministic bounded
+search, merge, eviction, and sleep compaction. Capacity pressure returns exact
+degradation receipts and validated zero/no-match rows; it cannot abort an
+otherwise valid neural tick. Automatic GPU sleep consolidation promotes bounded
+fast content into lifetime weights and may coordinate a crash-safe sidecar
+compaction swap; no CPU H-shadow is the consolidation authority.
 
 Memory must be ablatable. To prove grounded learning, tests should turn off teacher hints, reduce or disable internal SLM, test novel speakers/material, and test delayed recall after sleep.
 
@@ -947,7 +982,20 @@ Schooling uses sleep for consolidation. Lessons should have delayed tests after 
 
 ## 29. Topological Memory and Curiosity
 
-Topological memory is a future-compatible representation layer. Čech/Morse terminology from earlier drafts should be interpreted as a design direction: stable concept neighborhoods, gaps/contradictions, and curiosity pressure. It is not a requirement to implement full computational topology in v0.
+Topological memory is a bounded diagnostic sidecar over sealed experience. It
+is owned by portable organism identity and may summarize stable concept
+neighborhoods, contradictions, gaps, and curiosity-related diagnostics. It does
+not supply action commands, action hints, candidate logits, recurrent context,
+or a scalar decision bias. Object bindings use tracked-object IDs from the
+sealed episodic decision key, never raw world entity IDs.
+
+Capacity pressure is nonfatal. Concepts deterministically merge into summaries;
+edges evict; simplexes and gaps replace bounded entries; binding vectors
+truncate deterministically. Every observation produces an exact atomic receipt,
+including degradation or replay rejection, and ordinary saturation cannot abort
+a brain tick. Čech/Morse terminology from earlier drafts remains a future
+representation direction rather than a requirement to implement full
+computational topology in v0.
 
 Near-term interface:
 
@@ -1033,6 +1081,15 @@ Validation combines contract tests with behavioral, hardware, save, soak, and pe
 
 Behavioral and causal tests perturb sensory input, lesion or zero weights, ablate neuromodulation, and verify target-conditional learning rather than comparing against a CPU oracle. Real-hardware tests name the Vulkan adapter and prove action selection, waking plasticity, and sleep consolidation dispatch through WGSL. Save tests cover every sleep phase and typed GPU-unavailable state. Bounded 10,000-plus-tick soak tests and populated-phenotype performance reports complete acceptance.
 
+Memory and grounding tests additionally prove that privileged and grounded
+profiles have distinct provenance, grounded uploads contain no semantic truth
+labels, relabelling private world semantics cannot change grounded neural input,
+and one target's remembered outcome cannot leak to an unrelated candidate.
+Recall evidence binds both base and final perception digests. Tracker, memory,
+and topology saturation runs for at least 10,240 ticks must remain bounded,
+deterministic, replay-safe, and free of terminal capacity errors or tracked-ID
+reuse.
+
 
 ## 34. Determinism and Reproducibility
 
@@ -1066,6 +1123,15 @@ N512, N1024, and N2048 must each meet their documented causal and performance ga
 ## 36. Data Persistence, Saves, and Lineage Export
 
 Saves must be versioned. They should include world state, organisms, genomes, brain class specs, ABI versions, memory snapshots, consolidated habits, episodic summaries, school progress, and lineage metadata.
+
+GPU brain saves also preserve the exact sensor-profile identity and portable
+organism-owned tracker, memory, compaction, and topology sidecar state. Bulk
+sidecars live behind content-digest-checked assets. Tracker records persist
+physical provenance, canonical tracking keys, stable descriptors, monotonically
+allocated tracked IDs, and next-ID state without serializing raw world entity
+associations. Memory and topology assets use primitive versioned DTOs and
+rebuild private indices only after owner, profile, generation, replay guard,
+capacity, and canonical digest validation.
 
 Lineage export supports ascension. It should store enough to recreate the creature later, migrate it to a larger class, and test whether its identity survived migration.
 

@@ -3,7 +3,7 @@
 use alife_core::{validate_finite, LobeKind, ScaffoldContractError};
 
 use crate::{
-    GPU_BUFFER_CONTRACT_SCHEMA_VERSION, P27_PLASTICITY_STORAGE_BINDINGS,
+    GPU_BUFFER_CONTRACT_SCHEMA_VERSION, GPU_CLOSED_LOOP_STORAGE_BINDINGS,
     P27_STATIC_FORWARD_STORAGE_BINDINGS,
 };
 
@@ -274,13 +274,7 @@ async fn probe_local_wgpu_runtime_async(
 
 pub const fn required_storage_buffers(backend: GpuRuntimeBackendKind) -> u32 {
     match backend {
-        GpuRuntimeBackendKind::GpuAuthoritative => {
-            if P27_STATIC_FORWARD_STORAGE_BINDINGS > P27_PLASTICITY_STORAGE_BINDINGS {
-                P27_STATIC_FORWARD_STORAGE_BINDINGS
-            } else {
-                P27_PLASTICITY_STORAGE_BINDINGS
-            }
-        }
+        GpuRuntimeBackendKind::GpuAuthoritative => GPU_CLOSED_LOOP_STORAGE_BINDINGS,
     }
 }
 
@@ -551,7 +545,7 @@ pub struct GpuRuntimeCapabilityManifest {
     pub sleep_recompaction_available: bool,
     pub product_gpu_required_default: bool,
     pub static_forward_storage_bindings: u32,
-    pub plasticity_storage_bindings: u32,
+    pub closed_loop_storage_bindings: u32,
     pub no_active_gameplay_neural_readback: bool,
 }
 
@@ -565,7 +559,7 @@ impl GpuRuntimeCapabilityManifest {
             sleep_recompaction_available: true,
             product_gpu_required_default: true,
             static_forward_storage_bindings: P27_STATIC_FORWARD_STORAGE_BINDINGS,
-            plasticity_storage_bindings: P27_PLASTICITY_STORAGE_BINDINGS,
+            closed_loop_storage_bindings: GPU_CLOSED_LOOP_STORAGE_BINDINGS,
             no_active_gameplay_neural_readback: true,
         }
     }

@@ -1,6 +1,6 @@
 //! Local GPU diagnostic timing evidence for manual productization reports.
 //!
-//! This module measures bounded P25/P26 parity fixtures only. It is not an
+//! This module measures the bounded legacy P25 static-forward fixture only. It is not an
 //! active gameplay runtime path and all GPU readback remains manual diagnostic
 //! evidence scoped.
 
@@ -8,13 +8,12 @@ use std::time::Instant;
 
 use alife_core::{
     validate_finite, BrainClassSpec, BrainScaleTier, CooEntry, CooTile, DenseTile,
-    NeuralProjectionSchema, OjaUpdateConfig, ProjectionTile, ScaffoldContractError,
-    SparseTileCoord, SynapseWeightSplit, MICROTILE_CELLS, MICROTILE_EDGE,
+    NeuralProjectionSchema, ProjectionTile, ScaffoldContractError, SparseTileCoord,
+    SynapseWeightSplit, MICROTILE_CELLS, MICROTILE_EDGE,
 };
 
 use crate::{
-    run_plasticity_gpu_diagnostic_timed, run_static_forward_gpu_diagnostic_timed,
-    GpuFixedPointPolicy, GpuOjaFixedPointConfig, GpuPlasticityPlan, GpuRuntimeBackendKind,
+    run_static_forward_gpu_diagnostic_timed, GpuFixedPointPolicy, GpuRuntimeBackendKind,
     GpuStaticForwardPlan, GpuUploadBuffers,
 };
 
@@ -225,8 +224,6 @@ async fn run_local_gpu_diagnostic_timing_async(
 
     let static_workload =
         measure_static_forward(&device, &queue, warmup_iterations, measured_iterations).await?;
-    let plasticity_workload =
-        measure_plasticity(&device, &queue, warmup_iterations, measured_iterations).await?;
     let adapter_identifier = format!(
         "{} ({:?}, {:?}, {})",
         info.name, info.backend, info.device_type, info.driver_info
@@ -240,7 +237,7 @@ async fn run_local_gpu_diagnostic_timing_async(
         timestamp_query_supported,
         requested_backend: GpuRuntimeBackendKind::GpuAuthoritative,
         product_gameplay_timing_claim: GpuDiagnosticProductRuntimeClaim::None,
-        workloads: vec![static_workload, plasticity_workload],
+        workloads: vec![static_workload],
     };
     report.validate()?;
     Ok(report)
@@ -306,68 +303,6 @@ async fn measure_static_forward(
     })
 }
 
-async fn measure_plasticity(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    warmup_iterations: u32,
-    measured_iterations: u32,
-) -> Result<GpuDiagnosticWorkloadTiming, ScaffoldContractError> {
-    let plan = plasticity_fixture_plan(0.5, 0.1)?;
-    let previous_q = plan.quantize_activations(&activation_vec(0.8, 0.0))?;
-    let finalized_q = plan.quantize_activations(&activation_vec(0.6, 0.0))?;
-    let cpu_start = Instant::now();
-    let cpu = plan.execute_cpu_diagnostic(&previous_q, &finalized_q)?;
-    let cpu_reference_mean_ms = elapsed_ms(cpu_start);
-
-    for _ in 0..warmup_iterations {
-        run_plasticity_gpu_diagnostic_timed(device, queue, &plan, &previous_q, &finalized_q)
-            .await?;
-    }
-
-    let mut submit_poll_ms = 0.0_f32;
-    let mut readback_ms = 0.0_f32;
-    let mut parity_passed = true;
-    for _ in 0..measured_iterations {
-        let timed =
-            run_plasticity_gpu_diagnostic_timed(device, queue, &plan, &previous_q, &finalized_q)
-                .await?;
-        submit_poll_ms += timed.timing.submit_poll_wall_ms;
-        readback_ms += timed.timing.readback_wall_ms;
-        parity_passed &= timed.result.h_shadow_q == cpu.h_shadow_q
-            && timed.result.genetic_fixed_q == cpu.genetic_fixed_q
-            && timed.result.lifetime_consolidated_q == cpu.lifetime_consolidated_q
-            && timed.result.h_operational_q == cpu.h_operational_q
-            && timed.result.diagnostics == cpu.diagnostics;
-    }
-
-    let submit_poll_mean = submit_poll_ms / measured_iterations as f32;
-    let readback_mean = readback_ms / measured_iterations as f32;
-    Ok(GpuDiagnosticWorkloadTiming {
-        schema_version: GPU_DIAGNOSTIC_TIMING_SCHEMA_VERSION,
-        workload_name: "P26 plasticity/Oja diagnostic fixture".to_string(),
-        fixture_dimensions: format!(
-            "neurons={}, tiles={}, synapses={}, dispatch={}",
-            plan.header.neuron_count,
-            plan.tile_metadata.len(),
-            plan.packed_indices.len(),
-            plan.dispatch.pass3_workgroups
-        ),
-        warmup_iterations,
-        measured_iterations,
-        cpu_reference_mean_ms: Some(cpu_reference_mean_ms),
-        gpu_submit_poll_mean_ms: Some(submit_poll_mean),
-        readback_mean_ms: Some(readback_mean),
-        gpu_total_mean_ms: Some(submit_poll_mean + readback_mean),
-        parity_passed,
-        no_active_gameplay_readback: true,
-        timing_kind: GpuDiagnosticTimingKind::HostObservedDiagnostic,
-        product_runtime_claim: GpuDiagnosticProductRuntimeClaim::DiagnosticOnly,
-        target_60_fps: GpuTimingTargetStatus::NotApplicable,
-        notes: "Host-observed diagnostic timing; H_shadow-only parity readback is manual evidence."
-            .to_string(),
-    })
-}
-
 fn static_forward_fixture_plan() -> Result<GpuStaticForwardPlan, ScaffoldContractError> {
     let policy = GpuFixedPointPolicy::reference();
     let schema = static_forward_schema()?;
@@ -408,48 +343,6 @@ fn static_forward_activation_fixture() -> Vec<f32> {
     activations
 }
 
-fn plasticity_fixture_plan(
-    alpha: f32,
-    h_shadow: f32,
-) -> Result<GpuPlasticityPlan, ScaffoldContractError> {
-    let policy = GpuFixedPointPolicy::reference();
-    let upload = GpuUploadBuffers::from_cpu_schema(&plasticity_schema(alpha, h_shadow)?, policy)?;
-    GpuPlasticityPlan::from_upload(
-        &upload,
-        policy,
-        GpuOjaFixedPointConfig::from_oja_config(
-            OjaUpdateConfig {
-                learning_rate: 0.5,
-                learning_rate_scale: 1.0,
-                decay: 1.0,
-                shadow_min: -1.0,
-                shadow_max: 1.0,
-            },
-            policy,
-            0xACE1,
-        )?,
-    )
-}
-
-fn plasticity_schema(
-    alpha: f32,
-    h_shadow: f32,
-) -> Result<NeuralProjectionSchema, ScaffoldContractError> {
-    let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
-    let mut schema = NeuralProjectionSchema::empty_for_brain_class(&spec)?;
-    schema.projections[0].tiles.push(ProjectionTile::new_coo(
-        0,
-        SparseTileCoord::new(0, 0)?,
-        CooTile::new(vec![CooEntry::new(
-            0,
-            0,
-            weights(0.25, 0.125, alpha, 0.5, h_shadow)?,
-        )?])?,
-    ));
-    schema.rebuild_supertile_masks();
-    Ok(schema)
-}
-
 fn weights(
     genetic: f32,
     lifetime: f32,
@@ -458,13 +351,6 @@ fn weights(
     h_shadow: f32,
 ) -> Result<SynapseWeightSplit, ScaffoldContractError> {
     SynapseWeightSplit::new(genetic, lifetime, alpha, h, h_shadow)
-}
-
-fn activation_vec(index0: f32, index1: f32) -> Vec<f32> {
-    let mut values = vec![0.0; 512];
-    values[0] = index0;
-    values[1] = index1;
-    values
 }
 
 fn elapsed_ms(start: Instant) -> f32 {

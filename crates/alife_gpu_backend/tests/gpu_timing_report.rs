@@ -73,7 +73,7 @@ fn local_gpu_diagnostic_timing_report_measures_real_adapter() {
     let report = alife_gpu_backend::run_local_gpu_diagnostic_timing(1, 2).unwrap();
     println!("{}", report.to_markdown());
     report.validate().unwrap();
-    assert_eq!(report.workloads.len(), 2);
+    assert_eq!(report.workloads.len(), 1);
     assert!(report
         .workloads
         .iter()

@@ -15,7 +15,10 @@ pub enum SchemaKind {
     PackedLog,
     Genome,
     NeuralProjection,
+    Learning,
     SleepConsolidation,
+    SensorProfile,
+    MemoryQuery,
     Save,
     TeacherSchool,
     LineageExport,
@@ -28,6 +31,7 @@ pub struct ContractVersion(pub u16);
 impl ContractVersion {
     pub const V1: Self = Self(1);
     pub const V2: Self = Self(2);
+    pub const V3: Self = Self(3);
 
     pub const fn raw(self) -> u16 {
         self.0
@@ -45,6 +49,7 @@ pub struct SchemaVersions {
     pub packed_log: ContractVersion,
     pub genome: ContractVersion,
     pub neural_projection: ContractVersion,
+    pub learning: ContractVersion,
     pub sleep_consolidation: ContractVersion,
     pub save: ContractVersion,
     pub teacher_school: ContractVersion,
@@ -56,12 +61,13 @@ impl SchemaVersions {
         chemistry: ContractVersion::V1,
         sensory_abi: ContractVersion::V1,
         action_abi: ContractVersion::V2,
-        experience: ContractVersion::V2,
+        experience: ContractVersion::V3,
         perception: ContractVersion::V1,
         phenotype: ContractVersion::V1,
-        packed_log: ContractVersion::V1,
+        packed_log: ContractVersion::V2,
         genome: ContractVersion::V1,
         neural_projection: ContractVersion::V1,
+        learning: ContractVersion::V1,
         sleep_consolidation: ContractVersion::V1,
         save: ContractVersion::V1,
         teacher_school: ContractVersion::V1,
@@ -79,7 +85,10 @@ impl SchemaVersions {
             SchemaKind::PackedLog => Self::CURRENT.packed_log,
             SchemaKind::Genome => Self::CURRENT.genome,
             SchemaKind::NeuralProjection => Self::CURRENT.neural_projection,
+            SchemaKind::Learning => Self::CURRENT.learning,
             SchemaKind::SleepConsolidation => Self::CURRENT.sleep_consolidation,
+            SchemaKind::SensorProfile => ContractVersion::V1,
+            SchemaKind::MemoryQuery => ContractVersion::V2,
             SchemaKind::Save => Self::CURRENT.save,
             SchemaKind::TeacherSchool => Self::CURRENT.teacher_school,
             SchemaKind::LineageExport => Self::CURRENT.lineage_export,

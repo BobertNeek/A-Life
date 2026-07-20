@@ -1,6 +1,8 @@
 use alife_core::{
-    DurationTicks, ExperiencePatchPhase, SleepConsolidationConfig, SleepController, SleepPhase,
-    SleepTrigger, Tick, Validate,
+    ConsolidationDriverEvent, ConsolidationIntent, ConsolidationJobId, ConsolidationStagedOutput,
+    DurationTicks, ExperiencePatchPhase, GpuConsolidationRequest, PhenotypeHash,
+    SleepConsolidationConfig, SleepController, SleepPhase, SleepTrigger, Tick, Validate,
+    GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
 };
 use alife_world::{ScenarioAssertions, ScenarioFixture, ScenarioName, ScenarioRun};
 
@@ -20,7 +22,7 @@ fn fast_headless_soak_preserves_release_gate_invariants() {
         .filter(|run| run.name == ScenarioName::FatigueSleep)
         .count();
     assert_eq!(sleep_runs, FAST_SOAK_CYCLES);
-    assert!(runs.iter().any(|run| run.sleep_transition_observed));
+    assert!(runs.iter().all(|run| !run.sleep_transition_observed));
 
     for run in &runs {
         assert_release_invariants(run);
@@ -189,6 +191,7 @@ fn assert_repeated_sleep_wake_controller_sequence_is_deterministic() {
                 base.raw() + 1
             ))
         );
+        complete_test_consolidation(&mut controller, cycle + 1);
         assert_eq!(
             controller.advance(Tick::new(base.raw() + 2)).unwrap(),
             Some(transition(
@@ -208,6 +211,67 @@ fn assert_repeated_sleep_wake_controller_sequence_is_deterministic() {
         assert_eq!(controller.state().phase, SleepPhase::Awake);
         assert_eq!(controller.state().cycles_completed, cycle as u32 + 1);
     }
+}
+
+fn complete_test_consolidation(controller: &mut SleepController, cycle_id: u64) {
+    let intent = ConsolidationIntent { cycle_id };
+    let replay_digest = [cycle_id + 10, cycle_id + 11, cycle_id + 12, cycle_id + 13];
+    controller
+        .apply_consolidation_driver_event(ConsolidationDriverEvent::ReplayAssetPersisted {
+            intent,
+            replay_digest,
+            replay_event_count: 1,
+            replay_eligibility_sample_count: 1,
+        })
+        .unwrap();
+    let mut request = GpuConsolidationRequest {
+        schema_version: GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+        request_flags: 0,
+        cycle_id,
+        phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
+        input_generation: cycle_id,
+        expected_output_generation: cycle_id + 1,
+        input_digest: [21, 22, 23, 24],
+        replay_digest,
+        max_replay_events: 1,
+        max_replay_eligibility_samples: 1,
+        request_digest: [0; 4],
+    };
+    request.request_digest = request.recompute_request_digest().unwrap();
+    controller
+        .apply_consolidation_driver_event(ConsolidationDriverEvent::Prepared { request })
+        .unwrap();
+    let job_id = ConsolidationJobId::try_from_raw(cycle_id + 1).unwrap();
+    controller
+        .apply_consolidation_driver_event(ConsolidationDriverEvent::Submitted { request, job_id })
+        .unwrap();
+    let mut staged = ConsolidationStagedOutput {
+        job_id,
+        output_generation: request.expected_output_generation,
+        output_weight_bank: (cycle_id & 1) as u8,
+        output_digest: [31, 32, 33, cycle_id + 34],
+        eligibility_reset_generation: cycle_id + 1,
+        output_eligibility_bank: 0,
+        eligibility_output_digest: [41, 42, 43, cycle_id + 44],
+        replay_journal_generation: cycle_id + 1,
+        replay_journal_cursor: 0,
+        replay_journal_event_count: 0,
+        replay_journal_output_digest: [51, 52, 53, cycle_id + 54],
+        staging_digest: [0; 4],
+        promoted_fast_l1_bits: 0.25_f32.to_bits(),
+        replay_induced_fast_l1_bits: 0.125_f32.to_bits(),
+    };
+    staged.staging_digest = staged.recompute_staging_digest(&request, 1, 1).unwrap();
+    controller
+        .apply_consolidation_driver_event(ConsolidationDriverEvent::Completed { request, staged })
+        .unwrap();
+    controller
+        .apply_consolidation_driver_event(ConsolidationDriverEvent::Committed {
+            cycle_id,
+            output_generation: staged.output_generation,
+            output_digest: staged.output_digest,
+        })
+        .unwrap();
 }
 
 fn fast_sleep_config() -> SleepConsolidationConfig {

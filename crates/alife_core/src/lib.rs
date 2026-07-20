@@ -12,17 +12,19 @@ pub mod error;
 pub mod experience;
 pub mod foundation;
 pub mod genome;
+pub mod grounding;
 pub mod ids;
 pub mod language;
+pub mod learning;
 pub mod lineage;
 pub mod lobe;
 pub mod math;
 pub mod memory;
+pub mod memory_query;
 pub mod neural;
 pub mod packed_log;
 pub mod perception;
 pub mod phenotype;
-pub mod post_seal_lifetime;
 pub mod reference_brain;
 pub mod routing;
 pub mod sensory_abi;
@@ -73,20 +75,29 @@ pub use genome::{
     DriveThresholdKind, EffectiveWeightSample, EndocrineConstantGene, EndocrineConstantKind,
     GenomeSeedSet, HOperational, HShadow, InheritancePolicy, LifetimeConsolidationDelta,
     LobeAlphaOverride, LobeRatioOverride, LobeRatioPlan, LobeRatioRegistryRef, MacroConnectomeMask,
-    MotorAffordanceGene, MotorAffordanceKind, MutationRates, PlasticityMask,
-    ProjectionAlphaOverride, ProjectionKey, ProjectionPlasticityMask, SensorChannelGene,
-    SensorChannelKind, SensorLayoutGene, SparseDensityPrior, SynapseAddress, SynapseAlphaOverride,
-    TileAddress, TileAlphaOverride, WEffective, WGeneticFixed, WLifetimeConsolidated,
-    WeightLayerDescriptor, WeightLayerKind, WeightSplitContract, WeightStorageSemantics,
+    MotorAffordanceGene, MotorAffordanceKind, MutationRates, PlasticityGenomeParameters,
+    PlasticityMask, ProjectionAlphaOverride, ProjectionKey, ProjectionPlasticityMask,
+    SensorChannelGene, SensorChannelKind, SensorLayoutGene, SparseDensityPrior, SynapseAddress,
+    SynapseAlphaOverride, TileAddress, TileAlphaOverride, WEffective, WGeneticFixed,
+    WLifetimeConsolidated, WeightLayerDescriptor, WeightLayerKind, WeightSplitContract,
+    WeightStorageSemantics,
+};
+pub use grounding::{
+    GroundedObjectSlotV1, SensorProfileId, SensorProfileIdentity, SensorProfileProvenance,
+    GROUNDED_OBJECT_SLOT_SCHEMA_VERSION, MAX_GROUNDED_OBJECT_SLOTS,
 };
 pub use ids::{
     validate_optional_target, ActionId, BrainClassId, ConceptCellId, CreatureId,
     ExperienceSequenceId, GaussianClusterId, GenomeId, LineageId, LobeIndex, MemoryId, NeuronIndex,
-    OrganismId, WorldEntityId,
+    OrganismId, TrackedObjectId, WorldEntityId,
 };
 pub use language::{
     LanguageCodebookId, LanguageCodebookV1, LanguageTokenClass, LanguageTokenId, SpeechActKind,
     SpeechDecoderLayoutV1,
+};
+pub use learning::{
+    validate_outcome_credit_schema, FastWeightSemantics, LearningCommitToken,
+    LearningSequenceGuard, NeuromodulatorSample, OutcomeCreditPacket, OutcomeCreditReplayKey,
 };
 pub use lineage::LineageExportManifest;
 pub use lobe::{
@@ -95,9 +106,25 @@ pub use lobe::{
 };
 pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
 pub use memory::{
-    MemoryBank, MemoryBankConfig, MemoryConsolidationBatch, MemoryConsolidator, MemoryExpectancy,
-    MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecord, MEMORY_BANK_MAX_CAPACITY,
-    MEMORY_FEATURE_VECTOR_MAX_LEN,
+    CandidateMemoryRecallReceipt, FinalizedMemoryRecall, MemoryBank, MemoryBankConfig,
+    MemoryBucketReceiptKey, MemoryCompactionCheckpoint, MemoryCompactionIdentity,
+    MemoryCompactionPhase, MemoryCompactionReceipt, MemoryConsolidationBatch, MemoryConsolidator,
+    MemoryExpectancy, MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecallChannel,
+    MemoryRecallDegradation, MemoryRecallReceipt, MemoryRecord, MemorySidecarState,
+    MemoryUpdateKind, MemoryUpdateReceipt, PortableMemoryBankAssetV2, PortableMemoryRecordV2,
+    PreparedMemoryCompaction, PreparedMemoryRecall, TargetMemoryBucketReceiptKey,
+    MEMORY_BANK_MAX_CAPACITY, MEMORY_FAMILY_SEARCH_CAP, MEMORY_FEATURE_VECTOR_MAX_LEN,
+    MEMORY_MERGE_SIMILARITY, MEMORY_MIN_SIMILARITY, MEMORY_RECALL_SCHEMA_VERSION,
+    MEMORY_RECALL_TOP_K, MEMORY_TARGET_SEARCH_CAP, MEMORY_TOTAL_SEARCH_CAP,
+};
+pub use memory_query::{
+    CandidateMemoryContextV1, CandidateMemoryQueryV2, EpisodicDecisionKeyV2,
+    EpisodicRetrievalContextV1, MemoryQueryEncoderV2, MemoryQueryVersion,
+    EPISODIC_RETRIEVAL_CONTEXT_SCHEMA_VERSION, MEMORY_ACTION_FAMILY_RANGE,
+    MEMORY_ACTION_KIND_RANGE, MEMORY_BODY_RANGE, MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE,
+    MEMORY_CONTEXT_V1_MAX_SOURCES, MEMORY_DRIVE_RANGE, MEMORY_HORMONE_RANGE,
+    MEMORY_LATENT_V1_COUNT, MEMORY_PROFILE_RANGE, MEMORY_QUERY_V2_FEATURE_COUNT,
+    MEMORY_RESERVED_RANGE, MEMORY_STATE_SENSORY_RANGE, MEMORY_TARGET_RANGE, MEMORY_VALUE_V1_COUNT,
 };
 pub use neural::{
     cpu_spmv_projection, finalize_cpu_activations, update_oja_shadow_traces, ActivationFunction,
@@ -131,20 +158,13 @@ pub use phenotype::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainExecutionBudget, BrainPhenotype,
     CandidateDecoderFamilyPlan, CandidateDecoderPlan, CompiledBudgets, CompiledProjection,
     CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate,
-    GlobalPhenotypeBudgetReceipt, NeuronDynamics, PersistentAddressMap, PersistentDecoderAddress,
-    PersistentDecoderAddressEntry, PersistentNeuronAddress, PersistentNeuronAddressEntry,
-    PersistentProjectionAddress, PersistentProjectionAddressEntry, PersistentProjectionRole,
-    PersistentSynapseAddress, PersistentSynapseAddressEntry, PhenotypeCompiler,
-    PhenotypeCompilerInputs, PhenotypeHash, RouteBudgetReceipt, SensorEncoderAssignment,
-    SensorEncoderPlan, SensorEncoderSourceGroup,
-};
-pub use post_seal_lifetime::{
-    PostSealHShadowDeltaTarget, PostSealLearningToken, PostSealLifetimeDeltaApplication,
-    PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt, PostSealLifetimeDeltaRecord,
-    PostSealLifetimeDeltaRejectionReason, PostSealLifetimeDeltaSchemaVersion,
-    PostSealLifetimeDeltaSourceKind, PostSealLifetimeLayer, POST_SEAL_HSHADOW_ABS_LIMIT,
-    POST_SEAL_HSHADOW_VALUE_EPSILON, POST_SEAL_LIFETIME_DELTA_MAX_RECORDS,
-    POST_SEAL_LIFETIME_DELTA_SCHEMA_VERSION,
+    GlobalPhenotypeBudgetReceipt, MemoryChannelPlan, NeuronDynamics, PersistentAddressMap,
+    PersistentDecoderAddress, PersistentDecoderAddressEntry, PersistentNeuronAddress,
+    PersistentNeuronAddressEntry, PersistentProjectionAddress, PersistentProjectionAddressEntry,
+    PersistentProjectionRole, PersistentSynapseAddress, PersistentSynapseAddressEntry,
+    PhenotypeCompiler, PhenotypeCompilerInputs, PhenotypeHash, PlasticityReceptorPlan,
+    ReplayCapturePlan, RouteBudgetReceipt, SensorEncoderAssignment, SensorEncoderPlan,
+    SensorEncoderSourceGroup, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,
@@ -168,18 +188,28 @@ pub use sensory_abi::{
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 pub use sleep::{
-    ConceptConsolidationReport, HTraceDrainReport, LifetimeTraitEvidence, LifetimeTraitLedger,
-    MemoryCompressionReport, SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator,
-    SleepController, SleepPhase, SleepState, SleepTransition, SleepTrigger, StableLifetimeTrait,
-    StableLifetimeTraitKind, StructuralEditApplicationStatus, StructuralEditBatch,
-    StructuralEditCandidate, StructuralEditKind, StructuralEditReason, TraitPromotionReport,
-    SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+    compute_gpu_sleep_commit_digest, compute_gpu_sleep_input_weight_digest,
+    compute_gpu_sleep_mutable_state_digest, compute_gpu_sleep_output_weight_digest,
+    decode_replay_eligibility_q15, encode_replay_eligibility_q15, BoundedReplayBatch,
+    ConceptConsolidationReport, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationJobId,
+    ConsolidationStagedOutput, ConsolidationState, GpuConsolidationRequest, HTraceDrainReport,
+    LifetimeTraitEvidence, LifetimeTraitLedger, MemoryCompressionReport, ReplayEligibilitySample,
+    ReplaySynapseSpan, SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator,
+    SleepController, SleepPhase, SleepReplayEvent, SleepReplayJournal, SleepState, SleepTransition,
+    SleepTrigger, StableLifetimeTrait, StableLifetimeTraitKind, StructuralEditApplicationStatus,
+    StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
+    TraitPromotionReport, BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
+    GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 pub use topology::{
     ActionObservationFact, CognitiveEdge, CognitiveEdgeId, CognitiveSimplex, CognitiveSimplexId,
     ConceptBindings, ConceptCell, ContradictionType, CuriosityBias, DriveBinding, DriveChannel,
-    EdgeRelationKind, EmotionValenceSummary, GapResolutionStatus, TopologicalMap,
-    TopologicalMapConfig, TopologyUpdate, UnresolvedGap, UnresolvedGapId,
+    EdgeRelationKind, EmotionValenceSummary, GapResolutionStatus, PortableTopologyActionBindingV1,
+    PortableTopologyBindingSetV1, PortableTopologyConceptV1, PortableTopologyDriveBindingV1,
+    PortableTopologyEdgeV1, PortableTopologyGapV1, PortableTopologySidecarAssetV1,
+    PortableTopologySimplexV1, TopologicalMap, TopologicalMapConfig, TopologyCounts,
+    TopologyDegradationKind, TopologyIdCounters, TopologyObservationReceipt, TopologySidecar,
+    TopologySidecarDiagnostics, TopologyUpdate, UnresolvedGap, UnresolvedGapId,
 };
 pub use traits::{
     NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,

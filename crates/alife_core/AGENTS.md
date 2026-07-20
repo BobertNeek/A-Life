@@ -30,3 +30,9 @@ Rules:
 - N2048 compiles exactly 24,576 recurrent, 4,096 action (3,072 candidate plus
   1,024 reserved speech), and 4,096 memory-decoder synapses. N512/N1024 remain
   valid independent procedural phenotypes until their own foundations exist.
+- Phenotypes own versioned receptor, bounded replay-capture, and sleep plans.
+  The replay identity ceiling is the shared `MAX_REPLAY_CAPTURE_SYNAPSES`
+  contract; GPU crates must not duplicate that value.
+- Topology is an organism-owned, diagnostic-only `TopologySidecar`. It consumes
+  sealed episodic keys, binds objects only by `TrackedObjectId`, degrades
+  deterministically at capacity, and never returns action or score authority.

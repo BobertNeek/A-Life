@@ -175,6 +175,24 @@ ADR-025 and ADR-026 are reserved for the already approved memory/grounding and
 scaling/promotion checkpoints. Their reserved numbers do not delay the
 foundation, language, identity, or archive decisions below.
 
+## ADR-025: Candidate-Conditional Memory and Grounded Profiles
+
+Decision: Episodic recall uses a versioned state-action-target query and returns
+bounded per-candidate latent/value context. Production consumes that context
+only through explicit GPU candidate-decoder channels; no memory context is
+pooled into recurrent/global inputs, and no candidate-invariant memory or
+topology scalar is added to action scores. Queries bind the pre-context
+perception base digest; GPU dispatch and sealing bind the separately computed
+final frame digest after consume-once context finalization.
+
+`PrivilegedAffordanceV1` and `GroundedObjectSlotsV1` are separately provenanced.
+Grounded slots contain physical observations and no semantic class labels.
+Topology is a bounded diagnostic sidecar over sealed patches. Memory and
+topology saturation deterministically merge, evict, compact, or summarize and
+cannot abort a valid neural tick. Persistent bindings use tracked-object or
+episodic IDs rather than raw world entity IDs. Tracker, memory, compaction, and
+topology owners are portable organism IDs rather than GPU handles.
+
 ## ADR-027: Curated Foundations Use Baldwinian Inheritance
 
 Decision: N2048 is the first trained brain class. A versioned immutable curated

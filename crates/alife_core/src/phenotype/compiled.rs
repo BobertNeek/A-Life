@@ -115,10 +115,10 @@ pub enum DecoderHeadKind {
 }
 
 impl DecoderHeadKind {
-    pub const fn raw(self) -> u8 {
-        self as u8
+    pub const fn raw(self) -> u32 {
+        self as u32
     }
-    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
+    pub fn try_from_raw(raw: u32) -> Result<Self, ScaffoldContractError> {
         match raw {
             1 => Ok(Self::ActionCandidate),
             2 => Ok(Self::MemoryContext),
@@ -170,6 +170,25 @@ pub enum CompiledSynapseKind {
     Decoder(DecoderSynapseCoordinate),
 }
 
+impl CompiledSynapseKind {
+    pub const RECURRENT_RAW: u32 = 1;
+    pub const DECODER_RAW: u32 = 2;
+
+    pub const fn kind_raw(self) -> u32 {
+        match self {
+            Self::Recurrent => Self::RECURRENT_RAW,
+            Self::Decoder(_) => Self::DECODER_RAW,
+        }
+    }
+
+    pub fn validate_kind_raw(raw: u32) -> Result<(), ScaffoldContractError> {
+        match raw {
+            Self::RECURRENT_RAW | Self::DECODER_RAW => Ok(()),
+            _ => Err(ScaffoldContractError::PhenotypeCompile),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct CompiledSynapse {
     source: u32,
@@ -177,6 +196,7 @@ pub struct CompiledSynapse {
     genetic_weight: f32,
     alpha: f32,
     route_index: u16,
+    receptor_index: u16,
     kind: CompiledSynapseKind,
 }
 
@@ -196,6 +216,9 @@ impl CompiledSynapse {
     pub const fn route_index(&self) -> u16 {
         self.route_index
     }
+    pub const fn receptor_index(&self) -> u16 {
+        self.receptor_index
+    }
     pub const fn kind(&self) -> CompiledSynapseKind {
         self.kind
     }
@@ -213,8 +236,12 @@ impl CompiledSynapse {
             genetic_weight,
             alpha,
             route_index,
+            receptor_index: 0,
             kind,
         }
+    }
+    pub(super) fn set_receptor_index(&mut self, receptor_index: u16) {
+        self.receptor_index = receptor_index;
     }
     pub(super) fn validate_local(&self) -> Result<(), ScaffoldContractError> {
         if !self.genetic_weight.is_finite()
@@ -255,6 +282,7 @@ impl<'de> Deserialize<'de> for CompiledSynapse {
             genetic_weight: f32,
             alpha: f32,
             route_index: u16,
+            receptor_index: u16,
             kind: KindWire,
         }
         let w = Wire::deserialize(deserializer)?;
@@ -265,7 +293,7 @@ impl<'de> Deserialize<'de> for CompiledSynapse {
                     DecoderSynapseCoordinate::new(c.head, c.family, c.input_lane, c.motor_index),
                 ),
             };
-        let value = Self::new(
+        let mut value = Self::new(
             w.source,
             w.target,
             w.genetic_weight,
@@ -273,6 +301,7 @@ impl<'de> Deserialize<'de> for CompiledSynapse {
             w.route_index,
             kind,
         );
+        value.set_receptor_index(w.receptor_index);
         value.validate_local().map_err(D::Error::custom)?;
         Ok(value)
     }

@@ -33,6 +33,7 @@ pub struct GlobalPhenotypeBudgetReceipt {
     pub decoder_input_lanes: u16,
     pub replay_event_capacity: u32,
     pub replay_eligibility_sample_capacity: u32,
+    pub replay_capture_synapse_count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,6 +131,13 @@ impl CompiledBudgets {
             || global.replay_event_capacity > capacity.execution().max_replay_events()
             || global.replay_eligibility_sample_capacity
                 > capacity.execution().max_replay_eligibility_samples()
+            || global.replay_capture_synapse_count == 0
+            || global.replay_capture_synapse_count > global.total_synapses
+            || global.replay_capture_synapse_count
+                > global
+                    .replay_eligibility_sample_capacity
+                    .checked_div(global.replay_event_capacity)
+                    .unwrap_or(0)
         {
             return Err(compile_error());
         }
