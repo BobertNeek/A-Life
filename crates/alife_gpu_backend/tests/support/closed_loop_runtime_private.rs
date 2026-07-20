@@ -21,6 +21,53 @@ fn software_adapter_is_rejected_without_device_request() {
 }
 
 #[test]
+fn timestamp_queries_are_a_required_gpu_capability() {
+    assert_eq!(required_device_features(), wgpu::Features::TIMESTAMP_QUERY);
+    assert_eq!(
+        validate_required_device_features(wgpu::Features::empty()),
+        Err(ScaffoldContractError::GpuTimestampQueryUnavailable)
+    );
+    assert_eq!(
+        validate_required_device_features(wgpu::Features::TIMESTAMP_QUERY),
+        Ok(())
+    );
+}
+
+#[test]
+fn timestamp_period_bits_convert_ticks_without_float_arithmetic() {
+    let one_ns = ExactGpuTimestampPeriod::try_from_f32_bits(1.0_f32.to_bits()).unwrap();
+    assert_eq!(one_ns.elapsed_ns(100, 101).unwrap(), 1);
+
+    let five_quarters = ExactGpuTimestampPeriod::try_from_f32_bits(1.25_f32.to_bits()).unwrap();
+    assert_eq!(five_quarters.elapsed_ns(7, 11).unwrap(), 5);
+
+    let half_ns = ExactGpuTimestampPeriod::try_from_f32_bits(0.5_f32.to_bits()).unwrap();
+    assert_eq!(half_ns.elapsed_ns(3, 4).unwrap(), 1);
+    assert_eq!(
+        half_ns.elapsed_ns(4, 3),
+        Err(ScaffoldContractError::GpuTimestampQueryUnavailable)
+    );
+    assert_eq!(
+        ExactGpuTimestampPeriod::try_from_f32_bits(0.0_f32.to_bits()),
+        Err(ScaffoldContractError::GpuTimestampQueryUnavailable)
+    );
+    assert_eq!(
+        ExactGpuTimestampPeriod::try_from_f32_bits(f32::NAN.to_bits()),
+        Err(ScaffoldContractError::GpuTimestampQueryUnavailable)
+    );
+}
+
+#[test]
+fn timestamp_mapping_status_is_checked_without_waiting_for_a_missing_callback() {
+    let (_sender, receiver) = std::sync::mpsc::channel::<Result<(), wgpu::BufferAsyncError>>();
+    assert!(!timestamp_mapping_completed(&receiver));
+
+    let (sender, receiver) = std::sync::mpsc::channel::<Result<(), wgpu::BufferAsyncError>>();
+    sender.send(Ok(())).unwrap();
+    assert!(timestamp_mapping_completed(&receiver));
+}
+
+#[test]
 fn stale_gpu_layout_is_rejected_before_slot_allocation() {
     let result = validate_required_gpu_layout_version(GPU_CLOSED_LOOP_LAYOUT_VERSION - 1);
     assert_eq!(result, Err(ScaffoldContractError::GpuLayoutMismatch));

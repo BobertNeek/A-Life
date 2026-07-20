@@ -91,7 +91,7 @@ mod task3_capacity_budget_red_tests {
                 execution.required_max_bind_groups(),
                 execution.required_max_bindings_per_bind_group(),
             ),
-            (1, 1, 0, 268_435_456, 134_217_728, 4, 1_000),
+            (1, 1, 1, 268_435_456, 134_217_728, 4, 1_000),
             "wrong versioned feature/buffer/binding floors for {:?}",
             expected.id,
         );
@@ -261,7 +261,7 @@ mod task3_capacity_budget_red_tests {
             ("max_decoder_input_lanes", json!(63)),
             ("required_limits_schema_version", json!(2)),
             ("required_feature_mask_words", json!(2)),
-            ("required_feature_mask", json!(1)),
+            ("required_feature_mask", json!(0)),
             ("required_max_buffer_size", json!(536_870_912u64)),
             (
                 "required_max_storage_buffer_binding_size",

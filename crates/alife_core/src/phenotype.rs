@@ -20,7 +20,7 @@ mod record;
 mod topology_compile;
 
 pub use budgets::{CompiledBudgets, GlobalPhenotypeBudgetReceipt, RouteBudgetReceipt};
-pub use capacity::{BrainCapacityClass, BrainExecutionBudget};
+pub use capacity::{BrainCapacityClass, BrainExecutionBudget, REQUIRED_GPU_FEATURE_MASK};
 pub use compiled::{
     CompiledProjection, CompiledSynapse, CompiledSynapseKind, DecoderHeadKind,
     DecoderSynapseCoordinate, NeuronDynamics,

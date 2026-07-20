@@ -10,22 +10,26 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use alife_core::{
-    BrainCapacityClass, BrainClassId, BrainPhenotype, CanonicalDigestBuilder, Confidence,
-    ExperiencePatch, FinalizedMemoryRecall, LearningCommitToken, LearningSequenceGuard,
-    NeuralActionSelection, OrganismId, OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame,
-    PerceptionFrameDigest, PhenotypeHash, ScaffoldContractError, SensorProfile,
+    BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, BrainDispatchIdentity, BrainPhenotype,
+    BrainWorkReceipt, CanonicalDigestBuilder, Confidence, ExperiencePatch, FinalizedMemoryRecall,
+    GpuPressureSample, GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard,
+    NeuralActionSelection, NeuralThrottleDecision, OrganismId, OutcomeCreditPacket,
+    PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash,
+    ScaffoldContractError, SensorProfile, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX,
+    BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    GpuActiveBatchUpload, GpuAdmissionReceipt, GpuAllocationEventKind, GpuAllocationEventReceipt,
-    GpuBrainSlot, GpuClosedLoopError, GpuClosedLoopKernelSet, GpuClosedLoopPipelines,
-    GpuCompactMapTicket, GpuFastPlasticityBatchEntry, GpuFixedActiveBatchEntry,
-    GpuFixedClassArenaBuffers, GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuLearningReceipt,
-    GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload, GpuOutcomeCreditRecord,
-    GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
-    GpuRuntimeProfile, GpuValidatedClassBatch, PendingEligibilityDiscardReceipt,
-    PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
+    derive_executed_work, GpuActiveBatchUpload, GpuAdmissionReceipt, GpuAllocationEventKind,
+    GpuAllocationEventReceipt, GpuBrainSlot, GpuClosedLoopError, GpuClosedLoopKernelSet,
+    GpuClosedLoopPipelines, GpuCompactMapTicket, GpuFastPlasticityBatchEntry,
+    GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers, GpuFixedClassArenaPlan,
+    GpuFixedSlotRanges, GpuLearningReceipt, GpuMemoryContextDispatchReceipt,
+    GpuMemoryContextUpload, GpuOutcomeCreditRecord, GpuPendingEligibilityRecord,
+    GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget, GpuRuntimeProfile,
+    GpuValidatedClassBatch, PendingEligibilityDiscardReceipt, PendingEligibilityIdentity,
+    PendingEligibilityReceipt, GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 
 pub const GPU_HARDWARE_RECEIPT_SCHEMA_VERSION: u16 = 1;
@@ -36,6 +40,132 @@ pub const GPU_LIMITS_DIGEST_DOMAIN: &[u8] = b"alife.gpu.hardware.limits.v1";
 const BACKEND_VERSION: &str = env!("CARGO_PKG_VERSION");
 static NEXT_BACKEND_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_HARDWARE_RECEIPT_GENERATION: AtomicU64 = AtomicU64::new(1);
+const GPU_TIMESTAMP_QUERY_COUNT: u32 = 2;
+const GPU_TIMESTAMP_READBACK_BYTES: u64 = 16;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ExactGpuTimestampPeriod {
+    significand: u32,
+    binary_exponent: i16,
+}
+
+impl ExactGpuTimestampPeriod {
+    fn try_from_f32_bits(bits: u32) -> Result<Self, ScaffoldContractError> {
+        let sign = bits >> 31;
+        let exponent_bits = (bits >> 23) & 0xff;
+        let mantissa = bits & 0x7f_ffff;
+        if sign != 0 || exponent_bits == 0xff || (exponent_bits == 0 && mantissa == 0) {
+            return Err(ScaffoldContractError::GpuTimestampQueryUnavailable);
+        }
+        let (significand, binary_exponent) = if exponent_bits == 0 {
+            (mantissa, -149)
+        } else {
+            (
+                (1 << 23) | mantissa,
+                i16::try_from(exponent_bits)
+                    .map_err(|_| ScaffoldContractError::GpuTimestampQueryUnavailable)?
+                    - 127
+                    - 23,
+            )
+        };
+        Ok(Self {
+            significand,
+            binary_exponent,
+        })
+    }
+
+    fn elapsed_ns(self, begin: u64, end: u64) -> Result<u64, ScaffoldContractError> {
+        let ticks = end
+            .checked_sub(begin)
+            .filter(|ticks| *ticks != 0)
+            .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?;
+        let scaled = u128::from(ticks)
+            .checked_mul(u128::from(self.significand))
+            .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?;
+        let nanoseconds = if self.binary_exponent >= 0 {
+            scaled
+                .checked_shl(u32::from(self.binary_exponent.unsigned_abs()))
+                .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?
+        } else {
+            let shift = u32::from(self.binary_exponent.unsigned_abs());
+            if shift >= u128::BITS {
+                1
+            } else {
+                let quotient = scaled >> shift;
+                let remainder_mask = (1_u128 << shift) - 1;
+                quotient
+                    .checked_add(u128::from(scaled & remainder_mask != 0))
+                    .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?
+            }
+        };
+        u64::try_from(nanoseconds).map_err(|_| ScaffoldContractError::GpuTimestampQueryUnavailable)
+    }
+}
+
+fn timestamp_mapping_completed(
+    receiver: &std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>,
+) -> bool {
+    matches!(receiver.try_recv(), Ok(Ok(())))
+}
+
+struct GpuTimestampResources {
+    query_set: wgpu::QuerySet,
+    resolve_buffer: wgpu::Buffer,
+    readback_buffer: wgpu::Buffer,
+    period: ExactGpuTimestampPeriod,
+}
+
+impl GpuTimestampResources {
+    fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Result<Self, ScaffoldContractError> {
+        validate_required_device_features(device.features())?;
+        let period =
+            ExactGpuTimestampPeriod::try_from_f32_bits(queue.get_timestamp_period().to_bits())?;
+        let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
+            label: Some("closed-loop-runtime-timestamps"),
+            ty: wgpu::QueryType::Timestamp,
+            count: GPU_TIMESTAMP_QUERY_COUNT,
+        });
+        let resolve_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("closed-loop-runtime-timestamp-resolve"),
+            size: GPU_TIMESTAMP_READBACK_BYTES,
+            usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("closed-loop-runtime-timestamp-readback"),
+            size: GPU_TIMESTAMP_READBACK_BYTES,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        Ok(Self {
+            query_set,
+            resolve_buffer,
+            readback_buffer,
+            period,
+        })
+    }
+
+    fn read_elapsed_ns(&self) -> Result<u64, ScaffoldContractError> {
+        let mapped = self
+            .readback_buffer
+            .slice(..GPU_TIMESTAMP_READBACK_BYTES)
+            .get_mapped_range();
+        let bytes: &[u8] = &mapped;
+        let begin = u64::from_le_bytes(
+            bytes[0..8]
+                .try_into()
+                .map_err(|_| ScaffoldContractError::GpuTimestampQueryUnavailable)?,
+        );
+        let end = u64::from_le_bytes(
+            bytes[8..16]
+                .try_into()
+                .map_err(|_| ScaffoldContractError::GpuTimestampQueryUnavailable)?,
+        );
+        drop(mapped);
+        self.readback_buffer.unmap();
+        self.period.elapsed_ns(begin, end)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuHardwareReceipt {
@@ -102,6 +232,9 @@ pub struct GpuClosedLoopTick {
     pub active_activation_side: u8,
     pub selection: NeuralActionSelection,
     pub pending_eligibility: PendingEligibilityReceipt,
+    pub pressure: GpuPressureSample,
+    pub throttle: NeuralThrottleDecision,
+    pub work: BrainWorkReceipt,
     pub compact_readback_bytes: usize,
     pub hardware_receipt_generation: u64,
 }
@@ -494,6 +627,7 @@ struct GpuBrainSlotOwnership {
 
 pub(crate) struct ResidentBrainSlot {
     ownership: GpuBrainSlotOwnership,
+    pub(crate) phenotype: BrainPhenotype,
     pub(crate) brain_slot: GpuBrainSlot,
     pub(crate) ranges: GpuFixedSlotRanges,
     pub(crate) active_eligibility_bank: u8,
@@ -503,6 +637,15 @@ pub(crate) struct ResidentBrainSlot {
     pub(crate) replay_journal_generation: u64,
     pub(crate) transaction_generation: u64,
     pub(crate) logical_dispatch_generation: u64,
+    pub(crate) activity_sequence_cursor: u64,
+    pub(crate) brain_atp_q16: u32,
+    pub(crate) last_world_atp_tick: Option<u64>,
+    pub(crate) last_activity_dispatch_generation: u64,
+    pub(crate) last_activity_frame_digest: [u64; 4],
+    pub(crate) last_completed_gpu_time_ns: u64,
+    pub(crate) last_pressure: Option<GpuPressureSample>,
+    pub(crate) last_throttle: Option<NeuralThrottleDecision>,
+    pub(crate) last_work: Option<BrainWorkReceipt>,
     pub(crate) sleep_plan: alife_core::SleepConsolidationPlan,
     pub(crate) learning_sequence_guard: LearningSequenceGuard,
     pub(crate) pending_eligibility: Option<PendingEligibilityReceipt>,
@@ -686,11 +829,13 @@ pub struct GpuClosedLoopBackend {
     adapter: wgpu::Adapter,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
+    timestamp_resources: GpuTimestampResources,
     pub(crate) device_lost: Arc<AtomicBool>,
     kernels: Arc<GpuClosedLoopKernelSet>,
     pub(crate) state: GpuBackendState,
     runtime_profile: GpuRuntimeProfile,
     runtime_budget: GpuRuntimeBudget,
+    activity_policy: BrainActivityPolicyV1,
     admission: GpuAdmissionReceipt,
     pub(crate) class_buckets: BTreeMap<u16, ClassBucketRuntime>,
     slot_generation_watermarks: BTreeMap<(u16, u32), u32>,
@@ -735,6 +880,9 @@ impl GpuClosedLoopBackend {
             required.hardware.limits_digest,
         )?;
         let admission = GpuAdmissionReceipt::empty(runtime_budget);
+        let activity_policy = BrainActivityPolicyV1::production_v1();
+        activity_policy.validate_contract()?;
+        let timestamp_resources = GpuTimestampResources::new(&required.device, &required.queue)?;
         let kernels =
             GpuClosedLoopKernelSet::new(&required.device).map_err(map_gpu_contract_error)?;
         Ok(Self {
@@ -743,11 +891,13 @@ impl GpuClosedLoopBackend {
             adapter: required.adapter,
             device: required.device,
             queue: required.queue,
+            timestamp_resources,
             device_lost: required.lost,
             kernels,
             state: GpuBackendState::Ready,
             runtime_profile: profile,
             runtime_budget,
+            activity_policy,
             admission,
             class_buckets: BTreeMap::new(),
             slot_generation_watermarks: BTreeMap::new(),
@@ -798,6 +948,64 @@ impl GpuClosedLoopBackend {
 
     pub const fn completed_selection_count(&self) -> u64 {
         self.completed_selection_count
+    }
+
+    pub fn brain_atp_q16(&self, handle: GpuBrainHandle) -> Result<u32, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        self.class_buckets
+            .get(&handle.class_id.raw())
+            .and_then(|bucket| bucket.slots.get(handle.slot as usize))
+            .and_then(Option::as_ref)
+            .filter(|resident| resident.ownership.organism_id == handle.organism_id)
+            .map(|resident| resident.brain_atp_q16)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    /// Charges the exact world-owned ATP term before neural dispatch.
+    ///
+    /// The monotonic tick guard makes basal cost replay-safe. Sleep recovery is
+    /// a distinct credit in the same fixed-point transaction and never alters
+    /// the neural work receipt's independently computed debit.
+    pub fn charge_world_brain_atp_tick(
+        &mut self,
+        handle: GpuBrainHandle,
+        world_tick: u64,
+        began_tick_asleep: bool,
+    ) -> Result<u32, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let bucket = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if !bucket.contains(handle) {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let resident = bucket
+            .slots
+            .get_mut(handle.slot as usize)
+            .and_then(Option::as_mut)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if let Some(last) = resident.last_world_atp_tick {
+            if last == world_tick {
+                return Ok(resident.brain_atp_q16);
+            }
+            if last.checked_add(1) != Some(world_tick) {
+                return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+            }
+        }
+        let after_basal = resident
+            .brain_atp_q16
+            .saturating_sub(BRAIN_ATP_BASAL_DEBIT_Q16);
+        resident.brain_atp_q16 = if began_tick_asleep {
+            after_basal
+                .saturating_add(BRAIN_ATP_SLEEP_RECOVERY_Q16)
+                .min(BRAIN_ATP_Q16_MAX)
+        } else {
+            after_basal
+        };
+        resident.last_world_atp_tick = Some(world_tick);
+        Ok(resident.brain_atp_q16)
     }
 
     pub fn pending_eligibility(
@@ -1241,6 +1449,9 @@ impl GpuClosedLoopBackend {
             if resident.pending_eligibility.is_some() {
                 return Err(ScaffoldContractError::LearningReplayRejected);
             }
+            if resident.activity_sequence_cursor.checked_add(1).is_none() {
+                return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+            }
             grouped
                 .entry(handle.class_id.raw())
                 .or_default()
@@ -1265,6 +1476,53 @@ impl GpuClosedLoopBackend {
             .completed_selection_count
             .checked_add(batch.len() as u64)
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        let activity_decisions = batch
+            .iter()
+            .map(|input| {
+                let handle = input.handle;
+                let resident = self
+                    .class_buckets
+                    .get(&handle.class_id.raw())
+                    .and_then(|bucket| bucket.slots.get(handle.slot as usize))
+                    .and_then(Option::as_ref)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let identity = BrainDispatchIdentity {
+                    organism_id_raw: handle.organism_id.raw(),
+                    tick: input.frame.tick().raw(),
+                    class_id_raw: handle.class_id.raw(),
+                    handle_slot: handle.slot,
+                    handle_generation: handle.generation,
+                    sequence_cursor: resident.activity_sequence_cursor,
+                    dispatch_generation: dispatch_generation.get(),
+                    frame_digest: input.frame.frame_digest().0,
+                };
+                let pressure = GpuPressureSample::try_new(
+                    &self.activity_policy,
+                    GpuPressureSampleInput {
+                        identity,
+                        source_dispatch_generation: resident.last_activity_dispatch_generation,
+                        source_frame_digest: resident.last_activity_frame_digest,
+                        completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
+                        // This runtime waits for every submitted mixed-class batch
+                        // before accepting the next one, so there are no older
+                        // neural submissions queued at this dispatch boundary.
+                        queue_depth: 0,
+                        logical_heap_used: self.admission.logical_committed_bytes,
+                        logical_heap_capacity: self.runtime_budget.logical_neural_heap_budget_bytes,
+                        brain_atp_remaining_q16: resident.brain_atp_q16,
+                        brain_atp_capacity_q16: BRAIN_ATP_Q16_MAX,
+                    },
+                )?;
+                let capacity = capacity_for_promoted_class(handle.class_id)?;
+                NeuralThrottleDecision::derive(
+                    &self.activity_policy,
+                    &resident.phenotype,
+                    capacity.execution(),
+                    identity,
+                    pressure,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let mut dispatches = Vec::with_capacity(grouped.len());
         for (class_id, original_indices) in grouped {
             let bucket = self
@@ -1282,12 +1540,16 @@ impl GpuClosedLoopBackend {
                         Some(memory_upload) => GpuFixedActiveBatchEntry::with_memory(
                             input.frame,
                             &resident.brain_slot,
+                            &resident.phenotype,
+                            &activity_decisions[*index],
                             memory_upload,
                             resident.active_eligibility_generation,
                         ),
                         None => GpuFixedActiveBatchEntry::new(
                             input.frame,
                             &resident.brain_slot,
+                            &resident.phenotype,
+                            &activity_decisions[*index],
                             resident.active_eligibility_generation,
                         ),
                     }
@@ -1360,6 +1622,16 @@ impl GpuClosedLoopBackend {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("closed-loop-runtime-mixed-class-tick"),
             });
+        {
+            let _timestamp_start = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("closed-loop-runtime-timestamp-start"),
+                timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
+                    query_set: &self.timestamp_resources.query_set,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: None,
+                }),
+            });
+        }
         for index in 0..dispatches.len() {
             let dispatch = &mut dispatches[index];
             let bucket = self
@@ -1376,6 +1648,29 @@ impl GpuClosedLoopBackend {
             }
             dispatch.recorded = true;
         }
+        {
+            let _timestamp_end = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("closed-loop-runtime-timestamp-end"),
+                timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
+                    query_set: &self.timestamp_resources.query_set,
+                    beginning_of_pass_write_index: None,
+                    end_of_pass_write_index: Some(1),
+                }),
+            });
+        }
+        encoder.resolve_query_set(
+            &self.timestamp_resources.query_set,
+            0..GPU_TIMESTAMP_QUERY_COUNT,
+            &self.timestamp_resources.resolve_buffer,
+            0,
+        );
+        encoder.copy_buffer_to_buffer(
+            &self.timestamp_resources.resolve_buffer,
+            0,
+            &self.timestamp_resources.readback_buffer,
+            0,
+            GPU_TIMESTAMP_READBACK_BYTES,
+        );
         let command_buffer = encoder.finish();
         for index in 0..dispatches.len() {
             let dispatch = &mut dispatches[index];
@@ -1395,6 +1690,15 @@ impl GpuClosedLoopBackend {
                 }
             }
         }
+        let (timestamp_sender, timestamp_receiver) = std::sync::mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            &self.timestamp_resources.readback_buffer,
+            wgpu::MapMode::Read,
+            0..GPU_TIMESTAMP_READBACK_BYTES,
+            move |result| {
+                let _ = timestamp_sender.send(result);
+            },
+        );
         let submission = self.queue.submit(Some(command_buffer));
         let forced_loss = std::mem::take(&mut self.force_device_lost_after_submit);
         let poll_failed = self
@@ -1410,9 +1714,11 @@ impl GpuClosedLoopBackend {
                 .take()
                 .is_some_and(GpuCompactMapTicket::mapping_succeeded)
         });
+        let timestamp_mapping_succeeded = timestamp_mapping_completed(&timestamp_receiver);
         if forced_loss
             || poll_failed
             || !mappings_succeeded
+            || !timestamp_mapping_succeeded
             || self.device_lost.load(Ordering::Acquire)
         {
             for dispatch in &dispatches {
@@ -1425,9 +1731,30 @@ impl GpuClosedLoopBackend {
                     .pipelines
                     .mark_post_submit_poison(dispatch.batch.as_ref().expect("submitted batch"));
             }
+            self.timestamp_resources.readback_buffer.unmap();
             self.mark_device_lost();
-            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            return Err(if !timestamp_mapping_succeeded {
+                ScaffoldContractError::GpuTimestampQueryUnavailable
+            } else {
+                ScaffoldContractError::NeuralBackendUnavailable
+            });
         }
+
+        let completed_gpu_time_ns = match self.timestamp_resources.read_elapsed_ns() {
+            Ok(elapsed) => elapsed,
+            Err(error) => {
+                for dispatch in &dispatches {
+                    self.class_buckets
+                        .get(&dispatch.class_id)
+                        .expect("submitted bucket exists")
+                        .buffers
+                        .compact_readback()
+                        .unmap();
+                }
+                self.poison_submitted_dispatches(&dispatches);
+                return Err(error);
+            }
+        };
 
         for index in 0..dispatches.len() {
             let dispatch = &dispatches[index];
@@ -1588,6 +1915,53 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
 
+        let activity_work_receipts: Result<Vec<BrainWorkReceipt>, ScaffoldContractError> = batch
+            .iter()
+            .enumerate()
+            .map(|(index, input)| {
+                let handle = input.handle;
+                let resident = self
+                    .class_buckets
+                    .get(&handle.class_id.raw())
+                    .and_then(|bucket| bucket.slots.get(handle.slot as usize))
+                    .and_then(Option::as_ref)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let decision = &activity_decisions[index];
+                let candidate_count = u32::try_from(input.frame.candidates().len())
+                    .map_err(|_| ScaffoldContractError::BrainActivityPolicyMismatch)?;
+                let memory_context_count = input
+                    .memory_upload
+                    .map_or(0, |upload| upload.header.candidate_count);
+                let work = derive_executed_work(
+                    &resident.phenotype,
+                    decision.microsteps,
+                    &decision.enabled_route_ids,
+                    candidate_count,
+                    memory_context_count,
+                )?;
+                let record =
+                    ordered_records[index].ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                if work.tile_visits != u64::from(record.active_tiles)
+                    || work.synapse_ops != u64::from(record.active_synapses)
+                {
+                    return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+                }
+                BrainWorkReceipt::try_new(
+                    &self.activity_policy,
+                    decision,
+                    work,
+                    resident.brain_atp_q16,
+                )
+            })
+            .collect();
+        let activity_work_receipts = match activity_work_receipts {
+            Ok(receipts) => receipts,
+            Err(error) => {
+                self.poison_submitted_dispatches(&dispatches);
+                return Err(error);
+            }
+        };
+
         let prepared_ticks = (|| -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
             let mut ticks = Vec::with_capacity(batch.len());
             for (index, input) in batch.iter().enumerate() {
@@ -1619,6 +1993,9 @@ impl GpuClosedLoopBackend {
                         active_synapses: record.active_synapses,
                     },
                     pending_eligibility,
+                    pressure: activity_decisions[index].pressure,
+                    throttle: activity_decisions[index].clone(),
+                    work: activity_work_receipts[index].clone(),
                     compact_readback_bytes: crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
                     hardware_receipt_generation: self.hardware.generation,
                 });
@@ -1696,6 +2073,13 @@ impl GpuClosedLoopBackend {
                     .is_some_and(|resident| {
                         resident.pending_eligibility.is_none()
                             && resident.pending_eligibility_record.is_none()
+                            && resident.activity_sequence_cursor
+                                == activity_decisions[index].sequence_cursor
+                            && resident.brain_atp_q16
+                                == activity_work_receipts[index].atp_before_q16
+                            && activity_work_receipts[index]
+                                .validate_for(&self.activity_policy, &activity_decisions[index])
+                                .is_ok()
                             && resident.transaction_generation.checked_add(1)
                                 == Some(expected_generation)
                     })
@@ -1715,6 +2099,17 @@ impl GpuClosedLoopBackend {
             resident.transaction_generation = ordered_next_transaction_generations[index]
                 .expect("host transaction generation was prevalidated");
             resident.logical_dispatch_generation = dispatch_generation.get();
+            resident.activity_sequence_cursor = resident
+                .activity_sequence_cursor
+                .checked_add(1)
+                .expect("activity cursor was prevalidated");
+            resident.brain_atp_q16 = activity_work_receipts[index].atp_after_q16;
+            resident.last_activity_dispatch_generation = dispatch_generation.get();
+            resident.last_activity_frame_digest = input.frame.frame_digest().0;
+            resident.last_completed_gpu_time_ns = completed_gpu_time_ns;
+            resident.last_pressure = Some(activity_decisions[index].pressure);
+            resident.last_throttle = Some(activity_decisions[index].clone());
+            resident.last_work = Some(activity_work_receipts[index].clone());
             resident.pending_eligibility = ordered_pending_receipts[index];
             resident.pending_eligibility_record = ordered_pending_records[index];
         }
@@ -2089,6 +2484,7 @@ impl GpuClosedLoopBackend {
                 phenotype_hash: phenotype.phenotype_hash(),
                 sensor_profile: phenotype.sensor_profile(),
             },
+            phenotype: phenotype.clone(),
             brain_slot: upload.brain_slot().clone(),
             ranges: upload.ranges().clone(),
             active_eligibility_generation: 1,
@@ -2098,6 +2494,15 @@ impl GpuClosedLoopBackend {
             replay_journal_generation: 1,
             transaction_generation: 1,
             logical_dispatch_generation: self.next_dispatch_generation,
+            activity_sequence_cursor: 1,
+            brain_atp_q16: BRAIN_ATP_Q16_MAX,
+            last_world_atp_tick: None,
+            last_activity_dispatch_generation: 0,
+            last_activity_frame_digest: [0; 4],
+            last_completed_gpu_time_ns: 0,
+            last_pressure: None,
+            last_throttle: None,
+            last_work: None,
             sleep_plan: *phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(
                 organism_id,
@@ -2427,6 +2832,28 @@ impl GpuClosedLoopBackend {
     }
 
     #[cfg(feature = "gpu-tests")]
+    pub fn force_activity_sequence_cursor_for_test(
+        &mut self,
+        handle: GpuBrainHandle,
+        cursor: u64,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let bucket = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if !bucket.contains(handle) {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        bucket.slots[handle.slot as usize]
+            .as_mut()
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .activity_sequence_cursor = cursor;
+        Ok(())
+    }
+
+    #[cfg(feature = "gpu-tests")]
     pub fn force_learning_rejections_for_test(&mut self, rejection_count: u8) {
         self.forced_learning_rejections_remaining = rejection_count;
     }
@@ -2441,8 +2868,9 @@ impl GpuClosedLoopBackend {
 fn acquire_required_gpu(
     factory: &impl GpuDeviceFactory,
 ) -> Result<RequiredGpuDevice, ScaffoldContractError> {
-    let required_features = wgpu::Features::empty();
+    let required_features = required_device_features();
     let required_limits = required_device_limits();
+    let mut found_base_compatible_without_timestamps = false;
     for candidate in factory.request_adapters()? {
         let adapter = match candidate {
             GpuAdapterCandidate::Hardware(adapter) => adapter,
@@ -2453,9 +2881,12 @@ fn acquire_required_gpu(
         if info.device_type == wgpu::DeviceType::Cpu
             || info.backend == wgpu::Backend::Noop
             || backend_slug(info.backend).is_err()
-            || !adapter.features().contains(required_features)
             || !required_limits.check_limits(&adapter.limits())
         {
+            continue;
+        }
+        if validate_required_device_features(adapter.features()).is_err() {
+            found_base_compatible_without_timestamps = true;
             continue;
         }
         let descriptor = wgpu::DeviceDescriptor {
@@ -2488,7 +2919,29 @@ fn acquire_required_gpu(
             lost,
         });
     }
-    Err(ScaffoldContractError::NeuralBackendUnavailable)
+    Err(if found_base_compatible_without_timestamps {
+        ScaffoldContractError::GpuTimestampQueryUnavailable
+    } else {
+        ScaffoldContractError::NeuralBackendUnavailable
+    })
+}
+
+fn required_device_features() -> wgpu::Features {
+    wgpu::Features::TIMESTAMP_QUERY
+}
+
+fn validate_required_device_features(
+    available: wgpu::Features,
+) -> Result<(), ScaffoldContractError> {
+    let required = required_device_features();
+    if REQUIRED_GPU_FEATURE_MASK != 1 {
+        return Err(ScaffoldContractError::GpuLayoutMismatch);
+    }
+    if available.contains(required) {
+        Ok(())
+    } else {
+        Err(ScaffoldContractError::GpuTimestampQueryUnavailable)
+    }
 }
 
 fn required_device_limits() -> wgpu::Limits {

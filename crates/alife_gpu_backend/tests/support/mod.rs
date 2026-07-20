@@ -343,7 +343,11 @@ impl GpuTestBrain {
 mod hardware {
     use std::sync::mpsc;
 
-    use alife_core::{BrainCapacityClass, BrainPhenotype, FinalizedMemoryRecall, PerceptionFrame};
+    use alife_core::{
+        BrainActivityPolicyV1, BrainCapacityClass, BrainDispatchIdentity, BrainPhenotype,
+        FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput, NeuralThrottleDecision,
+        PerceptionFrame,
+    };
     use alife_gpu_backend::{
         GpuActiveBatchEntry, GpuBrainSlot, GpuClassBucketBuffers, GpuClassBucketPlan,
         GpuClosedLoopPipelines, GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload,
@@ -420,12 +424,59 @@ mod hardware {
         pipelines: GpuClosedLoopPipelines,
         plan: GpuClassBucketPlan,
         slots: [GpuBrainSlot; SLOT_COUNT],
+        phenotypes: [BrainPhenotype; SLOT_COUNT],
         immutable_weight_words: Vec<u32>,
         initial_mutable_state_words: Vec<u32>,
         transaction_generations: [u64; SLOT_COUNT],
         sample_indices: Vec<u32>,
         recurrent_sample_positions: Vec<usize>,
         loop_sample_positions: Vec<usize>,
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn activity_decision_for(
+        phenotype: &BrainPhenotype,
+        slot: &GpuBrainSlot,
+        frame: &PerceptionFrame,
+        dispatch_generation: u64,
+        completed_gpu_time_ns: u64,
+        queue_depth: u32,
+        logical_heap_pressure_q16: u32,
+        brain_atp_fraction_q16: u32,
+    ) -> NeuralThrottleDecision {
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
+        let policy = BrainActivityPolicyV1::production_v1();
+        let identity = BrainDispatchIdentity {
+            organism_id_raw: frame.organism_id().raw(),
+            tick: frame.tick().0,
+            class_id_raw: phenotype.brain_class_id().raw(),
+            handle_slot: slot.record().slot,
+            handle_generation: slot.record().slot_generation,
+            sequence_cursor: dispatch_generation,
+            dispatch_generation,
+            frame_digest: frame.frame_digest().0,
+        };
+        let pressure = GpuPressureSample::try_new(
+            &policy,
+            GpuPressureSampleInput {
+                identity,
+                source_dispatch_generation: dispatch_generation.saturating_sub(1),
+                source_frame_digest: if dispatch_generation == 1 {
+                    [0; 4]
+                } else {
+                    frame.frame_digest().0
+                },
+                completed_gpu_time_ns,
+                queue_depth,
+                logical_heap_used: u64::from(logical_heap_pressure_q16),
+                logical_heap_capacity: 65_535,
+                brain_atp_remaining_q16: brain_atp_fraction_q16,
+                brain_atp_capacity_q16: 65_535,
+            },
+        )
+        .unwrap();
+        NeuralThrottleDecision::derive(&policy, phenotype, capacity.execution(), identity, pressure)
+            .unwrap()
     }
 
     impl GpuPipelineFixture {
@@ -563,6 +614,11 @@ mod hardware {
                 pipelines,
                 plan,
                 slots: [slot0, slot1, slot2],
+                phenotypes: [
+                    phenotypes[0].clone(),
+                    phenotypes[1].clone(),
+                    phenotypes[2].clone(),
+                ],
                 immutable_weight_words,
                 initial_mutable_state_words,
                 transaction_generations: [1; SLOT_COUNT],
@@ -988,9 +1044,21 @@ mod hardware {
                 &self.slots[0],
             )
             .unwrap();
+            let decision = activity_decision_for(
+                &self.phenotypes[0],
+                &self.slots[0],
+                frame,
+                self.pipelines.next_dispatch_generation(),
+                0,
+                0,
+                0,
+                65_535,
+            );
             let entries = [GpuActiveBatchEntry::with_memory(
                 frame,
                 &self.slots[0],
+                &self.phenotypes[0],
+                &decision,
                 &memory,
             )];
             let batch = self
@@ -1020,8 +1088,33 @@ mod hardware {
             slot_index: usize,
             frame: &PerceptionFrame,
         ) -> GpuPendingFrameResult {
+            let decision = activity_decision_for(
+                &self.phenotypes[slot_index],
+                &self.slots[slot_index],
+                frame,
+                self.pipelines.next_dispatch_generation(),
+                0,
+                0,
+                0,
+                65_535,
+            );
+            self.run_slot_keep_pending_with_decision(slot_index, frame, &decision)
+                .await
+        }
+
+        async fn run_slot_keep_pending_with_decision(
+            &mut self,
+            slot_index: usize,
+            frame: &PerceptionFrame,
+            decision: &NeuralThrottleDecision,
+        ) -> GpuPendingFrameResult {
             assert!(slot_index < SLOT_COUNT);
-            let entries = [GpuActiveBatchEntry::new(frame, &self.slots[slot_index])];
+            let entries = [GpuActiveBatchEntry::new(
+                frame,
+                &self.slots[slot_index],
+                &self.phenotypes[slot_index],
+                decision,
+            )];
             let batch = self
                 .pipelines
                 .build_active_batch(&self.plan, &entries, FRAME_BASE_WORDS)
@@ -1057,13 +1150,91 @@ mod hardware {
             }
         }
 
+        #[allow(clippy::too_many_arguments)]
+        pub async fn run_slot_with_pressure(
+            &mut self,
+            slot_index: usize,
+            frame: &PerceptionFrame,
+            completed_gpu_time_ns: u64,
+            queue_depth: u32,
+            logical_heap_pressure_q16: u32,
+            brain_atp_fraction_q16: u32,
+        ) -> (GpuFrameResult, NeuralThrottleDecision) {
+            let decision = activity_decision_for(
+                &self.phenotypes[slot_index],
+                &self.slots[slot_index],
+                frame,
+                self.pipelines.next_dispatch_generation(),
+                completed_gpu_time_ns,
+                queue_depth,
+                logical_heap_pressure_q16,
+                brain_atp_fraction_q16,
+            );
+            let pending = self
+                .run_slot_keep_pending_with_decision(slot_index, frame, &decision)
+                .await;
+            if pending.result.record.status == 1 {
+                self.discard_pending_for_slot(slot_index, &pending.pending);
+            }
+            (pending.result, decision)
+        }
+
+        pub async fn run_slot_with_tampered_activity_digest(
+            &mut self,
+            slot_index: usize,
+            frame: &PerceptionFrame,
+        ) -> alife_gpu_backend::GpuClosedLoopError {
+            let decision = activity_decision_for(
+                &self.phenotypes[slot_index],
+                &self.slots[slot_index],
+                frame,
+                self.pipelines.next_dispatch_generation(),
+                0,
+                0,
+                0,
+                65_535,
+            );
+            let entries = [GpuActiveBatchEntry::new(
+                frame,
+                &self.slots[slot_index],
+                &self.phenotypes[slot_index],
+                &decision,
+            )];
+            let mut batch = self
+                .pipelines
+                .build_active_batch(&self.plan, &entries, FRAME_BASE_WORDS)
+                .unwrap();
+            batch
+                .tamper_activity_digest_for_hardware_diagnostic(0)
+                .unwrap();
+            self.pipelines
+                .submit_closed_loop_frame(&self.device, &self.queue, &self.buffers, &batch)
+                .await
+                .unwrap_err()
+        }
+
         pub async fn run_slot_expect_failure(
             &mut self,
             slot_index: usize,
             frame: &PerceptionFrame,
         ) -> alife_gpu_backend::GpuClosedLoopError {
             assert!(slot_index < SLOT_COUNT);
-            let entries = [GpuActiveBatchEntry::new(frame, &self.slots[slot_index])];
+            let decision = activity_decision_for(
+                &self.phenotypes[slot_index],
+                &self.slots[slot_index],
+                frame,
+                self.pipelines.next_dispatch_generation(),
+                0,
+                0,
+                0,
+                65_535,
+            );
+            let entries = [GpuActiveBatchEntry::new(
+                frame,
+                &self.slots[slot_index],
+                &self.phenotypes[slot_index],
+                &decision,
+            )];
             let batch = self
                 .pipelines
                 .build_active_batch(&self.plan, &entries, FRAME_BASE_WORDS)
@@ -1091,9 +1262,42 @@ mod hardware {
             &mut self,
             frames: [&PerceptionFrame; 2],
         ) -> [GpuPendingFrameResult; 2] {
+            let dispatch_generation = self.pipelines.next_dispatch_generation();
+            let decisions = [
+                activity_decision_for(
+                    &self.phenotypes[0],
+                    &self.slots[0],
+                    frames[0],
+                    dispatch_generation,
+                    0,
+                    0,
+                    0,
+                    65_535,
+                ),
+                activity_decision_for(
+                    &self.phenotypes[1],
+                    &self.slots[1],
+                    frames[1],
+                    dispatch_generation,
+                    0,
+                    0,
+                    0,
+                    65_535,
+                ),
+            ];
             let entries = [
-                GpuActiveBatchEntry::new(frames[0], &self.slots[0]),
-                GpuActiveBatchEntry::new(frames[1], &self.slots[1]),
+                GpuActiveBatchEntry::new(
+                    frames[0],
+                    &self.slots[0],
+                    &self.phenotypes[0],
+                    &decisions[0],
+                ),
+                GpuActiveBatchEntry::new(
+                    frames[1],
+                    &self.slots[1],
+                    &self.phenotypes[1],
+                    &decisions[1],
+                ),
             ];
             let batch = self
                 .pipelines
@@ -1379,10 +1583,20 @@ mod hardware {
             let mut foreign =
                 GpuClassBucketPlan::new(BrainCapacityClass::n512(), SLOT_COUNT as u32).unwrap();
             let slot = foreign.insert_phenotype(0, 7, phenotype).unwrap();
+            let decision = activity_decision_for(
+                phenotype,
+                &slot,
+                frame,
+                self.pipelines.next_dispatch_generation(),
+                0,
+                0,
+                0,
+                65_535,
+            );
             self.pipelines
                 .build_active_batch(
                     &foreign,
-                    &[GpuActiveBatchEntry::new(frame, &slot)],
+                    &[GpuActiveBatchEntry::new(frame, &slot, phenotype, &decision)],
                     FRAME_BASE_WORDS,
                 )
                 .unwrap_err()
@@ -1392,10 +1606,25 @@ mod hardware {
             &mut self,
             frame: &PerceptionFrame,
         ) -> alife_gpu_backend::GpuClosedLoopError {
+            let decision = activity_decision_for(
+                &self.phenotypes[0],
+                &self.slots[0],
+                frame,
+                self.pipelines.next_dispatch_generation(),
+                0,
+                0,
+                0,
+                65_535,
+            );
             self.pipelines
                 .build_active_batch(
                     &self.plan,
-                    &[GpuActiveBatchEntry::new(frame, &self.slots[0])],
+                    &[GpuActiveBatchEntry::new(
+                        frame,
+                        &self.slots[0],
+                        &self.phenotypes[0],
+                        &decision,
+                    )],
                     1025,
                 )
                 .unwrap_err()
@@ -1417,10 +1646,38 @@ mod hardware {
             frames: [&PerceptionFrame; SLOT_COUNT],
             zero_complete_frame_payload: bool,
         ) -> BatchReadback {
+            let dispatch_generation = self.pipelines.next_dispatch_generation();
+            let decisions: [NeuralThrottleDecision; SLOT_COUNT] = std::array::from_fn(|index| {
+                activity_decision_for(
+                    &self.phenotypes[index],
+                    &self.slots[index],
+                    frames[index],
+                    dispatch_generation,
+                    0,
+                    0,
+                    0,
+                    65_535,
+                )
+            });
             let entries = [
-                GpuActiveBatchEntry::new(frames[0], &self.slots[0]),
-                GpuActiveBatchEntry::new(frames[1], &self.slots[1]),
-                GpuActiveBatchEntry::new(frames[2], &self.slots[2]),
+                GpuActiveBatchEntry::new(
+                    frames[0],
+                    &self.slots[0],
+                    &self.phenotypes[0],
+                    &decisions[0],
+                ),
+                GpuActiveBatchEntry::new(
+                    frames[1],
+                    &self.slots[1],
+                    &self.phenotypes[1],
+                    &decisions[1],
+                ),
+                GpuActiveBatchEntry::new(
+                    frames[2],
+                    &self.slots[2],
+                    &self.phenotypes[2],
+                    &decisions[2],
+                ),
             ];
             let mut batch = self
                 .pipelines
@@ -1756,7 +2013,7 @@ mod hardware {
         assert!(
             actual.min_uniform_buffer_offset_alignment <= required.uniform_offset_alignment_bytes()
         );
-        assert_eq!(required.required_feature_mask(), 0);
+        assert_eq!(required.required_feature_mask(), 1);
         assert_eq!(required.required_feature_mask_words(), 1);
     }
 

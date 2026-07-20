@@ -18,7 +18,8 @@ use alife_gpu_backend::{
     GpuClassBucketBufferRole, GpuClassBucketBuffers, GpuClassBucketPlan, GpuMemoryChannelPlan,
     GpuMemoryContextHeader, GpuMemoryContextUpload, GpuPerceptionUpload, GpuPhenotypeUpload,
     CLOSED_LOOP_ELIGIBILITY_WGSL, CLOSED_LOOP_MEMORY_CONTEXT_WGSL, GPU_ACTIVE_DISPATCH_ROW_WORDS,
-    GPU_MEMORY_CONTEXT_HEADER_WORDS, GPU_NO_EXTENSION_SENTINEL, GPU_PERCEPTION_DISPATCH_ROW_WORDS,
+    GPU_ACTIVITY_DISPATCH_HEADER_WORDS, GPU_MEMORY_CONTEXT_HEADER_WORDS, GPU_NO_EXTENSION_SENTINEL,
+    GPU_PERCEPTION_DISPATCH_ROW_WORDS,
 };
 #[cfg(feature = "gpu-tests")]
 use alife_gpu_backend::{
@@ -489,13 +490,14 @@ fn shared_frame_payload_is_writable_only_for_candidate_local_context_materializa
 }
 
 #[test]
-fn active_dispatch_rows_reserve_one_exact_memory_context_header() {
+fn active_dispatch_rows_reserve_exact_memory_and_activity_headers() {
     assert_eq!(GPU_PERCEPTION_DISPATCH_ROW_WORDS, 272);
     assert_eq!(GPU_MEMORY_CONTEXT_HEADER_WORDS, 16);
-    assert_eq!(GPU_ACTIVE_DISPATCH_ROW_WORDS, 308);
+    assert_eq!(GPU_ACTIVITY_DISPATCH_HEADER_WORDS, 24);
+    assert_eq!(GPU_ACTIVE_DISPATCH_ROW_WORDS, 332);
     assert_eq!(
         GPU_ACTIVE_DISPATCH_ROW_WORDS - GPU_PERCEPTION_DISPATCH_ROW_WORDS,
-        20 + GPU_MEMORY_CONTEXT_HEADER_WORDS,
+        20 + GPU_MEMORY_CONTEXT_HEADER_WORDS + GPU_ACTIVITY_DISPATCH_HEADER_WORDS,
     );
 }
 

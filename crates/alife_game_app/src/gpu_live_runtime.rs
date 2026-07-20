@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alife_core::{
-    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, Confidence,
+    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkReceipt, Confidence,
     ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, DecisionSnapshot,
     DevelopmentState, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
     FinalizedMemoryRecall, HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot,
@@ -340,6 +340,7 @@ pub struct GpuLiveBrainRuntime {
     sensor_profile: SensorProfile,
     sealed_patches: Vec<ExperiencePatch>,
     last_learning_receipts: Vec<GpuLearningReceipt>,
+    last_activity_work_receipts: Vec<BrainWorkReceipt>,
     last_memory_recall_receipts: Vec<MemoryRecallReceipt>,
     last_memory_update_receipts: Vec<MemoryUpdateReceipt>,
     last_memory_compaction_receipts: Vec<MemoryCompactionReceipt>,
@@ -463,6 +464,7 @@ impl GpuLiveBrainRuntime {
             sensor_profile,
             sealed_patches: Vec::new(),
             last_learning_receipts: Vec::new(),
+            last_activity_work_receipts: Vec::new(),
             last_memory_recall_receipts: Vec::new(),
             last_memory_update_receipts: Vec::new(),
             last_memory_compaction_receipts: Vec::new(),
@@ -546,6 +548,7 @@ impl GpuLiveBrainRuntime {
             sensor_profile,
             sealed_patches: Vec::new(),
             last_learning_receipts: Vec::new(),
+            last_activity_work_receipts: Vec::new(),
             last_memory_recall_receipts: Vec::new(),
             last_memory_update_receipts: Vec::new(),
             last_memory_compaction_receipts: Vec::new(),
@@ -1060,6 +1063,7 @@ impl GpuLiveBrainRuntime {
     {
         self.reconcile_population()?;
         self.last_learning_receipts.clear();
+        self.last_activity_work_receipts.clear();
         self.last_memory_recall_receipts.clear();
         self.last_memory_update_receipts.clear();
         self.last_memory_compaction_receipts.clear();
@@ -1096,6 +1100,11 @@ impl GpuLiveBrainRuntime {
             Self::synchronize_resident_tick(resident, tick_before)?;
             let sleep_before = resident.sleep_scheduler.state();
             let phase_before = sleep_before.phase;
+            self.backend.charge_world_brain_atp_tick(
+                handle,
+                tick_before.raw(),
+                phase_before != SleepPhase::Awake,
+            )?;
             let sleep_event = {
                 let mut routed_driver = RoutedGpuSleepDriver {
                     backend: &mut self.backend,
@@ -1262,6 +1271,13 @@ impl GpuLiveBrainRuntime {
     /// contain generation and causal identity only, never weight payloads.
     pub fn last_learning_receipts(&self) -> &[GpuLearningReceipt] {
         &self.last_learning_receipts
+    }
+
+    /// Exact fixed-point neural work receipts from the most recent world tick.
+    /// These are audit and persistence inputs only; they never influence world
+    /// candidate enumeration or action legality.
+    pub fn last_activity_work_receipts(&self) -> &[BrainWorkReceipt] {
+        &self.last_activity_work_receipts
     }
 
     /// Candidate-conditioned recall receipts consumed by the most recent GPU
@@ -1586,6 +1602,8 @@ impl GpuLiveBrainRuntime {
         &mut self,
         gpu_ticks: &[GpuClosedLoopTick],
     ) -> Result<(), ScaffoldContractError> {
+        self.last_activity_work_receipts
+            .extend(gpu_ticks.iter().map(|tick| tick.work.clone()));
         let compact_readback_bytes = gpu_ticks
             .iter()
             .try_fold(0_usize, |total, tick| {
@@ -2391,6 +2409,45 @@ mod tests {
             };
             Ok(Some(event))
         }
+    }
+
+    #[test]
+    fn live_runtime_charges_one_exact_basal_debit_before_each_neural_dispatch() {
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
+        let world = HeadlessScenarioBuilder::new(9_311)
+            .agent("one", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let mut runtime =
+            GpuLiveBrainRuntime::new(backend, world, 9_311, BrainScaleTier::Nano512).unwrap();
+
+        runtime.tick().unwrap();
+        let first = runtime.last_activity_work_receipts()[0].clone();
+        assert_eq!(
+            first.atp_before_q16,
+            alife_core::BRAIN_ATP_Q16_MAX - alife_core::BRAIN_ATP_BASAL_DEBIT_Q16
+        );
+        let handle = runtime.handle_for(OrganismId(1)).unwrap();
+        assert_eq!(
+            runtime.backend.brain_atp_q16(handle).unwrap(),
+            first.atp_after_q16
+        );
+
+        runtime.tick().unwrap();
+        let second = runtime.last_activity_work_receipts()[0].clone();
+        assert_eq!(
+            second.atp_before_q16,
+            first
+                .atp_after_q16
+                .saturating_sub(alife_core::BRAIN_ATP_BASAL_DEBIT_Q16)
+        );
+        assert_eq!(
+            runtime.backend.brain_atp_q16(handle).unwrap(),
+            second.atp_after_q16
+        );
     }
 
     #[test]

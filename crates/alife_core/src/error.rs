@@ -102,6 +102,14 @@ pub enum ScaffoldContractError {
     LearningReplayRejected,
     #[error("sleep consolidation generation does not match the installed GPU brain slot")]
     ConsolidationGenerationMismatch,
+    #[error("brain activity policy, fixed-point cost, or pressure contract mismatch")]
+    BrainActivityPolicyMismatch,
+    #[error("brain activity pressure, throttle, or work sequence mismatch")]
+    BrainActivitySequenceMismatch,
+    #[error("brain ATP is insufficient for the completed neural dispatch")]
+    BrainAtpExhausted,
+    #[error("required GPU timestamp queries are unavailable")]
+    GpuTimestampQueryUnavailable,
     #[error("the GPU-authoritative neural backend is unavailable")]
     NeuralBackendUnavailable,
 }

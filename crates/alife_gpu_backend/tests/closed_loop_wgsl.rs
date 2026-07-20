@@ -420,7 +420,7 @@ fn dispatch_dimension_boundaries_are_checked_without_truncation() {
         validate_dispatch_dimensions(u32::MAX, 1, 65_535),
         Err(GpuClosedLoopError::CapacityExceeded)
     );
-    assert_eq!(GPU_ACTIVE_DISPATCH_ROW_WORDS, 308);
+    assert_eq!(GPU_ACTIVE_DISPATCH_ROW_WORDS, 332);
     for source in [
         CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
         CLOSED_LOOP_DECODE_WGSL,
@@ -429,7 +429,7 @@ fn dispatch_dimension_boundaries_are_checked_without_truncation() {
         CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
         CLOSED_LOOP_RECURRENT_WGSL,
     ] {
-        assert!(compact(source).contains("constACTIVE_DISPATCH_ROW_WORDS:u32=308u;"));
+        assert!(compact(source).contains("constACTIVE_DISPATCH_ROW_WORDS:u32=332u;"));
     }
 }
 

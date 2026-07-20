@@ -1,5 +1,5 @@
 
-const ACTIVE_DISPATCH_ROW_WORDS:u32 = 308u;
+const ACTIVE_DISPATCH_ROW_WORDS:u32 = 332u;
 const INVALID_LANE:u32 = 0xffffffffu;
 
 fn resolve_encoder_source_lane(encoder:GpuEncoderPlanRecord, assignment:GpuEncoderAssignmentRecord) -> u32 {

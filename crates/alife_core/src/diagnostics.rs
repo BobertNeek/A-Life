@@ -52,6 +52,10 @@ pub enum DiagnosticCode {
     LearningEvidenceMismatch,
     LearningReplayRejected,
     ConsolidationGenerationMismatch,
+    BrainActivityPolicyMismatch,
+    BrainActivitySequenceMismatch,
+    BrainAtpExhausted,
+    GpuTimestampQueryUnavailable,
     NeuralBackendUnavailable,
 }
 
@@ -206,6 +210,18 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
             }
             ScaffoldContractError::ConsolidationGenerationMismatch => {
                 Self::new(DiagnosticCode::ConsolidationGenerationMismatch)
+            }
+            ScaffoldContractError::BrainActivityPolicyMismatch => {
+                Self::new(DiagnosticCode::BrainActivityPolicyMismatch)
+            }
+            ScaffoldContractError::BrainActivitySequenceMismatch => {
+                Self::new(DiagnosticCode::BrainActivitySequenceMismatch)
+            }
+            ScaffoldContractError::BrainAtpExhausted => {
+                Self::new(DiagnosticCode::BrainAtpExhausted)
+            }
+            ScaffoldContractError::GpuTimestampQueryUnavailable => {
+                Self::new(DiagnosticCode::GpuTimestampQueryUnavailable)
             }
             ScaffoldContractError::NeuralBackendUnavailable => {
                 Self::new(DiagnosticCode::NeuralBackendUnavailable)

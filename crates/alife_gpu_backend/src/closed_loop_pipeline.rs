@@ -9,18 +9,22 @@ use std::{
     sync::{mpsc, Arc},
 };
 
-use alife_core::{PerceptionFrame, SchemaVersions, CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES};
+use alife_core::{
+    BrainCapacityClass, BrainPhenotype, NeuralThrottleDecision, PerceptionFrame, SchemaVersions,
+    CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
+};
 use bytemuck::Zeroable;
 
 use crate::{
-    phenotype_hash_from_gpu_words, split_u64x2, GpuBrainSlot, GpuCandidateMemoryRecord,
-    GpuCandidateRecord, GpuClassBucketBuffers, GpuClosedLoopError, GpuEligibilityDiscardRecord,
-    GpuFastPlasticityCommitRecord, GpuFixedClassArenaBuffers, GpuLearningHeader,
-    GpuMemoryContextDispatchReceipt, GpuMemoryContextHeader, GpuMemoryContextUpload,
-    GpuOutcomeCreditRecord, GpuPendingEligibilityRecord, GpuPerceptionHeader, GpuPerceptionUpload,
-    GpuSelectionRecord, CLOSED_LOOP_ELIGIBILITY_WGSL, CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
-    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
-    GPU_FAST_PLASTICITY_COMMIT_WORDS, GPU_LEARNING_HEADER_WORDS, GPU_OUTCOME_CREDIT_WORDS,
+    phenotype_hash_from_gpu_words, split_u64x2, GpuActivityDispatchHeader, GpuBrainSlot,
+    GpuCandidateMemoryRecord, GpuCandidateRecord, GpuClassBucketBuffers, GpuClosedLoopError,
+    GpuEligibilityDiscardRecord, GpuFastPlasticityCommitRecord, GpuFixedClassArenaBuffers,
+    GpuLearningHeader, GpuMemoryContextDispatchReceipt, GpuMemoryContextHeader,
+    GpuMemoryContextUpload, GpuOutcomeCreditRecord, GpuPendingEligibilityRecord,
+    GpuPerceptionHeader, GpuPerceptionUpload, GpuSelectionRecord, CLOSED_LOOP_ELIGIBILITY_WGSL,
+    CLOSED_LOOP_MEMORY_CONTEXT_WGSL, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_FAST_PLASTICITY_COMMIT_WORDS, GPU_LEARNING_HEADER_WORDS,
+    GPU_OUTCOME_CREDIT_WORDS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,7 +209,8 @@ impl BatchAuthority {
 pub const GPU_PERCEPTION_DISPATCH_ROW_WORDS: usize = 272;
 pub const GPU_ACTIVE_DISPATCH_ROW_WORDS: usize = GPU_PERCEPTION_DISPATCH_ROW_WORDS
     + GPU_LEARNING_HEADER_WORDS
-    + crate::GPU_MEMORY_CONTEXT_HEADER_WORDS;
+    + crate::GPU_MEMORY_CONTEXT_HEADER_WORDS
+    + crate::GPU_ACTIVITY_DISPATCH_HEADER_WORDS;
 pub const GPU_ACTIVE_SIDE_DIAGNOSTIC_LANE: u32 = 3;
 const GPU_PERCEPTION_HEADER_WORDS: usize = 16;
 const GPU_CANDIDATE_RECORD_WORDS: usize = 8;
@@ -254,15 +259,24 @@ pub(crate) struct GpuFastPlasticityBatchEntry<'a> {
 pub struct GpuActiveBatchEntry<'a> {
     frame: &'a PerceptionFrame,
     slot: &'a GpuBrainSlot,
+    phenotype: &'a BrainPhenotype,
+    activity: &'a NeuralThrottleDecision,
     memory_upload: Option<&'a GpuMemoryContextUpload>,
     active_eligibility_generation: u64,
 }
 
 impl<'a> GpuActiveBatchEntry<'a> {
-    pub const fn new(frame: &'a PerceptionFrame, slot: &'a GpuBrainSlot) -> Self {
+    pub const fn new(
+        frame: &'a PerceptionFrame,
+        slot: &'a GpuBrainSlot,
+        phenotype: &'a BrainPhenotype,
+        activity: &'a NeuralThrottleDecision,
+    ) -> Self {
         Self {
             frame,
             slot,
+            phenotype,
+            activity,
             memory_upload: None,
             active_eligibility_generation: 1,
         }
@@ -271,11 +285,15 @@ impl<'a> GpuActiveBatchEntry<'a> {
     pub const fn with_memory(
         frame: &'a PerceptionFrame,
         slot: &'a GpuBrainSlot,
+        phenotype: &'a BrainPhenotype,
+        activity: &'a NeuralThrottleDecision,
         memory_upload: &'a GpuMemoryContextUpload,
     ) -> Self {
         Self {
             frame,
             slot,
+            phenotype,
+            activity,
             memory_upload: Some(memory_upload),
             active_eligibility_generation: 1,
         }
@@ -287,6 +305,8 @@ impl<'a> GpuActiveBatchEntry<'a> {
 pub(crate) struct GpuFixedActiveBatchEntry<'a> {
     frame: &'a PerceptionFrame,
     slot: &'a GpuBrainSlot,
+    phenotype: &'a BrainPhenotype,
+    activity: &'a NeuralThrottleDecision,
     memory_upload: Option<&'a GpuMemoryContextUpload>,
     active_eligibility_generation: u64,
 }
@@ -295,11 +315,15 @@ impl<'a> GpuFixedActiveBatchEntry<'a> {
     pub(crate) const fn new(
         frame: &'a PerceptionFrame,
         slot: &'a GpuBrainSlot,
+        phenotype: &'a BrainPhenotype,
+        activity: &'a NeuralThrottleDecision,
         active_eligibility_generation: u64,
     ) -> Self {
         Self {
             frame,
             slot,
+            phenotype,
+            activity,
             memory_upload: None,
             active_eligibility_generation,
         }
@@ -308,12 +332,16 @@ impl<'a> GpuFixedActiveBatchEntry<'a> {
     pub(crate) const fn with_memory(
         frame: &'a PerceptionFrame,
         slot: &'a GpuBrainSlot,
+        phenotype: &'a BrainPhenotype,
+        activity: &'a NeuralThrottleDecision,
         memory_upload: &'a GpuMemoryContextUpload,
         active_eligibility_generation: u64,
     ) -> Self {
         Self {
             frame,
             slot,
+            phenotype,
+            activity,
             memory_upload: Some(memory_upload),
             active_eligibility_generation,
         }
@@ -324,6 +352,8 @@ impl<'a> GpuFixedActiveBatchEntry<'a> {
 struct GpuBatchEntryView<'a> {
     frame: &'a PerceptionFrame,
     slot: &'a GpuBrainSlot,
+    phenotype: &'a BrainPhenotype,
+    activity: &'a NeuralThrottleDecision,
     memory_upload: Option<&'a GpuMemoryContextUpload>,
     active_eligibility_generation: u64,
 }
@@ -332,6 +362,7 @@ struct GpuBatchEntryView<'a> {
 pub struct GpuActiveBatchUpload {
     headers: Vec<GpuPerceptionHeader>,
     learning_headers: Vec<GpuLearningHeader>,
+    activity_headers: Vec<GpuActivityDispatchHeader>,
     pending_templates: Vec<GpuPendingEligibilityRecord>,
     dispatch_header_words: Vec<u32>,
     frame_payload_words: Vec<u32>,
@@ -371,6 +402,7 @@ impl GpuActiveBatchUpload {
         let mut frame_payload_words = vec![0_u32; frame_base_words as usize];
         let mut headers = Vec::with_capacity(entries.len());
         let mut learning_headers = Vec::with_capacity(entries.len());
+        let mut activity_headers = Vec::with_capacity(entries.len());
         let mut pending_templates = Vec::with_capacity(entries.len());
         let mut memory_context_bindings = Vec::with_capacity(entries.len());
         let mut seen_slots = BTreeSet::new();
@@ -486,10 +518,11 @@ impl GpuActiveBatchUpload {
                     .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
                 frame_payload_words.extend_from_slice(&split_u64x2(digest.0));
             }
+            upload.header.microstep_count = u32::from(entry.activity.microsteps);
             let pending_template_offset = u32::try_from(frame_payload_words.len())
                 .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
             let final_side =
-                upload.header.active_activation_side ^ (entry.slot.record().microstep_count & 1);
+                upload.header.active_activation_side ^ (upload.header.microstep_count & 1);
             let active_activation_side =
                 u8::try_from(final_side).map_err(|_| GpuClosedLoopError::MalformedUpload)?;
             let staging_eligibility_generation = entry
@@ -533,6 +566,24 @@ impl GpuActiveBatchUpload {
             }
             upload.header.dispatch_generation_lo = dispatch_generation.get() as u32;
             upload.header.dispatch_generation_hi = (dispatch_generation.get() >> 32) as u32;
+            let capacity = BrainCapacityClass::production_for_id(entry.phenotype.brain_class_id())
+                .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+            if entry.activity.organism_id_raw != entry.frame.organism_id().raw()
+                || entry.activity.tick != entry.frame.tick().0
+                || entry.activity.dispatch_generation != dispatch_generation.get()
+                || entry.activity.frame_digest != entry.frame.frame_digest().0
+                || phenotype_hash_from_gpu_words(entry.slot.identity().phenotype_hash)
+                    != entry.phenotype.phenotype_hash()
+            {
+                return Err(GpuClosedLoopError::MalformedUpload);
+            }
+            let activity_header = GpuActivityDispatchHeader::try_from_decision(
+                entry.activity,
+                entry.phenotype,
+                capacity.execution(),
+                entry.slot,
+            )
+            .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
             dispatch_header_words[row_base..row_base + GPU_PERCEPTION_HEADER_WORDS]
                 .copy_from_slice(upload.header.words());
             let decoder_synapse_count = entry
@@ -574,8 +625,14 @@ impl GpuActiveBatchUpload {
                     [memory_start..memory_start + crate::GPU_MEMORY_CONTEXT_HEADER_WORDS]
                     .copy_from_slice(memory.header.words());
             }
+            let activity_start =
+                learning_start + GPU_LEARNING_HEADER_WORDS + crate::GPU_MEMORY_CONTEXT_HEADER_WORDS;
+            dispatch_header_words
+                [activity_start..activity_start + crate::GPU_ACTIVITY_DISPATCH_HEADER_WORDS]
+                .copy_from_slice(activity_header.words());
             headers.push(upload.header);
             learning_headers.push(learning_header);
+            activity_headers.push(activity_header);
             pending_templates.push(pending_template);
             memory_context_bindings.push(memory_binding);
         }
@@ -583,6 +640,7 @@ impl GpuActiveBatchUpload {
         Ok(Self {
             headers,
             learning_headers,
+            activity_headers,
             pending_templates,
             dispatch_header_words,
             frame_payload_words,
@@ -605,6 +663,9 @@ impl GpuActiveBatchUpload {
     pub fn learning_headers(&self) -> &[GpuLearningHeader] {
         &self.learning_headers
     }
+    pub fn activity_headers(&self) -> &[GpuActivityDispatchHeader] {
+        &self.activity_headers
+    }
     pub fn dispatch_header_words(&self) -> &[u32] {
         &self.dispatch_header_words
     }
@@ -613,6 +674,30 @@ impl GpuActiveBatchUpload {
     }
     pub fn memory_context_bindings(&self) -> &[Option<GpuMemoryContextDispatchReceipt>] {
         &self.memory_context_bindings
+    }
+    #[cfg(feature = "gpu-tests")]
+    pub fn tamper_activity_digest_for_hardware_diagnostic(
+        &mut self,
+        row: usize,
+    ) -> Result<(), GpuClosedLoopError> {
+        let header = self
+            .activity_headers
+            .get_mut(row)
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        header.tamper_route_schedule_digest_for_hardware_diagnostic();
+        let start = row
+            .checked_mul(GPU_ACTIVE_DISPATCH_ROW_WORDS)
+            .and_then(|base| {
+                base.checked_add(
+                    GPU_PERCEPTION_DISPATCH_ROW_WORDS
+                        + GPU_LEARNING_HEADER_WORDS
+                        + crate::GPU_MEMORY_CONTEXT_HEADER_WORDS,
+                )
+            })
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        self.dispatch_header_words[start..start + crate::GPU_ACTIVITY_DISPATCH_HEADER_WORDS]
+            .copy_from_slice(header.words());
+        Ok(())
     }
     #[allow(dead_code)]
     pub(crate) fn dispatch_generation(&self) -> u64 {
@@ -641,7 +726,7 @@ pub(crate) struct GpuCompactMapTicket {
 
 impl GpuCompactMapTicket {
     pub(crate) fn mapping_succeeded(self) -> bool {
-        self.receiver.recv().ok().and_then(Result::ok).is_some()
+        matches!(self.receiver.try_recv(), Ok(Ok(())))
     }
 }
 
@@ -1081,6 +1166,11 @@ pub struct GpuClosedLoopPipelines {
 }
 
 impl GpuClosedLoopPipelines {
+    /// Generation that the next successfully begun active batch must bind.
+    pub const fn next_dispatch_generation(&self) -> u64 {
+        self.next_authority_nonce
+    }
+
     pub fn new(
         device: &wgpu::Device,
         buffers: &GpuClassBucketBuffers,
@@ -1321,6 +1411,8 @@ impl GpuClosedLoopPipelines {
             .map(|entry| GpuBatchEntryView {
                 frame: entry.frame,
                 slot: entry.slot,
+                phenotype: entry.phenotype,
+                activity: entry.activity,
                 memory_upload: entry.memory_upload,
                 active_eligibility_generation: entry.active_eligibility_generation,
             })
@@ -1353,6 +1445,8 @@ impl GpuClosedLoopPipelines {
             .map(|entry| GpuBatchEntryView {
                 frame: entry.frame,
                 slot: entry.slot,
+                phenotype: entry.phenotype,
+                activity: entry.activity,
                 memory_upload: entry.memory_upload,
                 active_eligibility_generation: entry.active_eligibility_generation,
             })
@@ -2691,6 +2785,7 @@ fn validate_dispatch(
     if max_neurons == 0
         || batch.headers.is_empty()
         || batch.learning_headers.len() != batch.headers.len()
+        || batch.activity_headers.len() != batch.headers.len()
         || batch.pending_templates.len() != batch.headers.len()
         || batch.selection_offsets.len() != batch.headers.len()
         || batch.memory_context_bindings.len() != batch.headers.len()
@@ -2704,17 +2799,24 @@ fn validate_dispatch(
         return Err(GpuClosedLoopError::MalformedUpload);
     }
     let expected_learning_schema = u32::from(SchemaVersions::CURRENT.learning.raw());
-    for (row, ((((header, learning), pending), selection_offset), memory_binding)) in batch
-        .headers
-        .iter()
-        .zip(&batch.learning_headers)
-        .zip(&batch.pending_templates)
-        .zip(&batch.selection_offsets)
-        .zip(&batch.memory_context_bindings)
-        .enumerate()
+    for (row, (((((header, learning), activity), pending), selection_offset), memory_binding)) in
+        batch
+            .headers
+            .iter()
+            .zip(&batch.learning_headers)
+            .zip(&batch.activity_headers)
+            .zip(&batch.pending_templates)
+            .zip(&batch.selection_offsets)
+            .zip(&batch.memory_context_bindings)
+            .enumerate()
     {
         let expected_final_side = header.active_activation_side ^ (header.microstep_count & 1);
         if learning.schema_version != expected_learning_schema
+            || activity.class_id() != header.class_id
+            || activity.slot() != header.slot
+            || activity.slot_generation() != header.slot_generation
+            || activity.brain_slot_index() != header.brain_slot_index
+            || u32::from(activity.microsteps()) != header.microstep_count
             || learning.class_id != header.class_id
             || learning.slot != header.slot
             || learning.slot_generation != header.slot_generation
@@ -2891,6 +2993,15 @@ fn validate_dispatch(
                 }
             }
         }
+        let activity_start = memory_header_end;
+        let activity_end = activity_start
+            .checked_add(crate::GPU_ACTIVITY_DISPATCH_HEADER_WORDS)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        if activity_end > batch.dispatch_header_words.len()
+            || batch.dispatch_header_words[activity_start..activity_end] != *activity.words()
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
         let pending_start = usize::try_from(learning.outcome_offset)
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         let pending_end = pending_start
@@ -3021,6 +3132,24 @@ mod lifecycle_tests {
     use super::*;
 
     #[test]
+    fn compact_mapping_status_does_not_wait_for_a_missing_callback() {
+        let (callback_sender, callback_receiver) =
+            mpsc::channel::<Result<(), wgpu::BufferAsyncError>>();
+        let ticket = GpuCompactMapTicket {
+            receiver: callback_receiver,
+        };
+        let (result_sender, result_receiver) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            result_sender.send(ticket.mapping_succeeded()).unwrap();
+        });
+
+        let observed = result_receiver.recv_timeout(std::time::Duration::from_millis(25));
+        drop(callback_sender);
+        worker.join().unwrap();
+        assert_eq!(observed, Ok(false));
+    }
+
+    #[test]
     fn production_shader_contract_validation_rejects_missing_entry_and_eighth_binding() {
         let entries = [
             "initialize_fast_plasticity",
@@ -3062,6 +3191,7 @@ mod lifecycle_tests {
         let batch = GpuActiveBatchUpload {
             headers: vec![header],
             learning_headers: Vec::new(),
+            activity_headers: Vec::new(),
             pending_templates: Vec::new(),
             dispatch_header_words: header.words().to_vec(),
             frame_payload_words: Vec::new(),

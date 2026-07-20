@@ -123,7 +123,7 @@ impl GpuRuntimeBudget {
     ) -> Result<Self, ScaffoldContractError> {
         profile.validate_contract()?;
         let execution = BrainCapacityClass::n512().execution().to_owned();
-        let feature_words = features.bits().0;
+        let available_feature_mask = u64::from(features.contains(wgpu::Features::TIMESTAMP_QUERY));
         let budget = Self {
             schema_version: ADMISSION_SCHEMA_VERSION,
             profile_id: profile.profile_id,
@@ -156,7 +156,7 @@ impl GpuRuntimeBudget {
             max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension,
             required_feature_mask_words: execution.required_feature_mask_words(),
             required_feature_mask: execution.required_feature_mask(),
-            available_feature_mask: feature_words[0],
+            available_feature_mask,
             profile_digest: profile.canonical_digest()?,
             adapter_limits_digest,
         };

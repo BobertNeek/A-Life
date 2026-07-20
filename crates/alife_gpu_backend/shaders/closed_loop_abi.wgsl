@@ -380,7 +380,8 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
     && slot.slot == header.slot
     && slot.slot_generation == header.slot_generation
     && slot.neuron_count == header.neuron_count
-    && slot.microstep_count == header.microstep_count
+    && header.microstep_count >= 1u
+    && header.microstep_count <= slot.microstep_count
     && header.active_activation_side <= 1u
     && slot.extension_record_offset != 0xffffffffu
     && state_span_within(slot.extension_record_offset, 20u)

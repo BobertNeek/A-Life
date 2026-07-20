@@ -2,6 +2,7 @@
 
 pub mod action;
 pub mod action_abi;
+pub mod activity;
 pub mod adapter;
 mod blake3_digest;
 pub mod brain_class;
@@ -44,6 +45,12 @@ pub use action::{
     TeacherLessonMetadata, TeacherLessonResponseChannel,
 };
 pub use action_abi::ActionAbiVersion;
+pub use activity::{
+    BrainActivityPolicyV1, BrainAtpCostModel, BrainDispatchIdentity, BrainWorkCounters,
+    BrainWorkReceipt, GpuPressureSample, GpuPressureSampleInput, NeuralThrottleDecision,
+    NeuralThrottleLevel, BRAIN_ACTIVITY_POLICY_VERSION, BRAIN_ACTIVITY_SCHEMA_VERSION,
+    BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
+};
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{
@@ -165,6 +172,7 @@ pub use phenotype::{
     PhenotypeCompiler, PhenotypeCompilerInputs, PhenotypeHash, PlasticityReceptorPlan,
     ReplayCapturePlan, RouteBudgetReceipt, SensorEncoderAssignment, SensorEncoderPlan,
     SensorEncoderSourceGroup, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,
+    REQUIRED_GPU_FEATURE_MASK,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,

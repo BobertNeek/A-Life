@@ -9,6 +9,12 @@ const CAPACITY_SCHEMA_VERSION: u16 = 1;
 const GPU_LAYOUT_VERSION: u16 = 3;
 const REQUIRED_LIMITS_SCHEMA_VERSION: u16 = 1;
 const CAPACITY_DIGEST_DOMAIN: &[u8] = b"alife.brain.capacity.v1";
+/// Engine-neutral production GPU capability bit for timestamp queries.
+///
+/// Backend-specific feature layouts are deliberately not serialized into core
+/// contracts. GPU backends map their native timestamp-query capability to bit
+/// zero before admission evidence is created.
+pub const REQUIRED_GPU_FEATURE_MASK: u64 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct BrainExecutionBudget {
@@ -90,7 +96,7 @@ impl BrainExecutionBudget {
             max_decoder_input_lanes: 64,
             required_limits_schema_version: REQUIRED_LIMITS_SCHEMA_VERSION,
             required_feature_mask_words: 1,
-            required_feature_mask: 0,
+            required_feature_mask: REQUIRED_GPU_FEATURE_MASK,
             required_max_buffer_size: 268_435_456,
             required_max_storage_buffer_binding_size: 134_217_728,
             required_max_bind_groups: 4,
