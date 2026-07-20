@@ -1,0 +1,1272 @@
+{
+  "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_head_impostor_anatomy.png",
+  "assembly_preparation_population": "canonical-only",
+  "assembly_preparation_schema": "alife.geneforge_assembly_preparation.v2",
+  "assembly_preparation_schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+  "assembly_preparations": [
+    {
+      "asset_id": "ettin-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.039569564163684845,
+            1.6240415573120117,
+            0.010491815395653248
+          ],
+          "prepared_anchor": [
+            -0.03353041639569575,
+            1.6065296345485225,
+            0.002951175146842567
+          ],
+          "prepared_matrix": [
+            0.96,
+            0.0,
+            0.0,
+            0.019887336675126058,
+            0.0,
+            0.96,
+            0.0,
+            -0.21382205798551346,
+            0.0,
+            0.0,
+            0.96,
+            0.31791122216878503,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            -0.020715975703256312,
+            1.5693711638032317,
+            -0.013049275738561347
+          ],
+          "target_anchor": [
+            0.0,
+            1.2927742592655889,
+            0.3053839174597661
+          ],
+          "transformed_source_anchor": [
+            0.0,
+            1.2927742592655889,
+            0.3053839174597661
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 1,
+      "family_label": "tideclimber",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.96,
+          0.96,
+          0.96
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.039569564163684845,
+                1.6240415573120117,
+                0.010491815395653248
+              ],
+              "prepared_anchor": [
+                -0.03353041639569575,
+                1.6065296345485225,
+                0.002951175146842567
+              ],
+              "prepared_matrix": [
+                0.96,
+                0.0,
+                0.0,
+                0.019887336675126058,
+                0.0,
+                0.96,
+                0.0,
+                -0.21382205798551346,
+                0.0,
+                0.0,
+                0.96,
+                0.31791122216878503,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                -0.020715975703256312,
+                1.5693711638032317,
+                -0.013049275738561347
+              ],
+              "target_anchor": [
+                0.0,
+                1.2927742592655889,
+                0.3053839174597661
+              ],
+              "transformed_source_anchor": [
+                0.0,
+                1.2927742592655889,
+                0.3053839174597661
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.96,
+              0.96,
+              0.96
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            0.96,
+            0.0,
+            0.0,
+            0.019887336675126058,
+            0.0,
+            0.96,
+            0.0,
+            -0.21382205798551346,
+            0.0,
+            0.0,
+            0.96,
+            0.31791122216878503,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-head",
+          "source_family_id": 1,
+          "target_torso_asset_id": "norn-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        0.96,
+        0.0,
+        0.0,
+        0.019887336675126058,
+        0.0,
+        0.96,
+        0.0,
+        -0.21382205798551346,
+        0.0,
+        0.0,
+        0.96,
+        0.31791122216878503,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0.019887336675126058,
+        -0.21382205798551346,
+        0.31791122216878503
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "ettin-head",
+      "target_torso_asset_id": "norn-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "ettin-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.039569564163684845,
+            1.6240415573120117,
+            0.010491815395653248
+          ],
+          "prepared_anchor": [
+            -0.03353041639569575,
+            1.6065296345485225,
+            0.002951175146842567
+          ],
+          "prepared_matrix": [
+            1.07,
+            0.0,
+            0.0,
+            0.022972046743116946,
+            0.0,
+            1.07,
+            0.0,
+            -0.753600433799643,
+            0.0,
+            0.0,
+            1.07,
+            0.661385462947465,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 3.2526065174565133e-19,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            -0.020715975703256312,
+            1.5693711638032317,
+            -0.013049275738561347
+          ],
+          "target_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "transformed_source_anchor": [
+            0.0008059527406326893,
+            0.925626711469815,
+            0.6474227379072044
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 4,
+      "family_label": "duskmane",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.07,
+          1.07,
+          1.07
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.039569564163684845,
+                1.6240415573120117,
+                0.010491815395653248
+              ],
+              "prepared_anchor": [
+                -0.03353041639569575,
+                1.6065296345485225,
+                0.002951175146842567
+              ],
+              "prepared_matrix": [
+                1.07,
+                0.0,
+                0.0,
+                0.022972046743116946,
+                0.0,
+                1.07,
+                0.0,
+                -0.753600433799643,
+                0.0,
+                0.0,
+                1.07,
+                0.661385462947465,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 3.2526065174565133e-19,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                -0.020715975703256312,
+                1.5693711638032317,
+                -0.013049275738561347
+              ],
+              "target_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "transformed_source_anchor": [
+                0.0008059527406326893,
+                0.925626711469815,
+                0.6474227379072044
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.07,
+              1.07,
+              1.07
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.07,
+            0.0,
+            0.0,
+            0.022972046743116946,
+            0.0,
+            1.07,
+            0.0,
+            -0.753600433799643,
+            0.0,
+            0.0,
+            1.07,
+            0.661385462947465,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 3.2526065174565133e-19,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-head",
+          "source_family_id": 4,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 3.2526065174565133e-19,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.07,
+        0.0,
+        0.0,
+        0.022972046743116946,
+        0.0,
+        1.07,
+        0.0,
+        -0.753600433799643,
+        0.0,
+        0.0,
+        1.07,
+        0.661385462947465,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0.022972046743116946,
+        -0.753600433799643,
+        0.661385462947465
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "ettin-head",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "ettin-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.039569564163684845,
+            1.6240415573120117,
+            0.010491815395653248
+          ],
+          "prepared_anchor": [
+            -0.03353041639569575,
+            1.6065296345485225,
+            0.002951175146842567
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0.020715975703256312,
+            0.0,
+            1.0,
+            0.0,
+            -0.27659690453764285,
+            0.0,
+            0.0,
+            1.0,
+            0.31843319319832747,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            -0.020715975703256312,
+            1.5693711638032317,
+            -0.013049275738561347
+          ],
+          "target_anchor": [
+            0.0,
+            1.2927742592655889,
+            0.3053839174597661
+          ],
+          "transformed_source_anchor": [
+            0.0,
+            1.2927742592655889,
+            0.3053839174597661
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 7,
+      "family_label": "copperskipper",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.039569564163684845,
+                1.6240415573120117,
+                0.010491815395653248
+              ],
+              "prepared_anchor": [
+                -0.03353041639569575,
+                1.6065296345485225,
+                0.002951175146842567
+              ],
+              "prepared_matrix": [
+                1.0,
+                0.0,
+                0.0,
+                0.020715975703256312,
+                0.0,
+                1.0,
+                0.0,
+                -0.27659690453764285,
+                0.0,
+                0.0,
+                1.0,
+                0.31843319319832747,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                -0.020715975703256312,
+                1.5693711638032317,
+                -0.013049275738561347
+              ],
+              "target_anchor": [
+                0.0,
+                1.2927742592655889,
+                0.3053839174597661
+              ],
+              "transformed_source_anchor": [
+                0.0,
+                1.2927742592655889,
+                0.3053839174597661
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0.020715975703256312,
+            0.0,
+            1.0,
+            0.0,
+            -0.27659690453764285,
+            0.0,
+            0.0,
+            1.0,
+            0.31843319319832747,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-head",
+          "source_family_id": 7,
+          "target_torso_asset_id": "norn-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0.020715975703256312,
+        0.0,
+        1.0,
+        0.0,
+        -0.27659690453764285,
+        0.0,
+        0.0,
+        1.0,
+        0.31843319319832747,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0.020715975703256312,
+        -0.27659690453764285,
+        0.31843319319832747
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "ettin-head",
+      "target_torso_asset_id": "norn-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "ettin-head",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.039569564163684845,
+            1.6240415573120117,
+            0.010491815395653248
+          ],
+          "prepared_anchor": [
+            -0.03353041639569575,
+            1.6065296345485225,
+            0.002951175146842567
+          ],
+          "prepared_matrix": [
+            1.1,
+            0.0,
+            0.0,
+            0.002071597570325632,
+            0.0,
+            1.1,
+            0.0,
+            -0.15693711638032326,
+            0.0,
+            0.0,
+            1.1,
+            0.0013049275738561354,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "head",
+          "socket": "neck",
+          "source_anchor": [
+            -0.020715975703256312,
+            1.5693711638032317,
+            -0.013049275738561347
+          ],
+          "target_anchor": [
+            -0.020715975703256312,
+            1.5693711638032317,
+            -0.013049275738561347
+          ],
+          "transformed_source_anchor": [
+            -0.020715975703256312,
+            1.5693711638032317,
+            -0.013049275738561347
+          ]
+        }
+      ],
+      "bridge_kind": "head-join-cover",
+      "bridge_sockets": [
+        "neck"
+      ],
+      "family_id": 10,
+      "family_label": "orchidstout",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.1,
+          1.1,
+          1.1
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.039569564163684845,
+                1.6240415573120117,
+                0.010491815395653248
+              ],
+              "prepared_anchor": [
+                -0.03353041639569575,
+                1.6065296345485225,
+                0.002951175146842567
+              ],
+              "prepared_matrix": [
+                1.1,
+                0.0,
+                0.0,
+                0.002071597570325632,
+                0.0,
+                1.1,
+                0.0,
+                -0.15693711638032326,
+                0.0,
+                0.0,
+                1.1,
+                0.0013049275738561354,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "head",
+              "socket": "neck",
+              "source_anchor": [
+                -0.020715975703256312,
+                1.5693711638032317,
+                -0.013049275738561347
+              ],
+              "target_anchor": [
+                -0.020715975703256312,
+                1.5693711638032317,
+                -0.013049275738561347
+              ],
+              "transformed_source_anchor": [
+                -0.020715975703256312,
+                1.5693711638032317,
+                -0.013049275738561347
+              ]
+            }
+          ],
+          "bridge_kind": "head-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.1,
+              1.1,
+              1.1
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "neck-ruff",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.1,
+            0.0,
+            0.0,
+            0.002071597570325632,
+            0.0,
+            1.1,
+            0.0,
+            -0.15693711638032326,
+            0.0,
+            0.0,
+            1.1,
+            0.0013049275738561354,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "head",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "neck",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-head",
+          "source_family_id": 10,
+          "target_torso_asset_id": "ettin-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "neck-ruff",
+      "lod": "impostor",
+      "logical_slot": "head",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.1,
+        0.0,
+        0.0,
+        0.002071597570325632,
+        0.0,
+        1.1,
+        0.0,
+        -0.15693711638032326,
+        0.0,
+        0.0,
+        1.1,
+        0.0013049275738561354,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0.002071597570325632,
+        -0.15693711638032326,
+        0.0013049275738561354
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "ettin-head",
+      "target_torso_asset_id": "ettin-torso",
+      "transform_mode": "slot-transform"
+    }
+  ],
+  "asset_id": "ettin-head",
+  "bounds": {
+    "max": [
+      0.5775241851806641,
+      2.0214483737945557,
+      0.5475916862487793
+    ],
+    "min": [
+      -0.5878266096115112,
+      1.0962835550308228,
+      -0.46993082761764526
+    ]
+  },
+  "bridge_geometry": [
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        -0.039569564163684845,
+        1.6240415573120117,
+        0.010491815395653248
+      ],
+      "prepared_anchor": [
+        -0.03353041639569575,
+        1.6065296345485225,
+        0.002951175146842567
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "neck"
+    }
+  ],
+  "coordinate_frame": {
+    "forward": "-Z",
+    "handedness": "right",
+    "up": "+Y"
+  },
+  "cross_torso_preparations": [],
+  "donor": "ettin",
+  "expected_groups": [
+    "head",
+    "head.eyes",
+    "head.hair",
+    "head.lids",
+    "head.teeth",
+    "head.tongue"
+  ],
+  "ground_contacts": [],
+  "landmarks": {
+    "head": [
+      -0.020715975703256312,
+      1.5693711638032317,
+      -0.013049275738561347
+    ],
+    "left-brow": [
+      -0.16,
+      0.19,
+      -0.38
+    ],
+    "left-eye": [
+      -0.16,
+      0.1,
+      -0.39
+    ],
+    "left-foot": [
+      0.17786173583468645,
+      0.2540892063952545,
+      -0.502911345661293
+    ],
+    "left-lid": [
+      -0.16,
+      0.11,
+      -0.405
+    ],
+    "left-lower-arm": [
+      0.3497896212978099,
+      0.6168392299514918,
+      0.0036787911931146196
+    ],
+    "left-shin": [
+      0.19750363020187206,
+      0.23020797127429274,
+      -0.2913142923999564
+    ],
+    "left-thigh": [
+      0.1720121283343805,
+      0.6043129808746812,
+      -0.24511755442077265
+    ],
+    "left-upper-arm": [
+      0.2387161958221205,
+      0.92879790077761,
+      -0.1062470603575309
+    ],
+    "muzzle": [
+      0,
+      -0.08,
+      -0.45
+    ],
+    "neck-attachment": [
+      0,
+      -0.46,
+      0
+    ],
+    "right-brow": [
+      0.16,
+      0.19,
+      -0.38
+    ],
+    "right-eye": [
+      0.16,
+      0.1,
+      -0.39
+    ],
+    "right-foot": [
+      -0.21929368724119908,
+      0.2540892063952545,
+      -0.502911345661293
+    ],
+    "right-lid": [
+      0.16,
+      0.11,
+      -0.405
+    ],
+    "right-lower-arm": [
+      -0.3912215727043225,
+      0.6168392299514918,
+      0.0036787911931146196
+    ],
+    "right-shin": [
+      -0.2389355816083847,
+      0.23020797127429274,
+      -0.2913142923999564
+    ],
+    "right-thigh": [
+      -0.21344407974089313,
+      0.6043129808746812,
+      -0.24511755442077265
+    ],
+    "right-upper-arm": [
+      -0.2801481472286331,
+      0.92879790077761,
+      -0.1062470603575309
+    ],
+    "torso": [
+      -0.020715975703256312,
+      0.8362992037014375,
+      -0.06493692206580186
+    ]
+  },
+  "lod": "impostor",
+  "lod_topology": {
+    "boundary_edges": 53,
+    "component_connected_counts": {
+      "object-013091ad3168ab734175": 1,
+      "object-2c309ee4843afd811ce7": 1,
+      "object-99467e061490d8510f20": 8,
+      "object-9ec83d37d68e5eee719f": 20,
+      "object-a8158a4ded9640b356bf": 1,
+      "object-beaf27d4e7d3b54af7bd": 1,
+      "object-ca68e3c2fb417f1dee4d": 8,
+      "object-d809649d9b700870ad82": 1,
+      "object-da00a4b4c53e6a38824b": 1,
+      "object-f5bb1a5fa18076d4c0c6": 1
+    },
+    "component_ids": [
+      "object-013091ad3168ab734175",
+      "object-2c309ee4843afd811ce7",
+      "object-99467e061490d8510f20",
+      "object-9ec83d37d68e5eee719f",
+      "object-a8158a4ded9640b356bf",
+      "object-beaf27d4e7d3b54af7bd",
+      "object-ca68e3c2fb417f1dee4d",
+      "object-d809649d9b700870ad82",
+      "object-da00a4b4c53e6a38824b",
+      "object-f5bb1a5fa18076d4c0c6"
+    ],
+    "component_triangle_counts": {
+      "object-013091ad3168ab734175": 10,
+      "object-2c309ee4843afd811ce7": 8,
+      "object-99467e061490d8510f20": 22,
+      "object-9ec83d37d68e5eee719f": 222,
+      "object-a8158a4ded9640b356bf": 14,
+      "object-beaf27d4e7d3b54af7bd": 72,
+      "object-ca68e3c2fb417f1dee4d": 21,
+      "object-d809649d9b700870ad82": 14,
+      "object-da00a4b4c53e6a38824b": 10,
+      "object-f5bb1a5fa18076d4c0c6": 6
+    },
+    "connected_components": 43,
+    "non_manifold_edges": 0,
+    "triangle_count": 399
+  },
+  "logical_slot": "head",
+  "microdetail": {
+    "source_files": [
+      "Body F.png",
+      "Ettin_Body_Blend.png",
+      "Ettin_Body_Darkness.png",
+      "Ettin_Body_Hard.png",
+      "Ettin_Face_Darkness.png",
+      "Ettin_Foot_Blend.png",
+      "Ettin_Radius_Darkness.png",
+      "Ettin_Radius_Hard.png",
+      "Ettin_Thigh_Blend.png",
+      "Ettin_Thigh_Darkness.png",
+      "Face F.png",
+      "Foot F.png",
+      "Humerus F.png",
+      "Radius F.png",
+      "Shin F.png",
+      "Thigh F.png"
+    ],
+    "uvless_fallback": "evaluated-normal-curvature-material-output"
+  },
+  "schema": "alife.creature_part_sockets.v2",
+  "semantic_mask": "production_voxel_v1/models/geneforge/ettin_head_impostor_semantic.png",
+  "sockets": {
+    "left-hip": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.1720121283343805,
+        0.6043129808746812,
+        -0.24511755442077265
+      ]
+    },
+    "left-shoulder": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.2387161958221205,
+        0.92879790077761,
+        -0.1062470603575309
+      ]
+    },
+    "neck": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.020715975703256312,
+        1.5693711638032317,
+        -0.013049275738561347
+      ]
+    },
+    "right-hip": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.21344407974089313,
+        0.6043129808746812,
+        -0.24511755442077265
+      ]
+    },
+    "right-shoulder": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.2801481472286331,
+        0.92879790077761,
+        -0.1062470603575309
+      ]
+    }
+  }
+}

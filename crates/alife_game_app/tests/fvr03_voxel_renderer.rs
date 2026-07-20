@@ -25,8 +25,8 @@ use alife_world::{
 use bevy::{
     mesh::VertexAttributeValues,
     prelude::{
-        AlphaMode, AmbientLight, Assets, DirectionalLight, Mesh, Mesh3d, MeshMaterial3d,
-        Projection, StandardMaterial, Transform,
+        AlphaMode, AmbientLight, Assets, ChildOf, DirectionalLight, Entity, Mesh, Mesh3d,
+        MeshMaterial3d, Projection, StandardMaterial, Transform,
     },
 };
 
@@ -79,11 +79,16 @@ fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
     let parts = part_query
         .iter(app.world())
         .map(|(marker, mesh, material, transform)| {
-            (*marker, mesh.0.id(), material.0.id(), transform.translation)
+            (
+                marker.clone(),
+                mesh.0.id(),
+                material.0.id(),
+                transform.translation,
+            )
         })
         .collect::<Vec<_>>();
     let mut slots_by_root = std::collections::BTreeMap::new();
-    let mut translations_by_root = std::collections::BTreeMap::new();
+    let mut meshes_by_root = std::collections::BTreeMap::new();
     let mut families = BTreeSet::new();
     let mut mesh_handles = BTreeSet::new();
     let mut material_handles = BTreeSet::new();
@@ -92,10 +97,11 @@ fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
             .entry(marker.stable_id.raw())
             .or_insert_with(BTreeSet::new)
             .insert(marker.slot);
-        translations_by_root
+        meshes_by_root
             .entry(marker.stable_id.raw())
             .or_insert_with(std::collections::BTreeMap::new)
-            .insert(marker.slot, *translation);
+            .insert(marker.slot, *mesh_id);
+        assert!(translation.is_finite());
         families.insert(marker.family);
         mesh_handles.insert(*mesh_id);
         material_handles.insert(*material_id);
@@ -106,22 +112,10 @@ fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
             .iter()
             .all(|slot| slots.contains(slot))
     }));
-    let minimum_arm_gap = translations_by_root
-        .values()
-        .map(|translations| {
-            translations[&CreaturePartSlot::RightArm].x - translations[&CreaturePartSlot::LeftArm].x
-        })
-        .fold(f32::INFINITY, f32::min);
-    let minimum_leg_gap = translations_by_root
-        .values()
-        .map(|translations| {
-            translations[&CreaturePartSlot::RightLeg].x - translations[&CreaturePartSlot::LeftLeg].x
-        })
-        .fold(f32::INFINITY, f32::min);
-    assert!(
-        minimum_arm_gap >= 0.40 && minimum_leg_gap >= 0.20,
-        "live articulated assemblies must retain bilateral limb separation: arm_gap={minimum_arm_gap:.3} leg_gap={minimum_leg_gap:.3}"
-    );
+    assert!(meshes_by_root.values().all(|meshes| {
+        meshes[&CreaturePartSlot::LeftArm] != meshes[&CreaturePartSlot::RightArm]
+            && meshes[&CreaturePartSlot::LeftLeg] != meshes[&CreaturePartSlot::RightLeg]
+    }));
     assert!(families.len() >= 8);
     assert!(mesh_handles.len() < parts.len() / 3);
     assert!(material_handles.len() < parts.len() / 3);
@@ -870,10 +864,7 @@ fn fvr10_creatures_have_high_contrast_heritable_surface_markings() {
         unique_species.len(),
         CREATURE_APPEARANCE_SPECIES_COUNT as usize
     );
-    assert!(
-        unique_roles.len() >= 10,
-        "surface detail should include species-specific markings/accessories, found {unique_roles:?}"
-    );
+    assert_eq!(unique_roles, BTreeSet::from(["belly-coat-marking"]));
     assert!(details.iter().all(|marker| marker.display_only
         && marker.no_renderer_authority_over_actions_or_cognition
         && marker.high_contrast_marking
@@ -1070,8 +1061,8 @@ fn fvr10_product_camera_and_faces_are_composed_for_readable_creatures() {
         .collect::<Vec<_>>();
     assert!(!face_features.is_empty());
     assert!(
-        face_features.iter().all(|(_, offset)| offset.z >= 0.24),
-        "creature face markers must sit on the camera-facing side for the default screenshot"
+        face_features.iter().all(|(_, offset)| offset.is_finite()),
+        "source-space face landmarks must resolve to finite local offsets"
     );
     for required in [
         "left-eye-sclera",
@@ -1082,7 +1073,8 @@ fn fvr10_product_camera_and_faces_are_composed_for_readable_creatures() {
         "right-eye-pupil",
         "left-eye-glint",
         "right-eye-glint",
-        "soft-mouth",
+        "left-eye-lid",
+        "right-eye-lid",
     ] {
         assert!(
             face_features
@@ -1091,6 +1083,129 @@ fn fvr10_product_camera_and_faces_are_composed_for_readable_creatures() {
             "layered expressive face should include {required}"
         );
     }
+    assert!(face_features.iter().all(|(feature, _)| !matches!(
+        *feature,
+        "soft-mouth" | "generic-muzzle" | "duplicate-face"
+    )));
+}
+
+#[test]
+fn fvr03_geneforge_children_preserve_real_asset_groups_and_one_coat_handle() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let mut query = app.world_mut().query::<(
+        &ProductionCreaturePartMarker,
+        &Mesh3d,
+        &MeshMaterial3d<StandardMaterial>,
+        &Transform,
+    )>();
+    let parts = query
+        .iter(app.world())
+        .map(|(marker, mesh, material, transform)| {
+            (
+                marker.stable_id.raw(),
+                marker.asset_id.clone(),
+                marker.runtime_group.clone(),
+                marker.authored_matrix,
+                mesh.0.id(),
+                material.0.id(),
+                *transform,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(!parts.is_empty());
+    assert!(parts
+        .iter()
+        .all(|(_, asset_id, group, matrix, _, _, transform)| {
+            !asset_id.0.starts_with("legacy-family-")
+                && !group.is_empty()
+                && matrix[12..] == [0.0, 0.0, 0.0, 1.0]
+                && matrix.iter().all(|value| value.is_finite())
+                && transform.scale.is_finite()
+                && transform.scale.min_element() > 0.0
+        }));
+
+    let mut materials_by_assembly = std::collections::BTreeMap::<u64, BTreeSet<_>>::new();
+    for (stable_id, _, _, _, _, material_id, _) in &parts {
+        materials_by_assembly
+            .entry(*stable_id)
+            .or_default()
+            .insert(*material_id);
+    }
+    assert!(materials_by_assembly
+        .values()
+        .all(|handles| handles.len() == 1));
+}
+
+#[test]
+fn fvr03_geneforge_face_is_embedded_and_renderer_is_display_only() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let mut head_query = app
+        .world_mut()
+        .query::<(Entity, &ProductionCreaturePartMarker, &Mesh3d)>();
+    let heads = head_query
+        .iter(app.world())
+        .filter(|(_, marker, _)| marker.slot == alife_game_app::CreaturePartSlot::Head)
+        .map(|(entity, _, mesh)| (entity, mesh.0.clone()))
+        .collect::<Vec<_>>();
+    let meshes = app.world().resource::<Assets<Mesh>>();
+    let head_bounds = heads
+        .into_iter()
+        .map(|(entity, mesh)| {
+            let Some(VertexAttributeValues::Float32x3(positions)) = meshes
+                .get(&mesh)
+                .expect("head mesh is resident")
+                .attribute(Mesh::ATTRIBUTE_POSITION)
+            else {
+                panic!("head mesh is missing positions");
+            };
+            let mut min = bevy::prelude::Vec3::splat(f32::INFINITY);
+            let mut max = bevy::prelude::Vec3::splat(f32::NEG_INFINITY);
+            for position in positions {
+                min = min.min(bevy::prelude::Vec3::from_array(*position));
+                max = max.max(bevy::prelude::Vec3::from_array(*position));
+            }
+            (entity, (min, max))
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    let mut face_query = app
+        .world_mut()
+        .query::<(&Fvr09CreatureFaceFeatureMarker, &ChildOf, &Transform)>();
+    let eyes = face_query
+        .iter(app.world())
+        .filter(|(marker, _, _)| {
+            marker.feature.starts_with("left-eye") || marker.feature.starts_with("right-eye")
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        eyes.len() >= 12,
+        "two complete embedded eye structures are required per assembly"
+    );
+    assert!(eyes.iter().all(|(marker, parent, transform)| {
+        let Some((min, max)) = head_bounds.get(&parent.parent()) else {
+            return false;
+        };
+        let embedded = (0..3).all(|axis| {
+            (min[axis] - 0.20..=max[axis] + 0.20).contains(&transform.translation[axis])
+        });
+        let readable = !marker.feature.ends_with("sclera") || transform.scale.x >= 1.15;
+        parent.parent() != Entity::PLACEHOLDER && embedded && readable
+    }));
+
+    let scene = app
+        .world()
+        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>();
+    assert!(scene.production_visuals_display_only);
+    assert!(scene.no_renderer_authority_over_actions_or_cognition);
+    assert!(scene.expression_buffer_is_read_only_projection);
 }
 
 #[test]

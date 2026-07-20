@@ -68,9 +68,28 @@ pub fn grounded_root_height(
     surface_height + clearance.max(0.0) - min_y
 }
 
+pub fn grounded_root_height_from_transformed_feet(
+    surface_height: f32,
+    clearance: f32,
+    left_foot: CreatureVisualBounds,
+    right_foot: CreatureVisualBounds,
+) -> Result<f32, &'static str> {
+    if !surface_height.is_finite()
+        || !clearance.is_finite()
+        || clearance < 0.0
+        || !left_foot.is_valid()
+        || !right_foot.is_valid()
+    {
+        return Err("grounding requires finite transformed foot bounds");
+    }
+    Ok(surface_height + clearance - left_foot.min[1].min(right_foot.min[1]))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{grounded_root_height, CreatureVisualBounds};
+    use super::{
+        grounded_root_height, grounded_root_height_from_transformed_feet, CreatureVisualBounds,
+    };
 
     const IDENTITY_COLUMNS: [f32; 9] = [
         1.0, 0.0, 0.0, // X column
@@ -114,5 +133,20 @@ mod tests {
         assert_eq!(bounds.min, [-0.7, -0.4, -0.5]);
         assert_eq!(bounds.max, [0.3, 1.1, 0.4]);
         assert!(bounds.is_valid());
+    }
+
+    #[test]
+    fn transformed_feet_ground_by_root_translation_without_squashing_bounds() {
+        let left = CreatureVisualBounds::new([-0.31, -0.82, -0.20], [-0.03, -0.34, 0.18]);
+        let right = CreatureVisualBounds::new([0.04, -0.80, -0.19], [0.32, -0.33, 0.19]);
+        let original_left_extent = left.max[1] - left.min[1];
+        let original_right_extent = right.max[1] - right.min[1];
+
+        let root_y = grounded_root_height_from_transformed_feet(0.50, 0.012, left, right).unwrap();
+        let grounded_min = (left.min[1] + root_y).min(right.min[1] + root_y);
+
+        assert!((grounded_min - 0.512).abs() <= 1.0e-6);
+        assert_eq!(left.max[1] - left.min[1], original_left_extent);
+        assert_eq!(right.max[1] - right.min[1], original_right_extent);
     }
 }

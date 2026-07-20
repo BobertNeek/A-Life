@@ -1,0 +1,1497 @@
+{
+  "anatomy_mask": "production_voxel_v1/models/geneforge/ettin_arms_full_anatomy.png",
+  "assembly_preparation_population": "canonical-only",
+  "assembly_preparation_schema": "alife.geneforge_assembly_preparation.v2",
+  "assembly_preparation_schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+  "assembly_preparations": [
+    {
+      "asset_id": "ettin-arms",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.2336609810590744,
+            0.9041372537612915,
+            -0.13391873240470886
+          ],
+          "prepared_anchor": [
+            0.23618858844059745,
+            0.9164675772694508,
+            -0.12008289638111988
+          ],
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            0.02476796339906051,
+            0.0,
+            1.04,
+            0.0,
+            -0.3069306192165894,
+            0.0,
+            0.0,
+            1.04,
+            0.3777500565238547,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "left-arm",
+          "socket": "left-shoulder",
+          "source_anchor": [
+            0.2387161958221205,
+            0.92879790077761,
+            -0.1062470603575309
+          ],
+          "target_anchor": [
+            0.27303280705406585,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "transformed_source_anchor": [
+            0.27303280705406585,
+            0.6590191975921251,
+            0.26725311375202254
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.2750929892063141,
+            0.9041371941566467,
+            -0.13391871750354767
+          ],
+          "prepared_anchor": [
+            -0.2776205682174736,
+            0.9164675474671283,
+            -0.12008288893053928
+          ],
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            0.01118791477682013,
+            0.0,
+            1.04,
+            0.0,
+            -0.3069306192165894,
+            0.0,
+            0.0,
+            1.04,
+            0.3777500565238547,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "right-arm",
+          "socket": "right-shoulder",
+          "source_anchor": [
+            -0.2801481472286331,
+            0.92879790077761,
+            -0.1062470603575309
+          ],
+          "target_anchor": [
+            -0.2801661583409583,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "transformed_source_anchor": [
+            -0.2801661583409583,
+            0.6590191975921251,
+            0.26725311375202254
+          ]
+        }
+      ],
+      "bridge_kind": "arms-join-cover",
+      "bridge_sockets": [
+        "left-shoulder",
+        "right-shoulder"
+      ],
+      "family_id": 3,
+      "family_label": "emberloper",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.04,
+          1.04,
+          1.04
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                0.2336609810590744,
+                0.9041372537612915,
+                -0.13391873240470886
+              ],
+              "prepared_anchor": [
+                0.23618858844059745,
+                0.9164675772694508,
+                -0.12008289638111988
+              ],
+              "prepared_matrix": [
+                1.04,
+                0.0,
+                0.0,
+                0.02476796339906051,
+                0.0,
+                1.04,
+                0.0,
+                -0.3069306192165894,
+                0.0,
+                0.0,
+                1.04,
+                0.3777500565238547,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "left-arm",
+              "socket": "left-shoulder",
+              "source_anchor": [
+                0.2387161958221205,
+                0.92879790077761,
+                -0.1062470603575309
+              ],
+              "target_anchor": [
+                0.27303280705406585,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "transformed_source_anchor": [
+                0.27303280705406585,
+                0.6590191975921251,
+                0.26725311375202254
+              ]
+            }
+          ],
+          "bridge_kind": "arms-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.04,
+              1.04
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "shoulder-tuft",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            0.02476796339906051,
+            0.0,
+            1.04,
+            0.0,
+            -0.3069306192165894,
+            0.0,
+            0.0,
+            1.04,
+            0.3777500565238547,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "left-arm",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "left-shoulder",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-arms",
+          "source_family_id": 3,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        },
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.2750929892063141,
+                0.9041371941566467,
+                -0.13391871750354767
+              ],
+              "prepared_anchor": [
+                -0.2776205682174736,
+                0.9164675474671283,
+                -0.12008288893053928
+              ],
+              "prepared_matrix": [
+                1.04,
+                0.0,
+                0.0,
+                0.01118791477682013,
+                0.0,
+                1.04,
+                0.0,
+                -0.3069306192165894,
+                0.0,
+                0.0,
+                1.04,
+                0.3777500565238547,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "right-arm",
+              "socket": "right-shoulder",
+              "source_anchor": [
+                -0.2801481472286331,
+                0.92879790077761,
+                -0.1062470603575309
+              ],
+              "target_anchor": [
+                -0.2801661583409583,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "transformed_source_anchor": [
+                -0.2801661583409583,
+                0.6590191975921251,
+                0.26725311375202254
+              ]
+            }
+          ],
+          "bridge_kind": "arms-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.04,
+              1.04
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "shoulder-tuft",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            0.01118791477682013,
+            0.0,
+            1.04,
+            0.0,
+            -0.3069306192165894,
+            0.0,
+            0.0,
+            1.04,
+            0.3777500565238547,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "right-arm",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "right-shoulder",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-arms",
+          "source_family_id": 3,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "shoulder-tuft",
+      "lod": "full",
+      "logical_slot": "arms",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.04,
+        0.0,
+        0.0,
+        0.017977939087940334,
+        0.0,
+        1.04,
+        0.0,
+        -0.3069306192165894,
+        0.0,
+        0.0,
+        1.04,
+        0.3777500565238547,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0.017977939087940334,
+        -0.3069306192165894,
+        0.3777500565238547
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "ettin-arms",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "per-group-socket-transforms"
+    },
+    {
+      "asset_id": "ettin-arms",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.2336609810590744,
+            0.9041372537612915,
+            -0.13391873240470886
+          ],
+          "prepared_anchor": [
+            0.23618858844059745,
+            0.9164675772694508,
+            -0.12008289638111988
+          ],
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            -0.03455680497752575,
+            0.0,
+            1.04,
+            0.0,
+            -0.20084972711714932,
+            0.0,
+            0.0,
+            1.04,
+            0.3391089022939994,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "left-arm",
+          "socket": "left-shoulder",
+          "source_anchor": [
+            0.2387161958221205,
+            0.92879790077761,
+            -0.1062470603575309
+          ],
+          "target_anchor": [
+            0.2137080386774796,
+            0.7651000896915652,
+            0.22861195952216729
+          ],
+          "transformed_source_anchor": [
+            0.2137080386774796,
+            0.7651000896915652,
+            0.22861195952216729
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.2750929892063141,
+            0.9041371941566467,
+            -0.13391871750354767
+          ],
+          "prepared_anchor": [
+            -0.2776205682174736,
+            0.9164675474671283,
+            -0.12008288893053928
+          ],
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            0.07764603444029886,
+            0.0,
+            1.04,
+            0.0,
+            -0.20084972711714932,
+            0.0,
+            0.0,
+            1.04,
+            0.3391089022939994,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "right-arm",
+          "socket": "right-shoulder",
+          "source_anchor": [
+            -0.2801481472286331,
+            0.92879790077761,
+            -0.1062470603575309
+          ],
+          "target_anchor": [
+            -0.2137080386774796,
+            0.7651000896915652,
+            0.22861195952216729
+          ],
+          "transformed_source_anchor": [
+            -0.2137080386774796,
+            0.7651000896915652,
+            0.22861195952216729
+          ]
+        }
+      ],
+      "bridge_kind": "arms-join-cover",
+      "bridge_sockets": [
+        "left-shoulder",
+        "right-shoulder"
+      ],
+      "family_id": 5,
+      "family_label": "reefburrower",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.04,
+          1.04,
+          1.04
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                0.2336609810590744,
+                0.9041372537612915,
+                -0.13391873240470886
+              ],
+              "prepared_anchor": [
+                0.23618858844059745,
+                0.9164675772694508,
+                -0.12008289638111988
+              ],
+              "prepared_matrix": [
+                1.04,
+                0.0,
+                0.0,
+                -0.03455680497752575,
+                0.0,
+                1.04,
+                0.0,
+                -0.20084972711714932,
+                0.0,
+                0.0,
+                1.04,
+                0.3391089022939994,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "left-arm",
+              "socket": "left-shoulder",
+              "source_anchor": [
+                0.2387161958221205,
+                0.92879790077761,
+                -0.1062470603575309
+              ],
+              "target_anchor": [
+                0.2137080386774796,
+                0.7651000896915652,
+                0.22861195952216729
+              ],
+              "transformed_source_anchor": [
+                0.2137080386774796,
+                0.7651000896915652,
+                0.22861195952216729
+              ]
+            }
+          ],
+          "bridge_kind": "arms-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.04,
+              1.04
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "shoulder-tuft",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            -0.03455680497752575,
+            0.0,
+            1.04,
+            0.0,
+            -0.20084972711714932,
+            0.0,
+            0.0,
+            1.04,
+            0.3391089022939994,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "left-arm",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "left-shoulder",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-arms",
+          "source_family_id": 5,
+          "target_torso_asset_id": "norn-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        },
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.2750929892063141,
+                0.9041371941566467,
+                -0.13391871750354767
+              ],
+              "prepared_anchor": [
+                -0.2776205682174736,
+                0.9164675474671283,
+                -0.12008288893053928
+              ],
+              "prepared_matrix": [
+                1.04,
+                0.0,
+                0.0,
+                0.07764603444029886,
+                0.0,
+                1.04,
+                0.0,
+                -0.20084972711714932,
+                0.0,
+                0.0,
+                1.04,
+                0.3391089022939994,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "right-arm",
+              "socket": "right-shoulder",
+              "source_anchor": [
+                -0.2801481472286331,
+                0.92879790077761,
+                -0.1062470603575309
+              ],
+              "target_anchor": [
+                -0.2137080386774796,
+                0.7651000896915652,
+                0.22861195952216729
+              ],
+              "transformed_source_anchor": [
+                -0.2137080386774796,
+                0.7651000896915652,
+                0.22861195952216729
+              ]
+            }
+          ],
+          "bridge_kind": "arms-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.04,
+              1.04
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "shoulder-tuft",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            0.07764603444029886,
+            0.0,
+            1.04,
+            0.0,
+            -0.20084972711714932,
+            0.0,
+            0.0,
+            1.04,
+            0.3391089022939994,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "right-arm",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "right-shoulder",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-arms",
+          "source_family_id": 5,
+          "target_torso_asset_id": "norn-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "shoulder-tuft",
+      "lod": "full",
+      "logical_slot": "arms",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.04,
+        0.0,
+        0.0,
+        0.021544614731386566,
+        0.0,
+        1.04,
+        0.0,
+        -0.20084972711714932,
+        0.0,
+        0.0,
+        1.04,
+        0.3391089022939994,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0.021544614731386566,
+        -0.20084972711714932,
+        0.3391089022939994
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "ettin-arms",
+      "target_torso_asset_id": "norn-torso",
+      "transform_mode": "per-group-socket-transforms"
+    },
+    {
+      "asset_id": "ettin-arms",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.2336609810590744,
+            0.9041372537612915,
+            -0.13391873240470886
+          ],
+          "prepared_anchor": [
+            0.23618858844059745,
+            0.9164675772694508,
+            -0.12008289638111988
+          ],
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            -0.03455680497752575,
+            0.0,
+            1.04,
+            0.0,
+            -0.20084972711714932,
+            0.0,
+            0.0,
+            1.04,
+            0.3391089022939994,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "left-arm",
+          "socket": "left-shoulder",
+          "source_anchor": [
+            0.2387161958221205,
+            0.92879790077761,
+            -0.1062470603575309
+          ],
+          "target_anchor": [
+            0.2137080386774796,
+            0.7651000896915652,
+            0.22861195952216729
+          ],
+          "transformed_source_anchor": [
+            0.2137080386774796,
+            0.7651000896915652,
+            0.22861195952216729
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.2750929892063141,
+            0.9041371941566467,
+            -0.13391871750354767
+          ],
+          "prepared_anchor": [
+            -0.2776205682174736,
+            0.9164675474671283,
+            -0.12008288893053928
+          ],
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            0.07764603444029886,
+            0.0,
+            1.04,
+            0.0,
+            -0.20084972711714932,
+            0.0,
+            0.0,
+            1.04,
+            0.3391089022939994,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "right-arm",
+          "socket": "right-shoulder",
+          "source_anchor": [
+            -0.2801481472286331,
+            0.92879790077761,
+            -0.1062470603575309
+          ],
+          "target_anchor": [
+            -0.2137080386774796,
+            0.7651000896915652,
+            0.22861195952216729
+          ],
+          "transformed_source_anchor": [
+            -0.2137080386774796,
+            0.7651000896915652,
+            0.22861195952216729
+          ]
+        }
+      ],
+      "bridge_kind": "arms-join-cover",
+      "bridge_sockets": [
+        "left-shoulder",
+        "right-shoulder"
+      ],
+      "family_id": 11,
+      "family_label": "amberlongstep",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.04,
+          1.04,
+          1.04
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                0.2336609810590744,
+                0.9041372537612915,
+                -0.13391873240470886
+              ],
+              "prepared_anchor": [
+                0.23618858844059745,
+                0.9164675772694508,
+                -0.12008289638111988
+              ],
+              "prepared_matrix": [
+                1.04,
+                0.0,
+                0.0,
+                -0.03455680497752575,
+                0.0,
+                1.04,
+                0.0,
+                -0.20084972711714932,
+                0.0,
+                0.0,
+                1.04,
+                0.3391089022939994,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "left-arm",
+              "socket": "left-shoulder",
+              "source_anchor": [
+                0.2387161958221205,
+                0.92879790077761,
+                -0.1062470603575309
+              ],
+              "target_anchor": [
+                0.2137080386774796,
+                0.7651000896915652,
+                0.22861195952216729
+              ],
+              "transformed_source_anchor": [
+                0.2137080386774796,
+                0.7651000896915652,
+                0.22861195952216729
+              ]
+            }
+          ],
+          "bridge_kind": "arms-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.04,
+              1.04
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "shoulder-tuft",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            -0.03455680497752575,
+            0.0,
+            1.04,
+            0.0,
+            -0.20084972711714932,
+            0.0,
+            0.0,
+            1.04,
+            0.3391089022939994,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "left-arm",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "left-shoulder",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-arms",
+          "source_family_id": 11,
+          "target_torso_asset_id": "norn-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        },
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.2750929892063141,
+                0.9041371941566467,
+                -0.13391871750354767
+              ],
+              "prepared_anchor": [
+                -0.2776205682174736,
+                0.9164675474671283,
+                -0.12008288893053928
+              ],
+              "prepared_matrix": [
+                1.04,
+                0.0,
+                0.0,
+                0.07764603444029886,
+                0.0,
+                1.04,
+                0.0,
+                -0.20084972711714932,
+                0.0,
+                0.0,
+                1.04,
+                0.3391089022939994,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "right-arm",
+              "socket": "right-shoulder",
+              "source_anchor": [
+                -0.2801481472286331,
+                0.92879790077761,
+                -0.1062470603575309
+              ],
+              "target_anchor": [
+                -0.2137080386774796,
+                0.7651000896915652,
+                0.22861195952216729
+              ],
+              "transformed_source_anchor": [
+                -0.2137080386774796,
+                0.7651000896915652,
+                0.22861195952216729
+              ]
+            }
+          ],
+          "bridge_kind": "arms-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.04,
+              1.04,
+              1.04
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "shoulder-tuft",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.04,
+            0.0,
+            0.0,
+            0.07764603444029886,
+            0.0,
+            1.04,
+            0.0,
+            -0.20084972711714932,
+            0.0,
+            0.0,
+            1.04,
+            0.3391089022939994,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "right-arm",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "right-shoulder",
+          "socket_evidence": [],
+          "source_asset_id": "ettin-arms",
+          "source_family_id": 11,
+          "target_torso_asset_id": "norn-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "shoulder-tuft",
+      "lod": "full",
+      "logical_slot": "arms",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.04,
+        0.0,
+        0.0,
+        0.021544614731386566,
+        0.0,
+        1.04,
+        0.0,
+        -0.20084972711714932,
+        0.0,
+        0.0,
+        1.04,
+        0.3391089022939994,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0.021544614731386566,
+        -0.20084972711714932,
+        0.3391089022939994
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "ettin-arms",
+      "target_torso_asset_id": "norn-torso",
+      "transform_mode": "per-group-socket-transforms"
+    }
+  ],
+  "asset_id": "ettin-arms",
+  "bounds": {
+    "max": [
+      0.44376352429389954,
+      1.1010968685150146,
+      0.22165685892105103
+    ],
+    "min": [
+      -0.48519545793533325,
+      0.36553052067756653,
+      -0.19084753096103668
+    ]
+  },
+  "bridge_geometry": [
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        0.2336609810590744,
+        0.9041372537612915,
+        -0.13391873240470886
+      ],
+      "prepared_anchor": [
+        0.23618858844059745,
+        0.9164675772694508,
+        -0.12008289638111988
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "left-shoulder"
+    },
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        -0.2750929892063141,
+        0.9041371941566467,
+        -0.13391871750354767
+      ],
+      "prepared_anchor": [
+        -0.2776205682174736,
+        0.9164675474671283,
+        -0.12008288893053928
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "right-shoulder"
+    }
+  ],
+  "coordinate_frame": {
+    "forward": "-Z",
+    "handedness": "right",
+    "up": "+Y"
+  },
+  "cross_torso_preparations": [],
+  "donor": "ettin",
+  "expected_groups": [
+    "left-arm",
+    "right-arm"
+  ],
+  "ground_contacts": [],
+  "landmarks": {
+    "head": [
+      -0.020715975703256312,
+      1.5693711638032317,
+      -0.013049275738561347
+    ],
+    "left-foot": [
+      0.17786173583468645,
+      0.2540892063952545,
+      -0.502911345661293
+    ],
+    "left-hand": [
+      -0.84,
+      -0.43,
+      -0.02
+    ],
+    "left-lower-arm": [
+      0.3497896212978099,
+      0.6168392299514918,
+      0.0036787911931146196
+    ],
+    "left-shin": [
+      0.19750363020187206,
+      0.23020797127429274,
+      -0.2913142923999564
+    ],
+    "left-shoulder-attachment": [
+      -0.46,
+      0.42,
+      0
+    ],
+    "left-thigh": [
+      0.1720121283343805,
+      0.6043129808746812,
+      -0.24511755442077265
+    ],
+    "left-upper-arm": [
+      0.2387161958221205,
+      0.92879790077761,
+      -0.1062470603575309
+    ],
+    "right-foot": [
+      -0.21929368724119908,
+      0.2540892063952545,
+      -0.502911345661293
+    ],
+    "right-hand": [
+      0.84,
+      -0.43,
+      -0.02
+    ],
+    "right-lower-arm": [
+      -0.3912215727043225,
+      0.6168392299514918,
+      0.0036787911931146196
+    ],
+    "right-shin": [
+      -0.2389355816083847,
+      0.23020797127429274,
+      -0.2913142923999564
+    ],
+    "right-shoulder-attachment": [
+      0.46,
+      0.42,
+      0
+    ],
+    "right-thigh": [
+      -0.21344407974089313,
+      0.6043129808746812,
+      -0.24511755442077265
+    ],
+    "right-upper-arm": [
+      -0.2801481472286331,
+      0.92879790077761,
+      -0.1062470603575309
+    ],
+    "torso": [
+      -0.020715975703256312,
+      0.8362992037014375,
+      -0.06493692206580186
+    ]
+  },
+  "lod": "full",
+  "lod_topology": {
+    "boundary_edges": 4,
+    "component_connected_counts": {
+      "object-01b09978b5074735c7f7": 1,
+      "object-97255bb39e193de83ed7": 1,
+      "object-c4a0ede3de44decc3a9f": 1,
+      "object-cdeda1d401b0dff9b783": 1
+    },
+    "component_ids": [
+      "object-01b09978b5074735c7f7",
+      "object-97255bb39e193de83ed7",
+      "object-c4a0ede3de44decc3a9f",
+      "object-cdeda1d401b0dff9b783"
+    ],
+    "component_triangle_counts": {
+      "object-01b09978b5074735c7f7": 170,
+      "object-97255bb39e193de83ed7": 430,
+      "object-c4a0ede3de44decc3a9f": 170,
+      "object-cdeda1d401b0dff9b783": 430
+    },
+    "connected_components": 4,
+    "non_manifold_edges": 0,
+    "triangle_count": 1200
+  },
+  "logical_slot": "arms",
+  "microdetail": {
+    "source_files": [
+      "Body F.png",
+      "Ettin_Body_Blend.png",
+      "Ettin_Body_Darkness.png",
+      "Ettin_Body_Hard.png",
+      "Ettin_Face_Darkness.png",
+      "Ettin_Foot_Blend.png",
+      "Ettin_Radius_Darkness.png",
+      "Ettin_Radius_Hard.png",
+      "Ettin_Thigh_Blend.png",
+      "Ettin_Thigh_Darkness.png",
+      "Face F.png",
+      "Foot F.png",
+      "Humerus F.png",
+      "Radius F.png",
+      "Shin F.png",
+      "Thigh F.png"
+    ],
+    "uvless_fallback": "evaluated-normal-curvature-material-output"
+  },
+  "schema": "alife.creature_part_sockets.v2",
+  "semantic_mask": "production_voxel_v1/models/geneforge/ettin_arms_full_semantic.png",
+  "sockets": {
+    "left-hip": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.1720121283343805,
+        0.6043129808746812,
+        -0.24511755442077265
+      ]
+    },
+    "left-shoulder": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.2387161958221205,
+        0.92879790077761,
+        -0.1062470603575309
+      ]
+    },
+    "neck": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.020715975703256312,
+        1.5693711638032317,
+        -0.013049275738561347
+      ]
+    },
+    "right-hip": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.21344407974089313,
+        0.6043129808746812,
+        -0.24511755442077265
+      ]
+    },
+    "right-shoulder": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.2801481472286331,
+        0.92879790077761,
+        -0.1062470603575309
+      ]
+    }
+  }
+}

@@ -1,0 +1,1542 @@
+{
+  "anatomy_mask": "production_voxel_v1/models/geneforge/norn_legs_impostor_anatomy.png",
+  "assembly_preparation_population": "canonical-only",
+  "assembly_preparation_schema": "alife.geneforge_assembly_preparation.v2",
+  "assembly_preparation_schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+  "assembly_preparations": [
+    {
+      "asset_id": "norn-legs",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.06021382659673691,
+            0.47062233090400696,
+            0.09620924293994904
+          ],
+          "prepared_anchor": [
+            0.07920147813041781,
+            0.4758597392796834,
+            0.09967891767137561
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0.013251767698522487,
+            0.0,
+            1.0,
+            0.0,
+            0.10650832877340294,
+            0.0,
+            0.0,
+            1.0,
+            -0.3593345229827498,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 2.7755575615628914e-17,
+          "runtime_group": "left-leg",
+          "socket": "left-hip",
+          "source_anchor": [
+            0.15876036063585802,
+            0.4978046521012783,
+            0.11421696856197719
+          ],
+          "target_anchor": [
+            0.1720121283343805,
+            0.6043129808746812,
+            -0.24511755442077265
+          ],
+          "transformed_source_anchor": [
+            0.1720121283343805,
+            0.6043129808746812,
+            -0.24511755442077263
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.06021382659673691,
+            0.47062233090400696,
+            0.09620924293994904
+          ],
+          "prepared_anchor": [
+            -0.07920147813041781,
+            0.4758597392796834,
+            0.09967891767137561
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -0.05468371910503511,
+            0.0,
+            1.0,
+            0.0,
+            0.10650832877340294,
+            0.0,
+            0.0,
+            1.0,
+            -0.3593345229827498,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 2.7755575615628914e-17,
+          "runtime_group": "right-leg",
+          "socket": "right-hip",
+          "source_anchor": [
+            -0.15876036063585802,
+            0.4978046521012783,
+            0.11421696856197719
+          ],
+          "target_anchor": [
+            -0.21344407974089313,
+            0.6043129808746812,
+            -0.24511755442077265
+          ],
+          "transformed_source_anchor": [
+            -0.21344407974089313,
+            0.6043129808746812,
+            -0.24511755442077263
+          ]
+        }
+      ],
+      "bridge_kind": "legs-join-cover",
+      "bridge_sockets": [
+        "left-hip",
+        "right-hip"
+      ],
+      "family_id": 0,
+      "family_label": "tuftback",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                0.06021382659673691,
+                0.47062233090400696,
+                0.09620924293994904
+              ],
+              "prepared_anchor": [
+                0.07920147813041781,
+                0.4758597392796834,
+                0.09967891767137561
+              ],
+              "prepared_matrix": [
+                1.0,
+                0.0,
+                0.0,
+                0.013251767698522487,
+                0.0,
+                1.0,
+                0.0,
+                0.10650832877340294,
+                0.0,
+                0.0,
+                1.0,
+                -0.3593345229827498,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 2.7755575615628914e-17,
+              "runtime_group": "left-leg",
+              "socket": "left-hip",
+              "source_anchor": [
+                0.15876036063585802,
+                0.4978046521012783,
+                0.11421696856197719
+              ],
+              "target_anchor": [
+                0.1720121283343805,
+                0.6043129808746812,
+                -0.24511755442077265
+              ],
+              "transformed_source_anchor": [
+                0.1720121283343805,
+                0.6043129808746812,
+                -0.24511755442077263
+              ]
+            }
+          ],
+          "bridge_kind": "legs-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "hip-fur",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0.013251767698522487,
+            0.0,
+            1.0,
+            0.0,
+            0.10650832877340294,
+            0.0,
+            0.0,
+            1.0,
+            -0.3593345229827498,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 2.7755575615628914e-17,
+          "runtime_group": "left-leg",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "left-hip",
+          "socket_evidence": [],
+          "source_asset_id": "norn-legs",
+          "source_family_id": 0,
+          "target_torso_asset_id": "ettin-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        },
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.06021382659673691,
+                0.47062233090400696,
+                0.09620924293994904
+              ],
+              "prepared_anchor": [
+                -0.07920147813041781,
+                0.4758597392796834,
+                0.09967891767137561
+              ],
+              "prepared_matrix": [
+                1.0,
+                0.0,
+                0.0,
+                -0.05468371910503511,
+                0.0,
+                1.0,
+                0.0,
+                0.10650832877340294,
+                0.0,
+                0.0,
+                1.0,
+                -0.3593345229827498,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 2.7755575615628914e-17,
+              "runtime_group": "right-leg",
+              "socket": "right-hip",
+              "source_anchor": [
+                -0.15876036063585802,
+                0.4978046521012783,
+                0.11421696856197719
+              ],
+              "target_anchor": [
+                -0.21344407974089313,
+                0.6043129808746812,
+                -0.24511755442077265
+              ],
+              "transformed_source_anchor": [
+                -0.21344407974089313,
+                0.6043129808746812,
+                -0.24511755442077263
+              ]
+            }
+          ],
+          "bridge_kind": "legs-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "hip-fur",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -0.05468371910503511,
+            0.0,
+            1.0,
+            0.0,
+            0.10650832877340294,
+            0.0,
+            0.0,
+            1.0,
+            -0.3593345229827498,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 2.7755575615628914e-17,
+          "runtime_group": "right-leg",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "right-hip",
+          "socket_evidence": [],
+          "source_asset_id": "norn-legs",
+          "source_family_id": 0,
+          "target_torso_asset_id": "ettin-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "hip-fur",
+      "lod": "impostor",
+      "logical_slot": "legs",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 2.7755575615628914e-17,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.0,
+        0.0,
+        0.0,
+        -0.020715975703256312,
+        0.0,
+        1.0,
+        0.0,
+        0.10650832877340294,
+        0.0,
+        0.0,
+        1.0,
+        -0.3593345229827498,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -0.020715975703256312,
+        0.10650832877340294,
+        -0.3593345229827498
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "norn-legs",
+      "target_torso_asset_id": "ettin-torso",
+      "transform_mode": "per-group-socket-transforms"
+    },
+    {
+      "asset_id": "norn-legs",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.06021382659673691,
+            0.47062233090400696,
+            0.09620924293994904
+          ],
+          "prepared_anchor": [
+            0.07920147813041781,
+            0.4758597392796834,
+            0.09967891767137561
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -0.03306077839382224,
+            0.0,
+            1.0,
+            0.0,
+            0.03603671261976665,
+            0.0,
+            0.0,
+            1.0,
+            -0.035844947346288805,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "left-leg",
+          "socket": "left-hip",
+          "source_anchor": [
+            0.15876036063585802,
+            0.4978046521012783,
+            0.11421696856197719
+          ],
+          "target_anchor": [
+            0.12569958224203578,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "transformed_source_anchor": [
+            0.12569958224203578,
+            0.5338413647210449,
+            0.07837202121568838
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.06021382659673691,
+            0.47062233090400696,
+            0.09620924293994904
+          ],
+          "prepared_anchor": [
+            -0.07920147813041781,
+            0.4758597392796834,
+            0.09967891767137561
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0.025927427106929773,
+            0.0,
+            1.0,
+            0.0,
+            0.03603671261976665,
+            0.0,
+            0.0,
+            1.0,
+            -0.035844947346288805,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "right-leg",
+          "socket": "right-hip",
+          "source_anchor": [
+            -0.15876036063585802,
+            0.4978046521012783,
+            0.11421696856197719
+          ],
+          "target_anchor": [
+            -0.13283293352892825,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "transformed_source_anchor": [
+            -0.13283293352892825,
+            0.5338413647210449,
+            0.07837202121568838
+          ]
+        }
+      ],
+      "bridge_kind": "legs-join-cover",
+      "bridge_sockets": [
+        "left-hip",
+        "right-hip"
+      ],
+      "family_id": 4,
+      "family_label": "duskmane",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                0.06021382659673691,
+                0.47062233090400696,
+                0.09620924293994904
+              ],
+              "prepared_anchor": [
+                0.07920147813041781,
+                0.4758597392796834,
+                0.09967891767137561
+              ],
+              "prepared_matrix": [
+                1.0,
+                0.0,
+                0.0,
+                -0.03306077839382224,
+                0.0,
+                1.0,
+                0.0,
+                0.03603671261976665,
+                0.0,
+                0.0,
+                1.0,
+                -0.035844947346288805,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "left-leg",
+              "socket": "left-hip",
+              "source_anchor": [
+                0.15876036063585802,
+                0.4978046521012783,
+                0.11421696856197719
+              ],
+              "target_anchor": [
+                0.12569958224203578,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "transformed_source_anchor": [
+                0.12569958224203578,
+                0.5338413647210449,
+                0.07837202121568838
+              ]
+            }
+          ],
+          "bridge_kind": "legs-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "hip-fur",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -0.03306077839382224,
+            0.0,
+            1.0,
+            0.0,
+            0.03603671261976665,
+            0.0,
+            0.0,
+            1.0,
+            -0.035844947346288805,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "left-leg",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "left-hip",
+          "socket_evidence": [],
+          "source_asset_id": "norn-legs",
+          "source_family_id": 4,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        },
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.06021382659673691,
+                0.47062233090400696,
+                0.09620924293994904
+              ],
+              "prepared_anchor": [
+                -0.07920147813041781,
+                0.4758597392796834,
+                0.09967891767137561
+              ],
+              "prepared_matrix": [
+                1.0,
+                0.0,
+                0.0,
+                0.025927427106929773,
+                0.0,
+                1.0,
+                0.0,
+                0.03603671261976665,
+                0.0,
+                0.0,
+                1.0,
+                -0.035844947346288805,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "runtime_group": "right-leg",
+              "socket": "right-hip",
+              "source_anchor": [
+                -0.15876036063585802,
+                0.4978046521012783,
+                0.11421696856197719
+              ],
+              "target_anchor": [
+                -0.13283293352892825,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "transformed_source_anchor": [
+                -0.13283293352892825,
+                0.5338413647210449,
+                0.07837202121568838
+              ]
+            }
+          ],
+          "bridge_kind": "legs-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "hip-fur",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0.025927427106929773,
+            0.0,
+            1.0,
+            0.0,
+            0.03603671261976665,
+            0.0,
+            0.0,
+            1.0,
+            -0.035844947346288805,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "right-leg",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "right-hip",
+          "socket_evidence": [],
+          "source_asset_id": "norn-legs",
+          "source_family_id": 4,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "hip-fur",
+      "lod": "impostor",
+      "logical_slot": "legs",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.0,
+        0.0,
+        0.0,
+        -0.003566675643446232,
+        0.0,
+        1.0,
+        0.0,
+        0.03603671261976665,
+        0.0,
+        0.0,
+        1.0,
+        -0.035844947346288805,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -0.003566675643446232,
+        0.03603671261976665,
+        -0.035844947346288805
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "norn-legs",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "per-group-socket-transforms"
+    },
+    {
+      "asset_id": "norn-legs",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.06021382659673691,
+            0.47062233090400696,
+            0.09620924293994904
+          ],
+          "prepared_anchor": [
+            0.07920147813041781,
+            0.4758597392796834,
+            0.09967891767137561
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0.013251767698522487,
+            0.0,
+            1.0,
+            0.0,
+            0.10650832877340294,
+            0.0,
+            0.0,
+            1.0,
+            -0.3593345229827498,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 2.7755575615628914e-17,
+          "runtime_group": "left-leg",
+          "socket": "left-hip",
+          "source_anchor": [
+            0.15876036063585802,
+            0.4978046521012783,
+            0.11421696856197719
+          ],
+          "target_anchor": [
+            0.1720121283343805,
+            0.6043129808746812,
+            -0.24511755442077265
+          ],
+          "transformed_source_anchor": [
+            0.1720121283343805,
+            0.6043129808746812,
+            -0.24511755442077263
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.06021382659673691,
+            0.47062233090400696,
+            0.09620924293994904
+          ],
+          "prepared_anchor": [
+            -0.07920147813041781,
+            0.4758597392796834,
+            0.09967891767137561
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -0.05468371910503511,
+            0.0,
+            1.0,
+            0.0,
+            0.10650832877340294,
+            0.0,
+            0.0,
+            1.0,
+            -0.3593345229827498,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 2.7755575615628914e-17,
+          "runtime_group": "right-leg",
+          "socket": "right-hip",
+          "source_anchor": [
+            -0.15876036063585802,
+            0.4978046521012783,
+            0.11421696856197719
+          ],
+          "target_anchor": [
+            -0.21344407974089313,
+            0.6043129808746812,
+            -0.24511755442077265
+          ],
+          "transformed_source_anchor": [
+            -0.21344407974089313,
+            0.6043129808746812,
+            -0.24511755442077263
+          ]
+        }
+      ],
+      "bridge_kind": "legs-join-cover",
+      "bridge_sockets": [
+        "left-hip",
+        "right-hip"
+      ],
+      "family_id": 10,
+      "family_label": "orchidstout",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                0.06021382659673691,
+                0.47062233090400696,
+                0.09620924293994904
+              ],
+              "prepared_anchor": [
+                0.07920147813041781,
+                0.4758597392796834,
+                0.09967891767137561
+              ],
+              "prepared_matrix": [
+                1.0,
+                0.0,
+                0.0,
+                0.013251767698522487,
+                0.0,
+                1.0,
+                0.0,
+                0.10650832877340294,
+                0.0,
+                0.0,
+                1.0,
+                -0.3593345229827498,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 2.7755575615628914e-17,
+              "runtime_group": "left-leg",
+              "socket": "left-hip",
+              "source_anchor": [
+                0.15876036063585802,
+                0.4978046521012783,
+                0.11421696856197719
+              ],
+              "target_anchor": [
+                0.1720121283343805,
+                0.6043129808746812,
+                -0.24511755442077265
+              ],
+              "transformed_source_anchor": [
+                0.1720121283343805,
+                0.6043129808746812,
+                -0.24511755442077263
+              ]
+            }
+          ],
+          "bridge_kind": "legs-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "hip-fur",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0.013251767698522487,
+            0.0,
+            1.0,
+            0.0,
+            0.10650832877340294,
+            0.0,
+            0.0,
+            1.0,
+            -0.3593345229827498,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 2.7755575615628914e-17,
+          "runtime_group": "left-leg",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "left-hip",
+          "socket_evidence": [],
+          "source_asset_id": "norn-legs",
+          "source_family_id": 10,
+          "target_torso_asset_id": "ettin-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        },
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_geometry": [
+            {
+              "applied_overlap_depth": 0.02,
+              "original_anchor": [
+                -0.06021382659673691,
+                0.47062233090400696,
+                0.09620924293994904
+              ],
+              "prepared_anchor": [
+                -0.07920147813041781,
+                0.4758597392796834,
+                0.09967891767137561
+              ],
+              "prepared_matrix": [
+                1.0,
+                0.0,
+                0.0,
+                -0.05468371910503511,
+                0.0,
+                1.0,
+                0.0,
+                0.10650832877340294,
+                0.0,
+                0.0,
+                1.0,
+                -0.3593345229827498,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "prepared_vertex_count": 3,
+              "residual": 2.7755575615628914e-17,
+              "runtime_group": "right-leg",
+              "socket": "right-hip",
+              "source_anchor": [
+                -0.15876036063585802,
+                0.4978046521012783,
+                0.11421696856197719
+              ],
+              "target_anchor": [
+                -0.21344407974089313,
+                0.6043129808746812,
+                -0.24511755442077265
+              ],
+              "transformed_source_anchor": [
+                -0.21344407974089313,
+                0.6043129808746812,
+                -0.24511755442077263
+              ]
+            }
+          ],
+          "bridge_kind": "legs-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "hip-fur",
+          "lod": "impostor",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -0.05468371910503511,
+            0.0,
+            1.0,
+            0.0,
+            0.10650832877340294,
+            0.0,
+            0.0,
+            1.0,
+            -0.3593345229827498,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 2.7755575615628914e-17,
+          "runtime_group": "right-leg",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "right-hip",
+          "socket_evidence": [],
+          "source_asset_id": "norn-legs",
+          "source_family_id": 10,
+          "target_torso_asset_id": "ettin-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "hip-fur",
+      "lod": "impostor",
+      "logical_slot": "legs",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 2.7755575615628914e-17,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.0,
+        0.0,
+        0.0,
+        -0.020715975703256312,
+        0.0,
+        1.0,
+        0.0,
+        0.10650832877340294,
+        0.0,
+        0.0,
+        1.0,
+        -0.3593345229827498,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        -0.020715975703256312,
+        0.10650832877340294,
+        -0.3593345229827498
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "norn-legs",
+      "target_torso_asset_id": "ettin-torso",
+      "transform_mode": "per-group-socket-transforms"
+    }
+  ],
+  "asset_id": "norn-legs",
+  "bounds": {
+    "max": [
+      0.30442169308662415,
+      0.6962813138961792,
+      0.2949124276638031
+    ],
+    "min": [
+      -0.30442169308662415,
+      0.0006869350327178836,
+      -0.09340334683656693
+    ]
+  },
+  "bridge_geometry": [
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        0.06021382659673691,
+        0.47062233090400696,
+        0.09620924293994904
+      ],
+      "prepared_anchor": [
+        0.07920147813041781,
+        0.4758597392796834,
+        0.09967891767137561
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "left-hip"
+    },
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        -0.06021382659673691,
+        0.47062233090400696,
+        0.09620924293994904
+      ],
+      "prepared_anchor": [
+        -0.07920147813041781,
+        0.4758597392796834,
+        0.09967891767137561
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "right-hip"
+    }
+  ],
+  "coordinate_frame": {
+    "forward": "-Z",
+    "handedness": "right",
+    "up": "+Y"
+  },
+  "cross_torso_preparations": [],
+  "donor": "norn",
+  "expected_groups": [
+    "left-leg",
+    "right-leg"
+  ],
+  "ground_contacts": [
+    [
+      0.1536199003458023,
+      0.0006869350327178836,
+      0.2949124276638031
+    ],
+    [
+      -0.1536199003458023,
+      0.0006869350327178836,
+      0.2949124276638031
+    ]
+  ],
+  "landmarks": {
+    "head": [
+      0.0,
+      1.2927742592655889,
+      0.3053839174597661
+    ],
+    "left-foot": [
+      -0.25,
+      -0.88,
+      -0.12
+    ],
+    "left-hip-attachment": [
+      -0.25,
+      0.82,
+      0
+    ],
+    "left-lower-arm": [
+      0.3052051100238406,
+      0.5081231877957957,
+      0.31916371336485644
+    ],
+    "left-shin": [
+      0.17975906266658148,
+      0.1896345150244342,
+      0.07616226544331221
+    ],
+    "left-thigh": [
+      0.15876036063585802,
+      0.4978046521012783,
+      0.11421696856197719
+    ],
+    "left-upper-arm": [
+      0.2137080386774796,
+      0.7651000896915652,
+      0.22861195952216729
+    ],
+    "right-foot": [
+      0.25,
+      -0.88,
+      -0.12
+    ],
+    "right-hip-attachment": [
+      0.25,
+      0.82,
+      0
+    ],
+    "right-lower-arm": [
+      -0.3052051100238406,
+      0.5081231877957957,
+      0.31916371336485644
+    ],
+    "right-shin": [
+      -0.17975906266658148,
+      0.1896345150244342,
+      0.07616226544331221
+    ],
+    "right-thigh": [
+      -0.15876036063585802,
+      0.4978046521012783,
+      0.11421696856197719
+    ],
+    "right-upper-arm": [
+      -0.2137080386774796,
+      0.7651000896915652,
+      0.22861195952216729
+    ],
+    "tail-root": [
+      0.0,
+      0.7121686602397441,
+      -0.10059644347319847
+    ],
+    "tail-tip": [
+      0.0,
+      1.1026250211809214,
+      -0.29510181556678255
+    ],
+    "torso": [
+      0.0,
+      0.6889040072390945,
+      0.26712653873933656
+    ]
+  },
+  "lod": "impostor",
+  "lod_topology": {
+    "boundary_edges": 0,
+    "component_connected_counts": {
+      "object-1c58a25613ec3674009e": 1,
+      "object-2bbbdeb4641f573d9aa4": 1,
+      "object-3f180f1b500c87e8d2b9": 1,
+      "object-6b0f6bd0fea096b523e8": 1,
+      "object-845d487e2279ea8d94e1": 1,
+      "object-ef7b00db3ec5fd94eed5": 1
+    },
+    "component_ids": [
+      "object-1c58a25613ec3674009e",
+      "object-2bbbdeb4641f573d9aa4",
+      "object-3f180f1b500c87e8d2b9",
+      "object-6b0f6bd0fea096b523e8",
+      "object-845d487e2279ea8d94e1",
+      "object-ef7b00db3ec5fd94eed5"
+    ],
+    "component_triangle_counts": {
+      "object-1c58a25613ec3674009e": 80,
+      "object-2bbbdeb4641f573d9aa4": 66,
+      "object-3f180f1b500c87e8d2b9": 54,
+      "object-6b0f6bd0fea096b523e8": 66,
+      "object-845d487e2279ea8d94e1": 54,
+      "object-ef7b00db3ec5fd94eed5": 80
+    },
+    "connected_components": 6,
+    "non_manifold_edges": 0,
+    "triangle_count": 400
+  },
+  "logical_slot": "legs",
+  "microdetail": {
+    "source_files": [
+      "Body_A.png",
+      "Body_F.png",
+      "Ear_A.png",
+      "Ear_F.png",
+      "Eye.png",
+      "Feet_A.png",
+      "Feet_F.png",
+      "Head_A.png",
+      "Head_F.png",
+      "Humerus_F.png",
+      "Radius_A.png",
+      "Radius_F.png",
+      "Shin_F.png",
+      "Tail_Base_F.png",
+      "Tail_Tip_F.png",
+      "Thigh_F.png",
+      "blank.png"
+    ],
+    "uvless_fallback": "evaluated-normal-curvature-material-output"
+  },
+  "schema": "alife.creature_part_sockets.v2",
+  "semantic_mask": "production_voxel_v1/models/geneforge/norn_legs_impostor_semantic.png",
+  "sockets": {
+    "left-hip": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.15876036063585802,
+        0.4978046521012783,
+        0.11421696856197719
+      ]
+    },
+    "left-shoulder": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.2137080386774796,
+        0.7651000896915652,
+        0.22861195952216729
+      ]
+    },
+    "neck": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.0,
+        1.2927742592655889,
+        0.3053839174597661
+      ]
+    },
+    "right-hip": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.15876036063585802,
+        0.4978046521012783,
+        0.11421696856197719
+      ]
+    },
+    "right-shoulder": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.2137080386774796,
+        0.7651000896915652,
+        0.22861195952216729
+      ]
+    },
+    "tail-base": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.0,
+        0.7121686602397441,
+        -0.10059644347319847
+      ]
+    }
+  }
+}

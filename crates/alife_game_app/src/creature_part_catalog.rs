@@ -2314,29 +2314,6 @@ mod tests {
     }
 
     #[test]
-    fn generated_socket_manifests_match_each_explicit_family_profile() {
-        let catalog = load_production_creature_part_catalog().unwrap();
-        let assets_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
-        for family in &catalog.families {
-            for lod in &family.lods {
-                let manifest: serde_json::Value = serde_json::from_str(
-                    &std::fs::read_to_string(assets_root.join(&lod.socket_manifest)).unwrap(),
-                )
-                .unwrap();
-                assert_eq!(manifest["family_id"], family.id.0);
-                assert_eq!(manifest["lod"], serde_json::to_value(lod.lod).unwrap());
-                let actual_sockets: BTreeMap<String, SocketFrame> =
-                    serde_json::from_value(manifest["sockets"].clone()).unwrap();
-                assert_eq!(
-                    actual_sockets, family.sockets,
-                    "{} {:?} socket manifest drifted from the production catalog",
-                    family.label, lod.lod
-                );
-            }
-        }
-    }
-
-    #[test]
     fn synthetic_ninth_family_requires_no_rust_match_arm() {
         let mut catalog = load_production_creature_part_catalog().unwrap();
         let mut ninth = catalog.families[0].clone();

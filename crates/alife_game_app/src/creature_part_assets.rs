@@ -8,11 +8,18 @@ use crate::{
 };
 
 #[cfg(feature = "bevy-app")]
+use crate::{
+    CreatureAssemblyRecipe, CreatureCoatSourceInput, CreatureCoatSourceMasks,
+    GeneForgeCreaturePartCatalog,
+};
+
+#[cfg(feature = "bevy-app")]
 use bevy::{
     asset::RenderAssetUsages,
+    image::ImageSampler,
     mesh::Indices,
-    prelude::{Assets, Handle, Image, Mesh, Resource, StandardMaterial},
-    render::render_resource::{PrimitiveTopology, TextureDimension, TextureFormat},
+    prelude::{default, Assets, Color, Handle, Image, Mesh, Resource, StandardMaterial},
+    render::render_resource::{Extent3d, PrimitiveTopology, TextureDimension, TextureFormat},
 };
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -33,7 +40,6 @@ pub struct GeneratedPartObjPack {
 pub struct CreaturePartAssetLibrary {
     meshes: BTreeMap<crate::CreaturePartMeshKey, Handle<Mesh>>,
     bounds: BTreeMap<crate::CreaturePartMeshKey, CreatureVisualBounds>,
-    materials: BTreeMap<crate::CreaturePartMaterialKey, Handle<StandardMaterial>>,
     coat_cache: crate::CreatureCoatCache,
     coat_images: BTreeMap<u64, Handle<Image>>,
     coat_materials: BTreeMap<u64, Handle<StandardMaterial>>,
@@ -42,12 +48,12 @@ pub struct CreaturePartAssetLibrary {
 
 #[cfg(feature = "bevy-app")]
 impl CreaturePartAssetLibrary {
-    pub fn load(
+    pub fn load_geneforge(
         assets_root: &Path,
-        catalog: &CreaturePartCatalog,
+        catalog: &GeneForgeCreaturePartCatalog,
         mesh_assets: &mut Assets<Mesh>,
     ) -> Result<Self, CreaturePartAssetError> {
-        Self::load_for_profile(
+        Self::load_geneforge_for_profile(
             assets_root,
             catalog,
             mesh_assets,
@@ -55,30 +61,75 @@ impl CreaturePartAssetLibrary {
         )
     }
 
-    pub fn load_for_profile(
+    pub fn load_geneforge_for_profile(
         assets_root: &Path,
-        catalog: &CreaturePartCatalog,
+        catalog: &GeneForgeCreaturePartCatalog,
         mesh_assets: &mut Assets<Mesh>,
         profile: crate::ProductionFrontendProfileId,
     ) -> Result<Self, CreaturePartAssetError> {
+        Self::load_geneforge_lods(assets_root, catalog, mesh_assets, profile, None)
+    }
+
+    pub fn load_geneforge_lod_for_profile(
+        assets_root: &Path,
+        catalog: &GeneForgeCreaturePartCatalog,
+        mesh_assets: &mut Assets<Mesh>,
+        profile: crate::ProductionFrontendProfileId,
+        active_lod: CreaturePartLodId,
+    ) -> Result<Self, CreaturePartAssetError> {
+        Self::load_geneforge_lods(assets_root, catalog, mesh_assets, profile, Some(active_lod))
+    }
+
+    fn load_geneforge_lods(
+        assets_root: &Path,
+        catalog: &GeneForgeCreaturePartCatalog,
+        mesh_assets: &mut Assets<Mesh>,
+        profile: crate::ProductionFrontendProfileId,
+        active_lod: Option<CreaturePartLodId>,
+    ) -> Result<Self, CreaturePartAssetError> {
         let mut library =
             Self::with_coat_limits(crate::CreatureCoatCacheLimits::for_profile(profile))?;
-        for family in &catalog.families {
-            for lod in &family.lods {
-                let pack = load_generated_part_pack(assets_root, family, lod.lod)?;
-                for (slot, part) in pack.parts {
+        for asset in &catalog.part_assets {
+            let runtime_groups = asset
+                .groups
+                .values()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>();
+            for lod in &asset.lods {
+                if active_lod.is_some_and(|active| active != lod.lod) {
+                    continue;
+                }
+                let path = assets_root.join(&lod.generated_obj);
+                let text = fs::read_to_string(&path).map_err(|source| {
+                    if source.kind() == std::io::ErrorKind::NotFound {
+                        CreaturePartAssetError::MissingAssetFile {
+                            asset_id: asset.id.clone(),
+                            lod: lod.lod,
+                            path: path.clone(),
+                        }
+                    } else {
+                        CreaturePartAssetError::Io(source)
+                    }
+                })?;
+                let groups =
+                    parse_geneforge_runtime_groups(&text, &runtime_groups, &asset.id, lod.lod)?;
+                for (runtime_group, part) in groups {
                     let key = crate::CreaturePartMeshKey {
-                        family: family.id,
+                        asset_id: asset.id.clone(),
                         lod: lod.lod,
-                        slot,
+                        runtime_group,
                     };
-                    let bounds = part
-                        .bevy_bounds()
-                        .ok_or(CreaturePartAssetError::InvalidBounds(slot))?;
-                    library.bounds.insert(key, bounds);
+                    let bounds = part.geneforge_bevy_bounds().ok_or_else(|| {
+                        CreaturePartAssetError::InvalidRuntimeGroupBounds {
+                            asset_id: key.asset_id.clone(),
+                            lod: key.lod,
+                            runtime_group: key.runtime_group.clone(),
+                        }
+                    })?;
+                    library.bounds.insert(key.clone(), bounds);
                     library
                         .meshes
-                        .insert(key, mesh_assets.add(part.into_mesh()));
+                        .insert(key, mesh_assets.add(part.into_geneforge_mesh()));
                 }
             }
         }
@@ -91,7 +142,6 @@ impl CreaturePartAssetLibrary {
         Ok(Self {
             meshes: BTreeMap::new(),
             bounds: BTreeMap::new(),
-            materials: BTreeMap::new(),
             coat_cache: crate::CreatureCoatCache::new(limits)?,
             coat_images: BTreeMap::new(),
             coat_materials: BTreeMap::new(),
@@ -107,27 +157,83 @@ impl CreaturePartAssetLibrary {
         self.bounds.get(&key).copied()
     }
 
-    pub fn material(
-        &self,
-        key: crate::CreaturePartMaterialKey,
-    ) -> Option<Handle<StandardMaterial>> {
-        self.materials.get(&key).cloned()
-    }
-
-    pub fn cache_material(
-        &mut self,
-        key: crate::CreaturePartMaterialKey,
-        material: Handle<StandardMaterial>,
-    ) -> Handle<StandardMaterial> {
-        self.materials.entry(key).or_insert(material).clone()
-    }
-
     pub fn mesh_handle_count(&self) -> usize {
         self.meshes.len()
     }
 
-    pub fn material_handle_count(&self) -> usize {
-        self.materials.len()
+    pub fn acquire_geneforge_coat(
+        &mut self,
+        assets_root: &Path,
+        catalog: &GeneForgeCreaturePartCatalog,
+        recipe: &CreatureAssemblyRecipe,
+        image_assets: &mut Assets<Image>,
+        material_assets: &mut Assets<StandardMaterial>,
+    ) -> Result<CreatureCoatAssetHandles, CreaturePartAssetError> {
+        let input_for = |slot: CreaturePartSlot| {
+            let part = recipe
+                .parts
+                .get(&slot)
+                .ok_or(CreaturePartAssetError::MissingCoatSourcePart { slot })?;
+            let asset = catalog.asset(&part.asset_id).ok_or_else(|| {
+                CreaturePartAssetError::MissingCoatSourceAsset {
+                    asset_id: part.asset_id.clone(),
+                }
+            })?;
+            let asset_lod = asset
+                .lods
+                .iter()
+                .find(|candidate| candidate.lod == part.lod)
+                .ok_or_else(|| CreaturePartAssetError::MissingCoatSourceLod {
+                    asset_id: part.asset_id.clone(),
+                    lod: part.lod,
+                })?;
+            let load_mask = |relative: &str| {
+                let path = assets_root.join(relative);
+                image::open(&path)
+                    .map(|image| image.to_rgba8())
+                    .map_err(|source| CreaturePartAssetError::Image { path, source })
+            };
+            Ok::<_, CreaturePartAssetError>(CreatureCoatSourceInput::new(
+                load_mask(&asset_lod.semantic_mask)?,
+                load_mask(&asset_lod.anatomy_mask)?,
+            ))
+        };
+        let masks = CreatureCoatSourceMasks::new(
+            input_for(CreaturePartSlot::Head)?,
+            input_for(CreaturePartSlot::Torso)?,
+            input_for(CreaturePartSlot::LeftArm)?,
+            input_for(CreaturePartSlot::LeftLeg)?,
+            input_for(CreaturePartSlot::TailBack)?,
+        )?;
+        let atlas = crate::bake_creature_coat(recipe.coat_key, &masks)?;
+        let mut image = Image::new(
+            Extent3d {
+                width: atlas.width,
+                height: atlas.height,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            atlas.rgba,
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::default(),
+        );
+        image.sampler = ImageSampler::nearest();
+        let image = image_assets.add(image);
+        let material = material_assets.add(StandardMaterial {
+            base_color: Color::WHITE,
+            base_color_texture: Some(image.clone()),
+            perceptual_roughness: 0.78,
+            metallic: 0.0,
+            reflectance: 0.24,
+            ..default()
+        });
+        self.acquire_coat_assets(
+            recipe.coat_key,
+            image,
+            material,
+            image_assets,
+            material_assets,
+        )
     }
 
     pub fn acquire_coat_assets(
@@ -272,6 +378,66 @@ impl PartMeshData {
         }
         let bounds = CreatureVisualBounds::new(min, max);
         bounds.is_valid().then_some(bounds)
+    }
+}
+
+#[cfg(test)]
+mod task6_identity_tests {
+    use std::collections::BTreeSet;
+
+    use crate::{CreaturePartAssetId, CreaturePartLodId, CreaturePartMeshKey};
+
+    #[test]
+    fn mesh_identity_is_asset_lod_and_runtime_group_only() {
+        let shared = CreaturePartAssetId("norn-head".into());
+        let keys = BTreeSet::from([
+            CreaturePartMeshKey {
+                asset_id: shared.clone(),
+                lod: CreaturePartLodId::Full,
+                runtime_group: "head".into(),
+            },
+            CreaturePartMeshKey {
+                asset_id: shared.clone(),
+                lod: CreaturePartLodId::Full,
+                runtime_group: "head".into(),
+            },
+            CreaturePartMeshKey {
+                asset_id: shared,
+                lod: CreaturePartLodId::Compact,
+                runtime_group: "head".into(),
+            },
+        ]);
+        assert_eq!(keys.len(), 2);
+    }
+}
+
+#[cfg(all(test, feature = "bevy-app"))]
+mod geneforge_loader_contract_tests {
+    use std::path::Path;
+
+    use bevy::prelude::{Assets, Mesh};
+
+    use super::*;
+
+    #[test]
+    fn missing_geneforge_asset_file_reports_real_asset_id_and_lod() {
+        let catalog = crate::load_geneforge_creature_part_catalog().unwrap();
+        let mut meshes = Assets::<Mesh>::default();
+        let error = CreaturePartAssetLibrary::load_geneforge(
+            Path::new("tests/fixtures/geneforge-missing"),
+            &catalog,
+            &mut meshes,
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            CreaturePartAssetError::MissingAssetFile {
+                asset_id,
+                lod: crate::CreaturePartLodId::Full,
+                ..
+            } if asset_id == crate::CreaturePartAssetId("norn-head".into())
+        ));
     }
 }
 
@@ -628,16 +794,41 @@ mod coat_asset_tests {
 
 #[cfg(feature = "bevy-app")]
 impl PartMeshData {
+    fn geneforge_bevy_bounds(&self) -> Option<CreatureVisualBounds> {
+        let mut min = [f32::INFINITY; 3];
+        let mut max = [f32::NEG_INFINITY; 3];
+        for &position in &self.positions {
+            if !position.into_iter().all(f32::is_finite) {
+                return None;
+            }
+            for axis in 0..3 {
+                min[axis] = min[axis].min(position[axis]);
+                max[axis] = max[axis].max(position[axis]);
+            }
+        }
+        let bounds = CreatureVisualBounds::new(min, max);
+        bounds.is_valid().then_some(bounds)
+    }
+
+    fn into_geneforge_mesh(self) -> Mesh {
+        let positions = self.positions.clone();
+        let normals = self.normals.clone();
+        self.into_mesh_data(positions, normals)
+    }
+
+    #[cfg(test)]
     fn into_mesh(self) -> Mesh {
         let mut positions = self
             .positions
-            .into_iter()
+            .iter()
+            .copied()
             .map(|[x, depth, height]| [x, height, -depth])
             .collect::<Vec<_>>();
         let fitted_scale = preserve_canonical_part_geometry(&mut positions);
         let normals = self
             .normals
-            .into_iter()
+            .iter()
+            .copied()
             .map(|[x, depth, height]| {
                 normalize3([
                     x / fitted_scale[0],
@@ -646,6 +837,10 @@ impl PartMeshData {
                 ])
             })
             .collect::<Vec<_>>();
+        self.into_mesh_data(positions, normals)
+    }
+
+    fn into_mesh_data(self, positions: Vec<[f32; 3]>, normals: Vec<[f32; 3]>) -> Mesh {
         let mut mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
@@ -658,12 +853,12 @@ impl PartMeshData {
     }
 }
 
-#[cfg(any(feature = "bevy-app", test))]
+#[cfg(test)]
 fn preserve_canonical_part_geometry(_positions: &mut [[f32; 3]]) -> [f32; 3] {
     [1.0; 3]
 }
 
-#[cfg(feature = "bevy-app")]
+#[cfg(all(test, feature = "bevy-app"))]
 fn normalize3(value: [f32; 3]) -> [f32; 3] {
     let length = value
         .into_iter()
@@ -691,6 +886,43 @@ pub enum CreaturePartAssetError {
     MissingLod,
     #[error("generated creature part has invalid bounds for {0:?}")]
     InvalidBounds(CreaturePartSlot),
+    #[error("missing GeneForge mesh file for {asset_id:?} {lod:?}: {path}")]
+    MissingAssetFile {
+        asset_id: crate::CreaturePartAssetId,
+        lod: CreaturePartLodId,
+        path: std::path::PathBuf,
+    },
+    #[error("GeneForge mesh is missing runtime group {runtime_group} for {asset_id:?} {lod:?}")]
+    MissingRuntimeGroup {
+        asset_id: crate::CreaturePartAssetId,
+        lod: CreaturePartLodId,
+        runtime_group: String,
+    },
+    #[error("GeneForge mesh has invalid bounds for runtime group {runtime_group} in {asset_id:?} {lod:?}")]
+    InvalidRuntimeGroupBounds {
+        asset_id: crate::CreaturePartAssetId,
+        lod: CreaturePartLodId,
+        runtime_group: String,
+    },
+    #[error("GeneForge assembly is missing coat source part {slot:?}")]
+    MissingCoatSourcePart { slot: CreaturePartSlot },
+    #[error("GeneForge catalog is missing coat source asset {asset_id:?}")]
+    MissingCoatSourceAsset {
+        asset_id: crate::CreaturePartAssetId,
+    },
+    #[error("GeneForge coat source asset {asset_id:?} is missing {lod:?}")]
+    MissingCoatSourceLod {
+        asset_id: crate::CreaturePartAssetId,
+        lod: CreaturePartLodId,
+    },
+    #[error("failed to decode GeneForge coat source image {path}: {source}")]
+    Image {
+        path: std::path::PathBuf,
+        #[source]
+        source: image::ImageError,
+    },
+    #[error(transparent)]
+    Coat(#[from] crate::CreatureCoatError),
     #[error("creature coat cache selected an asset pair that is not resident")]
     MissingCoatAssetPair,
     #[error("candidate creature coat image is not present in Assets<Image>")]
@@ -719,6 +951,111 @@ pub enum CreaturePartAssetError {
     CoatCache(#[from] crate::CreatureCoatCacheError),
     #[error("creature part asset IO failed: {0}")]
     Io(#[from] std::io::Error),
+}
+
+pub fn parse_geneforge_runtime_groups(
+    text: &str,
+    runtime_groups: &std::collections::BTreeSet<String>,
+    asset_id: &crate::CreaturePartAssetId,
+    lod: CreaturePartLodId,
+) -> Result<BTreeMap<String, PartMeshData>, CreaturePartAssetError> {
+    let mut source_positions = Vec::<[f32; 3]>::new();
+    let mut source_uvs = Vec::<[f32; 2]>::new();
+    let mut source_normals = Vec::<[f32; 3]>::new();
+    let mut parts = BTreeMap::<String, PartMeshData>::new();
+    let mut vertex_maps = BTreeMap::<String, BTreeMap<(usize, usize, usize), u32>>::new();
+    let mut current_group = None::<String>;
+
+    for (line_index, raw_line) in text.lines().enumerate() {
+        let line_number = line_index + 1;
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut fields = line.split_whitespace();
+        match fields.next().unwrap_or_default() {
+            "g" => {
+                let name = fields.next().ok_or_else(|| CreaturePartAssetError::Obj {
+                    line: line_number,
+                    message: "group requires a name".into(),
+                })?;
+                current_group = runtime_groups
+                    .iter()
+                    .any(|group| name == group.as_str() || name.starts_with(&format!("{group}.")))
+                    .then(|| name.to_string());
+                if let Some(group) = &current_group {
+                    parts.entry(group.clone()).or_default();
+                    vertex_maps.entry(group.clone()).or_default();
+                }
+            }
+            "v" => source_positions.push(parse_vector::<3>(fields, line_number, "position")?),
+            "vt" => source_uvs.push(parse_vector::<2>(fields, line_number, "UV")?),
+            "vn" => source_normals.push(parse_vector::<3>(fields, line_number, "normal")?),
+            "f" => {
+                let group = current_group
+                    .as_ref()
+                    .ok_or_else(|| CreaturePartAssetError::Obj {
+                        line: line_number,
+                        message: "face appears before a recognized runtime group".into(),
+                    })?;
+                let refs = fields
+                    .map(|field| {
+                        parse_face_ref(
+                            field,
+                            source_positions.len(),
+                            source_uvs.len(),
+                            source_normals.len(),
+                            line_number,
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if refs.len() < 3 {
+                    return Err(CreaturePartAssetError::Obj {
+                        line: line_number,
+                        message: "face requires at least three vertices".into(),
+                    });
+                }
+                for corner in 1..refs.len() - 1 {
+                    for key in [refs[0], refs[corner], refs[corner + 1]] {
+                        let index = if let Some(index) = vertex_maps[group].get(&key).copied() {
+                            index
+                        } else {
+                            let part = parts.get_mut(group).expect("runtime group initialized");
+                            let index = part.positions.len() as u32;
+                            part.positions.push(source_positions[key.0]);
+                            part.uvs.push(source_uvs[key.1]);
+                            part.normals.push(source_normals[key.2]);
+                            vertex_maps
+                                .get_mut(group)
+                                .expect("runtime group initialized")
+                                .insert(key, index);
+                            index
+                        };
+                        parts
+                            .get_mut(group)
+                            .expect("runtime group initialized")
+                            .indices
+                            .push(index);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for runtime_group in runtime_groups {
+        if parts
+            .get(runtime_group)
+            .is_none_or(|part| part.positions.is_empty() || part.indices.is_empty())
+        {
+            return Err(CreaturePartAssetError::MissingRuntimeGroup {
+                asset_id: asset_id.clone(),
+                lod,
+                runtime_group: runtime_group.clone(),
+            });
+        }
+    }
+    Ok(parts)
 }
 
 pub fn parse_generated_part_obj(
@@ -1014,138 +1351,6 @@ o part_tail_back
         assert!(
             parse_generated_part_obj("v 0 0 0\nvt 0 0\nvn 0 0 1\nf 1/1/1 1/1/1 1/1/1").is_err()
         );
-    }
-
-    #[test]
-    fn every_production_generated_pack_parses_with_required_parts() {
-        let catalog = crate::load_production_creature_part_catalog().unwrap();
-        let assets_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
-        let mut pack_count = 0;
-        for family in &catalog.families {
-            for lod in &family.lods {
-                let pack = load_generated_part_pack(&assets_root, family, lod.lod).unwrap();
-                for slot in CreaturePartSlot::REQUIRED_RUNTIME_SLOTS {
-                    assert!(pack.parts[&slot].indices.len() >= 3);
-                }
-                pack_count += 1;
-            }
-        }
-        assert_eq!(pack_count, 24);
-    }
-
-    #[test]
-    fn production_part_packs_are_canonical_biped_geometry_without_runtime_stretching() {
-        let catalog = crate::load_production_creature_part_catalog().unwrap();
-        let assets_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
-
-        for family in &catalog.families {
-            for lod in &family.lods {
-                let pack = load_generated_part_pack(&assets_root, family, lod.lod).unwrap();
-                let bounds = |slot| {
-                    let positions = &pack.parts[&slot].positions;
-                    let min: [f32; 3] = std::array::from_fn(|axis| {
-                        positions
-                            .iter()
-                            .map(|position| position[axis])
-                            .fold(f32::INFINITY, f32::min)
-                    });
-                    let max: [f32; 3] = std::array::from_fn(|axis| {
-                        positions
-                            .iter()
-                            .map(|position| position[axis])
-                            .fold(f32::NEG_INFINITY, f32::max)
-                    });
-                    let span: [f32; 3] = std::array::from_fn(|axis| max[axis] - min[axis]);
-                    (min, max, span)
-                };
-
-                let (head_min, head_max, head_span) = bounds(CreaturePartSlot::Head);
-                let (torso_min, torso_max, torso_span) = bounds(CreaturePartSlot::Torso);
-                assert!(
-                    (0.38..=0.78).contains(&head_span[0])
-                        && (0.34..=0.78).contains(&head_span[2])
-                        && head_min[2] >= -0.12
-                        && head_max[2] >= 0.30,
-                    "family {} {:?} head is not canonical: min={head_min:?} max={head_max:?}",
-                    family.label,
-                    lod.lod
-                );
-                assert!(
-                    (0.38..=0.90).contains(&torso_span[0])
-                        && (0.58..=0.94).contains(&torso_span[2])
-                        && torso_min[2] <= -0.26
-                        && torso_max[2] >= 0.26,
-                    "family {} {:?} torso is not a readable biped chest: min={torso_min:?} max={torso_max:?}",
-                    family.label,
-                    lod.lod
-                );
-
-                for slot in [CreaturePartSlot::LeftArm, CreaturePartSlot::RightArm] {
-                    let (min, max, span) = bounds(slot);
-                    assert!(
-                        (0.10..=0.38).contains(&span[0])
-                            && (0.48..=0.90).contains(&span[2])
-                            && min[2] <= -0.42
-                            && max[2] <= 0.18,
-                        "family {} {:?} {slot:?} is not a bounded hanging arm: min={min:?} max={max:?}",
-                        family.label,
-                        lod.lod
-                    );
-                }
-                for slot in [CreaturePartSlot::LeftLeg, CreaturePartSlot::RightLeg] {
-                    let (min, max, span) = bounds(slot);
-                    assert!(
-                        (0.14..=0.40).contains(&span[0])
-                            && (0.48..=0.82).contains(&span[2])
-                            && min[2] <= -0.46
-                            && max[2] <= 0.16,
-                        "family {} {:?} {slot:?} is not a bounded grounded leg: min={min:?} max={max:?}",
-                        family.label,
-                        lod.lod
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn production_creature_textures_have_readable_surface_detail_and_contrast() {
-        let catalog = crate::load_production_creature_part_catalog().unwrap();
-        let assets_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
-
-        for family in &catalog.families {
-            let texture = image::open(assets_root.join(&family.texture_asset))
-                .unwrap_or_else(|error| panic!("{} texture failed to load: {error}", family.label))
-                .to_rgba8();
-            assert!(
-                texture.width() >= 128 && texture.height() >= 128,
-                "{} texture is only {}x{}; palette strips are not production surface maps",
-                family.label,
-                texture.width(),
-                texture.height()
-            );
-            let colors = texture
-                .pixels()
-                .map(|pixel| [pixel[0], pixel[1], pixel[2]])
-                .collect::<std::collections::BTreeSet<_>>();
-            let luminance = texture
-                .pixels()
-                .map(|pixel| {
-                    (u16::from(pixel[0]) * 54
-                        + u16::from(pixel[1]) * 183
-                        + u16::from(pixel[2]) * 19)
-                        / 256
-                })
-                .collect::<Vec<_>>();
-            let range = luminance.iter().max().unwrap() - luminance.iter().min().unwrap();
-            assert!(
-                colors.len() >= 96 && range >= 64,
-                "{} texture lacks bold readable detail: colors={} luminance_range={range}",
-                family.label,
-                colors.len()
-            );
-            assert!(texture.pixels().all(|pixel| pixel[3] == 255));
-        }
     }
 
     #[test]

@@ -258,6 +258,7 @@ struct StagedSocketManifest {
     microdetail: StagedMicrodetail,
     assembly_preparation_schema: String,
     assembly_preparation_schema_digest: String,
+    assembly_preparation_population: String,
     bridge_geometry: Vec<StagedGeometryPreparation>,
     assembly_preparations: Vec<StagedAssemblyPreparation>,
     cross_torso_preparations: Vec<StagedAssemblyPreparation>,
@@ -693,6 +694,21 @@ pub fn validate_geneforge_staging(
         .iter()
         .map(|source| (donor_name(source.donor).to_string(), source.sha256.clone()))
         .collect::<BTreeMap<_, _>>();
+    let augmented_preparations = match (
+        receipt.assembly_preparation.canonical_slot_records,
+        receipt.assembly_preparation.cross_torso_slot_records,
+        receipt.assembly_preparation.canonical_group_keys,
+        receipt.assembly_preparation.cross_torso_group_keys,
+        receipt.assembly_preparation.total_group_keys,
+    ) {
+        (180, 0, 252, 0, 252) => false,
+        (180, 288, 252, 432, 684) => true,
+        counts => {
+            return Err(fail(format!(
+                "build receipt has a partial assembly preparation population: {counts:?}"
+            )))
+        }
+    };
     if receipt.schema != "alife.geneforge_build_receipt.v2"
         || receipt.blender_version != "5.1.0"
         || receipt.importer_version != catalog.importer_version
@@ -708,11 +724,6 @@ pub fn validate_geneforge_staging(
         || receipt.assembly_preparation.schema != preparation_contract.schema
         || receipt.assembly_preparation.augmentor_version != preparation_contract.augmentor_version
         || receipt.assembly_preparation.schema_digest != preparation_contract.schema_digest
-        || receipt.assembly_preparation.canonical_slot_records != 180
-        || receipt.assembly_preparation.cross_torso_slot_records != 288
-        || receipt.assembly_preparation.canonical_group_keys != 252
-        || receipt.assembly_preparation.cross_torso_group_keys != 432
-        || receipt.assembly_preparation.total_group_keys != 684
     {
         return Err(fail(
             "build receipt recipe digest, importer version, source digest, or asset metadata drift"
@@ -809,6 +820,7 @@ pub fn validate_geneforge_staging(
             lod,
             summary,
             &preparation_contract,
+            augmented_preparations,
             &mut full_preparations,
             &mut canonical_slot_records,
             &mut cross_torso_slot_records,
@@ -823,21 +835,24 @@ pub fn validate_geneforge_staging(
             full_preparations.len()
         )));
     }
+    let expected_cross_slots = if augmented_preparations { 288 } else { 0 };
+    let expected_cross_groups = if augmented_preparations { 432 } else { 0 };
+    let expected_total_groups = if augmented_preparations { 684 } else { 252 };
     if canonical_slot_records != 180
-        || cross_torso_slot_records != 288
+        || cross_torso_slot_records != expected_cross_slots
         || canonical_group_keys.len() != 252
-        || cross_torso_group_keys.len() != 432
+        || cross_torso_group_keys.len() != expected_cross_groups
         || canonical_group_keys.iter().collect::<BTreeSet<_>>().len() != 252
-        || cross_torso_group_keys.iter().collect::<BTreeSet<_>>().len() != 432
+        || cross_torso_group_keys.iter().collect::<BTreeSet<_>>().len() != expected_cross_groups
         || canonical_group_keys
             .iter()
             .chain(cross_torso_group_keys.iter())
             .collect::<BTreeSet<_>>()
             .len()
-            != 684
+            != expected_total_groups
     {
         return Err(fail(format!(
-            "assembly preparation accounting must be 180/288 slots and 252/432/684 groups; found {canonical_slot_records}/{cross_torso_slot_records} and {}/{}/{}",
+            "assembly preparation accounting must be 180/{expected_cross_slots} slots and 252/{expected_cross_groups}/{expected_total_groups} groups; found {canonical_slot_records}/{cross_torso_slot_records} and {}/{}/{}",
             canonical_group_keys.len(),
             cross_torso_group_keys.len(),
             canonical_group_keys
@@ -852,8 +867,14 @@ pub fn validate_geneforge_staging(
             "recipe group-key count contract drifted during validation".into(),
         ));
     }
-    validate_preparation_key_population(&canonical_group_keys, &cross_torso_group_keys, &catalog)?;
-    validate_matrix_target_distinctness(&matrix_records)?;
+    if augmented_preparations {
+        validate_preparation_key_population(
+            &canonical_group_keys,
+            &cross_torso_group_keys,
+            &catalog,
+        )?;
+        validate_matrix_target_distinctness(&matrix_records)?;
+    }
 
     for (asset_index, asset) in catalog.part_assets.iter().enumerate() {
         let by_lod = |lod: CreaturePartLodId| {
@@ -1538,6 +1559,7 @@ fn validate_staged_socket_manifest(
     lod: &alife_game_app::GeneForgeGeneratedPartLod,
     obj: &StagedObjSummary,
     preparation_contract: &StagedPreparationContract,
+    require_cross_torso: bool,
     full_preparations: &mut BTreeSet<(u16, String)>,
     canonical_slot_records: &mut usize,
     cross_torso_slot_records: &mut usize,
@@ -1558,6 +1580,18 @@ fn validate_staged_socket_manifest(
             path.display()
         ))
     })?;
+    let expected_population = if require_cross_torso {
+        "canonical-plus-cross-torso"
+    } else {
+        "canonical-only"
+    };
+    if manifest.assembly_preparation_population != expected_population {
+        return Err(fail(format!(
+            "mixed assembly preparation population: expected {expected_population}, found {} in {}",
+            manifest.assembly_preparation_population,
+            path.display()
+        )));
+    }
     if manifest.schema != "alife.creature_part_sockets.v2"
         || manifest.asset_id != asset.id.0
         || manifest.logical_slot != slot_name(asset.logical_slot)
@@ -1700,6 +1734,7 @@ fn validate_staged_socket_manifest(
         lod.lod,
         obj,
         preparation_contract,
+        require_cross_torso,
         full_preparations,
         canonical_slot_records,
         cross_torso_slot_records,
@@ -1718,6 +1753,7 @@ fn validate_assembly_preparations(
     lod: CreaturePartLodId,
     obj: &StagedObjSummary,
     preparation_contract: &StagedPreparationContract,
+    require_cross_torso: bool,
     full_preparations: &mut BTreeSet<(u16, String)>,
     canonical_slot_records: &mut usize,
     cross_torso_slot_records: &mut usize,
@@ -2012,7 +2048,13 @@ fn validate_assembly_preparations(
             full_preparations.insert((prepared.family_id, prepared.logical_slot.clone()));
         }
     }
-    if asset.logical_slot == CreaturePartSlotKey::Torso {
+    if !require_cross_torso {
+        if !manifest.cross_torso_preparations.is_empty() {
+            return Err(fail(
+                "canonical-only manifest contains cross-torso preparations".to_string(),
+            ));
+        }
+    } else if asset.logical_slot == CreaturePartSlotKey::Torso {
         if !manifest.cross_torso_preparations.is_empty() {
             return Err(fail(
                 "torso asset manifest contains cross-torso preparations".to_string(),
