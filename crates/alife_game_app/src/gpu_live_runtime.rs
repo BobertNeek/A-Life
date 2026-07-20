@@ -22,7 +22,7 @@ use alife_gpu_backend::{
 };
 use alife_world::{
     persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
-    HeadlessWorld,
+    HeadlessWorld, WorldEditorSpawnSpec, WorldObjectKind,
 };
 
 use crate::{
@@ -57,6 +57,8 @@ struct GpuLiveRuntimeConstructionOptions {
     homeostatic_parameters: HomeostaticParameters,
     schedule_sleep: bool,
     birth_template_organism_id: Option<OrganismId>,
+    observe_sidecars: bool,
+    retain_sealed_patch_history: bool,
 }
 
 impl GpuLiveRuntimeConstructionOptions {
@@ -65,6 +67,8 @@ impl GpuLiveRuntimeConstructionOptions {
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: true,
             birth_template_organism_id: None,
+            observe_sidecars: true,
+            retain_sealed_patch_history: true,
         }
     }
 
@@ -73,6 +77,8 @@ impl GpuLiveRuntimeConstructionOptions {
             homeostatic_parameters,
             schedule_sleep: false,
             birth_template_organism_id: Some(OrganismId(1)),
+            observe_sidecars: false,
+            retain_sealed_patch_history: false,
         }
     }
 }
@@ -368,6 +374,10 @@ pub struct GpuLiveBrainRuntime {
     schedule_sleep: bool,
     birth_template_organism_id: Option<OrganismId>,
     sealed_patches: Vec<ExperiencePatch>,
+    sealed_patch_count: usize,
+    last_sealed_patches: Vec<ExperiencePatch>,
+    observe_sidecars: bool,
+    retain_sealed_patch_history: bool,
     last_learning_receipts: Vec<GpuLearningReceipt>,
     last_activity_work_receipts: Vec<BrainWorkReceipt>,
     last_memory_recall_receipts: Vec<MemoryRecallReceipt>,
@@ -544,6 +554,10 @@ impl GpuLiveBrainRuntime {
             schedule_sleep: options.schedule_sleep,
             birth_template_organism_id: options.birth_template_organism_id,
             sealed_patches: Vec::new(),
+            sealed_patch_count: 0,
+            last_sealed_patches: Vec::new(),
+            observe_sidecars: options.observe_sidecars,
+            retain_sealed_patch_history: options.retain_sealed_patch_history,
             last_learning_receipts: Vec::new(),
             last_activity_work_receipts: Vec::new(),
             last_memory_recall_receipts: Vec::new(),
@@ -631,6 +645,10 @@ impl GpuLiveBrainRuntime {
             schedule_sleep: true,
             birth_template_organism_id: None,
             sealed_patches: Vec::new(),
+            sealed_patch_count: 0,
+            last_sealed_patches: Vec::new(),
+            observe_sidecars: true,
+            retain_sealed_patch_history: true,
             last_learning_receipts: Vec::new(),
             last_activity_work_receipts: Vec::new(),
             last_memory_recall_receipts: Vec::new(),
@@ -1146,6 +1164,7 @@ impl GpuLiveBrainRuntime {
         ) -> SleepProgressResult,
     {
         self.reconcile_population()?;
+        self.last_sealed_patches.clear();
         self.last_learning_receipts.clear();
         self.last_activity_work_receipts.clear();
         self.last_memory_recall_receipts.clear();
@@ -1175,6 +1194,7 @@ impl GpuLiveBrainRuntime {
             .iter()
             .map(|(&raw, &handle)| (raw, handle))
             .collect::<Vec<_>>();
+        let perception_index = self.world.build_perception_batch_index()?;
         for (raw, handle) in scheduled_handles {
             let retained_learning_pending =
                 self.retry_retained_learning(OrganismId(raw), tick_before)?;
@@ -1251,14 +1271,14 @@ impl GpuLiveBrainRuntime {
                             OrganismId(raw),
                             tick_before,
                             tick_after,
-                            self.sealed_patches.len(),
+                            self.sealed_patch_count,
                         )
                     } else {
                         Self::sleeping_tick_summary(
                             OrganismId(raw),
                             tick_before,
                             tick_after,
-                            self.sealed_patches.len(),
+                            self.sealed_patch_count,
                         )
                     },
                 );
@@ -1272,11 +1292,12 @@ impl GpuLiveBrainRuntime {
                 if force_preparation_failure {
                     return Err(ScaffoldContractError::InvalidMemoryQuery);
                 }
-                let draft = self.world.perception_frame_draft(
+                let draft = self.world.perception_frame_draft_indexed(
                     OrganismId(raw),
                     tick_before,
                     self.sensor_profile,
                     resident.homeostasis,
+                    &perception_index,
                 )?;
                 let prepared_recall = self
                     .memories
@@ -1307,7 +1328,7 @@ impl GpuLiveBrainRuntime {
                             OrganismId(raw),
                             tick_before,
                             tick_after,
-                            self.sealed_patches.len(),
+                            self.sealed_patch_count,
                         ),
                     );
                 }
@@ -1363,6 +1384,14 @@ impl GpuLiveBrainRuntime {
         &self.sealed_patches
     }
 
+    pub(crate) const fn sealed_patch_count(&self) -> usize {
+        self.sealed_patch_count
+    }
+
+    pub(crate) fn last_sealed_patches(&self) -> &[ExperiencePatch] {
+        &self.last_sealed_patches
+    }
+
     /// Switches an explicit no-sleep benchmark fixture from its populated
     /// stimulus phase to an isolated phase. The world still owns the resulting
     /// unscored candidate set; this method never supplies a score or action.
@@ -1389,6 +1418,36 @@ impl GpuLiveBrainRuntime {
             };
             self.world.editor_move_object(object.id, position)?;
         }
+        Ok(())
+    }
+
+    /// Resets the one populated benchmark observer after warmup and creates a
+    /// fresh ordinary food object, so measured causal work cannot depend on a
+    /// stimulus consumed during the unmeasured phase.
+    pub(crate) fn prepare_measured_benchmark_phase(&mut self) -> Result<(), GameAppShellError> {
+        if self.schedule_sleep {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame.into());
+        }
+        let observer_entity = self
+            .world
+            .organism_entity_ids()
+            .into_iter()
+            .find_map(|(organism_id, entity_id)| {
+                (organism_id == OrganismId(1)).then_some(entity_id)
+            })
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        self.world
+            .editor_move_object(observer_entity, Vec3f::ZERO)?;
+        self.world.editor_spawn_object(WorldEditorSpawnSpec {
+            label: "benchmark-measured-food".to_string(),
+            kind: WorldObjectKind::Food,
+            organism_id: None,
+            position: Vec3f::new(1.5, 0.0, 0.0),
+            nutrition: 0.2,
+            hazard_pain: 0.0,
+            radius: 0.2,
+            token_id: None,
+        })?;
         Ok(())
     }
 
@@ -1518,7 +1577,7 @@ impl GpuLiveBrainRuntime {
         telemetry.authoritative = true;
         telemetry.adapter = self.backend.hardware_receipt().adapter_name.clone();
         telemetry.compact_readback_bytes = self.last_gpu_metrics.compact_readback_bytes;
-        telemetry.sealed_patches = self.sealed_patches.len();
+        telemetry.sealed_patches = self.sealed_patch_count;
         telemetry.learning_updates =
             u32::try_from(self.last_learning_receipts.len()).unwrap_or(u32::MAX);
         telemetry.last_learning_delta = self
@@ -1526,7 +1585,7 @@ impl GpuLiveBrainRuntime {
             .iter()
             .map(|receipt| receipt.max_abs_delta)
             .fold(0.0_f32, f32::max);
-        telemetry.active_ticks = u32::try_from(self.sealed_patches.len()).unwrap_or(u32::MAX);
+        telemetry.active_ticks = u32::try_from(self.sealed_patch_count).unwrap_or(u32::MAX);
         if let Some((&organism_raw, resident)) = self.residents.first_key_value() {
             telemetry.phenotype_hash_prefix =
                 format!("{:08x}", resident.phenotype.phenotype_hash().0[0]);
@@ -1997,7 +2056,7 @@ impl GpuLiveBrainRuntime {
             patch_success: Some(patch.outcome().success),
             physical_contact: Some(patch.outcome().physical.contact),
             action_failure: action_result.execution.failure,
-            sealed_patch_count: self.sealed_patches.len().saturating_add(1),
+            sealed_patch_count: self.sealed_patch_count.saturating_add(1),
             packed_record_count: 0,
             memory_updates: 0,
             topology_updates: 0,
@@ -2112,10 +2171,16 @@ impl GpuLiveBrainRuntime {
                 .saturating_add(learning_readback);
         }
 
-        let memory_updates = self.observe_sealed_memory(&sealed);
-        let topology_updates = self.observe_sealed_topology(&sealed);
+        let (memory_updates, topology_updates) = if self.observe_sidecars {
+            (
+                self.observe_sealed_memory(&sealed),
+                self.observe_sealed_topology(&sealed),
+            )
+        } else {
+            (vec![false; sealed.len()], vec![false; sealed.len()])
+        };
 
-        let first_patch_count = self.sealed_patches.len();
+        let first_patch_count = self.sealed_patch_count;
         let mut summaries = Vec::with_capacity(sealed.len());
         for (index, selection) in sealed.iter_mut().enumerate() {
             selection.summary.sealed_patch_count = first_patch_count + index + 1;
@@ -2146,8 +2211,19 @@ impl GpuLiveBrainRuntime {
         if let Some(learning) = learning {
             self.last_learning_receipts.extend(learning);
         }
-        self.sealed_patches
-            .extend(sealed.into_iter().map(|selection| selection.patch));
+        let committed_patches = sealed
+            .into_iter()
+            .map(|selection| selection.patch)
+            .collect::<Vec<_>>();
+        self.sealed_patch_count = self
+            .sealed_patch_count
+            .checked_add(committed_patches.len())
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        if self.retain_sealed_patch_history {
+            self.sealed_patches.extend(committed_patches);
+        } else {
+            self.last_sealed_patches = committed_patches;
+        }
         Ok(summaries)
     }
 

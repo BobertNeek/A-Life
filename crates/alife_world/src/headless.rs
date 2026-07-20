@@ -197,6 +197,18 @@ pub struct HeadlessWorld {
     tracked_objects: TrackedObjectRegistry,
 }
 
+/// Opaque, immutable lookup built once for one same-snapshot perception batch.
+/// It contains world IDs only; semantic observations are still assembled by
+/// the canonical world sensing paths.
+#[derive(Debug, Clone)]
+pub struct HeadlessPerceptionBatchIndex {
+    world_seed: u64,
+    world_tick: Tick,
+    object_count: usize,
+    cells: BTreeMap<(i32, i32, i32), Vec<u64>>,
+    organism_entities: BTreeMap<u64, u64>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct HeadlessWorldPersistenceParts {
     pub seed: u64,
@@ -352,6 +364,35 @@ impl HeadlessWorld {
 
     pub fn object_snapshots(&self) -> Vec<WorldObject> {
         self.objects.values().cloned().collect()
+    }
+
+    pub fn build_perception_batch_index(
+        &self,
+    ) -> Result<HeadlessPerceptionBatchIndex, ScaffoldContractError> {
+        let mut cells = BTreeMap::<(i32, i32, i32), Vec<u64>>::new();
+        let mut organism_entities = BTreeMap::new();
+        for object in self.objects.values() {
+            object.position.validate()?;
+            cells
+                .entry(perception_cell(object.position))
+                .or_default()
+                .push(object.id.raw());
+            if let Some(organism_id) = object.organism_id {
+                if organism_entities
+                    .insert(organism_id.raw(), object.id.raw())
+                    .is_some()
+                {
+                    return Err(ScaffoldContractError::InvalidId);
+                }
+            }
+        }
+        Ok(HeadlessPerceptionBatchIndex {
+            world_seed: self.seed,
+            world_tick: self.tick,
+            object_count: self.objects.len(),
+            cells,
+            organism_entities,
+        })
     }
 
     pub fn tracked_objects(&self) -> &TrackedObjectRegistry {
@@ -621,6 +662,28 @@ impl HeadlessWorld {
         profile: SensorProfile,
         homeostasis: HomeostaticSnapshot,
     ) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
+        self.perception_frame_draft_with_index(organism_id, tick, profile, homeostasis, None)
+    }
+
+    pub fn perception_frame_draft_indexed(
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
+        self.perception_frame_draft_with_index(organism_id, tick, profile, homeostasis, Some(index))
+    }
+
+    fn perception_frame_draft_with_index(
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+        index: Option<&HeadlessPerceptionBatchIndex>,
+    ) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
         homeostasis
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
@@ -630,7 +693,10 @@ impl HeadlessWorld {
         let provenance = SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, tick)?;
         match profile {
             SensorProfile::PrivilegedAffordanceV1 => {
-                let report = self.sensory_report(organism_id, tick)?;
+                let report = match index {
+                    Some(index) => self.sensory_report_indexed(organism_id, tick, index)?,
+                    None => self.sensory_report(organism_id, tick)?,
+                };
                 let candidates =
                     HeadlessCandidateEnumerator.enumerate_candidates(&report, profile)?;
                 let body = BodySnapshot {
@@ -653,7 +719,12 @@ impl HeadlessWorld {
                 )
             }
             SensorProfile::GroundedObjectSlotsV1 => {
-                let snapshot = self.physical_observation_snapshot(organism_id, tick)?;
+                let snapshot = match index {
+                    Some(index) => {
+                        self.physical_observation_snapshot_indexed(organism_id, tick, index)?
+                    }
+                    None => self.physical_observation_snapshot(organism_id, tick)?,
+                };
                 let grounded =
                     GroundedSensorExtractor::extract(&snapshot, &mut self.tracked_objects)?;
                 let candidates = GroundedCandidateEnumerator.enumerate_candidates(&grounded)?;
@@ -680,6 +751,37 @@ impl HeadlessWorld {
     ) -> Result<PhysicalObservationSnapshot, ScaffoldContractError> {
         organism_id.validate()?;
         let observer = self.agent_for(organism_id)?;
+        self.physical_observation_snapshot_from_objects(
+            organism_id,
+            tick,
+            observer,
+            self.objects.values(),
+        )
+    }
+
+    pub fn physical_observation_snapshot_indexed(
+        &self,
+        organism_id: OrganismId,
+        tick: Tick,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<PhysicalObservationSnapshot, ScaffoldContractError> {
+        organism_id.validate()?;
+        let observer = self.indexed_agent_for(organism_id, index)?;
+        self.physical_observation_snapshot_from_objects(
+            organism_id,
+            tick,
+            observer,
+            self.indexed_nearby_objects(observer, index)?.into_iter(),
+        )
+    }
+
+    fn physical_observation_snapshot_from_objects<'a>(
+        &self,
+        organism_id: OrganismId,
+        tick: Tick,
+        observer: &WorldObject,
+        objects: impl Iterator<Item = &'a WorldObject>,
+    ) -> Result<PhysicalObservationSnapshot, ScaffoldContractError> {
         let observer_pose = Pose {
             translation: observer.position,
             rotation: Quatf::IDENTITY,
@@ -688,9 +790,7 @@ impl HeadlessWorld {
             linear: observer.grounded_physical.velocity,
             angular: Vec3f::ZERO,
         };
-        let mut visible = self
-            .objects
-            .values()
+        let mut visible = objects
             .filter(|object| object.id != observer.id && !object.consumed)
             .filter_map(|object| {
                 let measured_distance = distance(observer.position, object.position);
@@ -749,6 +849,28 @@ impl HeadlessWorld {
         organism_id.validate()?;
         let agent = self.agent_for(organism_id)?;
         let visible_entities = self.visible_entities_from(agent);
+        self.sensory_report_from_visible(organism_id, tick, agent, visible_entities)
+    }
+
+    pub fn sensory_report_indexed(
+        &self,
+        organism_id: OrganismId,
+        tick: Tick,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<HeadlessSensoryReport, ScaffoldContractError> {
+        organism_id.validate()?;
+        let agent = self.indexed_agent_for(organism_id, index)?;
+        let visible_entities = self.indexed_visible_entities_from(agent, index)?;
+        self.sensory_report_from_visible(organism_id, tick, agent, visible_entities)
+    }
+
+    fn sensory_report_from_visible(
+        &self,
+        organism_id: OrganismId,
+        tick: Tick,
+        agent: &WorldObject,
+        visible_entities: Vec<VisibleWorldEntity>,
+    ) -> Result<HeadlessSensoryReport, ScaffoldContractError> {
         let contact_entities = visible_entities
             .iter()
             .filter(|visible| visible.distance <= HEADLESS_CONTACT_RADIUS)
@@ -867,9 +989,9 @@ impl HeadlessWorld {
             ..LanguageContextSnapshot::default()
         };
         for (index, entry) in social_proximity.iter().flatten().enumerate() {
-            let object = self
-                .objects
-                .values()
+            let object = visible_entities
+                .iter()
+                .filter_map(|visible| self.objects.get(&visible.id.raw()))
                 .find(|object| object.organism_id == Some(entry.agent_id))
                 .expect("social proximity object exists");
             core_snapshot.social_context.nearest_agents[index] = Some(SocialAgentSnapshot {
@@ -1342,10 +1464,80 @@ impl HeadlessWorld {
             .ok_or(ScaffoldContractError::InvalidId)
     }
 
+    fn indexed_agent_for(
+        &self,
+        organism_id: OrganismId,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<&WorldObject, ScaffoldContractError> {
+        self.validate_perception_batch_index(index)?;
+        let entity = index
+            .organism_entities
+            .get(&organism_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        self.objects
+            .get(entity)
+            .ok_or(ScaffoldContractError::InvalidId)
+    }
+
+    fn validate_perception_batch_index(
+        &self,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<(), ScaffoldContractError> {
+        if index.world_seed != self.seed
+            || index.world_tick != self.tick
+            || index.object_count != self.objects.len()
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Ok(())
+    }
+
+    fn indexed_nearby_objects<'a>(
+        &'a self,
+        observer: &WorldObject,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<Vec<&'a WorldObject>, ScaffoldContractError> {
+        self.validate_perception_batch_index(index)?;
+        let (cell_x, cell_y, cell_z) = perception_cell(observer.position);
+        let mut nearby = Vec::new();
+        for x in cell_x.saturating_sub(1)..=cell_x.saturating_add(1) {
+            for y in cell_y.saturating_sub(1)..=cell_y.saturating_add(1) {
+                for z in cell_z.saturating_sub(1)..=cell_z.saturating_add(1) {
+                    if let Some(ids) = index.cells.get(&(x, y, z)) {
+                        for id in ids {
+                            nearby.push(
+                                self.objects
+                                    .get(id)
+                                    .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Ok(nearby)
+    }
+
     fn visible_entities_from(&self, observer: &WorldObject) -> Vec<VisibleWorldEntity> {
-        let mut visible = self
-            .objects
-            .values()
+        Self::visible_entities_from_objects(observer, self.objects.values())
+    }
+
+    fn indexed_visible_entities_from(
+        &self,
+        observer: &WorldObject,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<Vec<VisibleWorldEntity>, ScaffoldContractError> {
+        Ok(Self::visible_entities_from_objects(
+            observer,
+            self.indexed_nearby_objects(observer, index)?.into_iter(),
+        ))
+    }
+
+    fn visible_entities_from_objects<'a>(
+        observer: &WorldObject,
+        objects: impl Iterator<Item = &'a WorldObject>,
+    ) -> Vec<VisibleWorldEntity> {
+        let mut visible = objects
             .filter(|object| object.id != observer.id && !object.consumed)
             .filter_map(|object| {
                 let distance = distance(observer.position, object.position);
@@ -2561,6 +2753,15 @@ fn distance(a: Vec3f, b: Vec3f) -> f32 {
     let dy = a.y - b.y;
     let dz = a.z - b.z;
     (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
+fn perception_cell(position: Vec3f) -> (i32, i32, i32) {
+    let scale = 1.0 / HEADLESS_VISION_RADIUS;
+    (
+        (position.x * scale).floor() as i32,
+        (position.y * scale).floor() as i32,
+        (position.z * scale).floor() as i32,
+    )
 }
 
 fn subtract(a: Vec3f, b: Vec3f) -> Vec3f {

@@ -161,8 +161,9 @@ pub fn run_gpu_closed_loop_benchmark_trial(
             .take_completed_neural_timing_sample()
             .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?;
     }
+    runtime.prepare_measured_benchmark_phase()?;
 
-    let start_patches = runtime.sealed_patches().len();
+    let start_patches = runtime.sealed_patch_count();
     let mut raw_inference_timestamp_ticks = Vec::with_capacity(options.measured_ticks as usize);
     let mut raw_plasticity_timestamp_ticks = Vec::with_capacity(options.measured_ticks as usize);
     let mut gpu_selections = 0_u64;
@@ -175,7 +176,7 @@ pub fn run_gpu_closed_loop_benchmark_trial(
         if tick == options.measured_ticks / 2 {
             runtime.enter_isolated_benchmark_phase()?;
         }
-        let before_patches = runtime.sealed_patches().len();
+        let before_patches = runtime.sealed_patch_count();
         let summaries =
             runtime
                 .tick()
@@ -202,7 +203,7 @@ pub fn run_gpu_closed_loop_benchmark_trial(
         raw_inference_timestamp_ticks.push(timing.inference_timestamp_ticks);
         raw_plasticity_timestamp_ticks.push(timing.plasticity_timestamp_ticks);
 
-        let after_patches = runtime.sealed_patches().len();
+        let after_patches = runtime.sealed_patch_count();
         let patch_delta = after_patches
             .checked_sub(before_patches)
             .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
@@ -218,14 +219,17 @@ pub fn run_gpu_closed_loop_benchmark_trial(
         if patch_delta != summaries.len() {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
-        for patch in &runtime.sealed_patches()[before_patches..after_patches] {
+        let committed_patches = runtime.last_sealed_patches();
+        if committed_patches.len() != patch_delta {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
+        for patch in committed_patches {
             selected_families.insert(patch.decision().neural_evidence()?.action_family.raw());
         }
         active_synapses = active_synapses.max(runtime.evidence_metrics().active_synapses);
     }
     let sealed_patches = runtime
-        .sealed_patches()
-        .len()
+        .sealed_patch_count()
         .checked_sub(start_patches)
         .ok_or(ScaffoldContractError::InvalidDecisionEvidence)? as u64;
     let admission = runtime.admission_receipt().clone();
@@ -337,12 +341,20 @@ fn benchmark_world(
         .food("benchmark-food", Vec3f::new(1.5, 0.0, 0.0), 0.2)
         .obstacle("benchmark-obstacle", Vec3f::new(-1.5, 0.0, 0.0), 0.4);
     for index in 0..population {
-        let angle = (index as f32) * 2.399_963_1;
-        let radius = 0.25 + 0.003 * index as f32;
+        // One organism receives the fixed populated stimulus set while every
+        // other brain is spatially isolated. This preserves real world
+        // enumeration, execution, sealing, and learning for every organism,
+        // while avoiding an accidental all-to-all social candidate fixture
+        // whose O(population^2) host work is outside the measured GPU span.
+        let position = if index == 0 {
+            Vec3f::ZERO
+        } else {
+            Vec3f::new(index as f32 * 1_024.0, 0.0, 0.0)
+        };
         builder = builder.agent(
             &format!("benchmark-agent-{index}"),
             OrganismId(u64::from(index) + 1),
-            Vec3f::new(radius * angle.cos(), radius * angle.sin(), 0.0),
+            position,
         );
     }
     Ok(builder.build()?)

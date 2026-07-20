@@ -134,6 +134,38 @@ fn perception_and_candidates_share_one_authoritative_tick_and_empty_context() {
 }
 
 #[test]
+fn batch_perception_index_matches_canonical_privileged_and_grounded_frames() {
+    let world = HeadlessScenarioBuilder::new(4_404)
+        .agent("indexed-agent-a", OrganismId(1), pos(0.0, 0.0))
+        .agent("indexed-agent-b", OrganismId(2), pos(1.0, 0.5))
+        .agent("indexed-agent-c", OrganismId(3), pos(1_024.0, 0.0))
+        .food("indexed-food", pos(1.5, 0.0), 0.4)
+        .hazard("indexed-hazard", pos(-1.5, 0.0), 0.3)
+        .build()
+        .unwrap();
+    let index = world.build_perception_batch_index().unwrap();
+    let tick = Tick::ZERO;
+
+    for profile in [
+        SensorProfile::PrivilegedAffordanceV1,
+        SensorProfile::GroundedObjectSlotsV1,
+    ] {
+        for organism_id in [OrganismId(1), OrganismId(2), OrganismId(3)] {
+            let mut canonical_world = world.clone();
+            let mut indexed_world = world.clone();
+            let homeostasis = HomeostaticSnapshot::baseline(tick);
+            let canonical = canonical_world
+                .perception_frame_draft(organism_id, tick, profile, homeostasis)
+                .unwrap();
+            let indexed = indexed_world
+                .perception_frame_draft_indexed(organism_id, tick, profile, homeostasis, &index)
+                .unwrap();
+            assert_eq!(indexed, canonical, "{profile:?} organism {organism_id:?}");
+        }
+    }
+}
+
+#[test]
 fn idle_is_index_zero_and_all_candidate_indices_are_contiguous() {
     let mut world = frame_world(SemanticFixtureKind::Food);
     let frame = perception_frame(
