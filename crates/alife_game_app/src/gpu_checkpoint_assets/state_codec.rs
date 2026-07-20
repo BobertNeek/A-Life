@@ -7,19 +7,22 @@ use alife_core::{
     SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
 };
 use alife_gpu_backend::{
-    GpuBrainCheckpointParts, GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuBrainRestoreReceipt,
-    GpuBrainRestoreRequest, GpuClosedLoopBackend, GpuCompletedSleepStagingInputParts,
-    GpuCompletedSleepStagingParts, GpuReplayEventRecord, GpuReplaySynapseSpanRecord,
+    GpuActivityRestoreInput, GpuActivityRuntimeSnapshot, GpuBrainCheckpointParts,
+    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuBrainRestoreReceipt, GpuBrainRestoreRequest,
+    GpuClosedLoopBackend, GpuCompletedSleepStagingInputParts, GpuCompletedSleepStagingParts,
+    GpuPortableActivityRestoreRecord, GpuReplayEventRecord, GpuReplaySynapseSpanRecord,
     PendingEligibilityRestoreParts, GPU_BRAIN_CHECKPOINT_SCHEMA_VERSION,
 };
 use alife_world::persistence::{
-    AssetManifest, AssetManifestEntry, GpuBrainSaveState, GpuSleepAssetState,
-    MemorySidecarSaveState, PendingEligibilityCheckpoint, PortableActivationBanksV1,
-    PortableDualWeightBankV1, PortableEligibilityBanksV1, PortableNeuronHomeostasisV1,
-    PortableReplayJournalV1, RetainedLearningRecoverySaveState, TopologySidecarSaveSummary,
+    AssetManifest, AssetManifestEntry, GpuBackendProvenanceSave, GpuBrainSaveState,
+    GpuSleepAssetState, MemorySidecarSaveState, NeuralGpuBackendApi, PendingEligibilityCheckpoint,
+    PortableActivationBanksV1, PortableDualWeightBankV1, PortableEligibilityBanksV1,
+    PortableNeuronHomeostasisV1, PortableReplayJournalV1, PortableThrottleCheckpoint,
+    RetainedLearningRecoverySaveState, ThrottleReplaySaveInput, ThrottleReplaySaveState,
+    TopologySidecarSaveSummary, GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION,
     GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON, GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION,
     GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION, GPU_BRAIN_WEIGHT_LAYER_FAST,
-    GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
+    GPU_BRAIN_WEIGHT_LAYER_LIFETIME, THROTTLE_REPLAY_SAVE_SCHEMA_VERSION,
 };
 use alife_world::TrackedObjectRegistrySaveState;
 use serde::{Deserialize, Serialize};
@@ -32,6 +35,130 @@ use super::{
 };
 
 const PENDING_TRANSACTION_SCHEMA_VERSION: u16 = 1;
+
+fn current_backend_provenance(
+    backend: &GpuClosedLoopBackend,
+    capacity: &BrainCapacityClass,
+) -> Result<GpuBackendProvenanceSave, GameAppShellError> {
+    let hardware = backend.hardware_receipt();
+    let budget = backend.runtime_budget();
+    let api = NeuralGpuBackendApi::try_from_slug(&hardware.backend_api)?;
+    let mut version_parts = hardware.backend_version.split('.');
+    let major = version_parts
+        .next()
+        .and_then(|value| value.parse::<u16>().ok())
+        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+    let minor = version_parts
+        .next()
+        .and_then(|value| value.parse::<u16>().ok())
+        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+    let patch = version_parts
+        .next()
+        .and_then(|value| value.parse::<u16>().ok())
+        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+    if version_parts.next().is_some() {
+        return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
+    }
+    let mut provenance = GpuBackendProvenanceSave {
+        schema_version: GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION,
+        backend_api_raw: api.raw(),
+        vendor_id: hardware.vendor_id,
+        device_id: hardware.device_id,
+        backend_version_major: major,
+        backend_version_minor: minor,
+        backend_version_patch: patch,
+        adapter_name_len: 0,
+        adapter_name_utf8: [0; 128],
+        driver_digest: hardware.driver_digest,
+        required_features_digest: budget.required_features_digest()?,
+        required_limits_digest: budget.required_limits_digest_for(capacity.execution())?,
+        available_features_digest: hardware.feature_digest,
+        adapter_limits_digest: hardware.limits_digest,
+    };
+    provenance.set_adapter_name(&hardware.adapter_name)?;
+    Ok(provenance)
+}
+
+fn portable_activity_checkpoint(
+    backend: &GpuClosedLoopBackend,
+    handle: GpuBrainHandle,
+) -> Result<(GpuActivityRuntimeSnapshot, Vec<PortableThrottleCheckpoint>), GameAppShellError> {
+    let snapshot = backend.snapshot_activity_state(handle)?;
+    let records = match (
+        snapshot.pressure,
+        snapshot.throttle.clone(),
+        snapshot.work.clone(),
+    ) {
+        (Some(pressure), Some(throttle), Some(work)) => {
+            if snapshot.next_sequence_cursor != pressure.sequence_cursor.checked_add(1).unwrap_or(0)
+            {
+                return Err(ScaffoldContractError::BrainActivitySequenceMismatch.into());
+            }
+            vec![PortableThrottleCheckpoint {
+                schema_version:
+                    alife_world::persistence::PORTABLE_THROTTLE_CHECKPOINT_SCHEMA_VERSION,
+                policy_version: throttle.policy_version,
+                organism_id_raw: pressure.organism_id_raw,
+                tick: pressure.tick,
+                class_id_raw: pressure.class_id_raw,
+                sequence_cursor: pressure.sequence_cursor,
+                dispatch_generation: pressure.dispatch_generation,
+                frame_digest: pressure.frame_digest,
+                source_dispatch_generation: pressure.source_dispatch_generation,
+                source_frame_digest: pressure.source_frame_digest,
+                completed_gpu_time_ns: pressure.completed_gpu_time_ns,
+                queue_depth: pressure.queue_depth,
+                logical_heap_pressure_q16: pressure.logical_heap_pressure_q16,
+                brain_atp_fraction_q16: pressure.brain_atp_fraction_q16,
+                level: throttle.level,
+                microsteps: throttle.microsteps,
+                enabled_route_ids: throttle.enabled_route_ids,
+                route_schedule_digest: throttle.route_schedule_digest,
+                work: work.counters,
+                neural_cost_q24: work.neural_cost_q24,
+                atp_before_q16: work.atp_before_q16,
+                atp_debit_q16: work.atp_debit_q16,
+                atp_after_q16: work.atp_after_q16,
+                policy_digest: throttle.policy_digest,
+                portable_digest: [0; 4],
+            }
+            .seal()?]
+        }
+        (None, None, None) if snapshot.next_sequence_cursor == 1 => Vec::new(),
+        _ => return Err(ScaffoldContractError::BrainActivitySequenceMismatch.into()),
+    };
+    Ok((snapshot, records))
+}
+
+fn activity_restore_record(
+    checkpoint: &PortableThrottleCheckpoint,
+) -> GpuPortableActivityRestoreRecord {
+    GpuPortableActivityRestoreRecord {
+        policy_version: checkpoint.policy_version,
+        organism_id_raw: checkpoint.organism_id_raw,
+        tick: checkpoint.tick,
+        class_id_raw: checkpoint.class_id_raw,
+        sequence_cursor: checkpoint.sequence_cursor,
+        dispatch_generation: checkpoint.dispatch_generation,
+        frame_digest: checkpoint.frame_digest,
+        source_dispatch_generation: checkpoint.source_dispatch_generation,
+        source_frame_digest: checkpoint.source_frame_digest,
+        completed_gpu_time_ns: checkpoint.completed_gpu_time_ns,
+        queue_depth: checkpoint.queue_depth,
+        logical_heap_pressure_q16: checkpoint.logical_heap_pressure_q16,
+        brain_atp_fraction_q16: checkpoint.brain_atp_fraction_q16,
+        level: checkpoint.level,
+        microsteps: checkpoint.microsteps,
+        enabled_route_ids: checkpoint.enabled_route_ids.clone(),
+        route_schedule_digest: checkpoint.route_schedule_digest,
+        work: checkpoint.work,
+        neural_cost_q24: checkpoint.neural_cost_q24,
+        atp_before_q16: checkpoint.atp_before_q16,
+        atp_debit_q16: checkpoint.atp_debit_q16,
+        atp_after_q16: checkpoint.atp_after_q16,
+        policy_digest: checkpoint.policy_digest,
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuBrainCheckpointWrite {
@@ -287,6 +414,30 @@ impl GpuCheckpointAssetStore {
 
         let sleep_assets =
             self.capture_sleep_assets(backend, handle, phenotype, sleep, &mut entries)?;
+        let backend_provenance = current_backend_provenance(backend, &capacity)?;
+        let runtime_profile = *backend.runtime_profile();
+        let activity_policy = *backend.activity_policy();
+        let (activity_snapshot, throttle_sequence) = portable_activity_checkpoint(backend, handle)?;
+        let (throttle_sequence_asset, entry) =
+            self.write_json("throttle-sequence", &throttle_sequence)?;
+        entries.push(entry);
+        let last_checkpoint = throttle_sequence.last().cloned();
+        let throttle_replay = ThrottleReplaySaveState::try_new(
+            ThrottleReplaySaveInput {
+                schema_version: THROTTLE_REPLAY_SAVE_SCHEMA_VERSION,
+                policy_version: activity_policy.policy_version,
+                next_sequence_cursor: activity_snapshot.next_sequence_cursor,
+                last_committed_sequence_cursor: last_checkpoint
+                    .as_ref()
+                    .map(|checkpoint| checkpoint.sequence_cursor),
+                policy_digest: activity_policy.policy_digest,
+                next_completed_gpu_time_ns: activity_snapshot.next_completed_gpu_time_ns,
+                brain_atp_q16: activity_snapshot.brain_atp_q16,
+                last_world_atp_tick: activity_snapshot.last_world_atp_tick,
+            },
+            throttle_sequence_asset,
+            last_checkpoint,
+        )?;
         let save_state = GpuBrainSaveState {
             schema_version: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
             organism_id: handle.organism_id(),
@@ -317,6 +468,12 @@ impl GpuCheckpointAssetStore {
             tracked_objects: sidecars.tracked_objects,
             sleep,
             sleep_assets,
+            backend_provenance,
+            runtime_profile_id: runtime_profile.profile_id,
+            runtime_profile_digest: runtime_profile.canonical_digest()?,
+            activity_policy_version: activity_policy.policy_version,
+            activity_policy_digest: activity_policy.policy_digest,
+            throttle_replay,
         };
         save_state.validate()?;
         Ok(GpuBrainCheckpointWrite {
@@ -334,9 +491,43 @@ impl GpuCheckpointAssetStore {
     ) -> Result<RestoredGpuBrainCheckpoint, GameAppShellError> {
         state.validate()?;
         manifest.validate_with_root(self.root())?;
+        state.validate_asset_manifest(manifest)?;
+        let capacity = BrainCapacityClass::production_for_id(state.capacity_class_id)?;
+        let current_provenance = current_backend_provenance(backend, &capacity)?;
+        state
+            .backend_provenance
+            .validate_portable_restore_against(&current_provenance)?;
+        let runtime_profile = backend.runtime_profile();
+        let activity_policy = backend.activity_policy();
+        if state.runtime_profile_id != runtime_profile.profile_id
+            || state.runtime_profile_digest != runtime_profile.canonical_digest()?
+            || state.activity_policy_version != activity_policy.policy_version
+            || state.activity_policy_digest != activity_policy.policy_digest
+        {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
+        }
+        let (throttle_sequence, _): (Vec<PortableThrottleCheckpoint>, Vec<u8>) =
+            self.read_json(manifest, &state.throttle_replay.sequence_asset)?;
+        for checkpoint in &throttle_sequence {
+            checkpoint.validate()?;
+            if checkpoint.organism_id_raw != state.organism_id.raw()
+                || checkpoint.class_id_raw != state.capacity_class_id.raw()
+                || checkpoint.policy_version != state.activity_policy_version
+                || checkpoint.policy_digest != state.activity_policy_digest
+            {
+                return Err(ScaffoldContractError::BrainActivitySequenceMismatch.into());
+            }
+        }
+        if !throttle_sequence
+            .windows(2)
+            .all(|pair| pair[0].sequence_cursor.checked_add(1) == Some(pair[1].sequence_cursor))
+            || throttle_sequence.last() != state.throttle_replay.last_checkpoint.as_ref()
+            || throttle_sequence.is_empty() != state.throttle_replay.last_checkpoint.is_none()
+        {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch.into());
+        }
         let (compiler_inputs, _): (PhenotypeCompilerInputs, Vec<u8>) =
             self.read_json(manifest, &state.phenotype_compiler_inputs)?;
-        let capacity = BrainCapacityClass::production_for_id(state.capacity_class_id)?;
         compiler_inputs.validate_against(&capacity)?;
         let (phenotype, phenotype_bytes): (BrainPhenotype, Vec<u8>) =
             self.read_json(manifest, &state.immutable_phenotype)?;
@@ -473,6 +664,27 @@ impl GpuCheckpointAssetStore {
         })?;
         let request = GpuBrainRestoreRequest::try_new(checkpoint)?;
         let receipt = backend.restore_brain(state.organism_id, phenotype.clone(), request)?;
+        if let Err(error) = backend.restore_activity_state(
+            receipt.handle,
+            GpuActivityRestoreInput {
+                next_sequence_cursor: state.throttle_replay.next_sequence_cursor,
+                checkpoint_tick: state.checkpoint_tick.raw(),
+                next_completed_gpu_time_ns: state.throttle_replay.next_completed_gpu_time_ns,
+                brain_atp_q16: state.throttle_replay.brain_atp_q16,
+                last_world_atp_tick: state.throttle_replay.last_world_atp_tick,
+                record: state
+                    .throttle_replay
+                    .last_checkpoint
+                    .as_ref()
+                    .map(activity_restore_record),
+            },
+        ) {
+            if let Some(pending) = receipt.pending_eligibility {
+                let _ = backend.discard_pending_eligibility(receipt.handle, pending.identity());
+            }
+            let _ = backend.remove_brain(receipt.handle);
+            return Err(error.into());
+        }
 
         let pending_transaction = match &state.pending_experience_transaction {
             Some(asset_ref) => {

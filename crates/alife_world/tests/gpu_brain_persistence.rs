@@ -1,22 +1,26 @@
 //! Portable GPU brain save-state and sleep-transaction persistence contracts.
 
 use alife_core::{
-    ActionId, BrainCapacityClass, CandidateActionFamily, CandidateFeatureDigest, Confidence,
-    ConsolidationIntent, ConsolidationJobId, ConsolidationStagedOutput, ConsolidationState,
-    ExperienceSequenceId, GpuConsolidationRequest, MemoryBankConfig, MemorySidecarState,
-    NeuromodulatorSample, OrganismId, PerceptionFrameDigest, PhenotypeHash,
-    ReplayEligibilitySample, ReplaySynapseSpan, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, SleepPhase, SleepReplayEvent, SleepState, SleepTrigger, Tick,
-    TopologicalMapConfig, TopologySidecar, Validate, GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
-    SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+    ActionId, BrainActivityPolicyV1, BrainCapacityClass, CandidateActionFamily,
+    CandidateFeatureDigest, Confidence, ConsolidationIntent, ConsolidationJobId,
+    ConsolidationStagedOutput, ConsolidationState, ExperienceSequenceId, GpuConsolidationRequest,
+    MemoryBankConfig, MemorySidecarState, NeuromodulatorSample, OrganismId, PerceptionFrameDigest,
+    PhenotypeHash, ReplayEligibilitySample, ReplaySynapseSpan, SensorProfile,
+    SensorProfileIdentity, SensoryAbiVersion, SleepPhase, SleepReplayEvent, SleepState,
+    SleepTrigger, Tick, TopologicalMapConfig, TopologySidecar, Validate,
+    GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 use alife_world::persistence::{
-    AssetKind, AssetManifest, AssetManifestEntry, AssetPresence, GpuBrainAssetRef,
-    GpuBrainSaveState, GpuSleepAssetState, MemorySidecarSaveState, PortableActivationBanksV1,
+    AssetKind, AssetManifest, AssetManifestEntry, AssetPresence, GpuBackendProvenanceSave,
+    GpuBrainAssetRef, GpuBrainSaveState, GpuSleepAssetState, MemorySidecarSaveState,
+    NeuralGpuBackendApi, PendingEligibilityCheckpoint, PortableActivationBanksV1,
     PortableAssetDigest, PortableDualWeightBankV1, PortableEligibilityBanksV1,
-    PortableNeuronHomeostasisV1, PortableReplayJournalV1, TopologySidecarSaveSummary,
-    GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON, GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION,
+    PortableNeuronHomeostasisV1, PortableReplayJournalV1, RetainedLearningRecoverySaveState,
+    ThrottleReplaySaveState, TopologySidecarSaveSummary,
+    GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION, GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON,
+    GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION, GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
     GPU_BRAIN_WEIGHT_LAYER_FAST, GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
+    RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
 };
 use alife_world::TrackedObjectRegistry;
 
@@ -25,6 +29,29 @@ fn asset(label: &str) -> GpuBrainAssetRef {
         asset_id: label.to_string(),
         digest: PortableAssetDigest::for_bytes(label.as_bytes()),
     }
+}
+
+fn backend_provenance() -> GpuBackendProvenanceSave {
+    let mut provenance = GpuBackendProvenanceSave {
+        schema_version: GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION,
+        backend_api_raw: NeuralGpuBackendApi::Vulkan.raw(),
+        vendor_id: 0x1002,
+        device_id: 0x744c,
+        backend_version_major: 0,
+        backend_version_minor: 1,
+        backend_version_patch: 0,
+        adapter_name_len: 0,
+        adapter_name_utf8: [0; 128],
+        driver_digest: [1, 2, 3, 4],
+        required_features_digest: [5, 6, 7, 8],
+        required_limits_digest: [9, 10, 11, 12],
+        available_features_digest: [13, 14, 15, 16],
+        adapter_limits_digest: [17, 18, 19, 20],
+    };
+    provenance
+        .set_adapter_name("fixture-vulkan-adapter")
+        .unwrap();
+    provenance
 }
 
 fn request() -> GpuConsolidationRequest {
@@ -121,7 +148,7 @@ fn save_for_sleep(sleep: SleepState) -> GpuBrainSaveState {
             | ConsolidationState::Completed { .. }
     );
     GpuBrainSaveState {
-        schema_version: 2,
+        schema_version: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
         organism_id,
         phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
         capacity_class_id: BrainCapacityClass::n512().id(),
@@ -164,7 +191,29 @@ fn save_for_sleep(sleep: SleepState) -> GpuBrainSaveState {
             eligibility_staging: completed.then(|| asset("staged-eligibility")),
             replay_journal_staging: completed.then(|| asset("staged-replay")),
         },
+        backend_provenance: backend_provenance(),
+        runtime_profile_id: 1,
+        runtime_profile_digest: [31, 32, 33, 34],
+        activity_policy_version: BrainActivityPolicyV1::production_v1().policy_version,
+        activity_policy_digest: BrainActivityPolicyV1::production_v1().policy_digest,
+        throttle_replay: ThrottleReplaySaveState::bootstrap(asset("throttle-sequence")).unwrap(),
     }
+}
+
+fn pending_eligibility() -> PendingEligibilityCheckpoint {
+    PendingEligibilityCheckpoint::try_new(
+        11,
+        Tick::new(39),
+        PerceptionFrameDigest([41, 42, 43, 44]),
+        1,
+        2,
+        ActionId(7),
+        CandidateActionFamily::Approach,
+        CandidateFeatureDigest([45, 46]),
+        6,
+        7,
+    )
+    .unwrap()
 }
 
 #[test]
@@ -205,6 +254,56 @@ fn every_sleep_phase_roundtrips_without_duplicate_consolidation() {
             sleep.last_consolidated_cycle_id
         );
         assert_eq!(loaded.sleep.consolidation, sleep.consolidation);
+    }
+}
+
+#[test]
+fn retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar_replay() {
+    let base = save_for_sleep(sleep_state(
+        SleepPhase::ForcedRecoverySleep,
+        ConsolidationState::None,
+    ));
+
+    let encoded = serde_json::to_vec(&base).unwrap();
+    let decoded: GpuBrainSaveState = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(decoded.memory.retained_learning, None);
+    assert_eq!(decoded.memory, base.memory);
+    assert_eq!(decoded.topology, base.topology);
+
+    for attempts in 1..=3 {
+        let mut save = base.clone();
+        let pending = pending_eligibility();
+        save.pending_eligibility = Some(pending);
+        save.memory.retained_learning = Some(RetainedLearningRecoverySaveState {
+            schema_version: RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION,
+            organism_id_raw: save.organism_id.raw(),
+            pending,
+            sealed_patch_asset: asset("retained-learning-sealed-patch"),
+            attempts,
+            last_error_code: "neural-backend-unavailable".to_owned(),
+        });
+        save.validate().unwrap();
+
+        let decoded: GpuBrainSaveState =
+            serde_json::from_slice(&serde_json::to_vec(&save).unwrap()).unwrap();
+        decoded.validate().unwrap();
+        assert_eq!(decoded.pending_eligibility, Some(pending));
+        assert_eq!(decoded.memory, save.memory);
+        assert_eq!(decoded.topology, save.topology);
+        assert_eq!(
+            decoded.memory.retained_learning.as_ref().unwrap().attempts,
+            attempts
+        );
+        assert_eq!(
+            decoded
+                .memory
+                .retained_learning
+                .as_ref()
+                .unwrap()
+                .sealed_patch_asset,
+            asset("retained-learning-sealed-patch")
+        );
+        assert_eq!(decoded.sleep.phase, SleepPhase::ForcedRecoverySleep);
     }
 }
 
@@ -318,6 +417,7 @@ fn gpu_checkpoint_requires_exact_enclosing_manifest_references() {
         &save.neuron_homeostasis,
         &save.memory.compaction.active_bank_asset,
         &save.topology.summary_asset,
+        &save.throttle_replay.sequence_asset,
     ];
     let mut manifest = AssetManifest::empty();
     manifest.entries = refs

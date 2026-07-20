@@ -11,12 +11,12 @@ use std::sync::Arc;
 
 use alife_core::{
     BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, BrainDispatchIdentity, BrainPhenotype,
-    BrainWorkReceipt, CanonicalDigestBuilder, Confidence, ExperiencePatch, FinalizedMemoryRecall,
-    GpuPressureSample, GpuPressureSampleInput, LearningCommitToken, LearningSequenceGuard,
-    NeuralActionSelection, NeuralThrottleDecision, OrganismId, OutcomeCreditPacket,
-    PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest, PhenotypeHash,
-    ScaffoldContractError, SensorProfile, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX,
-    BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
+    BrainWorkCounters, BrainWorkReceipt, CanonicalDigestBuilder, Confidence, ExperiencePatch,
+    FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput, LearningCommitToken,
+    LearningSequenceGuard, NeuralActionSelection, NeuralThrottleDecision, NeuralThrottleLevel,
+    OrganismId, OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
+    PhenotypeHash, ScaffoldContractError, SensorProfile, BRAIN_ATP_BASAL_DEBIT_Q16,
+    BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
 
@@ -180,6 +180,60 @@ pub struct GpuHardwareReceipt {
     pub limits_digest: [u64; 4],
     pub gpu_layout_version: u16,
     pub backend_version: String,
+}
+
+/// Ephemeral capture of Task 3 activity state. Runtime handle fields are
+/// validated before the app canonicalizes this into portable world records.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuActivityRuntimeSnapshot {
+    pub next_sequence_cursor: u64,
+    pub brain_atp_q16: u32,
+    pub last_world_atp_tick: Option<u64>,
+    pub next_completed_gpu_time_ns: u64,
+    pub pressure: Option<GpuPressureSample>,
+    pub throttle: Option<NeuralThrottleDecision>,
+    pub work: Option<BrainWorkReceipt>,
+}
+
+/// Portable activity record accepted only as data for rebinding to a newly
+/// allocated handle. It carries no backend instance, slot, or generation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuPortableActivityRestoreRecord {
+    pub policy_version: u16,
+    pub organism_id_raw: u64,
+    pub tick: u64,
+    pub class_id_raw: u16,
+    pub sequence_cursor: u64,
+    pub dispatch_generation: u64,
+    pub frame_digest: [u64; 4],
+    pub source_dispatch_generation: u64,
+    pub source_frame_digest: [u64; 4],
+    pub completed_gpu_time_ns: u64,
+    pub queue_depth: u32,
+    pub logical_heap_pressure_q16: u32,
+    pub brain_atp_fraction_q16: u32,
+    pub level: NeuralThrottleLevel,
+    pub microsteps: u8,
+    pub enabled_route_ids: Vec<u16>,
+    pub route_schedule_digest: [u64; 4],
+    pub work: BrainWorkCounters,
+    pub neural_cost_q24: u64,
+    pub atp_before_q16: u32,
+    pub atp_debit_q16: u32,
+    pub atp_after_q16: u32,
+    pub policy_digest: [u64; 4],
+}
+
+/// Portable activity continuation rebound only after a new opaque handle exists.
+/// Runtime slots and generations are deliberately absent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuActivityRestoreInput {
+    pub next_sequence_cursor: u64,
+    pub checkpoint_tick: u64,
+    pub next_completed_gpu_time_ns: u64,
+    pub brain_atp_q16: u32,
+    pub last_world_atp_tick: Option<u64>,
+    pub record: Option<GpuPortableActivityRestoreRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -930,6 +984,10 @@ impl GpuClosedLoopBackend {
         &self.runtime_budget
     }
 
+    pub const fn activity_policy(&self) -> &BrainActivityPolicyV1 {
+        &self.activity_policy
+    }
+
     pub const fn admission_receipt(&self) -> &GpuAdmissionReceipt {
         &self.admission
     }
@@ -959,6 +1017,198 @@ impl GpuClosedLoopBackend {
             .filter(|resident| resident.ownership.organism_id == handle.organism_id)
             .map(|resident| resident.brain_atp_q16)
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    pub fn snapshot_activity_state(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<GpuActivityRuntimeSnapshot, ScaffoldContractError> {
+        self.validate_handle_backend(handle)?;
+        let resident = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .and_then(|bucket| bucket.slots.get(handle.slot as usize))
+            .and_then(Option::as_ref)
+            .filter(|resident| resident.ownership.organism_id == handle.organism_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let all_absent = resident.last_pressure.is_none()
+            && resident.last_throttle.is_none()
+            && resident.last_work.is_none();
+        let all_present = resident.last_pressure.is_some()
+            && resident.last_throttle.is_some()
+            && resident.last_work.is_some();
+        if !(all_absent || all_present)
+            || resident.activity_sequence_cursor == 0
+            || resident.brain_atp_q16 > BRAIN_ATP_Q16_MAX
+        {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+        }
+        if let (Some(pressure), Some(throttle), Some(work)) = (
+            resident.last_pressure,
+            resident.last_throttle.as_ref(),
+            resident.last_work.as_ref(),
+        ) {
+            pressure.validate_for(&self.activity_policy)?;
+            let capacity = BrainCapacityClass::production_for_id(handle.class_id)?;
+            throttle.validate_for(&resident.phenotype, capacity.execution())?;
+            work.validate_for(&self.activity_policy, throttle)?;
+            if pressure.handle_slot != handle.slot
+                || pressure.handle_generation != handle.generation
+            {
+                return Err(ScaffoldContractError::BrainOwnershipMismatch);
+            }
+            throttle.validate_runtime_binding(handle.slot, handle.generation)?;
+            work.validate_runtime_binding(handle.slot, handle.generation)?;
+            if resident.activity_sequence_cursor
+                != pressure.sequence_cursor.checked_add(1).unwrap_or(0)
+                || resident.last_activity_dispatch_generation != pressure.dispatch_generation
+                || resident.last_activity_frame_digest != pressure.frame_digest
+            {
+                return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+            }
+        } else if resident.activity_sequence_cursor != 1
+            || resident.last_activity_dispatch_generation != 0
+            || resident.last_activity_frame_digest != [0; 4]
+            || resident.last_completed_gpu_time_ns != 0
+        {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+        }
+        Ok(GpuActivityRuntimeSnapshot {
+            next_sequence_cursor: resident.activity_sequence_cursor,
+            brain_atp_q16: resident.brain_atp_q16,
+            last_world_atp_tick: resident.last_world_atp_tick,
+            next_completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
+            pressure: resident.last_pressure,
+            throttle: resident.last_throttle.clone(),
+            work: resident.last_work.clone(),
+        })
+    }
+
+    pub fn restore_activity_state(
+        &mut self,
+        handle: GpuBrainHandle,
+        input: GpuActivityRestoreInput,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        if input.brain_atp_q16 > BRAIN_ATP_Q16_MAX
+            || input
+                .last_world_atp_tick
+                .is_some_and(|tick| tick > input.checkpoint_tick)
+        {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+        }
+        let phenotype = self
+            .class_buckets
+            .get(&handle.class_id.raw())
+            .and_then(|bucket| bucket.slots.get(handle.slot as usize))
+            .and_then(Option::as_ref)
+            .filter(|resident| resident.ownership.organism_id == handle.organism_id)
+            .map(|resident| resident.phenotype.clone())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+
+        let rebound = match input.record {
+            Some(record) => {
+                if record.policy_version != self.activity_policy.policy_version
+                    || record.policy_digest != self.activity_policy.policy_digest
+                    || record.organism_id_raw != handle.organism_id.raw()
+                    || record.class_id_raw != handle.class_id.raw()
+                    || record.tick > input.checkpoint_tick
+                    || input.next_sequence_cursor
+                        != record.sequence_cursor.checked_add(1).unwrap_or(0)
+                    || record.brain_atp_fraction_q16 > BRAIN_ATP_Q16_MAX
+                {
+                    return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+                }
+                let identity = BrainDispatchIdentity {
+                    organism_id_raw: record.organism_id_raw,
+                    tick: record.tick,
+                    class_id_raw: record.class_id_raw,
+                    handle_slot: handle.slot,
+                    handle_generation: handle.generation,
+                    sequence_cursor: record.sequence_cursor,
+                    dispatch_generation: record.dispatch_generation,
+                    frame_digest: record.frame_digest,
+                };
+                let pressure = GpuPressureSample::try_new(
+                    &self.activity_policy,
+                    GpuPressureSampleInput {
+                        identity,
+                        source_dispatch_generation: record.source_dispatch_generation,
+                        source_frame_digest: record.source_frame_digest,
+                        completed_gpu_time_ns: record.completed_gpu_time_ns,
+                        queue_depth: record.queue_depth,
+                        logical_heap_used: u64::from(record.logical_heap_pressure_q16),
+                        logical_heap_capacity: u64::from(BRAIN_ATP_Q16_MAX),
+                        brain_atp_remaining_q16: record.brain_atp_fraction_q16,
+                        brain_atp_capacity_q16: BRAIN_ATP_Q16_MAX,
+                    },
+                )?;
+                let capacity = BrainCapacityClass::production_for_id(handle.class_id)?;
+                let throttle = NeuralThrottleDecision::derive(
+                    &self.activity_policy,
+                    &phenotype,
+                    capacity.execution(),
+                    identity,
+                    pressure,
+                )?;
+                if throttle.level != record.level
+                    || throttle.microsteps != record.microsteps
+                    || throttle.enabled_route_ids != record.enabled_route_ids
+                    || throttle.route_schedule_digest != record.route_schedule_digest
+                {
+                    return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+                }
+                let work = BrainWorkReceipt::try_new(
+                    &self.activity_policy,
+                    &throttle,
+                    record.work,
+                    record.atp_before_q16,
+                )?;
+                if work.neural_cost_q24 != record.neural_cost_q24
+                    || work.atp_debit_q16 != record.atp_debit_q16
+                    || work.atp_after_q16 != record.atp_after_q16
+                {
+                    return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+                }
+                Some((pressure, throttle, work))
+            }
+            None if input.next_sequence_cursor == 1 && input.next_completed_gpu_time_ns == 0 => {
+                None
+            }
+            None => return Err(ScaffoldContractError::BrainActivitySequenceMismatch),
+        };
+
+        let resident = self
+            .class_buckets
+            .get_mut(&handle.class_id.raw())
+            .and_then(|bucket| bucket.slots.get_mut(handle.slot as usize))
+            .and_then(Option::as_mut)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        resident.activity_sequence_cursor = input.next_sequence_cursor;
+        match rebound {
+            Some((pressure, throttle, work)) => {
+                resident.brain_atp_q16 = input.brain_atp_q16;
+                resident.last_world_atp_tick = input.last_world_atp_tick;
+                resident.last_activity_dispatch_generation = pressure.dispatch_generation;
+                resident.last_activity_frame_digest = pressure.frame_digest;
+                resident.last_completed_gpu_time_ns = input.next_completed_gpu_time_ns;
+                resident.last_pressure = Some(pressure);
+                resident.last_throttle = Some(throttle);
+                resident.last_work = Some(work);
+            }
+            None => {
+                resident.brain_atp_q16 = input.brain_atp_q16;
+                resident.last_world_atp_tick = input.last_world_atp_tick;
+                resident.last_activity_dispatch_generation = 0;
+                resident.last_activity_frame_digest = [0; 4];
+                resident.last_completed_gpu_time_ns = 0;
+                resident.last_pressure = None;
+                resident.last_throttle = None;
+                resident.last_work = None;
+            }
+        }
+        Ok(())
     }
 
     /// Charges the exact world-owned ATP term before neural dispatch.

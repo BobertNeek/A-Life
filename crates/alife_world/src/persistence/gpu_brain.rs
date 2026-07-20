@@ -4,20 +4,23 @@
 //! GPU handles, packed arena offsets, or fallback execution path.
 
 use alife_core::{
-    ActionId, BrainCapacityClass, BrainClassId, CandidateActionFamily, CandidateFeatureDigest,
-    CanonicalDigestBuilder, ConsolidationState, MemoryCompactionCheckpoint, MemoryCompactionPhase,
-    MemorySidecarState, OrganismId, OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeHash,
-    PortableTopologySidecarAssetV1, ReplayEligibilitySample, ReplaySynapseSpan,
-    ScaffoldContractError, SensorProfileIdentity, SleepReplayEvent, SleepState, Tick,
-    TopologyCounts, TopologySidecar, Validate, MAX_REPLAY_CAPTURE_SYNAPSES,
+    ActionId, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, CandidateActionFamily,
+    CandidateFeatureDigest, CanonicalDigestBuilder, ConsolidationState, MemoryCompactionCheckpoint,
+    MemoryCompactionPhase, MemorySidecarState, OrganismId, OutcomeCreditReplayKey,
+    PerceptionFrameDigest, PhenotypeHash, PortableTopologySidecarAssetV1, ReplayEligibilitySample,
+    ReplaySynapseSpan, ScaffoldContractError, SensorProfileIdentity, SleepReplayEvent, SleepState,
+    Tick, TopologyCounts, TopologySidecar, Validate, MAX_REPLAY_CAPTURE_SYNAPSES,
 };
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
 use crate::TrackedObjectRegistrySaveState;
 
-use super::{AssetManifest, PersistenceError, PortableAssetDigest};
+use super::{
+    gpu_brain_vnext::{GpuBackendProvenanceSave, ThrottleReplaySaveState},
+    AssetManifest, PersistenceError, PortableAssetDigest,
+};
 
-pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 2;
+pub const GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION: u16 = 3;
 pub const GPU_BRAIN_PORTABLE_ASSET_SCHEMA_VERSION: u16 = 1;
 pub const MEMORY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
 pub const TOPOLOGY_SIDECAR_SAVE_SCHEMA_VERSION: u16 = 1;
@@ -770,13 +773,19 @@ pub struct GpuBrainSaveState {
     pub tracked_objects: TrackedObjectRegistrySaveState,
     pub sleep: SleepState,
     pub sleep_assets: GpuSleepAssetState,
+    pub backend_provenance: GpuBackendProvenanceSave,
+    pub runtime_profile_id: u16,
+    pub runtime_profile_digest: [u64; 4],
+    pub activity_policy_version: u16,
+    pub activity_policy_digest: [u64; 4],
+    pub throttle_replay: ThrottleReplaySaveState,
 }
 
 impl GpuBrainSaveState {
     pub fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION {
             return Err(PersistenceError::SchemaVersion {
-                schema: "alife.gpu_brain_save_state.v2",
+                schema: "alife.gpu_brain_save_state.v3",
                 expected: GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
                 actual: self.schema_version,
             });
@@ -823,6 +832,31 @@ impl GpuBrainSaveState {
         }
         self.sleep_assets.validate_refs()?;
         self.sleep.validate_contract()?;
+        self.backend_provenance.validate()?;
+        self.throttle_replay.validate()?;
+
+        let activity_policy = BrainActivityPolicyV1::production_v1();
+        let throttle_binding_matches =
+            self.throttle_replay
+                .last_checkpoint
+                .as_ref()
+                .is_none_or(|checkpoint| {
+                    checkpoint.organism_id_raw == self.organism_id.raw()
+                        && checkpoint.class_id_raw == self.capacity_class_id.raw()
+                        && checkpoint.tick <= self.checkpoint_tick.raw()
+                });
+        if self.runtime_profile_id == 0
+            || self.runtime_profile_digest == [0; 4]
+            || self.activity_policy_version != activity_policy.policy_version
+            || self.activity_policy_digest != activity_policy.policy_digest
+            || self.throttle_replay.policy_version != self.activity_policy_version
+            || self.throttle_replay.policy_digest != self.activity_policy_digest
+            || !throttle_binding_matches
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::BrainActivitySequenceMismatch,
+            ));
+        }
 
         if let Some(last) = self.last_learning_replay_key {
             last.organism_id.validate()?;
@@ -943,6 +977,7 @@ impl GpuBrainSaveState {
         refs.extend(self.sleep_assets.fast_staging.iter());
         refs.extend(self.sleep_assets.eligibility_staging.iter());
         refs.extend(self.sleep_assets.replay_journal_staging.iter());
+        refs.push(&self.throttle_replay.sequence_asset);
 
         for asset in refs {
             let mut matches = manifest
@@ -1051,6 +1086,12 @@ struct GpuBrainSaveStateWire {
     tracked_objects: TrackedObjectRegistrySaveState,
     sleep: SleepState,
     sleep_assets: GpuSleepAssetState,
+    backend_provenance: GpuBackendProvenanceSave,
+    runtime_profile_id: u16,
+    runtime_profile_digest: [u64; 4],
+    activity_policy_version: u16,
+    activity_policy_digest: [u64; 4],
+    throttle_replay: ThrottleReplaySaveState,
 }
 
 impl From<GpuBrainSaveStateWire> for GpuBrainSaveState {
@@ -1085,6 +1126,12 @@ impl From<GpuBrainSaveStateWire> for GpuBrainSaveState {
             tracked_objects: wire.tracked_objects,
             sleep: wire.sleep,
             sleep_assets: wire.sleep_assets,
+            backend_provenance: wire.backend_provenance,
+            runtime_profile_id: wire.runtime_profile_id,
+            runtime_profile_digest: wire.runtime_profile_digest,
+            activity_policy_version: wire.activity_policy_version,
+            activity_policy_digest: wire.activity_policy_digest,
+            throttle_replay: wire.throttle_replay,
         }
     }
 }

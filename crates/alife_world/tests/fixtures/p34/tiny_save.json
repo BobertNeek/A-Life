@@ -49,60 +49,60 @@
     "schema_version": 1,
     "entries": [
       {
-        "asset_id": "gpu-brain.activation.9fdfdcf0b7a8a356",
+        "asset_id": "gpu-brain.activation.157bbf04c460f9c1",
         "kind": "Other",
-        "relative_path": "gpu-brain/activation-9fdfdcf0b7a8a356.json",
-        "digest": "fnv1a64:9fdfdcf0b7a8a356",
+        "relative_path": "gpu-brain/activation-157bbf04c460f9c1.json",
+        "digest": "fnv1a64:157bbf04c460f9c1",
         "presence": "Required",
         "schema_version": 1,
-        "size_bytes": 2380,
+        "size_bytes": 2384,
         "provenance": "gpu-checkpoint:activation"
       },
       {
-        "asset_id": "gpu-brain.compiler-inputs.a3dac96f33847eec",
+        "asset_id": "gpu-brain.compiler-inputs.7c795e22679dd105",
         "kind": "Other",
-        "relative_path": "gpu-brain/compiler-inputs-a3dac96f33847eec.json",
-        "digest": "fnv1a64:a3dac96f33847eec",
+        "relative_path": "gpu-brain/compiler-inputs-7c795e22679dd105.json",
+        "digest": "fnv1a64:7c795e22679dd105",
         "presence": "Required",
         "schema_version": 1,
         "size_bytes": 5122,
         "provenance": "gpu-checkpoint:compiler-inputs"
       },
       {
-        "asset_id": "gpu-brain.eligibility.da638a36b499be5f",
+        "asset_id": "gpu-brain.eligibility.83ffe26ac44b4df0",
         "kind": "Other",
-        "relative_path": "gpu-brain/eligibility-da638a36b499be5f.json",
-        "digest": "fnv1a64:da638a36b499be5f",
+        "relative_path": "gpu-brain/eligibility-83ffe26ac44b4df0.json",
+        "digest": "fnv1a64:83ffe26ac44b4df0",
         "presence": "Required",
         "schema_version": 1,
-        "size_bytes": 7623,
+        "size_bytes": 7625,
         "provenance": "gpu-checkpoint:eligibility"
       },
       {
-        "asset_id": "gpu-brain.fast.8036085ade3d6d77",
+        "asset_id": "gpu-brain.fast.65179fa5ee9b5fb7",
         "kind": "Other",
-        "relative_path": "gpu-brain/fast-8036085ade3d6d77.json",
-        "digest": "fnv1a64:8036085ade3d6d77",
+        "relative_path": "gpu-brain/fast-65179fa5ee9b5fb7.json",
+        "digest": "fnv1a64:65179fa5ee9b5fb7",
         "presence": "Required",
         "schema_version": 1,
         "size_bytes": 7525,
         "provenance": "gpu-checkpoint:fast"
       },
       {
-        "asset_id": "gpu-brain.homeostasis.1a76463f0234c31d",
+        "asset_id": "gpu-brain.homeostasis.9e64d13deb24f2fe",
         "kind": "Other",
-        "relative_path": "gpu-brain/homeostasis-1a76463f0234c31d.json",
-        "digest": "fnv1a64:1a76463f0234c31d",
+        "relative_path": "gpu-brain/homeostasis-9e64d13deb24f2fe.json",
+        "digest": "fnv1a64:9e64d13deb24f2fe",
         "presence": "Required",
         "schema_version": 1,
-        "size_bytes": 2323,
+        "size_bytes": 2326,
         "provenance": "gpu-checkpoint:homeostasis"
       },
       {
-        "asset_id": "gpu-brain.lifetime.cd9d4fc55331403a",
+        "asset_id": "gpu-brain.lifetime.707c92ec1ba470f6",
         "kind": "Other",
-        "relative_path": "gpu-brain/lifetime-cd9d4fc55331403a.json",
-        "digest": "fnv1a64:cd9d4fc55331403a",
+        "relative_path": "gpu-brain/lifetime-707c92ec1ba470f6.json",
+        "digest": "fnv1a64:707c92ec1ba470f6",
         "presence": "Required",
         "schema_version": 1,
         "size_bytes": 7525,
@@ -119,24 +119,34 @@
         "provenance": "gpu-checkpoint:memory-active"
       },
       {
-        "asset_id": "gpu-brain.phenotype.2efadea012c18455",
+        "asset_id": "gpu-brain.phenotype.e49348c687247171",
         "kind": "Other",
-        "relative_path": "gpu-brain/phenotype-2efadea012c18455.json",
-        "digest": "fnv1a64:2efadea012c18455",
+        "relative_path": "gpu-brain/phenotype-e49348c687247171.json",
+        "digest": "fnv1a64:e49348c687247171",
         "presence": "Required",
         "schema_version": 1,
-        "size_bytes": 1555419,
+        "size_bytes": 1555421,
         "provenance": "gpu-checkpoint:phenotype"
       },
       {
-        "asset_id": "gpu-brain.replay-journal.3d2418dc2ff949fb",
+        "asset_id": "gpu-brain.replay-journal.998c740acff8209f",
         "kind": "Other",
-        "relative_path": "gpu-brain/replay-journal-3d2418dc2ff949fb.json",
-        "digest": "fnv1a64:3d2418dc2ff949fb",
+        "relative_path": "gpu-brain/replay-journal-998c740acff8209f.json",
+        "digest": "fnv1a64:998c740acff8209f",
         "presence": "Required",
         "schema_version": 1,
-        "size_bytes": 5129,
+        "size_bytes": 5130,
         "provenance": "gpu-checkpoint:replay-journal"
+      },
+      {
+        "asset_id": "gpu-brain.throttle-sequence.09612b07b5ecb5a5",
+        "kind": "Other",
+        "relative_path": "gpu-brain/throttle-sequence-09612b07b5ecb5a5.json",
+        "digest": "fnv1a64:09612b07b5ecb5a5",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 2,
+        "provenance": "gpu-checkpoint:throttle-sequence"
       },
       {
         "asset_id": "gpu-brain.topology-sidecar.290f2edd83f82ec2",
@@ -408,13 +418,13 @@
         "last_consolidated_tick": 2
       },
       "gpu_brain": {
-        "schema_version": 2,
+        "schema_version": 3,
         "organism_id": 1,
         "phenotype_hash": [
-          6965130949599744884,
-          4507449895082939656,
-          7135725061290134345,
-          13514156647399854557
+          5885994325298887104,
+          10688656878142778782,
+          14176634034225469271,
+          12750732584766968665
         ],
         "capacity_class_id": 1,
         "sensor_profile": {
@@ -423,43 +433,43 @@
           "sensory_abi_version": 1
         },
         "immutable_phenotype": {
-          "asset_id": "gpu-brain.phenotype.2efadea012c18455",
-          "digest": "fnv1a64:2efadea012c18455"
+          "asset_id": "gpu-brain.phenotype.e49348c687247171",
+          "digest": "fnv1a64:e49348c687247171"
         },
         "phenotype_compiler_inputs": {
-          "asset_id": "gpu-brain.compiler-inputs.a3dac96f33847eec",
-          "digest": "fnv1a64:a3dac96f33847eec"
+          "asset_id": "gpu-brain.compiler-inputs.7c795e22679dd105",
+          "digest": "fnv1a64:7c795e22679dd105"
         },
         "active_weight_generation": 1,
         "active_weight_bank": 0,
         "active_eligibility_bank": 0,
         "learning_transaction_generation": 1,
         "lifetime_weights": {
-          "asset_id": "gpu-brain.lifetime.cd9d4fc55331403a",
-          "digest": "fnv1a64:cd9d4fc55331403a"
+          "asset_id": "gpu-brain.lifetime.707c92ec1ba470f6",
+          "digest": "fnv1a64:707c92ec1ba470f6"
         },
         "fast_weights": {
-          "asset_id": "gpu-brain.fast.8036085ade3d6d77",
-          "digest": "fnv1a64:8036085ade3d6d77"
+          "asset_id": "gpu-brain.fast.65179fa5ee9b5fb7",
+          "digest": "fnv1a64:65179fa5ee9b5fb7"
         },
         "eligibility": {
-          "asset_id": "gpu-brain.eligibility.da638a36b499be5f",
-          "digest": "fnv1a64:da638a36b499be5f"
+          "asset_id": "gpu-brain.eligibility.83ffe26ac44b4df0",
+          "digest": "fnv1a64:83ffe26ac44b4df0"
         },
         "replay_journal": {
-          "asset_id": "gpu-brain.replay-journal.3d2418dc2ff949fb",
-          "digest": "fnv1a64:3d2418dc2ff949fb"
+          "asset_id": "gpu-brain.replay-journal.998c740acff8209f",
+          "digest": "fnv1a64:998c740acff8209f"
         },
         "replay_journal_generation": 1,
         "replay_journal_cursor": 0,
         "replay_journal_event_count": 0,
         "activation_state": {
-          "asset_id": "gpu-brain.activation.9fdfdcf0b7a8a356",
-          "digest": "fnv1a64:9fdfdcf0b7a8a356"
+          "asset_id": "gpu-brain.activation.157bbf04c460f9c1",
+          "digest": "fnv1a64:157bbf04c460f9c1"
         },
         "neuron_homeostasis": {
-          "asset_id": "gpu-brain.homeostasis.1a76463f0234c31d",
-          "digest": "fnv1a64:1a76463f0234c31d"
+          "asset_id": "gpu-brain.homeostasis.9e64d13deb24f2fe",
+          "digest": "fnv1a64:9e64d13deb24f2fe"
         },
         "checkpoint_tick": 2,
         "last_learning_replay_key": null,
@@ -575,6 +585,216 @@
           "fast_staging": null,
           "eligibility_staging": null,
           "replay_journal_staging": null
+        },
+        "backend_provenance": {
+          "schema_version": 1,
+          "backend_api_raw": 1,
+          "vendor_id": 4318,
+          "device_id": 9602,
+          "backend_version_major": 0,
+          "backend_version_minor": 1,
+          "backend_version_patch": 0,
+          "adapter_name_len": 23,
+          "adapter_name_utf8": [
+            78,
+            86,
+            73,
+            68,
+            73,
+            65,
+            32,
+            71,
+            101,
+            70,
+            111,
+            114,
+            99,
+            101,
+            32,
+            82,
+            84,
+            88,
+            32,
+            51,
+            48,
+            53,
+            48,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "driver_digest": [
+            14844111704067318861,
+            8333722380115877448,
+            14756969768802843840,
+            7551816136776032961
+          ],
+          "required_features_digest": [
+            405644668063157395,
+            961920981460498693,
+            15744928097394005554,
+            15887086596962944949
+          ],
+          "required_limits_digest": [
+            6866174084733670611,
+            10132618378107007067,
+            4762033249717566976,
+            7360921398546223356
+          ],
+          "available_features_digest": [
+            15706236095473546371,
+            6171321751519962572,
+            17906582510792600341,
+            5339043351149818590
+          ],
+          "adapter_limits_digest": [
+            5297400046688054671,
+            12404121985311822637,
+            7912872789263421403,
+            12838099270266840762
+          ]
+        },
+        "runtime_profile_id": 1,
+        "runtime_profile_digest": [
+          3464483859963259416,
+          9361622155691977912,
+          3553770735145477222,
+          12260153775447532463
+        ],
+        "activity_policy_version": 1,
+        "activity_policy_digest": [
+          3993468006703066050,
+          11335034347131096680,
+          3765222072571844223,
+          6945886014649662854
+        ],
+        "throttle_replay": {
+          "schema_version": 1,
+          "policy_version": 1,
+          "next_sequence_cursor": 1,
+          "last_committed_sequence_cursor": null,
+          "policy_digest": [
+            3993468006703066050,
+            11335034347131096680,
+            3765222072571844223,
+            6945886014649662854
+          ],
+          "sequence_digest": [
+            13390075146665217346,
+            2307552390939080356,
+            7512935733225913734,
+            3207167935825708769
+          ],
+          "sequence_asset": {
+            "asset_id": "gpu-brain.throttle-sequence.09612b07b5ecb5a5",
+            "digest": "fnv1a64:09612b07b5ecb5a5"
+          },
+          "last_checkpoint": null,
+          "next_completed_gpu_time_ns": 0,
+          "brain_atp_q16": 65535,
+          "last_world_atp_tick": null
         }
       }
     }

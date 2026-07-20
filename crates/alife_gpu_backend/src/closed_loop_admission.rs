@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 const ADMISSION_SCHEMA_VERSION: u16 = 1;
 const PROFILE_DIGEST_DOMAIN: &[u8] = b"alife.gpu.runtime-profile.v1";
 const ALLOCATION_EVENT_DIGEST_DOMAIN: &[u8] = b"alife.gpu.allocation-event.v1";
+const REQUIRED_FEATURES_DIGEST_DOMAIN: &[u8] = b"alife.gpu.required-features.v1";
+const REQUIRED_LIMITS_DIGEST_DOMAIN: &[u8] = b"alife.gpu.required-limits.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuRuntimeProfile {
@@ -268,6 +270,45 @@ impl GpuRuntimeBudget {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
         Ok(())
+    }
+
+    pub fn required_features_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        if self.required_feature_mask_words != 1 || self.required_feature_mask == 0 {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        let mut digest = CanonicalDigestBuilder::new(REQUIRED_FEATURES_DIGEST_DOMAIN);
+        digest.write_u8(self.required_feature_mask_words);
+        digest.write_u64(self.required_feature_mask);
+        Ok(digest.finish256())
+    }
+
+    pub fn required_limits_digest_for(
+        &self,
+        execution: &BrainExecutionBudget,
+    ) -> Result<[u64; 4], ScaffoldContractError> {
+        self.validate_for(execution)?;
+        let mut digest = CanonicalDigestBuilder::new(REQUIRED_LIMITS_DIGEST_DOMAIN);
+        digest.write_u16(execution.required_limits_schema_version());
+        digest.write_u16(execution.gpu_layout_version());
+        digest.write_u32(execution.storage_offset_alignment_bytes());
+        digest.write_u32(execution.uniform_offset_alignment_bytes());
+        digest.write_u32(execution.copy_buffer_alignment_bytes());
+        digest.write_u32(execution.copy_bytes_per_row_alignment());
+        digest.write_u64(execution.required_max_buffer_size());
+        digest.write_u64(execution.required_max_storage_buffer_binding_size());
+        digest.write_u32(execution.required_max_bind_groups());
+        digest.write_u32(execution.required_max_bindings_per_bind_group());
+        digest.write_u32(execution.required_max_storage_buffers_per_shader_stage());
+        digest.write_u32(execution.required_max_uniform_buffers_per_shader_stage());
+        digest.write_u32(execution.required_max_dynamic_storage_buffers_per_pipeline_layout());
+        digest.write_u32(execution.required_max_dynamic_uniform_buffers_per_pipeline_layout());
+        digest.write_u32(execution.required_max_compute_workgroup_storage_size());
+        digest.write_u32(execution.required_max_compute_workgroup_size_x());
+        digest.write_u32(execution.required_max_compute_workgroup_size_y());
+        digest.write_u32(execution.required_max_compute_workgroup_size_z());
+        digest.write_u32(execution.required_max_compute_invocations_per_workgroup());
+        digest.write_u32(execution.required_max_compute_workgroups_per_dimension());
+        Ok(digest.finish256())
     }
 }
 

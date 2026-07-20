@@ -34,6 +34,8 @@ use crate::{
 
 mod gpu_brain;
 pub use gpu_brain::*;
+mod gpu_brain_vnext;
+pub use gpu_brain_vnext::*;
 
 pub const P34_SAVE_FILE_SCHEMA: &str = "alife.p34.save_file.v1";
 pub const P34_SAVE_FILE_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.save.0;
