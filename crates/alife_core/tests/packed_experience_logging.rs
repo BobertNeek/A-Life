@@ -1,5 +1,5 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
     ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
     CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, ConceptCellId,
     Confidence, ContextFeatureFlags, DevelopmentState, DurationTicks, ExperiencePacker,
@@ -245,7 +245,7 @@ fn decision_at(tick: Tick, organism_id: OrganismId, rich: bool) -> alife_core::D
         proposal(300, ActionKind::Move, 0.35, Some(WorldEntityId(1))),
         top,
     ];
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         organism_id,
         &proposals,
         ActionArbitrationConfig {

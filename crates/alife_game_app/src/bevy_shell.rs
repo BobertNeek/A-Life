@@ -5450,8 +5450,10 @@ fn spawn_graphical_playground_scene(
     ));
 
     app.world_mut().spawn((
-        Name::new("A-Life CA05 CPU-shadow boundary footer"),
-        Text::new("Boundary: CPU shadow gate | Claim: pending | no bulk readback=true"),
+        Name::new("A-Life CA05 GPU-authority footer"),
+        Text::new(
+            "GPU neural: authoritative | failure policy: stop learned actions | no bulk readback=true",
+        ),
         TextFont {
             font_size: 12.0,
             ..default()
@@ -10712,11 +10714,11 @@ pub fn graphical_inspector_overlay_text(
             "Pose: {}\n",
             "Patch: {}\n",
             "Learning: {}\n",
-            "GPU: {}  fallback={}\n",
-            "Gate: CPU shadow\n",
+            "GPU: {}  unavailable={}\n",
+            "Authority: GPU neural execution only\n",
             "Tech: {}\n",
             "Read-only stable IDs\n",
-            "Claim: full_auth=false"
+            "Failure policy: stop learned actions"
         ),
         selection.stable_id.raw(),
         sleep,
@@ -10789,8 +10791,8 @@ pub fn graphical_full_debug_status_overlay_text(
             "Action: {}  Target: {}\n",
             "Pose: {} ({})\n",
             "Patch: sealed={} count={}\n",
-            "Learning: H_shadow apps={} delta={:.4}\n",
-            "Gate: CPU shadow; full_auth=false\n",
+            "Learning: H_fast apps={} delta={:.4}\n",
+            "Authority: GPU neural execution only\n",
             "Controls: Space run/pause | N step | R reset | Esc quit"
         ),
         status,
@@ -10950,7 +10952,7 @@ fn ca07_learning_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
 }
 
 fn ca07_compact_technical_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
-    format!("{} gate=CPU shadow", gpu.selected_backend)
+    format!("{} authority=GPU neural", gpu.selected_backend)
 }
 
 pub fn readability_legend_overlay_text() -> String {

@@ -1,5 +1,5 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
     ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
     CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
     DecisionSnapshot, DevelopmentState, DriveDelta, DurationTicks, EndocrineDelta, ExperiencePatch,
@@ -195,7 +195,7 @@ fn sealed_heuristic_patch() -> ExperiencePatch {
     .unwrap()
     .with_intensity(Intensity::new(1.0).unwrap());
     let proposals = vec![proposal];
-    let action_decision = cpu_reference_arbitrate(
+    let action_decision = heuristic_baseline_arbitrate(
         ORGANISM,
         &proposals,
         ActionArbitrationConfig {

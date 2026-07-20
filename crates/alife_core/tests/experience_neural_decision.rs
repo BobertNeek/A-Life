@@ -1,6 +1,6 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand, ActionId,
-    ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassId, BrainClassSpec,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand,
+    ActionId, ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassId, BrainClassSpec,
     BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateFeatureVector,
     CandidateObservationRef, Confidence, DecisionSnapshot, DevelopmentState, DurationTicks,
     EvidenceKind, ExperiencePacker, ExperiencePatch, ExperiencePatchBuilder, ExperiencePatchPhase,
@@ -651,7 +651,7 @@ fn legacy_patch_v1() -> LegacyExperiencePatchV1 {
     )
     .unwrap();
     let proposals = vec![proposal];
-    let action_decision = cpu_reference_arbitrate(
+    let action_decision = heuristic_baseline_arbitrate(
         organism(),
         &proposals,
         ActionArbitrationConfig {
@@ -743,7 +743,7 @@ fn install_legacy_decision(
     proposals: Vec<ActionProposal>,
     config: ActionArbitrationConfig,
 ) -> alife_core::ActionDecision {
-    let action_decision = cpu_reference_arbitrate(organism(), &proposals, config).unwrap();
+    let action_decision = heuristic_baseline_arbitrate(organism(), &proposals, config).unwrap();
     legacy.decision.proposals = proposals;
     legacy.decision.selected_action = action_decision.selected;
     legacy.decision.rejected_top_proposal = action_decision.rejected_top_proposal;

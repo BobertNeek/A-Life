@@ -82,6 +82,7 @@ impl GpuLiveRuntimeConstructionOptions {
         }
     }
 
+    #[cfg(feature = "gpu-tests")]
     const fn soak() -> Self {
         Self {
             homeostatic_parameters: HomeostaticParameters::reference(),
@@ -537,6 +538,7 @@ impl GpuLiveBrainRuntime {
         )
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn new_soak_profiled(
         backend: GpuClosedLoopBackend,
         world: HeadlessWorld,
@@ -798,6 +800,7 @@ impl GpuLiveBrainRuntime {
         Ok(runtime)
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn restore_soak_with_checkpoints(
         backend: GpuClosedLoopBackend,
         world: HeadlessWorld,

@@ -1,7 +1,7 @@
 //! Strict portable GPU provenance, throttle replay, and inspection-only records.
 //!
 //! These records intentionally contain no live GPU handles, packed offsets,
-//! wgpu objects, execution availability cache, or neural fallback state.
+//! wgpu objects, execution availability cache, or hidden policy-substitution state.
 
 use alife_core::{
     BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, BrainWorkCounters,

@@ -47,7 +47,7 @@ pub struct GpuDiagnosticWorkloadTiming {
     pub fixture_dimensions: String,
     pub warmup_iterations: u32,
     pub measured_iterations: u32,
-    pub cpu_reference_mean_ms: Option<f32>,
+    pub host_fixture_mean_ms: Option<f32>,
     pub gpu_submit_poll_mean_ms: Option<f32>,
     pub readback_mean_ms: Option<f32>,
     pub gpu_total_mean_ms: Option<f32>,
@@ -69,7 +69,7 @@ impl GpuDiagnosticWorkloadTiming {
             return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
         }
         for value in [
-            self.cpu_reference_mean_ms,
+            self.host_fixture_mean_ms,
             self.gpu_submit_poll_mean_ms,
             self.readback_mean_ms,
             self.gpu_total_mean_ms,
@@ -149,7 +149,7 @@ impl GpuDiagnosticTimingReport {
             self.timestamp_query_supported,
             self.product_gameplay_timing_claim,
         ));
-        out.push_str("| Workload | Dimensions | Warmup | Measured | CPU mean ms | GPU submit/poll mean ms | Readback mean ms | GPU total mean ms | Parity | Timing kind | 60 FPS target | Claim | Notes |\n");
+        out.push_str("| Workload | Dimensions | Warmup | Measured | Host fixture mean ms | GPU submit/poll mean ms | Readback mean ms | GPU total mean ms | Parity | Timing kind | 60 FPS target | Claim | Notes |\n");
         out.push_str("|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---|---|\n");
         for workload in &self.workloads {
             out.push_str(&format!(
@@ -158,7 +158,7 @@ impl GpuDiagnosticTimingReport {
                 workload.fixture_dimensions,
                 workload.warmup_iterations,
                 workload.measured_iterations,
-                optional_ms(workload.cpu_reference_mean_ms),
+                optional_ms(workload.host_fixture_mean_ms),
                 optional_ms(workload.gpu_submit_poll_mean_ms),
                 optional_ms(workload.readback_mean_ms),
                 optional_ms(workload.gpu_total_mean_ms),
@@ -254,7 +254,7 @@ async fn measure_static_forward(
     let activation_q = plan.quantize_activations(&activations)?;
     let cpu_start = Instant::now();
     let cpu = plan.execute_cpu_diagnostic(&activation_q)?;
-    let cpu_reference_mean_ms = elapsed_ms(cpu_start);
+    let host_fixture_mean_ms = elapsed_ms(cpu_start);
 
     for _ in 0..warmup_iterations {
         run_static_forward_gpu_diagnostic_timed(device, queue, &plan, &activation_q).await?;
@@ -289,7 +289,7 @@ async fn measure_static_forward(
         ),
         warmup_iterations,
         measured_iterations,
-        cpu_reference_mean_ms: Some(cpu_reference_mean_ms),
+        host_fixture_mean_ms: Some(host_fixture_mean_ms),
         gpu_submit_poll_mean_ms: Some(submit_poll_mean),
         readback_mean_ms: Some(readback_mean),
         gpu_total_mean_ms: Some(submit_poll_mean + readback_mean),

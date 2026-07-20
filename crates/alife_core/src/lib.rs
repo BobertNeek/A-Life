@@ -38,7 +38,7 @@ pub mod validation;
 pub mod version;
 
 pub use action::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionArbitrationTrace,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionArbitrationTrace,
     ActionArbitrationTraceRef, ActionBiasSource, ActionCommand, ActionDecision,
     ActionDecisionStatus, ActionFallbackReason, ActionInhibitionSample, ActionKind, ActionProposal,
     ActionRegistryEntry, ActionScoreBias, ActionTarget, ActionWtaResult, InhibitionNeighborhood,

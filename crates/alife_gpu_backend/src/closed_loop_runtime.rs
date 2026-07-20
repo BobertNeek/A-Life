@@ -1897,10 +1897,11 @@ impl GpuClosedLoopBackend {
                     .collect::<Vec<_>>(),
             )
         };
+        #[cfg(feature = "gpu-tests")]
+        let mut replayed_pressure_iter = replayed_pressure.as_deref().map(<[_]>::iter);
         let activity_decisions = batch
             .iter()
-            .enumerate()
-            .map(|(_input_index, input)| {
+            .map(|input| {
                 let handle = input.handle;
                 let resident = self
                     .class_buckets
@@ -1919,9 +1920,9 @@ impl GpuClosedLoopBackend {
                     frame_digest: input.frame.frame_digest().0,
                 };
                 #[cfg(feature = "gpu-tests")]
-                let pressure = match replayed_pressure
-                    .as_ref()
-                    .and_then(|samples| samples.get(_input_index))
+                let pressure = match replayed_pressure_iter
+                    .as_mut()
+                    .and_then(|samples| samples.next())
                     .copied()
                 {
                     Some(sample) => {

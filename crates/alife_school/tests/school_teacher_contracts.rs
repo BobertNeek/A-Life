@@ -1,6 +1,6 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand, ActionId,
-    ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand,
+    ActionId, ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome,
     BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
     Confidence, DecisionSnapshot, DevelopmentState, DurationTicks, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity,
@@ -407,7 +407,7 @@ fn lesson_response_metadata_can_annotate_action_candidates_without_bypassing_arb
     let teacher_tagged_low =
         proposal(700, ActionKind::Vocalize, 0.30, None).with_teacher_lesson(Some(metadata));
     let ordinary_high = proposal(701, ActionKind::Inspect, 0.90, None);
-    let first = cpu_reference_arbitrate(
+    let first = heuristic_baseline_arbitrate(
         organism(),
         &[teacher_tagged_low, ordinary_high],
         ActionArbitrationConfig::default(),
@@ -419,7 +419,7 @@ fn lesson_response_metadata_can_annotate_action_candidates_without_bypassing_arb
     let teacher_tagged_high =
         proposal(702, ActionKind::Vocalize, 0.95, None).with_teacher_lesson(Some(metadata));
     let ordinary_low = proposal(703, ActionKind::Inspect, 0.40, None);
-    let second = cpu_reference_arbitrate(
+    let second = heuristic_baseline_arbitrate(
         organism(),
         &[teacher_tagged_high, ordinary_low],
         ActionArbitrationConfig::default(),

@@ -8,15 +8,15 @@ mod prelude {
     pub(crate) use std::path::{Path, PathBuf};
 
     pub(crate) use alife_core::{
-        cpu_reference_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId, ActionKind,
-        ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput, BrainTickStatus,
-        ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence, ContractDiagnostic,
-        CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch, GapResolutionStatus,
-        GaussianClusterId, GenomeId, HomeostaticParameters, HomeostaticSnapshot, Intensity,
-        LineageId, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
-        PolicyBackend, ReferenceActionFailure, ScaffoldContractError, SleepPhase,
-        TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, UnresolvedGapId, Validate,
-        Vec3f, WorldEntityId,
+        heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId,
+        ActionKind, ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput,
+        BrainTickStatus, ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence,
+        ContractDiagnostic, CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch,
+        GapResolutionStatus, GaussianClusterId, GenomeId, HomeostaticParameters,
+        HomeostaticSnapshot, Intensity, LineageId, NeuralProjectionSchema, NormalizedScalar,
+        OrganismId, PhysicalContactKind, PolicyBackend, ReferenceActionFailure,
+        ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel, TeacherPerceptionChannel,
+        Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
         Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,

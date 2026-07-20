@@ -78,7 +78,7 @@ impl RuntimeControlPanel {
             packed_record_count: 0,
             player_events: vec![
                 "Press Space to run, or N to step one GPU-backed tick.".to_string(),
-                "GPU path is armed; first tick will verify CPU shadow parity.".to_string(),
+                "GPU path is armed; first tick must report an authoritative dispatch.".to_string(),
                 "Creature, food, and hazard markers are presentation-only.".to_string(),
             ],
             terminal_recovery_cause: None,
@@ -235,8 +235,8 @@ impl RuntimeControlPanel {
 
     pub fn status_overlay_text(&self) -> String {
         self.status_overlay_text_with_backend(
-            "GPU: CpuFallback degraded",
-            "Gate: CPU shadow; fallback uses CPU reference",
+            "GPU neural: unavailable",
+            "Failure policy: stop learned actions",
         )
     }
 
@@ -319,7 +319,7 @@ impl RuntimeControlPanel {
                 "Tech: {}\n",
                 "{}\n",
                 "Status: {}\n",
-                "Boundary: CPU shadow gate"
+                "Authority: GPU neural execution only"
             ),
             self.playback.label(),
             self.run_speed_ticks,

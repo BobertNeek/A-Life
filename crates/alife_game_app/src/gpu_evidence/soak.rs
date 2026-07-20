@@ -2,31 +2,44 @@
 
 use std::{
     collections::BTreeSet,
-    fs::{self, OpenOptions},
-    io::Write as _,
+    fs,
     path::{Path, PathBuf},
+};
+
+#[cfg(feature = "gpu-tests")]
+use std::{
+    fs::OpenOptions,
+    io::Write as _,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use alife_core::{
-    BrainCapacityClass, BrainClassId, BrainScaleTier, BrainWorkCounters, BrainWorkReceipt,
-    CandidateActionFamily, CanonicalDigestBuilder, DriveSnapshot, EndocrineSnapshot,
-    GlobalPhenotypeBudgetReceipt, GpuPressureSample, MemoryCompactionReceipt, MemoryRecallReceipt,
-    MemoryUpdateReceipt, NeuralThrottleDecision, NeuralThrottleLevel, OrganismId,
-    PhenotypeEvidenceManifest, PolicyBackend, RouteBudgetReceipt, SensorProfile,
-    SensorProfileIdentity, SensoryAbiVersion, SleepPhase, Tick, TopologyCounts,
-    TopologyDegradationKind, TopologyObservationReceipt, Validate, Vec3f,
+    BrainCapacityClass, BrainWorkCounters, BrainWorkReceipt, CanonicalDigestBuilder,
+    GlobalPhenotypeBudgetReceipt, GpuPressureSample, MemoryCompactionReceipt, MemoryUpdateReceipt,
+    NeuralThrottleDecision, PhenotypeEvidenceManifest, PolicyBackend, RouteBudgetReceipt,
+    SensorProfile, SensorProfileIdentity, SleepPhase, TopologyCounts, TopologyObservationReceipt,
+    Validate,
 };
-use alife_gpu_backend::{GpuAdmissionReceipt, GpuAllocationEventReceipt, GpuClosedLoopBackend};
+#[cfg(feature = "gpu-tests")]
+use alife_core::{
+    BrainClassId, BrainScaleTier, CandidateActionFamily, DriveSnapshot, EndocrineSnapshot,
+    MemoryRecallReceipt, NeuralThrottleLevel, OrganismId, SensoryAbiVersion, Tick,
+    TopologyDegradationKind, Vec3f,
+};
+use alife_gpu_backend::GpuAllocationEventReceipt;
+#[cfg(feature = "gpu-tests")]
+use alife_gpu_backend::{GpuAdmissionReceipt, GpuClosedLoopBackend};
+use alife_world::persistence::{GpuBackendProvenanceSave, NeuralGpuBackendApi};
+#[cfg(feature = "gpu-tests")]
 use alife_world::{
     persistence::{
-        AssetManifest, GpuBackendProvenanceSave, NeuralGpuBackendApi, ProductionNeuralAvailability,
-        GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
+        AssetManifest, ProductionNeuralAvailability, GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION,
     },
     HeadlessScenarioBuilder, HeadlessWorld, WorldEditorSpawnSpec, WorldObjectKind,
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "gpu-tests")]
 use crate::{
     compile_gpu_birth_components, gpu_checkpoint_assets::current_backend_provenance,
     merge_gpu_checkpoint_manifest_entries, GpuCheckpointAssetStore, GpuLiveBrainRuntime,
@@ -36,11 +49,13 @@ use super::{
     canonical::{
         encode_header_without_artifact_digest, encode_manifest_with_digest, write_digest4,
     },
-    capacity_slug, is_lower_hex_oid, read_git_provenance, sensor_profile_slug, tier_for_capacity,
-    GitProvenance, GpuEvidenceError, GpuSliceEvidenceHeader, ProfiledBehaviorReceiptHeader,
-    TopologyCapacityReceipt, GPU_EVIDENCE_BACKEND_API_SLUG, GPU_EVIDENCE_BACKEND_API_VERSION,
-    GPU_EVIDENCE_PASSING_STATUS_RAW, GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA,
+    capacity_slug, is_lower_hex_oid, sensor_profile_slug, GpuEvidenceError,
+    ProfiledBehaviorReceiptHeader, TopologyCapacityReceipt, GPU_EVIDENCE_BACKEND_API_SLUG,
+    GPU_EVIDENCE_BACKEND_API_VERSION, GPU_EVIDENCE_PASSING_STATUS_RAW,
+    GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA,
 };
+#[cfg(feature = "gpu-tests")]
+use super::{read_git_provenance, tier_for_capacity, GitProvenance, GpuSliceEvidenceHeader};
 
 pub const GPU_SLICE_D_RAW: u16 = 4;
 pub const GPU_SLICE_D_TICKS: u64 = 10_240;
@@ -51,16 +66,25 @@ pub const GPU_SLICE_D_REPLAY_TOLERANCE_BITS: u32 = 0x3727_c5ac;
 
 const SOAK_SCHEMA_VERSION: u16 = 1;
 const SOAK_ARTIFACT_MAX_BYTES: u64 = 128 * 1024 * 1024;
+#[cfg(feature = "gpu-tests")]
 const SOAK_ORGANISM: OrganismId = OrganismId(1);
 const SOAK_ARTIFACT_DOMAIN: &[u8] = b"alife.gpu.evidence.slice-d-artifact.v1";
 const SOAK_JSON_DIGEST_DOMAIN: &[u8] = b"alife.gpu.evidence.slice-d-json.v1";
+#[cfg(feature = "gpu-tests")]
 const SOAK_RSS_MIN_GROWTH_ENVELOPE: u64 = 16 * 1024 * 1024;
+#[cfg(feature = "gpu-tests")]
 const SOAK_RSS_BUDGET_HEADROOM: u64 = 512 * 1024 * 1024;
+#[cfg(feature = "gpu-tests")]
 const REPLAY_DISPATCH_LIMIT: usize = 32;
+#[cfg(feature = "gpu-tests")]
 const TOPOLOGY_BINDING_PRESSURE_TICKS: u64 = 2_048;
+#[cfg(feature = "gpu-tests")]
 const TRUNCATION_CANDIDATE: u16 = 1;
+#[cfg(feature = "gpu-tests")]
 const TRUNCATION_OBJECT_SLOT: u16 = 2;
+#[cfg(feature = "gpu-tests")]
 const TRUNCATION_MEMORY_CONTEXT: u16 = 3;
+#[cfg(feature = "gpu-tests")]
 const TRUNCATION_TOPOLOGY_BINDING: u16 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -471,6 +495,7 @@ impl GpuClosedLoopSoakReceipt {
 }
 
 #[derive(Debug)]
+#[cfg(feature = "gpu-tests")]
 struct PendingRestoreEvidence {
     save_tick: u64,
     phase_raw: u16,
@@ -482,6 +507,7 @@ struct PendingRestoreEvidence {
 }
 
 #[derive(Debug, Clone)]
+#[cfg(feature = "gpu-tests")]
 struct ReplayTrace {
     candidate_index: u16,
     logit_bits: u32,
@@ -490,10 +516,12 @@ struct ReplayTrace {
 }
 
 #[derive(Debug)]
+#[cfg(feature = "gpu-tests")]
 struct TemporarySoakCheckpointRoot {
     path: PathBuf,
 }
 
+#[cfg(feature = "gpu-tests")]
 impl TemporarySoakCheckpointRoot {
     fn new(label: &str) -> Result<Self, GpuEvidenceError> {
         let nonce = SystemTime::now()
@@ -513,12 +541,14 @@ impl TemporarySoakCheckpointRoot {
     }
 }
 
+#[cfg(feature = "gpu-tests")]
 impl Drop for TemporarySoakCheckpointRoot {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
 
+#[cfg(feature = "gpu-tests")]
 pub fn run_gpu_closed_loop_soak(
     options: GpuClosedLoopSoakOptions,
 ) -> Result<GpuClosedLoopSoakReceipt, GpuEvidenceError> {
@@ -526,6 +556,7 @@ pub fn run_gpu_closed_loop_soak(
     run_gpu_closed_loop_soak_with_provenance(options.validate()?, provenance)
 }
 
+#[cfg(feature = "gpu-tests")]
 pub fn run_and_write_gpu_closed_loop_soak(
     options: GpuClosedLoopSoakOptions,
     output: impl AsRef<Path>,
@@ -577,6 +608,7 @@ pub fn load_gpu_slice_d_evidence(
     Ok(receipt)
 }
 
+#[cfg(feature = "gpu-tests")]
 fn run_gpu_closed_loop_soak_with_provenance(
     options: GpuClosedLoopSoakOptions,
     provenance: GitProvenance,
@@ -1112,6 +1144,7 @@ fn run_gpu_closed_loop_soak_with_provenance(
 }
 
 #[derive(Debug)]
+#[cfg(feature = "gpu-tests")]
 struct PreTickTruncation {
     visible_requested: u32,
     candidate_requested: u32,
@@ -1119,6 +1152,7 @@ struct PreTickTruncation {
 }
 
 #[derive(Debug, Default)]
+#[cfg(feature = "gpu-tests")]
 struct MemoryShortlistDiagnostic {
     max_target_eligible: u32,
     max_target_searched: u32,
@@ -1126,6 +1160,7 @@ struct MemoryShortlistDiagnostic {
     max_family_searched: u32,
 }
 
+#[cfg(feature = "gpu-tests")]
 fn pre_tick_truncation(
     runtime: &GpuLiveBrainRuntime,
 ) -> Result<PreTickTruncation, GpuEvidenceError> {
@@ -1156,6 +1191,7 @@ fn pre_tick_truncation(
     })
 }
 
+#[cfg(feature = "gpu-tests")]
 fn record_frame_truncations(
     pre: PreTickTruncation,
     patch: &alife_core::ExperiencePatch,
@@ -1207,6 +1243,7 @@ fn record_frame_truncations(
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn record_memory_truncation(
     tick: u64,
     recalls: &[MemoryRecallReceipt],
@@ -1258,6 +1295,7 @@ fn record_memory_truncation(
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn record_truncation_once(
     events: &mut Vec<TruncationEventReceipt>,
     kinds: &mut BTreeSet<u16>,
@@ -1268,6 +1306,7 @@ fn record_truncation_once(
     }
 }
 
+#[cfg(feature = "gpu-tests")]
 fn rotate_stimuli(
     world: &mut HeadlessWorld,
     active: &mut Vec<alife_core::WorldEntityId>,
@@ -1313,6 +1352,7 @@ fn rotate_stimuli(
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn clear_memory_pressure_stimuli(
     world: &mut HeadlessWorld,
     active: &mut Vec<alife_core::WorldEntityId>,
@@ -1323,6 +1363,7 @@ fn clear_memory_pressure_stimuli(
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn install_topology_pressure_stimulus(
     world: &mut HeadlessWorld,
     active: &mut Vec<alife_core::WorldEntityId>,
@@ -1340,6 +1381,7 @@ fn install_topology_pressure_stimulus(
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn soak_sleep_interval_ticks(capacity: BrainCapacityClass) -> Result<u64, GpuEvidenceError> {
     match capacity.id() {
         BrainCapacityClass::N512_ID => Ok(32),
@@ -1351,6 +1393,7 @@ fn soak_sleep_interval_ticks(capacity: BrainCapacityClass) -> Result<u64, GpuEvi
     }
 }
 
+#[cfg(feature = "gpu-tests")]
 fn move_observer_for_topology_binding_pressure(
     world: &mut HeadlessWorld,
     tick: u64,
@@ -1371,6 +1414,7 @@ fn move_observer_for_topology_binding_pressure(
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn force_sleep_pressure(runtime: &mut GpuLiveBrainRuntime) -> Result<(), GpuEvidenceError> {
     let tick = runtime.evidence_world_tick();
     let mut drives = DriveSnapshot::baseline();
@@ -1384,6 +1428,7 @@ fn force_sleep_pressure(runtime: &mut GpuLiveBrainRuntime) -> Result<(), GpuEvid
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn set_memory_pressure_homeostasis(
     runtime: &mut GpuLiveBrainRuntime,
     curriculum_tick: u64,
@@ -1420,6 +1465,7 @@ fn set_memory_pressure_homeostasis(
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn memory_pressure_lane_mask(curriculum_tick: u64) -> [bool; 19] {
     let mut lane_order = [
         0_usize, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
@@ -1439,6 +1485,7 @@ fn memory_pressure_lane_mask(curriculum_tick: u64) -> [bool; 19] {
     mask
 }
 
+#[cfg(feature = "gpu-tests")]
 fn splitmix64(mut value: u64) -> u64 {
     value = value.wrapping_add(0x9e37_79b9_7f4a_7c15);
     value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
@@ -1446,6 +1493,7 @@ fn splitmix64(mut value: u64) -> u64 {
     value ^ (value >> 31)
 }
 
+#[cfg(feature = "gpu-tests")]
 fn soak_world(seed: u64) -> Result<HeadlessWorld, GpuEvidenceError> {
     let mut builder =
         HeadlessScenarioBuilder::new(seed).agent("slice-d-agent", SOAK_ORGANISM, Vec3f::ZERO);
@@ -1462,6 +1510,7 @@ fn soak_world(seed: u64) -> Result<HeadlessWorld, GpuEvidenceError> {
     Ok(builder.build()?)
 }
 
+#[cfg(feature = "gpu-tests")]
 fn run_same_adapter_replay(
     runtime: &mut GpuLiveBrainRuntime,
     store: &GpuCheckpointAssetStore,
@@ -1574,6 +1623,7 @@ fn run_same_adapter_replay(
     Ok(receipt)
 }
 
+#[cfg(feature = "gpu-tests")]
 fn replay_branch(
     world: HeadlessWorld,
     store: &GpuCheckpointAssetStore,
@@ -1644,6 +1694,7 @@ fn replay_branch(
     Ok(trace)
 }
 
+#[cfg(feature = "gpu-tests")]
 fn migration_receipts(
     options: GpuClosedLoopSoakOptions,
 ) -> Result<Vec<SaveMigrationReceipt>, GpuEvidenceError> {
@@ -1703,6 +1754,7 @@ fn migration_receipts(
     Ok(receipts)
 }
 
+#[cfg(feature = "gpu-tests")]
 fn build_admission_receipt(
     final_admission: &GpuAdmissionReceipt,
     raw_events: Vec<GpuAllocationEventReceipt>,
@@ -1752,6 +1804,7 @@ fn build_admission_receipt(
     })
 }
 
+#[cfg(feature = "gpu-tests")]
 fn build_process_memory_receipt(
     raw_samples: Vec<ProcessRssSample>,
 ) -> Result<ProcessMemorySoakReceipt, GpuEvidenceError> {
@@ -1782,6 +1835,7 @@ fn build_process_memory_receipt(
     })
 }
 
+#[cfg(feature = "gpu-tests")]
 fn build_activity_receipt(
     policy_digest: [u64; 4],
     learning_commits: u64,
@@ -1838,6 +1892,7 @@ fn build_activity_receipt(
     })
 }
 
+#[cfg(feature = "gpu-tests")]
 fn allocation_sample(tick: u64, receipt: &GpuAdmissionReceipt) -> GpuAllocationSample {
     GpuAllocationSample {
         tick,
@@ -1852,6 +1907,7 @@ fn allocation_sample(tick: u64, receipt: &GpuAdmissionReceipt) -> GpuAllocationS
     }
 }
 
+#[cfg(feature = "gpu-tests")]
 fn collect_allocation_event(
     receipt: &GpuAdmissionReceipt,
     events: &mut Vec<GpuAllocationEventReceipt>,
@@ -1864,6 +1920,7 @@ fn collect_allocation_event(
     }
 }
 
+#[cfg(feature = "gpu-tests")]
 fn topology_capacity(
     config: &alife_core::TopologicalMapConfig,
 ) -> Result<TopologyCapacityReceipt, GpuEvidenceError> {
@@ -1880,6 +1937,7 @@ fn topology_capacity(
     })
 }
 
+#[cfg(feature = "gpu-tests")]
 fn max_topology_bindings(sidecar: &alife_core::TopologySidecar) -> u32 {
     sidecar
         .map()
@@ -2185,6 +2243,7 @@ fn validate_sample_ticks(ticks: impl Iterator<Item = u64>) -> Result<(), GpuEvid
     Ok(())
 }
 
+#[cfg(feature = "gpu-tests")]
 fn is_sample_tick(tick: u64) -> bool {
     tick >= GPU_SLICE_D_WARMUP_TICKS
         && (tick - GPU_SLICE_D_WARMUP_TICKS).is_multiple_of(GPU_SLICE_D_SAMPLE_INTERVAL)
@@ -2242,6 +2301,7 @@ fn policy_raw(policy: PolicyBackend) -> u8 {
     }
 }
 
+#[cfg(feature = "gpu-tests")]
 fn distance(left: Vec3f, right: Vec3f) -> f32 {
     let x = left.x - right.x;
     let y = left.y - right.y;
@@ -2249,6 +2309,7 @@ fn distance(left: Vec3f, right: Vec3f) -> f32 {
     (x * x + y * y + z * z).sqrt()
 }
 
+#[cfg(feature = "gpu-tests")]
 fn write_soak_receipt(
     path: &Path,
     receipt: &GpuClosedLoopSoakReceipt,
@@ -2287,7 +2348,7 @@ fn write_soak_receipt(
     result
 }
 
-#[cfg(windows)]
+#[cfg(all(feature = "gpu-tests", windows))]
 fn process_rss_bytes() -> Result<u64, GpuEvidenceError> {
     use windows_sys::Win32::System::{
         ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS},
@@ -2320,7 +2381,7 @@ fn process_rss_bytes() -> Result<u64, GpuEvidenceError> {
         .map_err(|_| GpuEvidenceError::Contract("process RSS exceeds u64"))
 }
 
-#[cfg(not(windows))]
+#[cfg(all(feature = "gpu-tests", not(windows)))]
 fn process_rss_bytes() -> Result<u64, GpuEvidenceError> {
     Err(GpuEvidenceError::Contract(
         "Slice D process RSS evidence currently requires Windows",

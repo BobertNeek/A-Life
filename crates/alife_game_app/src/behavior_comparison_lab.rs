@@ -157,7 +157,7 @@ impl BehaviorComparisonLabSummary {
             || !self.report_markdown.contains("No hidden training mutation")
             || !self
                 .report_markdown
-                .contains("CPU shadow parity remains the gate")
+                .contains("GPU neural authority remains outside this read-only lab")
         {
             return Err(GameAppShellError::VisibleWorldMismatch {
                 message: "CA31 lab summary must stay bounded, honest, and report-only",
@@ -324,7 +324,7 @@ fn behavior_comparison_panel(
         scenario_b.sealed_patch_count as isize - scenario_a.sealed_patch_count as isize;
     let signatures_differ = scenario_a.behavior_signature != scenario_b.behavior_signature;
     let panel_text = format!(
-        "Behavior Comparison Lab\nA/B Scenario Runner\nA: {}\nB: {}\nDeltas: creatures={:+} food={:+} hazards={:+} sealed={:+}\nRead-only report; stable IDs only.\nNo hidden training mutation; isolated copies only.\nCPU shadow parity remains the gate; no full action-authoritative GPU claim.",
+        "Behavior Comparison Lab\nA/B Scenario Runner\nA: {}\nB: {}\nDeltas: creatures={:+} food={:+} hazards={:+} sealed={:+}\nRead-only report; stable IDs only.\nNo hidden training mutation; isolated copies only.\nGPU neural authority remains outside this read-only lab.",
         scenario_a.compact_row(),
         scenario_b.compact_row(),
         creature_delta,
@@ -369,8 +369,8 @@ fn behavior_comparison_report_markdown(
          - No hidden training mutation: true\n\
          - Stable IDs only: true\n\
          - Read-only comparison panel: true\n\
-         - CPU shadow parity remains the gate.\n\
-         - Product GPU claim is unchanged; no full action-authoritative GPU runtime is claimed.\n",
+         - GPU neural authority remains outside this read-only lab.\n\
+         - This report cannot issue actions or change the production policy.\n",
         panel.panel_text,
         scenario_a.scenario_id,
         scenario_a.ticks_completed,

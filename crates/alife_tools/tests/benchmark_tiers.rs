@@ -611,7 +611,7 @@ fn benchmark_report_generator_writes_markdown_under_target_artifacts() {
     assert!(path.ends_with("benchmark_tiers.md"));
     assert!(markdown.contains("# A-Life benchmark tiers report"));
     assert!(markdown.contains("| 1 |"));
-    assert!(markdown.contains("CPU reference smoke"));
+    assert!(markdown.contains("deterministic host baseline"));
     assert!(markdown.contains("Manual expected-slow tiers"));
 }
 

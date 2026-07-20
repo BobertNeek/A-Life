@@ -597,7 +597,7 @@ pub fn run_school_mode_smoke_with_config(
         0.90,
         0.0,
     )?;
-    let arbitration = cpu_reference_arbitrate(
+    let arbitration = heuristic_baseline_arbitrate(
         config.learner_id,
         &[teacher_tagged_low, ordinary_high],
         ActionArbitrationConfig::default(),

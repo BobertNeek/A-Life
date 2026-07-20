@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::LifetimeTraitLedger;
 use crate::{
-    cpu_reference_arbitrate, cpu_spmv_projection, finalize_cpu_activations,
+    cpu_spmv_projection, finalize_cpu_activations, heuristic_baseline_arbitrate,
     update_oja_shadow_traces, validate_finite_slice, ActionArbitrationConfig,
     ActionArbitrationTraceRef, ActionBiasSource, ActionCandidate, ActionCommand,
     ActionDecisionStatus, ActionKind, ActionProposal, ActionScoreBias, BodySnapshot,
@@ -706,7 +706,7 @@ impl CreatureMind {
         let fallback_intensity = fallible(&mut diagnostics, Intensity::new(0.0))?;
         let decision = fallible(
             &mut diagnostics,
-            cpu_reference_arbitrate(
+            heuristic_baseline_arbitrate(
                 self.organism_id,
                 &modulated_proposals,
                 ActionArbitrationConfig {

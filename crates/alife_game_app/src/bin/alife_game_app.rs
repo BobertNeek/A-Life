@@ -30,7 +30,7 @@ struct GpuMemoryGroundingCli {
     options: alife_game_app::GpuMemoryGroundingAcceptanceOptions,
 }
 
-#[cfg(feature = "gpu-runtime")]
+#[cfg(feature = "gpu-tests")]
 struct GpuClosedLoopSoakCli {
     options: alife_game_app::GpuClosedLoopSoakOptions,
     output: PathBuf,
@@ -175,7 +175,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
             println!("{}", help());
             return Ok(());
         }
-        #[cfg(feature = "gpu-runtime")]
+        #[cfg(feature = "gpu-tests")]
         {
             let parsed = parse_gpu_closed_loop_soak(rest)?;
             let receipt =
@@ -197,10 +197,10 @@ fn run(args: Vec<String>) -> Result<(), String> {
             );
             return Ok(());
         }
-        #[cfg(not(feature = "gpu-runtime"))]
+        #[cfg(not(feature = "gpu-tests"))]
         {
             return Err(format!(
-                "{GPU_CLOSED_LOOP_SOAK_COMMAND} requires --features gpu-runtime"
+                "{GPU_CLOSED_LOOP_SOAK_COMMAND} requires --features gpu-tests"
             ));
         }
     }
@@ -631,7 +631,7 @@ fn parse_gpu_memory_grounding(args: &[String]) -> Result<GpuMemoryGroundingCli, 
     Ok(parsed)
 }
 
-#[cfg(feature = "gpu-runtime")]
+#[cfg(feature = "gpu-tests")]
 fn parse_gpu_closed_loop_soak(args: &[String]) -> Result<GpuClosedLoopSoakCli, String> {
     let mut capacity = None;
     let mut ticks = None;
