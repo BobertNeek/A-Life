@@ -75,7 +75,7 @@ pub const CA12_APP_BUNDLE_MANIFEST_SCHEMA: &str = "alife.ca12.app_bundle_manifes
 pub const CA12_APP_BUNDLE_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const CA12_PLACEHOLDER_ART_MANIFEST_SCHEMA: &str = "alife.ca12.placeholder_art_manifest.v1";
 pub const CA12_PLACEHOLDER_ART_MANIFEST_SCHEMA_VERSION: u16 = 1;
-pub const CA12_MAX_BUNDLE_FILE_BYTES: u64 = 64 * 1024;
+pub const CA12_MAX_BUNDLE_FILE_BYTES: u64 = 128 * 1024;
 /// Metadata packs referenced by the CA12 bundle may describe many bounded assets
 /// while individual runtime fixtures remain subject to the smaller file cap.
 pub const CA12_MAX_REFERENCED_MANIFEST_BYTES: u64 = 256 * 1024;

@@ -1,10 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::io::{Cursor, Read};
+use std::path::{Component, Path, PathBuf};
 
 use alife_game_app::{
     CreaturePartFamilyDefinition, CreaturePartLodId, CreaturePartSlot, CutPlane, CutVolume,
-    SocketFrame,
+    GeneForgeAnatomyChannel, GeneForgeCreaturePartCatalog, GeneForgeDetailRole, GeneForgeDonorId,
+    GeneForgePartAssetDefinition, SocketFrame,
 };
-use serde::Serialize;
+use alife_world::CreaturePartSlotKey;
+use flate2::bufread::ZlibDecoder;
+use image::ImageDecoder;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const SLOT_PRIORITY: [CreaturePartSlot; 7] = [
@@ -25,6 +32,31 @@ const OUTPUT_SLOT_ORDER: [CreaturePartSlot; 7] = [
     CreaturePartSlot::RightLeg,
     CreaturePartSlot::TailBack,
 ];
+const PREPARATION_SCHEMA: &str = "alife.geneforge_assembly_preparation.v2";
+const PREPARATION_AUGMENTOR_VERSION: &str = "alife.geneforge_assembly_augmentor.v1";
+const PREPARATION_TRANSFORM_SPACE: &str = "alife.creature.canonical.rhs-y-up-neg-z-forward.v1";
+const PREPARATION_MATRIX_LAYOUT: &str =
+    "row-major-4x4-affine;point=[x,y,z,1];translation=[3,7,11];bottom-row=[0,0,0,1]";
+const PREPARATION_LOD_ORDER: [&str; 3] = ["full", "compact", "impostor"];
+const PREPARATION_RUNTIME_GROUP_ORDER: [&str; 7] = [
+    "head",
+    "torso",
+    "left-arm",
+    "right-arm",
+    "left-leg",
+    "right-leg",
+    "tail-back",
+];
+const PREPARATION_SOCKET_ORDER: [&str; 7] = [
+    "neck",
+    "left-shoulder",
+    "right-shoulder",
+    "left-hip",
+    "right-hip",
+    "tail-base",
+    "torso-frame",
+];
+const PREPARATION_TORSO_ASSETS: [&str; 3] = ["norn-torso", "ettin-torso", "grendel-torso"];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ObjVertex {
@@ -102,6 +134,242 @@ pub enum CreaturePartBuilderError {
     },
     #[error("socket manifest serialization failed: {0}")]
     SocketJson(#[from] serde_json::Error),
+    #[error("GeneForge staging validation failed: {0}")]
+    Staging(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneForgeStagingValidation {
+    pub donor_count: usize,
+    pub asset_count: usize,
+    pub lod_count: usize,
+    pub obj_count: usize,
+    pub mask_count: usize,
+    pub anatomy_mask_count: usize,
+    pub canonical_slot_records: usize,
+    pub cross_torso_slot_records: usize,
+    pub canonical_group_keys: usize,
+    pub cross_torso_group_keys: usize,
+    pub total_group_keys: usize,
+    pub total_bytes: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedPreparationContract {
+    schema: String,
+    version: u16,
+    augmentor_version: String,
+    transform_space: String,
+    matrix_layout: String,
+    key_fields: Vec<String>,
+    required_record_fields: Vec<String>,
+    lod_order: Vec<String>,
+    runtime_group_order: Vec<String>,
+    socket_order: Vec<String>,
+    residual_limit: f64,
+    schema_digest: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedGroupKeyCounts {
+    canonical: usize,
+    cross_torso: usize,
+    total: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedStableHashes {
+    obj: BTreeMap<String, String>,
+    semantic: BTreeMap<String, String>,
+    anatomy: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedAssemblyPreparationReceipt {
+    schema: String,
+    augmentor_version: String,
+    schema_digest: String,
+    canonical_slot_records: usize,
+    cross_torso_slot_records: usize,
+    canonical_group_keys: usize,
+    cross_torso_group_keys: usize,
+    total_group_keys: usize,
+    stable_hashes: StagedStableHashes,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeneForgeBuildReceipt {
+    schema: String,
+    blender_version: String,
+    importer_version: String,
+    recipe_sha256: String,
+    source_sha256: BTreeMap<String, String>,
+    donor_count: usize,
+    asset_count: usize,
+    lods: Vec<String>,
+    worker_execution: GeneForgeWorkerExecution,
+    sources: Vec<GeneForgeSourceBuildReceipt>,
+    outputs: BTreeMap<String, String>,
+    assembly_preparation: StagedAssemblyPreparationReceipt,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeneForgeSourceBuildReceipt {
+    donor: String,
+    asset_count: usize,
+    output_count: usize,
+    outputs: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeneForgeWorkerExecution {
+    strategy: String,
+    max_workers: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedBounds {
+    min: [f64; 3],
+    max: [f64; 3],
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedSocket {
+    translation: [f64; 3],
+    rotation_xyzw: [f64; 4],
+    scale: [f64; 3],
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedSocketManifest {
+    schema: String,
+    asset_id: String,
+    logical_slot: String,
+    donor: String,
+    lod: String,
+    bounds: StagedBounds,
+    sockets: BTreeMap<String, StagedSocket>,
+    landmarks: BTreeMap<String, [f64; 3]>,
+    ground_contacts: Vec<[f64; 3]>,
+    semantic_mask: String,
+    anatomy_mask: String,
+    lod_topology: StagedObjTopology,
+    expected_groups: BTreeSet<String>,
+    microdetail: StagedMicrodetail,
+    assembly_preparation_schema: String,
+    assembly_preparation_schema_digest: String,
+    bridge_geometry: Vec<StagedGeometryPreparation>,
+    assembly_preparations: Vec<StagedAssemblyPreparation>,
+    cross_torso_preparations: Vec<StagedAssemblyPreparation>,
+}
+
+#[derive(Debug)]
+struct StagedObjSummary {
+    bounds: StagedBounds,
+    positions: Vec<[f64; 3]>,
+    groups: BTreeSet<String>,
+    topology: StagedObjTopology,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct StagedObjTopology {
+    triangle_count: usize,
+    connected_components: usize,
+    boundary_edges: usize,
+    non_manifold_edges: usize,
+    component_ids: BTreeSet<String>,
+    component_triangle_counts: BTreeMap<String, usize>,
+    component_connected_counts: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedMicrodetail {
+    source_files: Vec<String>,
+    uvless_fallback: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedAssemblyPreparation {
+    family_id: u16,
+    family_label: String,
+    logical_slot: String,
+    asset_id: String,
+    fit: StagedSocket,
+    seam_offset: [f64; 3],
+    prepared_translation: [f64; 3],
+    prepared_matrix: [f64; 16],
+    bridge_sockets: Vec<String>,
+    bridge_kind: String,
+    join_cover_kind: String,
+    transform_mode: String,
+    target_torso_asset_id: String,
+    overlap_depth: f64,
+    attachment_error_bound: f64,
+    predicted_attachment_error: f64,
+    bridge_geometry: Vec<StagedAssemblyBridgeEvidence>,
+    preparation_kind: String,
+    source_asset_id: String,
+    lod: String,
+    group_transforms: Vec<StagedGroupTransform>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedGroupTransform {
+    source_family_id: u16,
+    source_asset_id: String,
+    target_torso_asset_id: String,
+    lod: String,
+    runtime_group: String,
+    socket: String,
+    transform_space: String,
+    schema_digest: String,
+    prepared_matrix: [f64; 16],
+    residual: f64,
+    fit: StagedSocket,
+    seam_offset: [f64; 3],
+    overlap_depth: f64,
+    attachment_error_bound: f64,
+    bridge_kind: String,
+    join_cover_kind: String,
+    #[serde(default)]
+    bridge_geometry: Vec<StagedAssemblyBridgeEvidence>,
+    #[serde(default)]
+    socket_evidence: Vec<StagedSocketEvidence>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedSocketEvidence {
+    socket: String,
+    source_anchor: [f64; 3],
+    target_anchor: [f64; 3],
+    transformed_source_anchor: [f64; 3],
+    residual: f64,
+    prepared_vertex_count: usize,
+    applied_overlap_depth: f64,
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedGeometryPreparation {
+    socket: String,
+    prepared_vertex_count: usize,
+    applied_overlap_depth: f64,
+    original_anchor: [f64; 3],
+    prepared_anchor: [f64; 3],
+}
+
+#[derive(Debug, Deserialize)]
+struct StagedAssemblyBridgeEvidence {
+    socket: String,
+    runtime_group: String,
+    prepared_vertex_count: usize,
+    applied_overlap_depth: f64,
+    original_anchor: [f64; 3],
+    prepared_anchor: [f64; 3],
+    source_anchor: [f64; 3],
+    target_anchor: [f64; 3],
+    transformed_source_anchor: [f64; 3],
+    prepared_matrix: [f64; 16],
+    residual: f64,
 }
 
 impl SourceObjMesh {
@@ -169,6 +437,2797 @@ impl SourceObjMesh {
         }
         Ok(Self { triangles })
     }
+}
+
+fn parse_staged_preparation_contract(
+    recipe_text: &str,
+) -> Result<(StagedPreparationContract, StagedGroupKeyCounts), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let recipe: serde_json::Value = serde_json::from_str(recipe_text)
+        .map_err(|error| fail(format!("invalid external GeneForge recipe JSON: {error}")))?;
+    let contract: StagedPreparationContract = serde_json::from_value(
+        recipe
+            .get("assembly_preparation_contract")
+            .cloned()
+            .ok_or_else(|| fail("recipe is missing the v2 assembly preparation contract".into()))?,
+    )
+    .map_err(|error| fail(format!("invalid v2 assembly preparation contract: {error}")))?;
+    if contract.schema != PREPARATION_SCHEMA
+        || contract.version != 2
+        || contract.augmentor_version != PREPARATION_AUGMENTOR_VERSION
+        || contract.transform_space != PREPARATION_TRANSFORM_SPACE
+        || contract.matrix_layout != PREPARATION_MATRIX_LAYOUT
+        || contract.key_fields
+            != [
+                "source_family_id",
+                "source_asset_id",
+                "target_torso_asset_id",
+                "lod",
+                "runtime_group",
+                "socket",
+            ]
+        || contract.required_record_fields
+            != [
+                "source_family_id",
+                "source_asset_id",
+                "target_torso_asset_id",
+                "lod",
+                "runtime_group",
+                "socket",
+                "transform_space",
+                "schema_digest",
+                "prepared_matrix",
+                "residual",
+            ]
+        || contract.lod_order != PREPARATION_LOD_ORDER
+        || contract.runtime_group_order != PREPARATION_RUNTIME_GROUP_ORDER
+        || contract.socket_order != PREPARATION_SOCKET_ORDER
+        || contract.residual_limit != 0.025
+        || !lower_sha256(&contract.schema_digest)
+    {
+        return Err(fail(
+            "v2 assembly preparation contract fields are invalid".into(),
+        ));
+    }
+    let mut descriptor = BTreeMap::new();
+    descriptor.insert(
+        "augmentor_version".to_string(),
+        serde_json::json!(contract.augmentor_version),
+    );
+    descriptor.insert(
+        "key_fields".to_string(),
+        serde_json::json!(contract.key_fields),
+    );
+    descriptor.insert(
+        "lod_order".to_string(),
+        serde_json::json!(contract.lod_order),
+    );
+    descriptor.insert(
+        "matrix_layout".to_string(),
+        serde_json::json!(contract.matrix_layout),
+    );
+    descriptor.insert(
+        "required_record_fields".to_string(),
+        serde_json::json!(contract.required_record_fields),
+    );
+    descriptor.insert(
+        "residual_limit".to_string(),
+        serde_json::json!(contract.residual_limit),
+    );
+    descriptor.insert(
+        "runtime_group_order".to_string(),
+        serde_json::json!(contract.runtime_group_order),
+    );
+    descriptor.insert("schema".to_string(), serde_json::json!(contract.schema));
+    descriptor.insert(
+        "schema_digest".to_string(),
+        serde_json::json!("0".repeat(64)),
+    );
+    descriptor.insert(
+        "socket_order".to_string(),
+        serde_json::json!(contract.socket_order),
+    );
+    descriptor.insert(
+        "transform_space".to_string(),
+        serde_json::json!(contract.transform_space),
+    );
+    descriptor.insert("version".to_string(), serde_json::json!(contract.version));
+    let descriptor_bytes = serde_json::to_vec(&descriptor).map_err(|error| {
+        fail(format!(
+            "could not serialize v2 preparation descriptor: {error}"
+        ))
+    })?;
+    let calculated = sha256_hex(&descriptor_bytes);
+    if calculated != contract.schema_digest {
+        return Err(fail(format!(
+            "v2 preparation schema digest mismatch: expected {}, calculated {calculated}",
+            contract.schema_digest
+        )));
+    }
+    let counts: StagedGroupKeyCounts = serde_json::from_value(
+        recipe
+            .get("group_key_counts")
+            .cloned()
+            .ok_or_else(|| fail("recipe is missing group-key counts".into()))?,
+    )
+    .map_err(|error| fail(format!("invalid group-key counts: {error}")))?;
+    if (counts.canonical, counts.cross_torso, counts.total) != (252, 432, 684) {
+        return Err(fail(
+            "recipe group-key counts must be exactly 252/432/684".into(),
+        ));
+    }
+    Ok((contract, counts))
+}
+
+fn lower_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+pub fn validate_geneforge_staging(
+    staging_root: &Path,
+    recipe_path: &Path,
+) -> Result<GeneForgeStagingValidation, CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let canonical_staging_root = fs::canonicalize(staging_root).map_err(|error| {
+        fail(format!(
+            "failed canonicalizing staging root {}: {error}",
+            staging_root.display()
+        ))
+    })?;
+    if !canonical_staging_root.is_dir() {
+        return Err(fail(format!(
+            "staging root is not a directory: {}",
+            staging_root.display()
+        )));
+    }
+    let recipe_text = fs::read_to_string(recipe_path).map_err(|error| {
+        fail(format!(
+            "failed reading external GeneForge recipe {}: {error}",
+            recipe_path.display()
+        ))
+    })?;
+    let (preparation_contract, recipe_group_counts) =
+        parse_staged_preparation_contract(&recipe_text)?;
+    let catalog = GeneForgeCreaturePartCatalog::from_json_str(&recipe_text)
+        .map_err(|error| fail(format!("invalid external GeneForge recipe: {error}")))?;
+    let canonical_digest = canonical_geneforge_recipe_sha256(&recipe_text)?;
+    if !catalog
+        .recipe_sha256
+        .eq_ignore_ascii_case(&canonical_digest)
+    {
+        return Err(fail(format!(
+            "external recipe digest mismatch: expected {}, calculated {canonical_digest}",
+            catalog.recipe_sha256
+        )));
+    }
+    if catalog.schema != "alife.geneforge_creature_part_catalog.v2"
+        || catalog.schema_version != 2
+        || catalog.blender_version != "5.1.0"
+        || catalog.importer_version != "alife.geneforge_importer.v2"
+        || catalog.sources.len() != 3
+        || catalog.part_assets.len() != 14
+        || catalog.families.len() != 12
+        || catalog.assembly_contract.schema != "alife.geneforge_family_assembly.v1"
+    {
+        return Err(fail(
+            "external recipe does not match the pinned Task 4 catalog contract".to_string(),
+        ));
+    }
+
+    let mut expected_outputs = BTreeSet::new();
+    let mut obj_contracts = BTreeMap::new();
+    let mut socket_contracts = BTreeMap::new();
+    let mut mask_contracts = BTreeMap::new();
+    let mut anatomy_contracts = BTreeMap::new();
+    let mut output_digest_contracts = BTreeMap::new();
+    let mut source_output_contracts = BTreeMap::<String, BTreeSet<String>>::new();
+    let mut source_asset_counts = BTreeMap::<String, usize>::new();
+    for (asset_index, asset) in catalog.part_assets.iter().enumerate() {
+        let donor = donor_name(asset.donor).to_string();
+        *source_asset_counts.entry(donor.clone()).or_default() += 1;
+        if asset.lods.len() != 3 {
+            return Err(fail(format!(
+                "asset {} does not declare three LODs",
+                asset.id.0
+            )));
+        }
+        for (lod_index, lod) in asset.lods.iter().enumerate() {
+            for relative in [
+                &lod.generated_obj,
+                &lod.socket_manifest,
+                &lod.semantic_mask,
+                &lod.anatomy_mask,
+            ] {
+                validate_relative_staging_path(relative)?;
+                if !expected_outputs.insert(relative.clone()) {
+                    return Err(fail(format!("duplicate recipe output path {relative}")));
+                }
+                source_output_contracts
+                    .entry(donor.clone())
+                    .or_default()
+                    .insert(relative.clone());
+            }
+            obj_contracts.insert(lod.generated_obj.clone(), (asset_index, lod_index));
+            socket_contracts.insert(lod.socket_manifest.clone(), (asset_index, lod_index));
+            mask_contracts.insert(lod.semantic_mask.clone(), (asset_index, lod_index));
+            anatomy_contracts.insert(lod.anatomy_mask.clone(), (asset_index, lod_index));
+            output_digest_contracts
+                .insert(lod.generated_obj.clone(), lod.generated_obj_sha256.clone());
+            output_digest_contracts.insert(
+                lod.socket_manifest.clone(),
+                lod.socket_manifest_sha256.clone(),
+            );
+            output_digest_contracts
+                .insert(lod.semantic_mask.clone(), lod.semantic_mask_sha256.clone());
+            output_digest_contracts
+                .insert(lod.anatomy_mask.clone(), lod.anatomy_mask_sha256.clone());
+        }
+    }
+    if expected_outputs.len() != 14 * 3 * 4
+        || obj_contracts.len() != 42
+        || socket_contracts.len() != 42
+        || mask_contracts.len() != 42
+        || anatomy_contracts.len() != 42
+    {
+        return Err(fail(
+            "recipe must declare 14 shared assets with three unique OBJ/socket/semantic/anatomy LOD outputs"
+                .to_string(),
+        ));
+    }
+
+    let receipt_path =
+        confined_existing_staged_path(&canonical_staging_root, "build_receipt.json")?;
+    let receipt_bytes = fs::read(&receipt_path).map_err(|error| {
+        fail(format!(
+            "missing build receipt {}: {error}",
+            receipt_path.display()
+        ))
+    })?;
+    let receipt: GeneForgeBuildReceipt = serde_json::from_slice(&receipt_bytes)
+        .map_err(|error| fail(format!("invalid build receipt: {error}")))?;
+    let expected_sources = catalog
+        .sources
+        .iter()
+        .map(|source| (donor_name(source.donor).to_string(), source.sha256.clone()))
+        .collect::<BTreeMap<_, _>>();
+    if receipt.schema != "alife.geneforge_build_receipt.v2"
+        || receipt.blender_version != "5.1.0"
+        || receipt.importer_version != catalog.importer_version
+        || !receipt
+            .recipe_sha256
+            .eq_ignore_ascii_case(&catalog.recipe_sha256)
+        || receipt.source_sha256 != expected_sources
+        || receipt.donor_count != 3
+        || receipt.asset_count != 14
+        || receipt.lods != ["full", "compact", "impostor"]
+        || receipt.worker_execution.strategy != "bounded-parallel-donor-workers"
+        || receipt.worker_execution.max_workers != catalog.sources.len().min(3)
+        || receipt.assembly_preparation.schema != preparation_contract.schema
+        || receipt.assembly_preparation.augmentor_version != preparation_contract.augmentor_version
+        || receipt.assembly_preparation.schema_digest != preparation_contract.schema_digest
+        || receipt.assembly_preparation.canonical_slot_records != 180
+        || receipt.assembly_preparation.cross_torso_slot_records != 288
+        || receipt.assembly_preparation.canonical_group_keys != 252
+        || receipt.assembly_preparation.cross_torso_group_keys != 432
+        || receipt.assembly_preparation.total_group_keys != 684
+    {
+        return Err(fail(
+            "build receipt recipe digest, importer version, source digest, or asset metadata drift"
+                .to_string(),
+        ));
+    }
+    if receipt.outputs.keys().cloned().collect::<BTreeSet<_>>() != expected_outputs {
+        return Err(fail(
+            "build receipt outputs do not exactly match the external recipe paths".to_string(),
+        ));
+    }
+    validate_receipt_source_accounting(
+        &receipt,
+        &source_output_contracts,
+        &source_asset_counts,
+        &expected_outputs,
+    )?;
+
+    let mut total_bytes = receipt_bytes.len() as u64;
+    for relative in &expected_outputs {
+        let kind = if relative.ends_with("_anatomy.png") {
+            "anatomy mask"
+        } else if relative.ends_with(".png") {
+            "semantic mask"
+        } else {
+            "output"
+        };
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)
+            .map_err(|error| fail(format!("missing {kind} {relative}: {error}")))?;
+        let metadata = fs::metadata(&path)
+            .map_err(|error| fail(format!("missing {kind} {relative}: {error}")))?;
+        if metadata.len() > 512 * 1024 {
+            return Err(fail(format!(
+                "output {relative} exceeds the 512 KiB per-file budget"
+            )));
+        }
+        total_bytes += metadata.len();
+    }
+    if total_bytes > 8 * 1024 * 1024 {
+        return Err(fail(format!(
+            "staged pack exceeds the 8 MiB budget: {total_bytes} bytes"
+        )));
+    }
+
+    for (relative, (asset_index, _)) in &mask_contracts {
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let bytes = fs::read(path)
+            .map_err(|error| fail(format!("failed reading semantic mask {relative}: {error}")))?;
+        let expected_colors = expected_asset_semantic_colors(&catalog.part_assets[*asset_index])?;
+        validate_semantic_mask_png_bytes(relative, &bytes, &expected_colors)?;
+    }
+    for (relative, (asset_index, lod_index)) in &anatomy_contracts {
+        let asset = &catalog.part_assets[*asset_index];
+        let semantic_relative = &asset.lods[*lod_index].semantic_mask;
+        let semantic_path =
+            confined_existing_staged_path(&canonical_staging_root, semantic_relative)?;
+        let semantic = fs::read(semantic_path).map_err(|error| {
+            fail(format!(
+                "failed reading semantic mask {semantic_relative}: {error}"
+            ))
+        })?;
+        let anatomy_path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let anatomy = fs::read(anatomy_path)
+            .map_err(|error| fail(format!("failed reading anatomy mask {relative}: {error}")))?;
+        validate_anatomy_mask_png_bytes(relative, &semantic, &anatomy, asset.logical_slot)?;
+    }
+
+    let mut obj_summaries = BTreeMap::new();
+    for (relative, (asset_index, lod_index)) in &obj_contracts {
+        let asset = &catalog.part_assets[*asset_index];
+        let expected_groups = expected_asset_groups(asset);
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let summary = validate_staged_obj(&path, &expected_groups)?;
+        obj_summaries.insert((*asset_index, *lod_index), summary);
+    }
+
+    let mut full_preparations = BTreeSet::new();
+    let mut canonical_slot_records = 0_usize;
+    let mut cross_torso_slot_records = 0_usize;
+    let mut canonical_group_keys = Vec::new();
+    let mut cross_torso_group_keys = Vec::new();
+    let mut matrix_records = Vec::<(String, String, [f64; 16])>::new();
+    for (relative, (asset_index, lod_index)) in &socket_contracts {
+        let asset = &catalog.part_assets[*asset_index];
+        let lod = &asset.lods[*lod_index];
+        let summary = obj_summaries
+            .get(&(*asset_index, *lod_index))
+            .ok_or_else(|| fail(format!("socket manifest has no matching OBJ: {relative}")))?;
+        validate_staged_socket_manifest(
+            &canonical_staging_root,
+            &confined_existing_staged_path(&canonical_staging_root, relative)?,
+            &catalog,
+            asset,
+            lod,
+            summary,
+            &preparation_contract,
+            &mut full_preparations,
+            &mut canonical_slot_records,
+            &mut cross_torso_slot_records,
+            &mut canonical_group_keys,
+            &mut cross_torso_group_keys,
+            &mut matrix_records,
+        )?;
+    }
+    if full_preparations.len() != 12 * 5 {
+        return Err(fail(format!(
+            "assembly preparation union must contain 60 family-slot references; found {}",
+            full_preparations.len()
+        )));
+    }
+    if canonical_slot_records != 180
+        || cross_torso_slot_records != 288
+        || canonical_group_keys.len() != 252
+        || cross_torso_group_keys.len() != 432
+        || canonical_group_keys.iter().collect::<BTreeSet<_>>().len() != 252
+        || cross_torso_group_keys.iter().collect::<BTreeSet<_>>().len() != 432
+        || canonical_group_keys
+            .iter()
+            .chain(cross_torso_group_keys.iter())
+            .collect::<BTreeSet<_>>()
+            .len()
+            != 684
+    {
+        return Err(fail(format!(
+            "assembly preparation accounting must be 180/288 slots and 252/432/684 groups; found {canonical_slot_records}/{cross_torso_slot_records} and {}/{}/{}",
+            canonical_group_keys.len(),
+            cross_torso_group_keys.len(),
+            canonical_group_keys
+                .iter()
+                .chain(cross_torso_group_keys.iter())
+                .collect::<BTreeSet<_>>()
+                .len()
+        )));
+    }
+    if recipe_group_counts.total != 684 {
+        return Err(fail(
+            "recipe group-key count contract drifted during validation".into(),
+        ));
+    }
+    validate_preparation_key_population(&canonical_group_keys, &cross_torso_group_keys, &catalog)?;
+    validate_matrix_target_distinctness(&matrix_records)?;
+
+    for (asset_index, asset) in catalog.part_assets.iter().enumerate() {
+        let by_lod = |lod: CreaturePartLodId| {
+            asset
+                .lods
+                .iter()
+                .position(|entry| entry.lod == lod)
+                .and_then(|index| obj_summaries.get(&(asset_index, index)))
+        };
+        let full = by_lod(CreaturePartLodId::Full)
+            .ok_or_else(|| fail(format!("asset {} is missing Full LOD", asset.id.0)))?;
+        let compact = by_lod(CreaturePartLodId::Compact)
+            .ok_or_else(|| fail(format!("asset {} is missing Compact LOD", asset.id.0)))?;
+        let impostor = by_lod(CreaturePartLodId::Impostor)
+            .ok_or_else(|| fail(format!("asset {} is missing Impostor LOD", asset.id.0)))?;
+        validate_topology_preserving_lods(
+            &asset.id.0,
+            &full.topology,
+            &compact.topology,
+            &impostor.topology,
+        )?;
+    }
+
+    for (relative, expected) in &output_digest_contracts {
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let bytes = fs::read(path).map_err(|error| {
+            fail(format!(
+                "failed reading {relative} for external catalog digest: {error}"
+            ))
+        })?;
+        let actual = sha256_hex(&bytes);
+        if !expected.eq_ignore_ascii_case(&actual) {
+            return Err(fail(format!(
+                "external catalog digest drift for {relative}: expected {expected}, found {actual}"
+            )));
+        }
+    }
+
+    for (relative, expected) in &receipt.outputs {
+        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
+        let bytes = fs::read(path)
+            .map_err(|error| fail(format!("failed reading {relative} for digest: {error}")))?;
+        let actual = sha256_hex(&bytes);
+        if !expected.eq_ignore_ascii_case(&actual) {
+            return Err(fail(format!(
+                "digest drift for {relative}: expected {expected}, found {actual}"
+            )));
+        }
+    }
+    validate_stable_hash_receipt(
+        &canonical_staging_root,
+        &receipt.assembly_preparation.stable_hashes,
+        &obj_contracts,
+        &mask_contracts,
+        &anatomy_contracts,
+        &receipt.outputs,
+    )?;
+
+    Ok(GeneForgeStagingValidation {
+        donor_count: receipt.donor_count,
+        asset_count: receipt.asset_count,
+        lod_count: obj_contracts.len(),
+        obj_count: obj_contracts.len(),
+        mask_count: mask_contracts.len(),
+        anatomy_mask_count: anatomy_contracts.len(),
+        canonical_slot_records,
+        cross_torso_slot_records,
+        canonical_group_keys: canonical_group_keys.len(),
+        cross_torso_group_keys: cross_torso_group_keys.len(),
+        total_group_keys: canonical_group_keys
+            .iter()
+            .chain(cross_torso_group_keys.iter())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        total_bytes,
+    })
+}
+
+fn validate_relative_staging_path(relative: &str) -> Result<(), CreaturePartBuilderError> {
+    let path = Path::new(relative);
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
+    {
+        return Err(CreaturePartBuilderError::Staging(format!(
+            "output path escapes staging: {relative}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_receipt_source_accounting(
+    receipt: &GeneForgeBuildReceipt,
+    expected_by_donor: &BTreeMap<String, BTreeSet<String>>,
+    expected_asset_counts: &BTreeMap<String, usize>,
+    expected_outputs: &BTreeSet<String>,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |reason: &str| {
+        CreaturePartBuilderError::Staging(format!("receipt source accounting {reason}"))
+    };
+    if receipt.sources.len() != expected_by_donor.len() {
+        return Err(fail("has an invalid donor count"));
+    }
+    let mut donors = BTreeSet::new();
+    let mut union = BTreeSet::new();
+    for source in &receipt.sources {
+        if !donors.insert(source.donor.clone()) {
+            return Err(fail("contains a duplicate donor"));
+        }
+        let source_outputs = source.outputs.iter().cloned().collect::<BTreeSet<_>>();
+        if source_outputs.len() != source.outputs.len() {
+            return Err(fail("contains a duplicate donor-owned output path"));
+        }
+        if source.asset_count
+            != expected_asset_counts
+                .get(&source.donor)
+                .copied()
+                .unwrap_or(0)
+            || source.output_count != source.outputs.len()
+            || expected_by_donor.get(&source.donor) != Some(&source_outputs)
+        {
+            return Err(fail("does not match exact donor-owned outputs"));
+        }
+        for relative in source_outputs {
+            if !union.insert(relative) {
+                return Err(fail("duplicates an output across donors"));
+            }
+        }
+    }
+    if donors != expected_by_donor.keys().cloned().collect::<BTreeSet<_>>()
+        || union != *expected_outputs
+    {
+        return Err(fail("union does not equal the top-level output set"));
+    }
+    Ok(())
+}
+
+fn validate_preparation_key_population(
+    canonical: &[String],
+    cross_torso: &[String],
+    catalog: &GeneForgeCreaturePartCatalog,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let mut all = BTreeSet::new();
+    let mut targets_by_source = BTreeMap::<String, BTreeSet<String>>::new();
+    for (kind, keys) in [("canonical", canonical), ("cross-torso", cross_torso)] {
+        for key in keys {
+            if !all.insert(key.clone()) {
+                return Err(fail(format!(
+                    "duplicate assembly preparation group key: {key}"
+                )));
+            }
+            let fields = key.split('|').collect::<Vec<_>>();
+            if fields.len() != 6 || fields.iter().any(|field| field.is_empty()) {
+                return Err(fail(format!(
+                    "malformed assembly preparation group key: {key}"
+                )));
+            }
+            let family_id = fields[0].parse::<u16>().map_err(|_| {
+                fail(format!(
+                    "assembly preparation family key is not a u16: {key}"
+                ))
+            })?;
+            let family = catalog
+                .families
+                .iter()
+                .find(|family| family.id.0 == family_id)
+                .ok_or_else(|| {
+                    fail(format!(
+                        "assembly preparation family is outside 0..=11: {key}"
+                    ))
+                })?;
+            let asset = catalog
+                .asset(&alife_game_app::CreaturePartAssetId(fields[1].into()))
+                .ok_or_else(|| {
+                    fail(format!(
+                        "assembly preparation source asset is unknown: {key}"
+                    ))
+                })?;
+            let target = fields[2];
+            if !PREPARATION_TORSO_ASSETS.contains(&target) {
+                return Err(fail(format!(
+                    "assembly preparation target torso is invalid: {key}"
+                )));
+            }
+            if !PREPARATION_LOD_ORDER.contains(&fields[3])
+                || !PREPARATION_RUNTIME_GROUP_ORDER.contains(&fields[4])
+                || !PREPARATION_SOCKET_ORDER.contains(&fields[5])
+            {
+                return Err(fail(format!(
+                    "assembly preparation key uses an invalid order value: {key}"
+                )));
+            }
+            let expected_groups: &[(&str, &str)] = match asset.logical_slot {
+                CreaturePartSlotKey::Head => &[("head", "neck")],
+                CreaturePartSlotKey::Torso => &[("torso", "torso-frame")],
+                CreaturePartSlotKey::Arms => &[
+                    ("left-arm", "left-shoulder"),
+                    ("right-arm", "right-shoulder"),
+                ],
+                CreaturePartSlotKey::Legs => {
+                    &[("left-leg", "left-hip"), ("right-leg", "right-hip")]
+                }
+                CreaturePartSlotKey::Tail => &[("tail-back", "tail-base")],
+            };
+            if !expected_groups.contains(&(fields[4], fields[5])) {
+                return Err(fail(format!(
+                    "assembly preparation group/socket is incompatible: {key}"
+                )));
+            }
+            let source_part = family.parts.get(&asset.logical_slot).ok_or_else(|| {
+                fail(format!(
+                    "assembly preparation source slot is missing: {key}"
+                ))
+            })?;
+            if source_part.asset_id.0 != fields[1] {
+                return Err(fail(format!(
+                    "assembly preparation source asset/slot mismatch: {key}"
+                )));
+            }
+            let canonical_target = family
+                .parts
+                .get(&CreaturePartSlotKey::Torso)
+                .ok_or_else(|| fail(format!("family has no torso target: {key}")))?
+                .asset_id
+                .0
+                .clone();
+            if kind == "canonical"
+                && (target != canonical_target
+                    || asset.logical_slot == CreaturePartSlotKey::Torso && fields[4] != "torso")
+            {
+                return Err(fail(format!(
+                    "canonical assembly preparation target drift: {key}"
+                )));
+            }
+            if kind == "cross-torso"
+                && (asset.logical_slot == CreaturePartSlotKey::Torso || target == canonical_target)
+            {
+                return Err(fail(format!(
+                    "cross-torso assembly preparation target drift: {key}"
+                )));
+            }
+            if fields[4] != "torso" {
+                let base = format!(
+                    "{}|{}|{}|{}|{}",
+                    fields[0], fields[1], fields[3], fields[4], fields[5]
+                );
+                targets_by_source
+                    .entry(base)
+                    .or_default()
+                    .insert(target.to_string());
+            }
+        }
+    }
+    if all.len() != 684 {
+        return Err(fail(format!(
+            "assembly preparation group-key union must contain 684 keys; found {}",
+            all.len()
+        )));
+    }
+    if targets_by_source.values().any(|targets| {
+        targets
+            != &BTreeSet::from_iter(
+                PREPARATION_TORSO_ASSETS
+                    .iter()
+                    .map(|value| (*value).to_string()),
+            )
+    }) {
+        return Err(fail(
+            "every source group must resolve against all three torso targets".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_matrix_target_distinctness(
+    matrix_records: &[(String, String, [f64; 16])],
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let mut by_base = BTreeMap::<&str, Vec<(&str, &[f64; 16])>>::new();
+    for (base, target, matrix) in matrix_records {
+        by_base
+            .entry(base.as_str())
+            .or_default()
+            .push((target.as_str(), matrix));
+    }
+    for (base, records) in by_base {
+        if records.len() != PREPARATION_TORSO_ASSETS.len() {
+            return Err(fail(format!(
+                "assembly preparation matrix target population drift for {base}"
+            )));
+        }
+        for (index, (left_target, left_matrix)) in records.iter().enumerate() {
+            for (right_target, right_matrix) in records.iter().skip(index + 1) {
+                if left_target == right_target || left_matrix == right_matrix {
+                    return Err(fail(format!(
+                        "assembly preparation matrix aliases target torso IDs for {base}"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_stable_hash_receipt(
+    staging_root: &Path,
+    stable: &StagedStableHashes,
+    obj_contracts: &BTreeMap<String, (usize, usize)>,
+    mask_contracts: &BTreeMap<String, (usize, usize)>,
+    anatomy_contracts: &BTreeMap<String, (usize, usize)>,
+    receipt_outputs: &BTreeMap<String, String>,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    for (kind, values, expected) in [
+        ("OBJ", &stable.obj, obj_contracts),
+        ("semantic", &stable.semantic, mask_contracts),
+        ("anatomy", &stable.anatomy, anatomy_contracts),
+    ] {
+        let expected_paths = expected.keys().cloned().collect::<BTreeSet<_>>();
+        if values.len() != 42 || values.keys().cloned().collect::<BTreeSet<_>>() != expected_paths {
+            return Err(fail(format!(
+                "stable {kind} hash map must contain exactly 42 recipe paths"
+            )));
+        }
+        for (relative, digest) in values {
+            if !lower_sha256(digest) || receipt_outputs.get(relative) != Some(digest) {
+                return Err(fail(format!(
+                    "stable {kind} hash receipt digest drift for {relative}"
+                )));
+            }
+            let path = confined_existing_staged_path(staging_root, relative)?;
+            let actual = sha256_hex(&fs::read(path).map_err(|error| fail(error.to_string()))?);
+            if actual != *digest {
+                return Err(fail(format!(
+                    "stable {kind} output hash drift for {relative}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn canonical_path_is_within(canonical_root: &Path, canonical_candidate: &Path) -> bool {
+    canonical_candidate.starts_with(canonical_root)
+}
+
+fn confined_existing_staged_path(
+    canonical_staging_root: &Path,
+    relative: &str,
+) -> Result<PathBuf, CreaturePartBuilderError> {
+    // Confinement assumes no concurrent mutator swaps components after this
+    // check. Every ordinary access rechecks symlink and Windows reparse state.
+    validate_relative_staging_path(relative)?;
+    let mut candidate = canonical_staging_root.to_path_buf();
+    for component in Path::new(relative).components() {
+        match component {
+            Component::CurDir => continue,
+            Component::Normal(component) => candidate.push(component),
+            _ => {
+                return Err(CreaturePartBuilderError::Staging(format!(
+                    "output path escapes staging: {relative}"
+                )))
+            }
+        }
+        let metadata = fs::symlink_metadata(&candidate).map_err(|error| {
+            CreaturePartBuilderError::Staging(format!("missing staged output {relative}: {error}"))
+        })?;
+        if metadata_is_symlink_or_reparse(&metadata) {
+            return Err(CreaturePartBuilderError::Staging(format!(
+                "staged output contains a symlink or reparse point: {relative}"
+            )));
+        }
+    }
+    let canonical = fs::canonicalize(&candidate).map_err(|error| {
+        CreaturePartBuilderError::Staging(format!(
+            "failed canonicalizing staged output {relative}: {error}"
+        ))
+    })?;
+    if !canonical_path_is_within(canonical_staging_root, &canonical) {
+        return Err(CreaturePartBuilderError::Staging(format!(
+            "staged output escapes canonical staging root: {relative}"
+        )));
+    }
+    Ok(canonical)
+}
+
+fn metadata_is_symlink_or_reparse(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    false
+}
+
+fn expected_asset_groups(asset: &GeneForgePartAssetDefinition) -> BTreeSet<String> {
+    let mut groups = asset.groups.values().cloned().collect::<BTreeSet<_>>();
+    for (role, objects) in &asset.detail_groups {
+        if !objects.is_empty() {
+            groups.insert(format!("head.{}", detail_role_name(*role)));
+        }
+    }
+    groups
+}
+
+fn expected_asset_semantic_colors(
+    asset: &GeneForgePartAssetDefinition,
+) -> Result<BTreeSet<[u8; 3]>, CreaturePartBuilderError> {
+    expected_asset_groups(asset)
+        .iter()
+        .map(|group| {
+            semantic_group_color(group).ok_or_else(|| {
+                CreaturePartBuilderError::Staging(format!(
+                    "asset {} has no semantic mask color for group {group}",
+                    asset.id.0
+                ))
+            })
+        })
+        .collect()
+}
+
+fn semantic_group_color(group: &str) -> Option<[u8; 3]> {
+    match group {
+        "head" => Some([230, 92, 88]),
+        "torso" => Some([64, 166, 184]),
+        "left-arm" | "right-arm" => Some([244, 177, 76]),
+        "left-leg" | "right-leg" => Some([95, 177, 104]),
+        "tail-back" => Some([154, 108, 180]),
+        "head.eyes" => Some([238, 238, 224]),
+        "head.lids" => Some([184, 80, 96]),
+        "head.hair" => Some([114, 84, 145]),
+        "head.teeth" => Some([235, 222, 188]),
+        "head.tongue" => Some([213, 92, 126]),
+        _ => None,
+    }
+}
+
+fn detail_role_name(role: GeneForgeDetailRole) -> &'static str {
+    match role {
+        GeneForgeDetailRole::Eyes => "eyes",
+        GeneForgeDetailRole::Lids => "lids",
+        GeneForgeDetailRole::Hair => "hair",
+        GeneForgeDetailRole::Teeth => "teeth",
+        GeneForgeDetailRole::Tongue => "tongue",
+    }
+}
+
+fn donor_name(donor: GeneForgeDonorId) -> &'static str {
+    match donor {
+        GeneForgeDonorId::Norn => "norn",
+        GeneForgeDonorId::Ettin => "ettin",
+        GeneForgeDonorId::Grendel => "grendel",
+    }
+}
+
+fn lod_name(lod: CreaturePartLodId) -> &'static str {
+    match lod {
+        CreaturePartLodId::Full => "full",
+        CreaturePartLodId::Compact => "compact",
+        CreaturePartLodId::Impostor => "impostor",
+    }
+}
+
+fn slot_name(slot: CreaturePartSlotKey) -> &'static str {
+    match slot {
+        CreaturePartSlotKey::Head => "head",
+        CreaturePartSlotKey::Torso => "torso",
+        CreaturePartSlotKey::Arms => "arms",
+        CreaturePartSlotKey::Legs => "legs",
+        CreaturePartSlotKey::Tail => "tail",
+    }
+}
+
+fn serialized_kebab_name<T: Serialize>(value: &T) -> Result<String, CreaturePartBuilderError> {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or_else(|| {
+            CreaturePartBuilderError::Staging(
+                "recipe enum could not be represented as a stable string".to_string(),
+            )
+        })
+}
+
+fn expected_landmarks(
+    catalog: &GeneForgeCreaturePartCatalog,
+    asset: &GeneForgePartAssetDefinition,
+) -> Result<BTreeSet<String>, CreaturePartBuilderError> {
+    let last_marker = if asset.donor == GeneForgeDonorId::Ettin {
+        12
+    } else {
+        14
+    };
+    let mut expected = BTreeSet::new();
+    for marker_id in 1..=last_marker {
+        let semantic = catalog.marker_map.get(&marker_id).ok_or_else(|| {
+            CreaturePartBuilderError::Staging(format!(
+                "recipe marker map is missing ID {marker_id}"
+            ))
+        })?;
+        expected.insert(serialized_kebab_name(semantic)?);
+    }
+    for landmark in asset.landmarks.keys() {
+        expected.insert(serialized_kebab_name(landmark)?);
+    }
+    Ok(expected)
+}
+
+fn validate_staged_obj(
+    path: &Path,
+    expected_groups: &BTreeSet<String>,
+) -> Result<StagedObjSummary, CreaturePartBuilderError> {
+    let text = fs::read_to_string(path).map_err(|error| {
+        CreaturePartBuilderError::Staging(format!("failed reading OBJ {}: {error}", path.display()))
+    })?;
+    let mut positions = Vec::<[f64; 3]>::new();
+    let mut uvs = Vec::<[f64; 2]>::new();
+    let mut normals = Vec::<[f64; 3]>::new();
+    let mut groups = BTreeSet::new();
+    let mut current_group = None::<String>;
+    let mut current_component = None::<String>;
+    let mut face_count = 0_usize;
+    let mut position_normals = BTreeMap::new();
+    let mut bounds = StagedBounds {
+        min: [f64::INFINITY; 3],
+        max: [f64::NEG_INFINITY; 3],
+    };
+    for (index, raw) in text.lines().enumerate() {
+        let line_number = index + 1;
+        let line = raw.trim();
+        let mut fields = line.split_whitespace();
+        match fields.next().unwrap_or_default() {
+            "v" => {
+                let value = parse_vector::<3>(fields, line_number, "position")?;
+                extend_bounds(&mut [bounds.min, bounds.max], value);
+                for axis in 0..3 {
+                    bounds.min[axis] = bounds.min[axis].min(value[axis]);
+                    bounds.max[axis] = bounds.max[axis].max(value[axis]);
+                }
+                positions.push(value);
+            }
+            "vt" => {
+                let value = parse_vector::<2>(fields, line_number, "UV")?;
+                if !value
+                    .into_iter()
+                    .all(|coordinate| (-0.001..=1.001).contains(&coordinate))
+                {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ UV is outside the semantic atlas at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                uvs.push(value);
+            }
+            "vn" => {
+                let value = parse_vector::<3>(fields, line_number, "normal")?;
+                let length = dot(value, value).sqrt();
+                if (length - 1.0).abs() > 2.0e-3 {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ normal is non-unit at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                normals.push(value);
+            }
+            "g" => {
+                let group = fields.next().unwrap_or_default().to_string();
+                if group.is_empty() {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ has an empty group at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                groups.insert(group.clone());
+                current_group = Some(group);
+            }
+            "o" => {
+                let component = fields.next().unwrap_or_default().to_string();
+                if component.is_empty() || fields.next().is_some() {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ has an invalid component ID at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                current_component = Some(component);
+            }
+            "f" => {
+                if current_group.is_none() {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ face has no semantic group at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                if current_component.is_none() {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ face has no semantic component at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                let refs = fields.collect::<Vec<_>>();
+                if refs.len() != 3 {
+                    return Err(CreaturePartBuilderError::Staging(format!(
+                        "OBJ face is not triangular at {}:{line_number}",
+                        path.display()
+                    )));
+                }
+                for reference in refs {
+                    let parts = reference.split('/').collect::<Vec<_>>();
+                    if parts.len() != 3
+                        || !valid_positive_obj_index(parts[0], positions.len())
+                        || !valid_positive_obj_index(parts[1], uvs.len())
+                        || !valid_positive_obj_index(parts[2], normals.len())
+                    {
+                        return Err(CreaturePartBuilderError::Staging(format!(
+                            "OBJ index is invalid at {}:{line_number}",
+                            path.display()
+                        )));
+                    }
+                    let position_index = parts[0].parse::<usize>().unwrap() - 1;
+                    let normal_index = parts[2].parse::<usize>().unwrap() - 1;
+                    if position_normals
+                        .insert(position_index, normal_index)
+                        .is_some_and(|previous| previous != normal_index)
+                    {
+                        return Err(CreaturePartBuilderError::Staging(format!(
+                            "OBJ shared position has split rather than smooth normals at {}:{line_number}",
+                            path.display()
+                        )));
+                    }
+                }
+                face_count += 1;
+            }
+            _ => {}
+        }
+    }
+    if positions.is_empty() || uvs.is_empty() || normals.is_empty() || face_count == 0 {
+        return Err(CreaturePartBuilderError::Staging(format!(
+            "OBJ is empty or incomplete: {}",
+            path.display()
+        )));
+    }
+    if &groups != expected_groups {
+        return Err(CreaturePartBuilderError::Staging(format!(
+            "OBJ semantic groups do not match its shared asset contract: {}",
+            path.display()
+        )));
+    }
+    let topology = analyze_obj_topology(&text)?;
+    if topology.non_manifold_edges != 0 {
+        return Err(CreaturePartBuilderError::Staging(format!(
+            "OBJ contains non-manifold edges after repair: {}",
+            path.display()
+        )));
+    }
+    Ok(StagedObjSummary {
+        bounds,
+        positions,
+        groups,
+        topology,
+    })
+}
+
+fn valid_positive_obj_index(value: &str, count: usize) -> bool {
+    value
+        .parse::<usize>()
+        .is_ok_and(|index| index > 0 && index <= count)
+}
+
+fn validate_staged_socket_manifest(
+    staging_root: &Path,
+    path: &Path,
+    catalog: &GeneForgeCreaturePartCatalog,
+    asset: &GeneForgePartAssetDefinition,
+    lod: &alife_game_app::GeneForgeGeneratedPartLod,
+    obj: &StagedObjSummary,
+    preparation_contract: &StagedPreparationContract,
+    full_preparations: &mut BTreeSet<(u16, String)>,
+    canonical_slot_records: &mut usize,
+    cross_torso_slot_records: &mut usize,
+    canonical_group_keys: &mut Vec<String>,
+    cross_torso_group_keys: &mut Vec<String>,
+    matrix_records: &mut Vec<(String, String, [f64; 16])>,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let bytes = fs::read(path).map_err(|error| {
+        fail(format!(
+            "failed reading socket manifest {}: {error}",
+            path.display()
+        ))
+    })?;
+    let manifest: StagedSocketManifest = serde_json::from_slice(&bytes).map_err(|error| {
+        fail(format!(
+            "invalid socket manifest {}: {error}",
+            path.display()
+        ))
+    })?;
+    if manifest.schema != "alife.creature_part_sockets.v2"
+        || manifest.asset_id != asset.id.0
+        || manifest.logical_slot != slot_name(asset.logical_slot)
+        || manifest.donor != donor_name(asset.donor)
+        || manifest.lod != lod_name(lod.lod)
+    {
+        return Err(fail(format!(
+            "socket manifest metadata is invalid: {}",
+            path.display()
+        )));
+    }
+    if !manifest
+        .bounds
+        .min
+        .into_iter()
+        .chain(manifest.bounds.max)
+        .all(f64::is_finite)
+        || !(0..3).all(|axis| manifest.bounds.min[axis] < manifest.bounds.max[axis])
+    {
+        return Err(fail(format!(
+            "socket bounds are invalid: {}",
+            path.display()
+        )));
+    }
+    for axis in 0..3 {
+        if obj.bounds.min[axis] < manifest.bounds.min[axis] - 0.01
+            || obj.bounds.max[axis] > manifest.bounds.max[axis] + 0.01
+        {
+            return Err(fail(format!(
+                "OBJ bounds exceed declared socket bounds: {}",
+                path.display()
+            )));
+        }
+    }
+    let required_sockets = &catalog.assembly_contract.slot_sockets[&asset.logical_slot];
+    for required in required_sockets {
+        if !manifest.sockets.contains_key(required) {
+            return Err(fail(format!(
+                "socket {required} is missing: {}",
+                path.display()
+            )));
+        }
+    }
+    for (name, socket) in &manifest.sockets {
+        if !socket
+            .translation
+            .into_iter()
+            .chain(socket.rotation_xyzw)
+            .chain(socket.scale)
+            .all(f64::is_finite)
+            || socket.scale.into_iter().any(|value| value <= 0.0)
+        {
+            return Err(fail(format!("socket {name} has invalid finite values")));
+        }
+        let quaternion_length = socket
+            .rotation_xyzw
+            .into_iter()
+            .map(|value| value * value)
+            .sum::<f64>()
+            .sqrt();
+        if (quaternion_length - 1.0).abs() > 1.0e-4 {
+            return Err(fail(format!("socket {name} has a non-unit quaternion")));
+        }
+        if (0..3).any(|axis| {
+            socket.translation[axis] < manifest.bounds.min[axis] - 2.0
+                || socket.translation[axis] > manifest.bounds.max[axis] + 2.0
+        }) {
+            return Err(fail(format!(
+                "socket {name} is detached from declared bounds"
+            )));
+        }
+    }
+    if manifest.landmarks.keys().cloned().collect::<BTreeSet<_>>()
+        != expected_landmarks(catalog, asset)?
+    {
+        return Err(fail(
+            "required marker and face landmark set does not match the recipe".to_string(),
+        ));
+    }
+    if manifest
+        .landmarks
+        .values()
+        .flatten()
+        .chain(manifest.ground_contacts.iter().flatten())
+        .any(|value| !value.is_finite())
+    {
+        return Err(fail("landmark or ground contact is non-finite".to_string()));
+    }
+    if asset.logical_slot == CreaturePartSlotKey::Legs {
+        if manifest.ground_contacts.len() != 2
+            || manifest
+                .ground_contacts
+                .iter()
+                .any(|contact| contact[1] > manifest.bounds.min[1] + 0.25)
+        {
+            return Err(fail(
+                "ground contacts are not planted within tolerance".to_string(),
+            ));
+        }
+    } else if !manifest.ground_contacts.is_empty() {
+        return Err(fail(
+            "non-leg shared asset unexpectedly declares ground contacts".to_string(),
+        ));
+    }
+    if manifest.semantic_mask != lod.semantic_mask || manifest.anatomy_mask != lod.anatomy_mask {
+        return Err(fail(format!(
+            "semantic/anatomy mask reference is missing or unsafe: {}, {}",
+            manifest.semantic_mask, manifest.anatomy_mask
+        )));
+    }
+    confined_existing_staged_path(staging_root, &manifest.semantic_mask)?;
+    confined_existing_staged_path(staging_root, &manifest.anatomy_mask)?;
+    if manifest.expected_groups != obj.groups {
+        return Err(fail(
+            "socket manifest semantic groups do not match the OBJ".to_string(),
+        ));
+    }
+    if manifest.lod_topology != obj.topology {
+        return Err(fail(
+            "socket manifest topology does not match the OBJ".to_string(),
+        ));
+    }
+    if manifest.microdetail.source_files.is_empty()
+        || manifest
+            .microdetail
+            .source_files
+            .iter()
+            .any(|name| Path::new(name).file_name().and_then(|value| value.to_str()) != Some(name))
+        || manifest.microdetail.uvless_fallback != "evaluated-normal-curvature-material-output"
+    {
+        return Err(fail(
+            "semantic mask lacks source-derived microdetail provenance".to_string(),
+        ));
+    }
+    validate_assembly_preparations(
+        staging_root,
+        &manifest,
+        catalog,
+        asset,
+        lod.lod,
+        obj,
+        preparation_contract,
+        full_preparations,
+        canonical_slot_records,
+        cross_torso_slot_records,
+        canonical_group_keys,
+        cross_torso_group_keys,
+        matrix_records,
+    )?;
+    Ok(())
+}
+
+fn validate_assembly_preparations(
+    staging_root: &Path,
+    manifest: &StagedSocketManifest,
+    catalog: &GeneForgeCreaturePartCatalog,
+    asset: &GeneForgePartAssetDefinition,
+    lod: CreaturePartLodId,
+    obj: &StagedObjSummary,
+    preparation_contract: &StagedPreparationContract,
+    full_preparations: &mut BTreeSet<(u16, String)>,
+    canonical_slot_records: &mut usize,
+    cross_torso_slot_records: &mut usize,
+    canonical_group_keys: &mut Vec<String>,
+    cross_torso_group_keys: &mut Vec<String>,
+    matrix_records: &mut Vec<(String, String, [f64; 16])>,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    if manifest.assembly_preparation_schema != preparation_contract.schema
+        || manifest.assembly_preparation_schema_digest != preparation_contract.schema_digest
+    {
+        return Err(fail("assembly preparation schema drift".to_string()));
+    }
+    let required_sockets = &catalog.assembly_contract.slot_sockets[&asset.logical_slot];
+    let mut observed_geometry = BTreeMap::new();
+    for geometry in &manifest.bridge_geometry {
+        if observed_geometry
+            .insert(geometry.socket.clone(), geometry)
+            .is_some()
+            || !required_sockets.contains(&geometry.socket)
+            || geometry.prepared_vertex_count == 0
+            || !geometry.applied_overlap_depth.is_finite()
+            || geometry.applied_overlap_depth <= 0.0
+            || geometry.applied_overlap_depth
+                > f64::from(catalog.assembly_contract.default_overlap_depth) + 1.0e-9
+            || !geometry
+                .original_anchor
+                .into_iter()
+                .chain(geometry.prepared_anchor)
+                .all(f64::is_finite)
+            || vector_distance(geometry.original_anchor, geometry.prepared_anchor) <= 1.0e-9
+            || !obj
+                .positions
+                .iter()
+                .any(|position| vector_distance(*position, geometry.prepared_anchor) <= 1.0e-6)
+        {
+            return Err(fail(
+                "assembly bridge geometry is not bound to prepared OBJ vertices".to_string(),
+            ));
+        }
+    }
+    if observed_geometry.keys().cloned().collect::<BTreeSet<_>>()
+        != required_sockets.iter().cloned().collect::<BTreeSet<_>>()
+    {
+        return Err(fail(
+            "assembly bridge geometry socket set drift".to_string(),
+        ));
+    }
+    let expected = catalog
+        .families
+        .iter()
+        .filter_map(|family| {
+            family
+                .parts
+                .get(&asset.logical_slot)
+                .filter(|part| part.asset_id == asset.id)
+                .map(|part| (family, part))
+        })
+        .collect::<Vec<_>>();
+    if manifest.assembly_preparations.len() != expected.len() {
+        return Err(fail(format!(
+            "assembly preparation count drift for asset {}",
+            asset.id.0
+        )));
+    }
+    let mut observed = BTreeSet::new();
+    for prepared in &manifest.assembly_preparations {
+        let Some((family, part)) = expected
+            .iter()
+            .find(|(family, _)| family.id.0 == prepared.family_id)
+            .copied()
+        else {
+            return Err(fail(
+                "assembly preparation references an unexpected family".to_string(),
+            ));
+        };
+        let slot = slot_name(asset.logical_slot);
+        let expected_transform_mode = if matches!(
+            asset.logical_slot,
+            CreaturePartSlotKey::Arms | CreaturePartSlotKey::Legs
+        ) {
+            "per-group-socket-transforms"
+        } else {
+            "slot-transform"
+        };
+        if !observed.insert((prepared.family_id, prepared.logical_slot.clone()))
+            || prepared.family_label != family.label
+            || prepared.logical_slot != slot
+            || prepared.asset_id != asset.id.0
+            || prepared.source_asset_id != asset.id.0
+            || prepared.lod != lod_name(lod)
+            || prepared.preparation_kind != "canonical"
+            || prepared.bridge_sockets
+                != catalog.assembly_contract.slot_sockets[&asset.logical_slot]
+            || prepared.bridge_kind != format!("{slot}-join-cover")
+            || prepared.join_cover_kind != part.join_cover_kind
+            || prepared.transform_mode != expected_transform_mode
+            || !near(
+                prepared.overlap_depth,
+                f64::from(catalog.assembly_contract.default_overlap_depth),
+            )
+            || !near(
+                prepared.attachment_error_bound,
+                f64::from(catalog.assembly_contract.attachment_error_limit),
+            )
+        {
+            return Err(fail("assembly preparation metadata drift".to_string()));
+        }
+        let authored_offset: [f64; 3] = std::array::from_fn(|axis| {
+            f64::from(part.fit.translation[axis] + part.seam_offset[axis])
+        });
+        let torso_part = &family.parts[&CreaturePartSlotKey::Torso];
+        if prepared.target_torso_asset_id != torso_part.asset_id.0 {
+            return Err(fail(
+                "assembly bridge geometry target torso drift".to_string(),
+            ));
+        }
+        let target_manifest = if asset.logical_slot == CreaturePartSlotKey::Torso {
+            None
+        } else {
+            let torso_asset = catalog.asset(&torso_part.asset_id).ok_or_else(|| {
+                fail("assembly bridge geometry references an unknown torso asset".to_string())
+            })?;
+            let torso_lod = torso_asset
+                .lods
+                .iter()
+                .find(|entry| entry.lod == lod)
+                .ok_or_else(|| {
+                    fail("assembly bridge geometry target torso LOD is missing".to_string())
+                })?;
+            let torso_manifest_path =
+                confined_existing_staged_path(staging_root, &torso_lod.socket_manifest)?;
+            let bytes = fs::read(torso_manifest_path).map_err(|error| {
+                fail(format!(
+                    "assembly bridge geometry target torso manifest is missing: {error}"
+                ))
+            })?;
+            Some(
+                serde_json::from_slice::<StagedSocketManifest>(&bytes).map_err(|error| {
+                    fail(format!(
+                        "assembly bridge geometry target torso manifest is invalid: {error}"
+                    ))
+                })?,
+            )
+        };
+        let source_centroid = socket_centroid(manifest, &prepared.bridge_sockets)?;
+        let expected_translation = if let Some(target) = &target_manifest {
+            let target_centroid = socket_centroid(target, &prepared.bridge_sockets)?;
+            let linear = prepared_matrix(&prepared.fit, [0.0; 3]);
+            let transformed_source = transform_matrix_point(linear, source_centroid);
+            std::array::from_fn(|axis| {
+                target_centroid[axis] + authored_offset[axis] - transformed_source[axis]
+            })
+        } else {
+            authored_offset
+        };
+        let expected_matrix = prepared_matrix(&prepared.fit, expected_translation);
+        if !socket_matches(&prepared.fit, part.fit)
+            || !(0..3).all(|axis| {
+                near(
+                    prepared.seam_offset[axis],
+                    f64::from(part.seam_offset[axis]),
+                )
+            })
+            || !(0..3).all(|axis| {
+                near(
+                    prepared.prepared_translation[axis],
+                    expected_translation[axis],
+                )
+            })
+        {
+            return Err(fail(
+                "assembly preparation fit or seam transform drift".to_string(),
+            ));
+        }
+        if !prepared.prepared_matrix.into_iter().all(f64::is_finite)
+            || !prepared
+                .prepared_matrix
+                .into_iter()
+                .zip(expected_matrix)
+                .all(|(actual, expected)| near(actual, expected))
+        {
+            return Err(fail(
+                "assembly preparation prepared matrix drift".to_string(),
+            ));
+        }
+        if prepared.bridge_geometry.len() != prepared.bridge_sockets.len() {
+            return Err(fail(
+                "assembly bridge geometry evidence count drift".to_string(),
+            ));
+        }
+        let mut bridge_sockets = BTreeSet::new();
+        let mut predicted = 0.0_f64;
+        for bridge in &prepared.bridge_geometry {
+            let source_socket = manifest.sockets.get(&bridge.socket).ok_or_else(|| {
+                fail("assembly bridge geometry source socket is missing".to_string())
+            })?;
+            let prepared_geometry = observed_geometry.get(&bridge.socket).ok_or_else(|| {
+                fail("assembly bridge geometry has no prepared vertex evidence".to_string())
+            })?;
+            let expected_runtime_group =
+                runtime_group_for_socket(asset.logical_slot, &bridge.socket).ok_or_else(|| {
+                    fail("assembly bridge geometry socket has no runtime OBJ group".to_string())
+                })?;
+            let expected_target = if let Some(target) = &target_manifest {
+                let target_socket = target.sockets.get(&bridge.socket).ok_or_else(|| {
+                    fail("assembly bridge geometry target socket is missing".to_string())
+                })?;
+                std::array::from_fn(|axis| target_socket.translation[axis] + authored_offset[axis])
+            } else {
+                transform_matrix_point(prepared.prepared_matrix, bridge.source_anchor)
+            };
+            let expected_bridge_matrix = if target_manifest.is_some() {
+                let linear = prepared_matrix(&prepared.fit, [0.0; 3]);
+                let linear_source = transform_matrix_point(linear, bridge.source_anchor);
+                let translation =
+                    std::array::from_fn(|axis| expected_target[axis] - linear_source[axis]);
+                prepared_matrix(&prepared.fit, translation)
+            } else {
+                prepared.prepared_matrix
+            };
+            let transformed = transform_matrix_point(expected_bridge_matrix, bridge.source_anchor);
+            let residual = vector_distance(transformed, expected_target);
+            if !bridge_sockets.insert(bridge.socket.clone())
+                || !prepared.bridge_sockets.contains(&bridge.socket)
+                || bridge.runtime_group != expected_runtime_group
+                || !manifest.expected_groups.contains(expected_runtime_group)
+                || bridge.prepared_vertex_count != prepared_geometry.prepared_vertex_count
+                || !near(
+                    bridge.applied_overlap_depth,
+                    prepared_geometry.applied_overlap_depth,
+                )
+                || !vectors_near(bridge.original_anchor, prepared_geometry.original_anchor)
+                || !vectors_near(bridge.prepared_anchor, prepared_geometry.prepared_anchor)
+                || !vectors_near(bridge.source_anchor, source_socket.translation)
+                || !vectors_near(bridge.target_anchor, expected_target)
+                || !vectors_near(bridge.transformed_source_anchor, transformed)
+                || !bridge.prepared_matrix.into_iter().all(f64::is_finite)
+                || !bridge
+                    .prepared_matrix
+                    .into_iter()
+                    .zip(expected_bridge_matrix)
+                    .all(|(actual, expected)| near(actual, expected))
+                || !near(bridge.residual, residual)
+                || !bridge
+                    .source_anchor
+                    .into_iter()
+                    .chain(bridge.target_anchor)
+                    .chain(bridge.transformed_source_anchor)
+                    .all(f64::is_finite)
+            {
+                return Err(fail(
+                    "assembly bridge geometry transformed socket evidence drift".to_string(),
+                ));
+            }
+            predicted = predicted.max(residual);
+        }
+        if bridge_sockets
+            != prepared
+                .bridge_sockets
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        {
+            return Err(fail(
+                "assembly bridge geometry socket evidence drift".to_string(),
+            ));
+        }
+        if !near(prepared.predicted_attachment_error, predicted)
+            || prepared.predicted_attachment_error > prepared.attachment_error_bound + 1.0e-9
+        {
+            return Err(fail(
+                "assembly preparation attachment-error bound is invalid".to_string(),
+            ));
+        }
+        let keys = validate_group_transforms(
+            &manifest,
+            asset,
+            family,
+            part,
+            prepared,
+            preparation_contract,
+            false,
+            target_manifest.as_ref(),
+            &observed_geometry,
+            catalog,
+            matrix_records,
+        )?;
+        *canonical_slot_records += 1;
+        canonical_group_keys.extend(keys);
+        if lod == CreaturePartLodId::Full {
+            full_preparations.insert((prepared.family_id, prepared.logical_slot.clone()));
+        }
+    }
+    if asset.logical_slot == CreaturePartSlotKey::Torso {
+        if !manifest.cross_torso_preparations.is_empty() {
+            return Err(fail(
+                "torso asset manifest contains cross-torso preparations".to_string(),
+            ));
+        }
+    } else {
+        let expected = catalog
+            .families
+            .iter()
+            .filter(|family| {
+                family
+                    .parts
+                    .get(&asset.logical_slot)
+                    .is_some_and(|part| part.asset_id == asset.id)
+            })
+            .collect::<Vec<_>>();
+        if manifest.cross_torso_preparations.len() != expected.len() * 2 {
+            return Err(fail(format!(
+                "cross-torso preparation count drift for asset {}",
+                asset.id.0
+            )));
+        }
+        let mut observed_cross = BTreeSet::new();
+        for prepared in &manifest.cross_torso_preparations {
+            let Some(family) = expected
+                .iter()
+                .find(|family| family.id.0 == prepared.family_id)
+                .copied()
+            else {
+                return Err(fail(
+                    "cross-torso preparation references an unexpected family".to_string(),
+                ));
+            };
+            let part = family.parts.get(&asset.logical_slot).ok_or_else(|| {
+                fail("cross-torso preparation source slot is missing".to_string())
+            })?;
+            let target_id = prepared.target_torso_asset_id.as_str();
+            let canonical_target = family.parts[&CreaturePartSlotKey::Torso]
+                .asset_id
+                .0
+                .as_str();
+            if !PREPARATION_TORSO_ASSETS.contains(&target_id) || target_id == canonical_target {
+                return Err(fail(
+                    "cross-torso preparation target torso drift".to_string(),
+                ));
+            }
+            if !observed_cross.insert((prepared.family_id, target_id.to_string()))
+                || prepared.family_label != family.label
+                || prepared.logical_slot != slot_name(asset.logical_slot)
+                || prepared.asset_id != asset.id.0
+                || prepared.source_asset_id != asset.id.0
+                || prepared.lod != lod_name(lod)
+                || prepared.preparation_kind != "cross-torso"
+                || prepared.bridge_sockets
+                    != catalog.assembly_contract.slot_sockets[&asset.logical_slot]
+                || prepared.bridge_kind != format!("{}-join-cover", slot_name(asset.logical_slot))
+                || prepared.join_cover_kind != part.join_cover_kind
+                || !near(
+                    prepared.overlap_depth,
+                    f64::from(catalog.assembly_contract.default_overlap_depth),
+                )
+                || !near(
+                    prepared.attachment_error_bound,
+                    f64::from(catalog.assembly_contract.attachment_error_limit),
+                )
+            {
+                return Err(fail("cross-torso preparation metadata drift".to_string()));
+            }
+            let torso_asset = catalog
+                .asset(&alife_game_app::CreaturePartAssetId(target_id.to_string()))
+                .filter(|asset| asset.logical_slot == CreaturePartSlotKey::Torso)
+                .ok_or_else(|| fail("cross-torso target torso asset is unknown".to_string()))?;
+            let torso_lod = torso_asset
+                .lods
+                .iter()
+                .find(|entry| entry.lod == lod)
+                .ok_or_else(|| fail("cross-torso target torso LOD is missing".to_string()))?;
+            let target_path =
+                confined_existing_staged_path(staging_root, &torso_lod.socket_manifest)?;
+            let target_manifest: StagedSocketManifest = serde_json::from_slice(
+                &fs::read(target_path).map_err(|error| fail(error.to_string()))?,
+            )
+            .map_err(|error| fail(format!("cross-torso target manifest is invalid: {error}")))?;
+            let authored_offset: [f64; 3] = std::array::from_fn(|axis| {
+                f64::from(part.fit.translation[axis] + part.seam_offset[axis])
+            });
+            let source_centroid = socket_centroid(&manifest, &prepared.bridge_sockets)?;
+            let target_centroid = socket_centroid(&target_manifest, &prepared.bridge_sockets)?;
+            let linear = prepared_matrix(&prepared.fit, [0.0; 3]);
+            let transformed_source = transform_matrix_point(linear, source_centroid);
+            let expected_translation = std::array::from_fn(|axis| {
+                target_centroid[axis] + authored_offset[axis] - transformed_source[axis]
+            });
+            let expected_matrix = prepared_matrix(&prepared.fit, expected_translation);
+            if !socket_matches(&prepared.fit, part.fit)
+                || !prepared
+                    .seam_offset
+                    .into_iter()
+                    .zip(part.seam_offset)
+                    .all(|(actual, expected)| near(actual, f64::from(expected)))
+                || !prepared
+                    .prepared_translation
+                    .into_iter()
+                    .zip(expected_translation)
+                    .all(|(actual, expected)| near(actual, expected))
+                || !prepared
+                    .prepared_matrix
+                    .into_iter()
+                    .zip(expected_matrix)
+                    .all(|(actual, expected)| near(actual, expected))
+            {
+                return Err(fail("cross-torso fit or seam transform drift".to_string()));
+            }
+            let observed_geometry = manifest
+                .bridge_geometry
+                .iter()
+                .map(|geometry| (geometry.socket.clone(), geometry))
+                .collect::<BTreeMap<_, _>>();
+            let keys = validate_group_transforms(
+                &manifest,
+                asset,
+                family,
+                part,
+                prepared,
+                preparation_contract,
+                true,
+                Some(&target_manifest),
+                &observed_geometry,
+                catalog,
+                matrix_records,
+            )?;
+            let predicted = prepared
+                .group_transforms
+                .iter()
+                .map(|group| group.residual)
+                .fold(0.0_f64, f64::max);
+            if !near(prepared.predicted_attachment_error, predicted)
+                || predicted > prepared.attachment_error_bound + 1.0e-9
+            {
+                return Err(fail(
+                    "cross-torso attachment-error bound is invalid".to_string(),
+                ));
+            }
+            *cross_torso_slot_records += 1;
+            cross_torso_group_keys.extend(keys);
+        }
+    }
+    Ok(())
+}
+
+fn validate_group_transforms(
+    manifest: &StagedSocketManifest,
+    asset: &GeneForgePartAssetDefinition,
+    family: &alife_game_app::GeneForgeCreatureFamilyDefinition,
+    part: &alife_game_app::GeneForgeFamilyPartRecipe,
+    prepared: &StagedAssemblyPreparation,
+    preparation_contract: &StagedPreparationContract,
+    cross_torso: bool,
+    target_manifest: Option<&StagedSocketManifest>,
+    observed_geometry: &BTreeMap<String, &StagedGeometryPreparation>,
+    catalog: &GeneForgeCreaturePartCatalog,
+    matrix_records: &mut Vec<(String, String, [f64; 16])>,
+) -> Result<Vec<String>, CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let expected_groups: &[(&str, &str)] = match asset.logical_slot {
+        CreaturePartSlotKey::Head => &[("head", "neck")],
+        CreaturePartSlotKey::Torso => &[("torso", "torso-frame")],
+        CreaturePartSlotKey::Arms => &[
+            ("left-arm", "left-shoulder"),
+            ("right-arm", "right-shoulder"),
+        ],
+        CreaturePartSlotKey::Legs => &[("left-leg", "left-hip"), ("right-leg", "right-hip")],
+        CreaturePartSlotKey::Tail => &[("tail-back", "tail-base")],
+    };
+    if prepared.group_transforms.len() != expected_groups.len() {
+        return Err(fail(format!(
+            "{} assembly preparation group count drift",
+            prepared.logical_slot
+        )));
+    }
+    let mut keys = Vec::new();
+    for group in &prepared.group_transforms {
+        if group.source_family_id != prepared.family_id
+            || group.source_family_id != family.id.0
+            || group.source_asset_id != asset.id.0
+            || group.target_torso_asset_id != prepared.target_torso_asset_id
+            || group.lod != manifest.lod
+            || group.transform_space != preparation_contract.transform_space
+            || group.schema_digest != preparation_contract.schema_digest
+            || group.bridge_kind != prepared.bridge_kind
+            || group.join_cover_kind != prepared.join_cover_kind
+            || !socket_matches(&group.fit, part.fit)
+            || !group
+                .seam_offset
+                .into_iter()
+                .zip(part.seam_offset)
+                .all(|(actual, expected)| near(actual, f64::from(expected)))
+            || !near(group.overlap_depth, prepared.overlap_depth)
+            || !near(
+                group.attachment_error_bound,
+                prepared.attachment_error_bound,
+            )
+            || !group.prepared_matrix.iter().all(|value| value.is_finite())
+            || group.prepared_matrix[12..] != [0.0, 0.0, 0.0, 1.0]
+            || !group.residual.is_finite()
+            || !(0.0..=preparation_contract.residual_limit).contains(&group.residual)
+        {
+            return Err(fail(
+                "assembly group transform identity or affine contract drift".into(),
+            ));
+        }
+        let expected_socket = expected_groups
+            .iter()
+            .find(|(runtime_group, _)| *runtime_group == group.runtime_group)
+            .map(|(_, socket)| *socket)
+            .ok_or_else(|| fail("assembly group transform runtime group is incompatible".into()))?;
+        if group.socket != expected_socket
+            || (cross_torso && group.runtime_group == "torso")
+            || (asset.logical_slot == CreaturePartSlotKey::Torso
+                && (cross_torso || group.runtime_group != "torso"))
+            || (asset.logical_slot != CreaturePartSlotKey::Torso && group.runtime_group == "torso")
+            || (group.runtime_group != "torso"
+                && !manifest.expected_groups.contains(&group.runtime_group))
+        {
+            return Err(fail(
+                "assembly group transform runtime group/socket drift".into(),
+            ));
+        }
+        if group.runtime_group == "torso" {
+            if target_manifest.is_some()
+                || !group.bridge_geometry.is_empty()
+                || group.socket_evidence.len() != 6
+                || group
+                    .socket_evidence
+                    .iter()
+                    .map(|evidence| evidence.socket.as_str())
+                    .collect::<Vec<_>>()
+                    != PREPARATION_SOCKET_ORDER[..6]
+            {
+                return Err(fail(
+                    "torso group transform must use six sorted socket evidences".into(),
+                ));
+            }
+            for evidence in &group.socket_evidence {
+                let geometry = observed_geometry.get(&evidence.socket).ok_or_else(|| {
+                    fail("torso group transform evidence is not bound to bridge geometry".into())
+                })?;
+                let source_anchor = manifest.sockets[&evidence.socket].translation;
+                let transformed = transform_matrix_point(group.prepared_matrix, source_anchor);
+                let residual = vector_distance(transformed, evidence.target_anchor);
+                if !evidence
+                    .source_anchor
+                    .into_iter()
+                    .chain(evidence.target_anchor)
+                    .chain(evidence.transformed_source_anchor)
+                    .all(f64::is_finite)
+                    || !evidence.residual.is_finite()
+                    || evidence.residual > preparation_contract.residual_limit
+                    || evidence.prepared_vertex_count != geometry.prepared_vertex_count
+                    || !near(
+                        evidence.applied_overlap_depth,
+                        geometry.applied_overlap_depth,
+                    )
+                    || !vectors_near(evidence.source_anchor, source_anchor)
+                    || !vectors_near(evidence.transformed_source_anchor, transformed)
+                    || !near(evidence.residual, residual)
+                {
+                    return Err(fail("torso group socket evidence drift".into()));
+                }
+            }
+        } else {
+            if !group.socket_evidence.is_empty() || group.bridge_geometry.len() != 1 {
+                return Err(fail(
+                    "non-torso group transform must bind one bridge evidence".into(),
+                ));
+            }
+            let bridge = &group.bridge_geometry[0];
+            let geometry = observed_geometry.get(&group.socket).ok_or_else(|| {
+                fail("group transform bridge socket is not bound to manifest geometry".into())
+            })?;
+            let source_socket = manifest
+                .sockets
+                .get(&group.socket)
+                .ok_or_else(|| fail("group transform source socket is missing".into()))?;
+            let target = target_manifest.ok_or_else(|| {
+                fail("non-torso group transform is missing target torso manifest".into())
+            })?;
+            let target_socket = target
+                .sockets
+                .get(&group.socket)
+                .ok_or_else(|| fail("group transform target socket is missing".into()))?;
+            let authored_offset: [f64; 3] = std::array::from_fn(|axis| {
+                f64::from(part.fit.translation[axis] + part.seam_offset[axis])
+            });
+            let expected_target =
+                std::array::from_fn(|axis| target_socket.translation[axis] + authored_offset[axis]);
+            let linear = prepared_matrix(&group.fit, [0.0; 3]);
+            let linear_source = transform_matrix_point(linear, source_socket.translation);
+            let translation =
+                std::array::from_fn(|axis| expected_target[axis] - linear_source[axis]);
+            let expected_matrix = prepared_matrix(&group.fit, translation);
+            let transformed = transform_matrix_point(expected_matrix, source_socket.translation);
+            let residual = vector_distance(transformed, expected_target);
+            if bridge.socket != group.socket
+                || bridge.runtime_group != group.runtime_group
+                || bridge.prepared_vertex_count != geometry.prepared_vertex_count
+                || !near(bridge.applied_overlap_depth, geometry.applied_overlap_depth)
+                || !vectors_near(bridge.original_anchor, geometry.original_anchor)
+                || !vectors_near(bridge.prepared_anchor, geometry.prepared_anchor)
+                || !vectors_near(bridge.source_anchor, source_socket.translation)
+                || !vectors_near(bridge.target_anchor, expected_target)
+                || !vectors_near(bridge.transformed_source_anchor, transformed)
+                || !bridge.prepared_matrix.into_iter().all(f64::is_finite)
+                || bridge.prepared_matrix[12..] != [0.0, 0.0, 0.0, 1.0]
+                || !bridge
+                    .prepared_matrix
+                    .into_iter()
+                    .zip(expected_matrix)
+                    .all(|(actual, expected)| near(actual, expected))
+                || !group
+                    .prepared_matrix
+                    .into_iter()
+                    .zip(bridge.prepared_matrix)
+                    .all(|(actual, expected)| near(actual, expected))
+                || !near(bridge.residual, residual)
+                || !near(group.residual, residual)
+            {
+                return Err(fail("group transform bridge evidence drift".into()));
+            }
+        }
+        let matrix_base = format!(
+            "{}|{}|{}|{}|{}",
+            group.source_family_id,
+            group.source_asset_id,
+            group.lod,
+            group.runtime_group,
+            group.socket
+        );
+        if group.runtime_group != "torso" {
+            matrix_records.push((
+                matrix_base,
+                group.target_torso_asset_id.clone(),
+                group.prepared_matrix,
+            ));
+        }
+        keys.push(group_key(group));
+    }
+    if keys != {
+        let mut sorted = keys.clone();
+        sorted.sort_by_key(|key| preparation_key_sort_key(key));
+        sorted
+    } {
+        return Err(fail(
+            "assembly group transforms are not deterministically ordered".into(),
+        ));
+    }
+    let _ = catalog;
+    Ok(keys)
+}
+
+fn group_key(group: &StagedGroupTransform) -> String {
+    format!(
+        "{}|{}|{}|{}|{}|{}",
+        group.source_family_id,
+        group.source_asset_id,
+        group.target_torso_asset_id,
+        group.lod,
+        group.runtime_group,
+        group.socket
+    )
+}
+
+fn preparation_key_sort_key(key: &str) -> (u16, String, usize, usize, usize, usize) {
+    let fields = key.split('|').collect::<Vec<_>>();
+    (
+        fields[0].parse().unwrap_or(u16::MAX),
+        fields[1].to_string(),
+        PREPARATION_TORSO_ASSETS
+            .iter()
+            .position(|value| *value == fields[2])
+            .unwrap_or(usize::MAX),
+        PREPARATION_LOD_ORDER
+            .iter()
+            .position(|value| *value == fields[3])
+            .unwrap_or(usize::MAX),
+        PREPARATION_RUNTIME_GROUP_ORDER
+            .iter()
+            .position(|value| *value == fields[4])
+            .unwrap_or(usize::MAX),
+        PREPARATION_SOCKET_ORDER
+            .iter()
+            .position(|value| *value == fields[5])
+            .unwrap_or(usize::MAX),
+    )
+}
+
+fn socket_matches(actual: &StagedSocket, expected: SocketFrame) -> bool {
+    (0..3).all(|axis| {
+        near(
+            actual.translation[axis],
+            f64::from(expected.translation[axis]),
+        )
+    }) && (0..4).all(|axis| {
+        near(
+            actual.rotation_xyzw[axis],
+            f64::from(expected.rotation_xyzw[axis]),
+        )
+    }) && (0..3).all(|axis| near(actual.scale[axis], f64::from(expected.scale[axis])))
+}
+
+fn prepared_matrix(fit: &StagedSocket, translation: [f64; 3]) -> [f64; 16] {
+    let [x, y, z, w] = fit.rotation_xyzw;
+    let [sx, sy, sz] = fit.scale;
+    [
+        (1.0 - 2.0 * (y * y + z * z)) * sx,
+        (2.0 * (x * y - z * w)) * sy,
+        (2.0 * (x * z + y * w)) * sz,
+        translation[0],
+        (2.0 * (x * y + z * w)) * sx,
+        (1.0 - 2.0 * (x * x + z * z)) * sy,
+        (2.0 * (y * z - x * w)) * sz,
+        translation[1],
+        (2.0 * (x * z - y * w)) * sx,
+        (2.0 * (y * z + x * w)) * sy,
+        (1.0 - 2.0 * (x * x + y * y)) * sz,
+        translation[2],
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ]
+}
+
+fn transform_matrix_point(matrix: [f64; 16], point: [f64; 3]) -> [f64; 3] {
+    std::array::from_fn(|row| {
+        (0..3)
+            .map(|axis| matrix[row * 4 + axis] * point[axis])
+            .sum::<f64>()
+            + matrix[row * 4 + 3]
+    })
+}
+
+fn socket_centroid(
+    manifest: &StagedSocketManifest,
+    socket_names: &[String],
+) -> Result<[f64; 3], CreaturePartBuilderError> {
+    if socket_names.is_empty() {
+        return Err(CreaturePartBuilderError::Staging(
+            "assembly bridge geometry has no sockets".to_string(),
+        ));
+    }
+    let mut centroid = [0.0; 3];
+    for name in socket_names {
+        let socket = manifest.sockets.get(name).ok_or_else(|| {
+            CreaturePartBuilderError::Staging(format!(
+                "assembly bridge geometry socket {name} is missing"
+            ))
+        })?;
+        for (axis, value) in centroid.iter_mut().enumerate() {
+            *value += socket.translation[axis];
+        }
+    }
+    for value in &mut centroid {
+        *value /= socket_names.len() as f64;
+    }
+    Ok(centroid)
+}
+
+fn vector_distance(left: [f64; 3], right: [f64; 3]) -> f64 {
+    (0..3)
+        .map(|axis| (left[axis] - right[axis]).powi(2))
+        .sum::<f64>()
+        .sqrt()
+}
+
+fn vectors_near(left: [f64; 3], right: [f64; 3]) -> bool {
+    (0..3).all(|axis| near(left[axis], right[axis]))
+}
+
+fn runtime_group_for_socket(
+    logical_slot: CreaturePartSlotKey,
+    socket: &str,
+) -> Option<&'static str> {
+    match (logical_slot, socket) {
+        (CreaturePartSlotKey::Head, "neck") => Some("head"),
+        (CreaturePartSlotKey::Torso, _) => Some("torso"),
+        (CreaturePartSlotKey::Arms, "left-shoulder") => Some("left-arm"),
+        (CreaturePartSlotKey::Arms, "right-shoulder") => Some("right-arm"),
+        (CreaturePartSlotKey::Legs, "left-hip") => Some("left-leg"),
+        (CreaturePartSlotKey::Legs, "right-hip") => Some("right-leg"),
+        (CreaturePartSlotKey::Tail, "tail-base") => Some("tail-back"),
+        _ => None,
+    }
+}
+
+fn near(left: f64, right: f64) -> bool {
+    (left - right).abs() <= 1.0e-6
+}
+
+fn decode_deterministic_rgba8_png(
+    label: &str,
+    kind: &str,
+    bytes: &[u8],
+) -> Result<Vec<u8>, CreaturePartBuilderError> {
+    const WIDTH: usize = 64;
+    const HEIGHT: usize = 64;
+    const PIXEL_BYTES: usize = WIDTH * HEIGHT * 4;
+    const FILTERED_BYTES: usize = HEIGHT * (1 + WIDTH * 4);
+    let fail =
+        |reason: String| CreaturePartBuilderError::Staging(format!("{kind} {label} {reason}"));
+    let compressed = deterministic_png_idat(bytes).map_err(&fail)?;
+    let filtered = inflate_zlib_bounded(&compressed, FILTERED_BYTES).map_err(&fail)?;
+    if filtered.len() != FILTERED_BYTES {
+        return Err(fail(format!(
+            "has invalid decoded row length: expected {FILTERED_BYTES}, found {}",
+            filtered.len()
+        )));
+    }
+    for row in 0..HEIGHT {
+        if filtered[row * (1 + WIDTH * 4)] != 0 {
+            return Err(fail("must use deterministic filter zero rows".to_string()));
+        }
+    }
+
+    let decoder = image::codecs::png::PngDecoder::new(Cursor::new(bytes))
+        .map_err(|error| fail(format!("is not a valid PNG: {error}")))?;
+    if decoder.dimensions() != (WIDTH as u32, HEIGHT as u32)
+        || decoder.color_type() != image::ColorType::Rgba8
+        || decoder.total_bytes() != PIXEL_BYTES as u64
+    {
+        return Err(fail(
+            "must be exactly 64x64 native deterministic RGBA8".to_string(),
+        ));
+    }
+    let mut pixels = vec![0; PIXEL_BYTES];
+    decoder
+        .read_image(&mut pixels)
+        .map_err(|error| fail(format!("failed native RGBA8 decode: {error}")))?;
+    if pixels.len() != PIXEL_BYTES {
+        return Err(fail("has an invalid decoded pixel length".to_string()));
+    }
+    Ok(pixels)
+}
+
+fn deterministic_png_idat(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    const SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+    if bytes.len() < SIGNATURE.len() || &bytes[..8] != SIGNATURE {
+        return Err("is not a PNG".to_string());
+    }
+    let mut offset = 8_usize;
+    let mut saw_ihdr = false;
+    let mut saw_iend = false;
+    let mut compressed = Vec::new();
+    while offset < bytes.len() {
+        if bytes.len() - offset < 12 {
+            return Err("has a truncated PNG chunk".to_string());
+        }
+        let length = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+        let chunk_end = offset
+            .checked_add(12)
+            .and_then(|value| value.checked_add(length))
+            .ok_or_else(|| "has an overflowing PNG chunk".to_string())?;
+        if chunk_end > bytes.len() {
+            return Err("has a truncated PNG chunk payload".to_string());
+        }
+        let chunk_kind = &bytes[offset + 4..offset + 8];
+        let payload = &bytes[offset + 8..offset + 8 + length];
+        let expected_crc = u32::from_be_bytes(
+            bytes[offset + 8 + length..offset + 12 + length]
+                .try_into()
+                .unwrap(),
+        );
+        if png_chunk_crc32(chunk_kind, payload) != expected_crc {
+            return Err("has an invalid PNG chunk checksum".to_string());
+        }
+        if !saw_ihdr && chunk_kind != b"IHDR" {
+            return Err("must begin with IHDR".to_string());
+        }
+        match chunk_kind {
+            b"IHDR" => {
+                if saw_ihdr || length != 13 {
+                    return Err("has invalid IHDR structure".to_string());
+                }
+                saw_ihdr = true;
+                let width = u32::from_be_bytes(payload[0..4].try_into().unwrap());
+                let height = u32::from_be_bytes(payload[4..8].try_into().unwrap());
+                if width != 64 || height != 64 || payload[8..] != [8, 6, 0, 0, 0] {
+                    return Err("must be exactly 64x64 native deterministic RGBA8".to_string());
+                }
+            }
+            b"IDAT" => {
+                if !saw_ihdr {
+                    return Err("has IDAT before IHDR".to_string());
+                }
+                if compressed.len() + payload.len() > 512 * 1024 {
+                    return Err("has oversized compressed PNG data".to_string());
+                }
+                compressed.extend_from_slice(payload);
+            }
+            b"IEND" => {
+                if length != 0 {
+                    return Err("has invalid IEND structure".to_string());
+                }
+                saw_iend = true;
+                offset = chunk_end;
+                break;
+            }
+            _ => {}
+        }
+        offset = chunk_end;
+    }
+    if !saw_ihdr || !saw_iend || compressed.is_empty() {
+        return Err("is missing required PNG chunks".to_string());
+    }
+    if offset != bytes.len() {
+        return Err("has trailing bytes after IEND".to_string());
+    }
+    Ok(compressed)
+}
+
+fn png_chunk_crc32(kind: &[u8], payload: &[u8]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in kind.iter().chain(payload) {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xedb8_8320 & 0_u32.wrapping_sub(crc & 1));
+        }
+    }
+    !crc
+}
+
+fn inflate_zlib_bounded(data: &[u8], output_limit: usize) -> Result<Vec<u8>, String> {
+    let decoder = ZlibDecoder::new(Cursor::new(data));
+    let mut bounded = decoder.take((output_limit + 1) as u64);
+    let mut output = Vec::with_capacity(output_limit);
+    bounded
+        .read_to_end(&mut output)
+        .map_err(|error| format!("has invalid zlib/DEFLATE data: {error}"))?;
+    let decoder = bounded.into_inner();
+    if output.len() > output_limit {
+        return Err("exceeds the bounded PNG decode size".to_string());
+    }
+    if decoder.total_in() != data.len() as u64 {
+        return Err("has a truncated stream or trailing zlib data".to_string());
+    }
+    Ok(output)
+}
+
+fn validate_semantic_mask_png_bytes(
+    label: &str,
+    bytes: &[u8],
+    expected_colors: &BTreeSet<[u8; 3]>,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let pixels = decode_deterministic_rgba8_png(label, "semantic mask", bytes)?;
+    let mut semantic_colors = BTreeSet::new();
+    let mut microdetail = BTreeSet::new();
+    for pixel in pixels.chunks_exact(4) {
+        if pixel[3] == 0 {
+            continue;
+        }
+        semantic_colors.insert([pixel[0], pixel[1], pixel[2]]);
+        microdetail.insert(pixel[3]);
+    }
+    if semantic_colors != *expected_colors {
+        return Err(fail(format!(
+            "semantic mask {label} occupied semantic colors do not match its asset groups"
+        )));
+    }
+    if microdetail.len() <= 8 {
+        return Err(fail(format!(
+            "semantic mask {label} lacks nonuniform source-derived microdetail"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_anatomy_mask_png_bytes(
+    label: &str,
+    semantic_bytes: &[u8],
+    anatomy_bytes: &[u8],
+    logical_slot: CreaturePartSlotKey,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let semantic = decode_deterministic_rgba8_png(
+        label,
+        "semantic mask paired with anatomy mask",
+        semantic_bytes,
+    )?;
+    let anatomy = decode_deterministic_rgba8_png(label, "anatomy mask", anatomy_bytes)?;
+    let (required, allowed) = anatomy_channels_for_slot(logical_slot);
+    let mut used = BTreeSet::new();
+    for (semantic_pixel, anatomy_pixel) in semantic.chunks_exact(4).zip(anatomy.chunks_exact(4)) {
+        if (semantic_pixel[3] > 0) != (anatomy_pixel[3] > 0) {
+            return Err(fail(format!(
+                "anatomy mask {label} occupancy does not match its semantic mask"
+            )));
+        }
+        if anatomy_pixel[3] == 0 {
+            if anatomy_pixel != [0, 0, 0, 0] {
+                return Err(fail(format!(
+                    "anatomy mask {label} has a nonzero transparent pixel"
+                )));
+            }
+            continue;
+        }
+        let channel =
+            anatomy_channel_from_rgb([anatomy_pixel[0], anatomy_pixel[1], anatomy_pixel[2]])
+                .ok_or_else(|| {
+                    fail(format!(
+                        "anatomy mask {label} contains an unknown channel color"
+                    ))
+                })?;
+        if !allowed.contains(&channel) {
+            return Err(fail(format!(
+                "anatomy mask {label} violates source channel ownership"
+            )));
+        }
+        used.insert(channel);
+    }
+    if !required.is_subset(&used) {
+        return Err(fail(format!(
+            "anatomy mask {label} lacks required source channel coverage"
+        )));
+    }
+    Ok(())
+}
+
+fn anatomy_channel_from_rgb(rgb: [u8; 3]) -> Option<GeneForgeAnatomyChannel> {
+    match rgb {
+        [248, 248, 248] => Some(GeneForgeAnatomyChannel::Primary),
+        [232, 176, 72] => Some(GeneForgeAnatomyChannel::Belly),
+        [226, 112, 128] => Some(GeneForgeAnatomyChannel::Muzzle),
+        [238, 86, 154] => Some(GeneForgeAnatomyChannel::InnerEar),
+        [72, 174, 218] => Some(GeneForgeAnatomyChannel::HandsFeet),
+        [64, 52, 72] => Some(GeneForgeAnatomyChannel::KeratinSkin),
+        [84, 92, 214] => Some(GeneForgeAnatomyChannel::SecondaryMarking),
+        _ => None,
+    }
+}
+
+fn anatomy_channels_for_slot(
+    slot: CreaturePartSlotKey,
+) -> (
+    BTreeSet<GeneForgeAnatomyChannel>,
+    BTreeSet<GeneForgeAnatomyChannel>,
+) {
+    let primary = GeneForgeAnatomyChannel::Primary;
+    let secondary = GeneForgeAnatomyChannel::SecondaryMarking;
+    match slot {
+        CreaturePartSlotKey::Head => {
+            let channels = BTreeSet::from([
+                primary,
+                GeneForgeAnatomyChannel::Muzzle,
+                GeneForgeAnatomyChannel::InnerEar,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                secondary,
+            ]);
+            (channels.clone(), channels)
+        }
+        CreaturePartSlotKey::Torso => (
+            BTreeSet::from([primary, GeneForgeAnatomyChannel::Belly, secondary]),
+            BTreeSet::from([
+                primary,
+                GeneForgeAnatomyChannel::Belly,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                secondary,
+            ]),
+        ),
+        CreaturePartSlotKey::Arms | CreaturePartSlotKey::Legs => (
+            BTreeSet::from([primary, GeneForgeAnatomyChannel::HandsFeet, secondary]),
+            BTreeSet::from([
+                primary,
+                GeneForgeAnatomyChannel::HandsFeet,
+                GeneForgeAnatomyChannel::KeratinSkin,
+                secondary,
+            ]),
+        ),
+        CreaturePartSlotKey::Tail => {
+            let channels =
+                BTreeSet::from([primary, GeneForgeAnatomyChannel::KeratinSkin, secondary]);
+            (channels.clone(), channels)
+        }
+    }
+}
+
+fn analyze_obj_topology(text: &str) -> Result<StagedObjTopology, CreaturePartBuilderError> {
+    let fail = |message: String| CreaturePartBuilderError::Staging(message);
+    let mut position_count = 0_usize;
+    let mut triangles = Vec::new();
+    let mut triangle_components = Vec::new();
+    let mut current_component = None::<String>;
+    for (line_index, raw) in text.lines().enumerate() {
+        let line_number = line_index + 1;
+        let mut fields = raw.split_whitespace();
+        match fields.next().unwrap_or_default() {
+            "v" => position_count += 1,
+            "o" => {
+                let component = fields.next().unwrap_or_default().to_string();
+                if component.is_empty() || fields.next().is_some() {
+                    return Err(fail(format!(
+                        "invalid OBJ component ID at line {line_number}"
+                    )));
+                }
+                current_component = Some(component);
+            }
+            "f" => {
+                let component = current_component.clone().ok_or_else(|| {
+                    fail(format!(
+                        "OBJ topology face has no semantic component at line {line_number}"
+                    ))
+                })?;
+                let refs = fields
+                    .map(|field| {
+                        let value = field.split('/').next().unwrap_or_default();
+                        let index = value.parse::<usize>().map_err(|_| {
+                            fail(format!("invalid OBJ topology index at line {line_number}"))
+                        })?;
+                        if index == 0 || index > position_count {
+                            return Err(fail(format!(
+                                "invalid OBJ topology index at line {line_number}"
+                            )));
+                        }
+                        Ok(index - 1)
+                    })
+                    .collect::<Result<Vec<_>, CreaturePartBuilderError>>()?;
+                if refs.len() < 3 {
+                    return Err(fail(format!(
+                        "OBJ topology face has fewer than three vertices at line {line_number}"
+                    )));
+                }
+                for index in 1..refs.len() - 1 {
+                    triangles.push([refs[0], refs[index], refs[index + 1]]);
+                    triangle_components.push(component.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    if triangles.is_empty() {
+        return Err(fail("OBJ topology contains no triangles".to_string()));
+    }
+    let mut edge_faces = BTreeMap::<(usize, usize), Vec<usize>>::new();
+    for (face_index, triangle) in triangles.iter().enumerate() {
+        for (first, second) in [(0, 1), (1, 2), (2, 0)] {
+            let edge = if triangle[first] < triangle[second] {
+                (triangle[first], triangle[second])
+            } else {
+                (triangle[second], triangle[first])
+            };
+            edge_faces.entry(edge).or_default().push(face_index);
+        }
+    }
+    let mut adjacency = vec![BTreeSet::new(); triangles.len()];
+    for linked in edge_faces.values() {
+        for face in linked {
+            adjacency[*face].extend(linked.iter().copied().filter(|other| other != face));
+        }
+    }
+    let mut unseen = BTreeSet::from_iter(0..triangles.len());
+    let mut connected_components = 0;
+    let mut component_connected_counts = BTreeMap::<String, usize>::new();
+    while let Some(first) = unseen.pop_first() {
+        connected_components += 1;
+        let mut pending = vec![first];
+        let mut connected_faces = Vec::new();
+        while let Some(face) = pending.pop() {
+            connected_faces.push(face);
+            for neighbor in &adjacency[face] {
+                if unseen.remove(neighbor) {
+                    pending.push(*neighbor);
+                }
+            }
+        }
+        let declared = connected_faces
+            .iter()
+            .map(|face| triangle_components[*face].clone())
+            .collect::<BTreeSet<_>>();
+        if declared.len() != 1 {
+            return Err(fail(
+                "geometrically connected OBJ faces cross semantic component IDs".to_string(),
+            ));
+        }
+        *component_connected_counts
+            .entry(declared.into_iter().next().unwrap())
+            .or_default() += 1;
+    }
+    let mut component_triangle_counts = BTreeMap::<String, usize>::new();
+    for component in &triangle_components {
+        *component_triangle_counts
+            .entry(component.clone())
+            .or_default() += 1;
+    }
+    let component_ids = component_triangle_counts
+        .keys()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    if component_connected_counts
+        .keys()
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        != component_ids
+        || component_connected_counts.values().any(|count| *count == 0)
+        || component_connected_counts.values().sum::<usize>() != connected_components
+    {
+        return Err(fail(
+            "declared OBJ source-object component islands are inconsistent".to_string(),
+        ));
+    }
+    Ok(StagedObjTopology {
+        triangle_count: triangles.len(),
+        connected_components,
+        boundary_edges: edge_faces.values().filter(|faces| faces.len() == 1).count(),
+        non_manifold_edges: edge_faces.values().filter(|faces| faces.len() > 2).count(),
+        component_ids,
+        component_triangle_counts,
+        component_connected_counts,
+    })
+}
+
+fn validate_topology_preserving_lods(
+    asset_id: &str,
+    full: &StagedObjTopology,
+    compact: &StagedObjTopology,
+    impostor: &StagedObjTopology,
+) -> Result<(), CreaturePartBuilderError> {
+    let fail = |message: &str| {
+        CreaturePartBuilderError::Staging(format!(
+            "asset {asset_id} has invalid topology-preserving LOD reduction: {message}"
+        ))
+    };
+    let summaries = [full, compact, impostor];
+    if !(full.triangle_count > compact.triangle_count
+        && compact.triangle_count > impostor.triangle_count)
+    {
+        return Err(fail("triangle counts do not decrease strictly"));
+    }
+    if summaries
+        .iter()
+        .any(|summary| summary.non_manifold_edges != 0)
+    {
+        return Err(fail("non-manifold geometry remains"));
+    }
+    for summary in summaries {
+        if summary.component_ids.is_empty()
+            || summary
+                .component_triangle_counts
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+                != summary.component_ids
+            || summary
+                .component_connected_counts
+                .keys()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+                != summary.component_ids
+            || summary
+                .component_triangle_counts
+                .values()
+                .any(|count| *count == 0)
+            || summary
+                .component_connected_counts
+                .values()
+                .any(|count| *count == 0)
+            || summary.component_triangle_counts.values().sum::<usize>() != summary.triangle_count
+            || summary.component_connected_counts.values().sum::<usize>()
+                != summary.connected_components
+        {
+            return Err(fail("semantic component identity/count is inconsistent"));
+        }
+    }
+    if compact.component_ids != full.component_ids || impostor.component_ids != full.component_ids {
+        return Err(fail(
+            "semantic source-object component identity differs between LODs",
+        ));
+    }
+    for component in &full.component_ids {
+        let full_islands = full.component_connected_counts[component];
+        let compact_islands = compact.component_connected_counts[component];
+        let impostor_islands = impostor.component_connected_counts[component];
+        if compact_islands > full_islands || impostor_islands > compact_islands {
+            return Err(fail(
+                "LOD multiplied connected islands within a source-object component",
+            ));
+        }
+    }
+    if compact.boundary_edges > full.boundary_edges {
+        return Err(fail(
+            "Full->Compact LOD introduced open component boundaries",
+        ));
+    }
+    if impostor.boundary_edges > compact.boundary_edges {
+        return Err(fail(
+            "Compact->Impostor LOD introduced open component boundaries",
+        ));
+    }
+    Ok(())
+}
+
+pub fn canonical_geneforge_recipe_sha256(text: &str) -> Result<String, CreaturePartBuilderError> {
+    let mut value: serde_json::Value = serde_json::from_str(text).map_err(|error| {
+        CreaturePartBuilderError::Staging(format!("invalid recipe JSON for digest: {error}"))
+    })?;
+    let object = value.as_object_mut().ok_or_else(|| {
+        CreaturePartBuilderError::Staging("recipe JSON must be an object".to_string())
+    })?;
+    if !object.contains_key("recipe_sha256") {
+        return Err(CreaturePartBuilderError::Staging(
+            "recipe JSON is missing recipe_sha256".to_string(),
+        ));
+    }
+    object.insert(
+        "recipe_sha256".to_string(),
+        serde_json::Value::String("0".repeat(64)),
+    );
+    let mut canonical = Vec::new();
+    write_python_canonical_json(&value, &mut canonical)?;
+    Ok(sha256_hex(&canonical))
+}
+
+fn write_python_canonical_json(
+    value: &serde_json::Value,
+    output: &mut Vec<u8>,
+) -> Result<(), CreaturePartBuilderError> {
+    match value {
+        serde_json::Value::Null => output.extend_from_slice(b"null"),
+        serde_json::Value::Bool(value) => {
+            output.extend_from_slice(if *value { b"true" } else { b"false" })
+        }
+        serde_json::Value::Number(number) => {
+            if let Some(value) = number.as_i64() {
+                output.extend_from_slice(value.to_string().as_bytes());
+            } else if let Some(value) = number.as_u64() {
+                output.extend_from_slice(value.to_string().as_bytes());
+            } else {
+                let value = number.as_f64().ok_or_else(|| {
+                    CreaturePartBuilderError::Staging(
+                        "recipe JSON contains an unsupported number".to_string(),
+                    )
+                })?;
+                output.extend_from_slice(python_json_float(value)?.as_bytes());
+            }
+        }
+        serde_json::Value::String(value) => {
+            write_python_json_string(value, output);
+        }
+        serde_json::Value::Array(values) => {
+            output.push(b'[');
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    output.push(b',');
+                }
+                write_python_canonical_json(value, output)?;
+            }
+            output.push(b']');
+        }
+        serde_json::Value::Object(values) => {
+            output.push(b'{');
+            let mut entries = values.iter().collect::<Vec<_>>();
+            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            for (index, (key, value)) in entries.into_iter().enumerate() {
+                if index > 0 {
+                    output.push(b',');
+                }
+                write_python_canonical_json(&serde_json::Value::String(key.clone()), output)?;
+                output.push(b':');
+                write_python_canonical_json(value, output)?;
+            }
+            output.push(b'}');
+        }
+    }
+    Ok(())
+}
+
+fn write_python_json_string(value: &str, output: &mut Vec<u8>) {
+    output.push(b'"');
+    for character in value.chars() {
+        match character {
+            '"' => output.extend_from_slice(br#"\""#),
+            '\\' => output.extend_from_slice(br#"\\"#),
+            '\u{0008}' => output.extend_from_slice(br#"\b"#),
+            '\u{000c}' => output.extend_from_slice(br#"\f"#),
+            '\n' => output.extend_from_slice(br#"\n"#),
+            '\r' => output.extend_from_slice(br#"\r"#),
+            '\t' => output.extend_from_slice(br#"\t"#),
+            '\u{0020}'..='\u{007e}' => output.push(character as u8),
+            character if character <= '\u{ffff}' => {
+                write_python_unicode_escape(character as u16, output);
+            }
+            character => {
+                let scalar = character as u32 - 0x1_0000;
+                write_python_unicode_escape(0xd800 + (scalar >> 10) as u16, output);
+                write_python_unicode_escape(0xdc00 + (scalar & 0x03ff) as u16, output);
+            }
+        }
+    }
+    output.push(b'"');
+}
+
+fn write_python_unicode_escape(code_unit: u16, output: &mut Vec<u8>) {
+    const LOWER_HEX: &[u8; 16] = b"0123456789abcdef";
+
+    output.extend_from_slice(br#"\u"#);
+    for shift in [12, 8, 4, 0] {
+        output.push(LOWER_HEX[((code_unit >> shift) & 0x0f) as usize]);
+    }
+}
+
+fn python_json_float(value: f64) -> Result<String, CreaturePartBuilderError> {
+    if !value.is_finite() {
+        return Err(CreaturePartBuilderError::Staging(
+            "recipe JSON contains a non-finite number".to_string(),
+        ));
+    }
+    if value == 0.0 {
+        return Ok(if value.is_sign_negative() {
+            "-0.0".to_string()
+        } else {
+            "0.0".to_string()
+        });
+    }
+    let absolute = value.abs();
+    if !(1.0e-4..1.0e16).contains(&absolute) {
+        let scientific = format!("{value:e}");
+        let (mantissa, exponent) = scientific.split_once('e').ok_or_else(|| {
+            CreaturePartBuilderError::Staging(
+                "failed canonicalizing recipe floating-point number".to_string(),
+            )
+        })?;
+        let exponent = exponent.parse::<i32>().map_err(|error| {
+            CreaturePartBuilderError::Staging(format!(
+                "failed canonicalizing recipe exponent: {error}"
+            ))
+        })?;
+        return Ok(format!(
+            "{mantissa}e{}{magnitude:02}",
+            if exponent < 0 { '-' } else { '+' },
+            magnitude = exponent.unsigned_abs()
+        ));
+    }
+    let mut encoded = value.to_string();
+    if !encoded.contains('.') {
+        encoded.push_str(".0");
+    }
+    Ok(encoded)
+}
+
+pub fn sha256_hex(input: &[u8]) -> String {
+    const INITIAL: [u32; 8] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let bit_len = (input.len() as u64) * 8;
+    let mut padded = input.to_vec();
+    padded.push(0x80);
+    while padded.len() % 64 != 56 {
+        padded.push(0);
+    }
+    padded.extend_from_slice(&bit_len.to_be_bytes());
+    let mut hash = INITIAL;
+    for chunk in padded.chunks_exact(64) {
+        let mut words = [0_u32; 64];
+        for (index, bytes) in chunk.chunks_exact(4).enumerate() {
+            words[index] = u32::from_be_bytes(bytes.try_into().unwrap());
+        }
+        for index in 16..64 {
+            let s0 = words[index - 15].rotate_right(7)
+                ^ words[index - 15].rotate_right(18)
+                ^ (words[index - 15] >> 3);
+            let s1 = words[index - 2].rotate_right(17)
+                ^ words[index - 2].rotate_right(19)
+                ^ (words[index - 2] >> 10);
+            words[index] = words[index - 16]
+                .wrapping_add(s0)
+                .wrapping_add(words[index - 7])
+                .wrapping_add(s1);
+        }
+        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = hash;
+        for index in 0..64 {
+            let sum1 = h
+                .wrapping_add(e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25))
+                .wrapping_add((e & f) ^ (!e & g))
+                .wrapping_add(K[index])
+                .wrapping_add(words[index]);
+            let sum0 = (a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22))
+                .wrapping_add((a & b) ^ (a & c) ^ (b & c));
+            h = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(sum1);
+            d = c;
+            c = b;
+            b = a;
+            a = sum0.wrapping_add(sum1);
+        }
+        for (state, value) in hash.iter_mut().zip([a, b, c, d, e, f, g, h]) {
+            *state = state.wrapping_add(value);
+        }
+    }
+    hash.into_iter()
+        .map(|value| format!("{value:08x}"))
+        .collect()
 }
 
 pub fn slice_creature_mesh(
@@ -772,7 +3831,12 @@ fn scale(vector: [f64; 3], scalar: f64) -> [f64; 3] {
 
 #[cfg(test)]
 mod tests {
-    use alife_game_app::{load_production_creature_part_catalog, CreaturePartLodId};
+    use alife_game_app::{
+        load_geneforge_creature_part_catalog, load_production_creature_part_catalog,
+        CreaturePartLodId,
+    };
+    use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+    use image::{ExtendedColorType, ImageEncoder, Rgba, RgbaImage};
 
     use super::*;
 
@@ -952,5 +4016,273 @@ f 22/1/1 23/2/1 24/3/1
     fn malformed_obj_indices_are_rejected() {
         let malformed = "v 0 0 0\nvt 0 0\nvn 0 1 0\nf 0/1/1 1/1/1 1/1/1\n";
         assert!(SourceObjMesh::parse(malformed).is_err());
+    }
+
+    #[test]
+    fn creature_part_builder_mask_contract_rejects_uniform_microdetail() {
+        let image = RgbaImage::from_pixel(64, 64, Rgba([230, 92, 88, 127]));
+        let bytes = deterministic_test_png(&image);
+
+        let expected_colors = BTreeSet::from([[230, 92, 88]]);
+        let error =
+            validate_semantic_mask_png_bytes("uniform.png", &bytes, &expected_colors).unwrap_err();
+        assert!(error.to_string().contains("microdetail"));
+    }
+
+    #[test]
+    fn creature_part_builder_mask_contract_rejects_asset_independent_stripes() {
+        let image = RgbaImage::from_fn(64, 64, |x, y| {
+            let colors = [
+                [230, 92, 88],
+                [64, 166, 184],
+                [244, 177, 76],
+                [95, 177, 104],
+            ];
+            let color = colors[(y as usize / 16).min(colors.len() - 1)];
+            Rgba([color[0], color[1], color[2], 32 + ((x + y) % 192) as u8])
+        });
+        let bytes = deterministic_test_png(&image);
+
+        let expected_colors = BTreeSet::from([[64, 166, 184]]);
+        let error = validate_semantic_mask_png_bytes("torso-stripes.png", &bytes, &expected_colors)
+            .unwrap_err();
+        assert!(error.to_string().contains("semantic colors"));
+    }
+
+    fn deterministic_test_png(image: &RgbaImage) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        PngEncoder::new_with_quality(&mut bytes, CompressionType::Best, FilterType::NoFilter)
+            .write_image(
+                image.as_raw(),
+                image.width(),
+                image.height(),
+                ExtendedColorType::Rgba8,
+            )
+            .unwrap();
+        bytes
+    }
+
+    #[test]
+    fn creature_part_builder_topology_analysis_counts_boundaries_and_components() {
+        let closed_tetrahedron = concat!(
+            "o shell\n",
+            "v 0 0 0\n",
+            "v 1 0 0\n",
+            "v 0 1 0\n",
+            "v 0 0 1\n",
+            "f 1 3 2\n",
+            "f 1 2 4\n",
+            "f 2 3 4\n",
+            "f 3 1 4\n",
+        );
+        let closed = analyze_obj_topology(closed_tetrahedron).unwrap();
+        assert_eq!(closed.connected_components, 1);
+        assert_eq!(closed.component_ids, BTreeSet::from(["shell".to_string()]));
+        assert_eq!(closed.boundary_edges, 0);
+        assert_eq!(closed.non_manifold_edges, 0);
+
+        let disconnected = "v 0 0 0\nv 1 0 0\nv 0 1 0\nv 3 0 0\nv 4 0 0\nv 3 1 0\no shell\nf 1 2 3\no eye\nf 4 5 6\n";
+        let open = analyze_obj_topology(disconnected).unwrap();
+        assert_eq!(open.connected_components, 2);
+        assert_eq!(
+            open.component_ids,
+            BTreeSet::from(["eye".to_string(), "shell".to_string()])
+        );
+        assert_eq!(open.boundary_edges, 6);
+    }
+
+    #[test]
+    fn creature_part_builder_topology_allows_multiple_islands_per_source_object() {
+        let same_object_islands = concat!(
+            "v 0 0 0\n",
+            "v 1 0 0\n",
+            "v 0 1 0\n",
+            "v 3 0 0\n",
+            "v 4 0 0\n",
+            "v 3 1 0\n",
+            "o source-hair-object\n",
+            "f 1 2 3\n",
+            "f 4 5 6\n",
+        );
+
+        let topology = analyze_obj_topology(same_object_islands).unwrap();
+
+        assert_eq!(topology.connected_components, 2);
+        assert_eq!(
+            topology.component_ids,
+            BTreeSet::from(["source-hair-object".to_string()])
+        );
+        assert_eq!(
+            topology.component_connected_counts,
+            BTreeMap::from([("source-hair-object".to_string(), 2)])
+        );
+    }
+
+    #[test]
+    fn creature_part_builder_allows_lod_to_merge_islands_without_losing_object_id() {
+        let topology = |triangles, connected_components| StagedObjTopology {
+            triangle_count: triangles,
+            connected_components,
+            boundary_edges: 0,
+            non_manifold_edges: 0,
+            component_ids: BTreeSet::from(["source-hair-object".to_string()]),
+            component_triangle_counts: BTreeMap::from([(
+                "source-hair-object".to_string(),
+                triangles,
+            )]),
+            component_connected_counts: BTreeMap::from([(
+                "source-hair-object".to_string(),
+                connected_components,
+            )]),
+        };
+        let full = topology(100, 3);
+        let compact = topology(60, 2);
+        let impostor = topology(30, 1);
+
+        validate_topology_preserving_lods("fixture-head", &full, &compact, &impostor).unwrap();
+    }
+
+    #[test]
+    fn creature_part_builder_rejects_boundary_growth_only_between_compact_and_impostor() {
+        let topology = |triangles, boundaries| StagedObjTopology {
+            triangle_count: triangles,
+            connected_components: 1,
+            boundary_edges: boundaries,
+            non_manifold_edges: 0,
+            component_ids: BTreeSet::from(["object-a".to_string()]),
+            component_triangle_counts: BTreeMap::from([("object-a".to_string(), triangles)]),
+            component_connected_counts: BTreeMap::from([("object-a".to_string(), 1)]),
+        };
+        let error = validate_topology_preserving_lods(
+            "compact-impostor-boundary-regression",
+            &topology(12, 8),
+            &topology(8, 2),
+            &topology(4, 6),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Compact->Impostor"), "{error}");
+    }
+
+    #[test]
+    fn creature_part_builder_rejects_lod_component_loss() {
+        let topology = |triangles, components, ids: &[&str]| {
+            let component_ids = ids
+                .iter()
+                .map(|value| (*value).to_string())
+                .collect::<BTreeSet<_>>();
+            let base = triangles / ids.len();
+            let remainder = triangles % ids.len();
+            StagedObjTopology {
+                triangle_count: triangles,
+                connected_components: components,
+                boundary_edges: 0,
+                non_manifold_edges: 0,
+                component_triangle_counts: ids
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        ((*value).to_string(), base + usize::from(index < remainder))
+                    })
+                    .collect(),
+                component_connected_counts: ids
+                    .iter()
+                    .map(|value| ((*value).to_string(), 1))
+                    .collect(),
+                component_ids,
+            }
+        };
+        let full = topology(100, 2, &["eye", "shell"]);
+        let compact = topology(60, 1, &["shell"]);
+        let impostor = topology(30, 1, &["shell"]);
+
+        let error = validate_topology_preserving_lods("fixture-head", &full, &compact, &impostor)
+            .unwrap_err();
+        assert!(error.to_string().contains("component"));
+    }
+
+    #[test]
+    fn creature_part_builder_recipe_digest_zeroes_only_the_digest_field() {
+        let first =
+            canonical_geneforge_recipe_sha256(r#"{"recipe_sha256":"aaaa","schema":"x"}"#).unwrap();
+        let second =
+            canonical_geneforge_recipe_sha256(r#"{"recipe_sha256":"bbbb","schema":"x"}"#).unwrap();
+        let changed =
+            canonical_geneforge_recipe_sha256(r#"{"recipe_sha256":"aaaa","schema":"y"}"#).unwrap();
+        assert_eq!(first, second);
+        assert_ne!(first, changed);
+    }
+
+    #[test]
+    fn creature_part_builder_recipe_digest_matches_python_float_canonicalization() {
+        let text = r#"{"recipe_sha256":"ignored","values":[-0.000073921,0.0001,1e16,1e-7,-0.0]}"#;
+        let expected = br#"{"recipe_sha256":"0000000000000000000000000000000000000000000000000000000000000000","values":[-7.3921e-05,0.0001,1e+16,1e-07,-0.0]}"#;
+        assert_eq!(
+            canonical_geneforge_recipe_sha256(text).unwrap(),
+            sha256_hex(expected)
+        );
+    }
+
+    #[test]
+    fn creature_part_builder_recipe_strings_match_python_ascii_canonicalization() {
+        let vectors = [
+            (
+                serde_json::json!("caf\u{00e9}"),
+                br#""caf\u00e9""#.as_slice(),
+                "ee08d8beb64c89c25fe7f583c6b522f7f380aab939035ec58d3fcdba24c881e1",
+            ),
+            (
+                serde_json::json!("\u{1f600}"),
+                br#""\ud83d\ude00""#.as_slice(),
+                "e30439cb87e140c0b998ad3095285abfec0294e2a8916f9a8f30d85734e6f82b",
+            ),
+            (
+                serde_json::json!("\"\\\u{0001}\n\t"),
+                br#""\"\\\u0001\n\t""#.as_slice(),
+                "b7bff3672a60c2d23a77d7b8b256f1310302f4b7f37baaf22d892858e77f72ef",
+            ),
+            (
+                serde_json::json!("\u{abcd}"),
+                br#""\uabcd""#.as_slice(),
+                "3654f686cead849be1ed22f53c44b27eeb64f23c26648a67d6a95c66f706cdd6",
+            ),
+        ];
+
+        for (value, expected_bytes, expected_digest) in vectors {
+            let mut actual = Vec::new();
+            write_python_canonical_json(&value, &mut actual).unwrap();
+            assert_eq!(actual, expected_bytes);
+            assert_eq!(sha256_hex(&actual), expected_digest);
+        }
+
+        let text = r#"{"label":"caf\u00e9 \ud83d\ude00","recipe_sha256":"ignored"}"#;
+        let expected = br#"{"label":"caf\u00e9 \ud83d\ude00","recipe_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}"#;
+        assert_eq!(
+            canonical_geneforge_recipe_sha256(text).unwrap(),
+            sha256_hex(expected)
+        );
+    }
+
+    #[test]
+    fn creature_part_builder_catalog_types_bridge_and_seam_contract() {
+        let catalog = load_geneforge_creature_part_catalog().unwrap();
+        assert_eq!(
+            catalog.assembly_contract.schema,
+            "alife.geneforge_family_assembly.v1"
+        );
+        assert_eq!(catalog.assembly_contract.attachment_error_limit, 0.025);
+        assert_eq!(catalog.assembly_contract.slot_sockets.len(), 5);
+        assert_eq!(
+            catalog
+                .sources
+                .iter()
+                .map(|source| (donor_name(source.donor), source.microdetail_root.as_str()))
+                .collect::<BTreeMap<_, _>>(),
+            BTreeMap::from([
+                ("norn", "Norn/Alpha Textures"),
+                ("ettin", "Ettin/Alpha Textures"),
+                ("grendel", "Grendel/Alpha Textures"),
+            ])
+        );
     }
 }

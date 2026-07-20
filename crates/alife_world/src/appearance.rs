@@ -9,7 +9,11 @@ use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 pub const CREATURE_APPEARANCE_SCHEMA_VERSION: u16 = 2;
 pub const CREATURE_APPEARANCE_SPECIES_COUNT: u8 = 16;
 pub const CREATURE_APPEARANCE_GENE_BUCKETS: u8 = 16;
-pub const INITIAL_CREATURE_PART_FAMILY_COUNT: u16 = 8;
+pub const LEGACY_CREATURE_PART_FAMILY_COUNT: u16 = 8;
+pub const PRODUCTION_CREATURE_PART_FAMILY_COUNT: u16 = 12;
+
+const FOUNDER_PART_FAMILY_BY_SPECIES: [u16; CREATURE_APPEARANCE_SPECIES_COUNT as usize] =
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 3, 6, 9, 0];
 
 const SPECIES_LABELS: [&str; CREATURE_APPEARANCE_SPECIES_COUNT as usize] = [
     "roundling-cave-kid",
@@ -204,7 +208,14 @@ impl<'de> Deserialize<'de> for CreatureAppearanceGenome {
 
 pub const fn migrate_v1_part_sources(species_archetype: u8) -> CreaturePartSources {
     CreaturePartSources::coherent(CreaturePartFamilyId(
-        (species_archetype as u16) % INITIAL_CREATURE_PART_FAMILY_COUNT,
+        (species_archetype as u16) % LEGACY_CREATURE_PART_FAMILY_COUNT,
+    ))
+}
+
+pub const fn founder_part_sources(species_archetype: u8) -> CreaturePartSources {
+    let species = species_archetype % CREATURE_APPEARANCE_SPECIES_COUNT;
+    CreaturePartSources::coherent(CreaturePartFamilyId(
+        FOUNDER_PART_FAMILY_BY_SPECIES[species as usize],
     ))
 }
 
@@ -220,7 +231,7 @@ impl CreatureAppearanceGenome {
         Self {
             schema_version: CREATURE_APPEARANCE_SCHEMA_VERSION,
             species_archetype,
-            part_sources: migrate_v1_part_sources(species_archetype),
+            part_sources: founder_part_sources(species_archetype),
             palette_family: gene(seed, 0x70A1_0001),
             fur_pattern: gene(seed, 0x70A1_0002),
             marking_density: 5 + gene(seed, 0x70A1_0003) % 9,
@@ -503,5 +514,75 @@ mod tests {
         assert_eq!(roundtrip, appearance);
         assert!(!json.to_ascii_lowercase().contains("bevy"));
         assert!(!json.to_ascii_lowercase().contains("mesh"));
+    }
+
+    #[test]
+    fn schema_v1_migration_remains_frozen_to_the_original_eight_families() {
+        for species in 0..CREATURE_APPEARANCE_SPECIES_COUNT {
+            assert_eq!(
+                migrate_v1_part_sources(species),
+                CreaturePartSources::coherent(CreaturePartFamilyId(u16::from(species) % 8)),
+                "legacy species {species} must retain its historical family"
+            );
+        }
+    }
+
+    #[test]
+    fn new_founders_use_the_fixed_twelve_family_roster() {
+        const EXPECTED: [u16; CREATURE_APPEARANCE_SPECIES_COUNT as usize] =
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 3, 6, 9, 0];
+
+        for (species, expected_family) in EXPECTED.into_iter().enumerate() {
+            let founder = CreatureAppearanceGenome::founder_for_species(species as u8, 41);
+            assert_eq!(
+                founder.part_sources,
+                CreaturePartSources::coherent(CreaturePartFamilyId(expected_family)),
+                "new founder species {species}"
+            );
+        }
+    }
+
+    #[test]
+    fn schema_v2_roundtrips_appended_family_ids() {
+        for family in 8..PRODUCTION_CREATURE_PART_FAMILY_COUNT {
+            let mut appearance = CreatureAppearanceGenome::founder_for_species(0, 73);
+            appearance.part_sources = CreaturePartSources::coherent(CreaturePartFamilyId(family));
+
+            let json = serde_json::to_string(&appearance).unwrap();
+            let roundtrip: CreatureAppearanceGenome = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(roundtrip.part_sources, appearance.part_sources);
+        }
+    }
+
+    #[test]
+    fn offspring_can_inherit_appended_family_ids_per_slot() {
+        let mut parent_a = CreatureAppearanceGenome::founder_for_species(0, 101);
+        parent_a.part_sources = CreaturePartSources {
+            head: CreaturePartFamilyId(8),
+            torso: CreaturePartFamilyId(9),
+            arms: CreaturePartFamilyId(10),
+            legs: CreaturePartFamilyId(11),
+            tail: CreaturePartFamilyId(8),
+        };
+        let mut parent_b = CreatureAppearanceGenome::founder_for_species(1, 202);
+        parent_b.part_sources = CreaturePartSources {
+            head: CreaturePartFamilyId(11),
+            torso: CreaturePartFamilyId(10),
+            arms: CreaturePartFamilyId(9),
+            legs: CreaturePartFamilyId(8),
+            tail: CreaturePartFamilyId(11),
+        };
+
+        let child = CreatureAppearanceGenome::offspring_from_parents(parent_a, parent_b, 303);
+
+        assert!(child
+            .part_sources
+            .inherited_from(parent_a.part_sources, parent_b.part_sources));
+        assert!(child
+            .part_sources
+            .iter_slots()
+            .into_iter()
+            .all(|(_, family)| (8..=11).contains(&family.0)));
     }
 }

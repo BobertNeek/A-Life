@@ -1,15 +1,10 @@
 {
-  "schema": "alife.creature_part_sockets.v1",
-  "schema_version": 1,
   "family_id": 7,
   "lod": "full",
+  "schema": "alife.creature_part_sockets.v1",
+  "schema_version": 1,
   "sockets": {
     "left-hip": {
-      "translation": [
-        -0.08,
-        0.0,
-        -0.1
-      ],
       "rotation_xyzw": [
         0.0,
         0.0,
@@ -20,14 +15,14 @@
         1.0,
         1.0,
         1.0
+      ],
+      "translation": [
+        -0.15,
+        0.0,
+        -0.1
       ]
     },
     "left-shoulder": {
-      "translation": [
-        -0.08,
-        0.0,
-        0.28
-      ],
       "rotation_xyzw": [
         0.0,
         0.0,
@@ -38,14 +33,14 @@
         1.0,
         1.0,
         1.0
+      ],
+      "translation": [
+        -0.27,
+        0.0,
+        0.27
       ]
     },
     "neck": {
-      "translation": [
-        0.0,
-        0.0,
-        0.45
-      ],
       "rotation_xyzw": [
         0.0,
         0.0,
@@ -56,14 +51,14 @@
         1.0,
         1.0,
         1.0
+      ],
+      "translation": [
+        0.0,
+        0.0,
+        0.43
       ]
     },
     "right-hip": {
-      "translation": [
-        0.08,
-        0.0,
-        -0.1
-      ],
       "rotation_xyzw": [
         0.0,
         0.0,
@@ -74,14 +69,14 @@
         1.0,
         1.0,
         1.0
+      ],
+      "translation": [
+        0.15,
+        0.0,
+        -0.1
       ]
     },
     "right-shoulder": {
-      "translation": [
-        0.08,
-        0.0,
-        0.28
-      ],
       "rotation_xyzw": [
         0.0,
         0.0,
@@ -92,14 +87,14 @@
         1.0,
         1.0,
         1.0
+      ],
+      "translation": [
+        0.27,
+        0.0,
+        0.27
       ]
     },
     "tail-base": {
-      "translation": [
-        0.0,
-        0.6,
-        0.1
-      ],
       "rotation_xyzw": [
         0.0,
         0.0,
@@ -110,6 +105,11 @@
         1.0,
         1.0,
         1.0
+      ],
+      "translation": [
+        0.0,
+        0.22,
+        -0.18
       ]
     }
   }

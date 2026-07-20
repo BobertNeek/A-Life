@@ -5,13 +5,14 @@ use std::{
 };
 
 use alife_game_app::{
-    CreaturePartCatalog, CreaturePartFamilyDefinition, CreaturePartLodId, CreaturePartSlot,
+    load_generated_part_pack, CreaturePartCatalog, CreaturePartFamilyDefinition, CreaturePartLodId,
+    CreaturePartSlot, SocketFrame,
 };
 use alife_tools::creature_part_builder::{
-    slice_creature_mesh, validate_sliced_pack, GeneratedPartMesh, SlicedCreaturePartPack,
-    SourceObjMesh,
+    slice_creature_mesh, validate_geneforge_staging, validate_sliced_pack, GeneratedPartMesh,
+    ObjVertex, SlicedCreaturePartPack, SourceObjMesh,
 };
-use alife_world::CreaturePartFamilyId;
+use alife_world::{persistence::PortableAssetDigest, CreaturePartFamilyId};
 use image::{ImageBuffer, Rgba};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -37,6 +38,10 @@ enum CreaturePartBuilderCommand {
     },
     Validate {
         catalog: PathBuf,
+    },
+    ValidateGeneForgeStaging {
+        staging: PathBuf,
+        recipes: PathBuf,
     },
     Preview {
         catalog: PathBuf,
@@ -66,7 +71,7 @@ impl CreaturePartBuilderCommand {
 
     fn parse(args: Vec<String>) -> Result<Self, String> {
         let Some(command) = args.first().map(String::as_str) else {
-            return Err("expected analyze, build, validate, preview, or manifest".to_string());
+            return Err("expected analyze, build, validate, validate-geneforge-staging, preview, or manifest".to_string());
         };
         let options = parse_options(&args[1..])?;
         let catalog = PathBuf::from(
@@ -105,6 +110,23 @@ impl CreaturePartBuilderCommand {
                 ),
             }),
             "validate" => Ok(Self::Validate { catalog }),
+            "validate-geneforge-staging" => {
+                let staging = PathBuf::from(
+                    options
+                        .get("staging")
+                        .map(String::as_str)
+                        .unwrap_or("target/artifacts/creature_parts/geneforge-staging"),
+                );
+                if !is_target_artifact_path(&staging) {
+                    return Err(
+                        "GeneForge staging must be under target/artifacts/creature_parts".into(),
+                    );
+                }
+                let recipes = options.get("recipes").map(PathBuf::from).ok_or_else(|| {
+                    "validate-geneforge-staging requires an external --recipes catalog".to_string()
+                })?;
+                Ok(Self::ValidateGeneForgeStaging { staging, recipes })
+            }
             "preview" => {
                 let output = PathBuf::from(
                     options
@@ -151,6 +173,21 @@ impl CreaturePartBuilderCommand {
                 staging,
             } => build(&catalog, family.map(CreaturePartFamilyId), &staging),
             Self::Validate { catalog } => validate(&catalog),
+            Self::ValidateGeneForgeStaging { staging, recipes } => {
+                let receipt = validate_geneforge_staging(&staging, &recipes)?;
+                println!(
+                    "validated_geneforge_staging={} donors={} assets={} lods={} objs={} semantic_masks={} anatomy_masks={} bytes={}",
+                    staging.display(),
+                    receipt.donor_count,
+                    receipt.asset_count,
+                    receipt.lod_count,
+                    receipt.obj_count,
+                    receipt.mask_count,
+                    receipt.anatomy_mask_count,
+                    receipt.total_bytes
+                );
+                Ok(())
+            }
             Self::Preview {
                 catalog,
                 family,
@@ -270,6 +307,132 @@ fn build_pack(
     Ok(slice_creature_mesh(&source, family, lod_id)?)
 }
 
+fn uses_canonical_authoring_builder(builder_version: &str) -> bool {
+    builder_version.starts_with("scripts::generate_canonical_creature_parts.")
+}
+
+fn load_committed_canonical_pack(
+    catalog_path: &Path,
+    catalog: &CreaturePartCatalog,
+    family_id: CreaturePartFamilyId,
+    lod_id: CreaturePartLodId,
+) -> Result<SlicedCreaturePartPack, Box<dyn std::error::Error>> {
+    let root = assets_root(catalog_path)?;
+    let (family, lod) = family_lod(catalog, family_id, lod_id)?;
+    let parsed = load_generated_part_pack(&root, family, lod_id)?;
+    let obj_bytes = fs::read(root.join(&lod.generated_obj))?;
+    let socket_json_bytes = fs::read(root.join(&lod.socket_manifest))?;
+    if obj_bytes.len() > 512 * 1024 || socket_json_bytes.len() > 512 * 1024 {
+        return Err(format!(
+            "canonical family {} {:?} exceeds the 512 KiB per-file budget",
+            family.label, lod_id
+        )
+        .into());
+    }
+
+    let socket_manifest: Value = serde_json::from_slice(&socket_json_bytes)?;
+    if socket_manifest["schema"] != "alife.creature_part_sockets.v1"
+        || socket_manifest["schema_version"] != 1
+        || socket_manifest["family_id"] != family.id.0
+        || socket_manifest["lod"] != serde_json::to_value(lod_id)?
+    {
+        return Err(format!(
+            "canonical family {} {:?} has invalid socket manifest identity",
+            family.label, lod_id
+        )
+        .into());
+    }
+    let sockets: BTreeMap<String, SocketFrame> =
+        serde_json::from_value(socket_manifest["sockets"].clone())?;
+    if sockets != family.sockets {
+        return Err(format!(
+            "canonical family {} {:?} sockets drifted from the catalog",
+            family.label, lod_id
+        )
+        .into());
+    }
+
+    let mut bounds = [[f64::INFINITY; 3], [f64::NEG_INFINITY; 3]];
+    let mut parts = BTreeMap::new();
+    for slot in CreaturePartSlot::ALL {
+        let data = parsed
+            .parts
+            .get(&slot)
+            .ok_or_else(|| format!("canonical family {} is missing {slot:?}", family.label))?;
+        if data.positions.is_empty()
+            || data.positions.len() != data.uvs.len()
+            || data.positions.len() != data.normals.len()
+            || data.indices.len() < 3
+            || data
+                .indices
+                .iter()
+                .any(|index| *index as usize >= data.positions.len())
+        {
+            return Err(format!(
+                "canonical family {} {:?} has invalid {slot:?} geometry",
+                family.label, lod_id
+            )
+            .into());
+        }
+        let vertices = data
+            .positions
+            .iter()
+            .zip(&data.uvs)
+            .zip(&data.normals)
+            .map(|((&position, &uv), &normal)| {
+                for axis in 0..3 {
+                    bounds[0][axis] = bounds[0][axis].min(f64::from(position[axis]));
+                    bounds[1][axis] = bounds[1][axis].max(f64::from(position[axis]));
+                }
+                ObjVertex {
+                    position: position.map(f64::from),
+                    uv: uv.map(f64::from),
+                    normal: normal.map(f64::from),
+                }
+            })
+            .collect::<Vec<_>>();
+        if !vertices.iter().all(|vertex| {
+            vertex
+                .position
+                .into_iter()
+                .chain(vertex.uv)
+                .chain(vertex.normal)
+                .all(f64::is_finite)
+        }) {
+            return Err(format!(
+                "canonical family {} {:?} has non-finite {slot:?} geometry",
+                family.label, lod_id
+            )
+            .into());
+        }
+        parts.insert(
+            slot,
+            GeneratedPartMesh {
+                vertices,
+                indices: data.indices.clone(),
+            },
+        );
+    }
+
+    Ok(SlicedCreaturePartPack {
+        family_id,
+        lod: lod_id,
+        parts,
+        source_triangle_count: 0,
+        source_triangle_owners: BTreeMap::new(),
+        source_triangle_fragment_slots: BTreeMap::new(),
+        sockets,
+        canonical_source_bounds: bounds,
+        minimum_join_overlap: family
+            .join_covers
+            .iter()
+            .map(|cover| cover.overlap_depth)
+            .fold(f32::INFINITY, f32::min),
+        obj_bytes,
+        socket_json_bytes,
+    })
+}
+
 fn read_verified_source(
     root: &Path,
     lod: &alife_game_app::CreaturePartLod,
@@ -358,8 +521,13 @@ fn build(
     let mut pending = Vec::new();
     for family in families {
         for lod in &family.lods {
-            let pack = build_pack(catalog_path, &catalog, family.id, lod.lod)?;
-            validate_sliced_pack(&pack)?;
+            let pack = if uses_canonical_authoring_builder(&family.builder_version) {
+                load_committed_canonical_pack(catalog_path, &catalog, family.id, lod.lod)?
+            } else {
+                let pack = build_pack(catalog_path, &catalog, family.id, lod.lod)?;
+                validate_sliced_pack(&pack)?;
+                pack
+            };
             let staged_obj = staging.join(Path::new(&lod.generated_obj).file_name().unwrap());
             let staged_sockets = staging.join(Path::new(&lod.socket_manifest).file_name().unwrap());
             fs::write(&staged_obj, &pack.obj_bytes)?;
@@ -387,14 +555,20 @@ fn validate(catalog_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let mut validated = 0;
     for family in &catalog.families {
         for lod in &family.lods {
-            let pack = build_pack(catalog_path, &catalog, family.id, lod.lod)?;
-            validate_sliced_pack(&pack)?;
-            if fs::read(root.join(&lod.generated_obj))? != pack.obj_bytes
-                || fs::read(root.join(&lod.socket_manifest))? != pack.socket_json_bytes
-            {
-                return Err(
-                    format!("generated output drift for {} {:?}", family.label, lod.lod).into(),
-                );
+            if uses_canonical_authoring_builder(&family.builder_version) {
+                load_committed_canonical_pack(catalog_path, &catalog, family.id, lod.lod)?;
+            } else {
+                let pack = build_pack(catalog_path, &catalog, family.id, lod.lod)?;
+                validate_sliced_pack(&pack)?;
+                if fs::read(root.join(&lod.generated_obj))? != pack.obj_bytes
+                    || fs::read(root.join(&lod.socket_manifest))? != pack.socket_json_bytes
+                {
+                    return Err(format!(
+                        "generated output drift for {} {:?}",
+                        family.label, lod.lod
+                    )
+                    .into());
+                }
             }
             validated += 1;
         }
@@ -410,7 +584,12 @@ fn preview(
     output: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let catalog = load_catalog(catalog_path)?;
-    let pack = build_pack(catalog_path, &catalog, family_id, lod_id)?;
+    let family = catalog.family(family_id).ok_or("unknown family")?;
+    let pack = if uses_canonical_authoring_builder(&family.builder_version) {
+        load_committed_canonical_pack(catalog_path, &catalog, family_id, lod_id)?
+    } else {
+        build_pack(catalog_path, &catalog, family_id, lod_id)?
+    };
     let image = render_preview(&pack, 768, 768);
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
@@ -616,11 +795,21 @@ fn update_manifest(
             .and_then(Value::as_str)
             .unwrap_or_default();
         !(asset_id.starts_with("creature-part-")
+            || asset_id.starts_with("creature-surface-family-")
+            || asset_id.starts_with("quirky-texture-t-")
             || (asset_id.starts_with("quirky-model-") && asset_id.contains("lod")))
     });
     for family in &catalog.families {
         for lod in &family.lods {
-            let source_digest = fnv1a_digest(&read_verified_source(&root, lod)?);
+            let seed = if uses_canonical_authoring_builder(&family.builder_version) {
+                format!(
+                    "family:{:04};lod:{}",
+                    family.id.0,
+                    format!("{:?}", lod.lod).to_ascii_lowercase()
+                )
+            } else {
+                fnv1a_digest(&read_verified_source(&root, lod)?)
+            };
             for (kind, relative) in [
                 ("parts", lod.generated_obj.as_str()),
                 ("sockets", lod.socket_manifest.as_str()),
@@ -631,28 +820,52 @@ fn update_manifest(
                     "asset_id": creature_part_asset_id(family.id, lod.lod, kind),
                     "usage_category": "creatures",
                     "local_path": format!("crates/alife_game_app/assets/{relative}"),
-                    "digest": fnv1a_digest(&bytes),
+                    "digest": PortableAssetDigest::for_file(&path)?.0,
                     "size_bytes": bytes.len(),
-                    "source_asset_id": family.source_attribution.asset_id.as_str(),
-                    "source": family.source_attribution.source.as_str(),
-                    "license": family.source_attribution.license.as_str(),
-                    "license_ref": format!("crates/alife_game_app/assets/{}", family.source_attribution.license_ref),
-                    "author": family.source_attribution.author.as_str(),
+                    "source": "scripts/generate_canonical_creature_parts.py",
+                    "license": "MIT",
+                    "license_ref": "LICENSE",
+                    "author": "A-Life contributors",
                     "generated": true,
                     "generator": {
                         "tool": family.builder_version.as_str(),
                         "output_schema": family.output_schema.as_str(),
                         "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
-                        "seed": source_digest,
-                        "date": "2026-07-12"
+                        "seed": seed,
+                        "date": "2026-07-16"
                     },
                     "external": false,
-                    "replacement_policy": "regenerate-from-catalog-and-licensed-source",
+                    "replacement_policy": "regenerate-from-deterministic-canonical-generator",
                     "final_art": true,
                     "placeholder": false
                 }));
             }
         }
+
+        let texture_path = root.join(&family.texture_asset);
+        let texture_bytes = fs::read(&texture_path)?;
+        entries.push(json!({
+            "asset_id": creature_surface_asset_id(family.id),
+            "usage_category": "creatures",
+            "local_path": format!("crates/alife_game_app/assets/{}", family.texture_asset),
+            "digest": PortableAssetDigest::for_file(&texture_path)?.0,
+            "size_bytes": texture_bytes.len(),
+            "source": "scripts/generate_canonical_creature_parts.py",
+            "license": "MIT",
+            "license_ref": "LICENSE",
+            "author": "A-Life contributors",
+            "generated": true,
+            "generator": {
+                "tool": family.builder_version.as_str(),
+                "config_path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/catalog.json",
+                "seed": format!("family:{:04};surface", family.id.0),
+                "date": "2026-07-16"
+            },
+            "external": false,
+            "replacement_policy": "regenerate-from-deterministic-canonical-generator",
+            "final_art": true,
+            "placeholder": false
+        }));
     }
     fs::write(
         manifest_path,
@@ -670,6 +883,10 @@ fn creature_part_asset_id(
     format!("creature-part-family-{:04}-{:?}-{kind}", family.0, lod).to_ascii_lowercase()
 }
 
+fn creature_surface_asset_id(family: CreaturePartFamilyId) -> String {
+    format!("creature-surface-family-{:04}", family.0)
+}
+
 fn fnv1a_digest(bytes: &[u8]) -> String {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for byte in bytes {
@@ -683,11 +900,33 @@ fn fnv1a_digest(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
 
+    fn workspace_path(relative: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("alife_tools must be under <workspace>/crates")
+            .join(relative)
+    }
+
     #[test]
     fn cli_supports_all_required_commands() {
         for command in ["analyze", "build", "validate", "preview", "manifest"] {
             assert!(CreaturePartBuilderCommand::parse_for_test([command]).is_ok());
         }
+        assert!(CreaturePartBuilderCommand::parse_for_test([
+            "validate-geneforge-staging",
+            "--staging",
+            "target/artifacts/creature_parts/geneforge-staging",
+            "--recipes",
+            "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
+        ])
+        .is_ok());
+        assert!(CreaturePartBuilderCommand::parse_for_test([
+            "validate-geneforge-staging",
+            "--staging",
+            "target/artifacts/creature_parts/geneforge-staging",
+        ])
+        .is_err());
     }
 
     #[test]
@@ -706,5 +945,69 @@ mod tests {
             creature_part_asset_id(CreaturePartFamilyId(7), CreaturePartLodId::Compact, "parts"),
             "creature-part-family-0007-compact-parts"
         );
+        assert_eq!(
+            creature_surface_asset_id(CreaturePartFamilyId(7)),
+            "creature-surface-family-0007"
+        );
+    }
+
+    #[test]
+    fn canonical_launch_authoring_never_routes_back_through_source_animal_slicing() {
+        assert!(uses_canonical_authoring_builder(
+            "scripts::generate_canonical_creature_parts.v3"
+        ));
+        assert!(!uses_canonical_authoring_builder(
+            "alife_tools::creature_part_builder.v1"
+        ));
+    }
+
+    #[test]
+    fn canonical_production_catalog_validates_committed_packs() {
+        validate(&workspace_path(DEFAULT_CATALOG)).unwrap();
+    }
+
+    #[test]
+    fn refreshed_manifest_records_canonical_parts_and_surfaces_as_mit_outputs() {
+        let artifact =
+            workspace_path("target/artifacts/creature_parts/canonical_manifest_validation.json");
+        if let Some(parent) = artifact.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::copy(workspace_path(DEFAULT_MANIFEST), &artifact).unwrap();
+        update_manifest(&workspace_path(DEFAULT_CATALOG), &artifact).unwrap();
+
+        let manifest: Value =
+            serde_json::from_str(&fs::read_to_string(&artifact).unwrap()).unwrap();
+        let entries = manifest["entries"].as_array().unwrap();
+        let canonical = entries
+            .iter()
+            .filter(|entry| {
+                entry["asset_id"]
+                    .as_str()
+                    .is_some_and(|id| id.starts_with("creature-part-family-"))
+            })
+            .collect::<Vec<_>>();
+        let surfaces = entries
+            .iter()
+            .filter(|entry| {
+                entry["asset_id"]
+                    .as_str()
+                    .is_some_and(|id| id.starts_with("creature-surface-family-"))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(canonical.len(), 48);
+        assert_eq!(surfaces.len(), 8);
+        assert!(canonical.iter().chain(&surfaces).all(|entry| {
+            entry["license"] == "MIT"
+                && entry["author"] == "A-Life contributors"
+                && entry["source"] == "scripts/generate_canonical_creature_parts.py"
+                && entry["generated"] == true
+                && entry["external"] == false
+        }));
+        assert!(entries.iter().all(|entry| {
+            !entry["asset_id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("quirky-texture-t-"))
+        }));
     }
 }

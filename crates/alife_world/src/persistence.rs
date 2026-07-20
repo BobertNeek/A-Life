@@ -425,6 +425,17 @@ impl GpuRuntimeSaveState {
             self.schema_version,
             FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
         )?;
+        let backend_state_valid = self.requested_backend_mode == "GpuAuthoritative"
+            && if self.authority.authoritative {
+                self.selected_backend_mode == "GpuAuthoritative"
+                    && self.unavailable_reason.is_none()
+            } else {
+                self.selected_backend_mode == "Unavailable"
+                    && self
+                        .unavailable_reason
+                        .as_deref()
+                        .is_some_and(|reason| !reason.trim().is_empty())
+            };
         if self.requested_backend_mode.trim().is_empty()
             || self.selected_backend_mode.trim().is_empty()
             || self.validation_profile.trim().is_empty()
@@ -435,7 +446,7 @@ impl GpuRuntimeSaveState {
             || self.last_safe_checkpoint.save_id.trim().is_empty()
             || self.last_safe_checkpoint.checkpoint_label.trim().is_empty()
             || !self.last_safe_checkpoint.sealed_patch_boundary
-            || !self.authority.authoritative
+            || !backend_state_valid
             || !self.authority.failure_stops_learned_actions
             || !self.no_active_bulk_readback
         {
