@@ -4,6 +4,8 @@
 //! owns the one authoritative device, fixed class arenas, generation-checked
 //! capabilities, bounded selection readback, and fail-stop transaction state.
 
+#[cfg(feature = "gpu-tests")]
+use std::collections::VecDeque;
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -915,6 +917,31 @@ fn capacity_for_promoted_class(
     BrainCapacityClass::production_for_id(class_id)
 }
 
+fn live_pressure_sample(
+    policy: &BrainActivityPolicyV1,
+    identity: BrainDispatchIdentity,
+    resident: &ResidentBrainSlot,
+    admission: &GpuAdmissionReceipt,
+    runtime_budget: &GpuRuntimeBudget,
+) -> Result<GpuPressureSample, ScaffoldContractError> {
+    GpuPressureSample::try_new(
+        policy,
+        GpuPressureSampleInput {
+            identity,
+            source_dispatch_generation: resident.last_activity_dispatch_generation,
+            source_frame_digest: resident.last_activity_frame_digest,
+            completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
+            // The runtime waits for the submitted mixed-class batch before it
+            // accepts another neural dispatch, so no older neural work is queued.
+            queue_depth: 0,
+            logical_heap_used: admission.logical_committed_bytes,
+            logical_heap_capacity: runtime_budget.logical_neural_heap_budget_bytes,
+            brain_atp_remaining_q16: resident.brain_atp_q16,
+            brain_atp_capacity_q16: BRAIN_ATP_Q16_MAX,
+        },
+    )
+}
+
 pub(crate) fn map_gpu_contract_error(error: GpuClosedLoopError) -> ScaffoldContractError {
     match error {
         GpuClosedLoopError::LayoutMismatch => ScaffoldContractError::GpuLayoutMismatch,
@@ -953,6 +980,8 @@ pub struct GpuClosedLoopBackend {
     forced_learning_rejections_remaining: u8,
     #[cfg(feature = "gpu-tests")]
     forced_discard_rejections_remaining: u8,
+    #[cfg(feature = "gpu-tests")]
+    recorded_pressure_replay: VecDeque<GpuPressureSample>,
     completed_dispatch_count: u64,
     perception_upload_count: u64,
     completed_selection_count: u64,
@@ -1020,6 +1049,8 @@ impl GpuClosedLoopBackend {
             forced_learning_rejections_remaining: 0,
             #[cfg(feature = "gpu-tests")]
             forced_discard_rejections_remaining: 0,
+            #[cfg(feature = "gpu-tests")]
+            recorded_pressure_replay: VecDeque::new(),
             completed_dispatch_count: 0,
             perception_upload_count: 0,
             completed_selection_count: 0,
@@ -1034,6 +1065,31 @@ impl GpuClosedLoopBackend {
 
     pub const fn hardware_receipt(&self) -> &GpuHardwareReceipt {
         &self.hardware
+    }
+
+    /// Installs an exact pressure sequence for same-adapter evidence replay.
+    ///
+    /// This test/evidence-only boundary replaces only the host pressure sample;
+    /// perception, recurrent execution, logits, selection, world outcomes, and
+    /// learning remain GPU-authoritative and run through the production path.
+    #[cfg(feature = "gpu-tests")]
+    pub fn install_recorded_pressure_replay(
+        &mut self,
+        samples: Vec<GpuPressureSample>,
+    ) -> Result<(), ScaffoldContractError> {
+        if samples.is_empty() || !self.recorded_pressure_replay.is_empty() {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+        }
+        for sample in &samples {
+            sample.validate_for(&self.activity_policy)?;
+        }
+        self.recorded_pressure_replay = samples.into();
+        Ok(())
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn recorded_pressure_replay_remaining(&self) -> usize {
+        self.recorded_pressure_replay.len()
     }
 
     pub const fn runtime_profile(&self) -> &GpuRuntimeProfile {
@@ -1828,9 +1884,23 @@ impl GpuClosedLoopBackend {
             .completed_selection_count
             .checked_add(batch.len() as u64)
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        #[cfg(feature = "gpu-tests")]
+        let replayed_pressure = if self.recorded_pressure_replay.is_empty() {
+            None
+        } else {
+            if self.recorded_pressure_replay.len() < batch.len() {
+                return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+            }
+            Some(
+                self.recorded_pressure_replay
+                    .drain(..batch.len())
+                    .collect::<Vec<_>>(),
+            )
+        };
         let activity_decisions = batch
             .iter()
-            .map(|input| {
+            .enumerate()
+            .map(|(_input_index, input)| {
                 let handle = input.handle;
                 let resident = self
                     .class_buckets
@@ -1848,22 +1918,38 @@ impl GpuClosedLoopBackend {
                     dispatch_generation: dispatch_generation.get(),
                     frame_digest: input.frame.frame_digest().0,
                 };
-                let pressure = GpuPressureSample::try_new(
-                    &self.activity_policy,
-                    GpuPressureSampleInput {
+                #[cfg(feature = "gpu-tests")]
+                let pressure = match replayed_pressure
+                    .as_ref()
+                    .and_then(|samples| samples.get(_input_index))
+                    .copied()
+                {
+                    Some(sample) => {
+                        sample.validate_for(&self.activity_policy)?;
+                        if sample.dispatch_identity() != identity
+                            || sample.source_dispatch_generation
+                                != resident.last_activity_dispatch_generation
+                            || sample.source_frame_digest != resident.last_activity_frame_digest
+                        {
+                            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+                        }
+                        sample
+                    }
+                    None => live_pressure_sample(
+                        &self.activity_policy,
                         identity,
-                        source_dispatch_generation: resident.last_activity_dispatch_generation,
-                        source_frame_digest: resident.last_activity_frame_digest,
-                        completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
-                        // This runtime waits for every submitted mixed-class batch
-                        // before accepting the next one, so there are no older
-                        // neural submissions queued at this dispatch boundary.
-                        queue_depth: 0,
-                        logical_heap_used: self.admission.logical_committed_bytes,
-                        logical_heap_capacity: self.runtime_budget.logical_neural_heap_budget_bytes,
-                        brain_atp_remaining_q16: resident.brain_atp_q16,
-                        brain_atp_capacity_q16: BRAIN_ATP_Q16_MAX,
-                    },
+                        resident,
+                        &self.admission,
+                        &self.runtime_budget,
+                    )?,
+                };
+                #[cfg(not(feature = "gpu-tests"))]
+                let pressure = live_pressure_sample(
+                    &self.activity_policy,
+                    identity,
+                    resident,
+                    &self.admission,
+                    &self.runtime_budget,
                 )?;
                 let capacity = capacity_for_promoted_class(handle.class_id)?;
                 NeuralThrottleDecision::derive(

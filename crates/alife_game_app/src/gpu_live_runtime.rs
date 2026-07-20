@@ -81,6 +81,16 @@ impl GpuLiveRuntimeConstructionOptions {
             retain_sealed_patch_history: false,
         }
     }
+
+    const fn soak() -> Self {
+        Self {
+            homeostatic_parameters: HomeostaticParameters::reference(),
+            schedule_sleep: true,
+            birth_template_organism_id: None,
+            observe_sidecars: true,
+            retain_sealed_patch_history: false,
+        }
+    }
 }
 
 impl GpuLiveCheckpointDurability {
@@ -252,7 +262,9 @@ struct PreparedGpuBrainFrame {
     memory_upload: GpuMemoryContextUpload,
 }
 
-const LIVE_MEMORY_CAPACITY: usize = 64;
+// The bank must exceed each 64-record target/family shortlist so production
+// recall can remain compute-bounded while reporting genuine capacity pressure.
+const LIVE_MEMORY_CAPACITY: usize = 256;
 const LIVE_MEMORY_MAX_FEATURE_LEN: usize = 64;
 const LIVE_MEMORY_MAX_MATCH_COUNT: usize = 4;
 const LIVE_MEMORY_MIN_MATCH_SCORE: f32 = 0.72;
@@ -525,6 +537,23 @@ impl GpuLiveBrainRuntime {
         )
     }
 
+    pub(crate) fn new_soak_profiled(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
+    ) -> Result<Self, GameAppShellError> {
+        Self::new_profiled_with_parameters(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            sensor_profile,
+            GpuLiveRuntimeConstructionOptions::soak(),
+        )
+    }
+
     fn new_profiled_with_parameters(
         backend: GpuClosedLoopBackend,
         world: HeadlessWorld,
@@ -766,6 +795,28 @@ impl GpuLiveBrainRuntime {
         runtime
             .world
             .restore_tracked_object_states(tracked_object_states)?;
+        Ok(runtime)
+    }
+
+    pub(crate) fn restore_soak_with_checkpoints(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        store: &GpuCheckpointAssetStore,
+        manifest: &AssetManifest,
+        checkpoints: &[GpuBrainSaveState],
+    ) -> Result<Self, GameAppShellError> {
+        let mut runtime = Self::restore_with_checkpoints(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            store,
+            manifest,
+            checkpoints,
+        )?;
+        runtime.retain_sealed_patch_history = false;
         Ok(runtime)
     }
 
@@ -1566,6 +1617,28 @@ impl GpuLiveBrainRuntime {
 
     pub(crate) const fn activity_policy_digest(&self) -> [u64; 4] {
         self.backend.activity_policy().policy_digest
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn evidence_activity_snapshot(
+        &self,
+        organism_id: OrganismId,
+    ) -> Result<alife_gpu_backend::GpuActivityRuntimeSnapshot, ScaffoldContractError> {
+        let handle = self.evidence_handle(organism_id)?;
+        self.backend.snapshot_activity_state(handle)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn install_recorded_pressure_replay(
+        &mut self,
+        samples: Vec<alife_core::GpuPressureSample>,
+    ) -> Result<(), ScaffoldContractError> {
+        self.backend.install_recorded_pressure_replay(samples)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn recorded_pressure_replay_remaining(&self) -> usize {
+        self.backend.recorded_pressure_replay_remaining()
     }
 
     pub fn authority_telemetry(&self) -> GpuBrainAuthorityTelemetry {

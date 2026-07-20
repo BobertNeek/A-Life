@@ -875,6 +875,7 @@ impl MemoryBank {
             .get(&family_key)
             .into_iter()
             .flatten()
+            .take(MEMORY_FAMILY_SEARCH_CAP)
             .filter_map(|id| {
                 self.candidate_store
                     .records

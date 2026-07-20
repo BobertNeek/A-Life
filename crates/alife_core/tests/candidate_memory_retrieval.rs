@@ -4,13 +4,13 @@ use alife_core::{
     DevelopmentState, DriveDelta, DriveSnapshot, DurationTicks, EndocrineDelta, EndocrineSnapshot,
     ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId, GroundedObjectSlotV1,
     HomeostaticDelta, HomeostaticSnapshot, LobeKind, MemoryBank, MemoryBankConfig,
-    MemoryCompactionPhase, MemorySidecarState, NeuralActionSelection, NormalizedScalar, OrganismId,
-    PerceptionContextKind, PerceptionFrame, PerceptionFrameDraft, PhenotypeHash,
-    PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PreActionSnapshot,
-    ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
-    SensoryChannels, SensorySnapshot, SignedValence, Tick, TrackedObjectId, Validate, Vec3f,
-    Velocity, WorldEntityId, MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE, MEMORY_LATENT_V1_COUNT,
-    MEMORY_VALUE_V1_COUNT,
+    MemoryCompactionPhase, MemoryRecallChannel, MemoryRecallDegradation, MemorySidecarState,
+    NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionContextKind, PerceptionFrame,
+    PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome, PhysicalContactKind, Pose,
+    PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile,
+    SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
+    Tick, TrackedObjectId, Validate, Vec3f, Velocity, WorldEntityId,
+    MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE, MEMORY_LATENT_V1_COUNT, MEMORY_VALUE_V1_COUNT,
 };
 
 const ORGANISM: OrganismId = OrganismId(811);
@@ -703,6 +703,49 @@ fn bounded_index_retrieves_the_only_match_after_memory_id_sixty_four() {
 }
 
 #[test]
+fn bounded_index_reports_eligible_records_above_the_similarity_search_cap() {
+    let config = MemoryBankConfig::new(80, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+    let mut bank = MemoryBank::new(config).unwrap();
+    bank.observe_sealed_patch(&poisoned_cyan_ingest_patch())
+        .unwrap();
+
+    let mut wire = serde_json::to_value(&bank).unwrap();
+    let store = wire
+        .get_mut("candidate_store")
+        .and_then(serde_json::Value::as_object_mut)
+        .unwrap();
+    let records = store
+        .get_mut("records")
+        .and_then(serde_json::Value::as_object_mut)
+        .unwrap();
+    let template = records.get("1").cloned().unwrap();
+    for memory_id in 2..=65_u64 {
+        let mut record = template.clone();
+        record["memory_id"] = serde_json::json!(memory_id);
+        records.insert(memory_id.to_string(), record);
+    }
+    store.insert("next_memory_id".to_owned(), serde_json::json!(66_u64));
+    let restored: MemoryBank = serde_json::from_value(wire).unwrap();
+
+    let prepared = restored.recall_frame(&cyan_amber_family_draft()).unwrap();
+    let receipt = prepared.receipt();
+    assert_eq!(receipt.candidates[0].family_eligible, 65);
+    assert_eq!(receipt.candidates[0].family_searched, 64);
+    assert!(receipt
+        .degradations
+        .contains(&MemoryRecallDegradation::SearchShortlisted {
+            candidate_index: 0,
+            channel: MemoryRecallChannel::FamilyValue,
+            eligible: 65,
+            searched: 64,
+        }));
+    assert!(
+        receipt.similarity_evaluations
+            <= u32::from(receipt.candidate_count) * alife_core::MEMORY_TOTAL_SEARCH_CAP as u32
+    );
+}
+
+#[test]
 fn million_record_capacity_index_keeps_similarity_work_bounded() {
     let config =
         MemoryBankConfig::new(1_000_000, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
@@ -787,6 +830,27 @@ fn compaction_is_prepared_offline_committed_once_and_replay_safe() {
     assert_eq!(
         sidecar.commit_compaction(second).unwrap().identity.cycle_id,
         2
+    );
+}
+
+#[test]
+fn consecutive_sleep_compactions_do_not_require_an_intervening_memory_write() {
+    let config = MemoryBankConfig::new(4, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+    let mut sidecar = grounded_sidecar(config);
+    sidecar
+        .observe_sealed_patch(&sequenced_patch(1, 2, 71, 0.4, -1.0, 1.0))
+        .unwrap();
+
+    let first = sidecar.prepare_compaction(1, 4, 7).unwrap();
+    sidecar.commit_compaction(first).unwrap();
+    let second = sidecar.prepare_compaction(2, 4, 7).unwrap();
+    let receipt = sidecar.commit_compaction(second).unwrap();
+
+    assert_eq!(receipt.identity.cycle_id, 2);
+    assert_eq!(sidecar.compaction_checkpoint().next_cycle_id, 3);
+    assert_eq!(
+        sidecar.compaction_checkpoint().last_committed_cycle_id,
+        Some(2)
     );
 }
 

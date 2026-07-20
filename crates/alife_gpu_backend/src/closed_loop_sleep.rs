@@ -534,6 +534,10 @@ impl GpuClosedLoopBackend {
         ]);
         resident.pending_eligibility = None;
         resident.pending_eligibility_record = None;
+        if self.sleep_jobs.remove(&staged.job_id.raw()).is_none() {
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         self.committed_sleep.insert(key, receipt);
         Ok(receipt)
     }

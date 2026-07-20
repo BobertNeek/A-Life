@@ -33,6 +33,8 @@ mod learning_sleep;
 pub use learning_sleep::*;
 mod memory_grounding;
 pub use memory_grounding::*;
+mod soak;
+pub use soak::*;
 mod persistence;
 use persistence::*;
 
@@ -353,6 +355,7 @@ pub enum ValidatedGpuEvidence {
     SliceA(GpuSliceAAcceptanceReceipt),
     SliceB(GpuSliceBAcceptanceReceipt),
     SliceC(Box<GpuMemoryGroundingEvidenceReceipt>),
+    SliceD(Box<GpuClosedLoopSoakReceipt>),
 }
 
 impl ValidatedGpuEvidence {
@@ -361,6 +364,7 @@ impl ValidatedGpuEvidence {
             Self::SliceA(receipt) => &receipt.header,
             Self::SliceB(receipt) => &receipt.header,
             Self::SliceC(receipt) => &receipt.header.common,
+            Self::SliceD(receipt) => &receipt.header.common,
         }
     }
 
@@ -369,6 +373,7 @@ impl ValidatedGpuEvidence {
             Self::SliceA(receipt) => &receipt.capacity_class,
             Self::SliceB(receipt) => &receipt.capacity_class,
             Self::SliceC(receipt) => &receipt.capacity_class_slug,
+            Self::SliceD(receipt) => &receipt.capacity_class_slug,
         }
     }
 
@@ -377,6 +382,7 @@ impl ValidatedGpuEvidence {
             Self::SliceA(receipt) => &receipt.backend_api,
             Self::SliceB(receipt) => &receipt.backend_api,
             Self::SliceC(receipt) => &receipt.header.adapter_backend,
+            Self::SliceD(receipt) => &receipt.header.adapter_backend,
         }
     }
 
@@ -385,6 +391,7 @@ impl ValidatedGpuEvidence {
             Self::SliceA(receipt) => &receipt.adapter_name,
             Self::SliceB(receipt) => &receipt.adapter_name,
             Self::SliceC(receipt) => &receipt.header.adapter_name,
+            Self::SliceD(receipt) => &receipt.header.adapter_name,
         }
     }
 
@@ -393,6 +400,7 @@ impl ValidatedGpuEvidence {
             Self::SliceA(receipt) => receipt.neural_dispatch_count,
             Self::SliceB(receipt) => receipt.gpu_learning_dispatches,
             Self::SliceC(receipt) => receipt.gpu_selection_count,
+            Self::SliceD(receipt) => receipt.authoritative_gpu_dispatches,
         }
     }
 }
@@ -407,6 +415,9 @@ pub fn validate_gpu_evidence_file(
         GPU_SLICE_C_RAW => load_gpu_slice_c_evidence(input)
             .map(Box::new)
             .map(ValidatedGpuEvidence::SliceC),
+        GPU_SLICE_D_RAW => load_gpu_slice_d_evidence(input)
+            .map(Box::new)
+            .map(ValidatedGpuEvidence::SliceD),
         other => Err(GpuEvidenceError::UnsupportedSlice(other)),
     }
 }

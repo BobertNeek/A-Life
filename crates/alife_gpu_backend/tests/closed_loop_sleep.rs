@@ -273,6 +273,27 @@ fn consolidation_promotes_fast_preserves_genetic_and_commits_once() {
 }
 
 #[test]
+fn committed_sleep_retires_staging_payload_but_remains_idempotent() {
+    let (mut backend, handle, _) = learned_backend(5_010);
+    let (_replay, request, staged) = stage_sleep(&mut backend, handle, 1);
+
+    let receipt = backend
+        .commit_sleep_consolidation(handle, &request, &staged.staged)
+        .unwrap();
+
+    assert!(matches!(
+        backend.poll_sleep_consolidation(handle, staged.staged.job_id),
+        Err(alife_core::ScaffoldContractError::ConsolidationGenerationMismatch)
+    ));
+    assert_eq!(
+        backend
+            .commit_sleep_consolidation(handle, &request, &staged.staged)
+            .unwrap(),
+        receipt
+    );
+}
+
+#[test]
 fn invalid_staging_rolls_back_and_valid_staging_still_commits() {
     let (mut backend, handle, _) = learned_backend(5_002);
     let before = backend.learning_state_snapshot_for_test(handle).unwrap();

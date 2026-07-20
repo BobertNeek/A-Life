@@ -235,12 +235,18 @@ fn collect_shortlist<'a, K: Ord>(
     cap: usize,
 ) -> (u32, Vec<MemoryId>) {
     let mut unique = BTreeSet::new();
+    let mut eligible = 0_u32;
     for key in keys {
         if let Some(ids) = lookup(key) {
-            unique.extend(ids.iter().map(|id| id.raw()));
+            // Each record belongs to exactly one exact-bin key in this
+            // already de-duplicated neighbor set. Keep the full bounded-bank
+            // population count for truthful pressure evidence, but admit at
+            // most one search cap from each ranked bucket into the bounded
+            // global shortlist.
+            eligible = eligible.saturating_add(u32::try_from(ids.len()).unwrap_or(u32::MAX));
+            unique.extend(ids.iter().take(cap).map(|id| id.raw()));
         }
     }
-    let eligible = u32::try_from(unique.len()).unwrap_or(u32::MAX);
     let mut ids = unique.into_iter().map(MemoryId).collect::<Vec<_>>();
     ids.sort_by_key(|id| {
         let distance = store.records.get(&id.raw()).map_or(u32::MAX, |record| {

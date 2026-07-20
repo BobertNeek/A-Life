@@ -343,6 +343,7 @@ impl MemorySidecarState {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
         }
 
+        let previous_checkpoint = self.compaction;
         match self.compaction.phase {
             MemoryCompactionPhase::Committed {
                 cycle_id: committed_cycle,
@@ -358,7 +359,16 @@ impl MemorySidecarState {
                         receipt,
                     });
                 }
-                return Err(ScaffoldContractError::MemoryCompactionConflict);
+                if cycle_id != self.compaction.next_cycle_id {
+                    return Err(ScaffoldContractError::MemoryCompactionConflict);
+                }
+                // A second sleep cycle can legitimately begin before another
+                // waking patch mutates memory (for example after restoring at
+                // a sealed sleep boundary). Preserve the committed identity
+                // for rollback while allowing the unchanged active bank to be
+                // compacted under the next cycle ID.
+                self.compaction.phase = MemoryCompactionPhase::Idle;
+                self.staged_bank = None;
             }
             MemoryCompactionPhase::Staged {
                 cycle_id: staged_cycle,
@@ -401,7 +411,6 @@ impl MemorySidecarState {
             return Err(ScaffoldContractError::MemoryCompactionConflict);
         }
 
-        let previous_checkpoint = self.compaction;
         if matches!(self.compaction.phase, MemoryCompactionPhase::Idle) {
             if cycle_id != self.compaction.next_cycle_id {
                 return Err(ScaffoldContractError::MemoryCompactionConflict);

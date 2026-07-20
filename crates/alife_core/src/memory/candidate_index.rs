@@ -336,7 +336,7 @@ impl CandidateMemoryStoreV2 {
         if !ids.contains(&memory_id) {
             ids.push(memory_id);
         }
-        self.rank_and_truncate_index_ids(&mut ids, MEMORY_FAMILY_SEARCH_CAP);
+        self.rank_index_ids(&mut ids);
         self.family_index.insert(family_key, ids);
     }
 
@@ -345,11 +345,11 @@ impl CandidateMemoryStoreV2 {
         if !ids.contains(&memory_id) {
             ids.push(memory_id);
         }
-        self.rank_and_truncate_index_ids(&mut ids, MEMORY_TARGET_SEARCH_CAP);
+        self.rank_index_ids(&mut ids);
         self.target_index.insert(target_key, ids);
     }
 
-    fn rank_and_truncate_index_ids(&self, ids: &mut Vec<MemoryId>, cap: usize) {
+    fn rank_index_ids(&self, ids: &mut [MemoryId]) {
         ids.sort_by(|left, right| {
             let left_record = &self.records[&left.raw()];
             let right_record = &self.records[&right.raw()];
@@ -369,7 +369,6 @@ impl CandidateMemoryStoreV2 {
                 })
                 .then_with(|| left.raw().cmp(&right.raw()))
         });
-        ids.truncate(cap);
     }
 
     pub(super) fn remove_record_from_indices(&mut self, record: &CandidateMemoryRecordV2) {
