@@ -1109,7 +1109,9 @@ impl GpuLiveBrainRuntime {
             .memories
             .get_mut(&organism_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let prepared = memory.prepare_compaction(cycle_id, LIVE_MEMORY_CAPACITY as u32, 1)?;
+        let max_records_after = u32::try_from(memory.bank().capacity())
+            .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
+        let prepared = memory.prepare_compaction(cycle_id, max_records_after, 1)?;
         let receipt = memory.commit_compaction(prepared)?;
         self.last_memory_compaction_receipts.push(receipt);
         Ok(receipt)
