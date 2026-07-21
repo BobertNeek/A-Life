@@ -1622,7 +1622,6 @@ impl GpuLiveBrainRuntime {
         self.backend.activity_policy().policy_digest
     }
 
-    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_activity_snapshot(
         &self,
         organism_id: OrganismId,
@@ -1631,7 +1630,6 @@ impl GpuLiveBrainRuntime {
         self.backend.snapshot_activity_state(handle)
     }
 
-    #[cfg(feature = "gpu-tests")]
     pub(crate) fn install_recorded_pressure_replay(
         &mut self,
         samples: Vec<alife_core::GpuPressureSample>,
@@ -1639,7 +1637,6 @@ impl GpuLiveBrainRuntime {
         self.backend.install_recorded_pressure_replay(samples)
     }
 
-    #[cfg(feature = "gpu-tests")]
     pub(crate) fn recorded_pressure_replay_remaining(&self) -> usize {
         self.backend.recorded_pressure_replay_remaining()
     }
@@ -2362,7 +2359,6 @@ impl GpuLiveBrainRuntime {
         }
     }
 
-    #[cfg(feature = "gpu-tests")]
     fn evidence_handle(
         &self,
         organism_id: OrganismId,

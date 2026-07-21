@@ -9,8 +9,8 @@ use std::fs;
 use std::path::Path;
 
 use alife_core::{
-    BrainCapacityClass, BrainClassId, BrainScaleTier, HomeostaticSnapshot, PhenotypeHash,
-    PolicyBackend, ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
+    BrainCapacityClass, BrainClassId, BrainScaleTier, GpuPressureSample, HomeostaticSnapshot,
+    PhenotypeHash, PolicyBackend, ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
 };
 pub use alife_core::{PhenotypeEvidenceManifest, GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA};
 use alife_gpu_backend::{
@@ -174,6 +174,7 @@ struct TrialEvidence {
     hardware: GpuHardwareReceipt,
     metrics: GpuLiveBrainEvidenceMetrics,
     trace: Vec<GpuSelectionEvidence>,
+    pressure_trace: Vec<GpuPressureSample>,
 }
 
 impl GpuClosedLoopAcceptanceOptions {
@@ -439,14 +440,20 @@ fn run_gpu_closed_loop_acceptance_with_provenance(
         PhenotypeEvidenceManifest::from_phenotype(&phenotype, &options.capacity)?;
     let initial_state_digest = initial_state_digest(&options, &phenotype, &genome, &development)?;
 
-    let first = run_trial(&options, tier, phenotype.phenotype_hash())?;
-    let second = run_trial(&options, tier, phenotype.phenotype_hash())?;
+    let first = run_trial(&options, tier, phenotype.phenotype_hash(), None)?;
+    let second = run_trial(
+        &options,
+        tier,
+        phenotype.phenotype_hash(),
+        Some(&first.pressure_trace),
+    )?;
     let first_adapter_digest = adapter_identity_digest(&first.hardware);
     let second_adapter_digest = adapter_identity_digest(&second.hardware);
     if first.hardware.backend_api != "vulkan"
         || second.hardware.backend_api != "vulkan"
         || first_adapter_digest != second_adapter_digest
         || first.trace.len() != second.trace.len()
+        || first.pressure_trace != second.pressure_trace
     {
         return Err(GpuEvidenceError::Contract(
             "same-adapter Vulkan replay precondition failed",
@@ -572,6 +579,7 @@ fn run_trial(
     options: &GpuClosedLoopAcceptanceOptions,
     tier: BrainScaleTier,
     expected_phenotype_hash: PhenotypeHash,
+    pressure_replay: Option<&[GpuPressureSample]>,
 ) -> Result<TrialEvidence, GpuEvidenceError> {
     let backend =
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?;
@@ -583,8 +591,12 @@ fn run_trial(
         tier,
         options.sensor_profile,
     )?;
+    if let Some(samples) = pressure_replay {
+        runtime.install_recorded_pressure_replay(samples.to_vec())?;
+    }
     let hardware = runtime.hardware_receipt().clone();
     let mut trace = Vec::with_capacity(options.requested_ticks as usize);
+    let mut pressure_trace = Vec::with_capacity(options.requested_ticks as usize);
     for expected_tick in 0..options.requested_ticks {
         let world_tick = runtime.evidence_world().tick();
         if world_tick != Tick::new(u64::from(expected_tick)) {
@@ -618,6 +630,10 @@ fn run_trial(
         patch.validate_contract()?;
         let neural = patch.decision().neural_evidence()?;
         let metrics = runtime.evidence_metrics();
+        let activity = runtime.evidence_activity_snapshot(GPU_EVIDENCE_ORGANISM_ID)?;
+        let pressure = activity.pressure.ok_or(GpuEvidenceError::Contract(
+            "completed GPU tick did not retain its pressure sample",
+        ))?;
         if neural.phenotype_hash != expected_phenotype_hash
             || patch.pre_action().tick != Tick::new(u64::from(expected_tick))
             || patch.pre_action().policy_backend() != PolicyBackend::NeuralClosedLoopGpu
@@ -644,11 +660,18 @@ fn run_trial(
                 .map_err(|_| GpuEvidenceError::Contract("compact readback does not fit u32"))?,
             outcome_success: patch.outcome().success,
         });
+        pressure_trace.push(pressure);
+    }
+    if pressure_replay.is_some() && runtime.recorded_pressure_replay_remaining() != 0 {
+        return Err(GpuEvidenceError::Contract(
+            "same-adapter replay did not consume its exact pressure sequence",
+        ));
     }
     Ok(TrialEvidence {
         hardware,
         metrics: runtime.evidence_metrics(),
         trace,
+        pressure_trace,
     })
 }
 

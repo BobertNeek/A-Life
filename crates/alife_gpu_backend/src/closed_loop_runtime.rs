@@ -4,9 +4,7 @@
 //! owns the one authoritative device, fixed class arenas, generation-checked
 //! capabilities, bounded selection readback, and fail-stop transaction state.
 
-#[cfg(feature = "gpu-tests")]
-use std::collections::VecDeque;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -980,7 +978,6 @@ pub struct GpuClosedLoopBackend {
     forced_learning_rejections_remaining: u8,
     #[cfg(feature = "gpu-tests")]
     forced_discard_rejections_remaining: u8,
-    #[cfg(feature = "gpu-tests")]
     recorded_pressure_replay: VecDeque<GpuPressureSample>,
     completed_dispatch_count: u64,
     perception_upload_count: u64,
@@ -1049,7 +1046,6 @@ impl GpuClosedLoopBackend {
             forced_learning_rejections_remaining: 0,
             #[cfg(feature = "gpu-tests")]
             forced_discard_rejections_remaining: 0,
-            #[cfg(feature = "gpu-tests")]
             recorded_pressure_replay: VecDeque::new(),
             completed_dispatch_count: 0,
             perception_upload_count: 0,
@@ -1069,10 +1065,9 @@ impl GpuClosedLoopBackend {
 
     /// Installs an exact pressure sequence for same-adapter evidence replay.
     ///
-    /// This test/evidence-only boundary replaces only the host pressure sample;
+    /// This exact-replay boundary replaces only the host pressure sample;
     /// perception, recurrent execution, logits, selection, world outcomes, and
     /// learning remain GPU-authoritative and run through the production path.
-    #[cfg(feature = "gpu-tests")]
     pub fn install_recorded_pressure_replay(
         &mut self,
         samples: Vec<GpuPressureSample>,
@@ -1087,7 +1082,6 @@ impl GpuClosedLoopBackend {
         Ok(())
     }
 
-    #[cfg(feature = "gpu-tests")]
     pub fn recorded_pressure_replay_remaining(&self) -> usize {
         self.recorded_pressure_replay.len()
     }
@@ -1884,7 +1878,6 @@ impl GpuClosedLoopBackend {
             .completed_selection_count
             .checked_add(batch.len() as u64)
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-        #[cfg(feature = "gpu-tests")]
         let replayed_pressure = if self.recorded_pressure_replay.is_empty() {
             None
         } else {
@@ -1897,7 +1890,6 @@ impl GpuClosedLoopBackend {
                     .collect::<Vec<_>>(),
             )
         };
-        #[cfg(feature = "gpu-tests")]
         let mut replayed_pressure_iter = replayed_pressure.as_deref().map(<[_]>::iter);
         let activity_decisions = batch
             .iter()
@@ -1919,7 +1911,6 @@ impl GpuClosedLoopBackend {
                     dispatch_generation: dispatch_generation.get(),
                     frame_digest: input.frame.frame_digest().0,
                 };
-                #[cfg(feature = "gpu-tests")]
                 let pressure = match replayed_pressure_iter
                     .as_mut()
                     .and_then(|samples| samples.next())
@@ -1944,14 +1935,6 @@ impl GpuClosedLoopBackend {
                         &self.runtime_budget,
                     )?,
                 };
-                #[cfg(not(feature = "gpu-tests"))]
-                let pressure = live_pressure_sample(
-                    &self.activity_policy,
-                    identity,
-                    resident,
-                    &self.admission,
-                    &self.runtime_budget,
-                )?;
                 let capacity = capacity_for_promoted_class(handle.class_id)?;
                 NeuralThrottleDecision::derive(
                     &self.activity_policy,
