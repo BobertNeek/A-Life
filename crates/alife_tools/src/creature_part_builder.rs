@@ -373,6 +373,39 @@ struct StagedAssemblyBridgeEvidence {
     residual: f64,
 }
 
+#[derive(Clone, Copy)]
+struct StagedSocketValidationContext<'a> {
+    staging_root: &'a Path,
+    catalog: &'a GeneForgeCreaturePartCatalog,
+    asset: &'a GeneForgePartAssetDefinition,
+    obj: &'a StagedObjSummary,
+    preparation_contract: &'a StagedPreparationContract,
+    require_cross_torso: bool,
+}
+
+#[derive(Debug, Default)]
+struct StagedPreparationValidationEvidence {
+    full_preparations: BTreeSet<(u16, String)>,
+    canonical_slot_records: usize,
+    cross_torso_slot_records: usize,
+    canonical_group_keys: Vec<String>,
+    cross_torso_group_keys: Vec<String>,
+    matrix_records: Vec<(String, String, [f64; 16])>,
+}
+
+struct GroupTransformValidationContext<'a> {
+    manifest: &'a StagedSocketManifest,
+    asset: &'a GeneForgePartAssetDefinition,
+    family: &'a alife_game_app::GeneForgeCreatureFamilyDefinition,
+    part: &'a alife_game_app::GeneForgeFamilyPartRecipe,
+    prepared: &'a StagedAssemblyPreparation,
+    preparation_contract: &'a StagedPreparationContract,
+    cross_torso: bool,
+    target_manifest: Option<&'a StagedSocketManifest>,
+    observed_geometry: &'a BTreeMap<String, &'a StagedGeometryPreparation>,
+    catalog: &'a GeneForgeCreaturePartCatalog,
+}
+
 impl SourceObjMesh {
     pub fn parse(text: &str) -> Result<Self, CreaturePartBuilderError> {
         let mut positions = Vec::<[f64; 3]>::new();
@@ -800,12 +833,7 @@ pub fn validate_geneforge_staging(
         obj_summaries.insert((*asset_index, *lod_index), summary);
     }
 
-    let mut full_preparations = BTreeSet::new();
-    let mut canonical_slot_records = 0_usize;
-    let mut cross_torso_slot_records = 0_usize;
-    let mut canonical_group_keys = Vec::new();
-    let mut cross_torso_group_keys = Vec::new();
-    let mut matrix_records = Vec::<(String, String, [f64; 16])>::new();
+    let mut preparation_evidence = StagedPreparationValidationEvidence::default();
     for (relative, (asset_index, lod_index)) in &socket_contracts {
         let asset = &catalog.part_assets[*asset_index];
         let lod = &asset.lods[*lod_index];
@@ -813,51 +841,62 @@ pub fn validate_geneforge_staging(
             .get(&(*asset_index, *lod_index))
             .ok_or_else(|| fail(format!("socket manifest has no matching OBJ: {relative}")))?;
         validate_staged_socket_manifest(
-            &canonical_staging_root,
             &confined_existing_staged_path(&canonical_staging_root, relative)?,
-            &catalog,
-            asset,
             lod,
-            summary,
-            &preparation_contract,
-            augmented_preparations,
-            &mut full_preparations,
-            &mut canonical_slot_records,
-            &mut cross_torso_slot_records,
-            &mut canonical_group_keys,
-            &mut cross_torso_group_keys,
-            &mut matrix_records,
+            StagedSocketValidationContext {
+                staging_root: &canonical_staging_root,
+                catalog: &catalog,
+                asset,
+                obj: summary,
+                preparation_contract: &preparation_contract,
+                require_cross_torso: augmented_preparations,
+            },
+            &mut preparation_evidence,
         )?;
     }
-    if full_preparations.len() != 12 * 5 {
+    if preparation_evidence.full_preparations.len() != 12 * 5 {
         return Err(fail(format!(
             "assembly preparation union must contain 60 family-slot references; found {}",
-            full_preparations.len()
+            preparation_evidence.full_preparations.len()
         )));
     }
     let expected_cross_slots = if augmented_preparations { 288 } else { 0 };
     let expected_cross_groups = if augmented_preparations { 432 } else { 0 };
     let expected_total_groups = if augmented_preparations { 684 } else { 252 };
-    if canonical_slot_records != 180
-        || cross_torso_slot_records != expected_cross_slots
-        || canonical_group_keys.len() != 252
-        || cross_torso_group_keys.len() != expected_cross_groups
-        || canonical_group_keys.iter().collect::<BTreeSet<_>>().len() != 252
-        || cross_torso_group_keys.iter().collect::<BTreeSet<_>>().len() != expected_cross_groups
-        || canonical_group_keys
+    if preparation_evidence.canonical_slot_records != 180
+        || preparation_evidence.cross_torso_slot_records != expected_cross_slots
+        || preparation_evidence.canonical_group_keys.len() != 252
+        || preparation_evidence.cross_torso_group_keys.len() != expected_cross_groups
+        || preparation_evidence
+            .canonical_group_keys
             .iter()
-            .chain(cross_torso_group_keys.iter())
+            .collect::<BTreeSet<_>>()
+            .len()
+            != 252
+        || preparation_evidence
+            .cross_torso_group_keys
+            .iter()
+            .collect::<BTreeSet<_>>()
+            .len()
+            != expected_cross_groups
+        || preparation_evidence
+            .canonical_group_keys
+            .iter()
+            .chain(preparation_evidence.cross_torso_group_keys.iter())
             .collect::<BTreeSet<_>>()
             .len()
             != expected_total_groups
     {
         return Err(fail(format!(
-            "assembly preparation accounting must be 180/{expected_cross_slots} slots and 252/{expected_cross_groups}/{expected_total_groups} groups; found {canonical_slot_records}/{cross_torso_slot_records} and {}/{}/{}",
-            canonical_group_keys.len(),
-            cross_torso_group_keys.len(),
-            canonical_group_keys
+            "assembly preparation accounting must be 180/{expected_cross_slots} slots and 252/{expected_cross_groups}/{expected_total_groups} groups; found {}/{} and {}/{}/{}",
+            preparation_evidence.canonical_slot_records,
+            preparation_evidence.cross_torso_slot_records,
+            preparation_evidence.canonical_group_keys.len(),
+            preparation_evidence.cross_torso_group_keys.len(),
+            preparation_evidence
+                .canonical_group_keys
                 .iter()
-                .chain(cross_torso_group_keys.iter())
+                .chain(preparation_evidence.cross_torso_group_keys.iter())
                 .collect::<BTreeSet<_>>()
                 .len()
         )));
@@ -869,11 +908,11 @@ pub fn validate_geneforge_staging(
     }
     if augmented_preparations {
         validate_preparation_key_population(
-            &canonical_group_keys,
-            &cross_torso_group_keys,
+            &preparation_evidence.canonical_group_keys,
+            &preparation_evidence.cross_torso_group_keys,
             &catalog,
         )?;
-        validate_matrix_target_distinctness(&matrix_records)?;
+        validate_matrix_target_distinctness(&preparation_evidence.matrix_records)?;
     }
 
     for (asset_index, asset) in catalog.part_assets.iter().enumerate() {
@@ -940,13 +979,14 @@ pub fn validate_geneforge_staging(
         obj_count: obj_contracts.len(),
         mask_count: mask_contracts.len(),
         anatomy_mask_count: anatomy_contracts.len(),
-        canonical_slot_records,
-        cross_torso_slot_records,
-        canonical_group_keys: canonical_group_keys.len(),
-        cross_torso_group_keys: cross_torso_group_keys.len(),
-        total_group_keys: canonical_group_keys
+        canonical_slot_records: preparation_evidence.canonical_slot_records,
+        cross_torso_slot_records: preparation_evidence.cross_torso_slot_records,
+        canonical_group_keys: preparation_evidence.canonical_group_keys.len(),
+        cross_torso_group_keys: preparation_evidence.cross_torso_group_keys.len(),
+        total_group_keys: preparation_evidence
+            .canonical_group_keys
             .iter()
-            .chain(cross_torso_group_keys.iter())
+            .chain(preparation_evidence.cross_torso_group_keys.iter())
             .collect::<BTreeSet<_>>()
             .len(),
         total_bytes,
@@ -1418,9 +1458,9 @@ fn validate_staged_obj(
             "v" => {
                 let value = parse_vector::<3>(fields, line_number, "position")?;
                 extend_bounds(&mut [bounds.min, bounds.max], value);
-                for axis in 0..3 {
-                    bounds.min[axis] = bounds.min[axis].min(value[axis]);
-                    bounds.max[axis] = bounds.max[axis].max(value[axis]);
+                for (axis, coordinate) in value.into_iter().enumerate() {
+                    bounds.min[axis] = bounds.min[axis].min(coordinate);
+                    bounds.max[axis] = bounds.max[axis].max(coordinate);
                 }
                 positions.push(value);
             }
@@ -1552,21 +1592,19 @@ fn valid_positive_obj_index(value: &str, count: usize) -> bool {
 }
 
 fn validate_staged_socket_manifest(
-    staging_root: &Path,
     path: &Path,
-    catalog: &GeneForgeCreaturePartCatalog,
-    asset: &GeneForgePartAssetDefinition,
     lod: &alife_game_app::GeneForgeGeneratedPartLod,
-    obj: &StagedObjSummary,
-    preparation_contract: &StagedPreparationContract,
-    require_cross_torso: bool,
-    full_preparations: &mut BTreeSet<(u16, String)>,
-    canonical_slot_records: &mut usize,
-    cross_torso_slot_records: &mut usize,
-    canonical_group_keys: &mut Vec<String>,
-    cross_torso_group_keys: &mut Vec<String>,
-    matrix_records: &mut Vec<(String, String, [f64; 16])>,
+    context: StagedSocketValidationContext<'_>,
+    evidence: &mut StagedPreparationValidationEvidence,
 ) -> Result<(), CreaturePartBuilderError> {
+    let StagedSocketValidationContext {
+        staging_root,
+        catalog,
+        asset,
+        obj,
+        preparation_contract: _,
+        require_cross_torso,
+    } = context;
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
     let bytes = fs::read(path).map_err(|error| {
         fail(format!(
@@ -1726,41 +1764,24 @@ fn validate_staged_socket_manifest(
             "semantic mask lacks source-derived microdetail provenance".to_string(),
         ));
     }
-    validate_assembly_preparations(
-        staging_root,
-        &manifest,
-        catalog,
-        asset,
-        lod.lod,
-        obj,
-        preparation_contract,
-        require_cross_torso,
-        full_preparations,
-        canonical_slot_records,
-        cross_torso_slot_records,
-        canonical_group_keys,
-        cross_torso_group_keys,
-        matrix_records,
-    )?;
+    validate_assembly_preparations(&manifest, lod.lod, context, evidence)?;
     Ok(())
 }
 
 fn validate_assembly_preparations(
-    staging_root: &Path,
     manifest: &StagedSocketManifest,
-    catalog: &GeneForgeCreaturePartCatalog,
-    asset: &GeneForgePartAssetDefinition,
     lod: CreaturePartLodId,
-    obj: &StagedObjSummary,
-    preparation_contract: &StagedPreparationContract,
-    require_cross_torso: bool,
-    full_preparations: &mut BTreeSet<(u16, String)>,
-    canonical_slot_records: &mut usize,
-    cross_torso_slot_records: &mut usize,
-    canonical_group_keys: &mut Vec<String>,
-    cross_torso_group_keys: &mut Vec<String>,
-    matrix_records: &mut Vec<(String, String, [f64; 16])>,
+    context: StagedSocketValidationContext<'_>,
+    evidence: &mut StagedPreparationValidationEvidence,
 ) -> Result<(), CreaturePartBuilderError> {
+    let StagedSocketValidationContext {
+        staging_root,
+        catalog,
+        asset,
+        obj,
+        preparation_contract,
+        require_cross_torso,
+    } = context;
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
     if manifest.assembly_preparation_schema != preparation_contract.schema
         || manifest.assembly_preparation_schema_digest != preparation_contract.schema_digest
@@ -2030,22 +2051,26 @@ fn validate_assembly_preparations(
             ));
         }
         let keys = validate_group_transforms(
-            &manifest,
-            asset,
-            family,
-            part,
-            prepared,
-            preparation_contract,
-            false,
-            target_manifest.as_ref(),
-            &observed_geometry,
-            catalog,
-            matrix_records,
+            GroupTransformValidationContext {
+                manifest,
+                asset,
+                family,
+                part,
+                prepared,
+                preparation_contract,
+                cross_torso: false,
+                target_manifest: target_manifest.as_ref(),
+                observed_geometry: &observed_geometry,
+                catalog,
+            },
+            &mut evidence.matrix_records,
         )?;
-        *canonical_slot_records += 1;
-        canonical_group_keys.extend(keys);
+        evidence.canonical_slot_records += 1;
+        evidence.canonical_group_keys.extend(keys);
         if lod == CreaturePartLodId::Full {
-            full_preparations.insert((prepared.family_id, prepared.logical_slot.clone()));
+            evidence
+                .full_preparations
+                .insert((prepared.family_id, prepared.logical_slot.clone()));
         }
     }
     if !require_cross_torso {
@@ -2141,7 +2166,7 @@ fn validate_assembly_preparations(
             let authored_offset: [f64; 3] = std::array::from_fn(|axis| {
                 f64::from(part.fit.translation[axis] + part.seam_offset[axis])
             });
-            let source_centroid = socket_centroid(&manifest, &prepared.bridge_sockets)?;
+            let source_centroid = socket_centroid(manifest, &prepared.bridge_sockets)?;
             let target_centroid = socket_centroid(&target_manifest, &prepared.bridge_sockets)?;
             let linear = prepared_matrix(&prepared.fit, [0.0; 3]);
             let transformed_source = transform_matrix_point(linear, source_centroid);
@@ -2174,17 +2199,19 @@ fn validate_assembly_preparations(
                 .map(|geometry| (geometry.socket.clone(), geometry))
                 .collect::<BTreeMap<_, _>>();
             let keys = validate_group_transforms(
-                &manifest,
-                asset,
-                family,
-                part,
-                prepared,
-                preparation_contract,
-                true,
-                Some(&target_manifest),
-                &observed_geometry,
-                catalog,
-                matrix_records,
+                GroupTransformValidationContext {
+                    manifest,
+                    asset,
+                    family,
+                    part,
+                    prepared,
+                    preparation_contract,
+                    cross_torso: true,
+                    target_manifest: Some(&target_manifest),
+                    observed_geometry: &observed_geometry,
+                    catalog,
+                },
+                &mut evidence.matrix_records,
             )?;
             let predicted = prepared
                 .group_transforms
@@ -2198,26 +2225,29 @@ fn validate_assembly_preparations(
                     "cross-torso attachment-error bound is invalid".to_string(),
                 ));
             }
-            *cross_torso_slot_records += 1;
-            cross_torso_group_keys.extend(keys);
+            evidence.cross_torso_slot_records += 1;
+            evidence.cross_torso_group_keys.extend(keys);
         }
     }
     Ok(())
 }
 
 fn validate_group_transforms(
-    manifest: &StagedSocketManifest,
-    asset: &GeneForgePartAssetDefinition,
-    family: &alife_game_app::GeneForgeCreatureFamilyDefinition,
-    part: &alife_game_app::GeneForgeFamilyPartRecipe,
-    prepared: &StagedAssemblyPreparation,
-    preparation_contract: &StagedPreparationContract,
-    cross_torso: bool,
-    target_manifest: Option<&StagedSocketManifest>,
-    observed_geometry: &BTreeMap<String, &StagedGeometryPreparation>,
-    catalog: &GeneForgeCreaturePartCatalog,
+    context: GroupTransformValidationContext<'_>,
     matrix_records: &mut Vec<(String, String, [f64; 16])>,
 ) -> Result<Vec<String>, CreaturePartBuilderError> {
+    let GroupTransformValidationContext {
+        manifest,
+        asset,
+        family,
+        part,
+        prepared,
+        preparation_contract,
+        cross_torso,
+        target_manifest,
+        observed_geometry,
+        catalog,
+    } = context;
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
     let expected_groups: &[(&str, &str)] = match asset.logical_slot {
         CreaturePartSlotKey::Head => &[("head", "neck")],
@@ -2271,13 +2301,13 @@ fn validate_group_transforms(
             .find(|(runtime_group, _)| *runtime_group == group.runtime_group)
             .map(|(_, socket)| *socket)
             .ok_or_else(|| fail("assembly group transform runtime group is incompatible".into()))?;
+        let is_torso_asset = asset.logical_slot == CreaturePartSlotKey::Torso;
+        let is_torso_group = group.runtime_group == "torso";
+        let invalid_torso_group =
+            is_torso_asset != is_torso_group || (cross_torso && is_torso_group);
         if group.socket != expected_socket
-            || (cross_torso && group.runtime_group == "torso")
-            || (asset.logical_slot == CreaturePartSlotKey::Torso
-                && (cross_torso || group.runtime_group != "torso"))
-            || (asset.logical_slot != CreaturePartSlotKey::Torso && group.runtime_group == "torso")
-            || (group.runtime_group != "torso"
-                && !manifest.expected_groups.contains(&group.runtime_group))
+            || invalid_torso_group
+            || (!is_torso_group && !manifest.expected_groups.contains(&group.runtime_group))
         {
             return Err(fail(
                 "assembly group transform runtime group/socket drift".into(),
@@ -3115,7 +3145,7 @@ fn write_python_canonical_json(
         serde_json::Value::Object(values) => {
             output.push(b'{');
             let mut entries = values.iter().collect::<Vec<_>>();
-            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            entries.sort_by_key(|(key, _)| *key);
             for (index, (key, value)) in entries.into_iter().enumerate() {
                 if index > 0 {
                     output.push(b',');

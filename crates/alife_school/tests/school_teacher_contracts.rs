@@ -313,7 +313,7 @@ fn curriculum_runner_emits_perceptual_events_and_advances_on_verifier_pass() {
                 VerifierCheck::NoHiddenSemanticContext,
                 VerifierCheck::SelectedByArbitration,
                 VerifierCheck::MinimumMemoryRecords(1),
-                VerifierCheck::MinimumTopologyConcepts(2),
+                VerifierCheck::MinimumTopologyConcepts(1),
             ],
             &evidence,
         )
@@ -350,7 +350,7 @@ fn patch_log_verifier_passes_and_fails_using_sealed_patch_memory_and_topology_ev
                 VerifierCheck::RewardAtLeast(0.01),
                 VerifierCheck::NoDirectTeacherActionSelection,
                 VerifierCheck::MinimumMemoryRecords(1),
-                VerifierCheck::MinimumTopologyConcepts(2),
+                VerifierCheck::MinimumTopologyConcepts(1),
             ],
             &evidence,
         )

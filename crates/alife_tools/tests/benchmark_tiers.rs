@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{process::Command, time::Duration};
 
 use alife_core::{
     BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, BrainScaleTier, LobeKind, SchemaKind,
@@ -197,6 +197,34 @@ fn benchmark_manifest_fixture() -> (GpuPerformanceTargetsV1, GpuClosedLoopBenchm
     manifest.seal_digest().unwrap();
     manifest.validate(&targets).unwrap();
     (targets, manifest)
+}
+
+#[test]
+fn benchmark_cli_validates_canonical_manifest_without_requiring_targets_flag() {
+    let (_, manifest) = benchmark_manifest_fixture();
+    let root =
+        std::env::temp_dir().join(format!("alife-benchmark-validator-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let manifest_path = root.join("benchmark.json");
+    std::fs::write(
+        &manifest_path,
+        serde_json::to_vec_pretty(&manifest).unwrap(),
+    )
+    .unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_benchmark_tiers"))
+        .arg("--validate")
+        .arg(&manifest_path)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        output.status.success(),
+        "validator failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("validated"));
 }
 
 #[test]

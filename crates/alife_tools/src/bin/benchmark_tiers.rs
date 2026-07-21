@@ -33,8 +33,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if let Some(path) = value_after(&args, "--validate") {
-        let targets_path = required_value(&args, "--targets")?;
-        let targets = load_performance_targets(targets_path)?;
+        let targets = match value_after(&args, "--targets") {
+            Some(targets_path) => load_performance_targets(targets_path)?,
+            None => canonical_performance_targets_v1(),
+        };
         load_benchmark_manifest(path, &targets)?;
         println!("validated {}", path);
         return Ok(());
