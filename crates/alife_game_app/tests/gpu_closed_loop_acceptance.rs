@@ -60,6 +60,18 @@ fn gpu_closed_loop_slice_a_receipt_is_authoritative() {
 }
 
 #[test]
+fn gpu_closed_loop_slice_a_sustains_sixty_four_neural_ticks() {
+    let mut options = test_options();
+    options.requested_ticks = 64;
+
+    let receipt = run_gpu_closed_loop_acceptance(options).unwrap();
+
+    assert_eq!(receipt.neural_dispatch_count, 64);
+    assert_eq!(receipt.sealed_patch_count, 64);
+    assert_eq!(receipt.selection_trace.len(), 64);
+}
+
+#[test]
 fn gpu_closed_loop_slice_a_receipt_round_trips_and_rejects_tampering() {
     let receipt = run_gpu_closed_loop_acceptance(test_options()).unwrap();
     let encoded = serde_json::to_vec(&receipt).unwrap();

@@ -9,8 +9,8 @@ use std::fs;
 use std::path::Path;
 
 use alife_core::{
-    BrainCapacityClass, BrainClassId, BrainScaleTier, PhenotypeHash, PolicyBackend,
-    ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
+    BrainCapacityClass, BrainClassId, BrainScaleTier, HomeostaticSnapshot, PhenotypeHash,
+    PolicyBackend, ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
 };
 pub use alife_core::{PhenotypeEvidenceManifest, GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA};
 use alife_gpu_backend::{
@@ -544,15 +544,30 @@ fn run_trial(
     let hardware = runtime.hardware_receipt().clone();
     let mut trace = Vec::with_capacity(options.requested_ticks as usize);
     for expected_tick in 0..options.requested_ticks {
+        let world_tick = runtime.evidence_world().tick();
+        if world_tick != Tick::new(u64::from(expected_tick)) {
+            return Err(GpuEvidenceError::Contract(
+                "Slice A evidence world tick diverged from its fixed waking probe",
+            ));
+        }
+        runtime.evidence_set_homeostasis(
+            GPU_EVIDENCE_ORGANISM_ID,
+            HomeostaticSnapshot::baseline(world_tick),
+        )?;
         let patch_count_before = runtime.sealed_patches().len();
         let summaries = runtime.tick()?;
         if summaries.len() != 1
             || !summaries[0].patch_sealed
             || runtime.sealed_patches().len() != patch_count_before + 1
         {
-            return Err(GpuEvidenceError::Contract(
-                "production GPU runtime failed to seal exactly one patch",
-            ));
+            return Err(GpuEvidenceError::ContractDetail(format!(
+                "production GPU runtime failed to seal exactly one patch at expected tick {expected_tick}: summaries={}, patch_sealed={}, retained_before={patch_count_before}, retained_after={}, total_sealed={}, last_sealed={}",
+                summaries.len(),
+                summaries.first().is_some_and(|summary| summary.patch_sealed),
+                runtime.sealed_patches().len(),
+                runtime.sealed_patch_count(),
+                runtime.last_sealed_patches().len(),
+            )));
         }
         let patch = runtime
             .sealed_patches()
