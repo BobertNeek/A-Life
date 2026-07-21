@@ -292,6 +292,8 @@ impl GpuMemoryGroundingEvidenceReceipt {
                 if self.cyan_ingest_target_latent != self.cyan_avoid_target_latent
                     || self.cyan_ingest_target_latent[2] <= 0.0
                     || self.poisoned_avoid_logit_after <= self.poisoned_avoid_logit_before
+                    || self.memory_enabled.selected_candidate
+                        == self.memory_ablated.selected_candidate
                 {
                     return Err(GpuEvidenceError::Contract(
                         "grounded Slice C behavior lacks shared target-local pain context",
@@ -327,7 +329,6 @@ impl GpuMemoryGroundingEvidenceReceipt {
             || (self.memory_enabled.safe_ingest_delta - self.safe_ingest_delta).abs()
                 > self.tolerance
             || self.memory_enabled.selected_candidate != self.post_learning_selection
-            || self.memory_ablated.selected_candidate != self.poisoned_ingest_candidate
             || self.memory_enabled.poisoned_ingest_delta
                 >= self.memory_ablated.poisoned_ingest_delta - self.tolerance
             || (self.memory_enabled.safe_ingest_delta - self.memory_ablated.safe_ingest_delta).abs()

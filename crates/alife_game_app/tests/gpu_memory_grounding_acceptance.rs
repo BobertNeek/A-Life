@@ -50,6 +50,10 @@ fn slice_c_receipt_proves_candidate_specific_grounded_memory() {
         receipt.post_learning_selection,
         receipt.poisoned_ingest_candidate
     );
+    assert_ne!(
+        receipt.memory_enabled.selected_candidate,
+        receipt.memory_ablated.selected_candidate
+    );
     assert_eq!(receipt.policy_backend, PolicyBackend::NeuralClosedLoopGpu);
     assert_eq!(receipt.gpu_selection_count, receipt.completed_waking_ticks);
     assert_eq!(

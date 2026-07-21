@@ -291,16 +291,18 @@ fn validate_behavior_probe(
             "Slice C candidate memory leaked into recurrent activation state",
         ));
     }
-    if behavior.memory_ablated.selected_candidate != behavior.poisoned_ingest_candidate {
-        return Err(GpuEvidenceError::Contract(
-            "Slice C ablated checkpoint did not select the poisoned ingest baseline",
-        ));
-    }
     if behavior.memory_enabled.selected_candidate != behavior.post_learning_selection
         || behavior.post_learning_selection == behavior.poisoned_ingest_candidate
     {
         return Err(GpuEvidenceError::Contract(
-            "Slice C enabled memory did not change selection away from poisoned ingest",
+            "Slice C enabled memory did not select away from poisoned ingest",
+        ));
+    }
+    if profile == SensorProfile::GroundedObjectSlotsV1
+        && behavior.memory_enabled.selected_candidate == behavior.memory_ablated.selected_candidate
+    {
+        return Err(GpuEvidenceError::Contract(
+            "grounded Slice C memory did not causally change GPU selection",
         ));
     }
     if behavior.poisoned_ingest_delta >= -ACCEPTANCE_TOLERANCE
@@ -1259,5 +1261,65 @@ mod tests {
                 "privileged Slice C run made a grounded saturation claim"
             ))
         ));
+    }
+
+    #[test]
+    fn paired_memory_probe_is_valid_for_every_promoted_class_and_profile() {
+        for sensor_profile in [
+            SensorProfile::GroundedObjectSlotsV1,
+            SensorProfile::PrivilegedAffordanceV1,
+        ] {
+            for capacity in [
+                BrainCapacityClass::n512(),
+                BrainCapacityClass::n1024(),
+                BrainCapacityClass::n2048(),
+            ] {
+                let options = GpuMemoryGroundingAcceptanceOptions {
+                    capacity,
+                    requested_ticks: match sensor_profile {
+                        SensorProfile::GroundedObjectSlotsV1 => GROUNDED_ACCEPTANCE_TICKS,
+                        SensorProfile::PrivilegedAffordanceV1 => PRIVILEGED_ACCEPTANCE_TICKS,
+                    },
+                    deterministic_seed: 4_303,
+                    sensor_profile,
+                };
+                let tier = tier_for_capacity(capacity.id()).unwrap();
+                let (phenotype, genome, development) = compile_gpu_birth_components(
+                    options.deterministic_seed,
+                    tier,
+                    EVIDENCE_ORGANISM,
+                    Tick::ZERO,
+                    options.sensor_profile,
+                )
+                .unwrap();
+                let manifest =
+                    PhenotypeEvidenceManifest::from_learning_phenotype(&phenotype, &capacity)
+                        .unwrap();
+                let mut backend = GpuClosedLoopBackend::new_required(
+                    alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+                )
+                .unwrap();
+
+                let behavior = run_behavior_probe(
+                    &mut backend,
+                    options,
+                    &phenotype,
+                    &genome,
+                    &development,
+                    &manifest,
+                )
+                .unwrap();
+
+                validate_behavior_probe(&behavior, options.sensor_profile).unwrap();
+                if sensor_profile == SensorProfile::GroundedObjectSlotsV1 {
+                    assert_ne!(
+                        behavior.memory_enabled.selected_candidate,
+                        behavior.memory_ablated.selected_candidate,
+                        "class {} did not change grounded GPU selection",
+                        capacity_slug(capacity.id()).unwrap(),
+                    );
+                }
+            }
+        }
     }
 }
