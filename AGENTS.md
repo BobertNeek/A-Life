@@ -24,6 +24,9 @@ Non-negotiable rules:
   legality and outcomes.
 - Promote only N512, N1024, and N2048 until larger tiers pass the documented
   causal and performance gates.
+- Derive each promoted class only from the complete ADR-026 A/B/C/D,
+  benchmark, clean-Git, and exact global-gate matrix on one Vulkan adapter;
+  configuration is never promotion authority.
 - N2048 is the first trained foundation; N4096 remains research-only.
 - Language token IDs are stable logical codes, never neuron indices or packed
   GPU offsets.

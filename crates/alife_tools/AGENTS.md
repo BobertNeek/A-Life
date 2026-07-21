@@ -6,6 +6,9 @@ and spec consistency checks.
 Rules:
 
 - Tooling must not become a runtime dependency for simulation crates.
+- Own GPU-only populated benchmark artifacts and their honest
+  Completed/Missed/Unavailable statuses; never substitute host fixtures or
+  inferred results for promotion evidence.
 - Graphify is optional; cargo build/check/test must work without Graphify installed.
 - Prefer checks that catch architecture drift: Unity/HLSL, fixed 2048-only assumptions,
   dense neural buffers, and hidden teacher injection.

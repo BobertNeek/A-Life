@@ -10,6 +10,9 @@ Rules:
   `alife_core`.
 - Use P34 runtime config and asset manifest validation instead of bypassing
   persistence contracts.
+- Own GPU session scheduling, explicit policy selection, A/B/C/D evidence
+  ingestion, exact gate receipts, and promotion derivation; never promote from
+  configuration, an incomplete matrix, or a different adapter/tree.
 - In the GPU live loop, seal the measured world outcome before applying or
   explicitly discarding the matching pending eligibility transaction.
 - Observe each sealed patch in its organism-owned memory sidecar and then its

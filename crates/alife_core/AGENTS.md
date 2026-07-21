@@ -17,6 +17,8 @@ Rules:
   legality and outcomes.
 - Promote only N512, N1024, and N2048 until larger tiers pass the documented
   causal and performance gates.
+- Own canonical capacity, phenotype, budget, and evidence-digest contracts;
+  app/tool layers may ingest them but may not redefine their meanings.
 - Own foundation, language-codebook, persistent-address, checkpoint, and
   archive-provenance contracts.
 - Never equate a language token ID with a neuron or packed GPU offset.

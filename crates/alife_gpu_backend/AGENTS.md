@@ -14,6 +14,8 @@ Rules:
   legality and outcomes.
 - Promote only N512, N1024, and N2048 until larger tiers pass the documented
   causal and performance gates.
+- This crate owns the only production neural execution backend and the real
+  Vulkan allocation, activity, learning, sleep, and replay evidence it emits.
 - Neural `Vocalize` payload selection remains GPU-authoritative.
 - Training-only WGSL and optimizer state stay out of production game binaries
   and saves.

@@ -6,7 +6,7 @@
 **Date:** 2026-07-17
 **Status:** implementation target; GPU-authoritative trainable creature runtime
 
-This document is the controlling engineering specification for A-Life. It supersedes earlier fixed-2048, HLSL, dense-matrix, single-pass-kernel, scaffold-only, and CPU-shadow neural drafts. It preserves scalable brain classes, class-bucketed sparse storage, Rust/Bevy/wgpu/WebGPU/WGSL, separated neural compute passes, and explicit boundaries between internal subconscious semantic priors and external teacher agents. ADR-024 and ADR-027 through ADR-030, together with the approved GPU closed-loop and N2048 foundation program, control production cognition when older milestone prose conflicts with this specification. ADR-025 and ADR-026 remain reserved for their approved memory/grounding and scaling/promotion checkpoints.
+This document is the controlling engineering specification for A-Life. It supersedes earlier fixed-2048, HLSL, dense-matrix, single-pass-kernel, scaffold-only, and CPU-shadow neural drafts. It preserves scalable brain classes, class-bucketed sparse storage, Rust/Bevy/wgpu/WebGPU/WGSL, separated neural compute passes, and explicit boundaries between internal subconscious semantic priors and external teacher agents. ADR-024 through ADR-030, together with the approved GPU closed-loop and N2048 foundation program, control production cognition when older milestone prose conflicts with this specification.
 
 The implementation goal is one causally closed production brain in which current perception, recurrent state, candidate scoring, action selection, measured outcome, waking plasticity, sleep consolidation, and later behavior remain connected. Production neural execution is GPU-authoritative WGSL. Pure CPU neural math is test-only or developer-only and never runs as a live shadow, parity gate, or automatic neural fallback. N2048 is the first fully trained class: curated inherited foundations establish robust sensorimotor and language mechanics, evolution hardens them, and personal semantic and episodic knowledge remains lifetime-learned.
 
@@ -780,6 +780,13 @@ For each promoted N512, N1024, or N2048 `BrainCapacityClass` bucket, allocate sh
 
 Genetics controls sparse structure. Evolution mutates topology and density. The GPU computes active paths, not dead weight lines. Memory budgets cap active synapses, tiles, candidates, object slots, and in-flight growth/swap storage per capacity class and profile. A lightweight `GpuBrainHandle` references shared backend-owned pools; it never duplicates device, queue, pipelines, or a complete projection schema per creature.
 
+Logical capacity, route ceilings, packed physical bytes, staging/readback,
+double-bank mutable state, shared backend bytes, and peak growth/swap bytes are
+one admission contract. A class cannot be promoted from a logical budget alone;
+its Slice D evidence must bind the exact canonical capacity digest and prove
+allocation, bounded activity scheduling, save migration, and both-profile soak
+against the same adapter used by the other promotion artifacts.
+
 The data model should support future payload compression, quantization, and tile format upgrades without changing high-level contracts.
 
 
@@ -811,6 +818,12 @@ Residency states:
 - DormantDiskBacked.
 
 The scheduler chooses residency based on salience, distance, social relevance, player focus, ecological importance, hunger/danger/reproduction urgency, and schooling status. Larger brains slow population growth by consuming more compute and metabolic resources.
+
+Capacity class does not imply a population count. Runtime admission derives hot
+and warm slot counts from the selected neural-heap profile after renderer,
+scratch, replay, readback, and migration reserves are accounted. A failed
+admission is typed and deterministic; it does not silently shrink the brain or
+switch neural authority.
 
 
 ## 23. Brain Migration and Ascension Compatibility
@@ -1090,6 +1103,15 @@ and topology saturation runs for at least 10,240 ticks must remain bounded,
 deterministic, replay-safe, and free of terminal capacity errors or tracked-ID
 reuse.
 
+Production class promotion is derived, never configured. One canonical
+`GpuClosedLoopPromotionManifest` retains the exact A/B/C/D artifact bindings,
+36 benchmark rows, 12-command gate receipt, Git commit/tree object IDs, capacity
+digests, phenotype-manifest digests, and Vulkan adapter identity. Slice A and B
+are profile-independent; Slice C and D each require privileged and grounded
+evidence. Every class requires 12 benchmark rows (two profiles by populations
+1, 10, 50, 100, 250, and 500). `Missed` and `Unavailable` are honest evidence
+but do not set the benchmark promotion bit.
+
 
 ## 34. Determinism and Reproducibility
 
@@ -1117,7 +1139,7 @@ Performance scales through sparsity, residency, promoted capacity-class batching
 - schooling lessons per simulated hour,
 - Graphify/doc agent overhead.
 
-N512, N1024, and N2048 must each meet their documented causal and performance gates before promotion. Larger brains remain research-gated special modes. A single 1M-neuron school candidate is not expected to coexist with hundreds of hot ecosystem brains on low hardware.
+N512, N1024, and N2048 must each meet their documented causal and performance gates before promotion. A benchmark manifest is accepted only when all 36 digest-bound rows are present; only `Completed` rows pass, while `Missed` and `Unavailable` remain visible and block the affected class. Larger brains remain research-gated special modes. A single 1M-neuron school candidate is not expected to coexist with hundreds of hot ecosystem brains on low hardware.
 
 
 ## 36. Data Persistence, Saves, and Lineage Export
@@ -1132,6 +1154,12 @@ allocated tracked IDs, and next-ID state without serializing raw world entity
 associations. Memory and topology assets use primitive versioned DTOs and
 rebuild private indices only after owner, profile, generation, replay guard,
 capacity, and canonical digest validation.
+
+Promotion and hardware evidence are separate versioned artifacts under
+`target/artifacts/`. They are regenerated from a clean committed tree and are
+not save authority. Their Git IDs use exact lowercase 40-hex commit/tree object
+identities; four-word canonical digests remain content identities and never
+stand in for Git provenance.
 
 Lineage export supports ascension. It should store enough to recreate the creature later, migrate it to a larger class, and test whether its identity survived migration.
 
@@ -1318,7 +1346,7 @@ Slice B: GPU causal learning and sleep. Add eligibility buffers, three-factor fa
 
 Slice C: memory, topology, and grounding. Add candidate-conditional memory, nonfatal topology, explicit privileged and grounded sensor profiles, tracked-object bindings, and a 10,000-plus-tick bounded cognition soak.
 
-Slice D: scaling and cleanup. Enforce global/per-route budgets, activity-dependent BrainATP, memory ceilings, tier promotion gates, legacy save migration, documentation cleanup, and removal of superseded backend code and claims.
+Slice D: scaling and cleanup. Enforce global/per-route budgets, activity-dependent BrainATP, memory ceilings, tier promotion gates, legacy save migration, documentation cleanup, and removal of superseded backend code and claims. Derive each promoted class only from the complete ADR-026 A/B/C/D, benchmark, and exact global-gate matrix on one source tree and Vulkan adapter.
 
 N2048 Foundation and Lineage Program: after Slice A evidence and the remaining
 B/C/D runtime gates, freeze `N2048FoundationLayoutV1`; load immutable foundation
@@ -1408,6 +1436,9 @@ learned checkpoints, ranking records, and portable founder bundles.
 `NeuralClosedLoopGpu`: normal GPU-authoritative neural policy.
 
 `HeuristicBaseline`: explicit separately labelled non-neural comparison policy.
+
+`GpuClosedLoopPromotionManifest`: canonical ADR-026 evidence matrix whose
+passing rows, rather than configuration, promote N512, N1024, and N2048.
 
 `Graphify`: developer tool that maps project files into a queryable knowledge graph.
 
@@ -1526,6 +1557,7 @@ The following checks are required acceptance evidence:
 27. Dead creatures commit genetic/life archives before retirement; selected learned checkpoints restore durable minds without stale body/world state.
 28. Cross-run ranking treats unexposed metrics as `Unknown` and resolves secure genetic-founder or explicit mind-clone cohorts with full provenance.
 29. N2048-to-N4096 research migration maps by persistent address and proves same-adapter selection identity plus logit delta at most `1e-6` before atomic handoff.
+30. Promotion retains the complete per-class A/B/C/D matrix, all 36 honest benchmark rows, exact 12-command gate receipt, clean Git commit/tree IDs, canonical capacity and phenotype digests, and one Vulkan adapter identity; no configuration override can add a promoted class.
 
 # Appendix C: Print/Page Estimate
 

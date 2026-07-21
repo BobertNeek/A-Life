@@ -311,6 +311,11 @@ mod gpu_evidence;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_evidence::*;
 
+#[cfg(feature = "gpu-runtime")]
+mod gpu_closed_loop_promotion;
+#[cfg(feature = "gpu-runtime")]
+pub use gpu_closed_loop_promotion::*;
+
 mod soak_isolation;
 pub use soak_isolation::*;
 

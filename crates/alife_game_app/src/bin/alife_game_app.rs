@@ -12,6 +12,8 @@ const GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND: &str = "gpu-learning-sleep-acceptan
 const GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND: &str = "gpu-memory-grounding-acceptance";
 const GPU_CLOSED_LOOP_SOAK_COMMAND: &str = "gpu-closed-loop-soak";
 const GPU_EVIDENCE_VALIDATE_COMMAND: &str = "gpu-evidence-validate";
+const GPU_CLOSED_LOOP_PROMOTION_COMMAND: &str = "gpu-closed-loop-promote";
+const GPU_CLOSED_LOOP_GATE_SEAL_COMMAND: &str = "gpu-closed-loop-gate-seal";
 
 #[cfg(feature = "gpu-runtime")]
 struct GpuAcceptanceCli {
@@ -22,6 +24,20 @@ struct GpuAcceptanceCli {
 #[cfg(feature = "gpu-runtime")]
 struct GpuLearningSleepCli {
     options: alife_game_app::GpuLearningSleepAcceptanceOptions,
+    output: PathBuf,
+}
+
+#[cfg(feature = "gpu-runtime")]
+struct GpuClosedLoopPromotionCli {
+    artifacts: alife_game_app::PromotionArtifactPaths,
+    output: PathBuf,
+}
+
+#[cfg(feature = "gpu-runtime")]
+struct GpuGateSealCli {
+    capture: PathBuf,
+    gate_script: PathBuf,
+    adapter_evidence: PathBuf,
     output: PathBuf,
 }
 
@@ -236,6 +252,90 @@ fn run(args: Vec<String>) -> Result<(), String> {
         {
             return Err(format!(
                 "{GPU_EVIDENCE_VALIDATE_COMMAND} requires --features gpu-runtime"
+            ));
+        }
+    }
+    if command == GPU_CLOSED_LOOP_PROMOTION_COMMAND {
+        if rest
+            .iter()
+            .any(|argument| argument == "--help" || argument == "-h")
+        {
+            println!("{}", help());
+            return Ok(());
+        }
+        #[cfg(feature = "gpu-runtime")]
+        {
+            let parsed = parse_gpu_closed_loop_promotion(rest)?;
+            let manifest =
+                alife_game_app::build_gpu_closed_loop_promotion_from_paths(&parsed.artifacts)
+                    .map_err(|error| error.to_string())?;
+            alife_game_app::write_gpu_closed_loop_promotion_manifest(&parsed.output, &manifest)
+                .map_err(|error| error.to_string())?;
+            let promoted = manifest
+                .promoted_classes
+                .iter()
+                .map(|class| class.raw().to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            println!(
+                "GPU closed-loop promotion classes={} adapter={:016x}{:016x}{:016x}{:016x} artifact={} commit={} tree={}",
+                promoted,
+                manifest.adapter.identity_digest[0],
+                manifest.adapter.identity_digest[1],
+                manifest.adapter.identity_digest[2],
+                manifest.adapter.identity_digest[3],
+                parsed.output.display(),
+                manifest.promotion_commit.to_hex(),
+                manifest.source_tree_digest.to_hex(),
+            );
+            return Ok(());
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            return Err(format!(
+                "{GPU_CLOSED_LOOP_PROMOTION_COMMAND} requires --features gpu-runtime"
+            ));
+        }
+    }
+    if command == GPU_CLOSED_LOOP_GATE_SEAL_COMMAND {
+        if rest
+            .iter()
+            .any(|argument| argument == "--help" || argument == "-h")
+        {
+            println!("{}", help());
+            return Ok(());
+        }
+        #[cfg(feature = "gpu-runtime")]
+        {
+            let parsed = parse_gpu_gate_seal(rest)?;
+            let adapter_evidence =
+                alife_game_app::load_gpu_slice_a_evidence(&parsed.adapter_evidence)
+                    .map_err(|error| error.to_string())?;
+            let adapter =
+                alife_game_app::GpuGateAdapterReceipt::from_hardware(&adapter_evidence.hardware)
+                    .map_err(|error| error.to_string())?;
+            let receipt = alife_game_app::write_gpu_closed_loop_gate_receipt_from_capture(
+                &parsed.capture,
+                &parsed.gate_script,
+                adapter,
+                &parsed.output,
+            )
+            .map_err(|error| error.to_string())?;
+            println!(
+                "GPU closed-loop gates passed={} commands={} adapter={} artifact={} commit={} tree={}",
+                receipt.passed,
+                receipt.commands.len(),
+                receipt.adapter.adapter_name().map_err(|error| error.to_string())?,
+                parsed.output.display(),
+                receipt.git_commit.to_hex(),
+                receipt.source_tree_digest.to_hex(),
+            );
+            return Ok(());
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            return Err(format!(
+                "{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} requires --features gpu-runtime"
             ));
         }
     }
@@ -743,6 +843,113 @@ fn parse_gpu_evidence_validation(args: &[String]) -> Result<(u16, PathBuf), Stri
 }
 
 #[cfg(feature = "gpu-runtime")]
+fn parse_gpu_closed_loop_promotion(args: &[String]) -> Result<GpuClosedLoopPromotionCli, String> {
+    let mut artifacts = alife_game_app::PromotionArtifactPaths::default();
+    let mut benchmark = None;
+    let mut gates = None;
+    let mut output = None;
+    let mut index = 0;
+    while index < args.len() {
+        let flag = args[index].as_str();
+        match flag {
+            "--slice-a" => {
+                artifacts
+                    .slice_a
+                    .push(PathBuf::from(value(args, index, flag)?));
+                index += 2;
+            }
+            "--slice-b" => {
+                artifacts
+                    .slice_b
+                    .push(PathBuf::from(value(args, index, flag)?));
+                index += 2;
+            }
+            "--slice-c" => {
+                artifacts
+                    .slice_c
+                    .push(PathBuf::from(value(args, index, flag)?));
+                index += 2;
+            }
+            "--slice-d" => {
+                artifacts
+                    .slice_d
+                    .push(PathBuf::from(value(args, index, flag)?));
+                index += 2;
+            }
+            "--benchmark" => {
+                set_once(
+                    &mut benchmark,
+                    PathBuf::from(value(args, index, flag)?),
+                    flag,
+                )?;
+                index += 2;
+            }
+            "--gates" => {
+                set_once(&mut gates, PathBuf::from(value(args, index, flag)?), flag)?;
+                index += 2;
+            }
+            "--output" => {
+                set_once(&mut output, PathBuf::from(value(args, index, flag)?), flag)?;
+                index += 2;
+            }
+            unknown => return Err(format!("unknown GPU promotion option: {unknown}")),
+        }
+    }
+    artifacts.benchmark = benchmark.ok_or_else(|| "--benchmark is required".to_string())?;
+    artifacts.gates = gates.ok_or_else(|| "--gates is required".to_string())?;
+    Ok(GpuClosedLoopPromotionCli {
+        artifacts,
+        output: output.ok_or_else(|| "--output is required".to_string())?,
+    })
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn parse_gpu_gate_seal(args: &[String]) -> Result<GpuGateSealCli, String> {
+    let mut capture = None;
+    let mut gate_script = None;
+    let mut adapter_evidence = None;
+    let mut output = None;
+    let mut index = 0;
+    while index < args.len() {
+        let flag = args[index].as_str();
+        match flag {
+            "--capture" => {
+                set_once(&mut capture, PathBuf::from(value(args, index, flag)?), flag)?;
+                index += 2;
+            }
+            "--gate-script" => {
+                set_once(
+                    &mut gate_script,
+                    PathBuf::from(value(args, index, flag)?),
+                    flag,
+                )?;
+                index += 2;
+            }
+            "--adapter-evidence" => {
+                set_once(
+                    &mut adapter_evidence,
+                    PathBuf::from(value(args, index, flag)?),
+                    flag,
+                )?;
+                index += 2;
+            }
+            "--output" => {
+                set_once(&mut output, PathBuf::from(value(args, index, flag)?), flag)?;
+                index += 2;
+            }
+            unknown => return Err(format!("unknown GPU gate-seal option: {unknown}")),
+        }
+    }
+    Ok(GpuGateSealCli {
+        capture: capture.ok_or_else(|| "--capture is required".to_string())?,
+        gate_script: gate_script.ok_or_else(|| "--gate-script is required".to_string())?,
+        adapter_evidence: adapter_evidence
+            .ok_or_else(|| "--adapter-evidence is required".to_string())?,
+        output: output.ok_or_else(|| "--output is required".to_string())?,
+    })
+}
+
+#[cfg(feature = "gpu-runtime")]
 fn set_once<T>(slot: &mut Option<T>, value: T, flag: &str) -> Result<(), String> {
     if slot.replace(value).is_some() {
         Err(format!("{flag} may be provided only once"))
@@ -768,7 +975,7 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--developer-overlay] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\n{GPU_CLOSED_LOOP_PROMOTION_COMMAND} --slice-a PATH (x3) --slice-b PATH (x3) --slice-c PATH (x6) --slice-d PATH (x6) --benchmark PATH --gates PATH --output PATH\n{GPU_CLOSED_LOOP_GATE_SEAL_COMMAND} --capture PATH --gate-script PATH --adapter-evidence PATH --output PATH\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
 }
 
@@ -1048,5 +1255,72 @@ mod tests {
         assert_eq!(slice_d, alife_game_app::GPU_SLICE_D_RAW);
         assert!(input_d.ends_with("soak.json"));
         assert!(help().contains("--slice a|b|c|d"));
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn parse_gpu_promotion_cli_keeps_every_explicit_repeatable_artifact() {
+        let mut args = Vec::new();
+        for class in ["n512", "n1024", "n2048"] {
+            args.extend([
+                "--slice-a".to_string(),
+                format!("target/artifacts/gpu-closed-loop-slice-a-{class}.json"),
+                "--slice-b".to_string(),
+                format!("target/artifacts/gpu-learning-sleep-slice-b-{class}.json"),
+            ]);
+        }
+        for profile in ["privileged-affordance-v1", "grounded-object-slots-v1"] {
+            for class in ["n512", "n1024", "n2048"] {
+                args.extend([
+                    "--slice-c".to_string(),
+                    format!("target/artifacts/gpu-memory-grounding-slice-c-{profile}-{class}.json"),
+                    "--slice-d".to_string(),
+                    format!("target/artifacts/gpu-closed-loop-slice-d-{profile}-{class}.json"),
+                ]);
+            }
+        }
+        args.extend([
+            "--benchmark".to_string(),
+            "target/artifacts/gpu-closed-loop-benchmark-full.json".to_string(),
+            "--gates".to_string(),
+            "target/artifacts/gpu-closed-loop-gates.json".to_string(),
+            "--output".to_string(),
+            "target/artifacts/gpu-closed-loop-promotion.json".to_string(),
+        ]);
+
+        let parsed = parse_gpu_closed_loop_promotion(&args).unwrap();
+        assert_eq!(parsed.artifacts.slice_a.len(), 3);
+        assert_eq!(parsed.artifacts.slice_b.len(), 3);
+        assert_eq!(parsed.artifacts.slice_c.len(), 6);
+        assert_eq!(parsed.artifacts.slice_d.len(), 6);
+        assert!(parsed.output.ends_with("gpu-closed-loop-promotion.json"));
+        assert!(help().contains(GPU_CLOSED_LOOP_PROMOTION_COMMAND));
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn parse_gpu_gate_seal_cli_requires_capture_script_and_output_once() {
+        let args = [
+            "--capture",
+            "target/artifacts/.gpu-closed-loop-gates.staging/capture.json",
+            "--gate-script",
+            "scripts/run_gpu_closed_loop_gates.ps1",
+            "--adapter-evidence",
+            "target/artifacts/gpu-closed-loop-slice-a-n512.json",
+            "--output",
+            "target/artifacts/gpu-closed-loop-gates.json",
+        ]
+        .map(str::to_string);
+        let parsed = parse_gpu_gate_seal(&args).unwrap();
+        assert!(parsed.capture.ends_with("capture.json"));
+        assert!(parsed
+            .gate_script
+            .ends_with("run_gpu_closed_loop_gates.ps1"));
+        assert!(parsed
+            .adapter_evidence
+            .ends_with("gpu-closed-loop-slice-a-n512.json"));
+        assert!(parsed.output.ends_with("gpu-closed-loop-gates.json"));
+        assert!(parse_gpu_gate_seal(&args[..6]).is_err());
+        assert!(help().contains(GPU_CLOSED_LOOP_GATE_SEAL_COMMAND));
     }
 }
