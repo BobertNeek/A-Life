@@ -1,17 +1,22 @@
 #![cfg(feature = "bevy-app")]
 
-use std::collections::BTreeSet;
+use std::{
+    collections::BTreeSet,
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use alife_game_app::{
-    default_environment_manifest_path, CreaturePartSlot, Fvr03ProductionVoxelCamera,
-    Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk, Fvr03ProductionVoxelMaterialKind,
-    Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionResource,
-    Fvr03ProductionVoxelTerrainBatch, Fvr03ProductionVoxelTerrainTile,
-    Fvr04ProductionCreatureVisualMarker, Fvr05ProductionUxStateResource,
-    Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVfxKind,
-    Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker,
-    Fvr09MesherMode, Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker,
-    Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
+    default_environment_manifest_path, run_production_voxel_frontend_dry_run, CreaturePartSlot,
+    Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk,
+    Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
+    Fvr03ProductionVoxelSelectionResource, Fvr03ProductionVoxelTerrainBatch,
+    Fvr03ProductionVoxelTerrainTile, Fvr04ProductionCreatureVisualMarker,
+    Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
+    Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
+    Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
+    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
     Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
     Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionCreatureAssemblyRoot,
     ProductionCreatureJoinCoverMarker, ProductionCreaturePartMarker, ProductionFrontendProfileId,
@@ -19,8 +24,8 @@ use alife_game_app::{
     FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
-    CreatureAppearanceGenome, StableVoxelRefKind, CREATURE_APPEARANCE_SPECIES_COUNT,
-    FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
+    persistence::PortableSaveFile, CreatureAppearanceGenome, StableVoxelRefKind,
+    CREATURE_APPEARANCE_SPECIES_COUNT, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
     mesh::VertexAttributeValues,
@@ -50,6 +55,39 @@ fn quantized_rgba(color: [f32; 4]) -> [i32; 4] {
         (color[2] * 255.0).round() as i32,
         (color[3] * 255.0).round() as i32,
     ]
+}
+
+#[test]
+fn dry_run_rebuilds_an_incompatible_derived_runtime_save_before_gpu_launch() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "alife-fvr03-incompatible-runtime-save-{}-{nonce}",
+        std::process::id()
+    ));
+    let mut launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    launch.manifest_path = root.join("crates/alife_game_app/environment_manifest.json");
+
+    let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
+    let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
+    fs::create_dir_all(runtime_save_path.parent().unwrap()).unwrap();
+    fs::write(&runtime_save_path, br#"{"schema":"stale-derived-runtime"}"#).unwrap();
+
+    let result = alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch);
+    assert!(
+        result.is_ok(),
+        "dry-run launch must rebuild an incompatible derived runtime save: {:?}",
+        result.as_ref().err()
+    );
+    drop(result);
+
+    let rebuilt = PortableSaveFile::from_json_file(&runtime_save_path).unwrap();
+    rebuilt
+        .validate_with_asset_root(&summary.asset_root)
+        .unwrap();
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

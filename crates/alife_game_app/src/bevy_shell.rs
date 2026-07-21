@@ -604,7 +604,7 @@ fn prepare_production_gpu_runtime_launch(
     summary: &ProductionVoxelLaunchSummary,
 ) -> Result<AppShellLaunchConfig, GameAppShellError> {
     let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
-    if runtime_save_path.exists() {
+    if runtime_save_path.exists() && !launch.dry_run {
         let existing = PortableSaveFile::from_json_file(&runtime_save_path)?;
         existing.validate_with_asset_root(&summary.asset_root)?;
         let existing_population = existing
