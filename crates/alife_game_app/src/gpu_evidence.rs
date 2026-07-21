@@ -466,9 +466,27 @@ fn run_gpu_closed_loop_acceptance_with_provenance(
     let second_logit_digest = logit_sequence_digest(&second.trace)?;
     let max_abs_error = max_logit_error(&first.trace, &second.trace)?;
     if max_abs_error > GPU_SLICE_A_REPLAY_TOLERANCE {
-        return Err(GpuEvidenceError::Contract(
-            "same-adapter replay exceeded its declared logit tolerance",
-        ));
+        let divergence = first
+            .trace
+            .iter()
+            .zip(&second.trace)
+            .find(|(left, right)| (left.logit - right.logit).abs() > GPU_SLICE_A_REPLAY_TOLERANCE)
+            .map_or_else(
+                || "first divergent tick unavailable".to_string(),
+                |(left, right)| {
+                    format!(
+                        "first divergent tick {} logits {:.9e}/{:.9e} delta {:.9e}",
+                        left.tick,
+                        left.logit,
+                        right.logit,
+                        (left.logit - right.logit).abs(),
+                    )
+                },
+            );
+        return Err(GpuEvidenceError::ContractDetail(format!(
+            "same-adapter replay exceeded tolerance {:.9e} with maximum delta {:.9e}; {divergence}",
+            GPU_SLICE_A_REPLAY_TOLERANCE, max_abs_error,
+        )));
     }
 
     let compact_readback_bytes = trace_max(&first.trace, |entry| entry.compact_readback_bytes);
