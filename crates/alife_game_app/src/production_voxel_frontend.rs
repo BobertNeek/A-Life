@@ -2077,6 +2077,22 @@ mod tests {
         launch.population = Some(30);
         launch.graphics_backend = "existing".to_string();
         launch.record_performance = true;
+        let fixture_artifact_dir =
+            fvr08_launch_artifact_dir(&launch, FVR06_PRODUCTION_GPU_RECEIPT_DIR);
+        let fixture_runtime_save_path =
+            fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_runtime_save.json");
+        let fixture_gameplay_receipt_path =
+            fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_gameplay_receipt.json");
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let artifact_root = std::env::temp_dir().join(format!(
+            "alife-fvr06-performance-receipt-{}-{nonce}",
+            std::process::id()
+        ));
+        launch.manifest_path =
+            artifact_root.join("crates/alife_game_app/environment_manifest.json");
 
         let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
         let receipt = summary.gpu_gameplay_receipt.as_ref().unwrap();
@@ -2094,6 +2110,9 @@ mod tests {
         assert_eq!(receipt.active_creatures, 30);
         assert_eq!(receipt.compact_readback_bytes, 30 * 48);
         assert!(summary.signature_line().contains("gameplay="));
+        assert!(!fixture_runtime_save_path.exists());
+        assert!(!fixture_gameplay_receipt_path.exists());
+        fs::remove_dir_all(artifact_root).unwrap();
     }
 
     #[test]
