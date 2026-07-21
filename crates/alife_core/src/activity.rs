@@ -1,6 +1,6 @@
 //! Portable fixed-point neural-work, GPU-pressure, and throttle receipts.
 //!
-//! These contracts contain no wgpu objects and perform no neural computation.
+//! These contracts contain no graphics-backend objects and perform no neural computation.
 //! They make the production GPU scheduler's inputs and committed work replayable
 //! without introducing a host neural oracle.
 
