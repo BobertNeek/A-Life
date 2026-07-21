@@ -466,6 +466,30 @@ fn run_gpu_closed_loop_acceptance_with_provenance(
     let second_logit_digest = logit_sequence_digest(&second.trace)?;
     let max_abs_error = max_logit_error(&first.trace, &second.trace)?;
     if max_abs_error > GPU_SLICE_A_REPLAY_TOLERANCE {
+        let schedule_divergence = first
+            .trace
+            .iter()
+            .zip(&second.trace)
+            .find(|(left, right)| {
+                left.active_tiles != right.active_tiles
+                    || left.active_synapses != right.active_synapses
+                    || left.active_activation_side != right.active_activation_side
+            })
+            .map_or_else(
+                || "no compact schedule-counter divergence".to_string(),
+                |(left, right)| {
+                    format!(
+                        "schedule counters first diverge at tick {}: tiles {}/{}, synapses {}/{}, activation side {}/{}",
+                        left.tick,
+                        left.active_tiles,
+                        right.active_tiles,
+                        left.active_synapses,
+                        right.active_synapses,
+                        left.active_activation_side,
+                        right.active_activation_side,
+                    )
+                },
+            );
         let divergence = first
             .trace
             .iter()
@@ -484,7 +508,7 @@ fn run_gpu_closed_loop_acceptance_with_provenance(
                 },
             );
         return Err(GpuEvidenceError::ContractDetail(format!(
-            "same-adapter replay exceeded tolerance {:.9e} with maximum delta {:.9e}; {divergence}",
+            "same-adapter replay exceeded tolerance {:.9e} with maximum delta {:.9e}; {divergence}; {schedule_divergence}",
             GPU_SLICE_A_REPLAY_TOLERANCE, max_abs_error,
         )));
     }
