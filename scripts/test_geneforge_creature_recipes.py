@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.util
 import json
@@ -824,6 +825,80 @@ class GeneForgeRecipeContractTests(unittest.TestCase):
                 importer._promote_augmented_pair(
                     staging, temporary, backup, recipe_temporary, output
                 )
+
+    def test_augmentation_promotion_failures_restore_original_pair_without_leftovers(self) -> None:
+        for failure_position in ("staging", "recipe"):
+            with self.subTest(failure_position=failure_position):
+                root = TEST_OUTPUT / f"augment-promotion-rollback-{failure_position}"
+                if root.exists():
+                    shutil.rmtree(root)
+                staging = root / "staging"
+                temporary = root / "staging.augment-tmp-test"
+                backup = root / "staging.augment-rollback-test"
+                output = root / "recipe.json"
+                recipe_temporary = root / ".recipe.json.augment-tmp-test"
+                staging.mkdir(parents=True)
+                temporary.mkdir()
+                old_digest, new_digest = "1" * 64, "2" * 64
+                (staging / "build_receipt.json").write_text(
+                    json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+                )
+                (staging / "sentinel.bin").write_bytes(b"original sentinel\x00\xff")
+                (temporary / "build_receipt.json").write_text(
+                    json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+                )
+                (temporary / "sentinel.bin").write_bytes(b"new sentinel")
+                output.write_text(
+                    json.dumps({"recipe_sha256": old_digest}), encoding="utf-8"
+                )
+                recipe_temporary.write_text(
+                    json.dumps({"recipe_sha256": new_digest}), encoding="utf-8"
+                )
+                original_tree = tree_digest(staging)
+                original_recipe = output.read_bytes()
+                durable_replace = importer._durable_replace
+                injected = False
+
+                def fail_selected_promotion(source: Path, target: Path) -> None:
+                    nonlocal injected
+                    selected = (
+                        source == temporary and target == staging
+                        if failure_position == "staging"
+                        else source == recipe_temporary and target == output
+                    )
+                    if selected and not injected:
+                        injected = True
+                        raise importer.ImportFailure(
+                            f"injected {failure_position} promotion failure"
+                        )
+                    durable_replace(source, target)
+
+                with mock.patch.object(
+                    importer, "_durable_replace", side_effect=fail_selected_promotion
+                ):
+                    with self.assertRaisesRegex(
+                        importer.ImportFailure,
+                        f"injected {failure_position} promotion failure",
+                    ):
+                        importer._promote_augmented_pair(
+                            staging,
+                            temporary,
+                            backup,
+                            recipe_temporary,
+                            output,
+                        )
+
+                self.assertTrue(injected)
+                self.assertTrue(staging.is_dir())
+                self.assertEqual(tree_digest(staging), original_tree)
+                self.assertEqual(output.read_bytes(), original_recipe)
+                self.assertFalse(temporary.exists())
+                self.assertFalse(backup.exists())
+                self.assertFalse(recipe_temporary.exists())
+                self.assertFalse(
+                    list(root.glob(".recipe.json.augment-rollback-*"))
+                )
+                self.assertFalse(importer._augmentation_transaction_path(staging).exists())
 
     def test_pair_recipe_digest_rejects_marker_selected_non_object_json(self) -> None:
         root = TEST_OUTPUT / "augment-recovery-non-object-generation"
@@ -1699,7 +1774,9 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
             self.assertEqual(len({tuple(group["prepared_matrix"]) for group in groups}), 3)
         aliased = next(iter(by_source.values()))
         aliased[1]["prepared_matrix"] = list(aliased[0]["prepared_matrix"])
-        with self.assertRaisesRegex(importer.ImportFailure, "aliases target torso"):
+        with self.assertRaisesRegex(
+            importer.ImportFailure, "aliases target torso|prepared_matrix drift"
+        ):
             importer.validate_preparation_metadata(payload, manifests)
 
         second_before_tree = tree_digest(staging)
@@ -1725,6 +1802,76 @@ class GeneForgeImporterSubprocessTests(unittest.TestCase):
         self.assert_success(completed)
         self.assertEqual(tree_digest(staging), second_before_tree)
         self.assertEqual(output.read_bytes(), second_before_recipe)
+
+    def test_preparation_validation_rejects_independently_wrong_matrix_and_anchor_evidence(self) -> None:
+        source = self.valid_staging()
+        root = TEST_OUTPUT / "cross-torso-independent-oracle"
+        if root.exists():
+            shutil.rmtree(root)
+        staging = root / "staging"
+        shutil.copytree(source, staging)
+        recipe_path = root / "fixture_recipes.json"
+        shutil.copy2(FIXTURE_ROOT / "valid/fixture_recipes.json", recipe_path)
+        self.assert_success(
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(IMPORTER),
+                    "bind-output-digests",
+                    "--staging",
+                    str(staging),
+                    "--recipes",
+                    str(recipe_path),
+                    "--output",
+                    str(recipe_path),
+                ],
+                cwd=WORKSPACE,
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONUTF8": "1"},
+            )
+        )
+        recipe = importer.load_recipe(recipe_path, validate_current_anatomy=False)
+        importer._materialize_cross_torso_preparations(recipe, staging)
+        manifests, _ = importer._staged_socket_manifests(staging, recipe)
+
+        def selected_records(candidate: dict) -> tuple[dict, dict]:
+            for manifest in candidate.values():
+                for slot_record in manifest["cross_torso_preparations"]:
+                    for group in slot_record["group_transforms"]:
+                        if group["runtime_group"] != "torso":
+                            return slot_record, group
+            raise AssertionError("augmented fixture has no non-torso group transform")
+
+        def shift(value: list[float], index: int = 0) -> None:
+            value[index] += 0.5
+
+        mutations = {
+            "prepared-matrix": lambda slot, group: shift(group["prepared_matrix"], 3),
+            "slot-source-anchor": lambda slot, group: shift(
+                slot["bridge_geometry"][0]["source_anchor"]
+            ),
+            "group-target-anchor": lambda slot, group: shift(
+                group["bridge_geometry"][0]["target_anchor"]
+            ),
+            "group-transformed-anchor": lambda slot, group: shift(
+                group["bridge_geometry"][0]["transformed_source_anchor"]
+            ),
+            "bridge-matrix": lambda slot, group: shift(
+                group["bridge_geometry"][0]["prepared_matrix"], 3
+            ),
+            "residual": lambda slot, group: group.__setitem__("residual", 0.01),
+        }
+        for name, mutation in mutations.items():
+            with self.subTest(name=name):
+                candidate = copy.deepcopy(manifests)
+                slot_record, group = selected_records(candidate)
+                mutation(slot_record, group)
+                with self.assertRaisesRegex(
+                    importer.ImportFailure, "matrix|anchor|bridge|residual|evidence|drift"
+                ):
+                    importer.validate_preparation_metadata(recipe, candidate)
 
     def test_augment_cross_torso_rejects_blender_and_subprocess_use(self) -> None:
         source = self.valid_staging()

@@ -913,7 +913,7 @@ impl LifecycleLiveLoop {
             self.creatures[parent_b].appearance,
             child_seed,
         );
-        let part_catalog = load_production_creature_part_catalog().map_err(|error| {
+        let part_catalog = load_geneforge_creature_part_catalog().map_err(|error| {
             GameAppShellError::InvalidProductionFrontend {
                 message: format!("creature part catalog failed during birth finalization: {error}"),
             }
@@ -1111,4 +1111,73 @@ pub fn run_lifecycle_lineage_smoke() -> Result<LifecycleLineageSummary, GameAppS
     let config = LifecycleLoopConfig::lineage_smoke()?;
     let mut live = LifecycleLiveLoop::from_config(config)?;
     live.run_lifecycle_once()
+}
+
+#[cfg(test)]
+mod tests {
+    use alife_world::{CreaturePartFamilyId, CreaturePartSources};
+
+    use super::*;
+
+    #[test]
+    fn birth_preserves_inherited_high_torso_id() {
+        let config = LifecycleLoopConfig::lineage_smoke().unwrap();
+        let mut live = LifecycleLiveLoop::from_config(config).unwrap();
+        for parent in &mut live.creatures {
+            parent.appearance.part_sources =
+                CreaturePartSources::coherent(CreaturePartFamilyId(11));
+        }
+
+        let summary = live.run_lifecycle_once().unwrap();
+        let birth = &summary.lineage_records[0];
+        let child = summary
+            .creatures
+            .iter()
+            .find(|creature| creature.genome_id == birth.offspring_genome_id)
+            .unwrap();
+
+        assert_eq!(
+            child.appearance.part_sources.torso,
+            CreaturePartFamilyId(11)
+        );
+        assert!(child
+            .appearance
+            .part_sources
+            .iter_slots()
+            .into_iter()
+            .all(|(_, family)| family.0 <= 11));
+    }
+
+    #[test]
+    fn display_fallback_does_not_rewrite_unknown_id_in_save_json() {
+        let summary = run_lifecycle_lineage_smoke().unwrap();
+        let mut save = LifecycleSaveState::from_summary(&summary).unwrap();
+        save.records[0].appearance.part_sources.head = CreaturePartFamilyId(999);
+        let before = save.to_json_string_pretty().unwrap();
+
+        let catalog = load_geneforge_creature_part_catalog().unwrap();
+        let display = resolve_creature_part_display_sources(
+            save.records[0].appearance.part_sources,
+            &catalog,
+        )
+        .unwrap();
+        assert_eq!(display.saved_sources.head, CreaturePartFamilyId(999));
+        assert_eq!(
+            display.displayed_sources.head,
+            display.displayed_sources.torso
+        );
+        assert!(display.warning.is_some());
+        let diagnostic = display.warning.unwrap().visible_message();
+        assert!(diagnostic.contains("999"));
+        assert!(diagnostic.contains("save and lineage data remain unchanged"));
+        assert!(display.display_only);
+
+        let after = save.to_json_string_pretty().unwrap();
+        assert_eq!(after, before);
+        let roundtrip = LifecycleSaveState::from_json_str(&after).unwrap();
+        assert_eq!(
+            roundtrip.records[0].appearance.part_sources.head,
+            CreaturePartFamilyId(999)
+        );
+    }
 }

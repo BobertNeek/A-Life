@@ -1,0 +1,2668 @@
+{
+  "anatomy_mask": "production_voxel_v1/models/geneforge/grendel_torso_full_anatomy.png",
+  "assembly_preparation_population": "canonical-only",
+  "assembly_preparation_schema": "alife.geneforge_assembly_preparation.v2",
+  "assembly_preparation_schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+  "assembly_preparations": [
+    {
+      "asset_id": "grendel-torso",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.011620154604315758,
+            0.9474952816963196,
+            0.48614948987960815
+          ],
+          "prepared_anchor": [
+            0.010294137811329122,
+            0.9448137993525938,
+            0.5059245077533043
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0007817741584137082,
+            0.8978579101257206,
+            0.6280000557699883
+          ],
+          "transformed_source_anchor": [
+            0.0007817741584137082,
+            0.8978579101257206,
+            0.6280000557699883
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.2083902359008789,
+            0.7210211753845215,
+            0.25854024291038513
+          ],
+          "prepared_anchor": [
+            0.22275629694926705,
+            0.7072419555577671,
+            0.26047657731331386
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "left-shoulder",
+          "source_anchor": [
+            0.27303280705406585,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "target_anchor": [
+            0.26484182284244384,
+            0.6392486216643614,
+            0.25923552033946184
+          ],
+          "transformed_source_anchor": [
+            0.26484182284244384,
+            0.6392486216643614,
+            0.25923552033946184
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.190128356218338,
+            0.7223740816116333,
+            0.2593058943748474
+          ],
+          "prepared_anchor": [
+            -0.20644246685351159,
+            0.710894696699891,
+            0.26074586528822735
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "right-shoulder",
+          "source_anchor": [
+            -0.2801661583409583,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "target_anchor": [
+            -0.27176117359072954,
+            0.6392486216643614,
+            0.25923552033946184
+          ],
+          "transformed_source_anchor": [
+            -0.27176117359072954,
+            0.6392486216643614,
+            0.25923552033946184
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.08357039093971252,
+            0.5514841079711914,
+            0.055658772587776184
+          ],
+          "prepared_anchor": [
+            0.10008838229915158,
+            0.5445667503966906,
+            0.06456417126700398
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "left-hip",
+          "source_anchor": [
+            0.12569958224203578,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "target_anchor": [
+            0.1219285947747747,
+            0.5178261237794136,
+            0.07602086057921772
+          ],
+          "transformed_source_anchor": [
+            0.1219285947747747,
+            0.5178261237794136,
+            0.07602086057921772
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.09400146454572678,
+            0.5843316912651062,
+            0.06927870213985443
+          ],
+          "prepared_anchor": [
+            -0.10607186839747161,
+            0.5686372391119586,
+            0.07210527647433489
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "right-hip",
+          "source_anchor": [
+            -0.13283293352892825,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "target_anchor": [
+            -0.1288479455230604,
+            0.5178261237794136,
+            0.07602086057921772
+          ],
+          "transformed_source_anchor": [
+            -0.1288479455230604,
+            0.5178261237794136,
+            0.07602086057921772
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.012616132386028767,
+            0.5650836229324341,
+            -0.32101646065711975
+          ],
+          "prepared_anchor": [
+            0.009728279921301597,
+            0.5699093088184093,
+            -0.3402095079365871
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "tail-base",
+          "source_anchor": [
+            -0.0035666756434462395,
+            0.5921255682039223,
+            -0.42856953111967233
+          ],
+          "target_anchor": [
+            -0.0034596753741428523,
+            0.5743618011578046,
+            -0.41571244518608214
+          ],
+          "transformed_source_anchor": [
+            -0.0034596753741428523,
+            0.5743618011578046,
+            -0.41571244518608214
+          ]
+        }
+      ],
+      "bridge_kind": "torso-join-cover",
+      "bridge_sockets": [
+        "neck",
+        "left-shoulder",
+        "right-shoulder",
+        "left-hip",
+        "right-hip",
+        "tail-base"
+      ],
+      "family_id": 3,
+      "family_label": "emberloper",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.97,
+          0.97,
+          0.97
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_kind": "torso-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.97,
+              0.97,
+              0.97
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "root-coat",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "torso-frame",
+          "socket_evidence": [
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0007817741584137082,
+                0.8978579101257206,
+                0.6280000557699883
+              ],
+              "transformed_source_anchor": [
+                0.0007817741584137082,
+                0.8978579101257206,
+                0.6280000557699883
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "left-shoulder",
+              "source_anchor": [
+                0.27303280705406585,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "target_anchor": [
+                0.26484182284244384,
+                0.6392486216643614,
+                0.25923552033946184
+              ],
+              "transformed_source_anchor": [
+                0.26484182284244384,
+                0.6392486216643614,
+                0.25923552033946184
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "right-shoulder",
+              "source_anchor": [
+                -0.2801661583409583,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "target_anchor": [
+                -0.27176117359072954,
+                0.6392486216643614,
+                0.25923552033946184
+              ],
+              "transformed_source_anchor": [
+                -0.27176117359072954,
+                0.6392486216643614,
+                0.25923552033946184
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "left-hip",
+              "source_anchor": [
+                0.12569958224203578,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "target_anchor": [
+                0.1219285947747747,
+                0.5178261237794136,
+                0.07602086057921772
+              ],
+              "transformed_source_anchor": [
+                0.1219285947747747,
+                0.5178261237794136,
+                0.07602086057921772
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "right-hip",
+              "source_anchor": [
+                -0.13283293352892825,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "target_anchor": [
+                -0.1288479455230604,
+                0.5178261237794136,
+                0.07602086057921772
+              ],
+              "transformed_source_anchor": [
+                -0.1288479455230604,
+                0.5178261237794136,
+                0.07602086057921772
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "tail-base",
+              "source_anchor": [
+                -0.0035666756434462395,
+                0.5921255682039223,
+                -0.42856953111967233
+              ],
+              "target_anchor": [
+                -0.0034596753741428523,
+                0.5743618011578046,
+                -0.41571244518608214
+              ],
+              "transformed_source_anchor": [
+                -0.0034596753741428523,
+                0.5743618011578046,
+                -0.41571244518608214
+              ]
+            }
+          ],
+          "source_asset_id": "grendel-torso",
+          "source_family_id": 3,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "root-coat",
+      "lod": "full",
+      "logical_slot": "torso",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        0.97,
+        0.0,
+        0.0,
+        0,
+        0.0,
+        0.97,
+        0.0,
+        0,
+        0.0,
+        0.0,
+        0.97,
+        0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0,
+        0,
+        0
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "grendel-torso",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-torso",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.011620154604315758,
+            0.9474952816963196,
+            0.48614948987960815
+          ],
+          "prepared_anchor": [
+            0.010294137811329122,
+            0.9448137993525938,
+            0.5059245077533043
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.0,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.0,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "transformed_source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.2083902359008789,
+            0.7210211753845215,
+            0.25854024291038513
+          ],
+          "prepared_anchor": [
+            0.22275629694926705,
+            0.7072419555577671,
+            0.26047657731331386
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.0,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.0,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "left-shoulder",
+          "source_anchor": [
+            0.27303280705406585,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "target_anchor": [
+            0.27303280705406585,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "transformed_source_anchor": [
+            0.27303280705406585,
+            0.6590191975921251,
+            0.26725311375202254
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.190128356218338,
+            0.7223740816116333,
+            0.2593058943748474
+          ],
+          "prepared_anchor": [
+            -0.20644246685351159,
+            0.710894696699891,
+            0.26074586528822735
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.0,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.0,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "right-shoulder",
+          "source_anchor": [
+            -0.2801661583409583,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "target_anchor": [
+            -0.2801661583409583,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "transformed_source_anchor": [
+            -0.2801661583409583,
+            0.6590191975921251,
+            0.26725311375202254
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.08357039093971252,
+            0.5514841079711914,
+            0.055658772587776184
+          ],
+          "prepared_anchor": [
+            0.10008838229915158,
+            0.5445667503966906,
+            0.06456417126700398
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.0,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.0,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "left-hip",
+          "source_anchor": [
+            0.12569958224203578,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "target_anchor": [
+            0.12569958224203578,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "transformed_source_anchor": [
+            0.12569958224203578,
+            0.5338413647210449,
+            0.07837202121568838
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.09400146454572678,
+            0.5843316912651062,
+            0.06927870213985443
+          ],
+          "prepared_anchor": [
+            -0.10607186839747161,
+            0.5686372391119586,
+            0.07210527647433489
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.0,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.0,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "right-hip",
+          "source_anchor": [
+            -0.13283293352892825,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "target_anchor": [
+            -0.13283293352892825,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "transformed_source_anchor": [
+            -0.13283293352892825,
+            0.5338413647210449,
+            0.07837202121568838
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.012616132386028767,
+            0.5650836229324341,
+            -0.32101646065711975
+          ],
+          "prepared_anchor": [
+            0.009728279921301597,
+            0.5699093088184093,
+            -0.3402095079365871
+          ],
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.0,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.0,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "tail-base",
+          "source_anchor": [
+            -0.0035666756434462395,
+            0.5921255682039223,
+            -0.42856953111967233
+          ],
+          "target_anchor": [
+            -0.0035666756434462395,
+            0.5921255682039223,
+            -0.42856953111967233
+          ],
+          "transformed_source_anchor": [
+            -0.0035666756434462395,
+            0.5921255682039223,
+            -0.42856953111967233
+          ]
+        }
+      ],
+      "bridge_kind": "torso-join-cover",
+      "bridge_sockets": [
+        "neck",
+        "left-shoulder",
+        "right-shoulder",
+        "left-hip",
+        "right-hip",
+        "tail-base"
+      ],
+      "family_id": 4,
+      "family_label": "duskmane",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_kind": "torso-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "root-coat",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.0,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.0,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "torso-frame",
+          "socket_evidence": [
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "transformed_source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "left-shoulder",
+              "source_anchor": [
+                0.27303280705406585,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "target_anchor": [
+                0.27303280705406585,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "transformed_source_anchor": [
+                0.27303280705406585,
+                0.6590191975921251,
+                0.26725311375202254
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "right-shoulder",
+              "source_anchor": [
+                -0.2801661583409583,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "target_anchor": [
+                -0.2801661583409583,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "transformed_source_anchor": [
+                -0.2801661583409583,
+                0.6590191975921251,
+                0.26725311375202254
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "left-hip",
+              "source_anchor": [
+                0.12569958224203578,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "target_anchor": [
+                0.12569958224203578,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "transformed_source_anchor": [
+                0.12569958224203578,
+                0.5338413647210449,
+                0.07837202121568838
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "right-hip",
+              "source_anchor": [
+                -0.13283293352892825,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "target_anchor": [
+                -0.13283293352892825,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "transformed_source_anchor": [
+                -0.13283293352892825,
+                0.5338413647210449,
+                0.07837202121568838
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "tail-base",
+              "source_anchor": [
+                -0.0035666756434462395,
+                0.5921255682039223,
+                -0.42856953111967233
+              ],
+              "target_anchor": [
+                -0.0035666756434462395,
+                0.5921255682039223,
+                -0.42856953111967233
+              ],
+              "transformed_source_anchor": [
+                -0.0035666756434462395,
+                0.5921255682039223,
+                -0.42856953111967233
+              ]
+            }
+          ],
+          "source_asset_id": "grendel-torso",
+          "source_family_id": 4,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "root-coat",
+      "lod": "full",
+      "logical_slot": "torso",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.0,
+        0.0,
+        0.0,
+        0,
+        0.0,
+        1.0,
+        0.0,
+        0,
+        0.0,
+        0.0,
+        1.0,
+        0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0,
+        0,
+        0
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "grendel-torso",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-torso",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.011620154604315758,
+            0.9474952816963196,
+            0.48614948987960815
+          ],
+          "prepared_anchor": [
+            0.010294137811329122,
+            0.9448137993525938,
+            0.5059245077533043
+          ],
+          "prepared_matrix": [
+            1.03,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.03,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.03,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0008301313228516697,
+            0.9533955128139094,
+            0.6668454200444205
+          ],
+          "transformed_source_anchor": [
+            0.0008301313228516697,
+            0.9533955128139094,
+            0.6668454200444205
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.2083902359008789,
+            0.7210211753845215,
+            0.25854024291038513
+          ],
+          "prepared_anchor": [
+            0.22275629694926705,
+            0.7072419555577671,
+            0.26047657731331386
+          ],
+          "prepared_matrix": [
+            1.03,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.03,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.03,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "left-shoulder",
+          "source_anchor": [
+            0.27303280705406585,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "target_anchor": [
+            0.28122379126568786,
+            0.6787897735198889,
+            0.27527070716458324
+          ],
+          "transformed_source_anchor": [
+            0.28122379126568786,
+            0.6787897735198889,
+            0.27527070716458324
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.190128356218338,
+            0.7223740816116333,
+            0.2593058943748474
+          ],
+          "prepared_anchor": [
+            -0.20644246685351159,
+            0.710894696699891,
+            0.26074586528822735
+          ],
+          "prepared_matrix": [
+            1.03,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.03,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.03,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "right-shoulder",
+          "source_anchor": [
+            -0.2801661583409583,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "target_anchor": [
+            -0.2885711430911871,
+            0.6787897735198889,
+            0.27527070716458324
+          ],
+          "transformed_source_anchor": [
+            -0.2885711430911871,
+            0.6787897735198889,
+            0.27527070716458324
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.08357039093971252,
+            0.5514841079711914,
+            0.055658772587776184
+          ],
+          "prepared_anchor": [
+            0.10008838229915158,
+            0.5445667503966906,
+            0.06456417126700398
+          ],
+          "prepared_matrix": [
+            1.03,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.03,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.03,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "left-hip",
+          "source_anchor": [
+            0.12569958224203578,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "target_anchor": [
+            0.12947056970929685,
+            0.5498566056626762,
+            0.08072318185215904
+          ],
+          "transformed_source_anchor": [
+            0.12947056970929685,
+            0.5498566056626762,
+            0.08072318185215904
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.09400146454572678,
+            0.5843316912651062,
+            0.06927870213985443
+          ],
+          "prepared_anchor": [
+            -0.10607186839747161,
+            0.5686372391119586,
+            0.07210527647433489
+          ],
+          "prepared_matrix": [
+            1.03,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.03,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.03,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "right-hip",
+          "source_anchor": [
+            -0.13283293352892825,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "target_anchor": [
+            -0.1368179215347961,
+            0.5498566056626762,
+            0.08072318185215904
+          ],
+          "transformed_source_anchor": [
+            -0.1368179215347961,
+            0.5498566056626762,
+            0.08072318185215904
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.012616132386028767,
+            0.5650836229324341,
+            -0.32101646065711975
+          ],
+          "prepared_anchor": [
+            0.009728279921301597,
+            0.5699093088184093,
+            -0.3402095079365871
+          ],
+          "prepared_matrix": [
+            1.03,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.03,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.03,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "tail-base",
+          "source_anchor": [
+            -0.0035666756434462395,
+            0.5921255682039223,
+            -0.42856953111967233
+          ],
+          "target_anchor": [
+            -0.0036736759127496267,
+            0.60988933525004,
+            -0.4414266170532625
+          ],
+          "transformed_source_anchor": [
+            -0.0036736759127496267,
+            0.60988933525004,
+            -0.4414266170532625
+          ]
+        }
+      ],
+      "bridge_kind": "torso-join-cover",
+      "bridge_sockets": [
+        "neck",
+        "left-shoulder",
+        "right-shoulder",
+        "left-hip",
+        "right-hip",
+        "tail-base"
+      ],
+      "family_id": 8,
+      "family_label": "slateprowler",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1.03,
+          1.03,
+          1.03
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_kind": "torso-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1.03,
+              1.03,
+              1.03
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "root-coat",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            1.03,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            1.03,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            1.03,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "torso-frame",
+          "socket_evidence": [
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0008301313228516697,
+                0.9533955128139094,
+                0.6668454200444205
+              ],
+              "transformed_source_anchor": [
+                0.0008301313228516697,
+                0.9533955128139094,
+                0.6668454200444205
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "left-shoulder",
+              "source_anchor": [
+                0.27303280705406585,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "target_anchor": [
+                0.28122379126568786,
+                0.6787897735198889,
+                0.27527070716458324
+              ],
+              "transformed_source_anchor": [
+                0.28122379126568786,
+                0.6787897735198889,
+                0.27527070716458324
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "right-shoulder",
+              "source_anchor": [
+                -0.2801661583409583,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "target_anchor": [
+                -0.2885711430911871,
+                0.6787897735198889,
+                0.27527070716458324
+              ],
+              "transformed_source_anchor": [
+                -0.2885711430911871,
+                0.6787897735198889,
+                0.27527070716458324
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "left-hip",
+              "source_anchor": [
+                0.12569958224203578,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "target_anchor": [
+                0.12947056970929685,
+                0.5498566056626762,
+                0.08072318185215904
+              ],
+              "transformed_source_anchor": [
+                0.12947056970929685,
+                0.5498566056626762,
+                0.08072318185215904
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "right-hip",
+              "source_anchor": [
+                -0.13283293352892825,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "target_anchor": [
+                -0.1368179215347961,
+                0.5498566056626762,
+                0.08072318185215904
+              ],
+              "transformed_source_anchor": [
+                -0.1368179215347961,
+                0.5498566056626762,
+                0.08072318185215904
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "tail-base",
+              "source_anchor": [
+                -0.0035666756434462395,
+                0.5921255682039223,
+                -0.42856953111967233
+              ],
+              "target_anchor": [
+                -0.0036736759127496267,
+                0.60988933525004,
+                -0.4414266170532625
+              ],
+              "transformed_source_anchor": [
+                -0.0036736759127496267,
+                0.60988933525004,
+                -0.4414266170532625
+              ]
+            }
+          ],
+          "source_asset_id": "grendel-torso",
+          "source_family_id": 8,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "root-coat",
+      "lod": "full",
+      "logical_slot": "torso",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        1.03,
+        0.0,
+        0.0,
+        0,
+        0.0,
+        1.03,
+        0.0,
+        0,
+        0.0,
+        0.0,
+        1.03,
+        0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0,
+        0,
+        0
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "grendel-torso",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "slot-transform"
+    },
+    {
+      "asset_id": "grendel-torso",
+      "attachment_error_bound": 0.025,
+      "bridge_geometry": [
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.011620154604315758,
+            0.9474952816963196,
+            0.48614948987960815
+          ],
+          "prepared_anchor": [
+            0.010294137811329122,
+            0.9448137993525938,
+            0.5059245077533043
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "neck",
+          "source_anchor": [
+            0.0008059527406326889,
+            0.925626711469815,
+            0.6474227379072044
+          ],
+          "target_anchor": [
+            0.0007817741584137082,
+            0.8978579101257206,
+            0.6280000557699883
+          ],
+          "transformed_source_anchor": [
+            0.0007817741584137082,
+            0.8978579101257206,
+            0.6280000557699883
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.2083902359008789,
+            0.7210211753845215,
+            0.25854024291038513
+          ],
+          "prepared_anchor": [
+            0.22275629694926705,
+            0.7072419555577671,
+            0.26047657731331386
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "left-shoulder",
+          "source_anchor": [
+            0.27303280705406585,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "target_anchor": [
+            0.26484182284244384,
+            0.6392486216643614,
+            0.25923552033946184
+          ],
+          "transformed_source_anchor": [
+            0.26484182284244384,
+            0.6392486216643614,
+            0.25923552033946184
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.190128356218338,
+            0.7223740816116333,
+            0.2593058943748474
+          ],
+          "prepared_anchor": [
+            -0.20644246685351159,
+            0.710894696699891,
+            0.26074586528822735
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "right-shoulder",
+          "source_anchor": [
+            -0.2801661583409583,
+            0.6590191975921251,
+            0.26725311375202254
+          ],
+          "target_anchor": [
+            -0.27176117359072954,
+            0.6392486216643614,
+            0.25923552033946184
+          ],
+          "transformed_source_anchor": [
+            -0.27176117359072954,
+            0.6392486216643614,
+            0.25923552033946184
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.08357039093971252,
+            0.5514841079711914,
+            0.055658772587776184
+          ],
+          "prepared_anchor": [
+            0.10008838229915158,
+            0.5445667503966906,
+            0.06456417126700398
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "left-hip",
+          "source_anchor": [
+            0.12569958224203578,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "target_anchor": [
+            0.1219285947747747,
+            0.5178261237794136,
+            0.07602086057921772
+          ],
+          "transformed_source_anchor": [
+            0.1219285947747747,
+            0.5178261237794136,
+            0.07602086057921772
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            -0.09400146454572678,
+            0.5843316912651062,
+            0.06927870213985443
+          ],
+          "prepared_anchor": [
+            -0.10607186839747161,
+            0.5686372391119586,
+            0.07210527647433489
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "right-hip",
+          "source_anchor": [
+            -0.13283293352892825,
+            0.5338413647210449,
+            0.07837202121568838
+          ],
+          "target_anchor": [
+            -0.1288479455230604,
+            0.5178261237794136,
+            0.07602086057921772
+          ],
+          "transformed_source_anchor": [
+            -0.1288479455230604,
+            0.5178261237794136,
+            0.07602086057921772
+          ]
+        },
+        {
+          "applied_overlap_depth": 0.02,
+          "original_anchor": [
+            0.012616132386028767,
+            0.5650836229324341,
+            -0.32101646065711975
+          ],
+          "prepared_anchor": [
+            0.009728279921301597,
+            0.5699093088184093,
+            -0.3402095079365871
+          ],
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "prepared_vertex_count": 3,
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "socket": "tail-base",
+          "source_anchor": [
+            -0.0035666756434462395,
+            0.5921255682039223,
+            -0.42856953111967233
+          ],
+          "target_anchor": [
+            -0.0034596753741428523,
+            0.5743618011578046,
+            -0.41571244518608214
+          ],
+          "transformed_source_anchor": [
+            -0.0034596753741428523,
+            0.5743618011578046,
+            -0.41571244518608214
+          ]
+        }
+      ],
+      "bridge_kind": "torso-join-cover",
+      "bridge_sockets": [
+        "neck",
+        "left-shoulder",
+        "right-shoulder",
+        "left-hip",
+        "right-hip",
+        "tail-base"
+      ],
+      "family_id": 9,
+      "family_label": "cobaltbramble",
+      "fit": {
+        "rotation_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.97,
+          0.97,
+          0.97
+        ],
+        "translation": [
+          0,
+          0,
+          0
+        ]
+      },
+      "group_transforms": [
+        {
+          "attachment_error_bound": 0.025,
+          "bridge_kind": "torso-join-cover",
+          "fit": {
+            "rotation_xyzw": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              0.97,
+              0.97,
+              0.97
+            ],
+            "translation": [
+              0,
+              0,
+              0
+            ]
+          },
+          "join_cover_kind": "root-coat",
+          "lod": "full",
+          "overlap_depth": 0.02,
+          "prepared_matrix": [
+            0.97,
+            0.0,
+            0.0,
+            0,
+            0.0,
+            0.97,
+            0.0,
+            0,
+            0.0,
+            0.0,
+            0.97,
+            0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "residual": 0.0,
+          "runtime_group": "torso",
+          "schema_digest": "8c11d2ffc4b36a4f62e9a0cba0e4f7c41504d32e96160312bec0a73d32c25ba1",
+          "seam_offset": [
+            0,
+            0,
+            0
+          ],
+          "socket": "torso-frame",
+          "socket_evidence": [
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "neck",
+              "source_anchor": [
+                0.0008059527406326889,
+                0.925626711469815,
+                0.6474227379072044
+              ],
+              "target_anchor": [
+                0.0007817741584137082,
+                0.8978579101257206,
+                0.6280000557699883
+              ],
+              "transformed_source_anchor": [
+                0.0007817741584137082,
+                0.8978579101257206,
+                0.6280000557699883
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "left-shoulder",
+              "source_anchor": [
+                0.27303280705406585,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "target_anchor": [
+                0.26484182284244384,
+                0.6392486216643614,
+                0.25923552033946184
+              ],
+              "transformed_source_anchor": [
+                0.26484182284244384,
+                0.6392486216643614,
+                0.25923552033946184
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "right-shoulder",
+              "source_anchor": [
+                -0.2801661583409583,
+                0.6590191975921251,
+                0.26725311375202254
+              ],
+              "target_anchor": [
+                -0.27176117359072954,
+                0.6392486216643614,
+                0.25923552033946184
+              ],
+              "transformed_source_anchor": [
+                -0.27176117359072954,
+                0.6392486216643614,
+                0.25923552033946184
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "left-hip",
+              "source_anchor": [
+                0.12569958224203578,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "target_anchor": [
+                0.1219285947747747,
+                0.5178261237794136,
+                0.07602086057921772
+              ],
+              "transformed_source_anchor": [
+                0.1219285947747747,
+                0.5178261237794136,
+                0.07602086057921772
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "right-hip",
+              "source_anchor": [
+                -0.13283293352892825,
+                0.5338413647210449,
+                0.07837202121568838
+              ],
+              "target_anchor": [
+                -0.1288479455230604,
+                0.5178261237794136,
+                0.07602086057921772
+              ],
+              "transformed_source_anchor": [
+                -0.1288479455230604,
+                0.5178261237794136,
+                0.07602086057921772
+              ]
+            },
+            {
+              "applied_overlap_depth": 0.02,
+              "prepared_vertex_count": 3,
+              "residual": 0.0,
+              "socket": "tail-base",
+              "source_anchor": [
+                -0.0035666756434462395,
+                0.5921255682039223,
+                -0.42856953111967233
+              ],
+              "target_anchor": [
+                -0.0034596753741428523,
+                0.5743618011578046,
+                -0.41571244518608214
+              ],
+              "transformed_source_anchor": [
+                -0.0034596753741428523,
+                0.5743618011578046,
+                -0.41571244518608214
+              ]
+            }
+          ],
+          "source_asset_id": "grendel-torso",
+          "source_family_id": 9,
+          "target_torso_asset_id": "grendel-torso",
+          "transform_space": "alife.creature.canonical.rhs-y-up-neg-z-forward.v1"
+        }
+      ],
+      "join_cover_kind": "root-coat",
+      "lod": "full",
+      "logical_slot": "torso",
+      "overlap_depth": 0.02,
+      "predicted_attachment_error": 0.0,
+      "preparation_kind": "canonical",
+      "prepared_matrix": [
+        0.97,
+        0.0,
+        0.0,
+        0,
+        0.0,
+        0.97,
+        0.0,
+        0,
+        0.0,
+        0.0,
+        0.97,
+        0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "prepared_translation": [
+        0,
+        0,
+        0
+      ],
+      "seam_offset": [
+        0,
+        0,
+        0
+      ],
+      "source_asset_id": "grendel-torso",
+      "target_torso_asset_id": "grendel-torso",
+      "transform_mode": "slot-transform"
+    }
+  ],
+  "asset_id": "grendel-torso",
+  "bounds": {
+    "max": [
+      0.3487618863582611,
+      1.2774152755737305,
+      0.5059245077533043
+    ],
+    "min": [
+      -0.3294999301433563,
+      0.43135178089141846,
+      -0.3402095079365871
+    ]
+  },
+  "bridge_geometry": [
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        0.011620154604315758,
+        0.9474952816963196,
+        0.48614948987960815
+      ],
+      "prepared_anchor": [
+        0.010294137811329122,
+        0.9448137993525938,
+        0.5059245077533043
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "neck"
+    },
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        0.2083902359008789,
+        0.7210211753845215,
+        0.25854024291038513
+      ],
+      "prepared_anchor": [
+        0.22275629694926705,
+        0.7072419555577671,
+        0.26047657731331386
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "left-shoulder"
+    },
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        -0.190128356218338,
+        0.7223740816116333,
+        0.2593058943748474
+      ],
+      "prepared_anchor": [
+        -0.20644246685351159,
+        0.710894696699891,
+        0.26074586528822735
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "right-shoulder"
+    },
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        0.08357039093971252,
+        0.5514841079711914,
+        0.055658772587776184
+      ],
+      "prepared_anchor": [
+        0.10008838229915158,
+        0.5445667503966906,
+        0.06456417126700398
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "left-hip"
+    },
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        -0.09400146454572678,
+        0.5843316912651062,
+        0.06927870213985443
+      ],
+      "prepared_anchor": [
+        -0.10607186839747161,
+        0.5686372391119586,
+        0.07210527647433489
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "right-hip"
+    },
+    {
+      "applied_overlap_depth": 0.02,
+      "original_anchor": [
+        0.012616132386028767,
+        0.5650836229324341,
+        -0.32101646065711975
+      ],
+      "prepared_anchor": [
+        0.009728279921301597,
+        0.5699093088184093,
+        -0.3402095079365871
+      ],
+      "prepared_vertex_count": 3,
+      "socket": "tail-base"
+    }
+  ],
+  "coordinate_frame": {
+    "forward": "-Z",
+    "handedness": "right",
+    "up": "+Y"
+  },
+  "cross_torso_preparations": [],
+  "donor": "grendel",
+  "expected_groups": [
+    "torso"
+  ],
+  "ground_contacts": [],
+  "landmarks": {
+    "head": [
+      0.0008059527406326889,
+      0.925626711469815,
+      0.6474227379072044
+    ],
+    "left-foot": [
+      0.16629753952848852,
+      0.3237618751303925,
+      0.20532513582425949
+    ],
+    "left-hip-attachment": [
+      -0.27,
+      -0.62,
+      0
+    ],
+    "left-lower-arm": [
+      0.38640715585549595,
+      0.34255322930306115,
+      0.2897745622744556
+    ],
+    "left-shin": [
+      0.18449857328068917,
+      0.2832034341634345,
+      0.13157317514881775
+    ],
+    "left-shoulder-attachment": [
+      -0.48,
+      0.42,
+      0
+    ],
+    "left-thigh": [
+      0.12569958224203578,
+      0.5338413647210449,
+      0.07837202121568838
+    ],
+    "left-upper-arm": [
+      0.27303280705406585,
+      0.6590191975921251,
+      0.26725311375202254
+    ],
+    "neck-attachment": [
+      0,
+      0.66,
+      0
+    ],
+    "right-foot": [
+      -0.173430890815381,
+      0.3237618751303925,
+      0.20532513582425949
+    ],
+    "right-hip-attachment": [
+      0.27,
+      -0.62,
+      0
+    ],
+    "right-lower-arm": [
+      -0.3935405071423884,
+      0.34255322930306115,
+      0.2897745622744556
+    ],
+    "right-shin": [
+      -0.19163192456758166,
+      0.2832034341634345,
+      0.13157317514881775
+    ],
+    "right-shoulder-attachment": [
+      0.48,
+      0.42,
+      0
+    ],
+    "right-thigh": [
+      -0.13283293352892825,
+      0.5338413647210449,
+      0.07837202121568838
+    ],
+    "right-upper-arm": [
+      -0.2801661583409583,
+      0.6590191975921251,
+      0.26725311375202254
+    ],
+    "tail-root": [
+      0,
+      -0.48,
+      0.32
+    ],
+    "tail-tip": [
+      -0.0035666756434462395,
+      0.9186398130022483,
+      -0.8766053917503961
+    ],
+    "torso": [
+      0.008621519465027708,
+      0.8003106967672349,
+      0.06699326447211386
+    ]
+  },
+  "lod": "full",
+  "lod_topology": {
+    "boundary_edges": 0,
+    "component_connected_counts": {
+      "object-0392e0650a84d8065a5c": 8,
+      "object-5b66eed562c5aa3a1df8": 1
+    },
+    "component_ids": [
+      "object-0392e0650a84d8065a5c",
+      "object-5b66eed562c5aa3a1df8"
+    ],
+    "component_triangle_counts": {
+      "object-0392e0650a84d8065a5c": 590,
+      "object-5b66eed562c5aa3a1df8": 610
+    },
+    "connected_components": 9,
+    "non_manifold_edges": 0,
+    "triangle_count": 1200
+  },
+  "logical_slot": "torso",
+  "microdetail": {
+    "source_files": [
+      "Body_F.png",
+      "Ear_Inner_F.png",
+      "Ear_Outer_F.png",
+      "Foot_F.png",
+      "Grendel_Body_Blend.png",
+      "Grendel_Body_Hard_Sides.png",
+      "Grendel_Foot.png",
+      "Grendel_Head.png",
+      "Grendel_Head_Nostrils.png",
+      "Grendel_Head_Twist.png",
+      "Grendel_Radius_Blend.png",
+      "Grendel_Radius_Hard.png",
+      "Head_F@2x.jpeg",
+      "Head_Hard.png",
+      "Head_Hard@2x.png",
+      "Head_Nostrils.png",
+      "Head_Nostrils@2x.jpeg",
+      "Humerus_F.png",
+      "Radius_F.png",
+      "Shin_F.png",
+      "Tail_F.png",
+      "Thigh_F.png",
+      "radius L(new).png",
+      "radius L.png"
+    ],
+    "uvless_fallback": "evaluated-normal-curvature-material-output"
+  },
+  "schema": "alife.creature_part_sockets.v2",
+  "semantic_mask": "production_voxel_v1/models/geneforge/grendel_torso_full_semantic.png",
+  "sockets": {
+    "left-hip": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.12569958224203578,
+        0.5338413647210449,
+        0.07837202121568838
+      ]
+    },
+    "left-shoulder": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.27303280705406585,
+        0.6590191975921251,
+        0.26725311375202254
+      ]
+    },
+    "neck": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.0008059527406326889,
+        0.925626711469815,
+        0.6474227379072044
+      ]
+    },
+    "right-hip": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.13283293352892825,
+        0.5338413647210449,
+        0.07837202121568838
+      ]
+    },
+    "right-shoulder": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.2801661583409583,
+        0.6590191975921251,
+        0.26725311375202254
+      ]
+    },
+    "tail-base": {
+      "allowable_scale_ratio": [
+        0.88,
+        1.12
+      ],
+      "overlap_depth": 0.02,
+      "pattern_phase_anchor": [
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        -0.0035666756434462395,
+        0.5921255682039223,
+        -0.42856953111967233
+      ]
+    }
+  }
+}
