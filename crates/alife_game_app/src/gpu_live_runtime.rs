@@ -82,6 +82,16 @@ impl GpuLiveRuntimeConstructionOptions {
         }
     }
 
+    const fn causal_acceptance() -> Self {
+        Self {
+            homeostatic_parameters: HomeostaticParameters::reference(),
+            schedule_sleep: false,
+            birth_template_organism_id: None,
+            observe_sidecars: true,
+            retain_sealed_patch_history: true,
+        }
+    }
+
     #[cfg(feature = "gpu-tests")]
     const fn soak() -> Self {
         Self {
@@ -535,6 +545,27 @@ impl GpuLiveBrainRuntime {
             brain_class,
             sensor_profile,
             GpuLiveRuntimeConstructionOptions::benchmark(parameters),
+        )
+    }
+
+    /// Runs the production neural, memory, action, learning, and work-cost path
+    /// as one fixed continuous-wake lab protocol. Natural ATP/sleep behavior is
+    /// proven separately by Slice D; this profile prevents sleep from
+    /// interrupting Slice A's exact 64 sealed causal transactions.
+    pub(crate) fn new_causal_acceptance_profiled(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
+    ) -> Result<Self, GameAppShellError> {
+        Self::new_profiled_with_parameters(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            sensor_profile,
+            GpuLiveRuntimeConstructionOptions::causal_acceptance(),
         )
     }
 
@@ -1261,10 +1292,10 @@ impl GpuLiveBrainRuntime {
             Self::synchronize_resident_tick(resident, tick_before, homeostatic_parameters)?;
             let sleep_before = resident.sleep_scheduler.state();
             let phase_before = sleep_before.phase;
-            // Throughput trials suppress sleep phases but keep the production
-            // work-cost ledger. Applying the existing sleep-rate recovery in
-            // that explicit profile prevents ecology energy exhaustion from
-            // truncating the fixed 1,280-tick neural measurement protocol.
+            // Fixed continuous-wake lab protocols suppress sleep phases but
+            // keep the production work-cost ledger. Applying the existing
+            // sleep-rate recovery prevents ecology energy exhaustion from
+            // truncating their bounded neural measurement windows.
             let recover_brain_atp = phase_before != SleepPhase::Awake || !self.schedule_sleep;
             self.backend.charge_world_brain_atp_tick(
                 handle,

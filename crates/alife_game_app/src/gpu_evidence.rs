@@ -239,6 +239,7 @@ impl GpuSliceAAcceptanceReceipt {
         self.phenotype_manifest
             .validate_for_capacity(&self.capacity)?;
         let expected_slug = capacity_slug(self.capacity.id())?;
+        let (max_executed_tiles, max_executed_synapses) = max_executed_work_counts(&self.capacity)?;
         if self.header.artifact_schema != GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA
             || self.header.slice_raw != GPU_SLICE_A_RAW
             || self.header.class_id_raw != self.capacity.id().raw()
@@ -275,16 +276,37 @@ impl GpuSliceAAcceptanceReceipt {
             || self.compact_readback_bytes == 0
             || self.compact_readback_bytes > 64
             || self.active_tiles == 0
-            || self.active_tiles > self.capacity.execution().max_active_tiles()
+            || self.active_tiles > max_executed_tiles
             || self.active_synapses == 0
-            || self.active_synapses > self.capacity.execution().max_total_synapses()
+            || self.active_synapses > max_executed_synapses
             || hardware_digests(&self.hardware)
                 .into_iter()
                 .any(|digest| digest == [0; 4])
         {
-            return Err(GpuEvidenceError::Contract(
-                "Slice A evidence header or body is inconsistent",
-            ));
+            return Err(GpuEvidenceError::ContractDetail(format!(
+                "Slice A evidence header or body is inconsistent: class={}/{} header_class={} manifest_class={} clean={}/{} dispatches={}/{} selections={}/{} patches={}/{} trace={} readback={} tiles={}/{} synapses={}/{} hardware_digest_missing={}",
+                self.capacity_class,
+                expected_slug,
+                self.header.class_id_raw,
+                self.phenotype_manifest.class_id_raw,
+                self.source_tree_clean,
+                require_clean_source,
+                self.neural_dispatch_count,
+                self.requested_ticks,
+                self.gpu_selection_count,
+                self.requested_ticks,
+                self.sealed_patch_count,
+                self.requested_ticks,
+                self.selection_trace.len(),
+                self.compact_readback_bytes,
+                self.active_tiles,
+                max_executed_tiles,
+                self.active_synapses,
+                max_executed_synapses,
+                hardware_digests(&self.hardware)
+                    .into_iter()
+                    .any(|digest| digest == [0; 4]),
+            )));
         }
 
         validate_selection_trace(self)?;
@@ -584,7 +606,7 @@ fn run_trial(
     let backend =
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?;
     let world = acceptance_world(options.deterministic_seed)?;
-    let mut runtime = GpuLiveBrainRuntime::new_profiled(
+    let mut runtime = GpuLiveBrainRuntime::new_causal_acceptance_profiled(
         backend,
         world,
         options.deterministic_seed,
@@ -708,6 +730,7 @@ pub fn capacity_slug(class_id: BrainClassId) -> Result<&'static str, GpuEvidence
 }
 
 fn validate_selection_trace(receipt: &GpuSliceAAcceptanceReceipt) -> Result<(), GpuEvidenceError> {
+    let (max_executed_tiles, max_executed_synapses) = max_executed_work_counts(&receipt.capacity)?;
     for (index, selection) in receipt.selection_trace.iter().enumerate() {
         if selection.tick != index as u64
             || selection.frame_digest == [0; 4]
@@ -719,9 +742,9 @@ fn validate_selection_trace(receipt: &GpuSliceAAcceptanceReceipt) -> Result<(), 
             || !selection.logit.is_finite()
             || selection.active_activation_side > 1
             || selection.active_tiles == 0
-            || selection.active_tiles > receipt.capacity.execution().max_active_tiles()
+            || selection.active_tiles > max_executed_tiles
             || selection.active_synapses == 0
-            || selection.active_synapses > receipt.capacity.execution().max_total_synapses()
+            || selection.active_synapses > max_executed_synapses
             || selection.compact_readback_bytes == 0
             || selection.compact_readback_bytes > 64
         {
@@ -742,6 +765,26 @@ fn validate_selection_trace(receipt: &GpuSliceAAcceptanceReceipt) -> Result<(), 
         ));
     }
     Ok(())
+}
+
+fn max_executed_work_counts(capacity: &BrainCapacityClass) -> Result<(u32, u32), GpuEvidenceError> {
+    let (_, max_microsteps) = capacity.execution().microstep_range();
+    let multiplier = u32::from(max_microsteps);
+    let max_tiles = capacity
+        .execution()
+        .max_active_tiles()
+        .checked_mul(multiplier)
+        .ok_or(GpuEvidenceError::Contract(
+            "Slice A executed tile ceiling overflowed",
+        ))?;
+    let max_synapses = capacity
+        .execution()
+        .max_total_synapses()
+        .checked_mul(multiplier)
+        .ok_or(GpuEvidenceError::Contract(
+            "Slice A executed synapse ceiling overflowed",
+        ))?;
+    Ok((max_tiles, max_synapses))
 }
 
 fn validate_replay(receipt: &GpuSliceAAcceptanceReceipt) -> Result<(), GpuEvidenceError> {
