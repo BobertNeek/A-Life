@@ -646,7 +646,7 @@ fn run_saturation_probe(
     let world = HeadlessScenarioBuilder::new(options.deterministic_seed)
         .agent("slice-c-agent", EVIDENCE_ORGANISM, Vec3f::ZERO)
         .build()?;
-    let mut runtime = GpuLiveBrainRuntime::new_profiled(
+    let mut runtime = GpuLiveBrainRuntime::new_causal_acceptance_profiled(
         backend,
         world,
         options.deterministic_seed,

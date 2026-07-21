@@ -551,7 +551,7 @@ impl GpuLiveBrainRuntime {
     /// Runs the production neural, memory, action, learning, and work-cost path
     /// as one fixed continuous-wake lab protocol. Natural ATP/sleep behavior is
     /// proven separately by Slice D; this profile prevents sleep from
-    /// interrupting Slice A's exact 64 sealed causal transactions.
+    /// interrupting an acceptance run's exact sealed causal transactions.
     pub(crate) fn new_causal_acceptance_profiled(
         backend: GpuClosedLoopBackend,
         world: HeadlessWorld,
