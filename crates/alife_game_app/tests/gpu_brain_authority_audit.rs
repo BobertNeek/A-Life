@@ -31,6 +31,7 @@ fn production_sources_retain_only_the_gpu_neural_execution_path() {
         .and_then(Path::parent)
         .expect("game app crate must be inside the workspace");
     let private_legacy = repository_root.join("crates/alife_world/src/legacy_neural_policy_v1.rs");
+    let authority_scanner = repository_root.join("scripts/run_gpu_closed_loop_gates.ps1");
     let world_lib = fs::read_to_string(repository_root.join("crates/alife_world/src/lib.rs"))
         .expect("world crate root must be readable");
     assert!(world_lib.contains("mod legacy_neural_policy_v1;"));
@@ -61,7 +62,7 @@ fn production_sources_retain_only_the_gpu_neural_execution_path() {
 
     let mut violations = Vec::new();
     for path in files {
-        if path == private_legacy {
+        if path == private_legacy || path == authority_scanner {
             continue;
         }
         let source = fs::read_to_string(&path)
