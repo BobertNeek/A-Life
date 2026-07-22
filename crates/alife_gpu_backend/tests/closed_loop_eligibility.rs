@@ -112,6 +112,7 @@ fn eligibility_shader_parses_and_exposes_the_transaction_entries() {
             "discard_pending_eligibility_arrays",
             "finalize_discard_pending_eligibility",
             "finalize_pending_eligibility",
+            "prevalidate_eligibility",
         ]
         .into_iter()
         .collect()
@@ -141,7 +142,9 @@ fn eligibility_shader_parses_and_exposes_the_transaction_entries() {
                 ("decoder_synapse_count", 56),
                 ("decoder_input_stride", 60),
                 ("pending_eligibility_offset", 64),
-                ("reserved", 68),
+                ("scheduled_tile_visits", 68),
+                ("scheduled_synapse_ops", 72),
+                ("scheduled_work_checksum", 76),
             ],
         ),
         (

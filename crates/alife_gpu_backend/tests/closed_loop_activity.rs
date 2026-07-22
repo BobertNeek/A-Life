@@ -9,7 +9,8 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     derive_executed_work, GpuActivityDispatchHeader, GpuClassBucketPlan,
-    CLOSED_LOOP_RECURRENT_WGSL, GPU_ACTIVITY_DISPATCH_HEADER_WORDS,
+    CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL, CLOSED_LOOP_RECURRENT_WGSL,
+    GPU_ACTIVITY_DISPATCH_HEADER_WORDS,
 };
 
 fn identity(
@@ -396,11 +397,79 @@ fn activity_dispatch_header_binds_the_validated_route_schedule_exactly() {
 #[test]
 fn recurrent_shader_validates_and_applies_the_activity_route_mask() {
     assert!(CLOSED_LOOP_RECURRENT_WGSL.contains("fn validate_activity_header"));
-    assert!(CLOSED_LOOP_RECURRENT_WGSL.contains("fn route_enabled"));
+    assert!(CLOSED_LOOP_RECURRENT_WGSL.contains("fn route_enabled_at"));
     assert!(CLOSED_LOOP_RECURRENT_WGSL
-        .contains("if (!route_enabled(activity, route_index)) { continue; }"));
-    assert!(CLOSED_LOOP_RECURRENT_WGSL
-        .contains("if (!route_enabled(activity, projection.route_index)) { continue; }"));
+        .contains("if (!route_enabled_at(route_mask_base, route_index)) { continue; }"));
+}
+
+#[test]
+fn activity_contract_is_validated_once_per_dispatch_row_before_neuron_work() {
+    assert!(
+        CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("validate_activity_header(activity, header)")
+    );
+    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("CONTRACT_INVALID_DIAGNOSTIC_BIT"));
+
+    let recurrent_entry = CLOSED_LOOP_RECURRENT_WGSL
+        .split_once("fn recurrent_microstep")
+        .expect("recurrent shader exposes its compute entry")
+        .1;
+    assert!(!recurrent_entry.contains("validate_activity_header(activity, header)"));
+    assert!(recurrent_entry.contains("activity_contract_prevalidated(header)"));
+
+    let fast_guard = CLOSED_LOOP_RECURRENT_WGSL
+        .split_once("fn activity_contract_prevalidated")
+        .expect("shared activity validation exposes the hot-path guard")
+        .1
+        .split_once("\n}\n")
+        .expect("hot-path guard is bounded")
+        .0;
+    assert!(fast_guard.contains("CONTRACT_INVALID_DIAGNOSTIC_BIT"));
+    for repeated_check in [
+        "schema_version",
+        "class_id",
+        "slot_generation",
+        "neuron_count",
+        "microstep_count",
+    ] {
+        assert!(
+            !fast_guard.contains(repeated_check),
+            "the per-invocation guard repeated {repeated_check} instead of consuming the row prepass"
+        );
+    }
+}
+
+#[test]
+fn validated_row_prepass_publishes_exact_work_without_hot_loop_atomics() {
+    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("scheduled_tile_visits"));
+    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("scheduled_synapse_ops"));
+    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("validate_scheduled_work"));
+
+    let recurrent_entry = CLOSED_LOOP_RECURRENT_WGSL
+        .split_once("fn recurrent_microstep")
+        .expect("recurrent entry exists")
+        .1;
+    assert!(!recurrent_entry.contains("diagnostic_offset + 1u"));
+    assert!(!recurrent_entry.contains("var active_rows"));
+}
+
+#[test]
+fn parallel_hot_loops_read_only_the_validated_route_mask_word() {
+    let recurrent_entry = CLOSED_LOOP_RECURRENT_WGSL
+        .split_once("fn recurrent_microstep")
+        .expect("recurrent entry exists")
+        .1;
+    assert!(recurrent_entry.contains("route_enabled_at"));
+    assert!(!recurrent_entry.contains("load_activity_header"));
+
+    let recurrent_eligibility = alife_gpu_backend::CLOSED_LOOP_ELIGIBILITY_WGSL
+        .split_once("fn accumulate_recurrent_eligibility")
+        .expect("recurrent eligibility entry exists")
+        .1
+        .split_once("@compute")
+        .expect("recurrent eligibility entry is bounded")
+        .0;
+    assert!(recurrent_eligibility.contains("route_enabled_at"));
+    assert!(!recurrent_eligibility.contains("load_activity_header"));
 }
 
 #[cfg(feature = "gpu-tests")]

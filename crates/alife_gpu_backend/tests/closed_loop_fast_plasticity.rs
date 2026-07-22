@@ -303,6 +303,176 @@ fn rewarding_outcome_changes_next_encounter_before_sleep() {
 }
 
 #[test]
+fn eligibility_contract_is_validated_once_per_row_before_synapse_work() {
+    let source = alife_gpu_backend::CLOSED_LOOP_ELIGIBILITY_WGSL;
+    let module = naga::front::wgsl::parse_str(source).expect("eligibility WGSL must parse");
+    let entry = module
+        .entry_points
+        .iter()
+        .find(|entry| entry.name == "prevalidate_eligibility")
+        .expect("eligibility requires a once-per-row prevalidation pass");
+    assert_eq!(entry.stage, naga::ShaderStage::Compute);
+    assert_eq!(entry.workgroup_size, [1, 1, 1]);
+    assert_eq!(
+        source.matches("learning_contract_is_valid(").count(),
+        2,
+        "the full contract may appear only in its definition and row prepass"
+    );
+    assert_eq!(
+        source.matches("pending_row_is_zero(").count(),
+        2,
+        "the 36-word pending scan may run only in the row prepass"
+    );
+    assert_eq!(
+        source.matches("learning_contract_prevalidated(").count(),
+        0,
+        "parallel synapse work must consume the prevalidated selection sentinel directly"
+    );
+}
+
+#[test]
+fn parallel_learning_loops_trust_the_validated_row_and_immutable_upload() {
+    let eligibility = alife_gpu_backend::CLOSED_LOOP_ELIGIBILITY_WGSL;
+    for (entry, next) in [
+        (
+            "fn accumulate_recurrent_eligibility",
+            "fn accumulate_decoder_eligibility",
+        ),
+        (
+            "fn accumulate_decoder_eligibility",
+            "fn finalize_pending_eligibility",
+        ),
+    ] {
+        let body = eligibility
+            .split_once(entry)
+            .expect("parallel eligibility entry exists")
+            .1
+            .split_once(next)
+            .expect("parallel eligibility entry is bounded")
+            .0;
+        for repeated_guard in [
+            "immutable_span_within(",
+            "receptor_is_valid(",
+            "state_span_within(",
+        ] {
+            assert!(
+                !body.contains(repeated_guard),
+                "{entry} repeated immutable upload guard {repeated_guard}"
+            );
+        }
+    }
+
+    let plasticity = alife_gpu_backend::CLOSED_LOOP_PLASTICITY_WGSL;
+    let apply_body = plasticity
+        .split_once("fn apply_fast_plasticity")
+        .expect("fast plasticity entry exists")
+        .1
+        .split_once("fn capture_fast_plasticity_replay")
+        .expect("fast plasticity entry is bounded")
+        .0;
+    for repeated_guard in [
+        "immutable_plan_span_within(",
+        "receptor_valid_for_plasticity(",
+        "state_span_within(",
+    ] {
+        assert!(
+            !apply_body.contains(repeated_guard),
+            "fast plasticity repeated immutable upload guard {repeated_guard}"
+        );
+    }
+}
+
+#[test]
+fn recurrent_eligibility_obeys_the_validated_activity_route_mask() {
+    let source = alife_gpu_backend::CLOSED_LOOP_ELIGIBILITY_WGSL;
+    let body = source
+        .split_once("fn accumulate_recurrent_eligibility")
+        .expect("recurrent eligibility entry exists")
+        .1
+        .split_once("fn accumulate_decoder_eligibility")
+        .expect("recurrent eligibility entry is bounded")
+        .0;
+    assert!(body.contains(
+        "let route_index = immutable_plan_words[brain.route_indices_offset + local_synapse]"
+    ));
+    assert!(body.contains("if (!route_enabled_at(route_mask_base, route_index))"));
+    assert!(body.contains("store_state_f32(staging_bases.recurrent + local_synapse, previous)"));
+}
+
+#[test]
+fn same_class_learning_batch_spans_fixed_arenas_without_aliasing_slots() {
+    let phenotype = support::controlled_learning_n512_phenotype(1.0);
+    let slot_bytes = alife_gpu_backend::GpuClassBucketPlan::for_phenotype(&phenotype)
+        .unwrap()
+        .slot_allocation_receipt()
+        .unwrap()
+        .logical_slot_commit_bytes;
+    let profile = support::scaling::bounded_profile(slot_bytes * 5, 512 * 1024 * 1024, 5, 2);
+    let mut backend = GpuClosedLoopBackend::new_required(profile).unwrap();
+    let handles = (0_u64..5)
+        .map(|index| {
+            backend
+                .insert_brain(alife_core::OrganismId(4_200 + index), phenotype.clone())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(backend.allocated_class_arena_count_for_test(), 3);
+
+    let frames = handles
+        .iter()
+        .map(|handle| {
+            support::perception_frame_for_profile_at_tick(
+                handle.organism_id().raw(),
+                1_200,
+                alife_core::SensorProfile::PrivilegedAffordanceV1,
+                true,
+                2,
+            )
+        })
+        .collect::<Vec<_>>();
+    let batch = handles
+        .iter()
+        .copied()
+        .zip(frames.iter().cloned())
+        .collect::<Vec<_>>();
+    let ticks = backend.tick_batch(&batch).unwrap();
+    assert_eq!(
+        ticks.iter().map(|tick| tick.handle).collect::<Vec<_>>(),
+        handles
+    );
+    assert!(ticks
+        .iter()
+        .all(|tick| tick.dispatch_generation == ticks[0].dispatch_generation));
+
+    let patches = handles
+        .iter()
+        .zip(&frames)
+        .zip(&ticks)
+        .enumerate()
+        .map(|(index, ((handle, frame), tick))| {
+            sealed_outcome(*handle, frame, tick, 1, 0.5 + index as f32 * 0.05, 0.0)
+        })
+        .collect::<Vec<_>>();
+    let learning_batch = handles
+        .iter()
+        .copied()
+        .zip(patches.iter())
+        .collect::<Vec<_>>();
+    let receipts = backend.apply_sealed_outcome_batch(&learning_batch).unwrap();
+    assert_eq!(receipts.len(), handles.len());
+    assert!(receipts
+        .iter()
+        .all(|receipt| receipt.fast_weights_changed > 0));
+    for handle in handles {
+        assert!(backend
+            .read_active_fast_weights_for_test(handle)
+            .unwrap()
+            .iter()
+            .any(|weight| *weight != 0.0));
+    }
+}
+
+#[test]
 fn modulator_credit_changes_the_next_encounter_relative_to_a_sealed_neutral_outcome() {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organism_a = alife_core::OrganismId(4_111);

@@ -825,6 +825,11 @@ scratch, replay, readback, and migration reserves are accounted. A failed
 admission is typed and deterministic; it does not silently shrink the brain or
 switch neural authority.
 
+The initial production neural profile admits at most 500 hot brains inside a
+2 GiB logical heap and 2 GiB physical-allocation ceiling. Class storage grows
+by appending fixed 32-slot arenas. A live arena is never resized or copied, so
+GPU handles and packed offsets remain stable throughout waking execution.
+
 
 ## 23. Brain Migration and Ascension Compatibility
 
@@ -945,7 +950,19 @@ The production neural tick is one GPU-authoritative multi-pass causal loop:
 9. Upload the compact post-outcome credit packet and update eligibility-gated `H_fast`.
 10. During canonical sleep phases, run GPU replay, consolidation, and safe structural swap pipelines.
 
-Passes may later be fused after correctness and profiling, but reviewed boundaries must preserve WebGPU safety and causal auditability. The GPU backend batches by promoted capacity class. A dispatch batch contains class ID, slot/generation, active tile range, perception/candidate offsets, activation buffers, sparse payload references, and bounded output offsets.
+Ordered dispatches may share one compute pass after correctness and profiling,
+but reviewed boundaries must preserve WebGPU safety and causal auditability. The
+GPU backend batches by promoted capacity class. A dispatch batch contains class
+ID, slot/generation, active tile range, perception/candidate offsets, activation
+buffers, sparse payload references, and bounded output offsets.
+
+The production implementation may record those ordered dispatches inside one
+compute pass per fixed class arena; dispatch order remains the synchronization
+boundary. Before parallel work, one row prepass validates the complete activity
+schedule and publishes a checksum-bound exact tile/synapse receipt. Recurrent
+and eligibility invocations consume only the accepted sentinel and the one
+route-mask word they need. They do not repeat the route digest or contend on a
+per-neuron global diagnostic counter.
 
 The host may read the compact winner record and bounded counters each tick. Active play never synchronously reads bulk activation, eligibility, topology, or weight state. Production does not dispatch a CPU shadow, require CPU parity, or fall back automatically to CPU neural math.
 
@@ -1140,6 +1157,15 @@ Performance scales through sparsity, residency, promoted capacity-class batching
 - Graphify/doc agent overhead.
 
 N512, N1024, and N2048 must each meet their documented causal and performance gates before promotion. A benchmark manifest is accepted only when all 36 digest-bound rows are present; only `Completed` rows pass, while `Missed` and `Unavailable` remain visible and block the affected class. Larger brains remain research-gated special modes. A single 1M-neuron school candidate is not expected to coexist with hundreds of hot ecosystem brains on low hardware.
+
+The canonical v1 p95 limits are full-causal neural-tick budgets, including
+eligibility capture and sealed-outcome plasticity. For populations
+`[1, 10, 50, 100, 250, 500]`, the limits in milliseconds are N512
+`[4, 8, 16, 32, 80, 160]`, N1024 `[6, 12, 32, 64, 160, 320]`, and N2048
+`[8, 16, 64, 128, 320, 640]` for both sensor profiles. These replace the
+pre-correction estimates measured while the activity contract could stop the
+causal workload early; changing them again requires a versioned, evidence-backed
+contract change rather than editing a generated result.
 
 
 ## 36. Data Persistence, Saves, and Lineage Export

@@ -759,6 +759,7 @@ pub(crate) struct ResidentBrainSlot {
 }
 
 struct PreparedLearningApply {
+    chunk_index: usize,
     handle: GpuBrainHandle,
     packet: OutcomeCreditPacket,
     outcome: GpuOutcomeCreditRecord,
@@ -809,84 +810,6 @@ impl ClassBucketRuntime {
         })
     }
 
-    fn next_free_slot(&self) -> Result<(u32, u32), ScaffoldContractError> {
-        let slot = *self
-            .free_slots
-            .last()
-            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-        let generation = self.generations[slot as usize]
-            .checked_add(1)
-            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-        Ok((slot, generation))
-    }
-
-    fn grow(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        kernels: Arc<GpuClosedLoopKernelSet>,
-        new_plan: GpuFixedClassArenaPlan,
-    ) -> Result<(), GpuClosedLoopError> {
-        let old_capacity = self.plan.slot_capacity();
-        let new_capacity = new_plan.slot_capacity();
-        if new_capacity <= old_capacity || new_plan.capacity().id() != self.plan.capacity().id() {
-            return Err(GpuClosedLoopError::CapacityExceeded);
-        }
-
-        let active_sides = self
-            .slots
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, resident)| {
-                resident.as_ref().map(|resident| {
-                    let generation = resident.brain_slot.record().slot_generation;
-                    self.pipelines
-                        .slot_active_side(slot as u32, generation)
-                        .map(|side| (slot as u32, generation, side))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let new_buffers = GpuFixedClassArenaBuffers::allocate(device, &new_plan)?;
-        let mut new_pipelines = GpuClosedLoopPipelines::from_shared_kernel_set_for_fixed_arena(
-            device,
-            &new_buffers,
-            kernels,
-        )?;
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("closed-loop-runtime-grow-class-arena"),
-        });
-        self.buffers
-            .record_persistent_prefix_copy_to(&new_buffers, &mut encoder)?;
-        let submission = queue.submit(Some(encoder.finish()));
-        device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .map_err(|_| GpuClosedLoopError::SubmissionFailed)?;
-
-        for (slot, generation, side) in active_sides {
-            new_pipelines.restore_slot_active_side(slot, generation, side)?;
-        }
-        let new_count =
-            usize::try_from(new_capacity).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
-        self.slots.resize_with(new_count, || None);
-        self.generations.resize(new_count, 0);
-        self.free_slots.extend((old_capacity..new_capacity).rev());
-        for (slot, resident) in self.slots.iter_mut().enumerate() {
-            if let Some(resident) = resident {
-                resident
-                    .brain_slot
-                    .rebind_bucket_ownership(new_plan.ownership_token());
-                resident.ranges = new_plan.slot_ranges(slot as u32)?;
-            }
-        }
-        self.plan = new_plan;
-        self.buffers = new_buffers;
-        self.pipelines = new_pipelines;
-        Ok(())
-    }
-
     pub(crate) fn contains(&self, handle: GpuBrainHandle) -> bool {
         self.slots
             .get(handle.slot as usize)
@@ -899,8 +822,84 @@ impl ClassBucketRuntime {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct ClassBucketPool {
+    pub(crate) chunks: Vec<ClassBucketRuntime>,
+}
+
+impl ClassBucketPool {
+    pub(crate) fn bucket_index_for_handle(&self, handle: GpuBrainHandle) -> Option<usize> {
+        self.chunks
+            .iter()
+            .position(|bucket| bucket.contains(handle))
+    }
+
+    pub(crate) fn bucket_for_handle(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<&ClassBucketRuntime, ScaffoldContractError> {
+        self.bucket_index_for_handle(handle)
+            .and_then(|index| self.chunks.get(index))
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    pub(crate) fn bucket_for_handle_mut(
+        &mut self,
+        handle: GpuBrainHandle,
+    ) -> Result<&mut ClassBucketRuntime, ScaffoldContractError> {
+        let index = self
+            .bucket_index_for_handle(handle)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        self.chunks
+            .get_mut(index)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    pub(crate) fn resident(
+        &self,
+        handle: GpuBrainHandle,
+    ) -> Result<&ResidentBrainSlot, ScaffoldContractError> {
+        self.bucket_for_handle(handle)?
+            .slots
+            .get(handle.slot as usize)
+            .and_then(Option::as_ref)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    pub(crate) fn resident_mut(
+        &mut self,
+        handle: GpuBrainHandle,
+    ) -> Result<&mut ResidentBrainSlot, ScaffoldContractError> {
+        self.bucket_for_handle_mut(handle)?
+            .slots
+            .get_mut(handle.slot as usize)
+            .and_then(Option::as_mut)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
+    }
+
+    fn reusable_slot(
+        &self,
+        class_raw: u16,
+        watermarks: &BTreeMap<(u16, u32), u32>,
+    ) -> Option<(usize, u32, u32)> {
+        self.chunks
+            .iter()
+            .enumerate()
+            .find_map(|(chunk_index, bucket)| {
+                let slot = *bucket.free_slots.last()?;
+                let generation = watermarks
+                    .get(&(class_raw, slot))
+                    .copied()
+                    .unwrap_or(0)
+                    .checked_add(1)?;
+                Some((chunk_index, slot, generation))
+            })
+    }
+}
+
 struct PreparedClassDispatch {
     class_id: u16,
+    chunk_index: usize,
     original_indices: Vec<usize>,
     prepared: Option<GpuPreparedActiveBatch>,
     batch: Option<GpuActiveBatchUpload>,
@@ -969,7 +968,7 @@ pub struct GpuClosedLoopBackend {
     runtime_budget: GpuRuntimeBudget,
     activity_policy: BrainActivityPolicyV1,
     admission: GpuAdmissionReceipt,
-    pub(crate) class_buckets: BTreeMap<u16, ClassBucketRuntime>,
+    pub(crate) class_buckets: BTreeMap<u16, ClassBucketPool>,
     slot_generation_watermarks: BTreeMap<(u16, u32), u32>,
     organisms: BTreeMap<u64, GpuBrainHandle>,
     pub(crate) next_dispatch_generation: u64,
@@ -1126,9 +1125,7 @@ impl GpuClosedLoopBackend {
         self.validate_handle_backend(handle)?;
         self.class_buckets
             .get(&handle.class_id.raw())
-            .and_then(|bucket| bucket.slots.get(handle.slot as usize))
-            .and_then(Option::as_ref)
-            .filter(|resident| resident.ownership.organism_id == handle.organism_id)
+            .and_then(|pool| pool.resident(handle).ok())
             .map(|resident| resident.brain_atp_q16)
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
     }
@@ -1141,9 +1138,7 @@ impl GpuClosedLoopBackend {
         let resident = self
             .class_buckets
             .get(&handle.class_id.raw())
-            .and_then(|bucket| bucket.slots.get(handle.slot as usize))
-            .and_then(Option::as_ref)
-            .filter(|resident| resident.ownership.organism_id == handle.organism_id)
+            .and_then(|pool| pool.resident(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         let all_absent = resident.last_pressure.is_none()
             && resident.last_throttle.is_none()
@@ -1215,9 +1210,7 @@ impl GpuClosedLoopBackend {
         let phenotype = self
             .class_buckets
             .get(&handle.class_id.raw())
-            .and_then(|bucket| bucket.slots.get(handle.slot as usize))
-            .and_then(Option::as_ref)
-            .filter(|resident| resident.ownership.organism_id == handle.organism_id)
+            .and_then(|pool| pool.resident(handle).ok())
             .map(|resident| resident.phenotype.clone())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
 
@@ -1296,8 +1289,7 @@ impl GpuClosedLoopBackend {
         let resident = self
             .class_buckets
             .get_mut(&handle.class_id.raw())
-            .and_then(|bucket| bucket.slots.get_mut(handle.slot as usize))
-            .and_then(Option::as_mut)
+            .and_then(|pool| pool.resident_mut(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         resident.activity_sequence_cursor = input.next_sequence_cursor;
         match rebound {
@@ -1338,18 +1330,11 @@ impl GpuClosedLoopBackend {
     ) -> Result<u32, ScaffoldContractError> {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
-        let bucket = self
+        let pool = self
             .class_buckets
             .get_mut(&handle.class_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if !bucket.contains(handle) {
-            return Err(ScaffoldContractError::BrainOwnershipMismatch);
-        }
-        let resident = bucket
-            .slots
-            .get_mut(handle.slot as usize)
-            .and_then(Option::as_mut)
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let resident = pool.resident_mut(handle)?;
         if let Some(last) = resident.last_world_atp_tick {
             if last == world_tick {
                 return Ok(resident.brain_atp_q16);
@@ -1381,18 +1366,11 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
         self.validate_handle_backend(handle)?;
-        let bucket = self
+        let pool = self
             .class_buckets
             .get(&handle.class_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let resident = bucket
-            .slots
-            .get(handle.slot as usize)
-            .and_then(Option::as_ref)
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if !bucket.contains(handle) {
-            return Err(ScaffoldContractError::BrainOwnershipMismatch);
-        }
+        let resident = pool.resident(handle)?;
         Ok(resident.pending_eligibility)
     }
 
@@ -1408,9 +1386,9 @@ impl GpuClosedLoopBackend {
             .ok_or(ScaffoldContractError::LearningEvidenceMismatch)
     }
 
-    /// Apply a same-class batch in one GPU transaction. Every row is bound to
-    /// the slot's durable pending eligibility and a core-owned sequence token
-    /// before any command is submitted.
+    /// Apply a same-class batch. Rows may span fixed arenas, but every row is
+    /// bound to its arena-local slot, durable pending eligibility, and a
+    /// core-owned sequence token before any command is submitted.
     pub fn apply_sealed_outcome_batch(
         &mut self,
         batch: &[(GpuBrainHandle, &ExperiencePatch)],
@@ -1436,18 +1414,14 @@ impl GpuClosedLoopBackend {
             }
             let packet = OutcomeCreditPacket::from_sealed_patch(patch)?;
             let outcome = GpuOutcomeCreditRecord::try_from(&packet)?;
-            let bucket = self
+            let pool = self
                 .class_buckets
                 .get(&class_id)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            let resident = bucket
-                .slots
-                .get(handle.slot as usize)
-                .and_then(Option::as_ref)
+            let chunk_index = pool
+                .bucket_index_for_handle(*handle)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if !bucket.contains(*handle) {
-                return Err(ScaffoldContractError::BrainOwnershipMismatch);
-            }
+            let resident = pool.resident(*handle)?;
             let expected_last_committed = resident.learning_sequence_guard.last_committed();
             let commit_token = resident
                 .learning_sequence_guard
@@ -1485,6 +1459,7 @@ impl GpuClosedLoopBackend {
                 return Err(ScaffoldContractError::LearningEvidenceMismatch);
             }
             prepared.push(PreparedLearningApply {
+                chunk_index,
                 handle: *handle,
                 packet,
                 outcome,
@@ -1499,45 +1474,73 @@ impl GpuClosedLoopBackend {
                 commit_token,
             });
         }
-        let gpu_entries = prepared
-            .iter()
-            .map(|entry| GpuFastPlasticityBatchEntry {
-                slot: &entry.brain_slot,
-                pending: &entry.pending_record,
-                outcome: entry.outcome,
-                active_weight_generation: entry.active_weight_generation,
-                replay_generation: entry.replay_journal_generation,
-                transaction_generation: entry.transaction_generation,
-            })
-            .collect::<Vec<_>>();
-        let gpu_result = {
-            let bucket = self
-                .class_buckets
-                .get_mut(&class_id)
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            bucket.pipelines.apply_fast_plasticity(
-                &self.device,
-                &self.queue,
-                &bucket.buffers,
-                &gpu_entries,
-                GpuTimestampQueryResources::new(
-                    &self.plasticity_timestamp_resources.query_set,
-                    &self.plasticity_timestamp_resources.resolve_buffer,
-                    &self.plasticity_timestamp_resources.readback_buffer,
-                ),
-            )
-        };
-        let gpu_timed_result = match gpu_result {
-            Ok(result) => result,
-            Err(GpuClosedLoopError::MalformedUpload | GpuClosedLoopError::StaleOrForeignHandle) => {
-                return Err(ScaffoldContractError::LearningEvidenceMismatch);
-            }
-            Err(_) => {
+        let mut grouped_indices = BTreeMap::<usize, Vec<usize>>::new();
+        for (index, entry) in prepared.iter().enumerate() {
+            grouped_indices
+                .entry(entry.chunk_index)
+                .or_default()
+                .push(index);
+        }
+        let mut ordered_gpu_records = vec![None; prepared.len()];
+        let mut plasticity_timestamp_ticks = 0_u64;
+        for (chunk_index, indices) in grouped_indices {
+            let gpu_entries = indices
+                .iter()
+                .map(|index| {
+                    let entry = &prepared[*index];
+                    GpuFastPlasticityBatchEntry {
+                        slot: &entry.brain_slot,
+                        pending: &entry.pending_record,
+                        outcome: entry.outcome,
+                        active_weight_generation: entry.active_weight_generation,
+                        replay_generation: entry.replay_journal_generation,
+                        transaction_generation: entry.transaction_generation,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let gpu_result = {
+                let bucket = self
+                    .class_buckets
+                    .get_mut(&class_id)
+                    .and_then(|pool| pool.chunks.get_mut(chunk_index))
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                bucket.pipelines.apply_fast_plasticity(
+                    &self.device,
+                    &self.queue,
+                    &bucket.buffers,
+                    &gpu_entries,
+                    GpuTimestampQueryResources::new(
+                        &self.plasticity_timestamp_resources.query_set,
+                        &self.plasticity_timestamp_resources.resolve_buffer,
+                        &self.plasticity_timestamp_resources.readback_buffer,
+                    ),
+                )
+            };
+            let gpu_timed_result = match gpu_result {
+                Ok(result) => result,
+                Err(
+                    GpuClosedLoopError::MalformedUpload | GpuClosedLoopError::StaleOrForeignHandle,
+                ) => return Err(ScaffoldContractError::LearningEvidenceMismatch),
+                Err(_) => {
+                    self.mark_device_lost();
+                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                }
+            };
+            if gpu_timed_result.records.len() != indices.len() {
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
-        };
-        let gpu_records = gpu_timed_result.records;
+            plasticity_timestamp_ticks = plasticity_timestamp_ticks
+                .checked_add(gpu_timed_result.timestamp_delta_ticks)
+                .ok_or(ScaffoldContractError::GpuTimestampQueryUnavailable)?;
+            for (index, record) in indices.into_iter().zip(gpu_timed_result.records) {
+                ordered_gpu_records[index] = Some(record);
+            }
+        }
+        let gpu_records = ordered_gpu_records
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
         if gpu_records.len() != prepared.len() {
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
@@ -1545,8 +1548,7 @@ impl GpuClosedLoopBackend {
         let host_precommit_valid = prepared.iter().zip(&gpu_records).all(|(entry, record)| {
             self.class_buckets
                 .get(&class_id)
-                .and_then(|bucket| bucket.slots.get(entry.handle.slot as usize))
-                .and_then(Option::as_ref)
+                .and_then(|pool| pool.resident(entry.handle).ok())
                 .is_some_and(|resident| {
                     resident.pending_eligibility == Some(entry.pending_receipt)
                         && resident.pending_eligibility_record == Some(entry.pending_record)
@@ -1579,8 +1581,7 @@ impl GpuClosedLoopBackend {
             let guard_commit = self
                 .class_buckets
                 .get_mut(&class_id)
-                .and_then(|bucket| bucket.slots.get_mut(entry.handle.slot as usize))
-                .and_then(Option::as_mut)
+                .and_then(|pool| pool.resident_mut(entry.handle).ok())
                 .expect("learning host commit was prevalidated")
                 .learning_sequence_guard
                 .commit_validated(entry.commit_token);
@@ -1591,8 +1592,7 @@ impl GpuClosedLoopBackend {
             let resident = self
                 .class_buckets
                 .get_mut(&class_id)
-                .and_then(|bucket| bucket.slots.get_mut(entry.handle.slot as usize))
-                .and_then(Option::as_mut)
+                .and_then(|pool| pool.resident_mut(entry.handle).ok())
                 .expect("learning guard commit retained the resident slot");
             resident.active_weight_bank ^= 1;
             resident.active_eligibility_bank ^= 1;
@@ -1637,7 +1637,7 @@ impl GpuClosedLoopBackend {
                     class_id_raw: class_id,
                     population: pending.population,
                     inference_timestamp_ticks: pending.inference_timestamp_ticks,
-                    plasticity_timestamp_ticks: gpu_timed_result.timestamp_delta_ticks,
+                    plasticity_timestamp_ticks,
                     timestamp_period_ns_q24: inference_period_ns_q24,
                 });
                 self.pending_inference_timing = None;
@@ -1654,18 +1654,11 @@ impl GpuClosedLoopBackend {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
         let (brain_slot, pending_receipt, pending_record, transaction_generation) = {
-            let bucket = self
+            let pool = self
                 .class_buckets
                 .get(&handle.class_id.raw())
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            let resident = bucket
-                .slots
-                .get(handle.slot as usize)
-                .and_then(Option::as_ref)
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if !bucket.contains(handle) {
-                return Err(ScaffoldContractError::BrainOwnershipMismatch);
-            }
+            let resident = pool.resident(handle)?;
             (
                 resident.brain_slot.clone(),
                 resident
@@ -1692,7 +1685,8 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get_mut(&handle.class_id.raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle_mut(handle)?;
             bucket.pipelines.discard_pending_eligibility(
                 &self.device,
                 &self.queue,
@@ -1724,8 +1718,7 @@ impl GpuClosedLoopBackend {
         let resident = self
             .class_buckets
             .get_mut(&handle.class_id.raw())
-            .and_then(|bucket| bucket.slots.get_mut(handle.slot as usize))
-            .and_then(Option::as_mut)
+            .and_then(|pool| pool.resident_mut(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         resident.transaction_generation = next_transaction_generation;
         resident.pending_eligibility = None;
@@ -1751,17 +1744,12 @@ impl GpuClosedLoopBackend {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
         frame.validate()?;
-        let bucket = self
+        let pool = self
             .class_buckets
             .get(&handle.class_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let resident = bucket
-            .slots
-            .get(handle.slot as usize)
-            .and_then(Option::as_ref)
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if !bucket.contains(handle)
-            || resident.ownership.organism_id != frame.organism_id()
+        let resident = pool.resident(handle)?;
+        if resident.ownership.organism_id != frame.organism_id()
             || handle.organism_id != frame.organism_id()
             || resident.ownership.sensor_profile != frame.sensor_profile()
         {
@@ -1819,7 +1807,7 @@ impl GpuClosedLoopBackend {
         }
         let mut seen_handles = BTreeSet::new();
         let mut seen_organisms = BTreeSet::new();
-        let mut grouped = BTreeMap::<u16, Vec<usize>>::new();
+        let mut grouped = BTreeMap::<(u16, usize), Vec<usize>>::new();
         for (index, input) in batch.iter().enumerate() {
             let handle = input.handle;
             let frame = input.frame;
@@ -1830,17 +1818,15 @@ impl GpuClosedLoopBackend {
                 return Err(ScaffoldContractError::BrainOwnershipMismatch);
             }
             frame.validate()?;
-            let bucket = self
+            let pool = self
                 .class_buckets
                 .get(&handle.class_id.raw())
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            let resident = bucket
-                .slots
-                .get(handle.slot as usize)
-                .and_then(Option::as_ref)
+            let chunk_index = pool
+                .bucket_index_for_handle(handle)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if !bucket.contains(handle)
-                || resident.ownership.organism_id != frame.organism_id()
+            let resident = pool.resident(handle)?;
+            if resident.ownership.organism_id != frame.organism_id()
                 || handle.organism_id != frame.organism_id()
             {
                 return Err(ScaffoldContractError::BrainOwnershipMismatch);
@@ -1855,7 +1841,7 @@ impl GpuClosedLoopBackend {
                 return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
             }
             grouped
-                .entry(handle.class_id.raw())
+                .entry((handle.class_id.raw(), chunk_index))
                 .or_default()
                 .push(index);
         }
@@ -1898,8 +1884,7 @@ impl GpuClosedLoopBackend {
                 let resident = self
                     .class_buckets
                     .get(&handle.class_id.raw())
-                    .and_then(|bucket| bucket.slots.get(handle.slot as usize))
-                    .and_then(Option::as_ref)
+                    .and_then(|pool| pool.resident(handle).ok())
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
                 let identity = BrainDispatchIdentity {
                     organism_id_raw: handle.organism_id.raw(),
@@ -1945,13 +1930,17 @@ impl GpuClosedLoopBackend {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let timing_class_id =
-            (grouped.len() == 1).then(|| *grouped.keys().next().expect("one grouped class exists"));
+        let first_class_id = batch[0].handle.class_id.raw();
+        let timing_class_id = batch
+            .iter()
+            .all(|input| input.handle.class_id.raw() == first_class_id)
+            .then_some(first_class_id);
         let mut dispatches = Vec::with_capacity(grouped.len());
-        for (class_id, original_indices) in grouped {
+        for ((class_id, chunk_index), original_indices) in grouped {
             let bucket = self
                 .class_buckets
                 .get(&class_id)
+                .and_then(|pool| pool.chunks.get(chunk_index))
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             let entries = original_indices
                 .iter()
@@ -1985,6 +1974,7 @@ impl GpuClosedLoopBackend {
                 .map_err(map_gpu_contract_error)?;
             dispatches.push(PreparedClassDispatch {
                 class_id,
+                chunk_index,
                 original_indices,
                 prepared: Some(prepared),
                 batch: None,
@@ -2003,6 +1993,7 @@ impl GpuClosedLoopBackend {
             let result = self
                 .class_buckets
                 .get_mut(&class_id)
+                .and_then(|pool| pool.chunks.get_mut(dispatches[index].chunk_index))
                 .expect("preflight bucket exists")
                 .pipelines
                 .begin_prepared_batch(prepared);
@@ -2014,6 +2005,7 @@ impl GpuClosedLoopBackend {
                             let _ = self
                                 .class_buckets
                                 .get_mut(&prior.class_id)
+                                .and_then(|pool| pool.chunks.get_mut(prior.chunk_index))
                                 .expect("prior bucket exists")
                                 .pipelines
                                 .abandon_unsubmitted_batch(active);
@@ -2029,6 +2021,7 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get(&dispatch.class_id)
+                .and_then(|pool| pool.chunks.get(dispatch.chunk_index))
                 .expect("prepared bucket exists");
             if let Err(error) = bucket.pipelines.write_staged_uploads(
                 &self.queue,
@@ -2061,6 +2054,7 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get_mut(&dispatch.class_id)
+                .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                 .expect("begun bucket exists");
             if let Err(error) = bucket.pipelines.record_staged_closed_loop(
                 &mut encoder,
@@ -2101,6 +2095,7 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get(&dispatch.class_id)
+                .and_then(|pool| pool.chunks.get(dispatch.chunk_index))
                 .expect("recorded bucket exists");
             match bucket.pipelines.register_compact_mapping(
                 &command_buffer,
@@ -2149,6 +2144,7 @@ impl GpuClosedLoopBackend {
                 let bucket = self
                     .class_buckets
                     .get_mut(&dispatch.class_id)
+                    .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                     .expect("submitted bucket exists");
                 bucket.buffers.compact_readback().unmap();
                 let _ = bucket
@@ -2171,6 +2167,7 @@ impl GpuClosedLoopBackend {
                     for dispatch in &dispatches {
                         self.class_buckets
                             .get(&dispatch.class_id)
+                            .and_then(|pool| pool.chunks.get(dispatch.chunk_index))
                             .expect("submitted bucket exists")
                             .buffers
                             .compact_readback()
@@ -2186,6 +2183,7 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get_mut(&dispatch.class_id)
+                .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                 .expect("mapped bucket exists");
             match bucket.pipelines.decode_validate_mapped_records(
                 &bucket.buffers,
@@ -2196,6 +2194,7 @@ impl GpuClosedLoopBackend {
                     for still_mapped in &dispatches[index + 1..] {
                         self.class_buckets
                             .get(&still_mapped.class_id)
+                            .and_then(|pool| pool.chunks.get(still_mapped.chunk_index))
                             .expect("submitted bucket exists")
                             .buffers
                             .compact_readback()
@@ -2205,6 +2204,7 @@ impl GpuClosedLoopBackend {
                         let bucket = self
                             .class_buckets
                             .get_mut(&submitted.class_id)
+                            .and_then(|pool| pool.chunks.get_mut(submitted.chunk_index))
                             .expect("submitted bucket exists");
                         let _ = bucket.pipelines.mark_post_submit_poison(
                             submitted.batch.as_ref().expect("submitted batch"),
@@ -2220,6 +2220,7 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get(&dispatch.class_id)
+                .and_then(|pool| pool.chunks.get(dispatch.chunk_index))
                 .expect("validated bucket exists");
             bucket
                 .pipelines
@@ -2232,6 +2233,7 @@ impl GpuClosedLoopBackend {
                 let bucket = self
                     .class_buckets
                     .get_mut(&dispatch.class_id)
+                    .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                     .expect("validated bucket exists");
                 let _ = bucket
                     .pipelines
@@ -2283,8 +2285,7 @@ impl GpuClosedLoopBackend {
                     let resident = self
                         .class_buckets
                         .get(&handle.class_id.raw())
-                        .and_then(|bucket| bucket.slots.get(handle.slot as usize))
-                        .and_then(Option::as_ref)
+                        .and_then(|pool| pool.resident(handle).ok())
                         .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
                     if identity.handle_generation() != handle.generation
                         || identity.dispatch_generation() != dispatch_generation.get()
@@ -2348,8 +2349,7 @@ impl GpuClosedLoopBackend {
                 let resident = self
                     .class_buckets
                     .get(&handle.class_id.raw())
-                    .and_then(|bucket| bucket.slots.get(handle.slot as usize))
-                    .and_then(Option::as_ref)
+                    .and_then(|pool| pool.resident(handle).ok())
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
                 let decision = &activity_decisions[index];
                 let candidate_count = u32::try_from(input.frame.candidates().len())
@@ -2449,6 +2449,7 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get_mut(&dispatch.class_id)
+                .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                 .expect("validated bucket exists");
             let commit = bucket
                 .pipelines
@@ -2493,8 +2494,7 @@ impl GpuClosedLoopBackend {
                 && self
                     .class_buckets
                     .get(&handle.class_id.raw())
-                    .and_then(|bucket| bucket.slots.get(handle.slot as usize))
-                    .and_then(Option::as_ref)
+                    .and_then(|pool| pool.resident(handle).ok())
                     .is_some_and(|resident| {
                         resident.pending_eligibility.is_none()
                             && resident.pending_eligibility_record.is_none()
@@ -2518,8 +2518,7 @@ impl GpuClosedLoopBackend {
             let resident = self
                 .class_buckets
                 .get_mut(&handle.class_id.raw())
-                .and_then(|bucket| bucket.slots.get_mut(handle.slot as usize))
-                .and_then(Option::as_mut)
+                .and_then(|pool| pool.resident_mut(handle).ok())
                 .expect("host pending commit was prevalidated");
             resident.transaction_generation = ordered_next_transaction_generations[index]
                 .expect("host transaction generation was prevalidated");
@@ -2561,53 +2560,55 @@ impl GpuClosedLoopBackend {
         let mut physical_shared_bytes = 0_u64;
         let mut physical_alignment_slack_bytes = 0_u64;
         let mut live_brains = 0_u32;
-        for bucket in self.class_buckets.values() {
-            let receipt = bucket
-                .plan
-                .slot_allocation_receipt()
-                .map_err(map_gpu_contract_error)?;
-            let live = u64::try_from(bucket.slots.iter().filter(|slot| slot.is_some()).count())
-                .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
-            let slots = u64::from(bucket.plan.slot_capacity());
-            let unused = slots
-                .checked_sub(live)
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            logical_committed_bytes = logical_committed_bytes
-                .checked_add(
-                    receipt
-                        .logical_slot_commit_bytes
-                        .checked_mul(live)
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
-                )
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            physical_unused_retained_bytes = physical_unused_retained_bytes
-                .checked_add(
-                    receipt
-                        .logical_slot_commit_bytes
-                        .checked_mul(unused)
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
-                )
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            physical_shared_bytes = physical_shared_bytes
-                .checked_add(receipt.shared_class_bytes)
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            physical_alignment_slack_bytes = physical_alignment_slack_bytes
-                .checked_add(
-                    receipt
-                        .alignment_padding_bytes
-                        .checked_mul(slots)
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
-                )
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            physical_allocated_bytes = physical_allocated_bytes
-                .checked_add(bucket.plan.aggregate_resident_bytes())
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            live_brains = live_brains
-                .checked_add(
-                    u32::try_from(live)
-                        .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?,
-                )
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        for pool in self.class_buckets.values() {
+            for bucket in &pool.chunks {
+                let receipt = bucket
+                    .plan
+                    .slot_allocation_receipt()
+                    .map_err(map_gpu_contract_error)?;
+                let live = u64::try_from(bucket.slots.iter().filter(|slot| slot.is_some()).count())
+                    .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+                let slots = u64::from(bucket.plan.slot_capacity());
+                let unused = slots
+                    .checked_sub(live)
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                logical_committed_bytes = logical_committed_bytes
+                    .checked_add(
+                        receipt
+                            .logical_slot_commit_bytes
+                            .checked_mul(live)
+                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+                    )
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                physical_unused_retained_bytes = physical_unused_retained_bytes
+                    .checked_add(
+                        receipt
+                            .logical_slot_commit_bytes
+                            .checked_mul(unused)
+                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+                    )
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                physical_shared_bytes = physical_shared_bytes
+                    .checked_add(receipt.shared_class_bytes)
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                physical_alignment_slack_bytes = physical_alignment_slack_bytes
+                    .checked_add(
+                        receipt
+                            .alignment_padding_bytes
+                            .checked_mul(slots)
+                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+                    )
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                physical_allocated_bytes = physical_allocated_bytes
+                    .checked_add(bucket.plan.aggregate_resident_bytes())
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                live_brains = live_brains
+                    .checked_add(
+                        u32::try_from(live)
+                            .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?,
+                    )
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            }
         }
         let logical_available_bytes = self
             .runtime_budget
@@ -2720,86 +2721,40 @@ impl GpuClosedLoopBackend {
         self.validate_logical_admission(&slot_receipt)?;
         let class_raw = class_id.raw();
         let current_physical = self.admission.physical_allocated_bytes;
-        let (slot, generation, upload, event_kind, transient_peak_physical_bytes) =
-            if self.class_buckets.contains_key(&class_raw) {
-                let has_free_slot = self
+        let reusable = self
+            .class_buckets
+            .get(&class_raw)
+            .and_then(|pool| pool.reusable_slot(class_raw, &self.slot_generation_watermarks));
+        let (chunk_index, slot, generation, upload, event_kind, transient_peak_physical_bytes) =
+            if let Some((chunk_index, slot, generation)) = reusable {
+                let bucket = self
                     .class_buckets
                     .get(&class_raw)
-                    .is_some_and(|bucket| !bucket.free_slots.is_empty());
-                if has_free_slot {
-                    let bucket = self
-                        .class_buckets
-                        .get(&class_raw)
-                        .expect("existing class key resolves");
-                    let (slot, generation) = bucket.next_free_slot()?;
-                    let upload = bucket
-                        .plan
-                        .prepare_slot_upload(slot, generation, &phenotype)
-                        .map_err(map_gpu_contract_error)?;
-                    (
-                        slot,
-                        generation,
-                        upload,
-                        GpuAllocationEventKind::AdmitFromRetainedSlot,
-                        current_physical,
-                    )
-                } else {
-                    let old_capacity = self
-                        .class_buckets
-                        .get(&class_raw)
-                        .expect("existing class key resolves")
-                        .plan
-                        .slot_capacity();
-                    let growth = u32::from(self.runtime_profile.growth_chunk_slots).min(
-                        self.runtime_profile
-                            .max_hot_brains
-                            .checked_sub(old_capacity)
-                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
-                    );
-                    if growth == 0 {
-                        return Err(ScaffoldContractError::NeuralBackendUnavailable);
-                    }
-                    let new_capacity = old_capacity
-                        .checked_add(growth)
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                    let new_plan = GpuFixedClassArenaPlan::new(
-                        capacity,
-                        new_capacity,
-                        self.runtime_budget.physical_allocation_ceiling_bytes,
-                    )
+                    .and_then(|pool| pool.chunks.get(chunk_index))
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let upload = bucket
+                    .plan
+                    .prepare_slot_upload(slot, generation, &phenotype)
                     .map_err(map_gpu_contract_error)?;
-                    let transient_peak = current_physical
-                        .checked_add(new_plan.aggregate_resident_bytes())
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                    if transient_peak > self.runtime_budget.physical_allocation_ceiling_bytes {
-                        return Err(ScaffoldContractError::NeuralBackendUnavailable);
-                    }
-                    let slot = old_capacity;
-                    let generation = 1;
-                    let upload = new_plan
-                        .prepare_slot_upload(slot, generation, &phenotype)
-                        .map_err(map_gpu_contract_error)?;
-                    self.class_buckets
-                        .get_mut(&class_raw)
-                        .expect("existing class key resolves")
-                        .grow(
-                            &self.device,
-                            &self.queue,
-                            Arc::clone(&self.kernels),
-                            new_plan,
-                        )
-                        .map_err(map_gpu_contract_error)?;
-                    (
-                        slot,
-                        generation,
-                        upload,
-                        GpuAllocationEventKind::AdmitFromNewChunk,
-                        transient_peak,
-                    )
-                }
+                (
+                    chunk_index,
+                    slot,
+                    generation,
+                    upload,
+                    GpuAllocationEventKind::AdmitFromRetainedSlot,
+                    current_physical,
+                )
             } else {
-                let slot_capacity = u32::from(self.runtime_profile.growth_chunk_slots)
-                    .min(self.runtime_profile.max_hot_brains);
+                let remaining_hot = self
+                    .runtime_profile
+                    .max_hot_brains
+                    .checked_sub(self.admission.live_brains)
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                let slot_capacity =
+                    u32::from(self.runtime_profile.growth_chunk_slots).min(remaining_hot);
+                if slot_capacity == 0 {
+                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                }
                 let plan = GpuFixedClassArenaPlan::new(
                     capacity,
                     slot_capacity,
@@ -2812,19 +2767,6 @@ impl GpuClosedLoopBackend {
                 if transient_peak > self.runtime_budget.physical_allocation_ceiling_bytes {
                     return Err(ScaffoldContractError::NeuralBackendUnavailable);
                 }
-                let (slot, generation) = (0..slot_capacity)
-                    .find_map(|slot| {
-                        let previous = self
-                            .slot_generation_watermarks
-                            .get(&(class_raw, slot))
-                            .copied()
-                            .unwrap_or(0);
-                        previous.checked_add(1).map(|generation| (slot, generation))
-                    })
-                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                let upload = plan
-                    .prepare_slot_upload(slot, generation, &phenotype)
-                    .map_err(map_gpu_contract_error)?;
                 let mut bucket =
                     ClassBucketRuntime::from_plan(&self.device, Arc::clone(&self.kernels), plan)
                         .map_err(map_gpu_contract_error)?;
@@ -2843,9 +2785,26 @@ impl GpuClosedLoopBackend {
                         }
                     }
                 }
-                debug_assert_eq!(bucket.next_free_slot()?, (slot, generation));
-                self.class_buckets.insert(class_raw, bucket);
+                let slot = *bucket
+                    .free_slots
+                    .last()
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                let generation = self
+                    .slot_generation_watermarks
+                    .get(&(class_raw, slot))
+                    .copied()
+                    .unwrap_or(0)
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                let upload = bucket
+                    .plan
+                    .prepare_slot_upload(slot, generation, &phenotype)
+                    .map_err(map_gpu_contract_error)?;
+                let pool = self.class_buckets.entry(class_raw).or_default();
+                let chunk_index = pool.chunks.len();
+                pool.chunks.push(bucket);
                 (
+                    chunk_index,
                     slot,
                     generation,
                     upload,
@@ -2856,6 +2815,7 @@ impl GpuClosedLoopBackend {
         let bucket = self
             .class_buckets
             .get_mut(&class_raw)
+            .and_then(|pool| pool.chunks.get_mut(chunk_index))
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
         bucket
             .buffers
@@ -2970,14 +2930,17 @@ impl GpuClosedLoopBackend {
         self.validate_handle_backend(handle)?;
         let class_raw = handle.class_id.raw();
         let transient_peak_physical_bytes = self.admission.physical_allocated_bytes;
+        let chunk_index = self
+            .class_buckets
+            .get(&class_raw)
+            .and_then(|pool| pool.bucket_index_for_handle(handle))
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         {
             let bucket = self
                 .class_buckets
                 .get_mut(&class_raw)
+                .and_then(|pool| pool.chunks.get_mut(chunk_index))
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if !bucket.contains(handle) {
-                return Err(ScaffoldContractError::BrainOwnershipMismatch);
-            }
             let resident = bucket.slots[handle.slot as usize]
                 .as_ref()
                 .expect("validated occupied slot");
@@ -3029,9 +2992,17 @@ impl GpuClosedLoopBackend {
             && self
                 .class_buckets
                 .get(&class_raw)
+                .and_then(|pool| pool.chunks.get(chunk_index))
                 .is_some_and(|bucket| bucket.slots.iter().all(Option::is_none));
         let event_kind = if drop_empty_chunk {
-            self.class_buckets.remove(&class_raw);
+            let pool = self
+                .class_buckets
+                .get_mut(&class_raw)
+                .expect("validated class pool exists");
+            pool.chunks.remove(chunk_index);
+            if pool.chunks.is_empty() {
+                self.class_buckets.remove(&class_raw);
+            }
             GpuAllocationEventKind::ReleaseAndDropEmptyChunk
         } else {
             GpuAllocationEventKind::ReleaseToRetainedSlot
@@ -3077,7 +3048,11 @@ impl GpuClosedLoopBackend {
     fn poison_submitted_dispatches(&mut self, dispatches: &[PreparedClassDispatch]) {
         for dispatch in dispatches {
             if let Some(batch) = dispatch.batch.as_ref() {
-                if let Some(bucket) = self.class_buckets.get_mut(&dispatch.class_id) {
+                if let Some(bucket) = self
+                    .class_buckets
+                    .get_mut(&dispatch.class_id)
+                    .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
+                {
                     let _ = bucket.pipelines.mark_post_submit_poison(batch);
                 }
             }
@@ -3092,6 +3067,7 @@ impl GpuClosedLoopBackend {
                     let _ = self
                         .class_buckets
                         .get_mut(&dispatch.class_id)
+                        .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                         .expect("transaction bucket exists")
                         .pipelines
                         .rollback_recorded_batch(batch);
@@ -3104,6 +3080,7 @@ impl GpuClosedLoopBackend {
                 let _ = self
                     .class_buckets
                     .get_mut(&dispatch.class_id)
+                    .and_then(|pool| pool.chunks.get_mut(dispatch.chunk_index))
                     .expect("transaction bucket exists")
                     .pipelines
                     .abandon_unsubmitted_batch(batch);
@@ -3124,7 +3101,10 @@ impl GpuClosedLoopBackend {
 
     #[cfg(feature = "gpu-tests")]
     pub fn allocated_class_arena_count_for_test(&self) -> usize {
-        self.class_buckets.len()
+        self.class_buckets
+            .values()
+            .map(|pool| pool.chunks.len())
+            .sum()
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -3156,15 +3136,13 @@ impl GpuClosedLoopBackend {
         let bucket = self
             .class_buckets
             .get(&handle.class_id.raw())
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
         let resident = bucket
             .slots
             .get(handle.slot as usize)
             .and_then(Option::as_ref)
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if !bucket.contains(handle) {
-            return Err(ScaffoldContractError::BrainOwnershipMismatch);
-        }
         let words = if resident.active_weight_bank == 0 {
             resident.ranges.layout.fast_weight_words.clone()
         } else {
@@ -3233,12 +3211,14 @@ impl GpuClosedLoopBackend {
     #[cfg(feature = "gpu-tests")]
     pub fn force_all_invalid_after_next_decode_for_test(&mut self, handle: GpuBrainHandle) {
         if handle.backend_instance_id == self.backend_instance_id {
-            if let Some(bucket) = self.class_buckets.get_mut(&handle.class_id.raw()) {
-                if bucket.contains(handle) {
-                    bucket
-                        .pipelines
-                        .force_all_invalid_record_for_test(handle.slot, handle.generation);
-                }
+            if let Some(bucket) = self
+                .class_buckets
+                .get_mut(&handle.class_id.raw())
+                .and_then(|pool| pool.bucket_for_handle_mut(handle).ok())
+            {
+                bucket
+                    .pipelines
+                    .force_all_invalid_record_for_test(handle.slot, handle.generation);
             }
         }
     }
@@ -3249,12 +3229,14 @@ impl GpuClosedLoopBackend {
         handle: GpuBrainHandle,
     ) {
         if handle.backend_instance_id == self.backend_instance_id {
-            if let Some(bucket) = self.class_buckets.get_mut(&handle.class_id.raw()) {
-                if bucket.contains(handle) {
-                    bucket
-                        .pipelines
-                        .force_pending_identity_mismatch_for_test(handle.slot, handle.generation);
-                }
+            if let Some(bucket) = self
+                .class_buckets
+                .get_mut(&handle.class_id.raw())
+                .and_then(|pool| pool.bucket_for_handle_mut(handle).ok())
+            {
+                bucket
+                    .pipelines
+                    .force_pending_identity_mismatch_for_test(handle.slot, handle.generation);
             }
         }
     }
@@ -3272,17 +3254,11 @@ impl GpuClosedLoopBackend {
     ) -> Result<(), ScaffoldContractError> {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
-        let bucket = self
+        let pool = self
             .class_buckets
             .get_mut(&handle.class_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if !bucket.contains(handle) {
-            return Err(ScaffoldContractError::BrainOwnershipMismatch);
-        }
-        bucket.slots[handle.slot as usize]
-            .as_mut()
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-            .activity_sequence_cursor = cursor;
+        pool.resident_mut(handle)?.activity_sequence_cursor = cursor;
         Ok(())
     }
 

@@ -95,7 +95,7 @@ struct GpuLearningHeader {
   brain_slot_index:u32, active_activation_side:u32, dispatch_generation_lo:u32, dispatch_generation_hi:u32,
   candidate_count:u32, candidate_offset:u32, decoder_learning_input_offset:u32, selection_offset:u32,
   outcome_offset:u32, recurrent_synapse_count:u32, decoder_synapse_count:u32, decoder_input_stride:u32,
-  pending_eligibility_offset:u32, reserved:array<u32,3>,
+  pending_eligibility_offset:u32, scheduled_tile_visits:u32, scheduled_synapse_ops:u32, scheduled_work_checksum:u32,
 }
 struct GpuSynapseLearningMetadata {
   global_synapse_id:u32, kind:u32, source_neuron:u32, target_neuron:u32,
@@ -242,7 +242,7 @@ fn load_learning_header(base:u32) -> GpuLearningHeader {
     dispatch_header_words[base+4u],dispatch_header_words[base+5u],dispatch_header_words[base+6u],dispatch_header_words[base+7u],
     dispatch_header_words[base+8u],dispatch_header_words[base+9u],dispatch_header_words[base+10u],dispatch_header_words[base+11u],
     dispatch_header_words[base+12u],dispatch_header_words[base+13u],dispatch_header_words[base+14u],dispatch_header_words[base+15u],
-    dispatch_header_words[base+16u],array<u32,3>(dispatch_header_words[base+17u],dispatch_header_words[base+18u],dispatch_header_words[base+19u])
+    dispatch_header_words[base+16u],dispatch_header_words[base+17u],dispatch_header_words[base+18u],dispatch_header_words[base+19u]
   );
 }
 fn load_synapse_learning_metadata(base:u32) -> GpuSynapseLearningMetadata {

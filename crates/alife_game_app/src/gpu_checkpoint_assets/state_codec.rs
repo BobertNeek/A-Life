@@ -499,9 +499,10 @@ impl GpuCheckpointAssetStore {
             .validate_portable_restore_against(&current_provenance)?;
         let runtime_profile = backend.runtime_profile();
         let activity_policy = backend.activity_policy();
-        if state.runtime_profile_id != runtime_profile.profile_id
-            || state.runtime_profile_digest != runtime_profile.canonical_digest()?
-            || state.activity_policy_version != activity_policy.policy_version
+        if !runtime_profile.accepts_portable_checkpoint_profile(
+            state.runtime_profile_id,
+            state.runtime_profile_digest,
+        )? || state.activity_policy_version != activity_policy.policy_version
             || state.activity_policy_digest != activity_policy.policy_digest
         {
             return Err(ScaffoldContractError::NeuralBackendUnavailable.into());

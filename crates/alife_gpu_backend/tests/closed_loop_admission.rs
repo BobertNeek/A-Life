@@ -136,6 +136,48 @@ fn admission_is_runtime_budgeted_and_release_reclaims_exact_bytes() {
 
 #[cfg(feature = "gpu-tests")]
 #[test]
+fn full_class_chunks_allocate_new_arenas_instead_of_reallocating_live_buffers() {
+    use alife_gpu_backend::GpuClosedLoopBackend;
+
+    let phenotype = populated(
+        BrainCapacityClass::n512(),
+        4_413,
+        SensorProfile::GroundedObjectSlotsV1,
+    );
+    let slot_bytes = GpuClassBucketPlan::for_phenotype(&phenotype)
+        .unwrap()
+        .slot_allocation_receipt()
+        .unwrap()
+        .logical_slot_commit_bytes;
+    let profile = bounded_profile(slot_bytes * 5, 512 * 1024 * 1024, 5, 2);
+    let mut backend = GpuClosedLoopBackend::new_required(profile).unwrap();
+
+    let handles = (1..=5)
+        .map(|organism| {
+            backend
+                .insert_brain(OrganismId(organism), phenotype.clone())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(backend.allocated_class_arena_count_for_test(), 3);
+    assert_eq!(backend.admission_receipt().live_brains, 5);
+    assert_eq!(
+        backend.admission_receipt().logical_committed_bytes,
+        slot_bytes * 5
+    );
+    assert_eq!(
+        handles
+            .iter()
+            .map(|handle| (handle.slot(), handle.generation()))
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        handles.len()
+    );
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
 fn zero_retention_profile_drops_the_empty_class_chunk() {
     use alife_gpu_backend::GpuClosedLoopBackend;
 
@@ -496,6 +538,34 @@ fn runtime_profile_rejects_invalid_budget_and_retention_shapes() {
     ] {
         assert!(invalid.validate_contract().is_err());
     }
+}
+
+#[test]
+fn production_profile_accepts_only_the_known_previous_v1_checkpoint_envelope() {
+    let current = GpuRuntimeProfile::production_v1();
+    let previous_v1 = GpuRuntimeProfile {
+        logical_neural_heap_budget_bytes: 512 * 1024 * 1024,
+        physical_allocation_ceiling_bytes: 1024 * 1024 * 1024,
+        growth_chunk_slots: 4,
+        ..current
+    };
+    let previous_digest = previous_v1.canonical_digest().unwrap();
+
+    assert!(current
+        .accepts_portable_checkpoint_profile(previous_v1.profile_id, previous_digest)
+        .unwrap());
+    assert!(current
+        .accepts_portable_checkpoint_profile(
+            current.profile_id,
+            current.canonical_digest().unwrap()
+        )
+        .unwrap());
+    assert!(!current
+        .accepts_portable_checkpoint_profile(previous_v1.profile_id, [9; 4])
+        .unwrap());
+    assert!(!current
+        .accepts_portable_checkpoint_profile(previous_v1.profile_id + 1, previous_digest)
+        .unwrap());
 }
 
 fn _assert_receipt_is_public(_: GpuSlotAllocationReceipt) {}

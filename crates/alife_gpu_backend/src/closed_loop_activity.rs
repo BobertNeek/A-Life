@@ -144,6 +144,21 @@ impl GpuActivityDispatchHeader {
         self.route_schedule_digest
     }
 
+    pub(crate) fn scheduled_work_checksum(
+        &self,
+        scheduled_tile_visits: u32,
+        scheduled_synapse_ops: u32,
+    ) -> u32 {
+        let mut checksum = 0x811c_9dc5_u32;
+        for word in self.route_schedule_digest {
+            checksum = (checksum ^ word).wrapping_mul(16_777_619);
+        }
+        for word in [scheduled_tile_visits, scheduled_synapse_ops] {
+            checksum = (checksum ^ word).wrapping_mul(16_777_619);
+        }
+        checksum
+    }
+
     pub fn route_is_enabled(&self, route_id: u16) -> bool {
         let route = usize::from(route_id);
         route < GPU_ACTIVITY_ROUTE_MASK_WORDS * u32::BITS as usize

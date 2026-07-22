@@ -484,14 +484,17 @@ impl GpuPerformanceTargetsV1 {
 pub fn canonical_performance_targets_v1() -> GpuPerformanceTargetsV1 {
     let populations = [1_u32, 10, 50, 100, 250, 500];
     let class_targets_ms = [
-        (BrainCapacityClass::N512_ID.raw(), [2_u64, 4, 8, 12, 25, 50]),
+        (
+            BrainCapacityClass::N512_ID.raw(),
+            [4_u64, 8, 16, 32, 80, 160],
+        ),
         (
             BrainCapacityClass::N1024_ID.raw(),
-            [3_u64, 6, 12, 20, 40, 80],
+            [6_u64, 12, 32, 64, 160, 320],
         ),
         (
             BrainCapacityClass::N2048_ID.raw(),
-            [4_u64, 8, 20, 35, 70, 140],
+            [8_u64, 16, 64, 128, 320, 640],
         ),
     ];
     let mut rows = Vec::with_capacity(36);

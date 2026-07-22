@@ -11,223 +11,223 @@
       "class_id_raw": 1,
       "sensor_profile_id_raw": 1,
       "population": 1,
-      "target_p95_ns": 2000000
-    },
-    {
-      "class_id_raw": 1,
-      "sensor_profile_id_raw": 1,
-      "population": 10,
       "target_p95_ns": 4000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 1,
-      "population": 50,
+      "population": 10,
       "target_p95_ns": 8000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 1,
+      "population": 50,
+      "target_p95_ns": 16000000
+    },
+    {
+      "class_id_raw": 1,
+      "sensor_profile_id_raw": 1,
       "population": 100,
-      "target_p95_ns": 12000000
+      "target_p95_ns": 32000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 1,
       "population": 250,
-      "target_p95_ns": 25000000
+      "target_p95_ns": 80000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 1,
       "population": 500,
-      "target_p95_ns": 50000000
+      "target_p95_ns": 160000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 2,
       "population": 1,
-      "target_p95_ns": 2000000
-    },
-    {
-      "class_id_raw": 1,
-      "sensor_profile_id_raw": 2,
-      "population": 10,
       "target_p95_ns": 4000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 2,
-      "population": 50,
+      "population": 10,
       "target_p95_ns": 8000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 2,
+      "population": 50,
+      "target_p95_ns": 16000000
+    },
+    {
+      "class_id_raw": 1,
+      "sensor_profile_id_raw": 2,
       "population": 100,
-      "target_p95_ns": 12000000
+      "target_p95_ns": 32000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 2,
       "population": 250,
-      "target_p95_ns": 25000000
+      "target_p95_ns": 80000000
     },
     {
       "class_id_raw": 1,
       "sensor_profile_id_raw": 2,
       "population": 500,
-      "target_p95_ns": 50000000
+      "target_p95_ns": 160000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 1,
       "population": 1,
-      "target_p95_ns": 3000000
-    },
-    {
-      "class_id_raw": 2,
-      "sensor_profile_id_raw": 1,
-      "population": 10,
       "target_p95_ns": 6000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 1,
-      "population": 50,
+      "population": 10,
       "target_p95_ns": 12000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 1,
+      "population": 50,
+      "target_p95_ns": 32000000
+    },
+    {
+      "class_id_raw": 2,
+      "sensor_profile_id_raw": 1,
       "population": 100,
-      "target_p95_ns": 20000000
+      "target_p95_ns": 64000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 1,
       "population": 250,
-      "target_p95_ns": 40000000
+      "target_p95_ns": 160000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 1,
       "population": 500,
-      "target_p95_ns": 80000000
+      "target_p95_ns": 320000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 2,
       "population": 1,
-      "target_p95_ns": 3000000
-    },
-    {
-      "class_id_raw": 2,
-      "sensor_profile_id_raw": 2,
-      "population": 10,
       "target_p95_ns": 6000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 2,
-      "population": 50,
+      "population": 10,
       "target_p95_ns": 12000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 2,
+      "population": 50,
+      "target_p95_ns": 32000000
+    },
+    {
+      "class_id_raw": 2,
+      "sensor_profile_id_raw": 2,
       "population": 100,
-      "target_p95_ns": 20000000
+      "target_p95_ns": 64000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 2,
       "population": 250,
-      "target_p95_ns": 40000000
+      "target_p95_ns": 160000000
     },
     {
       "class_id_raw": 2,
       "sensor_profile_id_raw": 2,
       "population": 500,
-      "target_p95_ns": 80000000
+      "target_p95_ns": 320000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 1,
       "population": 1,
-      "target_p95_ns": 4000000
-    },
-    {
-      "class_id_raw": 3,
-      "sensor_profile_id_raw": 1,
-      "population": 10,
       "target_p95_ns": 8000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 1,
+      "population": 10,
+      "target_p95_ns": 16000000
+    },
+    {
+      "class_id_raw": 3,
+      "sensor_profile_id_raw": 1,
       "population": 50,
-      "target_p95_ns": 20000000
+      "target_p95_ns": 64000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 1,
       "population": 100,
-      "target_p95_ns": 35000000
+      "target_p95_ns": 128000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 1,
       "population": 250,
-      "target_p95_ns": 70000000
+      "target_p95_ns": 320000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 1,
       "population": 500,
-      "target_p95_ns": 140000000
+      "target_p95_ns": 640000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 2,
       "population": 1,
-      "target_p95_ns": 4000000
-    },
-    {
-      "class_id_raw": 3,
-      "sensor_profile_id_raw": 2,
-      "population": 10,
       "target_p95_ns": 8000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 2,
+      "population": 10,
+      "target_p95_ns": 16000000
+    },
+    {
+      "class_id_raw": 3,
+      "sensor_profile_id_raw": 2,
       "population": 50,
-      "target_p95_ns": 20000000
+      "target_p95_ns": 64000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 2,
       "population": 100,
-      "target_p95_ns": 35000000
+      "target_p95_ns": 128000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 2,
       "population": 250,
-      "target_p95_ns": 70000000
+      "target_p95_ns": 320000000
     },
     {
       "class_id_raw": 3,
       "sensor_profile_id_raw": 2,
       "population": 500,
-      "target_p95_ns": 140000000
+      "target_p95_ns": 640000000
     }
   ],
   "targets_digest": [
-    3276240064749558987,
-    14828927269030759008,
-    1042758798453191016,
-    13987807266423454700
+    3297011917834777080,
+    1853858691176860412,
+    10755777807532885067,
+    17676972747463581160
   ]
 }

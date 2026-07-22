@@ -92,7 +92,6 @@ fn learning_contract_is_valid(
     && extension.replay_plan_identity_offset != 0xffffffffu
     && learning.active_eligibility_bank <= 1u
     && learning.pending_valid == 0u
-    && header.reserved[0] == 0u && header.reserved[1] == 0u && header.reserved[2] == 0u
     && state_span_within(header.pending_eligibility_offset, PENDING_ELIGIBILITY_WORDS)
     && pending_row_is_zero(header.pending_eligibility_offset)
     && dispatch_span_within(header.candidate_offset, header.candidate_count * 8u)
@@ -103,33 +102,55 @@ fn learning_contract_is_valid(
     && frame_span_within(header.outcome_offset, PENDING_ELIGIBILITY_WORDS);
 }
 
-@compute @workgroup_size(64)
-fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
+@compute @workgroup_size(1)
+fn prevalidate_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
   let learning_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + LEARNING_HEADER_WORD_OFFSET;
   let header = load_learning_header(learning_base);
-  if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
+  if (gid.x != 0u || header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
   let brain = brain_slots[header.brain_slot_index];
   if (!state_span_within(brain.extension_record_offset, 20u)) { return; }
   let extension = load_slot_extension(brain);
   if (!state_span_within(extension.learning_state_offset, 24u)) { return; }
   let learning = load_slot_learning_state(extension);
   if (!learning_contract_is_valid(header, brain, extension, learning)) { return; }
+  let activity = load_activity_header(
+    gid.y * ACTIVE_DISPATCH_ROW_WORDS + ACTIVITY_HEADER_OFFSET
+  );
+  if (!validate_scheduled_work(header, activity)) { return; }
+  let selection = load_selection_record(header.selection_offset);
+  if (selection.slot != brain.slot
+      || selection.slot_generation != brain.slot_generation
+      || selection.status != 1u
+      || selection.candidate_index >= header.candidate_count
+      || selection.active_activation_side != header.active_activation_side) { return; }
+  store_state_u32(header.selection_offset + 5u, 2u);
+}
+
+@compute @workgroup_size(64)
+fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let learning_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + LEARNING_HEADER_WORD_OFFSET;
+  let header = load_learning_header(learning_base);
+  if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
+  let brain = brain_slots[header.brain_slot_index];
+  let extension = load_slot_extension(brain);
+  let learning = load_slot_learning_state(extension);
+  let selection = load_selection_record(header.selection_offset);
+  if (selection.status != 2u) { return; }
   let local_synapse = gid.x;
   if (local_synapse >= header.recurrent_synapse_count) { return; }
+  let active_bases = active_eligibility_bases(brain, extension, learning);
+  let staging_bases = inactive_eligibility_bases(brain, extension, learning);
+  let route_index = immutable_plan_words[brain.route_indices_offset + local_synapse];
+  let route_mask_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + ACTIVITY_HEADER_OFFSET + 8u;
+  if (!route_enabled_at(route_mask_base, route_index)) {
+    let previous = load_state_f32(active_bases.recurrent + local_synapse);
+    store_state_f32(staging_bases.recurrent + local_synapse, previous);
+    return;
+  }
   let metadata_base = extension.synapse_metadata_offset + local_synapse * 8u;
-  if (!immutable_span_within(metadata_base, 8u)) { return; }
   let metadata = load_synapse_learning_metadata(metadata_base);
-  if (metadata.kind != SYNAPSE_KIND_RECURRENT
-      || metadata.global_synapse_id != local_synapse
-      || metadata.source_neuron >= brain.neuron_count
-      || metadata.target_neuron >= brain.neuron_count
-      || metadata.eligibility_local_index >= header.recurrent_synapse_count
-      || metadata.decoder_metadata_local_or_max != 0xffffffffu
-      || metadata.reserved != 0u) { return; }
   let receptor_base = extension.receptor_offset + metadata.receptor_index * 8u;
-  if (!immutable_span_within(receptor_base, 8u)) { return; }
-  let receptor = load_plasticity_receptor(receptor_base);
-  if (!receptor_is_valid(receptor)) { return; }
+  let eligibility_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
   let post_activation_offset = select(
     brain.activation_a_offset,
     brain.activation_b_offset,
@@ -142,16 +163,12 @@ fn accumulate_recurrent_eligibility(@builtin(global_invocation_id) gid:vec3<u32>
   );
   let source = pre_activation_offset + metadata.source_neuron;
   let target_index = post_activation_offset + metadata.target_neuron;
-  let active_bases = active_eligibility_bases(brain, extension, learning);
-  let staging_bases = inactive_eligibility_bases(brain, extension, learning);
   let active_index = active_bases.recurrent + metadata.eligibility_local_index;
   let staging_index = staging_bases.recurrent + metadata.eligibility_local_index;
-  if (!state_span_within(source, 1u) || !state_span_within(target_index, 1u)
-      || !state_span_within(active_index, 1u) || !state_span_within(staging_index, 1u)) { return; }
   let local = load_state_f32(source) * load_state_f32(target_index);
   let previous = load_state_f32(active_index);
   if (!finite_eligibility(local) || !finite_eligibility(previous)) { return; }
-  store_state_f32(staging_index, clamp(receptor.eligibility_decay * previous + local, -1.0, 1.0));
+  store_state_f32(staging_index, clamp(eligibility_decay * previous + local, -1.0, 1.0));
 }
 
 @compute @workgroup_size(64)
@@ -160,33 +177,23 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   let header = load_learning_header(learning_base);
   if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
   let brain = brain_slots[header.brain_slot_index];
-  if (!state_span_within(brain.extension_record_offset, 20u)) { return; }
   let extension = load_slot_extension(brain);
-  if (!state_span_within(extension.learning_state_offset, 24u)) { return; }
   let learning = load_slot_learning_state(extension);
-  if (!learning_contract_is_valid(header, brain, extension, learning)) { return; }
+  let selection = load_selection_record(header.selection_offset);
+  if (selection.status != 2u) { return; }
   let local_synapse = gid.x;
   if (local_synapse >= header.decoder_synapse_count) { return; }
   let metadata_base = extension.decoder_metadata_offset + local_synapse * 8u;
-  if (!immutable_span_within(metadata_base, 8u)) { return; }
   let metadata = load_decoder_eligibility_metadata(metadata_base);
-  if (metadata.global_synapse_id != extension.decoder_synapse_local_start + local_synapse
-      || metadata.eligibility_local_index != local_synapse
-      || metadata.motor_index >= brain.neuron_count
-      || metadata.reserved != 0u) { return; }
   let receptor_base = extension.receptor_offset + metadata.receptor_index * 8u;
-  if (!immutable_span_within(receptor_base, 8u)) { return; }
-  let receptor = load_plasticity_receptor(receptor_base);
-  if (!receptor_is_valid(receptor)) { return; }
-  let selection = load_selection_record(header.selection_offset);
-  if (selection.status != 1u || selection.candidate_index >= header.candidate_count
+  let eligibility_decay = bitcast<f32>(immutable_plan_words[receptor_base]);
+  if (selection.status != 2u || selection.candidate_index >= header.candidate_count
       || selection.active_activation_side != header.active_activation_side) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
   let active_bases = active_eligibility_bases(brain, extension, learning);
   let staging_bases = inactive_eligibility_bases(brain, extension, learning);
   let active_index = active_bases.decoder + metadata.eligibility_local_index;
   let staging_index = staging_bases.decoder + metadata.eligibility_local_index;
-  if (!state_span_within(active_index, 1u) || !state_span_within(staging_index, 1u)) { return; }
   var local = 0.0;
   if (metadata.decoder_head == DECODER_HEAD_ACTION_CANDIDATE) {
     if (metadata.family == selected.family) {
@@ -199,8 +206,6 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
         brain.activation_b_offset,
         header.active_activation_side == 1u
       );
-      if (!frame_span_within(feature_index, 1u)
-          || !state_span_within(activation_offset + metadata.motor_index, 1u)) { return; }
       local = load_state_f32(activation_offset + metadata.motor_index)
         * bitcast<f32>(frame_payload_words[feature_index]);
     }
@@ -211,7 +216,6 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
       let feature_index = header.decoder_learning_input_offset
         + selection.candidate_index * header.decoder_input_stride
         + metadata.input_lane;
-      if (!frame_span_within(feature_index, 1u)) { return; }
       local = bitcast<f32>(frame_payload_words[feature_index]);
     }
   } else if (metadata.decoder_head == DECODER_HEAD_SPEECH_PAYLOAD) {
@@ -225,7 +229,7 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   }
   let previous = load_state_f32(active_index);
   if (!finite_eligibility(local) || !finite_eligibility(previous)) { return; }
-  store_state_f32(staging_index, clamp(receptor.eligibility_decay * previous + local, -1.0, 1.0));
+  store_state_f32(staging_index, clamp(eligibility_decay * previous + local, -1.0, 1.0));
 }
 
 @compute @workgroup_size(1)
@@ -238,11 +242,11 @@ fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
   let extension = load_slot_extension(brain);
   if (!state_span_within(extension.learning_state_offset, 24u)) { return; }
   let learning = load_slot_learning_state(extension);
-  if (!learning_contract_is_valid(header, brain, extension, learning)) { return; }
+  let selection = load_selection_record(header.selection_offset);
+  if (selection.status != 2u) { return; }
   if ((atomicLoad(&mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE])
       & ELIGIBILITY_DIAGNOSTIC_UNKNOWN_DECODER_HEAD) != 0u) { return; }
-  let selection = load_selection_record(header.selection_offset);
-  if (selection.status != 1u || selection.candidate_index >= header.candidate_count
+  if (selection.status != 2u || selection.candidate_index >= header.candidate_count
       || selection.active_activation_side != header.active_activation_side) { return; }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
   if (selected.candidate_index != selection.candidate_index || selected.family >= 8u) { return; }
@@ -339,7 +343,9 @@ fn discard_contract_is_valid(
       || header.pending_eligibility_offset != learning.pending_eligibility_offset
       || learning.active_eligibility_bank > 1u
       || learning.pending_valid != 1u
-      || header.reserved[0] != 0u || header.reserved[1] != 0u || header.reserved[2] != 0u
+      || header.scheduled_tile_visits != 0u
+      || header.scheduled_synapse_ops != 0u
+      || header.scheduled_work_checksum != 0u
       || !state_span_within(header.pending_eligibility_offset, PENDING_ELIGIBILITY_WORDS)
       || !state_span_within(header.selection_offset, 12u)
       || !frame_span_within(header.outcome_offset, PENDING_ELIGIBILITY_WORDS)) {

@@ -653,9 +653,11 @@ fn production_pipeline_surface_has_no_decode_select_or_cpu_neural_types() {
     for required in [
         "pub struct GpuClosedLoopPipelines",
         "pub fn submit_encode_and_microsteps",
-        "closed-loop-finalize-pending-eligibility-pass",
+        "closed-loop-authoritative-compute-pass",
+        "fn record_staged_compute_pass",
+        "prevalidate_eligibility_pipeline",
         "record.status != 1",
-        "closed-loop-clear-diagnostics-pass",
+        "clear_diagnostics_pipeline",
     ] {
         assert!(
             source.contains(required),

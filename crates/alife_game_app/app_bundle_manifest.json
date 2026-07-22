@@ -52,6 +52,11 @@
       "required": true
     },
     {
+      "id": "closed-loop-activity-validation",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_activity_validation.wgsl",
+      "required": true
+    },
+    {
       "id": "closed-loop-clear-diagnostics",
       "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_clear_diagnostics.wgsl",
       "required": true

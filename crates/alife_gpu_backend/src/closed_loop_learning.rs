@@ -24,6 +24,7 @@ pub const GPU_COMPACT_READBACK_CAPACITY_PER_ROW_BYTES: usize =
     };
 pub const CLOSED_LOOP_ELIGIBILITY_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
+    include_str!("../shaders/closed_loop_activity_validation.wgsl"),
     include_str!("../shaders/closed_loop_eligibility.wgsl")
 );
 
@@ -213,7 +214,9 @@ pub struct GpuLearningHeader {
     pub decoder_synapse_count: u32,
     pub decoder_input_stride: u32,
     pub pending_eligibility_offset: u32,
-    pub reserved: [u32; 3],
+    pub scheduled_tile_visits: u32,
+    pub scheduled_synapse_ops: u32,
+    pub scheduled_work_checksum: u32,
 }
 
 impl GpuLearningHeader {

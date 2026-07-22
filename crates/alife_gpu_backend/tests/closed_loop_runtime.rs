@@ -13,6 +13,14 @@ fn runtime_source() -> String {
     .expect("Task 7 must provide the required-GPU runtime module")
 }
 
+fn pipeline_source() -> String {
+    fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/closed_loop_pipeline.rs"
+    ))
+    .expect("the GPU closed-loop pipeline source must be available")
+}
+
 fn without_rust_comments(source: &str) -> String {
     let bytes = source.as_bytes();
     let mut result = String::with_capacity(source.len());
@@ -46,13 +54,37 @@ fn required_gpu_api_is_public_without_constructing_a_device() {
         GpuClosedLoopBackend::new_required;
     let _opaque_capability = std::mem::size_of::<GpuBrainHandle>();
     let profile = GpuRuntimeProfile::production_v1();
-    assert_eq!(profile.logical_neural_heap_budget_bytes, 512 * 1024 * 1024);
+    assert_eq!(
+        profile.logical_neural_heap_budget_bytes,
+        2 * 1024 * 1024 * 1024
+    );
     assert_eq!(
         profile.physical_allocation_ceiling_bytes,
-        1024 * 1024 * 1024
+        2 * 1024 * 1024 * 1024
     );
     assert_eq!(profile.max_hot_brains, 500);
-    assert_eq!(profile.growth_chunk_slots, 4);
+    assert_eq!(profile.growth_chunk_slots, 32);
+}
+
+#[test]
+fn authoritative_tick_records_one_ordered_compute_pass_per_class_arena() {
+    let source = pipeline_source();
+    let body = source
+        .split_once("fn record_staged_compute_pass")
+        .expect("the production tick has a fused compute-pass recorder")
+        .1
+        .split_once("\n    pub(crate) fn register_compact_mapping")
+        .expect("the fused recorder is bounded")
+        .0;
+    assert_eq!(body.matches("begin_compute_pass").count(), 1);
+    for stage in [
+        "record_encode",
+        "record_microsteps",
+        "record_decode_select",
+        "record_eligibility",
+    ] {
+        assert!(body.contains(stage), "fused pass omitted {stage}");
+    }
 }
 
 #[test]
@@ -298,6 +330,7 @@ mod hardware {
         backend
             .insert_brain(OrganismId(2), n512_phenotype(22))
             .unwrap();
+        assert_eq!(backend.allocated_class_arena_count_for_test(), 2);
         assert_eq!(backend.admission_receipt().allocation_generation, 2);
         assert_eq!(
             backend
@@ -311,7 +344,7 @@ mod hardware {
         assert!(backend
             .insert_brain(OrganismId(3), n512_phenotype(23))
             .is_err());
-        assert_eq!(backend.allocated_class_arena_count_for_test(), 1);
+        assert_eq!(backend.allocated_class_arena_count_for_test(), 2);
         assert_eq!(backend.runtime_counters_for_test(), before);
         assert!(!backend.contains_organism_for_test(OrganismId(3)));
     }

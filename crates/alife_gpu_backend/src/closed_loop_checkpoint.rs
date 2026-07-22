@@ -906,10 +906,8 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get(&handle.class_id().raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if !bucket.contains(handle) {
-                return Err(ScaffoldContractError::BrainOwnershipMismatch);
-            }
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle(handle)?;
             let resident = bucket.slots[handle.slot() as usize]
                 .as_ref()
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
@@ -990,10 +988,8 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get(&handle.class_id().raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            if !bucket.contains(handle) {
-                return Err(ScaffoldContractError::BrainOwnershipMismatch);
-            }
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle(handle)?;
             let resident = bucket.slots[handle.slot() as usize]
                 .as_ref()
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
@@ -1224,13 +1220,11 @@ impl GpuClosedLoopBackend {
     ) -> Result<GpuBrainRestoreReceipt, ScaffoldContractError> {
         validate_checkpoint_parts(&parts)?;
         let (brain_slot, ranges, initialized_state) = {
-            let bucket = self
+            let pool = self
                 .class_buckets
                 .get(&handle.class_id().raw())
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            let resident = bucket.slots[handle.slot() as usize]
-                .as_ref()
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let resident = pool.resident(handle)?;
             let words = self.read_slot_mutable_words(handle, &resident.ranges)?;
             let state = record_from_range::<GpuSlotLearningStateRecord>(
                 &words,
@@ -1291,6 +1285,7 @@ impl GpuClosedLoopBackend {
             .class_buckets
             .get(&handle.class_id().raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?
             .buffers
             .neural_buffers()[6];
         for (range, words) in [
@@ -1362,7 +1357,8 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get_mut(&handle.class_id().raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle_mut(handle)?;
             bucket
                 .pipelines
                 .restore_slot_active_side(
@@ -1665,6 +1661,7 @@ impl GpuClosedLoopBackend {
             .class_buckets
             .get(&handle.class_id().raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?
             .buffers
             .neural_buffers()[6];
         let (output_lifetime_range, output_fast_range, output_lifetime, output_fast) =

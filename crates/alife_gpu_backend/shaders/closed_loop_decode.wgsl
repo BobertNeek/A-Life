@@ -21,7 +21,7 @@ fn span_within(start:u32, count:u32, limit:u32) -> bool {
 @compute @workgroup_size(32)
 fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
-  if (!validate_slice_a_slot(header.brain_slot_index, header)) { return; }
+  if (!activity_contract_prevalidated(header)) { return; }
   let brain = brain_slots[header.brain_slot_index];
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
@@ -95,7 +95,7 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
 @compute @workgroup_size(1)
 fn select_candidate(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
-  if (!validate_slice_a_slot(header.brain_slot_index, header)) { return; }
+  if (!activity_contract_prevalidated(header)) { return; }
   let brain = brain_slots[header.brain_slot_index];
   var found = false;
   var selected_candidate = 0xffffffffu;

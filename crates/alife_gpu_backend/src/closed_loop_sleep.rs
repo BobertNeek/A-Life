@@ -418,7 +418,8 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get_mut(&handle.class_id().raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle_mut(handle)?;
             bucket.pipelines.dispatch_sleep_commit(
                 &self.device,
                 &self.queue,
@@ -520,8 +521,7 @@ impl GpuClosedLoopBackend {
         let resident = self
             .class_buckets
             .get_mut(&handle.class_id().raw())
-            .and_then(|bucket| bucket.slots.get_mut(handle.slot() as usize))
-            .and_then(Option::as_mut)
+            .and_then(|pool| pool.resident_mut(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         resident.active_weight_bank = staged.output_weight_bank;
         resident.active_weight_generation = staged.output_generation;
@@ -590,7 +590,8 @@ impl GpuClosedLoopBackend {
             let bucket = self
                 .class_buckets
                 .get_mut(&handle.class_id().raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle_mut(handle)?;
             bucket.pipelines.dispatch_sleep_staging(
                 &self.device,
                 &self.queue,
@@ -704,19 +705,12 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
         self.validate_handle_backend(handle)?;
-        let bucket = self
+        let pool = self
             .class_buckets
             .get(&handle.class_id().raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let resident = bucket
-            .slots
-            .get(handle.slot() as usize)
-            .and_then(Option::as_ref)
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if !bucket.contains(handle)
-            || resident.pending_eligibility.is_some()
-            || resident.pending_eligibility_record.is_some()
-        {
+        let resident = pool.resident(handle)?;
+        if resident.pending_eligibility.is_some() || resident.pending_eligibility_record.is_some() {
             return Err(ScaffoldContractError::LearningReplayRejected);
         }
         resident.sleep_plan.validate_contract()?;
@@ -741,7 +735,8 @@ impl GpuClosedLoopBackend {
         let bucket = self
             .class_buckets
             .get(&handle.class_id().raw())
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
         read_gpu_words(
             &self.device,
             &self.queue,
@@ -761,7 +756,8 @@ impl GpuClosedLoopBackend {
         let bucket = self
             .class_buckets
             .get(&handle.class_id().raw())
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
         let words = read_gpu_words(
             &self.device,
             &self.queue,
@@ -935,7 +931,8 @@ impl GpuClosedLoopBackend {
         let bucket = self
             .class_buckets
             .get(&handle.class_id().raw())
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
         self.queue.write_buffer(
             bucket.buffers.neural_buffers()[6],
             u64::from(range.start) * 4,
@@ -954,7 +951,8 @@ impl GpuClosedLoopBackend {
         let bucket = self
             .class_buckets
             .get(&handle.class_id().raw())
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .bucket_for_handle(handle)?;
         let plan_words = read_gpu_words(
             &self.device,
             &self.queue,

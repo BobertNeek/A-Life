@@ -244,18 +244,22 @@ const GPU_REQUIRED_MAX_BUFFER_WORDS: usize = 268_435_456 / 4;
 
 pub const CLOSED_LOOP_ENCODE_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
+    include_str!("../shaders/closed_loop_activity_validation.wgsl"),
     include_str!("../shaders/closed_loop_encode.wgsl")
 );
 pub const CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
+    include_str!("../shaders/closed_loop_activity_validation.wgsl"),
     include_str!("../shaders/closed_loop_clear_diagnostics.wgsl")
 );
 pub const CLOSED_LOOP_RECURRENT_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
+    include_str!("../shaders/closed_loop_activity_validation.wgsl"),
     include_str!("../shaders/closed_loop_recurrent.wgsl")
 );
 pub const CLOSED_LOOP_DECODE_WGSL: &str = concat!(
     include_str!("../shaders/closed_loop_abi.wgsl"),
+    include_str!("../shaders/closed_loop_activity_validation.wgsl"),
     include_str!("../shaders/closed_loop_decode.wgsl")
 );
 pub const CLOSED_LOOP_PLASTICITY_WGSL: &str = concat!(
@@ -617,6 +621,20 @@ impl GpuActiveBatchUpload {
                 .synapse_count
                 .checked_sub(entry.slot.record().recurrent_synapse_count)
                 .ok_or(GpuClosedLoopError::MalformedUpload)?;
+            let scheduled_work = crate::derive_executed_work(
+                entry.phenotype,
+                entry.activity.microsteps,
+                &entry.activity.enabled_route_ids,
+                upload.header.candidate_count,
+                memory_upload
+                    .as_ref()
+                    .map_or(0, |memory| memory.header.candidate_count),
+            )
+            .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+            let scheduled_tile_visits = u32::try_from(scheduled_work.tile_visits)
+                .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+            let scheduled_synapse_ops = u32::try_from(scheduled_work.synapse_ops)
+                .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
             let learning_header = GpuLearningHeader {
                 schema_version: u32::from(SchemaVersions::CURRENT.learning.raw()),
                 class_id: entry.slot.record().class_id,
@@ -639,7 +657,10 @@ impl GpuActiveBatchUpload {
                     .word_ranges()
                     .pending_eligibility_words
                     .start,
-                reserved: [0; 3],
+                scheduled_tile_visits,
+                scheduled_synapse_ops,
+                scheduled_work_checksum: activity_header
+                    .scheduled_work_checksum(scheduled_tile_visits, scheduled_synapse_ops),
             };
             let learning_start = row_base + GPU_PERCEPTION_DISPATCH_ROW_WORDS;
             dispatch_header_words[learning_start..learning_start + GPU_LEARNING_HEADER_WORDS]
@@ -710,6 +731,20 @@ impl GpuActiveBatchUpload {
             .get_mut(row)
             .ok_or(GpuClosedLoopError::MalformedUpload)?;
         header.tamper_route_schedule_digest_for_hardware_diagnostic();
+        let learning = self
+            .learning_headers
+            .get_mut(row)
+            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+        learning.scheduled_work_checksum = header.scheduled_work_checksum(
+            learning.scheduled_tile_visits,
+            learning.scheduled_synapse_ops,
+        );
+        let learning_start = row
+            .checked_mul(GPU_ACTIVE_DISPATCH_ROW_WORDS)
+            .and_then(|base| base.checked_add(GPU_PERCEPTION_DISPATCH_ROW_WORDS))
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        self.dispatch_header_words[learning_start..learning_start + GPU_LEARNING_HEADER_WORDS]
+            .copy_from_slice(learning.words());
         let start = row
             .checked_mul(GPU_ACTIVE_DISPATCH_ROW_WORDS)
             .and_then(|base| {
@@ -875,6 +910,7 @@ pub(crate) struct GpuClosedLoopKernelSet {
     decode_pipeline: wgpu::ComputePipeline,
     memory_context_pipeline: wgpu::ComputePipeline,
     select_pipeline: wgpu::ComputePipeline,
+    prevalidate_eligibility_pipeline: wgpu::ComputePipeline,
     recurrent_eligibility_pipeline: wgpu::ComputePipeline,
     decoder_eligibility_pipeline: wgpu::ComputePipeline,
     finalize_pending_eligibility_pipeline: wgpu::ComputePipeline,
@@ -913,6 +949,7 @@ impl GpuClosedLoopKernelSet {
             (
                 CLOSED_LOOP_ELIGIBILITY_WGSL,
                 &[
+                    "prevalidate_eligibility",
                     "accumulate_recurrent_eligibility",
                     "accumulate_decoder_eligibility",
                     "finalize_pending_eligibility",
@@ -1031,6 +1068,13 @@ impl GpuClosedLoopKernelSet {
             &pipeline_layout,
             &decode_shader,
             "select_candidate",
+            &[],
+        );
+        let prevalidate_eligibility_pipeline = create_compute_pipeline(
+            device,
+            &pipeline_layout,
+            &eligibility_shader,
+            "prevalidate_eligibility",
             &[],
         );
         let recurrent_eligibility_pipeline = create_compute_pipeline(
@@ -1153,6 +1197,7 @@ impl GpuClosedLoopKernelSet {
             decode_pipeline,
             memory_context_pipeline,
             select_pipeline,
+            prevalidate_eligibility_pipeline,
             recurrent_eligibility_pipeline,
             decoder_eligibility_pipeline,
             finalize_pending_eligibility_pipeline,
@@ -1774,7 +1819,9 @@ impl GpuClosedLoopPipelines {
                     .word_ranges()
                     .pending_eligibility_words
                     .start,
-                reserved: [0; 3],
+                scheduled_tile_visits: 0,
+                scheduled_synapse_ops: 0,
+                scheduled_work_checksum: 0,
             };
             let dispatch_base =
                 row * GPU_ACTIVE_DISPATCH_ROW_WORDS + GPU_PERCEPTION_DISPATCH_ROW_WORDS;
@@ -2074,7 +2121,9 @@ impl GpuClosedLoopPipelines {
             decoder_synapse_count,
             decoder_input_stride: 0,
             pending_eligibility_offset: slot.word_ranges().pending_eligibility_words.start,
-            reserved: [0; 3],
+            scheduled_tile_visits: 0,
+            scheduled_synapse_ops: 0,
+            scheduled_work_checksum: 0,
         };
         let mut dispatch_words = vec![0_u32; GPU_ACTIVE_DISPATCH_ROW_WORDS];
         dispatch_words[GPU_PERCEPTION_DISPATCH_ROW_WORDS
@@ -2178,12 +2227,9 @@ impl GpuClosedLoopPipelines {
         let readback_bytes = self.readback_bytes(buffers, batch)?;
         self.authority.record_encode(batch.authority_nonce)?;
         let result = (|| {
-            self.record_encode(encoder, batch)?;
-            self.record_microsteps(encoder, batch)?;
+            self.record_staged_compute_pass(encoder, batch)?;
             self.authority.record_recurrent(batch.authority_nonce)?;
-            self.record_decode_select(encoder, batch)?;
             self.authority.record_selection(batch.authority_nonce)?;
-            self.record_eligibility(encoder, batch)?;
             self.authority.record_eligibility(batch.authority_nonce)?;
             let neural = buffers.neural_buffers();
             for (row, selection_offset) in batch.selection_offsets.iter().enumerate() {
@@ -2202,6 +2248,22 @@ impl GpuClosedLoopPipelines {
             self.authority.recording_failed(batch.authority_nonce)?;
         }
         result
+    }
+
+    fn record_staged_compute_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        batch: &GpuActiveBatchUpload,
+    ) -> Result<(), GpuClosedLoopError> {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("closed-loop-authoritative-compute-pass"),
+            timestamp_writes: None,
+        });
+        self.record_encode(&mut pass, batch)?;
+        self.record_microsteps(&mut pass, batch)?;
+        self.record_decode_select(&mut pass, batch)?;
+        self.record_eligibility(&mut pass, batch)?;
+        Ok(())
     }
 
     pub(crate) fn register_compact_mapping(
@@ -2362,11 +2424,15 @@ impl GpuClosedLoopPipelines {
             label: Some("closed-loop-authoritative-batch"),
         });
         self.authority.record_encode(batch.authority_nonce)?;
-        if let Err(error) = self.record_encode(&mut encoder, batch) {
-            self.authority.recording_failed(batch.authority_nonce)?;
-            return Err(error);
-        }
-        let receipt = match self.record_microsteps(&mut encoder, batch) {
+        let recorded = (|| {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("closed-loop-recurrent-diagnostic-compute-pass"),
+                timestamp_writes: None,
+            });
+            self.record_encode(&mut pass, batch)?;
+            self.record_microsteps(&mut pass, batch)
+        })();
+        let receipt = match recorded {
             Ok(receipt) => receipt,
             Err(error) => {
                 self.authority.recording_failed(batch.authority_nonce)?;
@@ -2451,9 +2517,9 @@ impl GpuClosedLoopPipelines {
         ))
     }
 
-    fn record_eligibility(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
+    fn record_eligibility<'pass>(
+        &'pass self,
+        pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
     ) -> Result<(), GpuClosedLoopError> {
         self.validate_dispatch(batch)?;
@@ -2481,64 +2547,35 @@ impl GpuClosedLoopPipelines {
         {
             return Err(GpuClosedLoopError::CapacityExceeded);
         }
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("closed-loop-recurrent-eligibility-pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.kernels.recurrent_eligibility_pipeline);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.dispatch_workgroups(recurrent_groups, rows, 1);
-        }
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("closed-loop-decoder-eligibility-pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.kernels.decoder_eligibility_pipeline);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.dispatch_workgroups(decoder_groups, rows, 1);
-        }
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("closed-loop-finalize-pending-eligibility-pass"),
-            timestamp_writes: None,
-        });
+        pass.set_pipeline(&self.kernels.prevalidate_eligibility_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(1, rows, 1);
+        pass.set_pipeline(&self.kernels.recurrent_eligibility_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(recurrent_groups, rows, 1);
+        pass.set_pipeline(&self.kernels.decoder_eligibility_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(decoder_groups, rows, 1);
         pass.set_pipeline(&self.kernels.finalize_pending_eligibility_pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(1, rows, 1);
         Ok(())
     }
 
-    fn record_decode_select(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
+    fn record_decode_select<'pass>(
+        &'pass self,
+        pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
     ) -> Result<(), GpuClosedLoopError> {
         self.validate_dispatch(batch)?;
         let rows =
             u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("closed-loop-decode-pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.kernels.decode_pipeline);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.dispatch_workgroups(1, rows, 1);
-        }
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("closed-loop-memory-context-pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.kernels.memory_context_pipeline);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.dispatch_workgroups(1, rows, 1);
-        }
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("closed-loop-select-pass"),
-            timestamp_writes: None,
-        });
+        pass.set_pipeline(&self.kernels.decode_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(1, rows, 1);
+        pass.set_pipeline(&self.kernels.memory_context_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(1, rows, 1);
         pass.set_pipeline(&self.kernels.select_pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(1, rows, 1);
@@ -2680,29 +2717,18 @@ impl GpuClosedLoopPipelines {
         Some(pending_records)
     }
 
-    fn record_encode(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
+    fn record_encode<'pass>(
+        &'pass self,
+        pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
     ) -> Result<(), GpuClosedLoopError> {
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("closed-loop-clear-diagnostics-pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.kernels.clear_diagnostics_pipeline);
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.dispatch_workgroups(
-                1,
-                u32::try_from(batch.row_count())
-                    .map_err(|_| GpuClosedLoopError::CapacityExceeded)?,
-                1,
-            );
-        }
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("closed-loop-encode-pass"),
-            timestamp_writes: None,
-        });
+        pass.set_pipeline(&self.kernels.clear_diagnostics_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(
+            1,
+            u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?,
+            1,
+        );
         pass.set_pipeline(&self.kernels.encode_pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(
@@ -2715,9 +2741,9 @@ impl GpuClosedLoopPipelines {
 
     /// Dispatches recurrent WGSL only. Candidate decode consumes diagnostic
     /// lane 3 as the GPU-authored active-side receipt before selection.
-    fn record_microsteps(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
+    fn record_microsteps<'pass>(
+        &'pass self,
+        pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
     ) -> Result<GpuRecurrentDispatchReceipt, GpuClosedLoopError> {
         let max_microsteps = batch
@@ -2728,10 +2754,6 @@ impl GpuClosedLoopPipelines {
             .ok_or(GpuClosedLoopError::MalformedUpload)?;
         Self::validate_microstep_count(max_microsteps)?;
         for step in 0..max_microsteps as usize {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("closed-loop-recurrent-pass"),
-                timestamp_writes: None,
-            });
             pass.set_pipeline(&self.kernels.recurrent_pipelines[step]);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.dispatch_workgroups(
@@ -2921,7 +2943,13 @@ fn validate_dispatch(
             || learning.decoder_synapse_count == 0
             || learning.decoder_input_stride < CANDIDATE_FEATURE_COUNT as u32
             || learning.decoder_input_stride > 64
-            || learning.reserved != [0; 3]
+            || learning.scheduled_tile_visits == 0
+            || learning.scheduled_synapse_ops == 0
+            || learning.scheduled_work_checksum
+                != activity.scheduled_work_checksum(
+                    learning.scheduled_tile_visits,
+                    learning.scheduled_synapse_ops,
+                )
             || pending.schema_version != expected_learning_schema
             || pending.slot != header.slot
             || pending.slot_generation != header.slot_generation

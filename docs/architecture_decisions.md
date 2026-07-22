@@ -207,6 +207,14 @@ larger legacy tiers remain inspection/export or research-only. No CPU neural
 shadow, parity gate, automatic CPU neural fallback, configuration override, or
 unbound benchmark result is a promotion mechanism.
 
+The canonical v1 p95 matrix measures the corrected full causal neural tick,
+including eligibility capture and sealed-outcome plasticity. For populations
+`[1, 10, 50, 100, 250, 500]`, its millisecond limits are N512
+`[4, 8, 16, 32, 80, 160]`, N1024 `[6, 12, 32, 64, 160, 320]`, and N2048
+`[8, 16, 64, 128, 320, 640]` for both sensor profiles. Replacing this matrix
+requires a versioned, evidence-backed contract change; generated benchmark
+results are never allowed to redefine the target.
+
 ADR-026 supersedes the benchmark/fallback portions of ADR-016, ADR-019,
 ADR-021, and ADR-022 where they conflict with ADR-024 through ADR-026. Their
 renderer fallback and evidence-honesty decisions remain in force.

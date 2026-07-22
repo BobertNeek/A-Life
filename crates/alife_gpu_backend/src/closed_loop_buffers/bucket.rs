@@ -119,10 +119,6 @@ impl GpuBrainSlot {
     pub const fn brain_slot_index(&self) -> u32 {
         self.brain_slot_index
     }
-
-    pub(crate) fn rebind_bucket_ownership(&mut self, bucket_ownership_token: u64) {
-        self.bucket_ownership_token = bucket_ownership_token;
-    }
 }
 
 #[derive(Debug)]
@@ -2859,53 +2855,6 @@ impl GpuFixedClassArenaBuffers {
         Ok(())
     }
 
-    pub(crate) fn record_persistent_prefix_copy_to(
-        &self,
-        target: &Self,
-        encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<(), GpuClosedLoopError> {
-        if self.max_neurons != target.max_neurons
-            || self.slot_capacity > target.slot_capacity
-            || self.sizes.brain_slots > target.sizes.brain_slots
-            || self.sizes.phenotype_identities > target.sizes.phenotype_identities
-            || self.sizes.immutable_plan_words > target.sizes.immutable_plan_words
-            || self.sizes.immutable_weight_words > target.sizes.immutable_weight_words
-            || self.sizes.mutable_state_words > target.sizes.mutable_state_words
-        {
-            return Err(GpuClosedLoopError::CapacityExceeded);
-        }
-        for (source, destination, bytes) in [
-            (
-                &self.brain_slots,
-                &target.brain_slots,
-                self.sizes.brain_slots,
-            ),
-            (
-                &self.phenotype_identities,
-                &target.phenotype_identities,
-                self.sizes.phenotype_identities,
-            ),
-            (
-                &self.immutable_plan_words,
-                &target.immutable_plan_words,
-                self.sizes.immutable_plan_words,
-            ),
-            (
-                &self.immutable_weight_words,
-                &target.immutable_weight_words,
-                self.sizes.immutable_weight_words,
-            ),
-            (
-                &self.mutable_state_words,
-                &target.mutable_state_words,
-                self.sizes.mutable_state_words,
-            ),
-        ] {
-            encoder.copy_buffer_to_buffer(source, 0, destination, 0, bytes);
-        }
-        Ok(())
-    }
-
     fn validate_ranges(&self, ranges: &GpuFixedSlotRanges) -> Result<(), GpuClosedLoopError> {
         if ranges.arena_ownership_token != self.arena_ownership_token
             || ranges.slot >= self.slot_capacity
@@ -3105,6 +3054,16 @@ mod fixed_arena_tests {
                 crate::GPU_FAST_PLASTICITY_COMMIT_BYTES
                     >= crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES
             );
+        }
+    }
+
+    #[test]
+    fn production_chunk_width_fits_every_promoted_class_storage_binding() {
+        for capacity in BrainCapacityClass::production_classes() {
+            let plan = GpuFixedClassArenaPlan::new(capacity, 32, 2 * 1024 * 1024 * 1024)
+                .expect("production fixed-arena chunk must fit every promoted class");
+            assert_eq!(plan.slot_capacity(), 32);
+            assert!(plan.aggregate_resident_bytes() <= 2 * 1024 * 1024 * 1024);
         }
     }
 

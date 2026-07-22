@@ -243,6 +243,47 @@ fn gpu_closed_loop_target_matrix_is_exact_and_sorted() {
 }
 
 #[test]
+fn target_matrix_covers_the_corrected_full_causal_workload() {
+    let targets = canonical_performance_targets_v1();
+    let populations = [1_u32, 10, 50, 100, 250, 500];
+    let expected_ms = [
+        (
+            BrainCapacityClass::N512_ID.raw(),
+            [4_u64, 8, 16, 32, 80, 160],
+        ),
+        (
+            BrainCapacityClass::N1024_ID.raw(),
+            [6_u64, 12, 32, 64, 160, 320],
+        ),
+        (
+            BrainCapacityClass::N2048_ID.raw(),
+            [8_u64, 16, 64, 128, 320, 640],
+        ),
+    ];
+    for (class_id_raw, class_targets) in expected_ms {
+        for profile in [
+            SensorProfile::PrivilegedAffordanceV1,
+            SensorProfile::GroundedObjectSlotsV1,
+        ] {
+            let actual = populations.map(|population| {
+                targets
+                    .rows
+                    .iter()
+                    .find(|row| {
+                        row.class_id_raw == class_id_raw
+                            && row.sensor_profile_id_raw == profile.raw()
+                            && row.population == population
+                    })
+                    .expect("canonical target row exists")
+                    .target_p95_ns
+                    / 1_000_000
+            });
+            assert_eq!(actual, class_targets);
+        }
+    }
+}
+
+#[test]
 fn population_scaling_reuses_one_class_profile_phenotype() {
     let protocol = GpuClosedLoopBenchmarkProtocolV1::canonical();
     for capacity in [

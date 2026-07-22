@@ -163,7 +163,9 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
       || header.recurrent_synapse_count != brain.recurrent_synapse_count
       || header.decoder_synapse_count != brain.synapse_count - brain.recurrent_synapse_count
       || header.decoder_input_stride != 0u
-      || header.reserved[0] != 0u || header.reserved[1] != 0u || header.reserved[2] != 0u
+      || header.scheduled_tile_visits != 0u
+      || header.scheduled_synapse_ops != 0u
+      || header.scheduled_work_checksum != 0u
       || !state_span_within(brain.extension_record_offset,20u)
       || !plasticity_frame_span_within(header.outcome_offset,OUTCOME_CREDIT_WORDS)) {
     reject_plasticity(receipt_base); return;
@@ -245,26 +247,19 @@ fn apply_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
   let brain = brain_slots[header.brain_slot_index];
   let receipt_base = brain.diagnostic_offset;
-  if (!state_span_within(receipt_base,FAST_PLASTICITY_RECEIPT_WORDS)
-      || load_state_u32(receipt_base+3u) != PLASTICITY_STATUS_PREPARED) { return; }
+  if (load_state_u32(receipt_base+3u) != PLASTICITY_STATUS_PREPARED) { return; }
   let local_synapse = gid.x;
   if (local_synapse >= brain.synapse_count) { return; }
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
   let metadata_base = extension.synapse_metadata_offset + local_synapse*8u;
-  if (!immutable_plan_span_within(metadata_base,8u)) { reject_plasticity(receipt_base); return; }
   let metadata = load_synapse_learning_metadata(metadata_base);
-  if (metadata.global_synapse_id != local_synapse
-      || (metadata.kind != SYNAPSE_KIND_RECURRENT_PLASTICITY && metadata.kind != SYNAPSE_KIND_DECODER_PLASTICITY)
-      || metadata.target_neuron >= brain.neuron_count
-      || (metadata.kind == SYNAPSE_KIND_RECURRENT_PLASTICITY && metadata.eligibility_local_index >= header.recurrent_synapse_count)
-      || (metadata.kind == SYNAPSE_KIND_DECODER_PLASTICITY && metadata.eligibility_local_index >= header.decoder_synapse_count)) {
-    reject_plasticity(receipt_base); return;
-  }
   let receptor_base = extension.receptor_offset + metadata.receptor_index*8u;
-  if (!immutable_plan_span_within(receptor_base,8u)) { reject_plasticity(receipt_base); return; }
-  let receptor = load_plasticity_receptor(receptor_base);
-  if (!receptor_valid_for_plasticity(receptor)) { reject_plasticity(receipt_base); return; }
+  let learning_rate = bitcast<f32>(immutable_plan_words[receptor_base+1u]);
+  let normalization_rate = bitcast<f32>(immutable_plan_words[receptor_base+3u]);
+  let modulator_sign = bitcast<f32>(immutable_plan_words[receptor_base+4u]);
+  let fast_min = bitcast<f32>(immutable_plan_words[receptor_base+5u]);
+  let fast_max = bitcast<f32>(immutable_plan_words[receptor_base+6u]);
   let active_weights = active_weight_bases(brain,extension,learning);
   let inactive_weights = inactive_weight_bases(brain,extension,learning);
   let active_lifetime_index = active_weights.lifetime + local_synapse;
@@ -278,11 +273,11 @@ fn apply_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset+local_synapse]);
   let lifetime = load_state_f32(active_lifetime_index);
   let fast = load_state_f32(active_fast_index);
-  let outcome = load_outcome_credit(header.outcome_offset);
+  let modulator_value = bitcast<f32>(frame_payload_words[header.outcome_offset+39u]);
   let effective = genetic + lifetime + alpha*fast;
-  let delta = receptor.learning_rate*alpha*(outcome.modulator_value*receptor.modulator_sign)*staging_eligibility
-    - receptor.normalization_rate*post*post*effective;
-  let next_fast = clamp(fast+delta,receptor.fast_min,receptor.fast_max);
+  let delta = learning_rate*alpha*(modulator_value*modulator_sign)*staging_eligibility
+    - normalization_rate*post*post*effective;
+  let next_fast = clamp(fast+delta,fast_min,fast_max);
   if (!finite_plasticity(staging_eligibility) || !finite_plasticity(post)
       || !finite_plasticity(genetic) || !finite_plasticity(alpha)
       || !finite_plasticity(lifetime) || !finite_plasticity(fast)

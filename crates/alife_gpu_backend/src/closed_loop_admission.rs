@@ -29,11 +29,11 @@ impl GpuRuntimeProfile {
         Self {
             schema_version: ADMISSION_SCHEMA_VERSION,
             profile_id: 1,
-            logical_neural_heap_budget_bytes: 512 * 1024 * 1024,
-            physical_allocation_ceiling_bytes: 1024 * 1024 * 1024,
+            logical_neural_heap_budget_bytes: 2 * 1024 * 1024 * 1024,
+            physical_allocation_ceiling_bytes: 2 * 1024 * 1024 * 1024,
             max_hot_brains: 500,
             max_in_flight_batches: 8,
-            growth_chunk_slots: 4,
+            growth_chunk_slots: 32,
             retain_empty_chunks: 1,
             reserved: [0; 7],
         }
@@ -71,6 +71,38 @@ impl GpuRuntimeProfile {
             digest.write_u8(byte);
         }
         Ok(digest.finish256())
+    }
+
+    /// Accepts a checkpoint envelope only when its runtime packing can be
+    /// deterministically re-admitted without changing portable brain state.
+    ///
+    /// The sole v1 migration is from the former four-slot production chunks to
+    /// the current fixed 32-slot arenas and wider heap ceilings. Checkpoints do
+    /// not persist arena-local offsets, so this migration only changes fresh
+    /// allocation; phenotype, learning, sleep, memory, and activity state keep
+    /// their exact portable identities.
+    pub fn accepts_portable_checkpoint_profile(
+        &self,
+        saved_profile_id: u16,
+        saved_profile_digest: [u64; 4],
+    ) -> Result<bool, ScaffoldContractError> {
+        self.validate_contract()?;
+        if saved_profile_id != self.profile_id {
+            return Ok(false);
+        }
+        if saved_profile_digest == self.canonical_digest()? {
+            return Ok(true);
+        }
+        if *self != Self::production_v1() {
+            return Ok(false);
+        }
+        let previous_v1 = Self {
+            logical_neural_heap_budget_bytes: 512 * 1024 * 1024,
+            physical_allocation_ceiling_bytes: 1024 * 1024 * 1024,
+            growth_chunk_slots: 4,
+            ..Self::production_v1()
+        };
+        Ok(saved_profile_digest == previous_v1.canonical_digest()?)
     }
 }
 
