@@ -41,6 +41,46 @@ Non-negotiable rules:
 - Future post-R24 productization work should use `docs/productization_s_plans/`
   and must not create P37/G25/S12 automatically.
 
+## Execution discipline
+
+- Before substantial work, state the source of truth, hard constraints,
+  explicitly rejected approaches, required deliverable, and evidence that will
+  prove success. Resolve contradictions before investing in implementation.
+- Separate discovery, production implementation, scaling, and hardening into
+  explicit phases. Do not expand an unapproved experiment or harden a design
+  whose user-facing result has not been accepted.
+- Prove one representative end-to-end vertical slice through the real
+  production path as early as possible. A fixture, mockup, isolated component,
+  or generated concept may guide work, but it is not evidence that the actual
+  product works.
+- Put an early evidence checkpoint on long or uncertain work. If the promised
+  artifact is not available by that checkpoint, report the concrete bottleneck
+  and change the approach instead of silently extending the same loop.
+- For subjective or visual work, capture real product output after the first
+  slice, compare it with the approved reference and acceptance criteria, and
+  fix the largest visible discrepancy before adding breadth.
+- Gate multiplication. Validate a small representative set before producing
+  many variants, migrating all callers, generating a large corpus, or applying
+  a pattern across the repository.
+- Match validation cost to the phase. Use the fastest relevant targeted checks
+  during iteration, then run the complete required validation suite once the
+  result is stable. Never present a targeted, fixture-only, or partial pass as
+  final validation.
+- Treat expensive build and asset-generation pipelines as incremental systems:
+  cache unchanged inputs, bind outputs to source digests, rebuild only affected
+  stages, preserve atomic jobs, and inspect process and receipt state before
+  retrying. A short wait timeout is not proof of failure or completion.
+- Use subagents only for independent, bounded work with explicit inputs,
+  outputs, acceptance criteria, and a clear speed or quality advantage. Keep
+  tightly coupled implementation and rapid visual iteration in one context
+  when coordination would dominate the work.
+- After repeated failures or non-improving iterations, stop and diagnose the
+  root cause. Replace the approach when its assumptions are wrong rather than
+  stacking patches onto a failing direction.
+- Define completion as both a concrete artifact and reproducible evidence from
+  the real system. Optimize feedback latency while iterating, but do not skip
+  the final correctness, boundary, integration, or release gates.
+
 ## graphify
 
 Graphify is optional project tooling. It is installed project-scoped through
