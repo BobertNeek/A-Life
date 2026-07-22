@@ -68,7 +68,11 @@ pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
 pub use evidence_digest::{
     lobe_layout_evidence_digest, projection_plan_evidence_digest, synapse_payload_evidence_digest,
-    PhenotypeEvidenceManifest, GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA,
+    GpuClosedLoopBenchmarkProtocolV1, PhenotypeEvidenceManifest,
+    GPU_CLOSED_LOOP_BENCHMARK_BASE_SEED, GPU_CLOSED_LOOP_BENCHMARK_MEASURED_TICKS,
+    GPU_CLOSED_LOOP_BENCHMARK_PROTOCOL_VERSION, GPU_CLOSED_LOOP_BENCHMARK_SCHEMA,
+    GPU_CLOSED_LOOP_BENCHMARK_TIMESTAMP_SCOPE_SPLIT, GPU_CLOSED_LOOP_BENCHMARK_WARMUP_TICKS,
+    GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA,
 };
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,

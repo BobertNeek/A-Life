@@ -13,7 +13,8 @@ use std::{
 };
 
 use alife_core::{
-    BrainCapacityClass, BrainClassId, CanonicalDigestBuilder, PhenotypeHash, SensorProfile,
+    BrainCapacityClass, BrainClassId, CanonicalDigestBuilder, GpuClosedLoopBenchmarkProtocolV1,
+    PhenotypeHash, SensorProfile,
 };
 use alife_gpu_backend::GpuHardwareReceipt;
 use alife_world::persistence::GpuBackendProvenanceSave;
@@ -1481,27 +1482,13 @@ fn parse_benchmark_manifest_value(
         .ok_or(PromotionEvidenceError::Contract(
             "benchmark protocol is missing",
         ))?;
-    let protocol_digest = digest4_field(protocol, "protocol_digest")?;
-    if u16_field(protocol, "schema_version")? != 1
-        || u16_field(protocol, "protocol_version")? != 1
-        || u32_field(protocol, "warmup_ticks")? != 256
-        || u32_field(protocol, "measured_ticks")? != 1_024
-        || u16_field(protocol, "samples_per_tick")? != 1
-        || u16_field(protocol, "nearest_rank_percentile")? != 95
-        || u16_field(protocol, "timestamp_scope_raw")? != 2
-        || u64_field(protocol, "base_seed")? != 4_404
-        || protocol_digest == [0; 4]
-        || protocol_digest
-            != canonical_json_struct_digest(
-                b"alife.gpu.closed-loop-benchmark.protocol.v1",
-                protocol,
-                "protocol_digest",
-            )?
-    {
+    let protocol: GpuClosedLoopBenchmarkProtocolV1 = serde_json::from_value(protocol.clone())?;
+    if !protocol.is_canonical() {
         return Err(PromotionEvidenceError::Contract(
             "benchmark protocol is not canonical v1",
         ));
     }
+    let protocol_digest = protocol.protocol_digest;
     let raw_rows =
         object
             .get("rows")
@@ -1902,15 +1889,6 @@ fn u32_field(value: &Value, field: &str) -> Result<u32, PromotionEvidenceError> 
         .and_then(|value| u32::try_from(value).ok())
         .ok_or(PromotionEvidenceError::Contract(
             "evidence u32 field is missing or invalid",
-        ))
-}
-
-fn u64_field(value: &Value, field: &str) -> Result<u64, PromotionEvidenceError> {
-    value
-        .get(field)
-        .and_then(Value::as_u64)
-        .ok_or(PromotionEvidenceError::Contract(
-            "evidence u64 field is missing or invalid",
         ))
 }
 
@@ -2374,24 +2352,9 @@ mod tests {
         let adapter = test_adapter();
         let adapter_value = serde_json::to_value(&adapter).unwrap();
         let adapter_identity = benchmark_adapter_identity_digest(&adapter).unwrap();
-        let mut protocol = json!({
-            "schema_version": 1,
-            "protocol_version": 1,
-            "warmup_ticks": 256,
-            "measured_ticks": 1024,
-            "samples_per_tick": 1,
-            "nearest_rank_percentile": 95,
-            "timestamp_scope_raw": 2,
-            "base_seed": 4404,
-            "protocol_digest": [0, 0, 0, 0],
-        });
-        let protocol_digest = canonical_json_struct_digest(
-            b"alife.gpu.closed-loop-benchmark.protocol.v1",
-            &protocol,
-            "protocol_digest",
-        )
-        .unwrap();
-        protocol["protocol_digest"] = serde_json::to_value(protocol_digest).unwrap();
+        let protocol_contract = GpuClosedLoopBenchmarkProtocolV1::canonical();
+        let protocol_digest = protocol_contract.protocol_digest;
+        let protocol = serde_json::to_value(protocol_contract).unwrap();
 
         let mut rows = Vec::new();
         for capacity in [

@@ -6,6 +6,12 @@ use alife_core::{
     BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, CanonicalDigestBuilder,
     PhenotypeEvidenceManifest, PhenotypeHash, SchemaKind, SchemaVersions, SensorProfile,
 };
+pub use alife_core::{
+    GpuClosedLoopBenchmarkProtocolV1, GPU_CLOSED_LOOP_BENCHMARK_BASE_SEED,
+    GPU_CLOSED_LOOP_BENCHMARK_MEASURED_TICKS, GPU_CLOSED_LOOP_BENCHMARK_PROTOCOL_VERSION,
+    GPU_CLOSED_LOOP_BENCHMARK_SCHEMA, GPU_CLOSED_LOOP_BENCHMARK_TIMESTAMP_SCOPE_SPLIT,
+    GPU_CLOSED_LOOP_BENCHMARK_WARMUP_TICKS,
+};
 use alife_game_app::{
     compile_gpu_closed_loop_benchmark_phenotype, run_gpu_closed_loop_benchmark_trial,
     GpuClosedLoopBenchmarkTrialError, GpuClosedLoopBenchmarkTrialOptions,
@@ -16,18 +22,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-pub const GPU_CLOSED_LOOP_BENCHMARK_SCHEMA: u16 = 1;
-pub const GPU_CLOSED_LOOP_BENCHMARK_PROTOCOL_VERSION: u16 = 1;
-pub const GPU_CLOSED_LOOP_BENCHMARK_BASE_SEED: u64 = 4_404;
-pub const GPU_CLOSED_LOOP_BENCHMARK_WARMUP_TICKS: u32 = 256;
-pub const GPU_CLOSED_LOOP_BENCHMARK_MEASURED_TICKS: u32 = 1_024;
 pub const GPU_CLOSED_LOOP_BENCHMARK_P95_INDEX: usize = 972;
-pub const GPU_CLOSED_LOOP_BENCHMARK_TIMESTAMP_SCOPE_SPLIT: u16 = 2;
 pub const GPU_BENCHMARK_UNAVAILABLE_NO_ADAPTER: u16 = 1;
 pub const GPU_BENCHMARK_UNAVAILABLE_REQUIRED_CAPABILITY: u16 = 2;
 pub const GPU_BENCHMARK_UNAVAILABLE_ADMISSION: u16 = 3;
 
-const PROTOCOL_DOMAIN: &[u8] = b"alife.gpu.closed-loop-benchmark.protocol.v1";
 const ENVIRONMENT_DOMAIN: &[u8] = b"alife.gpu.closed-loop-benchmark.environment.v1";
 const ADAPTER_IDENTITY_DOMAIN: &[u8] = b"alife.gpu.closed-loop-benchmark.adapter.v1";
 const ROW_DOMAIN: &[u8] = b"alife.gpu.closed-loop-benchmark.row.v1";
@@ -48,66 +47,6 @@ pub enum GpuBenchmarkError {
     Json(#[from] serde_json::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GpuClosedLoopBenchmarkProtocolV1 {
-    pub schema_version: u16,
-    pub protocol_version: u16,
-    pub warmup_ticks: u32,
-    pub measured_ticks: u32,
-    pub samples_per_tick: u16,
-    pub nearest_rank_percentile: u16,
-    pub timestamp_scope_raw: u16,
-    pub base_seed: u64,
-    pub protocol_digest: [u64; 4],
-}
-
-impl GpuClosedLoopBenchmarkProtocolV1 {
-    pub fn canonical() -> Self {
-        let mut protocol = Self {
-            schema_version: GPU_CLOSED_LOOP_BENCHMARK_SCHEMA,
-            protocol_version: GPU_CLOSED_LOOP_BENCHMARK_PROTOCOL_VERSION,
-            warmup_ticks: GPU_CLOSED_LOOP_BENCHMARK_WARMUP_TICKS,
-            measured_ticks: GPU_CLOSED_LOOP_BENCHMARK_MEASURED_TICKS,
-            samples_per_tick: 1,
-            nearest_rank_percentile: 95,
-            timestamp_scope_raw: GPU_CLOSED_LOOP_BENCHMARK_TIMESTAMP_SCOPE_SPLIT,
-            base_seed: GPU_CLOSED_LOOP_BENCHMARK_BASE_SEED,
-            protocol_digest: [0; 4],
-        };
-        protocol.protocol_digest = protocol.recompute_digest();
-        protocol
-    }
-
-    pub fn recompute_digest(&self) -> [u64; 4] {
-        let mut digest = CanonicalDigestBuilder::new(PROTOCOL_DOMAIN);
-        digest.write_u16(self.schema_version);
-        digest.write_u16(self.protocol_version);
-        digest.write_u32(self.warmup_ticks);
-        digest.write_u32(self.measured_ticks);
-        digest.write_u16(self.samples_per_tick);
-        digest.write_u16(self.nearest_rank_percentile);
-        digest.write_u16(self.timestamp_scope_raw);
-        digest.write_u64(self.base_seed);
-        digest.finish256()
-    }
-
-    pub fn validate(&self) -> Result<(), GpuBenchmarkError> {
-        if self != &Self::canonical() {
-            return Err(GpuBenchmarkError::Contract(
-                "benchmark protocol is not canonical",
-            ));
-        }
-        Ok(())
-    }
-
-    pub const fn row_seed(self, class_id_raw: u16, profile_id_raw: u16, population: u32) -> u64 {
-        self.base_seed
-            ^ ((class_id_raw as u64) << 48)
-            ^ ((profile_id_raw as u64) << 32)
-            ^ (population as u64)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -429,7 +368,11 @@ impl GpuClosedLoopBenchmarkManifest {
 
     pub fn validate(&self, targets: &GpuPerformanceTargetsV1) -> Result<(), GpuBenchmarkError> {
         targets.validate()?;
-        self.protocol.validate()?;
+        if !self.protocol.is_canonical() {
+            return Err(GpuBenchmarkError::Contract(
+                "benchmark protocol is not canonical",
+            ));
+        }
         if self.schema_version != GPU_CLOSED_LOOP_BENCHMARK_SCHEMA
             || !is_lower_hex_oid(&self.git_commit)
             || !is_lower_hex_oid(&self.source_tree_digest)
