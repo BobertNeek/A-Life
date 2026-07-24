@@ -6,9 +6,10 @@ use alife_core::{
     GaussianContextRef, GaussianSalienceEntry, HeardToken, HomeostaticSnapshot, NormalizedScalar,
     OrganismId, PerceptionBaseDigest, PerceptionContextBlock, PerceptionContextDigest,
     PerceptionContextKind, PerceptionFrameDigest, PerceptionFrameDraft, Pose, Quatf,
-    SemanticContextRef, SemanticSalienceEntry, SensorProfile, SensoryChannels, SensorySnapshot,
-    SignedValence, SocialAgentSnapshot, SocialProximityEntry, TeacherPerceptionChannel, Tick,
-    Validate, Vec3f, Velocity, VocalizedToken, WorldEntityId,
+    SemanticContextRef, SemanticSalienceEntry, SensorProfile, SensorProfileProvenance,
+    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, SocialAgentSnapshot,
+    SocialProximityEntry, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
+    VocalizedToken, WorldEntityId,
 };
 
 fn organism() -> OrganismId {
@@ -170,7 +171,7 @@ fn rich_candidates() -> Vec<ActionCandidate> {
         ActionId(101),
         ActionKind::Move,
         CandidateActionFamily::Approach,
-        CandidateObservationRef::ObjectSlot(3),
+        CandidateObservationRef::None,
         ActionTarget::new(Some(WorldEntityId(44)), Some(Vec3f::new(1.0, -1.0, 2.0))),
         features,
         Confidence::new(0.9).unwrap(),
@@ -201,6 +202,13 @@ fn rich_draft() -> PerceptionFrameDraft {
         },
         rich_homeostasis(tick),
         rich_candidates(),
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
     )
     .unwrap()
 }
@@ -210,31 +218,33 @@ fn perception_digest_golden_vectors_are_stable() {
     let draft = rich_draft();
     assert_eq!(
         draft.candidates()[1].feature_digest().unwrap(),
-        CandidateFeatureDigest([0x4fa6_cef2_258f_c5f4, 0x01d1_f060_babb_702f])
+        CandidateFeatureDigest([0xb645_d16b_9d15_451e, 0xe695_6e1d_af56_0dc8])
     );
     assert_eq!(
         draft.base_digest(),
         PerceptionBaseDigest([
-            0x1f4d_b183_fbd2_bf95,
-            0xa68d_a972_d33d_afde,
-            0xfacc_efb2_d558_5d54,
-            0x84bc_9112_425e_d340,
+            0xb9e6_553a_8a7c_02a7,
+            0xb1ed_a030_f362_93ca,
+            0xc176_ff6c_05ca_f8c6,
+            0x02c9_ac28_7401_2c99,
         ])
     );
 
+    let mut context_values = vec![0.0; alife_core::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE];
+    context_values[..3].copy_from_slice(&[0.25, -0.5, 0.75]);
     let context = PerceptionContextBlock::try_new(
         1,
         PerceptionContextKind::EpisodicCandidateV1,
-        vec![0.25, -0.5, 0.75],
+        context_values,
     )
     .unwrap();
     assert_eq!(
         context.canonical_digest(),
         PerceptionContextDigest([
-            0x2292_df40_666c_8eec,
-            0x4747_70af_9dbd_55de,
-            0x07a7_8352_cd71_d092,
-            0xd5e1_4742_6847_84b7,
+            0xbe2b_a6cd_b50e_7e56,
+            0x61bc_faa2_d819_ef59,
+            0x63ac_c64d_a541_0f5a,
+            0x8bb4_a389_18ad_051a,
         ])
     );
 
@@ -242,10 +252,10 @@ fn perception_digest_golden_vectors_are_stable() {
     assert_eq!(
         frame.frame_digest(),
         PerceptionFrameDigest([
-            0xbfb5_9dd8_498b_fe76,
-            0x9247_09b0_59cf_6b77,
-            0x6cb3_958b_0f14_99b1,
-            0x1fc6_80b0_a601_416a,
+            0x485c_3578_8fcb_d2b5,
+            0x72df_599f_352d_a9fe,
+            0xcce9_78b2_3cdd_7c38,
+            0x5baf_03df_f1eb_ca98,
         ])
     );
 }

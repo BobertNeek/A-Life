@@ -101,7 +101,9 @@ impl RequiredGpuFactory for ProductionRequiredGpuFactory {
     fn new_required(
         &self,
     ) -> Result<alife_gpu_backend::GpuClosedLoopBackend, alife_core::ScaffoldContractError> {
-        alife_gpu_backend::GpuClosedLoopBackend::new_required()
+        alife_gpu_backend::GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
     }
 }
 

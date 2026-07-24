@@ -32,7 +32,7 @@ fn auxiliary_decoder_digest(
 ) -> [u64; 4] {
     let mut digest = CanonicalDigestBuilder::new(b"alife.phenotype.auxiliary-decoder.v1");
     digest.write_u16(1);
-    digest.write_u8(head.raw());
+    digest.write_u32(head.raw());
     digest.write_u16(input_width);
     digest.write_u16(output_width);
     digest.write_u32(start);

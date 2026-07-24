@@ -1,8 +1,8 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionArbitrationTraceRef, ActionCommand,
-    ActionDecisionStatus, ActionFallbackReason, ActionId, ActionKind, ActionProposal,
-    ActionRegistryEntry, ActionScoreBias, ActionTarget, Confidence, DurationTicks, Intensity,
-    LobeIndex, MotorPayloadKind, MotorPayloadRef, NormalizedScalar, OrganismId,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionArbitrationTraceRef,
+    ActionCommand, ActionDecisionStatus, ActionFallbackReason, ActionId, ActionKind,
+    ActionProposal, ActionRegistryEntry, ActionScoreBias, ActionTarget, Confidence, DurationTicks,
+    Intensity, LobeIndex, MotorPayloadKind, MotorPayloadRef, NormalizedScalar, OrganismId,
     ScaffoldContractError, SuppressionReason, TeacherLessonMetadata, TeacherLessonResponseChannel,
     Validate, Vec3f, WorldEntityId,
 };
@@ -122,7 +122,7 @@ fn cpu_arbitration_selects_deterministic_wta_and_preserves_source_mask() {
         ),
     ];
 
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         OrganismId(1),
         &proposals,
         ActionArbitrationConfig::default(),
@@ -158,8 +158,8 @@ fn tie_breaking_is_seeded_and_repeatable() {
         ..ActionArbitrationConfig::default()
     };
 
-    let first = cpu_reference_arbitrate(OrganismId(1), &proposals, config).unwrap();
-    let second = cpu_reference_arbitrate(OrganismId(1), &proposals, config).unwrap();
+    let first = heuristic_baseline_arbitrate(OrganismId(1), &proposals, config).unwrap();
+    let second = heuristic_baseline_arbitrate(OrganismId(1), &proposals, config).unwrap();
 
     assert_eq!(first.selected, second.selected);
     assert_eq!(first.trace.tie_breaker_seed, 55);
@@ -186,7 +186,7 @@ fn fallback_command_is_used_when_no_proposal_passes_threshold() {
         ..ActionArbitrationConfig::default()
     };
 
-    let decision = cpu_reference_arbitrate(OrganismId(1), &proposals, config).unwrap();
+    let decision = heuristic_baseline_arbitrate(OrganismId(1), &proposals, config).unwrap();
 
     assert_eq!(decision.status, ActionDecisionStatus::FallbackSelected);
     assert_eq!(
@@ -219,7 +219,7 @@ fn invalid_target_is_suppressed_without_blocking_valid_candidates() {
         ),
     ];
 
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         OrganismId(1),
         &proposals,
         ActionArbitrationConfig::default(),
@@ -252,7 +252,7 @@ fn teacher_lesson_metadata_does_not_bypass_selection() {
     .with_teacher_lesson(Some(teacher_metadata));
     let ordinary = proposal(400, ActionKind::Move, 0.70, 0.8, Some(WorldEntityId(11)), 2);
 
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         OrganismId(1),
         &[teacher_tagged, ordinary],
         ActionArbitrationConfig::default(),
@@ -284,7 +284,7 @@ fn memory_expectancy_bias_modulates_scores_without_replay_actions() {
     .with_score_bias(ActionScoreBias::memory_expectancy(0.40).unwrap());
     let unbiassed = proposal(400, ActionKind::Move, 0.60, 0.8, Some(WorldEntityId(11)), 2);
 
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         OrganismId(1),
         &[biased, unbiassed],
         ActionArbitrationConfig::default(),
@@ -293,7 +293,7 @@ fn memory_expectancy_bias_modulates_scores_without_replay_actions() {
 
     assert_eq!(decision.selected.action_id, ActionId::new(300).unwrap());
 
-    let fallback = cpu_reference_arbitrate(
+    let fallback = heuristic_baseline_arbitrate(
         OrganismId(1),
         &[],
         ActionArbitrationConfig {

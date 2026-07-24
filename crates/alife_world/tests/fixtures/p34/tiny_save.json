@@ -36,17 +36,128 @@
     },
     "logging": {
       "enabled": true,
-      "packed_log_schema_version": 1,
+      "packed_log_schema_version": 2,
       "max_side_buffer_bytes": 4194304,
       "relative_log_path": null
     },
     "asset_root": "assets",
     "save_root": "saves"
   },
+  "gpu_runtime": null,
   "assets": {
     "schema": "alife.p34.asset_manifest.v1",
     "schema_version": 1,
     "entries": [
+      {
+        "asset_id": "gpu-brain.activation.157bbf04c460f9c1",
+        "kind": "Other",
+        "relative_path": "gpu-brain/activation-157bbf04c460f9c1.json",
+        "digest": "fnv1a64:157bbf04c460f9c1",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 2384,
+        "provenance": "gpu-checkpoint:activation"
+      },
+      {
+        "asset_id": "gpu-brain.compiler-inputs.7c795e22679dd105",
+        "kind": "Other",
+        "relative_path": "gpu-brain/compiler-inputs-7c795e22679dd105.json",
+        "digest": "fnv1a64:7c795e22679dd105",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 5122,
+        "provenance": "gpu-checkpoint:compiler-inputs"
+      },
+      {
+        "asset_id": "gpu-brain.eligibility.83ffe26ac44b4df0",
+        "kind": "Other",
+        "relative_path": "gpu-brain/eligibility-83ffe26ac44b4df0.json",
+        "digest": "fnv1a64:83ffe26ac44b4df0",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 7625,
+        "provenance": "gpu-checkpoint:eligibility"
+      },
+      {
+        "asset_id": "gpu-brain.fast.65179fa5ee9b5fb7",
+        "kind": "Other",
+        "relative_path": "gpu-brain/fast-65179fa5ee9b5fb7.json",
+        "digest": "fnv1a64:65179fa5ee9b5fb7",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 7525,
+        "provenance": "gpu-checkpoint:fast"
+      },
+      {
+        "asset_id": "gpu-brain.homeostasis.9e64d13deb24f2fe",
+        "kind": "Other",
+        "relative_path": "gpu-brain/homeostasis-9e64d13deb24f2fe.json",
+        "digest": "fnv1a64:9e64d13deb24f2fe",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 2326,
+        "provenance": "gpu-checkpoint:homeostasis"
+      },
+      {
+        "asset_id": "gpu-brain.lifetime.707c92ec1ba470f6",
+        "kind": "Other",
+        "relative_path": "gpu-brain/lifetime-707c92ec1ba470f6.json",
+        "digest": "fnv1a64:707c92ec1ba470f6",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 7525,
+        "provenance": "gpu-checkpoint:lifetime"
+      },
+      {
+        "asset_id": "gpu-brain.memory-active.368bbd1de2b0085f",
+        "kind": "Other",
+        "relative_path": "gpu-brain/memory-active-368bbd1de2b0085f.json",
+        "digest": "fnv1a64:368bbd1de2b0085f",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 559,
+        "provenance": "gpu-checkpoint:memory-active"
+      },
+      {
+        "asset_id": "gpu-brain.phenotype.e49348c687247171",
+        "kind": "Other",
+        "relative_path": "gpu-brain/phenotype-e49348c687247171.json",
+        "digest": "fnv1a64:e49348c687247171",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 1555421,
+        "provenance": "gpu-checkpoint:phenotype"
+      },
+      {
+        "asset_id": "gpu-brain.replay-journal.998c740acff8209f",
+        "kind": "Other",
+        "relative_path": "gpu-brain/replay-journal-998c740acff8209f.json",
+        "digest": "fnv1a64:998c740acff8209f",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 5130,
+        "provenance": "gpu-checkpoint:replay-journal"
+      },
+      {
+        "asset_id": "gpu-brain.throttle-sequence.09612b07b5ecb5a5",
+        "kind": "Other",
+        "relative_path": "gpu-brain/throttle-sequence-09612b07b5ecb5a5.json",
+        "digest": "fnv1a64:09612b07b5ecb5a5",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 2,
+        "provenance": "gpu-checkpoint:throttle-sequence"
+      },
+      {
+        "asset_id": "gpu-brain.topology-sidecar.290f2edd83f82ec2",
+        "kind": "Other",
+        "relative_path": "gpu-brain/topology-sidecar-290f2edd83f82ec2.json",
+        "digest": "fnv1a64:290f2edd83f82ec2",
+        "presence": "Required",
+        "schema_version": 1,
+        "size_bytes": 761,
+        "provenance": "gpu-checkpoint:topology-sidecar"
+      },
       {
         "asset_id": "tiny-generated-weights",
         "kind": "GeneratedWeights",
@@ -63,13 +174,19 @@
     "seed": 4242,
     "tick": 2,
     "next_entity_id": 5,
+    "next_spawn_sequence": 3,
     "objects": [
       {
+        "schema_version": 1,
         "id": 1,
         "label": "agent",
         "kind": "Agent",
         "organism_id": 1,
-        "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+        "position": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
         "radius": 0.75,
         "nutrition": 0.0,
         "hazard_pain": 0.0,
@@ -77,14 +194,62 @@
         "social_affinity": 0.0,
         "teacher_channel": null,
         "consumed": false,
-        "carried_by": null
+        "carried_by": null,
+        "grounded_physical": {
+          "velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "color": [
+            0.2509804,
+            0.7607843,
+            0.98039216
+          ],
+          "material": [
+            0.48235294,
+            0.6392157,
+            0.70980394
+          ],
+          "shape": [
+            0.33333334,
+            0.54901963,
+            0.50980395
+          ],
+          "chemical": [
+            0.23921573,
+            -0.10588235,
+            -0.027450979
+          ],
+          "surface_temperature": 0.37254906,
+          "terrain": [
+            0.36078432,
+            0.74509805
+          ]
+        },
+        "tracking_provenance": {
+          "schema_version": 1,
+          "world_seed": 4242,
+          "zone_id": 0,
+          "spawn_sequence": 1,
+          "lineage_key": 1
+        },
+        "tracking_key": [
+          110635904595791298,
+          18337651044597684867
+        ]
       },
       {
+        "schema_version": 1,
         "id": 2,
         "label": "berry",
         "kind": "Food",
         "organism_id": null,
-        "position": { "x": 1.0, "y": 0.0, "z": 0.0 },
+        "position": {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
         "radius": 0.75,
         "nutrition": 0.75,
         "hazard_pain": 0.0,
@@ -92,22 +257,111 @@
         "social_affinity": 0.0,
         "teacher_channel": null,
         "consumed": false,
-        "carried_by": null
+        "carried_by": null,
+        "grounded_physical": {
+          "velocity": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "color": [
+            0.827451,
+            0.078431375,
+            0.23137255
+          ],
+          "material": [
+            0.92156863,
+            0.6745098,
+            0.5882353
+          ],
+          "shape": [
+            0.63529414,
+            0.36862746,
+            0.89411765
+          ],
+          "chemical": [
+            0.7882353,
+            0.45098042,
+            0.07450986
+          ],
+          "surface_temperature": 0.20784318,
+          "terrain": [
+            0.96862745,
+            0.09803922
+          ]
+        },
+        "tracking_provenance": {
+          "schema_version": 1,
+          "world_seed": 4242,
+          "zone_id": 0,
+          "spawn_sequence": 2,
+          "lineage_key": 0
+        },
+        "tracking_key": [
+          2063860419051599018,
+          1312361456848426386
+        ]
       }
     ],
-    "last_touched_entities": []
+    "last_touched_entities": [],
+    "ecology": {
+      "schema": "alife.g07.world_ecology.v1",
+      "schema_version": 1,
+      "config": {
+        "max_world_objects": 64,
+        "max_resource_records": 32,
+        "max_zones": 8,
+        "max_spawn_per_tick": 2,
+        "cycle_length_ticks": 24
+      },
+      "zones": [],
+      "resources": [],
+      "spawn_policies": [],
+      "metrics": {
+        "active_resources": 0,
+        "consumed_resources": 0,
+        "active_hazards": 0,
+        "zones": 0,
+        "resources_regrown": 0,
+        "resources_spawned": 0,
+        "resources_decayed": 0,
+        "cleanup_marked": 0,
+        "cap_rejections": 0
+      }
+    },
+    "voxel_backend": null
   },
   "creatures": [
     {
       "organism_id": 1,
       "genome_id": 17,
       "brain_class": "Nano512",
-      "development_tick": 3,
+      "development_tick": 2,
+      "appearance": {
+        "schema_version": 2,
+        "species_archetype": 0,
+        "part_sources": {
+          "head": 0,
+          "torso": 0,
+          "arms": 0,
+          "legs": 0,
+          "tail": 0
+        },
+        "palette_family": 12,
+        "fur_pattern": 4,
+        "marking_density": 8,
+        "accessory_trait": 2,
+        "ear_muzzle_trait": 13,
+        "tail_trait": 11,
+        "body_mass_trait": 9,
+        "mutation_count": 0,
+        "bipedal_caveman_furry": true
+      },
       "mind": {
-        "tick": 3,
+        "tick": 2,
         "homeostasis": {
           "schema_version": 1,
-          "tick": 3,
+          "tick": 2,
           "drives": {
             "hunger": 0.25,
             "fatigue": 0.2,
@@ -118,7 +372,10 @@
             "brain_atp": 0.75,
             "temperature_stress": 0.0,
             "reproductive_drive": 0.1,
-            "extension": [0.0, 0.0]
+            "extension": [
+              0.0,
+              0.0
+            ]
           },
           "hormones": {
             "adrenaline": 0.2,
@@ -130,17 +387,22 @@
             "learning_modulator": 0.5,
             "developmental_hormone": 0.5,
             "sleep_pressure": 0.2,
-            "extension": [0.0, 0.0]
+            "extension": [
+              0.0,
+              0.0
+            ]
           }
         },
-        "memory_record_count": 1,
+        "memory_record_count": 0,
         "memory_source_ids": [],
-        "concept_count": 1,
+        "concept_count": 0,
         "edge_count": 0,
         "simplex_count": 0,
         "unresolved_gap_count": 0,
-        "sleep_state_label": "awake",
-        "diagnostics": ["fixture"]
+        "sleep_state_label": "gpu:Awake:consolidation-0:cycle-0",
+        "diagnostics": [
+          "fixture"
+        ]
       },
       "weights": {
         "generated_weight_asset_id": "tiny-generated-weights",
@@ -154,6 +416,386 @@
         "lifetime_learning_enabled": true,
         "lamarckian_mode_enabled": false,
         "last_consolidated_tick": 2
+      },
+      "gpu_brain": {
+        "schema_version": 3,
+        "organism_id": 1,
+        "phenotype_hash": [
+          5885994325298887104,
+          10688656878142778782,
+          14176634034225469271,
+          12750732584766968665
+        ],
+        "capacity_class_id": 1,
+        "sensor_profile": {
+          "profile_id": 1,
+          "profile_schema_version": 1,
+          "sensory_abi_version": 1
+        },
+        "immutable_phenotype": {
+          "asset_id": "gpu-brain.phenotype.e49348c687247171",
+          "digest": "fnv1a64:e49348c687247171"
+        },
+        "phenotype_compiler_inputs": {
+          "asset_id": "gpu-brain.compiler-inputs.7c795e22679dd105",
+          "digest": "fnv1a64:7c795e22679dd105"
+        },
+        "active_weight_generation": 1,
+        "active_weight_bank": 0,
+        "active_eligibility_bank": 0,
+        "learning_transaction_generation": 1,
+        "lifetime_weights": {
+          "asset_id": "gpu-brain.lifetime.707c92ec1ba470f6",
+          "digest": "fnv1a64:707c92ec1ba470f6"
+        },
+        "fast_weights": {
+          "asset_id": "gpu-brain.fast.65179fa5ee9b5fb7",
+          "digest": "fnv1a64:65179fa5ee9b5fb7"
+        },
+        "eligibility": {
+          "asset_id": "gpu-brain.eligibility.83ffe26ac44b4df0",
+          "digest": "fnv1a64:83ffe26ac44b4df0"
+        },
+        "replay_journal": {
+          "asset_id": "gpu-brain.replay-journal.998c740acff8209f",
+          "digest": "fnv1a64:998c740acff8209f"
+        },
+        "replay_journal_generation": 1,
+        "replay_journal_cursor": 0,
+        "replay_journal_event_count": 0,
+        "activation_state": {
+          "asset_id": "gpu-brain.activation.157bbf04c460f9c1",
+          "digest": "fnv1a64:157bbf04c460f9c1"
+        },
+        "neuron_homeostasis": {
+          "asset_id": "gpu-brain.homeostasis.9e64d13deb24f2fe",
+          "digest": "fnv1a64:9e64d13deb24f2fe"
+        },
+        "checkpoint_tick": 2,
+        "last_learning_replay_key": null,
+        "pending_eligibility": null,
+        "pending_experience_transaction": null,
+        "memory": {
+          "summary": {
+            "schema_version": 1,
+            "organism_id_raw": 1,
+            "profile": {
+              "profile_id": 1,
+              "profile_schema_version": 1,
+              "sensory_abi_version": 1
+            },
+            "capacity": 64,
+            "record_count": 0,
+            "merge_count": 0,
+            "eviction_count": 0,
+            "compaction_count": 0,
+            "active_generation": 0,
+            "active_digest": [
+              9698862336205796363,
+              6142953211101743273,
+              1782740196776912935,
+              6645329718711368471
+            ]
+          },
+          "compaction": {
+            "checkpoint": {
+              "schema_version": 2,
+              "organism_id_raw": 1,
+              "active_generation": 0,
+              "active_digest": [
+                9698862336205796363,
+                6142953211101743273,
+                1782740196776912935,
+                6645329718711368471
+              ],
+              "last_committed_cycle_id": null,
+              "next_cycle_id": 1,
+              "phase": "Idle"
+            },
+            "active_bank_asset": {
+              "asset_id": "gpu-brain.memory-active.368bbd1de2b0085f",
+              "digest": "fnv1a64:368bbd1de2b0085f"
+            },
+            "staged_bank_asset": null
+          },
+          "retained_learning": null
+        },
+        "topology": {
+          "schema_version": 1,
+          "organism_id_raw": 1,
+          "profile": {
+            "profile_id": 1,
+            "profile_schema_version": 1,
+            "sensory_abi_version": 1
+          },
+          "counts": {
+            "concepts": 0,
+            "edges": 0,
+            "simplexes": 0,
+            "unresolved_gaps": 0
+          },
+          "next_concept_id_raw": 1,
+          "next_edge_id_raw": 1,
+          "next_simplex_id_raw": 1,
+          "next_gap_id_raw": 1,
+          "max_bindings_per_kind": 32,
+          "has_last_observation": false,
+          "last_observed_sequence_id_raw": 0,
+          "last_observed_key_digest": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "degradation_count": 0,
+          "replay_rejection_count": 0,
+          "canonical_digest": [
+            1812205694323856668,
+            8042509613708223789,
+            5895892245973407265,
+            5983540993238382246
+          ],
+          "summary_asset": {
+            "asset_id": "gpu-brain.topology-sidecar.290f2edd83f82ec2",
+            "digest": "fnv1a64:290f2edd83f82ec2"
+          }
+        },
+        "tracked_objects": {
+          "schema_version": 1,
+          "world_seed": 4242,
+          "organism_id": 1,
+          "capacity": 1024,
+          "next_id": 230831858392720,
+          "records": []
+        },
+        "sleep": {
+          "schema_version": 1,
+          "phase": "Awake",
+          "phase_started_tick": 0,
+          "entered_sleep_tick": null,
+          "cycles_completed": 0,
+          "last_trigger": null,
+          "active_cycle_id": 0,
+          "last_consolidated_cycle_id": 0,
+          "consolidation": "None"
+        },
+        "sleep_assets": {
+          "replay_batch": null,
+          "lifetime_staging": null,
+          "fast_staging": null,
+          "eligibility_staging": null,
+          "replay_journal_staging": null
+        },
+        "backend_provenance": {
+          "schema_version": 1,
+          "backend_api_raw": 1,
+          "vendor_id": 4318,
+          "device_id": 9602,
+          "backend_version_major": 0,
+          "backend_version_minor": 1,
+          "backend_version_patch": 0,
+          "adapter_name_len": 23,
+          "adapter_name_utf8": [
+            78,
+            86,
+            73,
+            68,
+            73,
+            65,
+            32,
+            71,
+            101,
+            70,
+            111,
+            114,
+            99,
+            101,
+            32,
+            82,
+            84,
+            88,
+            32,
+            51,
+            48,
+            53,
+            48,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "driver_digest": [
+            14844111704067318861,
+            8333722380115877448,
+            14756969768802843840,
+            7551816136776032961
+          ],
+          "required_features_digest": [
+            405644668063157395,
+            961920981460498693,
+            15744928097394005554,
+            15887086596962944949
+          ],
+          "required_limits_digest": [
+            6866174084733670611,
+            10132618378107007067,
+            4762033249717566976,
+            7360921398546223356
+          ],
+          "available_features_digest": [
+            15706236095473546371,
+            6171321751519962572,
+            17906582510792600341,
+            5339043351149818590
+          ],
+          "adapter_limits_digest": [
+            5297400046688054671,
+            12404121985311822637,
+            7912872789263421403,
+            12838099270266840762
+          ]
+        },
+        "runtime_profile_id": 1,
+        "runtime_profile_digest": [
+          3464483859963259416,
+          9361622155691977912,
+          3553770735145477222,
+          12260153775447532463
+        ],
+        "activity_policy_version": 1,
+        "activity_policy_digest": [
+          3993468006703066050,
+          11335034347131096680,
+          3765222072571844223,
+          6945886014649662854
+        ],
+        "throttle_replay": {
+          "schema_version": 1,
+          "policy_version": 1,
+          "next_sequence_cursor": 1,
+          "last_committed_sequence_cursor": null,
+          "policy_digest": [
+            3993468006703066050,
+            11335034347131096680,
+            3765222072571844223,
+            6945886014649662854
+          ],
+          "sequence_digest": [
+            13390075146665217346,
+            2307552390939080356,
+            7512935733225913734,
+            3207167935825708769
+          ],
+          "sequence_asset": {
+            "asset_id": "gpu-brain.throttle-sequence.09612b07b5ecb5a5",
+            "digest": "fnv1a64:09612b07b5ecb5a5"
+          },
+          "last_checkpoint": null,
+          "next_completed_gpu_time_ns": 0,
+          "brain_atp_q16": 65535,
+          "last_world_atp_tick": null
+        }
       }
     }
   ],
@@ -166,7 +808,9 @@
   "adapter_remap": {
     "entries": []
   },
-  "generated_weight_asset_refs": ["tiny-generated-weights"],
+  "generated_weight_asset_refs": [
+    "tiny-generated-weights"
+  ],
   "etf_prototype_asset_refs": [],
-  "packed_log_schema_version": 1
+  "packed_log_schema_version": 2
 }

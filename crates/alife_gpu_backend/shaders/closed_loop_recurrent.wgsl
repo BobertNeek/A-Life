@@ -1,5 +1,5 @@
 
-const ACTIVE_DISPATCH_ROW_WORDS:u32 = 272u;
+const ACTIVE_DISPATCH_ROW_WORDS:u32 = 332u;
 override microstep_index:u32 = 0u;
 
 fn is_finite(value:f32) -> bool {
@@ -33,8 +33,12 @@ fn recurrent_microstep(@builtin(global_invocation_id) gid:vec3<u32>) {
   // brain.encoded_input_offset+target. WGSL reserves `target`, so executable
   // code below names the same target-major index `target_index`.
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
-  if (!validate_slice_a_slot(header.brain_slot_index, header)) { return; }
+  if (!activity_contract_prevalidated(header)) { return; }
+  let route_mask_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + ACTIVITY_HEADER_OFFSET + 8u;
   let brain = brain_slots[header.brain_slot_index];
+  let extension = load_slot_extension(brain);
+  let learning = load_slot_learning_state(extension);
+  let weight_bases = active_weight_bases(brain, extension, learning);
   if (microstep_index >= brain.microstep_count || microstep_index >= header.microstep_count) { return; }
   let target_index = gid.x;
   if (target_index >= brain.neuron_count) { return; }
@@ -46,41 +50,22 @@ fn recurrent_microstep(@builtin(global_invocation_id) gid:vec3<u32>) {
   let begin = immutable_plan_words[brain.target_offsets_offset + target_index];
   let end = immutable_plan_words[brain.target_offsets_offset + target_index + 1u];
   var recurrent_sum = 0.0;
-  var active_rows = 0u;
   for (var cursor = begin; cursor < end; cursor++) {
     let source = immutable_plan_words[brain.source_indices_offset + cursor];
     let route_index = immutable_plan_words[brain.route_indices_offset + cursor];
+    if (!route_enabled_at(route_mask_base, route_index)) { continue; }
     let route = load_route_metadata(brain.route_metadata_offset + route_index * 12u);
     if (route.delay_microsteps != 0u) {
       atomicAdd(&mutable_state_words[brain.diagnostic_offset + 2u], 1u);
       continue;
     }
     if (!route_fires(route.update_cadence_raw, microstep_index)) { continue; }
-    active_rows += 1u;
     let genetic = bitcast<f32>(immutable_weight_words[brain.genetic_weight_offset + cursor]);
     let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset + cursor]);
-    let lifetime = load_state_f32(brain.lifetime_weight_offset + cursor);
-    let fast = load_state_f32(brain.fast_weight_offset + cursor);
+    let lifetime = load_state_f32(weight_bases.lifetime + cursor);
+    let fast = load_state_f32(weight_bases.fast + cursor);
     let effective = genetic + lifetime + alpha * fast;
     recurrent_sum += load_state_f32(source_base + source) * effective;
-  }
-  if (active_rows != 0u) {
-    atomicAdd(&mutable_state_words[brain.diagnostic_offset + 1u], active_rows);
-  }
-
-  if (target_index == 0u) {
-    let projection_count = (brain.route_metadata_offset - brain.projection_offset) / 8u;
-    var active_tiles = 0u;
-    for (var route_cursor = 0u; route_cursor < projection_count; route_cursor++) {
-      let projection = load_projection(brain.projection_offset + route_cursor * 8u);
-      let route = load_route_metadata(brain.route_metadata_offset + projection.route_index * 12u);
-      if (route.delay_microsteps != 0u) {
-        atomicAdd(&mutable_state_words[brain.diagnostic_offset + 2u], 1u);
-      } else if (route_fires(route.update_cadence_raw, microstep_index)) {
-        active_tiles += projection.active_tile_count;
-      }
-    }
-    atomicAdd(&mutable_state_words[brain.diagnostic_offset], active_tiles);
   }
 
   let dynamics = load_neuron_dynamics(brain.neuron_dynamics_offset + target_index * 8u);

@@ -1,6 +1,7 @@
 //! Genome, development, and weight-split contracts.
 
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     ensure_current_version, validate_finite, BrainClassId, BrainScaleTier, GenomeId, LineageId,
@@ -23,6 +24,7 @@ pub struct BrainGenome {
     pub sparse_density_priors: Vec<SparseDensityPrior>,
     pub alpha_mask: AlphaMask,
     pub plasticity_mask: PlasticityMask,
+    plasticity_parameters: PlasticityGenomeParameters,
     pub endocrine_constants: Vec<EndocrineConstantGene>,
     pub drive_thresholds: Vec<DriveThresholdGene>,
     pub sensor_layout: SensorLayoutGene,
@@ -60,6 +62,7 @@ impl BrainGenome {
             },
             alpha_mask: AlphaMask::default_for_projection(NormalizedScalar(0.25)),
             plasticity_mask: PlasticityMask::scaffold_default(),
+            plasticity_parameters: PlasticityGenomeParameters::canonical_default(),
             endocrine_constants: EndocrineConstantGene::baseline_defaults(),
             drive_thresholds: DriveThresholdGene::baseline_defaults(),
             sensor_layout: SensorLayoutGene::minimal_grounded(),
@@ -70,6 +73,23 @@ impl BrainGenome {
                 .expect("canonical scaffold developmental schedule must validate"),
             inheritance: InheritancePolicy::default(),
         }
+    }
+
+    pub const fn plasticity_parameters(&self) -> &PlasticityGenomeParameters {
+        &self.plasticity_parameters
+    }
+
+    /// Replace the heritable plasticity parameters through their validated
+    /// constructor boundary. This is the causal mutation/training entrypoint;
+    /// callers cannot write unchecked parameter lanes.
+    pub fn with_plasticity_parameters(
+        mut self,
+        parameters: PlasticityGenomeParameters,
+    ) -> Result<Self, ScaffoldContractError> {
+        parameters.validate_contract()?;
+        self.plasticity_parameters = parameters;
+        self.validate_contract()?;
+        Ok(self)
     }
 }
 
@@ -99,6 +119,7 @@ impl Validate for BrainGenome {
         )?;
         self.alpha_mask.validate_contract()?;
         self.plasticity_mask.validate_contract()?;
+        self.plasticity_parameters.validate_contract()?;
         validate_all(&self.endocrine_constants)?;
         validate_all(&self.drive_thresholds)?;
         self.sensor_layout.validate_contract()?;
@@ -524,6 +545,180 @@ pub struct PlasticityMask {
     pub projection_masks: Vec<ProjectionPlasticityMask>,
 }
 
+/// Versioned heritable parameters from which phenotype receptor and sleep
+/// plans are compiled. Fields are private so invalid learning lanes cannot be
+/// introduced through struct literals or unchecked deserialization.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct PlasticityGenomeParameters {
+    schema_version: u16,
+    eligibility_decay: f32,
+    base_learning_rate: f32,
+    normalization_rate: f32,
+    sleep_replay_rate: f32,
+    modulator_sign: f32,
+    fast_min: f32,
+    fast_max: f32,
+    sleep_staging_rate: f32,
+    sleep_weight_limit: f32,
+    sleep_fast_decay_rate: f32,
+}
+
+impl PlasticityGenomeParameters {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new_v1(
+        eligibility_decay: f32,
+        base_learning_rate: f32,
+        normalization_rate: f32,
+        sleep_replay_rate: f32,
+        modulator_sign: f32,
+        fast_min: f32,
+        fast_max: f32,
+        sleep_staging_rate: f32,
+        sleep_weight_limit: f32,
+        sleep_fast_decay_rate: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            schema_version: SchemaVersions::CURRENT.learning.raw(),
+            eligibility_decay,
+            base_learning_rate,
+            normalization_rate,
+            sleep_replay_rate,
+            modulator_sign,
+            fast_min,
+            fast_max,
+            sleep_staging_rate,
+            sleep_weight_limit,
+            sleep_fast_decay_rate,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+
+    const fn canonical_default() -> Self {
+        Self {
+            schema_version: SchemaVersions::CURRENT.learning.raw(),
+            eligibility_decay: 0.95,
+            base_learning_rate: 0.01,
+            normalization_rate: 0.001,
+            sleep_replay_rate: 0.25,
+            modulator_sign: 1.0,
+            fast_min: -2.0,
+            fast_max: 2.0,
+            sleep_staging_rate: 0.5,
+            sleep_weight_limit: 4.0,
+            sleep_fast_decay_rate: 0.5,
+        }
+    }
+
+    pub const fn schema_version(&self) -> u16 {
+        self.schema_version
+    }
+    pub const fn eligibility_decay(&self) -> f32 {
+        self.eligibility_decay
+    }
+    pub const fn base_learning_rate(&self) -> f32 {
+        self.base_learning_rate
+    }
+    pub const fn normalization_rate(&self) -> f32 {
+        self.normalization_rate
+    }
+    pub const fn sleep_replay_rate(&self) -> f32 {
+        self.sleep_replay_rate
+    }
+    pub const fn modulator_sign(&self) -> f32 {
+        self.modulator_sign
+    }
+    pub const fn fast_bounds(&self) -> (f32, f32) {
+        (self.fast_min, self.fast_max)
+    }
+    pub const fn sleep_staging_rate(&self) -> f32 {
+        self.sleep_staging_rate
+    }
+    pub const fn sleep_weight_limit(&self) -> f32 {
+        self.sleep_weight_limit
+    }
+    pub const fn sleep_fast_decay_rate(&self) -> f32 {
+        self.sleep_fast_decay_rate
+    }
+}
+
+impl Validate for PlasticityGenomeParameters {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        ensure_current_version(SchemaKind::Learning, self.schema_version)?;
+        let values = [
+            self.eligibility_decay,
+            self.base_learning_rate,
+            self.normalization_rate,
+            self.sleep_replay_rate,
+            self.modulator_sign,
+            self.fast_min,
+            self.fast_max,
+            self.sleep_staging_rate,
+            self.sleep_weight_limit,
+            self.sleep_fast_decay_rate,
+        ];
+        if values.into_iter().any(|value| !value.is_finite()) {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
+        if !(0.0..=1.0).contains(&self.eligibility_decay)
+            || !(0.0..=1.0).contains(&self.base_learning_rate)
+            || self.base_learning_rate == 0.0
+            || !(0.0..=1.0).contains(&self.normalization_rate)
+            || !(0.0..=1.0).contains(&self.sleep_replay_rate)
+            || !matches!(self.modulator_sign, -1.0 | 1.0)
+            || !(-8.0..=8.0).contains(&self.fast_min)
+            || !(-8.0..=8.0).contains(&self.fast_max)
+            || self.fast_min >= self.fast_max
+            || !(0.0..=1.0).contains(&self.sleep_staging_rate)
+            || self.sleep_staging_rate == 0.0
+            || !(0.0..=8.0).contains(&self.sleep_weight_limit)
+            || self.sleep_weight_limit == 0.0
+            || !(0.0..=1.0).contains(&self.sleep_fast_decay_rate)
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(())
+    }
+}
+
+impl<'de> Deserialize<'de> for PlasticityGenomeParameters {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wire {
+            schema_version: u16,
+            eligibility_decay: f32,
+            base_learning_rate: f32,
+            normalization_rate: f32,
+            sleep_replay_rate: f32,
+            modulator_sign: f32,
+            fast_min: f32,
+            fast_max: f32,
+            sleep_staging_rate: f32,
+            sleep_weight_limit: f32,
+            sleep_fast_decay_rate: f32,
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        let value = Self {
+            schema_version: wire.schema_version,
+            eligibility_decay: wire.eligibility_decay,
+            base_learning_rate: wire.base_learning_rate,
+            normalization_rate: wire.normalization_rate,
+            sleep_replay_rate: wire.sleep_replay_rate,
+            modulator_sign: wire.modulator_sign,
+            fast_min: wire.fast_min,
+            fast_max: wire.fast_max,
+            sleep_staging_rate: wire.sleep_staging_rate,
+            sleep_weight_limit: wire.sleep_weight_limit,
+            sleep_fast_decay_rate: wire.sleep_fast_decay_rate,
+        };
+        value.validate_contract().map_err(D::Error::custom)?;
+        Ok(value)
+    }
+}
+
 impl PlasticityMask {
     pub fn scaffold_default() -> Self {
         Self {
@@ -864,6 +1059,12 @@ impl MotorAffordanceGene {
                 enabled_at_maturation: 0,
             },
             Self {
+                kind: MotorAffordanceKind::Eat,
+                enabled: true,
+                motor_lobe_units: 8,
+                enabled_at_maturation: 0,
+            },
+            Self {
                 kind: MotorAffordanceKind::Rest,
                 enabled: true,
                 motor_lobe_units: 8,
@@ -872,7 +1073,7 @@ impl MotorAffordanceGene {
             Self {
                 kind: MotorAffordanceKind::Interact,
                 enabled: true,
-                motor_lobe_units: 16,
+                motor_lobe_units: 8,
                 enabled_at_maturation: 20,
             },
         ]

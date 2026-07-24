@@ -16,9 +16,6 @@ pub(super) fn compile(
     inputs.validate_against(capacity)?;
     let genome = inputs.genome();
     let development = inputs.development();
-    if !development.open_critical_periods.is_empty() {
-        return Err(compile_error());
-    }
     validate_supported_inputs(genome, capacity)?;
     let layout = super::layout_compile::compile_layout(
         genome,
@@ -41,6 +38,13 @@ pub(super) fn compile(
     synapses.extend(decoders.synapses);
     receipts.extend(decoders.receipts);
     super::topology_compile::validate_alpha_matches(genome, &projections, &synapses, &layout)?;
+    let learning = super::learning::compile_learning_plans(
+        genome,
+        development,
+        capacity,
+        &projections,
+        &mut synapses,
+    )?;
 
     let recurrent = receipts
         .iter()
@@ -78,14 +82,27 @@ pub(super) fn compile(
             candidate_capacity: execution.max_candidates(),
             object_slot_capacity: execution.max_object_slots(),
             memory_context_capacity: execution.max_memory_context_records(),
-            decoder_input_lanes: execution.candidate_feature_count(),
+            decoder_input_lanes: decoders.candidate.flattened_input_lane_count(),
             replay_event_capacity: execution.max_replay_events(),
             replay_eligibility_sample_capacity: execution.max_replay_eligibility_samples(),
+            replay_capture_synapse_count: u32::try_from(learning.replay.global_synapse_ids().len())
+                .map_err(|_| compile_error())?,
         },
     };
     budgets.validate_against(capacity)?;
+    let motor = layout
+        .region(crate::LobeKind::MotorArbitration)
+        .filter(|region| region.enabled)
+        .ok_or_else(compile_error)?;
     let dynamics = (0..execution.max_neurons())
-        .map(|_| NeuronDynamics::new(0.0, 0.25, ActivationFunction::Tanh, 0.95, 0.01, 1.0))
+        .map(|neuron| {
+            let bias = if motor.contains_neuron(neuron) {
+                0.05
+            } else {
+                0.0
+            };
+            NeuronDynamics::new(bias, 0.25, ActivationFunction::Tanh, 0.95, 0.01, 1.0)
+        })
         .collect();
     let microstep_count = match development.maturation.raw() {
         value if value < 1.0 / 3.0 => 2,
@@ -105,6 +122,10 @@ pub(super) fn compile(
         decoders.candidate,
         decoders.speech,
         decoders.memory,
+        learning.receptors,
+        learning.replay,
+        learning.sleep,
+        learning.digest,
         budgets,
     )
 }

@@ -15,11 +15,12 @@ use super::abi_validation::{
 use super::{
     AuxiliaryDecoderPlan, CandidateDecoderPlan, CompiledBudgets, CompiledProjection,
     CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, NeuronDynamics, PersistentAddressMap,
-    PhenotypeCompilerInputs, SensorEncoderPlan,
+    PhenotypeCompilerInputs, PlasticityReceptorPlan, ReplayCapturePlan, SensorEncoderPlan,
+    SleepConsolidationPlan,
 };
 
-const PHENOTYPE_SCHEMA_VERSION: u16 = 2;
-const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v2";
+const PHENOTYPE_SCHEMA_VERSION: u16 = 3;
+const PHENOTYPE_DOMAIN: &[u8] = b"alife.brain.phenotype.v3";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct BrainPhenotype {
@@ -39,6 +40,10 @@ pub struct BrainPhenotype {
     decoder: CandidateDecoderPlan,
     speech_decoder: Option<AuxiliaryDecoderPlan>,
     memory_decoder: Option<AuxiliaryDecoderPlan>,
+    plasticity_receptors: Vec<PlasticityReceptorPlan>,
+    replay_capture_plan: ReplayCapturePlan,
+    sleep_consolidation_plan: SleepConsolidationPlan,
+    plasticity_plan_digest: [u64; 4],
     persistent_address_map: PersistentAddressMap,
     route_abi_digest: Blake3Digest,
     plasticity_abi_digest: Blake3Digest,
@@ -98,6 +103,18 @@ impl BrainPhenotype {
     pub fn memory_decoder(&self) -> Option<&AuxiliaryDecoderPlan> {
         self.memory_decoder.as_ref()
     }
+    pub fn plasticity_receptors(&self) -> &[PlasticityReceptorPlan] {
+        &self.plasticity_receptors
+    }
+    pub const fn replay_capture_plan(&self) -> &ReplayCapturePlan {
+        &self.replay_capture_plan
+    }
+    pub const fn sleep_consolidation_plan(&self) -> &SleepConsolidationPlan {
+        &self.sleep_consolidation_plan
+    }
+    pub const fn plasticity_plan_digest(&self) -> [u64; 4] {
+        self.plasticity_plan_digest
+    }
     pub const fn persistent_address_map(&self) -> &PersistentAddressMap {
         &self.persistent_address_map
     }
@@ -125,6 +142,10 @@ impl BrainPhenotype {
         decoder: CandidateDecoderPlan,
         speech_decoder: Option<AuxiliaryDecoderPlan>,
         memory_decoder: Option<AuxiliaryDecoderPlan>,
+        plasticity_receptors: Vec<PlasticityReceptorPlan>,
+        replay_capture_plan: ReplayCapturePlan,
+        sleep_consolidation_plan: SleepConsolidationPlan,
+        plasticity_plan_digest: [u64; 4],
         budgets: CompiledBudgets,
     ) -> Result<Self, ScaffoldContractError> {
         inputs.validate_against(capacity)?;
@@ -151,6 +172,10 @@ impl BrainPhenotype {
             decoder,
             speech_decoder,
             memory_decoder,
+            plasticity_receptors,
+            replay_capture_plan,
+            sleep_consolidation_plan,
+            plasticity_plan_digest,
             persistent_address_map,
             route_abi_digest,
             plasticity_abi_digest,
@@ -215,11 +240,12 @@ impl BrainPhenotype {
             d.write_f32(row.genetic_weight())?;
             d.write_f32(row.alpha())?;
             d.write_u16(row.route_index());
+            d.write_u16(row.receptor_index());
             match row.kind() {
                 CompiledSynapseKind::Recurrent => d.write_u8(0),
                 CompiledSynapseKind::Decoder(c) => {
                     d.write_u8(1);
-                    d.write_u8(c.head().raw());
+                    d.write_u32(c.head().raw());
                     d.write_u8(c.family().raw());
                     d.write_u16(c.input_lane());
                     d.write_u16(c.motor_index());
@@ -259,6 +285,9 @@ impl BrainPhenotype {
             }
             None => d.write_none(),
         }
+        for word in self.plasticity_plan_digest {
+            d.write_u64(word);
+        }
         write_blake3(&mut d, self.persistent_address_map.digest());
         write_blake3(&mut d, self.route_abi_digest);
         write_blake3(&mut d, self.plasticity_abi_digest);
@@ -284,6 +313,7 @@ impl BrainPhenotype {
             || SensorProfile::try_from_raw(self.sensor_profile.raw()).is_err()
             || self.projections.is_empty()
             || self.synapses.is_empty()
+            || self.plasticity_receptors.is_empty()
             || self.neuron_dynamics.len() != self.neuron_count as usize
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
@@ -374,6 +404,7 @@ impl BrainPhenotype {
             for synapse in &self.synapses[start as usize..cursor as usize] {
                 synapse.validate_local()?;
                 if synapse.route_index() != route
+                    || usize::from(synapse.receptor_index()) >= self.plasticity_receptors.len()
                     || synapse.source() >= self.neuron_count
                     || synapse.target() >= self.neuron_count
                     || !source_region.contains_neuron(synapse.source())
@@ -477,6 +508,9 @@ impl BrainPhenotype {
         for dynamics in &self.neuron_dynamics {
             dynamics.validate()?;
         }
+        for receptor in &self.plasticity_receptors {
+            receptor.validate_contract()?;
+        }
         self.sensor_encoder.validate_against(self)?;
         self.decoder.validate_against(self)?;
         if let Some(plan) = &self.speech_decoder {
@@ -494,12 +528,26 @@ impl BrainPhenotype {
             .memory_decoder
             .as_ref()
             .map_or(0, AuxiliaryDecoderPlan::decoder_synapse_count);
+        let memory_channel_valid = match (self.decoder.memory_channel(), &self.memory_decoder) {
+            (None, None) => true,
+            (Some(channel), Some(decoder)) => {
+                channel.validate_contract().is_ok()
+                    && channel.memory_decoder_synapse_count() == decoder.decoder_synapse_count()
+            }
+            _ => false,
+        };
         let (route_abi_digest, plasticity_abi_digest) =
             compute_abi_digests(capacity, &self.projections, &self.synapses);
+        let plasticity_plan_digest = super::learning::compute_plasticity_plan_digest(
+            &self.plasticity_receptors,
+            &self.replay_capture_plan,
+            &self.sleep_consolidation_plan,
+        )?;
         let n2048 = capacity.id() == BrainCapacityClass::N2048_ID;
         if candidate_count.checked_add(speech_count)
             != Some(self.budgets.global.action_decoder_synapses)
             || memory_count != self.budgets.global.memory_decoder_synapses
+            || !memory_channel_valid
             || (n2048
                 && (candidate_count
                     != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT
@@ -507,9 +555,15 @@ impl BrainPhenotype {
                         != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT
                     || memory_count
                         != crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT))
-            || (!n2048 && (self.speech_decoder.is_some() || self.memory_decoder.is_some()))
+            || (!n2048 && self.speech_decoder.is_some())
             || self.route_abi_digest != route_abi_digest
             || self.plasticity_abi_digest != plasticity_abi_digest
+            || self.plasticity_plan_digest != plasticity_plan_digest
+            || self
+                .replay_capture_plan
+                .validate_against(self, capacity)
+                .is_err()
+            || self.sleep_consolidation_plan.validate_contract().is_err()
             || self.persistent_address_map.digest()
                 != self.persistent_address_map.recompute_digest()?
             || self.persistent_address_map.validate_against(self).is_err()
@@ -550,6 +604,10 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             decoder: CandidateDecoderPlan,
             speech_decoder: Option<AuxiliaryDecoderPlan>,
             memory_decoder: Option<AuxiliaryDecoderPlan>,
+            plasticity_receptors: Vec<PlasticityReceptorPlan>,
+            replay_capture_plan: ReplayCapturePlan,
+            sleep_consolidation_plan: SleepConsolidationPlan,
+            plasticity_plan_digest: [u64; 4],
             persistent_address_map: PersistentAddressMap,
             route_abi_digest: Blake3Digest,
             plasticity_abi_digest: Blake3Digest,
@@ -574,6 +632,10 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             decoder: w.decoder,
             speech_decoder: w.speech_decoder,
             memory_decoder: w.memory_decoder,
+            plasticity_receptors: w.plasticity_receptors,
+            replay_capture_plan: w.replay_capture_plan,
+            sleep_consolidation_plan: w.sleep_consolidation_plan,
+            plasticity_plan_digest: w.plasticity_plan_digest,
             persistent_address_map: w.persistent_address_map,
             route_abi_digest: w.route_abi_digest,
             plasticity_abi_digest: w.plasticity_abi_digest,
@@ -625,6 +687,7 @@ fn encode_budgets(d: &mut CanonicalDigestBuilder, budgets: &CompiledBudgets) {
         u32::from(g.decoder_input_lanes),
         g.replay_event_capacity,
         g.replay_eligibility_sample_capacity,
+        g.replay_capture_synapse_count,
     ] {
         d.write_u32(value);
     }

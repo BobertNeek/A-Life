@@ -900,7 +900,7 @@ impl ProductionVoxelLaunchSummary {
             .as_ref()
             .map(|receipt| {
                 format!(
-                    ":gameplay_mode={}:gameplay={}:batch={}:proposals={}:hshadow={}",
+                    ":gameplay_mode={}:gameplay={}:batch={}:active_creatures={}:finite_rejections={}",
                     receipt.requested_policy,
                     receipt.selected_backend,
                     receipt.batch_size,
@@ -1040,7 +1040,7 @@ fn fvr06_gpu_runtime_save_state(
         shader_abi_versions: GpuRuntimeShaderAbiVersions {
             shader_manifest: vec![
                 "p25_static_forward:v1".to_string(),
-                "p26_plasticity:v1".to_string(),
+                "closed_loop_plasticity:v1".to_string(),
                 "p27_supertile_routing:v1".to_string(),
                 "p28_recompaction_autophagy:contract-v1".to_string(),
             ],
@@ -1449,12 +1449,36 @@ fn apply_production_population_target(
         next_organism_id = next_organism_id.saturating_add(1);
         next_genome_id = next_genome_id.saturating_add(1);
 
+        let position = production_population_position(save.deterministic_seed, slot);
+        let spawn_sequence = save.world.next_spawn_sequence;
+        let next_spawn_sequence = spawn_sequence
+            .checked_add(1)
+            .ok_or(GameAppShellError::Core(
+                ScaffoldContractError::TrackedObjectIdentityExhausted,
+            ))?;
+        let tracking_provenance = alife_world::PhysicalTrackingProvenance {
+            schema_version: alife_world::PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
+            world_seed: save.world.seed,
+            zone_id: save
+                .world
+                .ecology
+                .zone_at(position)
+                .map_or(0, |zone| zone.id.raw()),
+            spawn_sequence,
+            lineage_key: organism_id.raw(),
+        };
+        tracking_provenance
+            .validate_contract()
+            .map_err(GameAppShellError::Core)?;
+        let tracking_key = tracking_provenance.canonical_key();
+
         save.world.objects.push(WorldObjectSaveState {
+            schema_version: alife_world::persistence::WORLD_OBJECT_SAVE_SCHEMA_VERSION,
             id: stable_id,
             label: format!("production-creature-{slot:03}"),
             kind: WorldObjectKind::Agent,
             organism_id: Some(organism_id),
-            position: production_population_position(save.deterministic_seed, slot),
+            position,
             radius: template_agent.radius,
             nutrition: 0.0,
             hazard_pain: 0.0,
@@ -1463,7 +1487,13 @@ fn apply_production_population_target(
             teacher_channel: None,
             consumed: false,
             carried_by: None,
+            grounded_physical: alife_world::GroundedPhysicalProperties::deterministic_default(
+                spawn_sequence,
+            ),
+            tracking_provenance,
+            tracking_key,
         });
+        save.world.next_spawn_sequence = next_spawn_sequence;
         save.creatures.push(production_creature_save_for_slot(
             &template_creature,
             organism_id,
@@ -1558,13 +1588,16 @@ fn production_creature_save_for_slot(
             genetic_layer_mutable: false,
             lifetime_consolidated_entries: template.weights.lifetime_consolidated_entries,
             h_operational_entries: template.weights.h_operational_entries,
-            h_shadow_entries: template.weights.h_shadow_entries,
+            // Legacy portable-save lane retained for migration only. The
+            // GPU-authoritative production runtime never populates it.
+            h_shadow_entries: 0,
         },
         learning: LearningTraceSaveSummary {
             lifetime_learning_enabled: template.learning.lifetime_learning_enabled,
             lamarckian_mode_enabled: false,
             last_consolidated_tick: template.learning.last_consolidated_tick,
         },
+        gpu_brain: None,
     })
 }
 
@@ -2044,6 +2077,22 @@ mod tests {
         launch.population = Some(30);
         launch.graphics_backend = "existing".to_string();
         launch.record_performance = true;
+        let fixture_artifact_dir =
+            fvr08_launch_artifact_dir(&launch, FVR06_PRODUCTION_GPU_RECEIPT_DIR);
+        let fixture_runtime_save_path =
+            fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_runtime_save.json");
+        let fixture_gameplay_receipt_path =
+            fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_gameplay_receipt.json");
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let artifact_root = std::env::temp_dir().join(format!(
+            "alife-fvr06-performance-receipt-{}-{nonce}",
+            std::process::id()
+        ));
+        launch.manifest_path =
+            artifact_root.join("crates/alife_game_app/environment_manifest.json");
 
         let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
         let receipt = summary.gpu_gameplay_receipt.as_ref().unwrap();
@@ -2061,12 +2110,22 @@ mod tests {
         assert_eq!(receipt.active_creatures, 30);
         assert_eq!(receipt.compact_readback_bytes, 30 * 48);
         assert!(summary.signature_line().contains("gameplay="));
+        assert!(!fixture_runtime_save_path.exists());
+        assert!(!fixture_gameplay_receipt_path.exists());
+        fs::remove_dir_all(artifact_root).unwrap();
     }
 
     #[test]
     fn fvr04_population_target_materializes_real_save_state_and_voxel_anchors() {
         let root = gpu_alpha_fixture_root();
         let save = gpu_alpha_save();
+        let first_generated_spawn_sequence = save.world.next_spawn_sequence;
+        let existing_agent_count = save
+            .world
+            .objects
+            .iter()
+            .filter(|object| object.kind == WorldObjectKind::Agent)
+            .count();
         let production = production_voxel_save_with_population(
             &save,
             &root,
@@ -2080,6 +2139,50 @@ mod tests {
         assert_eq!(visible.kind_count(WorldObjectKind::Agent), 30);
         assert_eq!(production.creatures.len(), 30);
         assert_eq!(backend.creature_anchors.len(), 30);
+        let generated_agents = production
+            .world
+            .objects
+            .iter()
+            .filter(|object| object.label.starts_with("production-creature-"))
+            .collect::<Vec<_>>();
+        assert_eq!(generated_agents.len(), 30 - existing_agent_count);
+        assert_eq!(
+            production.world.next_spawn_sequence,
+            first_generated_spawn_sequence + generated_agents.len() as u64
+        );
+        for (offset, object) in generated_agents.into_iter().enumerate() {
+            assert_eq!(
+                object.schema_version,
+                alife_world::persistence::WORLD_OBJECT_SAVE_SCHEMA_VERSION
+            );
+            assert_eq!(object.tracking_provenance.world_seed, production.world.seed);
+            assert_eq!(
+                object.tracking_provenance.spawn_sequence,
+                first_generated_spawn_sequence + offset as u64
+            );
+            assert_eq!(
+                object.tracking_provenance.lineage_key,
+                object.organism_id.unwrap().raw()
+            );
+            assert_eq!(
+                object.tracking_provenance.zone_id,
+                production
+                    .world
+                    .ecology
+                    .zone_at(object.position)
+                    .map_or(0, |zone| zone.id.raw())
+            );
+            assert_eq!(
+                object.tracking_key,
+                object.tracking_provenance.canonical_key()
+            );
+            assert_eq!(
+                object.grounded_physical,
+                alife_world::GroundedPhysicalProperties::deterministic_default(
+                    object.tracking_provenance.spawn_sequence
+                )
+            );
+        }
         assert!(backend.validate().is_ok());
         assert!(production.creatures.iter().any(|creature| creature
             .mind

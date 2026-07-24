@@ -184,7 +184,7 @@ fn every_slice_a_mutable_pool_has_the_exact_word_length_and_offset() {
     let neuron_count = phenotype.neuron_count() as usize;
     let total = phenotype.synapses().len();
     let recurrent = phenotype.budgets().global.recurrent_synapses as usize;
-    let decoder = phenotype.budgets().global.action_decoder_synapses as usize;
+    let decoder = total - recurrent;
 
     assert_eq!(ranges.activation_a_words.len(), neuron_count);
     assert_eq!(ranges.activation_b_words.len(), neuron_count);
@@ -250,11 +250,15 @@ fn two_slots_cover_pairwise_disjoint_ranges_in_each_shared_heap() {
     assert_eq!(right.record().reserved, [0; 3]);
     assert_eq!(
         left.record().extension_record_offset,
-        GPU_NO_EXTENSION_SENTINEL
+        left.word_ranges().extension_words.start
     );
     assert_eq!(
         right.record().extension_record_offset,
-        GPU_NO_EXTENSION_SENTINEL
+        right.word_ranges().extension_words.start
+    );
+    assert_ne!(
+        left.record().extension_record_offset,
+        right.record().extension_record_offset
     );
     assert_eq!(left.brain_slot_index(), 0);
     assert_eq!(right.brain_slot_index(), 1);
@@ -366,7 +370,7 @@ fn bucket_rejects_wrong_class_duplicate_slot_and_out_of_range_slot() {
 }
 
 #[test]
-fn slice_a_slot_record_rejects_reserved_words_and_non_sentinel_extension() {
+fn slot_record_rejects_reserved_words_and_missing_extension() {
     let capacity = BrainCapacityClass::n512();
     let phenotype = compile(capacity.id(), 41);
     let mut bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
@@ -378,7 +382,7 @@ fn slice_a_slot_record_rejects_reserved_words_and_non_sentinel_extension() {
     assert!(reserved.validate_slice_a().is_err());
 
     let mut extension = *slot.record();
-    extension.extension_record_offset = 0;
+    extension.extension_record_offset = GPU_NO_EXTENSION_SENTINEL;
     assert!(extension.validate_slice_a().is_err());
 }
 
@@ -396,6 +400,13 @@ fn plan_ranges(ranges: &alife_gpu_backend::GpuSlotWordRanges) -> Vec<Range<u32>>
         ranges.decoder_plan_words.clone(),
         ranges.decoder_family_words.clone(),
         ranges.decoder_weight_index_words.clone(),
+        ranges.memory_channel_plan_words.clone(),
+        ranges.memory_weight_index_words.clone(),
+        ranges.receptor_words.clone(),
+        ranges.synapse_learning_metadata_words.clone(),
+        ranges.decoder_eligibility_metadata_words.clone(),
+        ranges.replay_plan_identity_words.clone(),
+        ranges.sleep_parameter_words.clone(),
     ]
 }
 
@@ -409,10 +420,20 @@ fn mutable_ranges(ranges: &alife_gpu_backend::GpuSlotWordRanges) -> Vec<Range<u3
         ranges.fast_weight_words.clone(),
         ranges.recurrent_eligibility_words.clone(),
         ranges.decoder_eligibility_words.clone(),
+        ranges.lifetime_weight_bank_1_words.clone(),
+        ranges.fast_weight_bank_1_words.clone(),
+        ranges.recurrent_eligibility_bank_1_words.clone(),
+        ranges.decoder_eligibility_bank_1_words.clone(),
         ranges.encoded_input_words.clone(),
         ranges.candidate_logit_words.clone(),
         ranges.diagnostic_words.clone(),
         ranges.selection_words.clone(),
+        ranges.extension_words.clone(),
+        ranges.learning_state_words.clone(),
+        ranges.pending_eligibility_words.clone(),
+        ranges.replay_event_words.clone(),
+        ranges.replay_sample_words.clone(),
+        ranges.replay_span_words.clone(),
     ]
 }
 

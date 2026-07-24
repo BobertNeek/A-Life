@@ -46,7 +46,7 @@ fn food_seeking_scenario_links_hunger_food_salience_eating_and_reward() {
 }
 
 #[test]
-fn pain_poison_scenario_records_danger_expectancy_without_action_replay() {
+fn pain_poison_scenario_records_danger_without_heuristic_replay() {
     let run = run(ScenarioName::PoisonPainAvoidance);
 
     let painful = run.patch_at(0);
@@ -65,7 +65,8 @@ fn pain_poison_scenario_records_danger_expectancy_without_action_replay() {
         .heuristic_evidence()
         .expect("scenario patches use heuristic baseline evidence")
         .memory_expectancy;
-    assert!(memory.danger_bias.raw() > 0.0);
+    assert_eq!(memory.danger_bias.raw(), 0.0);
+    assert_eq!(memory.salience_hint.raw(), 0.0);
     ScenarioAssertions::assert_memory_expectancy_snapshot_is_bias_only(memory);
     assert_eq!(repeat.decision().selected_action.kind, ActionKind::Move);
     assert!(run
@@ -99,23 +100,18 @@ fn obstacle_frustration_scenario_records_failure_and_gap() {
 }
 
 #[test]
-fn fatigue_sleep_scenario_uses_p16_sleep_hooks_and_preserves_genetic_baseline() {
+fn fatigue_rest_scenario_does_not_invoke_cpu_sleep_authority() {
     let run = run(ScenarioName::FatigueSleep);
     let patch = run.first_patch();
-    let report = run
-        .sleep_report
-        .as_ref()
-        .expect("sleep consolidation report");
 
     assert_eq!(patch.decision().selected_action.kind, ActionKind::Rest);
     assert!(patch.pre_action().homeostasis().drives.fatigue >= 0.9);
     assert!(patch.outcome().homeostatic_delta.drives.fatigue < 0.0);
-    assert_eq!(run.sleep_phase, SleepPhase::ForcedRecoverySleep);
-    assert!(run.sleep_transition_observed);
-    assert!(run.sleep_cycle_count >= 1);
-    assert!(report.neural.genetic_layer_unchanged);
-    assert!(!report.structural_edits.candidates().is_empty());
-    assert!(run.pending_structural_edit_count >= 1);
+    assert_eq!(run.sleep_phase, SleepPhase::Awake);
+    assert!(!run.sleep_transition_observed);
+    assert_eq!(run.sleep_cycle_count, 0);
+    assert!(run.sleep_report.is_none());
+    assert_eq!(run.pending_structural_edit_count, 0);
 }
 
 #[test]

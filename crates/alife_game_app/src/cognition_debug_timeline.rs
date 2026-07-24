@@ -343,7 +343,7 @@ pub fn cognition_debug_timeline_panel_from_summaries(
         .map(CognitionTimelineEntry::from_tick)
         .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
     let proposals = cognition_debug_fixture_proposals()?;
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         survival.organism_id,
         &proposals,
         ActionArbitrationConfig::default(),

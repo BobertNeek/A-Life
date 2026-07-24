@@ -3,10 +3,15 @@
 use alife_core::NeuralComputeBackend;
 
 pub mod buffers;
+pub mod closed_loop_activity;
+pub mod closed_loop_admission;
 pub mod closed_loop_buffers;
+pub mod closed_loop_checkpoint;
+pub mod closed_loop_learning;
+pub mod closed_loop_memory;
 pub mod closed_loop_pipeline;
 pub mod closed_loop_runtime;
-pub mod plasticity;
+pub mod closed_loop_sleep;
 pub mod recompaction;
 pub mod routing_masks;
 pub mod runtime;
@@ -24,15 +29,15 @@ pub use buffers::{
     GPU_ROUTING_DESCRIPTOR_BYTES, GPU_SERIALIZATION_ENDIANNESS, GPU_SUPERTILE_MASK_BYTES,
     GPU_TILE_METADATA_BYTES,
 };
+pub use closed_loop_activity::*;
+pub use closed_loop_admission::*;
 pub use closed_loop_buffers::*;
+pub use closed_loop_checkpoint::*;
+pub use closed_loop_learning::*;
+pub use closed_loop_memory::*;
 pub use closed_loop_pipeline::*;
 pub use closed_loop_runtime::*;
-pub use plasticity::{
-    run_plasticity_gpu_diagnostic, run_plasticity_gpu_diagnostic_timed, GpuOjaFixedPointConfig,
-    GpuPlasticityDiagnostics, GpuPlasticityDispatch, GpuPlasticityPlan, GpuPlasticityResult,
-    GpuPlasticityTimedResult, GpuPlasticityTiming, P26_PLASTICITY_DIAGNOSTIC_WORDS,
-    P26_PLASTICITY_TOLERANCE_Q, P26_PLASTICITY_WORKGROUP_SIZE, P26_WGSL_PLASTICITY,
-};
+pub use closed_loop_sleep::*;
 pub use recompaction::{
     GpuAffectedTileRef, GpuAutophagyMarker, GpuAutophagyMarkerKind, GpuAutophagyPolicy,
     GpuBufferReplacement, GpuLogicalBufferRef, GpuRecompactionDiagnostics, GpuRecompactionOutput,
@@ -43,8 +48,8 @@ pub use recompaction::{
 pub use routing_masks::{
     p27_routing_counters, p27_tile_is_active, GpuActiveTileMaskConfig, GpuRoutingCounters,
     GpuRoutingMaskPlan, GpuSupertileIndex, GpuSupertileMaskWords, P27_MICROTILE_EDGE,
-    P27_PLASTICITY_STORAGE_BINDINGS, P27_STATIC_FORWARD_STORAGE_BINDINGS, P27_SUPERTILE_EDGE,
-    P27_SUPERTILE_MASK_WORDS, P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
+    P27_STATIC_FORWARD_STORAGE_BINDINGS, P27_SUPERTILE_EDGE, P27_SUPERTILE_MASK_WORDS,
+    P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
 };
 pub use runtime::{
     probe_local_wgpu_runtime, probe_local_wgpu_runtime_for_graphics_backend,

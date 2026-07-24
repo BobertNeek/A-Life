@@ -18,6 +18,23 @@ pub struct RouteBudgetReceipt {
     pub payload_word_ceiling: u32,
 }
 
+impl RouteBudgetReceipt {
+    pub fn total_synapses(&self) -> Option<u32> {
+        self.recurrent_synapses
+            .checked_add(self.action_decoder_synapses)?
+            .checked_add(self.memory_decoder_synapses)
+    }
+
+    pub fn within_ceiling(&self) -> bool {
+        self.active_tiles <= self.tile_ceiling
+            && self
+                .total_synapses()
+                .is_some_and(|total| total <= self.synapse_ceiling)
+            && self.immutable_payload_words <= self.payload_word_ceiling
+            && self.total_synapses() == Some(self.immutable_payload_words)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GlobalPhenotypeBudgetReceipt {
     pub neuron_count: u32,
@@ -33,6 +50,42 @@ pub struct GlobalPhenotypeBudgetReceipt {
     pub decoder_input_lanes: u16,
     pub replay_event_capacity: u32,
     pub replay_eligibility_sample_capacity: u32,
+    pub replay_capture_synapse_count: u32,
+}
+
+impl GlobalPhenotypeBudgetReceipt {
+    pub fn within(&self, execution: &super::BrainExecutionBudget) -> bool {
+        let total_synapses = checked_synapse_sum(
+            self.recurrent_synapses,
+            self.action_decoder_synapses,
+            self.memory_decoder_synapses,
+        )
+        .ok();
+        let replay_capture_limit = self
+            .replay_eligibility_sample_capacity
+            .checked_div(self.replay_event_capacity)
+            .unwrap_or(0);
+
+        self.neuron_count != 0
+            && self.neuron_count <= execution.max_neurons()
+            && self.active_tiles <= execution.max_active_tiles()
+            && self.recurrent_synapses <= execution.max_recurrent_synapses()
+            && self.action_decoder_synapses <= execution.max_action_decoder_synapses()
+            && self.memory_decoder_synapses <= execution.max_memory_decoder_synapses()
+            && total_synapses == Some(self.total_synapses)
+            && self.total_synapses <= execution.max_total_synapses()
+            && self.immutable_payload_words == self.total_synapses
+            && self.candidate_capacity <= execution.max_candidates()
+            && self.object_slot_capacity <= execution.max_object_slots()
+            && self.memory_context_capacity <= execution.max_memory_context_records()
+            && self.decoder_input_lanes <= execution.max_decoder_input_lanes()
+            && self.replay_event_capacity != 0
+            && self.replay_event_capacity <= execution.max_replay_events()
+            && self.replay_eligibility_sample_capacity <= execution.max_replay_eligibility_samples()
+            && self.replay_capture_synapse_count != 0
+            && self.replay_capture_synapse_count <= self.total_synapses
+            && self.replay_capture_synapse_count <= replay_capture_limit
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +97,13 @@ pub struct CompiledBudgets {
 }
 
 impl CompiledBudgets {
+    pub fn sum_route_synapses(&self) -> Result<u32, ScaffoldContractError> {
+        self.routes.iter().try_fold(0_u32, |sum, route| {
+            sum.checked_add(route.total_synapses().ok_or_else(compile_error)?)
+                .ok_or_else(compile_error)
+        })
+    }
+
     pub fn validate_against(
         &self,
         capacity: &BrainCapacityClass,
@@ -63,17 +123,8 @@ impl CompiledBudgets {
         let mut immutable_payload_words = 0_u32;
         for (index, route) in self.routes.iter().enumerate() {
             if route.route_index != u16::try_from(index).map_err(|_| compile_error())?
-                || route.active_tiles > route.tile_ceiling
-                || route.immutable_payload_words > route.payload_word_ceiling
+                || !route.within_ceiling()
             {
-                return Err(compile_error());
-            }
-            let route_synapses = checked_synapse_sum(
-                route.recurrent_synapses,
-                route.action_decoder_synapses,
-                route.memory_decoder_synapses,
-            )?;
-            if route_synapses > route.synapse_ceiling {
                 return Err(compile_error());
             }
             let populated_categories = [
@@ -106,30 +157,14 @@ impl CompiledBudgets {
         }
 
         let global = &self.global;
-        let total_synapses = checked_synapse_sum(
-            global.recurrent_synapses,
-            global.action_decoder_synapses,
-            global.memory_decoder_synapses,
-        )?;
         if global.neuron_count != capacity.execution().max_neurons()
             || global.active_tiles != active_tiles
             || global.recurrent_synapses != recurrent_synapses
             || global.action_decoder_synapses != action_decoder_synapses
             || global.memory_decoder_synapses != memory_decoder_synapses
             || global.immutable_payload_words != immutable_payload_words
-            || global.total_synapses != total_synapses
-            || global.recurrent_synapses > capacity.execution().max_recurrent_synapses()
-            || global.action_decoder_synapses > capacity.execution().max_action_decoder_synapses()
-            || global.memory_decoder_synapses > capacity.execution().max_memory_decoder_synapses()
-            || global.total_synapses > capacity.execution().max_total_synapses()
-            || global.active_tiles > capacity.execution().max_active_tiles()
-            || global.candidate_capacity > capacity.execution().max_candidates()
-            || global.object_slot_capacity > capacity.execution().max_object_slots()
-            || global.memory_context_capacity > capacity.execution().max_memory_context_records()
-            || global.decoder_input_lanes > capacity.execution().max_decoder_input_lanes()
-            || global.replay_event_capacity > capacity.execution().max_replay_events()
-            || global.replay_eligibility_sample_capacity
-                > capacity.execution().max_replay_eligibility_samples()
+            || !global.within(capacity.execution())
+            || self.sum_route_synapses()? != global.total_synapses
         {
             return Err(compile_error());
         }

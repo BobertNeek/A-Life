@@ -1,14 +1,12 @@
 use alife_core::{
     BrainClassSpec, BrainScaleTier, Confidence, CooEntry, CooTile, NeuralProjectionSchema,
-    NormalizedScalar, OjaUpdateConfig, ProjectionTile, ScaffoldContractError, SparseTileCoord,
-    StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
-    SynapseWeightSplit, Tick,
+    NormalizedScalar, ProjectionTile, ScaffoldContractError, SparseTileCoord, StructuralEditBatch,
+    StructuralEditCandidate, StructuralEditKind, StructuralEditReason, SynapseWeightSplit, Tick,
 };
 use alife_gpu_backend::{
-    GpuAutophagyPolicy, GpuBufferReplacement, GpuFixedPointPolicy, GpuOjaFixedPointConfig,
-    GpuPlasticityPlan, GpuReadbackClass, GpuReadbackPolicy, GpuRecompactionPlan,
-    GpuRecompactionRemapTable, GpuRecompactionSwapState, GpuStaticForwardPlan, GpuUploadBuffers,
-    P28_WGSL_RECOMPACTION_AUTOPHAGY,
+    GpuAutophagyPolicy, GpuBufferReplacement, GpuFixedPointPolicy, GpuReadbackClass,
+    GpuReadbackPolicy, GpuRecompactionPlan, GpuRecompactionRemapTable, GpuRecompactionSwapState,
+    GpuStaticForwardPlan, GpuUploadBuffers, P28_WGSL_RECOMPACTION_AUTOPHAGY,
 };
 
 fn weights(
@@ -262,7 +260,7 @@ fn double_buffer_swap_is_all_or_nothing_at_sleep_boundary() {
 }
 
 #[test]
-fn plasticity_h_shadow_only_and_routing_masks_survive_recompaction() {
+fn persisted_weight_layers_and_routing_masks_survive_recompaction() {
     let schema = recompaction_schema();
     let upload =
         GpuUploadBuffers::from_cpu_schema(&schema, GpuFixedPointPolicy::reference()).unwrap();
@@ -285,39 +283,21 @@ fn plasticity_h_shadow_only_and_routing_masks_survive_recompaction() {
         upload.supertile_masks
     );
 
-    let policy = GpuFixedPointPolicy::reference();
-    let plasticity = GpuPlasticityPlan::from_upload(
-        &output.compacted_upload,
-        policy,
-        GpuOjaFixedPointConfig::from_oja_config(
-            OjaUpdateConfig {
-                learning_rate: 0.5,
-                learning_rate_scale: 1.0,
-                decay: 1.0,
-                shadow_min: -1.0,
-                shadow_max: 1.0,
-            },
-            policy,
-            0xD1CE,
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    let pre_q = plasticity
-        .quantize_activations(&activation_vec(0.75, 0.5))
-        .unwrap();
-    let post_q = plasticity
-        .quantize_activations(&activation_vec(0.5, 0.25))
-        .unwrap();
-    let result = plasticity.execute_cpu_diagnostic(&pre_q, &post_q).unwrap();
-
-    assert_eq!(result.genetic_fixed_q, plasticity.genetic_fixed_q);
+    let compacted = &output.compacted_upload;
     assert_eq!(
-        result.lifetime_consolidated_q,
-        plasticity.lifetime_consolidated_q
+        compacted.genetic_fixed_q.len(),
+        compacted.packed_indices.len()
     );
-    assert_eq!(result.h_operational_q, plasticity.h_operational_q);
-    assert_ne!(result.h_shadow_q, plasticity.h_shadow_initial_q);
+    assert_eq!(
+        compacted.lifetime_consolidated_q.len(),
+        compacted.packed_indices.len()
+    );
+    assert_eq!(
+        compacted.h_operational_q.len(),
+        compacted.packed_indices.len()
+    );
+    assert_eq!(compacted.h_shadow_q.len(), compacted.packed_indices.len());
+    assert!(compacted.h_shadow_q.iter().any(|value| *value != 0));
 }
 
 #[test]

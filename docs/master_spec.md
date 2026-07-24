@@ -6,7 +6,7 @@
 **Date:** 2026-07-17
 **Status:** implementation target; GPU-authoritative trainable creature runtime
 
-This document is the controlling engineering specification for A-Life. It supersedes earlier fixed-2048, HLSL, dense-matrix, single-pass-kernel, scaffold-only, and CPU-shadow neural drafts. It preserves scalable brain classes, class-bucketed sparse storage, Rust/Bevy/wgpu/WebGPU/WGSL, separated neural compute passes, and explicit boundaries between internal subconscious semantic priors and external teacher agents. ADR-024 and ADR-027 through ADR-030, together with the approved GPU closed-loop and N2048 foundation program, control production cognition when older milestone prose conflicts with this specification. ADR-025 and ADR-026 remain reserved for their approved memory/grounding and scaling/promotion checkpoints.
+This document is the controlling engineering specification for A-Life. It supersedes earlier fixed-2048, HLSL, dense-matrix, single-pass-kernel, scaffold-only, and CPU-shadow neural drafts. It preserves scalable brain classes, class-bucketed sparse storage, Rust/Bevy/wgpu/WebGPU/WGSL, separated neural compute passes, and explicit boundaries between internal subconscious semantic priors and external teacher agents. ADR-024 through ADR-030, together with the approved GPU closed-loop and N2048 foundation program, control production cognition when older milestone prose conflicts with this specification.
 
 The implementation goal is one causally closed production brain in which current perception, recurrent state, candidate scoring, action selection, measured outcome, waking plasticity, sleep consolidation, and later behavior remain connected. Production neural execution is GPU-authoritative WGSL. Pure CPU neural math is test-only or developer-only and never runs as a live shadow, parity gate, or automatic neural fallback. N2048 is the first fully trained class: curated inherited foundations establish robust sensorimotor and language mechanics, evolution hardens them, and personal semantic and episodic knowledge remains lifetime-learned.
 
@@ -591,7 +591,28 @@ Core sensory groups:
 - written/glyph fields,
 - lesson/environment markers.
 
-Early implementations can use clean symbolic sensory channels as developmental scaffolding, but the spec must record them as perception channels, not hidden truth injection. Later systems can replace clean channels with more raw sensors while preserving semantic ABI versions.
+Two production profiles are explicit and separately provenanced.
+`PrivilegedAffordanceV1` may expose versioned ecological affordance channels as
+a developmental and ablation profile. `GroundedObjectSlotsV1` exposes bounded
+generic object slots containing bearing, distance, relative velocity, color,
+material, shape, chemical gradients, contact, proprioception, temperature, and
+terrain. Grounded slots contain no food, hazard, teacher, lesson, nutrition,
+toxicity, or object-class truth channel. Every perception frame, sealed patch,
+save, benchmark, and behavioral receipt records the exact profile identity,
+profile schema, sensory ABI, and source tick where transaction evidence needs
+it.
+
+Grounded object identity is organism-local and stable through a versioned
+tracked-object binding derived from portable physical provenance. Raw world
+entity IDs remain command-transport data only and never enter neural features,
+memory queries, topology bindings, or durable sidecar identity. Grounded slots
+and their equal generic candidate families are extracted from one authoritative
+world snapshot before memory retrieval and GPU dispatch.
+
+Clean symbolic sensory channels may still be used as developmental scaffolding,
+but they must remain explicitly labelled privileged perception rather than
+hidden truth injection. Later systems can replace clean channels with more raw
+sensors while preserving versioned profile identities.
 
 ETF/codebook anchors are versioned. They are useful for sensory invariance and migration. They are not a guarantee that all internal representations are frozen. The association brain may adapt; the sensory ABI should remain stable enough that adaptation does not scramble the world.
 
@@ -717,7 +738,21 @@ Core memory layers:
 - external artifacts: books, signs, maps, cultural records.
 - school mastery ledger: concept-level test outcomes.
 
-Every production dispatch uses `W_effective = W_genetic + W_lifetime + alpha * H_fast`. Candidate-conditional episodic retrieval is attached to the same-tick perception frame. Automatic GPU sleep consolidation promotes bounded fast content into lifetime weights and may prepare a safe double-buffered structural swap; no CPU H-shadow is the consolidation authority.
+Every production dispatch uses `W_effective = W_genetic + W_lifetime + alpha * H_fast`. Episodic recall uses a versioned, fixed-width state-action-target query for every candidate. It returns a bounded target-local latent and exact-family value row for that candidate; no candidate-invariant memory or topology scalar is added to all action scores. Candidate memory enters only through explicit GPU candidate-decoder channels and does not enter recurrent/global state in Slice C.
+
+Recall queries bind the immutable pre-context `PerceptionBaseDigest`. The exact
+ordered candidate-local rows are finalized once into the perception context,
+after which GPU dispatch, selection evidence, episodic decision keys, and the
+sealed patch bind the distinct final `PerceptionFrameDigest`. A context row or
+key from another base frame, candidate, profile, organism, or tick is rejected
+before world execution.
+
+Memory banks are portable organism-owned sidecars with deterministic bounded
+search, merge, eviction, and sleep compaction. Capacity pressure returns exact
+degradation receipts and validated zero/no-match rows; it cannot abort an
+otherwise valid neural tick. Automatic GPU sleep consolidation promotes bounded
+fast content into lifetime weights and may coordinate a crash-safe sidecar
+compaction swap; no CPU H-shadow is the consolidation authority.
 
 Memory must be ablatable. To prove grounded learning, tests should turn off teacher hints, reduce or disable internal SLM, test novel speakers/material, and test delayed recall after sleep.
 
@@ -744,6 +779,13 @@ For each promoted N512, N1024, or N2048 `BrainCapacityClass` bucket, allocate sh
 - replay/event buffers.
 
 Genetics controls sparse structure. Evolution mutates topology and density. The GPU computes active paths, not dead weight lines. Memory budgets cap active synapses, tiles, candidates, object slots, and in-flight growth/swap storage per capacity class and profile. A lightweight `GpuBrainHandle` references shared backend-owned pools; it never duplicates device, queue, pipelines, or a complete projection schema per creature.
+
+Logical capacity, route ceilings, packed physical bytes, staging/readback,
+double-bank mutable state, shared backend bytes, and peak growth/swap bytes are
+one admission contract. A class cannot be promoted from a logical budget alone;
+its Slice D evidence must bind the exact canonical capacity digest and prove
+allocation, bounded activity scheduling, save migration, and both-profile soak
+against the same adapter used by the other promotion artifacts.
 
 The data model should support future payload compression, quantization, and tile format upgrades without changing high-level contracts.
 
@@ -776,6 +818,17 @@ Residency states:
 - DormantDiskBacked.
 
 The scheduler chooses residency based on salience, distance, social relevance, player focus, ecological importance, hunger/danger/reproduction urgency, and schooling status. Larger brains slow population growth by consuming more compute and metabolic resources.
+
+Capacity class does not imply a population count. Runtime admission derives hot
+and warm slot counts from the selected neural-heap profile after renderer,
+scratch, replay, readback, and migration reserves are accounted. A failed
+admission is typed and deterministic; it does not silently shrink the brain or
+switch neural authority.
+
+The initial production neural profile admits at most 500 hot brains inside a
+2 GiB logical heap and 2 GiB physical-allocation ceiling. Class storage grows
+by appending fixed 32-slot arenas. A live arena is never resized or copied, so
+GPU handles and packed offsets remain stable throughout waking execution.
 
 
 ## 23. Brain Migration and Ascension Compatibility
@@ -897,7 +950,19 @@ The production neural tick is one GPU-authoritative multi-pass causal loop:
 9. Upload the compact post-outcome credit packet and update eligibility-gated `H_fast`.
 10. During canonical sleep phases, run GPU replay, consolidation, and safe structural swap pipelines.
 
-Passes may later be fused after correctness and profiling, but reviewed boundaries must preserve WebGPU safety and causal auditability. The GPU backend batches by promoted capacity class. A dispatch batch contains class ID, slot/generation, active tile range, perception/candidate offsets, activation buffers, sparse payload references, and bounded output offsets.
+Ordered dispatches may share one compute pass after correctness and profiling,
+but reviewed boundaries must preserve WebGPU safety and causal auditability. The
+GPU backend batches by promoted capacity class. A dispatch batch contains class
+ID, slot/generation, active tile range, perception/candidate offsets, activation
+buffers, sparse payload references, and bounded output offsets.
+
+The production implementation may record those ordered dispatches inside one
+compute pass per fixed class arena; dispatch order remains the synchronization
+boundary. Before parallel work, one row prepass validates the complete activity
+schedule and publishes a checksum-bound exact tile/synapse receipt. Recurrent
+and eligibility invocations consume only the accepted sentinel and the one
+route-mask word they need. They do not repeat the route digest or contend on a
+per-neuron global diagnostic counter.
 
 The host may read the compact winner record and bounded counters each tick. Active play never synchronously reads bulk activation, eligibility, topology, or weight state. Production does not dispatch a CPU shadow, require CPU parity, or fall back automatically to CPU neural math.
 
@@ -947,7 +1012,20 @@ Schooling uses sleep for consolidation. Lessons should have delayed tests after 
 
 ## 29. Topological Memory and Curiosity
 
-Topological memory is a future-compatible representation layer. Čech/Morse terminology from earlier drafts should be interpreted as a design direction: stable concept neighborhoods, gaps/contradictions, and curiosity pressure. It is not a requirement to implement full computational topology in v0.
+Topological memory is a bounded diagnostic sidecar over sealed experience. It
+is owned by portable organism identity and may summarize stable concept
+neighborhoods, contradictions, gaps, and curiosity-related diagnostics. It does
+not supply action commands, action hints, candidate logits, recurrent context,
+or a scalar decision bias. Object bindings use tracked-object IDs from the
+sealed episodic decision key, never raw world entity IDs.
+
+Capacity pressure is nonfatal. Concepts deterministically merge into summaries;
+edges evict; simplexes and gaps replace bounded entries; binding vectors
+truncate deterministically. Every observation produces an exact atomic receipt,
+including degradation or replay rejection, and ordinary saturation cannot abort
+a brain tick. Čech/Morse terminology from earlier drafts remains a future
+representation direction rather than a requirement to implement full
+computational topology in v0.
 
 Near-term interface:
 
@@ -1033,6 +1111,24 @@ Validation combines contract tests with behavioral, hardware, save, soak, and pe
 
 Behavioral and causal tests perturb sensory input, lesion or zero weights, ablate neuromodulation, and verify target-conditional learning rather than comparing against a CPU oracle. Real-hardware tests name the Vulkan adapter and prove action selection, waking plasticity, and sleep consolidation dispatch through WGSL. Save tests cover every sleep phase and typed GPU-unavailable state. Bounded 10,000-plus-tick soak tests and populated-phenotype performance reports complete acceptance.
 
+Memory and grounding tests additionally prove that privileged and grounded
+profiles have distinct provenance, grounded uploads contain no semantic truth
+labels, relabelling private world semantics cannot change grounded neural input,
+and one target's remembered outcome cannot leak to an unrelated candidate.
+Recall evidence binds both base and final perception digests. Tracker, memory,
+and topology saturation runs for at least 10,240 ticks must remain bounded,
+deterministic, replay-safe, and free of terminal capacity errors or tracked-ID
+reuse.
+
+Production class promotion is derived, never configured. One canonical
+`GpuClosedLoopPromotionManifest` retains the exact A/B/C/D artifact bindings,
+36 benchmark rows, 12-command gate receipt, Git commit/tree object IDs, capacity
+digests, phenotype-manifest digests, and Vulkan adapter identity. Slice A and B
+are profile-independent; Slice C and D each require privileged and grounded
+evidence. Every class requires 12 benchmark rows (two profiles by populations
+1, 10, 50, 100, 250, and 500). `Missed` and `Unavailable` are honest evidence
+but do not set the benchmark promotion bit.
+
 
 ## 34. Determinism and Reproducibility
 
@@ -1060,12 +1156,36 @@ Performance scales through sparsity, residency, promoted capacity-class batching
 - schooling lessons per simulated hour,
 - Graphify/doc agent overhead.
 
-N512, N1024, and N2048 must each meet their documented causal and performance gates before promotion. Larger brains remain research-gated special modes. A single 1M-neuron school candidate is not expected to coexist with hundreds of hot ecosystem brains on low hardware.
+N512, N1024, and N2048 must each meet their documented causal and performance gates before promotion. A benchmark manifest is accepted only when all 36 digest-bound rows are present; only `Completed` rows pass, while `Missed` and `Unavailable` remain visible and block the affected class. Larger brains remain research-gated special modes. A single 1M-neuron school candidate is not expected to coexist with hundreds of hot ecosystem brains on low hardware.
+
+The canonical v1 p95 limits are full-causal neural-tick budgets, including
+eligibility capture and sealed-outcome plasticity. For populations
+`[1, 10, 50, 100, 250, 500]`, the limits in milliseconds are N512
+`[4, 8, 16, 32, 80, 160]`, N1024 `[6, 12, 32, 64, 160, 320]`, and N2048
+`[8, 16, 64, 128, 320, 640]` for both sensor profiles. These replace the
+pre-correction estimates measured while the activity contract could stop the
+causal workload early; changing them again requires a versioned, evidence-backed
+contract change rather than editing a generated result.
 
 
 ## 36. Data Persistence, Saves, and Lineage Export
 
 Saves must be versioned. They should include world state, organisms, genomes, brain class specs, ABI versions, memory snapshots, consolidated habits, episodic summaries, school progress, and lineage metadata.
+
+GPU brain saves also preserve the exact sensor-profile identity and portable
+organism-owned tracker, memory, compaction, and topology sidecar state. Bulk
+sidecars live behind content-digest-checked assets. Tracker records persist
+physical provenance, canonical tracking keys, stable descriptors, monotonically
+allocated tracked IDs, and next-ID state without serializing raw world entity
+associations. Memory and topology assets use primitive versioned DTOs and
+rebuild private indices only after owner, profile, generation, replay guard,
+capacity, and canonical digest validation.
+
+Promotion and hardware evidence are separate versioned artifacts under
+`target/artifacts/`. They are regenerated from a clean committed tree and are
+not save authority. Their Git IDs use exact lowercase 40-hex commit/tree object
+identities; four-word canonical digests remain content identities and never
+stand in for Git provenance.
 
 Lineage export supports ascension. It should store enough to recreate the creature later, migrate it to a larger class, and test whether its identity survived migration.
 
@@ -1252,7 +1372,7 @@ Slice B: GPU causal learning and sleep. Add eligibility buffers, three-factor fa
 
 Slice C: memory, topology, and grounding. Add candidate-conditional memory, nonfatal topology, explicit privileged and grounded sensor profiles, tracked-object bindings, and a 10,000-plus-tick bounded cognition soak.
 
-Slice D: scaling and cleanup. Enforce global/per-route budgets, activity-dependent BrainATP, memory ceilings, tier promotion gates, legacy save migration, documentation cleanup, and removal of superseded backend code and claims.
+Slice D: scaling and cleanup. Enforce global/per-route budgets, activity-dependent BrainATP, memory ceilings, tier promotion gates, legacy save migration, documentation cleanup, and removal of superseded backend code and claims. Derive each promoted class only from the complete ADR-026 A/B/C/D, benchmark, and exact global-gate matrix on one source tree and Vulkan adapter.
 
 N2048 Foundation and Lineage Program: after Slice A evidence and the remaining
 B/C/D runtime gates, freeze `N2048FoundationLayoutV1`; load immutable foundation
@@ -1342,6 +1462,9 @@ learned checkpoints, ranking records, and portable founder bundles.
 `NeuralClosedLoopGpu`: normal GPU-authoritative neural policy.
 
 `HeuristicBaseline`: explicit separately labelled non-neural comparison policy.
+
+`GpuClosedLoopPromotionManifest`: canonical ADR-026 evidence matrix whose
+passing rows, rather than configuration, promote N512, N1024, and N2048.
 
 `Graphify`: developer tool that maps project files into a queryable knowledge graph.
 
@@ -1460,6 +1583,7 @@ The following checks are required acceptance evidence:
 27. Dead creatures commit genetic/life archives before retirement; selected learned checkpoints restore durable minds without stale body/world state.
 28. Cross-run ranking treats unexposed metrics as `Unknown` and resolves secure genetic-founder or explicit mind-clone cohorts with full provenance.
 29. N2048-to-N4096 research migration maps by persistent address and proves same-adapter selection identity plus logit delta at most `1e-6` before atomic handoff.
+30. Promotion retains the complete per-class A/B/C/D matrix, all 36 honest benchmark rows, exact 12-command gate receipt, clean Git commit/tree IDs, canonical capacity and phenotype digests, and one Vulkan adapter identity; no configuration override can add a promoted class.
 
 # Appendix C: Print/Page Estimate
 

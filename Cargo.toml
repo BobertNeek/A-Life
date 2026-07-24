@@ -11,6 +11,7 @@ repository = "https://github.com/BobertNeek/A-Life"
 [workspace.dependencies]
 alife_core = { path = "crates/alife_core" }
 bevy = { version = "=0.18.0", default-features = false }
+bincode = { version = "2.0.1", features = ["serde"] }
 bitflags = "2.13.0"
 blake3 = "1.8.2"
 bytemuck = { version = "1.25.0", features = ["derive"] }
@@ -20,3 +21,19 @@ serde_json = "1.0.145"
 smallvec = "1.15.1"
 thiserror = "2.0.18"
 wgpu = "29.0.3"
+
+# Real-hardware brain acceptance runs execute tens of thousands of neural,
+# memory, topology, and evidence operations. Keep debug assertions enabled but
+# optimize only the local hot-path crates so the exact workspace test gates
+# remain practical on Windows.
+[profile.test.package.alife_core]
+opt-level = 2
+
+[profile.test.package.alife_world]
+opt-level = 2
+
+[profile.test.package.alife_gpu_backend]
+opt-level = 2
+
+[profile.test.package.alife_game_app]
+opt-level = 2

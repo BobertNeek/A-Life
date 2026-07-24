@@ -8,15 +8,15 @@ mod prelude {
     pub(crate) use std::path::{Path, PathBuf};
 
     pub(crate) use alife_core::{
-        cpu_reference_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId, ActionKind,
-        ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput, BrainTickStatus,
-        ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence, ContractDiagnostic,
-        CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch, GapResolutionStatus,
-        GaussianClusterId, GenomeId, HomeostaticParameters, HomeostaticSnapshot, Intensity,
-        LineageId, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
-        PolicyBackend, PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt,
-        ReferenceActionFailure, ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel,
-        TeacherPerceptionChannel, Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
+        heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId,
+        ActionKind, ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput,
+        BrainTickStatus, ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence,
+        ContractDiagnostic, CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch,
+        GapResolutionStatus, GaussianClusterId, GenomeId, HomeostaticParameters,
+        HomeostaticSnapshot, Intensity, LineageId, NeuralProjectionSchema, NormalizedScalar,
+        OrganismId, PhysicalContactKind, PolicyBackend, ReferenceActionFailure,
+        ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel, TeacherPerceptionChannel,
+        Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
         Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -98,6 +98,9 @@ pub use creature_part_pose::*;
 mod live_brain_bridge;
 pub(crate) use live_brain_bridge::proposal;
 pub use live_brain_bridge::*;
+
+mod gpu_sleep_scheduler;
+pub use gpu_sleep_scheduler::*;
 
 mod camera_inspector;
 pub use camera_inspector::*;
@@ -299,9 +302,19 @@ mod gpu_live_runtime;
 pub use gpu_live_runtime::*;
 
 #[cfg(feature = "gpu-runtime")]
+mod gpu_checkpoint_assets;
+#[cfg(feature = "gpu-runtime")]
+pub use gpu_checkpoint_assets::*;
+
+#[cfg(feature = "gpu-runtime")]
 mod gpu_evidence;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_evidence::*;
+
+#[cfg(feature = "gpu-runtime")]
+mod gpu_closed_loop_promotion;
+#[cfg(feature = "gpu-runtime")]
+pub use gpu_closed_loop_promotion::*;
 
 mod soak_isolation;
 pub use soak_isolation::*;

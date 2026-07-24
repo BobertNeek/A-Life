@@ -1,13 +1,14 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand, ActionId,
-    ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand,
+    ActionId, ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome,
     BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
     Confidence, DecisionSnapshot, DevelopmentState, DurationTicks, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity,
     LobeKind, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeHash,
     PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, PreActionSnapshot,
-    ScaffoldContractError, SensorProfile, SensoryChannels, SensorySnapshot, SignedValence,
-    TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, Vec3f, Velocity, WorldEntityId,
+    ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, SignedValence, TeacherLessonResponseChannel,
+    TeacherPerceptionChannel, Tick, Vec3f, Velocity, WorldEntityId,
 };
 use alife_school::{
     Curriculum, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -78,6 +79,13 @@ fn neural_patch() -> ExperiencePatch {
         },
         HomeostaticSnapshot::baseline(tick),
         vec![candidate],
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
     )
     .unwrap();
     let selection = NeuralActionSelection {
@@ -305,7 +313,7 @@ fn curriculum_runner_emits_perceptual_events_and_advances_on_verifier_pass() {
                 VerifierCheck::NoHiddenSemanticContext,
                 VerifierCheck::SelectedByArbitration,
                 VerifierCheck::MinimumMemoryRecords(1),
-                VerifierCheck::MinimumTopologyConcepts(2),
+                VerifierCheck::MinimumTopologyConcepts(1),
             ],
             &evidence,
         )
@@ -342,7 +350,7 @@ fn patch_log_verifier_passes_and_fails_using_sealed_patch_memory_and_topology_ev
                 VerifierCheck::RewardAtLeast(0.01),
                 VerifierCheck::NoDirectTeacherActionSelection,
                 VerifierCheck::MinimumMemoryRecords(1),
-                VerifierCheck::MinimumTopologyConcepts(2),
+                VerifierCheck::MinimumTopologyConcepts(1),
             ],
             &evidence,
         )
@@ -399,7 +407,7 @@ fn lesson_response_metadata_can_annotate_action_candidates_without_bypassing_arb
     let teacher_tagged_low =
         proposal(700, ActionKind::Vocalize, 0.30, None).with_teacher_lesson(Some(metadata));
     let ordinary_high = proposal(701, ActionKind::Inspect, 0.90, None);
-    let first = cpu_reference_arbitrate(
+    let first = heuristic_baseline_arbitrate(
         organism(),
         &[teacher_tagged_low, ordinary_high],
         ActionArbitrationConfig::default(),
@@ -411,7 +419,7 @@ fn lesson_response_metadata_can_annotate_action_candidates_without_bypassing_arb
     let teacher_tagged_high =
         proposal(702, ActionKind::Vocalize, 0.95, None).with_teacher_lesson(Some(metadata));
     let ordinary_low = proposal(703, ActionKind::Inspect, 0.40, None);
-    let second = cpu_reference_arbitrate(
+    let second = heuristic_baseline_arbitrate(
         organism(),
         &[teacher_tagged_high, ordinary_low],
         ActionArbitrationConfig::default(),

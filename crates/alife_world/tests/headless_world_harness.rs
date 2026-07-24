@@ -6,7 +6,7 @@ use alife_core::{
 };
 use alife_world::{
     HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessWorld,
-    HeadlessWorldCommand, WorldObjectKind,
+    HeadlessWorldCommand, WorldEditorSpawnSpec, WorldObjectKind,
 };
 
 fn organism() -> OrganismId {
@@ -256,6 +256,36 @@ fn food_reward_and_hazard_pain_are_measured_in_outcomes() {
 }
 
 #[test]
+fn ingesting_one_edible_poison_applies_nutrition_and_pain_together() {
+    let mut world = HeadlessScenarioBuilder::new(9191)
+        .agent("agent", organism(), pos(0.0, 0.0))
+        .build()
+        .unwrap();
+    let poisoned_food = world
+        .editor_spawn_object(WorldEditorSpawnSpec {
+            label: "poisoned-fruit".to_string(),
+            kind: WorldObjectKind::Food,
+            organism_id: None,
+            position: pos(0.25, 0.0),
+            nutrition: 0.8,
+            hazard_pain: 1.0,
+            radius: 0.5,
+            token_id: None,
+        })
+        .unwrap();
+
+    let outcome = world
+        .apply_command(&HeadlessWorldCommand::eat(organism(), poisoned_food).unwrap())
+        .unwrap();
+
+    assert!(outcome.execution.succeeded);
+    assert!(outcome.observation.homeostatic_delta.drives.hunger < 0.0);
+    assert!(outcome.observation.energy_delta.raw() > 0.0);
+    assert!(outcome.observation.pain_delta.raw() > 0.0);
+    assert!(outcome.observation.homeostatic_delta.drives.fear > 0.0);
+}
+
+#[test]
 fn action_execution_supports_approach_flee_grab_and_vocalize() {
     let mut world = world_with_food_and_hazard();
     let berry = world.entity_id("berry").unwrap();
@@ -320,7 +350,7 @@ fn action_execution_supports_approach_flee_grab_and_vocalize() {
 }
 
 #[test]
-fn headless_harness_collects_sealed_patches_and_triggers_p16_sleep_on_rest() {
+fn headless_harness_collects_rest_patch_without_forcing_cpu_sleep() {
     let world = HeadlessScenarioBuilder::new(5)
         .agent("agent", organism(), pos(0.0, 0.0))
         .build()
@@ -347,8 +377,8 @@ fn headless_harness_collects_sealed_patches_and_triggers_p16_sleep_on_rest() {
     assert_eq!(first.brain.status, BrainTickStatus::Normal);
     assert_eq!(harness.telemetry().sealed_patches.len(), 1);
     assert_eq!(harness.world().tick(), Tick::new(1));
-    assert_eq!(mind.sleep_state().phase, SleepPhase::ForcedRecoverySleep);
-    assert!(first.sleep_transition.is_some());
+    assert_eq!(mind.sleep_state().phase, SleepPhase::Awake);
+    assert!(first.sleep_transition.is_none());
 }
 
 #[test]

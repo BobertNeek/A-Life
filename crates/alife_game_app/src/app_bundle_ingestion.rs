@@ -257,8 +257,9 @@ fn validate_app_bundle_manifest_inner(
     }
 
     let mut shader_ids = BTreeSet::new();
+    let mut declared_shader_paths = BTreeSet::new();
     for shader in &manifest.shader_assets {
-        validate_shader_entry(shader, &mut shader_ids)?;
+        validate_shader_entry(shader, &mut shader_ids, &mut declared_shader_paths)?;
         let path = resolve_workspace_path(root, &shader.relative_path)?;
         if !path.exists() {
             if shader.required {
@@ -273,7 +274,16 @@ fn validate_app_bundle_manifest_inner(
         }
         largest_file_bytes = largest_file_bytes.max(tiny_file_size(&path)?);
     }
-    let discovered_shader_assets = discover_workspace_shaders(root)?.len();
+    let discovered_shader_paths = discover_workspace_shaders(root)?
+        .into_iter()
+        .map(|path| {
+            path.strip_prefix(root)
+                .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+                .map_err(|_| ScaffoldContractError::MissingPhaseData.into())
+        })
+        .collect::<Result<BTreeSet<_>, GameAppShellError>>()?;
+    let discovered_shader_assets = discovered_shader_paths.len();
+    let shader_discovery_complete = discovered_shader_paths == declared_shader_paths;
 
     Ok(AppBundleIngestionSummary {
         schema: CA12_APP_BUNDLE_MANIFEST_SCHEMA,
@@ -317,7 +327,7 @@ fn validate_app_bundle_manifest_inner(
         required_entries,
         largest_file_bytes,
         missing_required_rejected: false,
-        shader_discovery_complete: discovered_shader_assets == manifest.shader_assets.len(),
+        shader_discovery_complete,
         tiny_placeholder_art: placeholder_art.entries.iter().all(|entry| {
             !entry.id.trim().is_empty()
                 && !entry.kind.trim().is_empty()
@@ -418,10 +428,14 @@ fn validate_entry(
 fn validate_shader_entry(
     entry: &ShaderAssetEntry,
     ids: &mut BTreeSet<String>,
+    paths: &mut BTreeSet<String>,
 ) -> Result<(), GameAppShellError> {
     require_id(&entry.id)?;
     validate_relative_path(&entry.relative_path)?;
-    if !entry.relative_path.ends_with(".wgsl") || !ids.insert(entry.id.clone()) {
+    if !entry.relative_path.ends_with(".wgsl")
+        || !ids.insert(entry.id.clone())
+        || !paths.insert(entry.relative_path.replace('\\', "/"))
+    {
         return Err(ScaffoldContractError::MissingPhaseData.into());
     }
     Ok(())

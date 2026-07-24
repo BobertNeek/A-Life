@@ -75,7 +75,7 @@ mod task3_capacity_budget_red_tests {
                 execution.candidate_feature_count(),
                 execution.max_decoder_input_lanes(),
             ),
-            (1, 2, 32, 16, 16, (2, 4), 64, 16, 128, 24, 64),
+            (1, 3, 32, 16, 16, (2, 4), 64, 16, 128, 24, 64),
             "wrong common logical ABI tuple for {:?}",
             expected.id,
         );
@@ -91,7 +91,7 @@ mod task3_capacity_budget_red_tests {
                 execution.required_max_bind_groups(),
                 execution.required_max_bindings_per_bind_group(),
             ),
-            (1, 1, 0, 268_435_456, 134_217_728, 4, 1_000),
+            (1, 1, 1, 268_435_456, 134_217_728, 4, 1_000),
             "wrong versioned feature/buffer/binding floors for {:?}",
             expected.id,
         );
@@ -103,7 +103,7 @@ mod task3_capacity_budget_red_tests {
                 execution.required_max_dynamic_uniform_buffers_per_pipeline_layout(),
                 execution.required_max_compute_workgroup_storage_size(),
             ),
-            (8, 12, 4, 8, 16_384),
+            (8, 12, 4, 8, 16_352),
             "wrong stage/dynamic/workgroup-storage floors for {:?}",
             expected.id,
         );
@@ -240,7 +240,7 @@ mod task3_capacity_budget_red_tests {
     fn forged_execution_field_cases() -> Vec<(&'static str, Value)> {
         vec![
             ("schema_version", json!(2)),
-            ("gpu_layout_version", json!(3)),
+            ("gpu_layout_version", json!(4)),
             ("max_neurons", json!(640)),
             ("max_total_synapses", json!(8_193)),
             ("max_recurrent_synapses", json!(6_145)),
@@ -261,7 +261,7 @@ mod task3_capacity_budget_red_tests {
             ("max_decoder_input_lanes", json!(63)),
             ("required_limits_schema_version", json!(2)),
             ("required_feature_mask_words", json!(2)),
-            ("required_feature_mask", json!(1)),
+            ("required_feature_mask", json!(0)),
             ("required_max_buffer_size", json!(536_870_912u64)),
             (
                 "required_max_storage_buffer_binding_size",
@@ -383,6 +383,7 @@ mod task3_capacity_budget_red_tests {
                 decoder_input_lanes: 24,
                 replay_event_capacity: 32,
                 replay_eligibility_sample_capacity: 2_048,
+                replay_capture_synapse_count: 8,
             },
         };
         budgets

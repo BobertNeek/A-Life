@@ -143,6 +143,14 @@ pub(super) fn compile_decoders(
         .region(LobeKind::MotorArbitration)
         .filter(|region| region.enabled)
         .ok_or_else(compile_error)?;
+    let episodic = layout
+        .region(LobeKind::EpisodicMemory)
+        .filter(|region| region.enabled && region.len >= 12)
+        .ok_or_else(compile_error)?;
+    let core = layout
+        .region(LobeKind::CoreAssociation)
+        .filter(|region| region.enabled && region.len >= 8)
+        .ok_or_else(compile_error)?;
     let motor_width = u16::try_from(motor.len).map_err(|_| compile_error())?;
     let mut family_units: BTreeMap<u8, Vec<u16>> = (0_u8..8).map(|raw| (raw, Vec::new())).collect();
     family_units
@@ -234,11 +242,14 @@ pub(super) fn compile_decoders(
     if len == 0 || len > capacity.execution().max_action_decoder_synapses() {
         return Err(compile_error());
     }
+    let memory_channel =
+        super::MemoryChannelPlan::try_new_v1(super::MemoryChannelPlan::MINIMUM_SYNAPSE_COUNT)?;
     let decoder = CandidateDecoderPlan::try_new(
         motor.start,
         motor_width,
         CANDIDATE_FEATURE_COUNT as u16,
-        CANDIDATE_FEATURE_COUNT as u16,
+        u16::try_from(memory_channel.decoder_input_stride()).map_err(|_| compile_error())?,
+        Some(memory_channel),
         family_plans,
     )?;
     let projection = CompiledProjection::new(
@@ -265,13 +276,77 @@ pub(super) fn compile_decoders(
         synapse_ceiling: len,
         payload_word_ceiling: len,
     };
+    let memory_route_index = route_index.checked_add(1).ok_or_else(compile_error)?;
+    let memory_start = start.checked_add(len).ok_or_else(compile_error)?;
+    for raw in 0_u8..8 {
+        let family = CandidateActionFamily::try_from_raw(raw)?;
+        for channel in 0_u16..12 {
+            let source = episodic.start + u32::from(channel);
+            let target = core.start + u32::from(raw);
+            synapses.push(CompiledSynapse::new(
+                source,
+                target,
+                inherited_memory_decoder_weight(family, channel, 1),
+                1.0,
+                memory_route_index,
+                CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
+                    DecoderHeadKind::MemoryContext,
+                    family,
+                    u16::try_from(memory_channel.target_latent_lane_start())
+                        .map_err(|_| compile_error())?
+                        + channel,
+                    u16::from(raw),
+                )),
+            ));
+        }
+    }
+    let memory_count = u32::try_from(synapses.len())
+        .map_err(|_| compile_error())?
+        .checked_sub(len)
+        .ok_or_else(compile_error)?;
+    if memory_count != memory_channel.memory_decoder_synapse_count()
+        || memory_count > capacity.execution().max_memory_decoder_synapses()
+    {
+        return Err(compile_error());
+    }
+    let memory = AuxiliaryDecoderPlan::try_new(
+        DecoderHeadKind::MemoryContext,
+        12,
+        8,
+        memory_start,
+        memory_count,
+    )?;
+    let memory_projection = CompiledProjection::new(
+        memory_route_index,
+        LobeKind::EpisodicMemory,
+        LobeKind::CoreAssociation,
+        ProjectionType::Feedback,
+        ActiveTilePolicy::EssentialReservation,
+        UpdateCadence::Hot5To15Hz,
+        BiologicalPriority::High,
+        0,
+        memory_start,
+        memory_count,
+        0,
+    );
+    let memory_receipt = RouteBudgetReceipt {
+        route_index: memory_route_index,
+        active_tiles: 0,
+        recurrent_synapses: 0,
+        action_decoder_synapses: 0,
+        memory_decoder_synapses: memory_count,
+        immutable_payload_words: memory_count,
+        tile_ceiling: 0,
+        synapse_ceiling: memory_count,
+        payload_word_ceiling: memory_count,
+    };
     Ok(CompiledDecoderSet {
         candidate: decoder,
         speech: None,
-        memory: None,
-        projections: vec![projection],
+        memory: Some(memory),
+        projections: vec![projection, memory_projection],
         synapses,
-        receipts: vec![receipt],
+        receipts: vec![receipt, memory_receipt],
     })
 }
 
@@ -341,11 +416,15 @@ fn compile_n2048_decoders(
     if candidate_count != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT {
         return Err(compile_error());
     }
+    let memory_channel = super::MemoryChannelPlan::try_new_v1(
+        crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT,
+    )?;
     let candidate = CandidateDecoderPlan::try_new(
         motor.start,
         u16::try_from(motor.len).map_err(|_| compile_error())?,
         CANDIDATE_FEATURE_COUNT as u16,
-        CANDIDATE_FEATURE_COUNT as u16,
+        u16::try_from(memory_channel.decoder_input_stride()).map_err(|_| compile_error())?,
+        Some(memory_channel),
         family_plans,
     )?;
 
@@ -420,33 +499,47 @@ fn compile_n2048_decoders(
         .checked_add(1)
         .ok_or_else(compile_error)?;
     let memory_start = start + action_len;
-    for input_lane in 0_u16..crate::N2048FoundationLayoutV1::MEMORY_DECODER_INPUT_WIDTH {
-        for output_index in 0_u16..crate::N2048FoundationLayoutV1::MEMORY_DECODER_OUTPUT_WIDTH {
-            let source = episodic.start + u32::from(input_lane);
-            let target = core.start + u32::from(output_index);
-            synapses.push(CompiledSynapse::new(
-                source,
-                target,
-                genetic_weight(
-                    genome.genetic_prior_seed ^ 0x4D45_4D4F_5259,
-                    memory_route_index,
-                    source,
-                    target,
-                ),
-                1.0,
-                memory_route_index,
-                CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
-                    DecoderHeadKind::MemoryContext,
-                    CandidateActionFamily::Other,
-                    input_lane,
-                    output_index,
-                )),
-            ));
+    for raw in 0_u8..8 {
+        let family = CandidateActionFamily::try_from_raw(raw)?;
+        for channel in 0_u16..12 {
+            for output_index in (u16::from(raw)
+                ..crate::N2048FoundationLayoutV1::MEMORY_DECODER_OUTPUT_WIDTH)
+                .step_by(8)
+            {
+                for input_index in (channel
+                    ..crate::N2048FoundationLayoutV1::MEMORY_DECODER_INPUT_WIDTH)
+                    .step_by(12)
+                {
+                    let source = episodic.start + u32::from(input_index);
+                    let target = core.start + u32::from(output_index);
+                    synapses.push(CompiledSynapse::new(
+                        source,
+                        target,
+                        inherited_memory_decoder_weight(
+                            family,
+                            channel,
+                            n2048_memory_channel_synapse_count(channel),
+                        ),
+                        1.0,
+                        memory_route_index,
+                        CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
+                            DecoderHeadKind::MemoryContext,
+                            family,
+                            u16::try_from(memory_channel.target_latent_lane_start())
+                                .map_err(|_| compile_error())?
+                                + channel,
+                            output_index,
+                        )),
+                    ));
+                }
+            }
         }
     }
     let memory_count =
         start + u32::try_from(synapses.len()).map_err(|_| compile_error())? - memory_start;
-    if memory_count != crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT {
+    if memory_count != crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT
+        || memory_count != memory_channel.memory_decoder_synapse_count()
+    {
         return Err(compile_error());
     }
     let memory = AuxiliaryDecoderPlan::try_new(
@@ -510,6 +603,33 @@ fn genetic_weight(seed: u64, route: u16, source: u32, target: u32) -> f32 {
     let bits =
         splitmix64(seed ^ (u64::from(route) << 48) ^ (u64::from(source) << 16) ^ u64::from(target));
     0.02 + ((bits >> 40) as f32 / ((1_u32 << 24) - 1) as f32) * 0.23
+}
+
+fn inherited_memory_decoder_weight(
+    family: CandidateActionFamily,
+    channel: u16,
+    synapse_copies: u16,
+) -> f32 {
+    let total = match (family, channel) {
+        (CandidateActionFamily::Ingest, 0) => -0.10,
+        (CandidateActionFamily::Ingest, 1) => -0.20,
+        (CandidateActionFamily::Ingest, 2) => -0.40,
+        (CandidateActionFamily::Ingest, 8) => 0.35,
+        (CandidateActionFamily::Ingest, 9) => 0.05,
+        (CandidateActionFamily::Ingest, 10) => -0.55,
+        (CandidateActionFamily::Ingest, 11) => 0.25,
+        (CandidateActionFamily::Avoid, 1) => 0.25,
+        (CandidateActionFamily::Avoid, 2) => 0.50,
+        (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 1) => -0.15,
+        (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 2) => -0.35,
+        _ => 0.0,
+    };
+    total / f32::from(synapse_copies.max(1))
+}
+
+const fn n2048_memory_channel_synapse_count(channel: u16) -> u16 {
+    let input_copies = if channel < 4 { 6 } else { 5 };
+    8 * input_copies
 }
 
 fn splitmix64(mut value: u64) -> u64 {

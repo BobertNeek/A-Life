@@ -229,10 +229,9 @@ Timed smoke:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run_windows_alpha_package.ps1 -SmokeSeconds 30
 ```
 
-This package is GPU-first and requests `static-plastic-cpu-shadow-guarded` by
-default. GPU unavailability stops learned actions.
-This is not a full action-authoritative GPU runtime claim and no release tag is
-created by the package builder.
+This package requests `gpu-required` by default. GPU unavailability stops
+learned actions, and compact runtime telemetry reports GPU neural authority.
+No release tag is created by the package builder.
 
 If launch fails, the runner writes a sanitized CA43 crash summary and tester
 feedback template under `diagnostics/ca43_tester_feedback/`. Keep those files

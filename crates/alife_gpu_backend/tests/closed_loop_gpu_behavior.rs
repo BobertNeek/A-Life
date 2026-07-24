@@ -6,10 +6,12 @@ use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainPhenotype,
     CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
     DurationTicks, HomeostaticSnapshot, NormalizedScalar, OrganismId, PerceptionFrame, Pose,
-    SensorProfile, SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity, WorldEntityId,
+    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+    Tick, Vec3f, Velocity, WorldEntityId,
 };
 use alife_gpu_backend::{
-    CLOSED_LOOP_DECODE_WGSL, GPU_CANDIDATE_RECORD_BYTES, GPU_SELECTION_RECORD_BYTES,
+    CLOSED_LOOP_DECODE_WGSL, GPU_CANDIDATE_RECORD_BYTES, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
+    GPU_SELECTION_RECORD_BYTES,
 };
 use naga::ShaderStage;
 
@@ -67,11 +69,7 @@ fn two_candidate_frame_with_transport(
         let mut features = CandidateFeatureVector::zero();
         features.0[0] = 1.0;
         features.0[1] = if index == 0 { -0.5 } else { 0.75 };
-        let observation = if alternate_transport {
-            CandidateObservationRef::ObjectSlot(10 + index as u16)
-        } else {
-            CandidateObservationRef::None
-        };
+        let observation = CandidateObservationRef::None;
         let target = if alternate_transport {
             ActionTarget::new(
                 Some(WorldEntityId(900 + index as u64)),
@@ -111,6 +109,13 @@ fn two_candidate_frame_with_transport(
         },
         HomeostaticSnapshot::baseline(tick),
         candidates,
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
     )
     .unwrap()
 }
@@ -165,7 +170,10 @@ async fn run_fresh_gpu_sequence(
     let mut dispatch_generations = Vec::with_capacity(frames.len());
     for frame in frames {
         let result = gpu.run_frame(frame).await;
-        assert_eq!(result.compact_readback_bytes, 48);
+        assert_eq!(
+            result.compact_readback_bytes,
+            GPU_CLOSED_LOOP_TICK_READBACK_BYTES as u64
+        );
         selected_candidates.push(result.selection.candidate_index);
         selected_logits.push(result.selection.logit);
         dispatch_generations.push(result.selection.dispatch_generation);
@@ -202,7 +210,10 @@ fn expected_candidate_for_side(microsteps: u8) -> u32 {
 }
 
 fn assert_compact_selection(result: &GpuFrameResult) -> CompactSelection {
-    assert_eq!(result.compact_readback_bytes, 48);
+    assert_eq!(
+        result.compact_readback_bytes,
+        GPU_CLOSED_LOOP_TICK_READBACK_BYTES as u64
+    );
     assert!(result.selection.logit.is_finite());
     assert_eq!(result.selection.status, 1);
     result.selection
@@ -250,7 +261,7 @@ fn decode_wgsl_parses_and_abi_remains_compact_candidate_conditioned_and_entity_b
         .unwrap()
         + header_start;
     let header = &CLOSED_LOOP_DECODE_WGSL[header_start..header_end];
-    assert!(CLOSED_LOOP_DECODE_WGSL.contains("GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 2u"));
+    assert!(CLOSED_LOOP_DECODE_WGSL.contains("GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 3u"));
     assert!(header.contains("dispatch_generation_lo"));
     assert!(header.contains("dispatch_generation_hi"));
     assert!(!header.contains("reserved:array<u32,3>"));
@@ -340,7 +351,10 @@ fn zero_neural_weights_remove_non_idle_behavior() {
         assert_eq!(result.selection.status, 1);
         assert_ne!(result.selection.dispatch_generation, 0);
         assert_ne!(result.selection.dispatch_generation, 77);
-        assert_eq!(result.compact_readback_bytes, 48);
+        assert_eq!(
+            result.compact_readback_bytes,
+            GPU_CLOSED_LOOP_TICK_READBACK_BYTES as u64
+        );
         assert_eq!(result.record.slot, 0);
         assert_eq!(result.record.slot_generation, 7);
         assert_eq!(result.record.candidate_index, 0);
@@ -374,7 +388,8 @@ fn transport_identity_only_does_not_change_gpu_selection_or_logit() {
             assert_eq!(a.family, b.family);
             assert_eq!(a.features, b.features);
             assert_ne!(a.action_id, b.action_id);
-            assert_ne!(a.observation, b.observation);
+            assert_eq!(a.observation, CandidateObservationRef::None);
+            assert_eq!(b.observation, CandidateObservationRef::None);
             assert_ne!(a.target, b.target);
             assert_ne!(a.sensor_confidence, b.sensor_confidence);
             assert_ne!(a.required_effort, b.required_effort);
@@ -414,7 +429,10 @@ fn all_non_finite_logits_fail_closed_with_explicit_status() {
         assert_eq!(result.selection.confidence_q16, 0);
         assert_ne!(result.selection.dispatch_generation, 0);
         assert_ne!(result.selection.dispatch_generation, 99);
-        assert_eq!(result.compact_readback_bytes, 48);
+        assert_eq!(
+            result.compact_readback_bytes,
+            GPU_CLOSED_LOOP_TICK_READBACK_BYTES as u64
+        );
         assert_eq!(result.record.slot, 0);
         assert_eq!(result.record.slot_generation, 7);
         assert_eq!(result.record.finite_rejections, 2);
@@ -472,5 +490,43 @@ fn decoder_reads_the_final_ping_pong_side_for_two_three_and_four_microsteps() {
                 expected_candidate_for_side(microsteps)
             );
         }
+    });
+}
+
+#[test]
+fn active_weight_bank_selector_changes_gpu_behavior_without_mutating_either_fast_bank() {
+    pollster::block_on(async {
+        let phenotype = support::controlled_n512_phenotype_at_maturation(0.5);
+        let frame = two_candidate_frame(7, 77, [0.65, -0.25]);
+        let mut gpu = GpuPipelineFixture::new(&phenotype).await;
+
+        let synapse = gpu.configure_controlled_fast_bank_decoder(&phenotype, 1.0, -1.0);
+        gpu.set_active_weight_bank(0, 0);
+        let bank_zero_before = gpu.read_fast_bank_pair(0, synapse).await;
+        assert_eq!(bank_zero_before, [1.0_f32.to_bits(), (-1.0_f32).to_bits()]);
+        let bank_zero_result = gpu.run_frame(&frame).await.selection;
+        let bank_zero_after = gpu.read_fast_bank_pair(0, synapse).await;
+        assert_eq!(bank_zero_before, bank_zero_after);
+
+        gpu.restore_mutable_checkpoint();
+        let restored_synapse = gpu.configure_controlled_fast_bank_decoder(&phenotype, 1.0, -1.0);
+        assert_eq!(restored_synapse, synapse);
+        gpu.set_active_weight_bank(0, 1);
+        let bank_one_before = gpu.read_fast_bank_pair(0, synapse).await;
+        assert_eq!(bank_one_before, [1.0_f32.to_bits(), (-1.0_f32).to_bits()]);
+        let bank_one_result = gpu.run_frame(&frame).await.selection;
+        let bank_one_after = gpu.read_fast_bank_pair(0, synapse).await;
+        assert_eq!(bank_one_before, bank_one_after);
+
+        assert_ne!(
+            (
+                bank_zero_result.candidate_index,
+                bank_zero_result.logit.to_bits()
+            ),
+            (
+                bank_one_result.candidate_index,
+                bank_one_result.logit.to_bits()
+            )
+        );
     });
 }

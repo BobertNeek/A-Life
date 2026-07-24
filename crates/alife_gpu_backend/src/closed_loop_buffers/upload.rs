@@ -1,11 +1,14 @@
+use crate::closed_loop_memory::GpuMemoryChannelPlan;
 use alife_core::{
     BrainCapacityClass, BrainPhenotype, CandidateActionFamily, CompiledSynapseKind, PhenotypeHash,
 };
 
 use super::{
-    GpuClosedLoopError, GpuDecoderFamilyRecord, GpuDecoderPlanRecord, GpuDecoderWeightIndexRecord,
-    GpuEncoderAssignmentRecord, GpuEncoderPlanRecord, GpuNeuronDynamicsRecord,
-    GpuPhenotypeIdentityRecord, GpuProjectionRecord, GpuRouteMetadataRecord,
+    GpuClosedLoopError, GpuDecoderEligibilityMetadata, GpuDecoderFamilyRecord,
+    GpuDecoderPlanRecord, GpuDecoderWeightIndexRecord, GpuEncoderAssignmentRecord,
+    GpuEncoderPlanRecord, GpuNeuronDynamicsRecord, GpuPhenotypeIdentityRecord,
+    GpuPlasticityReceptorRecord, GpuProjectionRecord, GpuReplayCaptureIdentityRecord,
+    GpuRouteMetadataRecord, GpuSleepParameterRecord, GpuSynapseLearningMetadata,
     GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_NO_EXTENSION_SENTINEL,
 };
 
@@ -20,6 +23,10 @@ pub struct GpuPhenotypeCountPlan {
     pub synapses: usize,
     pub recurrent_synapses: usize,
     pub candidate_decoder_synapses: usize,
+    pub decoder_synapses: usize,
+    pub plasticity_receptors: usize,
+    pub replay_capture_synapses: usize,
+    pub sleep_parameters: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +56,14 @@ pub struct GpuPhenotypeUpload {
     pub decoder_plans: Vec<GpuDecoderPlanRecord>,
     pub decoder_families: Vec<GpuDecoderFamilyRecord>,
     pub decoder_weight_indices: Vec<GpuDecoderWeightIndexRecord>,
+    pub memory_channel_plans: Vec<GpuMemoryChannelPlan>,
+    pub memory_weight_indices: Vec<u32>,
+    pub plasticity_receptors: Vec<GpuPlasticityReceptorRecord>,
+    pub synapse_learning_metadata: Vec<GpuSynapseLearningMetadata>,
+    pub decoder_eligibility_metadata: Vec<GpuDecoderEligibilityMetadata>,
+    pub replay_capture_local_synapse_ids: Vec<u32>,
+    pub replay_capture_identity: GpuReplayCaptureIdentityRecord,
+    pub sleep_parameters: Vec<GpuSleepParameterRecord>,
     pub genetic_weights: Vec<f32>,
     pub alpha: Vec<f32>,
     pub decoder_weight_index_word_base: u32,
@@ -74,13 +89,17 @@ impl GpuPhenotypeUpload {
             synapses: self.genetic_weights.len(),
             recurrent_synapses: self.source_indices.len(),
             candidate_decoder_synapses: self.decoder_weight_indices.len(),
+            decoder_synapses: self.decoder_eligibility_metadata.len(),
+            plasticity_receptors: self.plasticity_receptors.len(),
+            replay_capture_synapses: self.replay_capture_local_synapse_ids.len(),
+            sleep_parameters: self.sleep_parameters.len(),
         }
     }
     pub fn exact_byte_plan(&self) -> GpuPhenotypeBytePlan {
         let c = self.exact_count_plan();
         GpuPhenotypeBytePlan {
             immutable_weight_bytes: c.synapses * 8,
-            mutable_weight_bytes: c.synapses * 12,
+            mutable_weight_bytes: c.synapses * 24,
             activation_bytes: c.neurons * 3 * 4,
             homeostasis_bytes: c.neurons * 2 * 4,
         }
@@ -200,29 +219,34 @@ impl GpuPhenotypeUpload {
         let mut recurrent = phenotype
             .synapses()
             .iter()
-            .filter(|row| matches!(row.kind(), CompiledSynapseKind::Recurrent))
+            .enumerate()
+            .filter(|(_, row)| matches!(row.kind(), CompiledSynapseKind::Recurrent))
             .collect::<Vec<_>>();
-        recurrent.sort_by_key(|row| (row.target(), row.source(), row.route_index()));
+        recurrent.sort_by_key(|(_, row)| (row.target(), row.source(), row.route_index()));
         let mut target_offsets = vec![0_u32; neuron_count as usize + 1];
-        for row in &recurrent {
+        for (_, row) in &recurrent {
             target_offsets[row.target() as usize + 1] += 1;
         }
         prefix_sum(&mut target_offsets)?;
-        let source_indices = recurrent.iter().map(|row| row.source()).collect::<Vec<_>>();
+        let source_indices = recurrent
+            .iter()
+            .map(|(_, row)| row.source())
+            .collect::<Vec<_>>();
         let route_indices = recurrent
             .iter()
-            .map(|row| row.route_index() as u32)
+            .map(|(_, row)| row.route_index() as u32)
             .collect::<Vec<_>>();
 
         let mut all_decoders = phenotype
             .synapses()
             .iter()
-            .filter_map(|row| match row.kind() {
-                CompiledSynapseKind::Decoder(coord) => Some((row, coord)),
+            .enumerate()
+            .filter_map(|(canonical_id, row)| match row.kind() {
+                CompiledSynapseKind::Decoder(coord) => Some((canonical_id, row, coord)),
                 CompiledSynapseKind::Recurrent => None,
             })
             .collect::<Vec<_>>();
-        all_decoders.sort_by_key(|(row, c)| {
+        all_decoders.sort_by_key(|(_, row, c)| {
             (
                 c.head().raw(),
                 c.family().raw(),
@@ -235,30 +259,201 @@ impl GpuPhenotypeUpload {
         let candidate_decoders = all_decoders
             .iter()
             .copied()
-            .filter(|(_, coordinate)| {
+            .filter(|(_, _, coordinate)| {
                 coordinate.head() == alife_core::DecoderHeadKind::ActionCandidate
             })
             .collect::<Vec<_>>();
+        let memory_decoders = all_decoders
+            .iter()
+            .copied()
+            .filter(|(_, _, coordinate)| {
+                coordinate.head() == alife_core::DecoderHeadKind::MemoryContext
+            })
+            .collect::<Vec<_>>();
         let recurrent_count = recurrent.len() as u32;
+        let ordered = recurrent
+            .iter()
+            .map(|(canonical_id, row)| (*canonical_id, *row))
+            .chain(
+                all_decoders
+                    .iter()
+                    .map(|(canonical_id, row, _)| (*canonical_id, *row)),
+            )
+            .collect::<Vec<_>>();
+        let mut canonical_to_local = vec![u32::MAX; phenotype.synapses().len()];
+        for (local_id, (canonical_id, _)) in ordered.iter().enumerate() {
+            canonical_to_local[*canonical_id] = local_id as u32;
+        }
+        if canonical_to_local.contains(&u32::MAX) {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
         let decoder_weight_indices = candidate_decoders
             .iter()
-            .enumerate()
-            .map(|(index, (_, c))| GpuDecoderWeightIndexRecord {
-                global_synapse_id: recurrent_count + index as u32,
+            .map(|(canonical_id, _, c)| GpuDecoderWeightIndexRecord {
+                global_synapse_id: canonical_to_local[*canonical_id],
                 input_lane: c.input_lane() as u32,
                 motor_index: c.motor_index() as u32,
                 reserved0: 0,
             })
             .collect::<Vec<_>>();
-        let ordered = recurrent
+        let memory_weight_indices = memory_decoders
             .iter()
-            .copied()
-            .chain(all_decoders.iter().map(|(row, _)| *row));
+            .map(|(canonical_id, _, _)| canonical_to_local[*canonical_id])
+            .collect::<Vec<_>>();
+        let memory_channel_plans = phenotype
+            .candidate_decoder()
+            .memory_channel()
+            .map(GpuMemoryChannelPlan::try_from)
+            .transpose()?
+            .into_iter()
+            .collect::<Vec<_>>();
+        match memory_channel_plans.as_slice() {
+            [] if memory_weight_indices.is_empty() => {}
+            [plan] if plan.memory_decoder_synapse_count as usize == memory_weight_indices.len() => {
+            }
+            _ => return Err(GpuClosedLoopError::MalformedUpload),
+        }
         let (genetic_weights, alpha): (Vec<_>, Vec<_>) = ordered
-            .map(|row| (row.genetic_weight(), row.alpha()))
+            .iter()
+            .map(|(_, row)| (row.genetic_weight(), row.alpha()))
             .unzip();
         if genetic_weights.iter().chain(&alpha).any(|v| !v.is_finite()) {
             return Err(GpuClosedLoopError::NonFinitePayload);
+        }
+
+        let plasticity_receptors = phenotype
+            .plasticity_receptors()
+            .iter()
+            .map(|receptor| {
+                let (fast_min, fast_max) = receptor.fast_weight_bounds();
+                GpuPlasticityReceptorRecord {
+                    eligibility_decay: receptor.eligibility_decay(),
+                    learning_rate: receptor.learning_rate(),
+                    sleep_replay_rate: receptor.sleep_replay_rate(),
+                    normalization_rate: receptor.normalization_rate(),
+                    modulator_sign: receptor.modulator_sign(),
+                    fast_min,
+                    fast_max,
+                    reserved: 0.0,
+                }
+            })
+            .collect::<Vec<_>>();
+        if plasticity_receptors.iter().any(|row| {
+            row.reserved.to_bits() != 0
+                || [
+                    row.eligibility_decay,
+                    row.learning_rate,
+                    row.sleep_replay_rate,
+                    row.normalization_rate,
+                    row.modulator_sign,
+                    row.fast_min,
+                    row.fast_max,
+                ]
+                .into_iter()
+                .any(|value| !value.is_finite())
+        }) {
+            return Err(GpuClosedLoopError::NonFinitePayload);
+        }
+
+        let decoder_eligibility_metadata = all_decoders
+            .iter()
+            .enumerate()
+            .map(
+                |(eligibility_local_index, (canonical_id, row, coordinate))| {
+                    GpuDecoderEligibilityMetadata {
+                        global_synapse_id: canonical_to_local[*canonical_id],
+                        decoder_head: coordinate.head().raw(),
+                        family: u32::from(coordinate.family().raw()),
+                        input_lane: u32::from(coordinate.input_lane()),
+                        // Eligibility reads the final activation heap directly, so this
+                        // runtime-local lane is the absolute compiled source neuron rather
+                        // than the candidate decoder's lobe-local motor ordinal.
+                        motor_index: row.source(),
+                        receptor_index: u32::from(row.receptor_index()),
+                        eligibility_local_index: eligibility_local_index as u32,
+                        reserved: 0,
+                    }
+                },
+            )
+            .collect::<Vec<_>>();
+        let synapse_learning_metadata = ordered
+            .iter()
+            .enumerate()
+            .map(|(local_id, (_, row))| {
+                let (eligibility_local_index, decoder_metadata_local_or_max) = match row.kind() {
+                    CompiledSynapseKind::Recurrent => (local_id as u32, u32::MAX),
+                    CompiledSynapseKind::Decoder(_) => {
+                        let decoder_local = (local_id as u32)
+                            .checked_sub(recurrent_count)
+                            .ok_or(GpuClosedLoopError::MalformedUpload)?;
+                        (decoder_local, decoder_local)
+                    }
+                };
+                Ok(GpuSynapseLearningMetadata {
+                    global_synapse_id: local_id as u32,
+                    kind: row.kind().kind_raw(),
+                    source_neuron: row.source(),
+                    target_neuron: row.target(),
+                    receptor_index: u32::from(row.receptor_index()),
+                    eligibility_local_index,
+                    decoder_metadata_local_or_max,
+                    reserved: 0,
+                })
+            })
+            .collect::<Result<Vec<_>, GpuClosedLoopError>>()?;
+        let mut replay_capture_local_synapse_ids = phenotype
+            .replay_capture_plan()
+            .global_synapse_ids()
+            .iter()
+            .map(|canonical_id| {
+                canonical_to_local
+                    .get(*canonical_id as usize)
+                    .copied()
+                    .filter(|local| *local != u32::MAX)
+                    .ok_or(GpuClosedLoopError::MalformedUpload)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        // The portable replay batch ABI is ordered by executable, GPU-local
+        // synapse identity. Canonical phenotype order is not preserved by the
+        // recurrent/decoder packing translation (notably for N2048), so sort
+        // only after every persistent ID has resolved to its runtime-local ID.
+        replay_capture_local_synapse_ids.sort_unstable();
+        if replay_capture_local_synapse_ids
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        let replay_capture_identity = GpuReplayCaptureIdentityRecord {
+            replay_capture_plan_digest: split_digest(
+                phenotype.replay_capture_plan().canonical_digest(),
+            ),
+        };
+        let sleep = phenotype.sleep_consolidation_plan();
+        sleep
+            .validate_contract()
+            .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+        let sleep_parameter = GpuSleepParameterRecord {
+            schema_version: u32::from(sleep.schema_version()),
+            staging_rate: sleep.staging_rate(),
+            weight_limit: sleep.weight_limit(),
+            fast_decay_rate: sleep.fast_decay_rate(),
+            eligibility_reset_policy: u32::from(sleep.eligibility_reset_policy_raw()),
+            replay_consume_policy: u32::from(sleep.replay_consume_policy_raw()),
+            reserved: [0; 2],
+        };
+        if [
+            sleep_parameter.staging_rate,
+            sleep_parameter.weight_limit,
+            sleep_parameter.fast_decay_rate,
+        ]
+        .into_iter()
+        .any(|value| !value.is_finite())
+            || sleep_parameter.eligibility_reset_policy != 1
+            || sleep_parameter.replay_consume_policy != 1
+            || sleep_parameter.reserved != [0; 2]
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
         }
 
         let encoder_plan_words = 8_u32;
@@ -374,6 +569,14 @@ impl GpuPhenotypeUpload {
             decoder_plans: vec![decoder_plan],
             decoder_families,
             decoder_weight_indices,
+            memory_channel_plans,
+            memory_weight_indices,
+            plasticity_receptors,
+            synapse_learning_metadata,
+            decoder_eligibility_metadata,
+            replay_capture_local_synapse_ids,
+            replay_capture_identity,
+            sleep_parameters: vec![sleep_parameter],
             genetic_weights,
             alpha,
             decoder_weight_index_word_base,
@@ -402,4 +605,13 @@ fn checked_sum(values: &[u32]) -> Result<u32, GpuClosedLoopError> {
         sum.checked_add(*value)
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)
     })
+}
+
+fn split_digest(values: [u64; 4]) -> [u32; 8] {
+    let mut split = [0_u32; 8];
+    for (index, value) in values.into_iter().enumerate() {
+        split[index * 2] = value as u32;
+        split[index * 2 + 1] = (value >> 32) as u32;
+    }
+    split
 }

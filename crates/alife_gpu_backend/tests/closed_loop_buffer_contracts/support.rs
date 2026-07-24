@@ -5,7 +5,8 @@ use alife_core::{
     BrainClassId, BrainGenome, BrainPhenotype, CandidateActionFamily, CandidateFeatureVector,
     CandidateObservationRef, CompiledSynapseKind, Confidence, DevelopmentState, DurationTicks,
     HomeostaticSnapshot, NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeCompiler, Pose,
-    SensorProfile, SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity, WorldEntityId,
+    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+    Tick, Vec3f, Velocity, WorldEntityId,
 };
 
 pub fn compile(class_id: BrainClassId, seed: u64) -> BrainPhenotype {
@@ -81,7 +82,7 @@ pub fn perception_fixture() -> PerceptionFrame {
             ActionId(101),
             ActionKind::Move,
             CandidateActionFamily::Approach,
-            CandidateObservationRef::ObjectSlot(3),
+            CandidateObservationRef::None,
             ActionTarget::new(Some(WorldEntityId(55)), Some(Vec3f::new(1.0, 0.0, 2.0))),
             second_features,
             Confidence::new(0.9).unwrap(),
@@ -102,6 +103,13 @@ pub fn perception_fixture() -> PerceptionFrame {
         },
         HomeostaticSnapshot::baseline(tick),
         candidates,
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
     )
     .unwrap()
 }

@@ -1,8 +1,8 @@
 //! Typed canonical encoders for Slice A evidence identities.
 
 use alife_core::{
-    BrainGenome, BrainPhenotype, CanonicalDigestBuilder, CompiledSynapseKind, DevelopmentState,
-    PhenotypeHash, PolicyBackend, Tick,
+    synapse_payload_evidence_digest, BrainGenome, BrainPhenotype, CanonicalDigestBuilder,
+    DevelopmentState, PhenotypeHash, PolicyBackend, Tick,
 };
 use alife_gpu_backend::GpuHardwareReceipt;
 
@@ -11,85 +11,17 @@ use super::{
     GpuSelectionEvidence, GpuSliceAAcceptanceReceipt, GpuSliceEvidenceHeader,
     PhenotypeEvidenceManifest, ADAPTER_IDENTITY_DOMAIN, ARTIFACT_DOMAIN, CANDIDATE_SEQUENCE_DOMAIN,
     FRAME_SEQUENCE_DOMAIN, GPU_EVIDENCE_ORGANISM_ID, GPU_SLICE_A_FIXTURE_SCHEMA,
-    INITIAL_STATE_DOMAIN, LOBE_LAYOUT_DOMAIN, LOGIT_SEQUENCE_DOMAIN, MANIFEST_DOMAIN,
-    PROJECTION_PLAN_DOMAIN, SYNAPSE_PAYLOAD_DOMAIN,
+    INITIAL_STATE_DOMAIN, LOGIT_SEQUENCE_DOMAIN,
 };
 
 pub(super) fn new_artifact_digest() -> CanonicalDigestBuilder {
     CanonicalDigestBuilder::new(ARTIFACT_DOMAIN)
 }
 
-pub(super) fn new_manifest_digest() -> CanonicalDigestBuilder {
-    CanonicalDigestBuilder::new(MANIFEST_DOMAIN)
-}
-
-pub(super) fn lobe_layout_digest(phenotype: &BrainPhenotype) -> [u64; 4] {
-    let mut digest = CanonicalDigestBuilder::new(LOBE_LAYOUT_DOMAIN);
-    digest.write_sequence_len(phenotype.lobe_layout().regions.len());
-    for region in &phenotype.lobe_layout().regions {
-        digest.write_u16(region.id.0);
-        digest.write_u16(region.kind.raw());
-        digest.write_u32(region.start);
-        digest.write_u32(region.len);
-        digest.write_bool(region.enabled);
-        digest.write_u8(region.update_cadence.raw());
-        digest.write_u8(region.plasticity_policy as u8);
-        digest.write_u8(region.activation_policy as u8);
-        digest.write_u8(region.essentiality as u8);
-        digest.write_u8(region.throttle_priority as u8);
-    }
-    digest.finish256()
-}
-
-pub(super) fn projection_plan_digest(phenotype: &BrainPhenotype) -> [u64; 4] {
-    let mut digest = CanonicalDigestBuilder::new(PROJECTION_PLAN_DOMAIN);
-    digest.write_sequence_len(phenotype.projections().len());
-    for projection in phenotype.projections() {
-        digest.write_u16(projection.route_index());
-        digest.write_u16(projection.source_lobe().raw());
-        digest.write_u16(projection.target_lobe().raw());
-        digest.write_u8(projection.projection_type().raw());
-        digest.write_u8(projection.active_tile_policy().raw());
-        digest.write_u8(projection.update_cadence().raw());
-        digest.write_u8(projection.priority().raw());
-        digest.write_u8(projection.delay_microsteps());
-        let (start, len) = projection.synapse_range();
-        digest.write_u32(start);
-        digest.write_u32(len);
-        digest.write_u32(projection.active_tile_count());
-    }
-    digest.finish256()
-}
-
 pub(super) fn synapse_payload_digest(
     phenotype: &BrainPhenotype,
 ) -> Result<[u64; 4], GpuEvidenceError> {
-    let mut digest = CanonicalDigestBuilder::new(SYNAPSE_PAYLOAD_DOMAIN);
-    digest.write_sequence_len(phenotype.synapses().len());
-    for synapse in phenotype.synapses() {
-        digest.write_u32(synapse.source());
-        digest.write_u32(synapse.target());
-        digest.write_f32(synapse.genetic_weight())?;
-        digest.write_f32(synapse.alpha())?;
-        digest.write_u16(synapse.route_index());
-        match synapse.kind() {
-            CompiledSynapseKind::Recurrent => digest.write_u8(0),
-            CompiledSynapseKind::Decoder(coordinate) => {
-                digest.write_u8(1);
-                digest.write_u8(coordinate.head().raw());
-                digest.write_u8(coordinate.family().raw());
-                digest.write_u16(coordinate.input_lane());
-                digest.write_u16(coordinate.motor_index());
-            }
-        }
-    }
-    Ok(digest.finish256())
-}
-
-pub(super) fn explicit_none_digest(domain: &[u8]) -> [u64; 4] {
-    let mut digest = CanonicalDigestBuilder::new(domain);
-    digest.write_none();
-    digest.finish256()
+    Ok(synapse_payload_evidence_digest(phenotype)?)
 }
 
 pub(super) fn adapter_identity_digest(hardware: &GpuHardwareReceipt) -> [u64; 4] {
@@ -212,39 +144,11 @@ pub(super) fn max_logit_error(
     Ok(max_error)
 }
 
-pub(super) fn encode_manifest_without_digest(
-    digest: &mut CanonicalDigestBuilder,
-    manifest: &PhenotypeEvidenceManifest,
-) {
-    digest.write_u16(manifest.schema_version);
-    digest.write_u16(manifest.class_id_raw);
-    digest.write_u16(manifest.phenotype_sensor_profile_raw);
-    write_digest4(digest, manifest.phenotype_hash.0);
-    for component in manifest_component_digests(manifest) {
-        write_digest4(digest, component);
-    }
-}
-
 pub(super) fn encode_manifest_with_digest(
     digest: &mut CanonicalDigestBuilder,
     manifest: &PhenotypeEvidenceManifest,
 ) {
-    encode_manifest_without_digest(digest, manifest);
-    write_digest4(digest, manifest.manifest_digest);
-}
-
-pub(super) fn manifest_component_digests(manifest: &PhenotypeEvidenceManifest) -> [[u64; 4]; 9] {
-    [
-        manifest.compile_inputs_digest,
-        manifest.capacity_digest,
-        manifest.lobe_layout_digest,
-        manifest.projection_plan_digest,
-        manifest.synapse_payload_digest,
-        manifest.encoder_plan_digest,
-        manifest.decoder_plan_digest,
-        manifest.plasticity_plan_digest,
-        manifest.replay_capture_plan_digest,
-    ]
+    manifest.encode_with_digest(digest);
 }
 
 pub(super) fn encode_header_without_artifact_digest(

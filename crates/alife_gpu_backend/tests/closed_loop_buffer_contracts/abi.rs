@@ -5,12 +5,12 @@ use alife_core::{
     UpdateCadence,
 };
 use alife_gpu_backend::{
-    GpuBrainSlotRecord, GpuCandidateRecord, GpuDecoderFamilyRecord, GpuDecoderPlanRecord,
-    GpuDecoderWeightIndexRecord, GpuEncoderAssignmentRecord, GpuEncoderPlanRecord,
-    GpuNeuronDynamicsRecord, GpuPerceptionHeader, GpuPhenotypeIdentityRecord, GpuProjectionRecord,
-    GpuRouteMetadataRecord, GpuSelectionRecord, CLOSED_LOOP_ABI_WGSL, GPU_BRAIN_SLOT_RECORD_BYTES,
-    GPU_CANDIDATE_RECORD_BYTES, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_PERCEPTION_HEADER_BYTES,
-    GPU_SELECTION_RECORD_BYTES,
+    GpuBrainSlotExtensionRecord, GpuBrainSlotRecord, GpuCandidateRecord, GpuDecoderFamilyRecord,
+    GpuDecoderPlanRecord, GpuDecoderWeightIndexRecord, GpuEncoderAssignmentRecord,
+    GpuEncoderPlanRecord, GpuNeuronDynamicsRecord, GpuPerceptionHeader, GpuPhenotypeIdentityRecord,
+    GpuProjectionRecord, GpuRouteMetadataRecord, GpuSelectionRecord, GpuSlotLearningStateRecord,
+    CLOSED_LOOP_ABI_WGSL, GPU_BRAIN_SLOT_RECORD_BYTES, GPU_CANDIDATE_RECORD_BYTES,
+    GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_PERCEPTION_HEADER_BYTES, GPU_SELECTION_RECORD_BYTES,
 };
 use bytemuck::Zeroable;
 
@@ -42,6 +42,8 @@ fn every_shader_visible_record_is_compile_time_pod_and_zeroable() {
     assert_pod_zeroable::<GpuDecoderPlanRecord>();
     assert_pod_zeroable::<GpuDecoderFamilyRecord>();
     assert_pod_zeroable::<GpuDecoderWeightIndexRecord>();
+    assert_pod_zeroable::<GpuBrainSlotExtensionRecord>();
+    assert_pod_zeroable::<GpuSlotLearningStateRecord>();
 }
 
 #[test]
@@ -95,12 +97,14 @@ fn packed_records_decode_from_deliberately_unaligned_word_subslices() {
     assert_unaligned_decode!(GpuDecoderPlanRecord, bytemuck::Zeroable::zeroed());
     assert_unaligned_decode!(GpuDecoderFamilyRecord, bytemuck::Zeroable::zeroed());
     assert_unaligned_decode!(GpuDecoderWeightIndexRecord, bytemuck::Zeroable::zeroed());
+    assert_unaligned_decode!(GpuBrainSlotExtensionRecord, bytemuck::Zeroable::zeroed());
+    assert_unaligned_decode!(GpuSlotLearningStateRecord, bytemuck::Zeroable::zeroed());
 }
 
 #[test]
 fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
-    assert_eq!(GPU_CLOSED_LOOP_LAYOUT_VERSION, 2);
-    assert!(CLOSED_LOOP_ABI_WGSL.contains("const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 2u;"));
+    assert_eq!(GPU_CLOSED_LOOP_LAYOUT_VERSION, 3);
+    assert!(CLOSED_LOOP_ABI_WGSL.contains("const GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 3u;"));
     assert!(CLOSED_LOOP_ABI_WGSL
         .contains("header.dispatch_generation_lo != 0u || header.dispatch_generation_hi != 0u"));
     assert_eq!(
@@ -138,6 +142,8 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
     assert_eq!(std::mem::align_of::<GpuDecoderPlanRecord>(), 16);
     assert_eq!(std::mem::align_of::<GpuDecoderFamilyRecord>(), 16);
     assert_eq!(std::mem::align_of::<GpuDecoderWeightIndexRecord>(), 16);
+    assert_eq!(std::mem::align_of::<GpuBrainSlotExtensionRecord>(), 16);
+    assert_eq!(std::mem::align_of::<GpuSlotLearningStateRecord>(), 16);
 
     assert_eq!(std::mem::size_of::<GpuEncoderPlanRecord>(), 32);
     assert_eq!(std::mem::size_of::<GpuEncoderAssignmentRecord>(), 32);
@@ -147,6 +153,8 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
     assert_eq!(std::mem::size_of::<GpuDecoderPlanRecord>(), 32);
     assert_eq!(std::mem::size_of::<GpuDecoderFamilyRecord>(), 32);
     assert_eq!(std::mem::size_of::<GpuDecoderWeightIndexRecord>(), 16);
+    assert_eq!(std::mem::size_of::<GpuBrainSlotExtensionRecord>(), 80);
+    assert_eq!(std::mem::size_of::<GpuSlotLearningStateRecord>(), 96);
 
     assert_record_offsets!(GpuPerceptionHeader, PERCEPTION_FIELDS;
         schema_version, class_id, slot, slot_generation, neuron_count, candidate_count,
@@ -195,6 +203,24 @@ fn closed_loop_records_have_stable_aligned_sizes_and_offsets() {
         weight_index_count, reserved0, reserved1);
     assert_record_offsets!(GpuDecoderWeightIndexRecord, DECODER_WEIGHT_FIELDS;
         global_synapse_id, input_lane, motor_index, reserved0);
+    assert_record_offsets!(GpuBrainSlotExtensionRecord, SLOT_EXTENSION_FIELDS;
+        schema_version, projection_count, decoder_synapse_local_start, decoder_synapse_count,
+        receptor_offset, decoder_input_plan_offset, decoder_metadata_offset,
+        synapse_metadata_offset, recurrent_eligibility_bank_1_offset,
+        decoder_eligibility_bank_1_offset, fast_bank_1_offset, lifetime_bank_1_offset,
+        sleep_parameter_offset, memory_plan_offset, memory_weight_map_offset,
+        learning_state_offset, pending_eligibility_offset, replay_plan_identity_offset,
+        reserved0, reserved1);
+    assert_record_offsets!(GpuSlotLearningStateRecord, LEARNING_STATE_FIELDS;
+        schema_version, active_weight_bank, active_eligibility_bank, pending_valid,
+        active_weight_generation_lo, active_weight_generation_hi,
+        active_eligibility_generation_lo, active_eligibility_generation_hi,
+        inactive_eligibility_generation_lo, inactive_eligibility_generation_hi,
+        replay_generation_lo, replay_generation_hi, replay_cursor, replay_event_count,
+        replay_event_capacity, replay_sample_capacity, replay_span_count,
+        replay_event_rows_offset, replay_sample_offset, replay_span_offset,
+        replay_plan_identity_offset, pending_eligibility_offset,
+        transaction_generation_lo, transaction_generation_hi);
 }
 
 #[test]
@@ -282,6 +308,14 @@ fn naga_reflection_matches_every_closed_loop_wgsl_record() {
         (
             "GpuDecoderWeightIndexRecord",
             (&DECODER_WEIGHT_FIELDS[..], 16),
+        ),
+        (
+            "GpuBrainSlotExtensionRecord",
+            (&SLOT_EXTENSION_FIELDS[..], 80),
+        ),
+        (
+            "GpuSlotLearningStateRecord",
+            (&LEARNING_STATE_FIELDS[..], 96),
         ),
     ]
     .into_iter()
@@ -478,6 +512,54 @@ const DECODER_WEIGHT_FIELDS: [(&str, u32); 4] = sequential(&[
     "input_lane",
     "motor_index",
     "reserved0",
+]);
+const SLOT_EXTENSION_FIELDS: [(&str, u32); 20] = sequential(&[
+    "schema_version",
+    "projection_count",
+    "decoder_synapse_local_start",
+    "decoder_synapse_count",
+    "receptor_offset",
+    "decoder_input_plan_offset",
+    "decoder_metadata_offset",
+    "synapse_metadata_offset",
+    "recurrent_eligibility_bank_1_offset",
+    "decoder_eligibility_bank_1_offset",
+    "fast_bank_1_offset",
+    "lifetime_bank_1_offset",
+    "sleep_parameter_offset",
+    "memory_plan_offset",
+    "memory_weight_map_offset",
+    "learning_state_offset",
+    "pending_eligibility_offset",
+    "replay_plan_identity_offset",
+    "reserved0",
+    "reserved1",
+]);
+const LEARNING_STATE_FIELDS: [(&str, u32); 24] = sequential(&[
+    "schema_version",
+    "active_weight_bank",
+    "active_eligibility_bank",
+    "pending_valid",
+    "active_weight_generation_lo",
+    "active_weight_generation_hi",
+    "active_eligibility_generation_lo",
+    "active_eligibility_generation_hi",
+    "inactive_eligibility_generation_lo",
+    "inactive_eligibility_generation_hi",
+    "replay_generation_lo",
+    "replay_generation_hi",
+    "replay_cursor",
+    "replay_event_count",
+    "replay_event_capacity",
+    "replay_sample_capacity",
+    "replay_span_count",
+    "replay_event_rows_offset",
+    "replay_sample_offset",
+    "replay_span_offset",
+    "replay_plan_identity_offset",
+    "pending_eligibility_offset",
+    "transaction_generation_lo",
+    "transaction_generation_hi",
 ]);
 
 const fn sequential<const N: usize>(names: &[&'static str; N]) -> [(&'static str, u32); N] {

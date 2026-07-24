@@ -11,7 +11,7 @@
     "key": "fatigue-sleep",
     "label": "fatigue/sleep",
     "seed": 18004,
-    "experience_schema_version": 2,
+    "experience_schema_version": 3,
     "action_abi_version": 2,
     "sensory_abi_version": 1,
     "chemistry_schema_version": 1
@@ -40,7 +40,7 @@
       "prediction_error_milli": 50,
       "contradiction": false,
       "memory_danger_milli": 0,
-      "memory_salience_milli": 13
+      "memory_salience_milli": 0
     }
   ],
   "state": {
@@ -51,9 +51,9 @@
     "topology_simplex_count": 1,
     "topology_gap_count": 0,
     "curiosity_bias_count": 0,
-    "sleep_phase": "ForcedRecoverySleep",
-    "sleep_cycle_count": 1,
-    "pending_structural_edit_count": 1,
+    "sleep_phase": "Awake",
+    "sleep_cycle_count": 0,
+    "pending_structural_edit_count": 0,
     "final_drive_milli": [
       260,
       610,
@@ -91,6 +91,6 @@
     }
   ],
   "world_signature": [
-    "1:Agent:agent:0.000:0.000:0.000:0.000:0.000:None:0.000:None:false:None"
+    "1:Agent:agent:0.000:0.000:0.000:0.000:0.000:None:0.000:None:false:None:physical=0.000000,0.000000,0.000000;0.250980,0.760784,0.980392;0.482353,0.639216,0.709804;0.333333,0.549020,0.509804;0.239216,-0.105882,-0.027451;0.372549;0.360784,0.745098|tracking=1,0,1,1804"
   ]
 }

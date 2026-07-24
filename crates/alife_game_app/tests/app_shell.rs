@@ -38,6 +38,10 @@ fn authority_overlay_contains_the_blueprint_fields_without_a_switching_status() 
         capacity_class: "N1024".to_string(),
         selected_candidate: Some(3),
         selected_logit: Some(0.742),
+        checkpoint_tick: Some(18_432),
+        checkpoint_sleep_phase: "Consolidating".to_string(),
+        checkpoint_consolidation_state: "Submitted".to_string(),
+        recovery_status: "GPU required".to_string(),
         ..GpuBrainAuthorityTelemetry::pending("N1024")
     };
     let text = telemetry.overlay_text();
@@ -47,11 +51,22 @@ fn authority_overlay_contains_the_blueprint_fields_without_a_switching_status() 
         "Phenotype: 7f3a91c2",
         "Class: N1024",
         "Selected: candidate 3  logit +0.742",
+        "GPU BRAIN CHECKPOINT",
+        "Checkpoint tick: 18432",
+        "Sleep phase: Consolidating",
+        "Consolidation: Submitted",
+        "Recovery: GPU required",
         "Failure policy: stop learned actions",
     ] {
         assert!(
             text.contains(required),
             "missing {required:?} from {text:?}"
+        );
+    }
+    for forbidden in ["CPU shadow", "fallback", "parity"] {
+        assert!(
+            !text.contains(forbidden),
+            "forbidden authority wording {forbidden:?} in {text:?}"
         );
     }
 }

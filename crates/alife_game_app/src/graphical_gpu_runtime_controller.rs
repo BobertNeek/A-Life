@@ -23,12 +23,12 @@ impl GraphicalGpuRuntimeController {
         };
         #[cfg(feature = "gpu-runtime")]
         let neural = if mode == GraphicalBrainPolicyMode::GpuRequired {
-            let backend =
-                alife_gpu_backend::GpuClosedLoopBackend::new_required().map_err(|error| {
-                    GameAppShellError::NeuralBackendUnavailable {
-                        message: error.to_string(),
-                    }
-                })?;
+            let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
+                alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+            )
+            .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
+                message: error.to_string(),
+            })?;
             Some(GpuLiveBrainRuntime::from_p34_launch(
                 backend,
                 &launch.app_launch,

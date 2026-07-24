@@ -9,9 +9,10 @@ use std::fs;
 use std::path::Path;
 
 use alife_core::{
-    BrainCapacityClass, BrainClassId, BrainPhenotype, BrainScaleTier, PhenotypeHash, PolicyBackend,
-    ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
+    BrainCapacityClass, BrainClassId, BrainScaleTier, GpuPressureSample, HomeostaticSnapshot,
+    PhenotypeHash, PolicyBackend, ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
 };
+pub use alife_core::{PhenotypeEvidenceManifest, GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA};
 use alife_gpu_backend::{
     GpuClosedLoopBackend, GpuHardwareReceipt, GPU_HARDWARE_RECEIPT_SCHEMA_VERSION,
 };
@@ -26,6 +27,14 @@ use crate::{
 
 mod canonical;
 use canonical::*;
+mod benchmark;
+pub use benchmark::*;
+mod learning_sleep;
+pub use learning_sleep::*;
+mod memory_grounding;
+pub use memory_grounding::*;
+mod soak;
+pub use soak::*;
 mod persistence;
 use persistence::*;
 
@@ -33,7 +42,6 @@ pub const GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA: u16 = 1;
 pub const GPU_SLICE_A_RAW: u16 = 1;
 pub const GPU_SLICE_B_RAW: u16 = 2;
 pub const GPU_EVIDENCE_PASSING_STATUS_RAW: u16 = 1;
-pub const GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA: u16 = 1;
 pub const GPU_SLICE_A_FIXTURE_SCHEMA: u16 = 1;
 pub const GPU_SLICE_A_MAX_TICKS: u32 = 4_096;
 pub const GPU_SLICE_A_REPLAY_TOLERANCE: f32 = 1.0e-6;
@@ -41,13 +49,7 @@ pub const GPU_SLICE_A_REPLAY_TOLERANCE: f32 = 1.0e-6;
 const GPU_EVIDENCE_MAX_ARTIFACT_BYTES: u64 = 4 * 1024 * 1024;
 const GPU_EVIDENCE_ORGANISM_ID: alife_core::OrganismId = alife_core::OrganismId(1);
 
-const MANIFEST_DOMAIN: &[u8] = b"alife.gpu.evidence.phenotype-manifest.v1";
 const ARTIFACT_DOMAIN: &[u8] = b"alife.gpu.evidence.slice-a-artifact.v1";
-const LOBE_LAYOUT_DOMAIN: &[u8] = b"alife.gpu.evidence.lobe-layout.v1";
-const PROJECTION_PLAN_DOMAIN: &[u8] = b"alife.gpu.evidence.projection-plan.v1";
-const SYNAPSE_PAYLOAD_DOMAIN: &[u8] = b"alife.gpu.evidence.synapse-payload.v1";
-const PLASTICITY_NONE_DOMAIN: &[u8] = b"alife.gpu.evidence.plasticity-plan.none.v1";
-const REPLAY_CAPTURE_NONE_DOMAIN: &[u8] = b"alife.gpu.evidence.replay-capture.none.v1";
 const ADAPTER_IDENTITY_DOMAIN: &[u8] = b"alife.gpu.evidence.adapter-identity.v1";
 const INITIAL_STATE_DOMAIN: &[u8] = b"alife.gpu.evidence.initial-state.v1";
 const FRAME_SEQUENCE_DOMAIN: &[u8] = b"alife.gpu.evidence.frame-sequence.v1";
@@ -58,10 +60,18 @@ const LOGIT_SEQUENCE_DOMAIN: &[u8] = b"alife.gpu.evidence.logit-sequence.v1";
 pub enum GpuEvidenceError {
     #[error("GPU evidence contract failed: {0}")]
     Contract(&'static str),
+    #[error("GPU evidence contract failed: {0}")]
+    ContractDetail(String),
     #[error("GPU evidence Git provenance failed: {0}")]
     Git(String),
     #[error("GPU evidence does not yet define slice {0}")]
     UnsupportedSlice(u16),
+    #[error("GPU evidence stage `{stage}` failed: {source}")]
+    Stage {
+        stage: &'static str,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     #[error(transparent)]
     Core(#[from] ScaffoldContractError),
     #[error(transparent)]
@@ -86,24 +96,6 @@ pub struct GpuSliceEvidenceHeader {
     pub phenotype_hash: PhenotypeHash,
     pub phenotype_manifest_digest: [u64; 4],
     pub capacity_digest: [u64; 4],
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PhenotypeEvidenceManifest {
-    pub schema_version: u16,
-    pub class_id_raw: u16,
-    pub phenotype_sensor_profile_raw: u16,
-    pub phenotype_hash: PhenotypeHash,
-    pub compile_inputs_digest: [u64; 4],
-    pub capacity_digest: [u64; 4],
-    pub lobe_layout_digest: [u64; 4],
-    pub projection_plan_digest: [u64; 4],
-    pub synapse_payload_digest: [u64; 4],
-    pub encoder_plan_digest: [u64; 4],
-    pub decoder_plan_digest: [u64; 4],
-    pub plasticity_plan_digest: [u64; 4],
-    pub replay_capture_plan_digest: [u64; 4],
-    pub manifest_digest: [u64; 4],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -182,6 +174,7 @@ struct TrialEvidence {
     hardware: GpuHardwareReceipt,
     metrics: GpuLiveBrainEvidenceMetrics,
     trace: Vec<GpuSelectionEvidence>,
+    pressure_trace: Vec<GpuPressureSample>,
 }
 
 impl GpuClosedLoopAcceptanceOptions {
@@ -203,59 +196,6 @@ impl GpuClosedLoopAcceptanceOptions {
             ));
         }
         Ok(self)
-    }
-}
-
-impl PhenotypeEvidenceManifest {
-    pub fn from_phenotype(
-        phenotype: &BrainPhenotype,
-        capacity: &BrainCapacityClass,
-    ) -> Result<Self, GpuEvidenceError> {
-        phenotype.validate_against(capacity)?;
-        let mut manifest = Self {
-            schema_version: GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA,
-            class_id_raw: phenotype.brain_class_id().raw(),
-            phenotype_sensor_profile_raw: phenotype.sensor_profile().raw(),
-            phenotype_hash: phenotype.phenotype_hash(),
-            compile_inputs_digest: phenotype.compiler_inputs_digest(),
-            capacity_digest: capacity.canonical_digest(),
-            lobe_layout_digest: lobe_layout_digest(phenotype),
-            projection_plan_digest: projection_plan_digest(phenotype),
-            synapse_payload_digest: synapse_payload_digest(phenotype)?,
-            encoder_plan_digest: phenotype.sensor_encoder().canonical_digest(),
-            decoder_plan_digest: phenotype.candidate_decoder().canonical_digest(),
-            plasticity_plan_digest: explicit_none_digest(PLASTICITY_NONE_DOMAIN),
-            replay_capture_plan_digest: explicit_none_digest(REPLAY_CAPTURE_NONE_DOMAIN),
-            manifest_digest: [0; 4],
-        };
-        manifest.manifest_digest = manifest.recompute_manifest_digest();
-        manifest.validate(capacity)?;
-        Ok(manifest)
-    }
-
-    pub fn recompute_manifest_digest(&self) -> [u64; 4] {
-        let mut digest = new_manifest_digest();
-        encode_manifest_without_digest(&mut digest, self);
-        digest.finish256()
-    }
-
-    fn validate(&self, capacity: &BrainCapacityClass) -> Result<(), GpuEvidenceError> {
-        capacity.validate_contract()?;
-        SensorProfile::try_from_raw(self.phenotype_sensor_profile_raw)?;
-        if self.schema_version != GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA
-            || self.class_id_raw != capacity.id().raw()
-            || self.capacity_digest != capacity.canonical_digest()
-            || self.phenotype_hash == PhenotypeHash([0; 4])
-            || self.manifest_digest != self.recompute_manifest_digest()
-            || manifest_component_digests(self)
-                .into_iter()
-                .any(|digest| digest == [0; 4])
-        {
-            return Err(GpuEvidenceError::Contract(
-                "phenotype evidence manifest is inconsistent",
-            ));
-        }
-        Ok(())
     }
 }
 
@@ -296,8 +236,10 @@ impl GpuSliceAAcceptanceReceipt {
 
     fn validate(&self, require_clean_source: bool) -> Result<(), GpuEvidenceError> {
         self.capacity.validate_contract()?;
-        self.phenotype_manifest.validate(&self.capacity)?;
+        self.phenotype_manifest
+            .validate_for_capacity(&self.capacity)?;
         let expected_slug = capacity_slug(self.capacity.id())?;
+        let (max_executed_tiles, max_executed_synapses) = max_executed_work_counts(&self.capacity)?;
         if self.header.artifact_schema != GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA
             || self.header.slice_raw != GPU_SLICE_A_RAW
             || self.header.class_id_raw != self.capacity.id().raw()
@@ -334,16 +276,37 @@ impl GpuSliceAAcceptanceReceipt {
             || self.compact_readback_bytes == 0
             || self.compact_readback_bytes > 64
             || self.active_tiles == 0
-            || self.active_tiles > self.capacity.execution().max_active_tiles()
+            || self.active_tiles > max_executed_tiles
             || self.active_synapses == 0
-            || self.active_synapses > self.capacity.execution().max_total_synapses()
+            || self.active_synapses > max_executed_synapses
             || hardware_digests(&self.hardware)
                 .into_iter()
                 .any(|digest| digest == [0; 4])
         {
-            return Err(GpuEvidenceError::Contract(
-                "Slice A evidence header or body is inconsistent",
-            ));
+            return Err(GpuEvidenceError::ContractDetail(format!(
+                "Slice A evidence header or body is inconsistent: class={}/{} header_class={} manifest_class={} clean={}/{} dispatches={}/{} selections={}/{} patches={}/{} trace={} readback={} tiles={}/{} synapses={}/{} hardware_digest_missing={}",
+                self.capacity_class,
+                expected_slug,
+                self.header.class_id_raw,
+                self.phenotype_manifest.class_id_raw,
+                self.source_tree_clean,
+                require_clean_source,
+                self.neural_dispatch_count,
+                self.requested_ticks,
+                self.gpu_selection_count,
+                self.requested_ticks,
+                self.sealed_patch_count,
+                self.requested_ticks,
+                self.selection_trace.len(),
+                self.compact_readback_bytes,
+                self.active_tiles,
+                max_executed_tiles,
+                self.active_synapses,
+                max_executed_synapses,
+                hardware_digests(&self.hardware)
+                    .into_iter()
+                    .any(|digest| digest == [0; 4]),
+            )));
         }
 
         validate_selection_trace(self)?;
@@ -410,13 +373,74 @@ pub fn load_gpu_slice_a_evidence(
     Ok(receipt)
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidatedGpuEvidence {
+    SliceA(GpuSliceAAcceptanceReceipt),
+    SliceB(GpuSliceBAcceptanceReceipt),
+    SliceC(Box<GpuMemoryGroundingEvidenceReceipt>),
+    SliceD(Box<GpuClosedLoopSoakReceipt>),
+}
+
+impl ValidatedGpuEvidence {
+    pub const fn header(&self) -> &GpuSliceEvidenceHeader {
+        match self {
+            Self::SliceA(receipt) => &receipt.header,
+            Self::SliceB(receipt) => &receipt.header,
+            Self::SliceC(receipt) => &receipt.header.common,
+            Self::SliceD(receipt) => &receipt.header.common,
+        }
+    }
+
+    pub fn capacity_class(&self) -> &str {
+        match self {
+            Self::SliceA(receipt) => &receipt.capacity_class,
+            Self::SliceB(receipt) => &receipt.capacity_class,
+            Self::SliceC(receipt) => &receipt.capacity_class_slug,
+            Self::SliceD(receipt) => &receipt.capacity_class_slug,
+        }
+    }
+
+    pub fn backend_api(&self) -> &str {
+        match self {
+            Self::SliceA(receipt) => &receipt.backend_api,
+            Self::SliceB(receipt) => &receipt.backend_api,
+            Self::SliceC(receipt) => &receipt.header.adapter_backend,
+            Self::SliceD(receipt) => &receipt.header.adapter_backend,
+        }
+    }
+
+    pub fn adapter_name(&self) -> &str {
+        match self {
+            Self::SliceA(receipt) => &receipt.adapter_name,
+            Self::SliceB(receipt) => &receipt.adapter_name,
+            Self::SliceC(receipt) => &receipt.header.adapter_name,
+            Self::SliceD(receipt) => &receipt.header.adapter_name,
+        }
+    }
+
+    pub const fn activity_count(&self) -> u64 {
+        match self {
+            Self::SliceA(receipt) => receipt.neural_dispatch_count,
+            Self::SliceB(receipt) => receipt.gpu_learning_dispatches,
+            Self::SliceC(receipt) => receipt.gpu_selection_count,
+            Self::SliceD(receipt) => receipt.authoritative_gpu_dispatches,
+        }
+    }
+}
+
 pub fn validate_gpu_evidence_file(
     slice_raw: u16,
     input: impl AsRef<Path>,
-) -> Result<GpuSliceAAcceptanceReceipt, GpuEvidenceError> {
+) -> Result<ValidatedGpuEvidence, GpuEvidenceError> {
     match slice_raw {
-        GPU_SLICE_A_RAW => load_gpu_slice_a_evidence(input),
-        GPU_SLICE_B_RAW => Err(GpuEvidenceError::UnsupportedSlice(GPU_SLICE_B_RAW)),
+        GPU_SLICE_A_RAW => load_gpu_slice_a_evidence(input).map(ValidatedGpuEvidence::SliceA),
+        GPU_SLICE_B_RAW => load_gpu_slice_b_evidence(input).map(ValidatedGpuEvidence::SliceB),
+        GPU_SLICE_C_RAW => load_gpu_slice_c_evidence(input)
+            .map(Box::new)
+            .map(ValidatedGpuEvidence::SliceC),
+        GPU_SLICE_D_RAW => load_gpu_slice_d_evidence(input)
+            .map(Box::new)
+            .map(ValidatedGpuEvidence::SliceD),
         other => Err(GpuEvidenceError::UnsupportedSlice(other)),
     }
 }
@@ -438,14 +462,20 @@ fn run_gpu_closed_loop_acceptance_with_provenance(
         PhenotypeEvidenceManifest::from_phenotype(&phenotype, &options.capacity)?;
     let initial_state_digest = initial_state_digest(&options, &phenotype, &genome, &development)?;
 
-    let first = run_trial(&options, tier, phenotype.phenotype_hash())?;
-    let second = run_trial(&options, tier, phenotype.phenotype_hash())?;
+    let first = run_trial(&options, tier, phenotype.phenotype_hash(), None)?;
+    let second = run_trial(
+        &options,
+        tier,
+        phenotype.phenotype_hash(),
+        Some(&first.pressure_trace),
+    )?;
     let first_adapter_digest = adapter_identity_digest(&first.hardware);
     let second_adapter_digest = adapter_identity_digest(&second.hardware);
     if first.hardware.backend_api != "vulkan"
         || second.hardware.backend_api != "vulkan"
         || first_adapter_digest != second_adapter_digest
         || first.trace.len() != second.trace.len()
+        || first.pressure_trace != second.pressure_trace
     {
         return Err(GpuEvidenceError::Contract(
             "same-adapter Vulkan replay precondition failed",
@@ -465,9 +495,51 @@ fn run_gpu_closed_loop_acceptance_with_provenance(
     let second_logit_digest = logit_sequence_digest(&second.trace)?;
     let max_abs_error = max_logit_error(&first.trace, &second.trace)?;
     if max_abs_error > GPU_SLICE_A_REPLAY_TOLERANCE {
-        return Err(GpuEvidenceError::Contract(
-            "same-adapter replay exceeded its declared logit tolerance",
-        ));
+        let schedule_divergence = first
+            .trace
+            .iter()
+            .zip(&second.trace)
+            .find(|(left, right)| {
+                left.active_tiles != right.active_tiles
+                    || left.active_synapses != right.active_synapses
+                    || left.active_activation_side != right.active_activation_side
+            })
+            .map_or_else(
+                || "no compact schedule-counter divergence".to_string(),
+                |(left, right)| {
+                    format!(
+                        "schedule counters first diverge at tick {}: tiles {}/{}, synapses {}/{}, activation side {}/{}",
+                        left.tick,
+                        left.active_tiles,
+                        right.active_tiles,
+                        left.active_synapses,
+                        right.active_synapses,
+                        left.active_activation_side,
+                        right.active_activation_side,
+                    )
+                },
+            );
+        let divergence = first
+            .trace
+            .iter()
+            .zip(&second.trace)
+            .find(|(left, right)| (left.logit - right.logit).abs() > GPU_SLICE_A_REPLAY_TOLERANCE)
+            .map_or_else(
+                || "first divergent tick unavailable".to_string(),
+                |(left, right)| {
+                    format!(
+                        "first divergent tick {} logits {:.9e}/{:.9e} delta {:.9e}",
+                        left.tick,
+                        left.logit,
+                        right.logit,
+                        (left.logit - right.logit).abs(),
+                    )
+                },
+            );
+        return Err(GpuEvidenceError::ContractDetail(format!(
+            "same-adapter replay exceeded tolerance {:.9e} with maximum delta {:.9e}; {divergence}; {schedule_divergence}",
+            GPU_SLICE_A_REPLAY_TOLERANCE, max_abs_error,
+        )));
     }
 
     let compact_readback_bytes = trace_max(&first.trace, |entry| entry.compact_readback_bytes);
@@ -529,22 +601,49 @@ fn run_trial(
     options: &GpuClosedLoopAcceptanceOptions,
     tier: BrainScaleTier,
     expected_phenotype_hash: PhenotypeHash,
+    pressure_replay: Option<&[GpuPressureSample]>,
 ) -> Result<TrialEvidence, GpuEvidenceError> {
-    let backend = GpuClosedLoopBackend::new_required()?;
+    let backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?;
     let world = acceptance_world(options.deterministic_seed)?;
-    let mut runtime = GpuLiveBrainRuntime::new(backend, world, options.deterministic_seed, tier)?;
+    let mut runtime = GpuLiveBrainRuntime::new_causal_acceptance_profiled(
+        backend,
+        world,
+        options.deterministic_seed,
+        tier,
+        options.sensor_profile,
+    )?;
+    if let Some(samples) = pressure_replay {
+        runtime.install_recorded_pressure_replay(samples.to_vec())?;
+    }
     let hardware = runtime.hardware_receipt().clone();
     let mut trace = Vec::with_capacity(options.requested_ticks as usize);
+    let mut pressure_trace = Vec::with_capacity(options.requested_ticks as usize);
     for expected_tick in 0..options.requested_ticks {
+        let world_tick = runtime.evidence_world().tick();
+        if world_tick != Tick::new(u64::from(expected_tick)) {
+            return Err(GpuEvidenceError::Contract(
+                "Slice A evidence world tick diverged from its fixed waking probe",
+            ));
+        }
+        runtime.evidence_set_homeostasis(
+            GPU_EVIDENCE_ORGANISM_ID,
+            HomeostaticSnapshot::baseline(world_tick),
+        )?;
         let patch_count_before = runtime.sealed_patches().len();
         let summaries = runtime.tick()?;
         if summaries.len() != 1
             || !summaries[0].patch_sealed
             || runtime.sealed_patches().len() != patch_count_before + 1
         {
-            return Err(GpuEvidenceError::Contract(
-                "production GPU runtime failed to seal exactly one patch",
-            ));
+            return Err(GpuEvidenceError::ContractDetail(format!(
+                "production GPU runtime failed to seal exactly one patch at expected tick {expected_tick}: summaries={}, patch_sealed={}, retained_before={patch_count_before}, retained_after={}, total_sealed={}, last_sealed={}",
+                summaries.len(),
+                summaries.first().is_some_and(|summary| summary.patch_sealed),
+                runtime.sealed_patches().len(),
+                runtime.sealed_patch_count(),
+                runtime.last_sealed_patches().len(),
+            )));
         }
         let patch = runtime
             .sealed_patches()
@@ -553,6 +652,10 @@ fn run_trial(
         patch.validate_contract()?;
         let neural = patch.decision().neural_evidence()?;
         let metrics = runtime.evidence_metrics();
+        let activity = runtime.evidence_activity_snapshot(GPU_EVIDENCE_ORGANISM_ID)?;
+        let pressure = activity.pressure.ok_or(GpuEvidenceError::Contract(
+            "completed GPU tick did not retain its pressure sample",
+        ))?;
         if neural.phenotype_hash != expected_phenotype_hash
             || patch.pre_action().tick != Tick::new(u64::from(expected_tick))
             || patch.pre_action().policy_backend() != PolicyBackend::NeuralClosedLoopGpu
@@ -575,15 +678,22 @@ fn run_trial(
             active_activation_side: neural.active_activation_side,
             active_tiles: metrics.active_tiles,
             active_synapses: metrics.active_synapses,
-            compact_readback_bytes: u32::try_from(metrics.compact_readback_bytes)
+            compact_readback_bytes: u32::try_from(metrics.selection_readback_bytes)
                 .map_err(|_| GpuEvidenceError::Contract("compact readback does not fit u32"))?,
             outcome_success: patch.outcome().success,
         });
+        pressure_trace.push(pressure);
+    }
+    if pressure_replay.is_some() && runtime.recorded_pressure_replay_remaining() != 0 {
+        return Err(GpuEvidenceError::Contract(
+            "same-adapter replay did not consume its exact pressure sequence",
+        ));
     }
     Ok(TrialEvidence {
         hardware,
         metrics: runtime.evidence_metrics(),
         trace,
+        pressure_trace,
     })
 }
 
@@ -620,6 +730,7 @@ pub fn capacity_slug(class_id: BrainClassId) -> Result<&'static str, GpuEvidence
 }
 
 fn validate_selection_trace(receipt: &GpuSliceAAcceptanceReceipt) -> Result<(), GpuEvidenceError> {
+    let (max_executed_tiles, max_executed_synapses) = max_executed_work_counts(&receipt.capacity)?;
     for (index, selection) in receipt.selection_trace.iter().enumerate() {
         if selection.tick != index as u64
             || selection.frame_digest == [0; 4]
@@ -631,9 +742,9 @@ fn validate_selection_trace(receipt: &GpuSliceAAcceptanceReceipt) -> Result<(), 
             || !selection.logit.is_finite()
             || selection.active_activation_side > 1
             || selection.active_tiles == 0
-            || selection.active_tiles > receipt.capacity.execution().max_active_tiles()
+            || selection.active_tiles > max_executed_tiles
             || selection.active_synapses == 0
-            || selection.active_synapses > receipt.capacity.execution().max_total_synapses()
+            || selection.active_synapses > max_executed_synapses
             || selection.compact_readback_bytes == 0
             || selection.compact_readback_bytes > 64
         {
@@ -654,6 +765,26 @@ fn validate_selection_trace(receipt: &GpuSliceAAcceptanceReceipt) -> Result<(), 
         ));
     }
     Ok(())
+}
+
+fn max_executed_work_counts(capacity: &BrainCapacityClass) -> Result<(u32, u32), GpuEvidenceError> {
+    let (_, max_microsteps) = capacity.execution().microstep_range();
+    let multiplier = u32::from(max_microsteps);
+    let max_tiles = capacity
+        .execution()
+        .max_active_tiles()
+        .checked_mul(multiplier)
+        .ok_or(GpuEvidenceError::Contract(
+            "Slice A executed tile ceiling overflowed",
+        ))?;
+    let max_synapses = capacity
+        .execution()
+        .max_total_synapses()
+        .checked_mul(multiplier)
+        .ok_or(GpuEvidenceError::Contract(
+            "Slice A executed synapse ceiling overflowed",
+        ))?;
+    Ok((max_tiles, max_synapses))
 }
 
 fn validate_replay(receipt: &GpuSliceAAcceptanceReceipt) -> Result<(), GpuEvidenceError> {

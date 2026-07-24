@@ -171,9 +171,53 @@ fallback in ADR-019 and ADR-021, and the CPU-shadow/parity authority clauses in
 ADR-023. Their save-safety, sparse-layout, world-authority, and sealed-patch
 boundaries remain in force where they do not conflict with ADR-024.
 
-ADR-025 and ADR-026 are reserved for the already approved memory/grounding and
-scaling/promotion checkpoints. Their reserved numbers do not delay the
-foundation, language, identity, or archive decisions below.
+## ADR-025: Candidate-Conditional Memory and Grounded Profiles
+
+Decision: Episodic recall uses a versioned state-action-target query and returns
+bounded per-candidate latent/value context. Production consumes that context
+only through explicit GPU candidate-decoder channels; no memory context is
+pooled into recurrent/global inputs, and no candidate-invariant memory or
+topology scalar is added to action scores. Queries bind the pre-context
+perception base digest; GPU dispatch and sealing bind the separately computed
+final frame digest after consume-once context finalization.
+
+`PrivilegedAffordanceV1` and `GroundedObjectSlotsV1` are separately provenanced.
+Grounded slots contain physical observations and no semantic class labels.
+Topology is a bounded diagnostic sidecar over sealed patches. Memory and
+topology saturation deterministically merge, evict, compact, or summarize and
+cannot abort a valid neural tick. Persistent bindings use tracked-object or
+episodic IDs rather than raw world entity IDs. Tracker, memory, compaction, and
+topology owners are portable organism IDs rather than GPU handles.
+
+## ADR-026: GPU Closed-Loop Scaling Is Evidence- and Budget-Gated
+
+Decision: N512, N1024, and N2048 are the only initial production neural
+capacity classes. Each class is promoted independently only when one canonical
+manifest binds complete A/B/C/D evidence from the same source tree and Vulkan
+adapter: causal GPU authority and replay; immediate learning, sleep, and
+restore; separate privileged and grounded memory/saturation evidence; logical
+and VRAM budgets, admission, BrainATP/throttling, save migration, both-profile
+10,240-tick soak and replay; all 12 populated benchmark rows; and the exact
+global source, docs, boundary, and authority gates.
+
+Completed benchmark rows may promote. Honest `Missed` or `Unavailable` rows
+remain valid evidence but block only their class. Runtime population limits
+come from an explicit neural-heap profile, not the capacity class. N4096 and
+larger legacy tiers remain inspection/export or research-only. No CPU neural
+shadow, parity gate, automatic CPU neural fallback, configuration override, or
+unbound benchmark result is a promotion mechanism.
+
+The canonical v1 p95 matrix measures the corrected full causal neural tick,
+including eligibility capture and sealed-outcome plasticity. For populations
+`[1, 10, 50, 100, 250, 500]`, its millisecond limits are N512
+`[4, 8, 16, 32, 80, 160]`, N1024 `[6, 12, 32, 64, 160, 320]`, and N2048
+`[8, 16, 64, 128, 320, 640]` for both sensor profiles. Replacing this matrix
+requires a versioned, evidence-backed contract change; generated benchmark
+results are never allowed to redefine the target.
+
+ADR-026 supersedes the benchmark/fallback portions of ADR-016, ADR-019,
+ADR-021, and ADR-022 where they conflict with ADR-024 through ADR-026. Their
+renderer fallback and evidence-honesty decisions remain in force.
 
 ## ADR-027: Curated Foundations Use Baldwinian Inheritance
 

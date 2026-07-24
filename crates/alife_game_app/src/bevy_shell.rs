@@ -2,6 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -13,10 +14,10 @@ use alife_bevy_adapter::{
 use alife_core::{ActionKind, AffordanceBits, Vec3f, WorldEntityId};
 use alife_world::{
     activate_procedural_chunks_around_creatures, generate_procedural_world_content,
-    sample_procedural_terrain_tile, CreatureWorldAnchor, ProceduralChunkActivationReport,
-    ProceduralChunkCoord, ProceduralTerrainSample, ProceduralTileCoord, ProceduralWorldConfig,
-    ProceduralWorldContentCandidate, ProceduralWorldContentKind, ProceduralWorldContentReport,
-    TerrainZoneKind, WorldObjectKind,
+    persistence::PortableSaveFile, sample_procedural_terrain_tile, CreatureWorldAnchor,
+    ProceduralChunkActivationReport, ProceduralChunkCoord, ProceduralTerrainSample,
+    ProceduralTileCoord, ProceduralWorldConfig, ProceduralWorldContentCandidate,
+    ProceduralWorldContentKind, ProceduralWorldContentReport, TerrainZoneKind, WorldObjectKind,
 };
 use bevy::{
     app::AppExit,
@@ -80,10 +81,10 @@ use crate::{
     CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
     GraphicalGpuRuntimeController, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
     GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, GraphicalPlaygroundViewMode,
-    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
-    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
-    VisibleWorldObjectPresentation, VisibleWorldPresentation, CA13_FIXED_SIM_TICK_HZ,
-    CA13_TARGET_RENDER_FRAME_HZ, S02_MAX_SMOKE_TICKS,
+    LiveBrainLoop, LiveBrainTickSummary, ProductionVoxelLaunchConfig, ProductionVoxelLaunchSummary,
+    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
+    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
+    CA13_FIXED_SIM_TICK_HZ, CA13_TARGET_RENDER_FRAME_HZ, S02_MAX_SMOKE_TICKS,
 };
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -566,15 +567,89 @@ pub(crate) struct ProductionGpuBrainAuthorityResource {
 
 #[cfg(feature = "gpu-runtime")]
 #[derive(Resource)]
-struct ProductionGpuBrainRuntimeResource {
-    runtime: crate::GpuLiveBrainRuntime,
+pub(crate) struct ProductionGpuBrainRuntimeResource {
+    pub(crate) runtime: crate::GpuLiveBrainRuntime,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
+struct ProductionGpuBrainTickScheduleResource {
+    startup_render_frames_remaining: u8,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl ProductionGpuBrainTickScheduleResource {
+    const fn new(startup_render_frames: u8) -> Self {
+        Self {
+            startup_render_frames_remaining: startup_render_frames,
+        }
+    }
+
+    fn take_dispatch_permit(&mut self) -> bool {
+        if self.startup_render_frames_remaining == 0 {
+            true
+        } else {
+            self.startup_render_frames_remaining -= 1;
+            false
+        }
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+const PRODUCTION_GPU_STARTUP_RENDER_FRAMES: u8 = 12;
+
+#[cfg(feature = "gpu-runtime")]
+fn prepare_production_gpu_runtime_launch(
+    launch: &ProductionVoxelLaunchConfig,
+    summary: &ProductionVoxelLaunchSummary,
+) -> Result<AppShellLaunchConfig, GameAppShellError> {
+    let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
+    if runtime_save_path.exists() && !launch.dry_run {
+        let existing = PortableSaveFile::from_json_file(&runtime_save_path)?;
+        existing.validate_with_asset_root(&summary.asset_root)?;
+        let existing_population = existing
+            .world
+            .objects
+            .iter()
+            .filter(|object| object.kind == alife_world::WorldObjectKind::Agent)
+            .count();
+        if existing_population != usize::from(summary.effective_population) {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "runtime save population {existing_population} does not match requested profile population {}; select a matching save or create a new world",
+                    summary.effective_population
+                ),
+            });
+        }
+    } else {
+        let source = PortableSaveFile::from_json_file(&summary.save_path)?;
+        let production = crate::production_voxel_save_with_population(
+            &source,
+            &summary.asset_root,
+            summary.profile_id,
+            summary.effective_population,
+        )?
+        .with_gpu_runtime_state(summary.gpu_runtime_state.clone())?;
+        crate::GpuDurableSaveManifest::publish_snapshot(
+            &runtime_save_path,
+            &summary.asset_root,
+            &production,
+        )?;
+    }
+    let mut runtime_launch = launch.app_launch.clone();
+    runtime_launch.save_path = runtime_save_path;
+    Ok(runtime_launch)
 }
 
 #[cfg(feature = "gpu-runtime")]
 fn tick_production_gpu_brain(
     mut runtime: ResMut<ProductionGpuBrainRuntimeResource>,
     mut authority: ResMut<ProductionGpuBrainAuthorityResource>,
+    mut schedule: ResMut<ProductionGpuBrainTickScheduleResource>,
 ) {
+    if !schedule.take_dispatch_permit() {
+        return;
+    }
     match runtime.runtime.tick() {
         Ok(_) => authority.telemetry = runtime.runtime.authority_telemetry(),
         Err(error) => {
@@ -4836,13 +4911,20 @@ pub fn build_production_voxel_frontend_app_shell(
     });
     #[cfg(feature = "gpu-runtime")]
     {
-        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required().map_err(|error| {
-            GameAppShellError::NeuralBackendUnavailable {
-                message: error.to_string(),
-            }
+        let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;
+        let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
+            message: error.to_string(),
         })?;
-        let runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &launch.app_launch)?;
-        app.insert_resource(ProductionGpuBrainRuntimeResource { runtime })
+        let runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
+        let telemetry = runtime.authority_telemetry();
+        app.insert_resource(ProductionGpuBrainAuthorityResource { telemetry })
+            .insert_resource(ProductionGpuBrainTickScheduleResource::new(
+                PRODUCTION_GPU_STARTUP_RENDER_FRAMES,
+            ))
+            .insert_resource(ProductionGpuBrainRuntimeResource { runtime })
             .add_systems(Update, tick_production_gpu_brain);
     }
     crate::spawn_fvr03_production_voxel_scene(&mut app, &summary)?;
@@ -4885,6 +4967,21 @@ mod fvr11_asset_root_tests {
         assert!(root
             .join("production_voxel_v1/terrain/terrain_albedo_atlas.png")
             .is_file());
+    }
+}
+
+#[cfg(all(test, feature = "gpu-runtime"))]
+mod production_gpu_tick_schedule_tests {
+    use super::ProductionGpuBrainTickScheduleResource;
+
+    #[test]
+    fn first_gpu_world_tick_waits_for_the_startup_render_barrier() {
+        let mut schedule = ProductionGpuBrainTickScheduleResource::new(12);
+        for _ in 0..12 {
+            assert!(!schedule.take_dispatch_permit());
+        }
+        assert!(schedule.take_dispatch_permit());
+        assert!(schedule.take_dispatch_permit());
     }
 }
 
@@ -5353,8 +5450,10 @@ fn spawn_graphical_playground_scene(
     ));
 
     app.world_mut().spawn((
-        Name::new("A-Life CA05 CPU-shadow boundary footer"),
-        Text::new("Boundary: CPU shadow gate | Claim: pending | no bulk readback=true"),
+        Name::new("A-Life CA05 GPU-authority footer"),
+        Text::new(
+            "GPU neural: authoritative | failure policy: stop learned actions | no bulk readback=true",
+        ),
         TextFont {
             font_size: 12.0,
             ..default()
@@ -10615,11 +10714,11 @@ pub fn graphical_inspector_overlay_text(
             "Pose: {}\n",
             "Patch: {}\n",
             "Learning: {}\n",
-            "GPU: {}  fallback={}\n",
-            "Gate: CPU shadow\n",
+            "GPU: {}  unavailable={}\n",
+            "Authority: GPU neural execution only\n",
             "Tech: {}\n",
             "Read-only stable IDs\n",
-            "Claim: full_auth=false"
+            "Failure policy: stop learned actions"
         ),
         selection.stable_id.raw(),
         sleep,
@@ -10692,8 +10791,8 @@ pub fn graphical_full_debug_status_overlay_text(
             "Action: {}  Target: {}\n",
             "Pose: {} ({})\n",
             "Patch: sealed={} count={}\n",
-            "Learning: H_shadow apps={} delta={:.4}\n",
-            "Gate: CPU shadow; full_auth=false\n",
+            "Learning: H_fast apps={} delta={:.4}\n",
+            "Authority: GPU neural execution only\n",
             "Controls: Space run/pause | N step | R reset | Esc quit"
         ),
         status,
@@ -10853,7 +10952,7 @@ fn ca07_learning_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
 }
 
 fn ca07_compact_technical_summary(gpu: &GraphicalGpuRuntimeTelemetry) -> String {
-    format!("{} gate=CPU shadow", gpu.selected_backend)
+    format!("{} authority=GPU neural", gpu.selected_backend)
 }
 
 pub fn readability_legend_overlay_text() -> String {

@@ -219,7 +219,7 @@ pub fn run_gpu_graphics_performance_evidence_smoke(
         graphical_dry_run_command,
         graphical_smoke_command,
         cpu_benchmark_evidence:
-            "benchmark_tiers smoke measures CPU reference tiers 1 and 10 in target/artifacts"
+            "benchmark_tiers measures deterministic host baseline tiers 1 and 10 in target/artifacts"
                 .to_string(),
         gpu_runtime_evidence:
             "gpu-runtime fails closed when required hardware is unavailable; GPU timing stays manual/unknown unless hardware flags and validation are set"

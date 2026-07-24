@@ -213,7 +213,7 @@ pub fn run_semantic_provider_smoke() -> Result<SemanticProviderSmokeSummary, Gam
         ActionTarget::NONE,
         NormalizedScalar::new(0.6)?,
     )?;
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         OrganismId(11_001),
         &[semantic_marked_low, ordinary_high],
         ActionArbitrationConfig::default(),

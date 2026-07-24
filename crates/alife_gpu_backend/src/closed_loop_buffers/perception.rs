@@ -6,6 +6,7 @@ use super::{
     GpuBrainSlot, GpuBrainSlotRecord, GpuCandidateRecord, GpuClosedLoopError, GpuPerceptionHeader,
     GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
+use crate::closed_loop_memory::GpuPerceptionFrameBinding;
 
 const FIXED_FRAME_LANES: u32 = 77;
 
@@ -21,6 +22,7 @@ pub struct GpuPerceptionUpload {
     pub candidates: Vec<GpuCandidateRecord>,
     pub dispatch_header_words: Vec<u32>,
     pub frame_payload_words: Vec<u32>,
+    pub frame_binding: GpuPerceptionFrameBinding,
     offset_domain: GpuOffsetDomain,
 }
 
@@ -46,6 +48,11 @@ impl GpuPerceptionUpload {
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
         let record = slot.record();
         record.validate_slice_a()?;
+        let decoder_input_stride = usize::try_from(slot.decoder_input_stride())
+            .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
+        if !(CANDIDATE_FEATURE_COUNT..=64).contains(&decoder_input_stride) {
+            return Err(GpuClosedLoopError::LayoutMismatch);
+        }
         let tick = frame.tick().raw();
         let header = GpuPerceptionHeader {
             // Dynamic dispatches inherit the slot's GPU layout ABI version.
@@ -76,7 +83,9 @@ impl GpuPerceptionUpload {
                 kind: candidate.kind.raw() as u32,
                 family: candidate.family.raw() as u32,
                 candidate_index: index as u32,
-                feature_offset: FIXED_FRAME_LANES + (index * CANDIDATE_FEATURE_COUNT) as u32,
+                feature_offset: FIXED_FRAME_LANES
+                    + u32::try_from(index * decoder_input_stride)
+                        .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
                 observation_slot_or_max: match candidate.observation {
                     CandidateObservationRef::None => u32::MAX,
                     CandidateObservationRef::ObjectSlot(slot) => slot as u32,
@@ -90,7 +99,7 @@ impl GpuPerceptionUpload {
             dispatch_header_words.extend_from_slice(candidate.words());
         }
         let mut frame_payload_words = Vec::with_capacity(
-            FIXED_FRAME_LANES as usize + frame.candidates().len() * CANDIDATE_FEATURE_COUNT,
+            FIXED_FRAME_LANES as usize + frame.candidates().len() * decoder_input_stride,
         );
         frame_payload_words.extend(frame.sensory().channels.as_flat_array().map(f32::to_bits));
         let body = frame.body();
@@ -116,6 +125,10 @@ impl GpuPerceptionUpload {
         frame_payload_words.extend(frame.homeostasis().hormones.to_array().map(f32::to_bits));
         for candidate in frame.candidates() {
             frame_payload_words.extend(candidate.features.0.map(f32::to_bits));
+            frame_payload_words.resize(
+                frame_payload_words.len() + decoder_input_stride - CANDIDATE_FEATURE_COUNT,
+                0,
+            );
         }
         if frame_payload_words.len() < FIXED_FRAME_LANES as usize
             || frame_payload_words
@@ -129,6 +142,16 @@ impl GpuPerceptionUpload {
             candidates,
             dispatch_header_words,
             frame_payload_words,
+            frame_binding: GpuPerceptionFrameBinding {
+                perception_header_index: 0,
+                slot: record.slot,
+                slot_generation: record.slot_generation,
+                tick: frame.tick(),
+                candidate_count: frame.candidates().len() as u16,
+                base_frame_digest: frame.base_digest(),
+                context_digest: frame.context().canonical_digest(),
+                final_frame_digest: frame.frame_digest(),
+            },
             offset_domain: GpuOffsetDomain::Local,
         })
     }
@@ -188,6 +211,7 @@ impl GpuPerceptionUpload {
         for (row, feature_offset) in self.candidates.iter_mut().zip(feature_offsets) {
             row.feature_offset = feature_offset;
         }
+        self.frame_binding.perception_header_index = dispatch_word_base;
         self.dispatch_header_words.clear();
         self.dispatch_header_words
             .extend_from_slice(self.header.words());

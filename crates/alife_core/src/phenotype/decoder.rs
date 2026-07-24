@@ -8,7 +8,7 @@ use crate::{
     CANDIDATE_FEATURE_COUNT,
 };
 
-use super::{BrainPhenotype, CompiledSynapseKind, DecoderHeadKind};
+use super::{BrainPhenotype, CompiledSynapseKind, DecoderHeadKind, MemoryChannelPlan};
 
 const DECODER_SCHEMA_VERSION: u16 = 1;
 const DECODER_DOMAIN: &[u8] = b"alife.phenotype.candidate-decoder.v1";
@@ -57,6 +57,7 @@ pub struct CandidateDecoderPlan {
     motor_width: u16,
     feature_count: u16,
     flattened_input_lane_count: u16,
+    memory_channel: Option<MemoryChannelPlan>,
     families: Vec<CandidateDecoderFamilyPlan>,
     canonical_digest: [u64; 4],
 }
@@ -77,6 +78,9 @@ impl CandidateDecoderPlan {
     pub const fn flattened_input_lane_count(&self) -> u16 {
         self.flattened_input_lane_count
     }
+    pub const fn memory_channel(&self) -> Option<&MemoryChannelPlan> {
+        self.memory_channel.as_ref()
+    }
     pub fn families(&self) -> &[CandidateDecoderFamilyPlan] {
         &self.families
     }
@@ -95,6 +99,7 @@ impl CandidateDecoderPlan {
         motor_width: u16,
         feature_count: u16,
         flattened_input_lane_count: u16,
+        memory_channel: Option<MemoryChannelPlan>,
         families: Vec<CandidateDecoderFamilyPlan>,
     ) -> Result<Self, ScaffoldContractError> {
         let mut value = Self {
@@ -103,6 +108,7 @@ impl CandidateDecoderPlan {
             motor_width,
             feature_count,
             flattened_input_lane_count,
+            memory_channel,
             families,
             canonical_digest: [0; 4],
         };
@@ -118,8 +124,13 @@ impl CandidateDecoderPlan {
         self.validate_local()?;
         let capacity = crate::BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
         let execution = capacity.execution();
+        let expected_stride = self
+            .memory_channel
+            .map_or(u32::from(execution.candidate_feature_count()), |plan| {
+                plan.decoder_input_stride()
+            });
         if self.feature_count != execution.candidate_feature_count()
-            || self.flattened_input_lane_count != execution.candidate_feature_count()
+            || u32::from(self.flattened_input_lane_count) != expected_stride
             || self.flattened_input_lane_count != phenotype.budgets().global.decoder_input_lanes
             || self.flattened_input_lane_count > execution.max_decoder_input_lanes()
             || self.decoder_synapse_count() > phenotype.budgets().global.action_decoder_synapses
@@ -156,7 +167,7 @@ impl CandidateDecoderPlan {
                 };
                 if coordinate.head() != DecoderHeadKind::ActionCandidate
                     || coordinate.family() != row.family
-                    || coordinate.input_lane() >= self.flattened_input_lane_count
+                    || coordinate.input_lane() >= self.feature_count
                     || coordinate.motor_index() >= self.motor_width
                     || synapse.source() != self.motor_start + u32::from(coordinate.motor_index())
                     || synapse.target() != self.motor_start + u32::from(coordinate.motor_index())
@@ -172,10 +183,18 @@ impl CandidateDecoderPlan {
         if self.schema_version != DECODER_SCHEMA_VERSION
             || self.motor_width == 0
             || self.feature_count != CANDIDATE_FEATURE_COUNT as u16
-            || self.flattened_input_lane_count != CANDIDATE_FEATURE_COUNT as u16
+            || self.flattened_input_lane_count
+                != self
+                    .memory_channel
+                    .map_or(CANDIDATE_FEATURE_COUNT as u16, |plan| {
+                        u16::try_from(plan.decoder_input_stride()).unwrap_or(u16::MAX)
+                    })
             || self.families.len() != FAMILY_COUNT
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        if let Some(plan) = self.memory_channel {
+            plan.validate_contract()?;
         }
         let mut cursor = self
             .families
@@ -212,6 +231,12 @@ impl CandidateDecoderPlan {
         digest.write_u16(self.motor_width);
         digest.write_u16(self.feature_count);
         digest.write_u16(self.flattened_input_lane_count);
+        digest.write_bool(self.memory_channel.is_some());
+        if let Some(plan) = self.memory_channel {
+            for word in plan.canonical_digest() {
+                digest.write_u64(word);
+            }
+        }
         digest.write_sequence_len(self.families.len());
         for row in &self.families {
             digest.write_u8(row.family.raw());
@@ -350,7 +375,7 @@ impl AuxiliaryDecoderPlan {
     fn recompute_digest(&self) -> [u64; 4] {
         let mut d = CanonicalDigestBuilder::new(AUXILIARY_DECODER_DOMAIN);
         d.write_u16(self.schema_version);
-        d.write_u8(self.head.raw());
+        d.write_u32(self.head.raw());
         d.write_u16(self.input_width);
         d.write_u16(self.output_width);
         d.write_u32(self.decoder_synapse_start);
@@ -401,6 +426,7 @@ impl<'de> Deserialize<'de> for CandidateDecoderPlan {
             motor_width: u16,
             feature_count: u16,
             flattened_input_lane_count: u16,
+            memory_channel: Option<MemoryChannelPlan>,
             families: Vec<CandidateDecoderFamilyPlan>,
             canonical_digest: [u64; 4],
         }
@@ -411,6 +437,7 @@ impl<'de> Deserialize<'de> for CandidateDecoderPlan {
             motor_width: w.motor_width,
             feature_count: w.feature_count,
             flattened_input_lane_count: w.flattened_input_lane_count,
+            memory_channel: w.memory_channel,
             families: w.families,
             canonical_digest: w.canonical_digest,
         };
@@ -441,10 +468,12 @@ mod tests {
 
     #[test]
     fn slice_a_decoder_shape_requires_exact_widths_and_positive_zero_biases() {
-        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 24, families(0.0)).is_ok());
-        assert!(CandidateDecoderPlan::try_new(0, 16, 23, 24, families(0.0)).is_err());
-        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 23, families(0.0)).is_err());
-        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 24, families(0.25)).is_err());
-        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 24, families(-0.0)).is_err());
+        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 24, None, families(0.0)).is_ok());
+        assert!(CandidateDecoderPlan::try_new(0, 16, 23, 24, None, families(0.0)).is_err());
+        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 23, None, families(0.0)).is_err());
+        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 24, None, families(0.25)).is_err());
+        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 24, None, families(-0.0)).is_err());
+        let memory = MemoryChannelPlan::try_new_v1(96).unwrap();
+        assert!(CandidateDecoderPlan::try_new(0, 16, 24, 36, Some(memory), families(0.0)).is_ok());
     }
 }

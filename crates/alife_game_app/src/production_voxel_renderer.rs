@@ -1288,6 +1288,59 @@ impl Fvr05ProductionUxStateResource {
         }
     }
 
+    #[cfg(feature = "gpu-runtime")]
+    fn write_gpu_runtime_save(
+        &mut self,
+        create_world: bool,
+        runtime: &mut crate::GpuLiveBrainRuntime,
+    ) {
+        let target_path = if create_world {
+            PathBuf::from(&self.settings.created_world_save_path)
+        } else {
+            PathBuf::from(&self.settings.runtime_save_path)
+        };
+        let result = (|| -> Result<(PathBuf, GpuRuntimeSaveState), GameAppShellError> {
+            let checkpointed = runtime.capture_portable_checkpoint()?;
+            let mut descriptor = self.gpu_runtime_state.clone();
+            descriptor.last_safe_checkpoint.save_id = checkpointed.save_id.clone();
+            descriptor.last_safe_checkpoint.world_tick = checkpointed.world.tick;
+            descriptor.last_safe_checkpoint.sealed_patch_boundary = true;
+            descriptor.last_safe_checkpoint.checkpoint_label = format!(
+                "{}:GpuAuthoritative:checkpoint-tick={}",
+                self.profile_id.label(),
+                checkpointed.world.tick.raw()
+            );
+            let checkpointed = checkpointed.with_gpu_runtime_state(descriptor.clone())?;
+            crate::GpuDurableSaveManifest::publish_snapshot(
+                &target_path,
+                &self.asset_root,
+                &checkpointed,
+            )?;
+            Ok((target_path.clone(), descriptor))
+        })();
+        match result {
+            Ok((path, descriptor)) => {
+                self.gpu_runtime_state = descriptor;
+                self.last_error = None;
+                self.last_action = if create_world {
+                    format!(
+                        "Created exact GPU-checkpoint world save: {}",
+                        path.display()
+                    )
+                } else {
+                    format!(
+                        "Saved exact GPU-checkpoint runtime state: {}",
+                        path.display()
+                    )
+                };
+            }
+            Err(error) => {
+                self.last_error = Some(error.to_string());
+                self.last_action = "GPU checkpoint save failed; prior save retained".to_string();
+            }
+        }
+    }
+
     fn load_runtime_save_and_settings(&mut self) {
         let result = (|| -> Result<(), GameAppShellError> {
             let save = PortableSaveFile::from_json_file(&self.settings.runtime_save_path)?;
@@ -4076,7 +4129,7 @@ fn spawn_fvr03_diagnostics_ui(
     app.world_mut().spawn((
         Name::new("A-Life FVR03 production voxel diagnostics"),
         Text::new(format!(
-            "A-Life Voxel Frontend\nprofile: {} | population: {}\nrenderer: {} | backend: {}\ntarget: {} FPS | chunks radius: {} | stride: {}\nmesher: {} | material atlas: {}\ncreatures: {} / {}\nruntime: {} | fallback: {}\nsave: {}",
+            "A-Life Voxel Frontend\nprofile: {} | population: {}\nrenderer: {} | backend: {}\ntarget: {} FPS | chunks radius: {} | stride: {}\nmesher: {} | material atlas: {}\ncreatures: {} / {}\nruntime: {} | unavailable: {}\nsave: {}",
             summary.profile_id.label(),
             summary.effective_population,
             summary.renderer_profile,
@@ -4264,6 +4317,9 @@ fn handle_fvr05_production_ux_input(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
+    #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
+        ResMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
+    >,
 ) {
     ux.update_selection_snapshot(selection.selected, follow.enabled);
     if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyP) {
@@ -4302,12 +4358,26 @@ fn handle_fvr05_production_ux_input(
         ux.last_action = format!("Simulation speed {:.2}x", ux.settings.simulation_speed);
     }
     if keyboard.just_pressed(KeyCode::KeyS) {
+        #[cfg(feature = "gpu-runtime")]
+        if let Some(runtime) = gpu_runtime.as_mut() {
+            ux.write_gpu_runtime_save(false, &mut runtime.runtime);
+        } else {
+            ux.write_runtime_save(false);
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
         ux.write_runtime_save(false);
         if ux.last_error.is_none() {
             ux.persist_ui_settings();
         }
     }
     if keyboard.just_pressed(KeyCode::KeyN) {
+        #[cfg(feature = "gpu-runtime")]
+        if let Some(runtime) = gpu_runtime.as_mut() {
+            ux.write_gpu_runtime_save(true, &mut runtime.runtime);
+        } else {
+            ux.write_runtime_save(true);
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
         ux.write_runtime_save(true);
         if ux.last_error.is_none() {
             ux.persist_ui_settings();
@@ -4847,7 +4917,7 @@ fn request_fvr03_recorded_screenshot(
         }
         capture.measurement_written = true;
     }
-    if !capture.measurement_written {
+    if !fvr03_visual_capture_ready(capture.frame, capture.capture_after_frame) {
         return;
     }
     if !capture.product_screenshot_captured {
@@ -4871,14 +4941,15 @@ fn request_fvr03_recorded_screenshot(
             .spawn(Screenshot::primary_window())
             .observe(save_to_disk(capture.path.clone()));
         capture.product_screenshot_captured = true;
-        capture.fvr05_next_capture_frame = capture.frame.saturating_add(24);
+        capture.fvr05_next_capture_frame =
+            capture.frame.saturating_add(FVR05_SCREENSHOT_SETTLE_FRAMES);
         if !capture.developer_overlay {
             capture.fvr05_sequence_complete = true;
         }
         return;
     }
     if capture.fvr05_sequence_complete {
-        if capture.frame >= capture.fvr05_next_capture_frame {
+        if capture.measurement_written && capture.frame >= capture.fvr05_next_capture_frame {
             capture.requested = true;
             exits.write(AppExit::Success);
         }
@@ -4911,25 +4982,32 @@ fn request_fvr03_recorded_screenshot(
         .spawn(Screenshot::primary_window())
         .observe(save_to_disk(path));
     capture.fvr05_capture_index = capture.fvr05_capture_index.saturating_add(1);
-    capture.fvr05_next_capture_frame = capture.frame.saturating_add(24);
+    capture.fvr05_next_capture_frame = capture.frame.saturating_add(FVR05_SCREENSHOT_SETTLE_FRAMES);
     if fvr05_screenshot_step(capture.fvr05_capture_index).is_none() {
         capture.fvr05_sequence_complete = true;
     }
 }
 
+const FVR03_VISUAL_CAPTURE_AFTER_FRAMES: u32 = 8;
+const FVR05_SCREENSHOT_SETTLE_FRAMES: u32 = 2;
+
 fn fvr03_screenshot_capture_frame(_settings: &Fvr03ProductionVoxelRendererSettings) -> u32 {
-    48
+    FVR03_VISUAL_CAPTURE_AFTER_FRAMES
+}
+
+const fn fvr03_visual_capture_ready(frame: u32, capture_after_frame: u32) -> bool {
+    frame >= capture_after_frame
 }
 
 fn fvr05_screenshot_step(index: usize) -> Option<(&'static str, Fvr05ProductionInspectorTab)> {
     match index {
-        0 => Some((
+        0 => Some(("fvr05_gpu_panel", Fvr05ProductionInspectorTab::GpuRuntime)),
+        1 => Some((
             "fvr05_menu_settings_creature",
             Fvr05ProductionInspectorTab::Creature,
         )),
-        1 => Some(("fvr05_tile_inspector", Fvr05ProductionInspectorTab::Tile)),
-        2 => Some(("fvr05_world_inspector", Fvr05ProductionInspectorTab::World)),
-        3 => Some(("fvr05_gpu_panel", Fvr05ProductionInspectorTab::GpuRuntime)),
+        2 => Some(("fvr05_tile_inspector", Fvr05ProductionInspectorTab::Tile)),
+        3 => Some(("fvr05_world_inspector", Fvr05ProductionInspectorTab::World)),
         _ => None,
     }
 }
@@ -5332,6 +5410,21 @@ mod tests {
         assert_eq!(comfort.production_dressing_cap, 224);
         assert!(comfort.production_dressing_cap < high.production_dressing_cap);
         assert!(high.production_dressing_cap <= 384);
+    }
+
+    #[test]
+    fn visual_capture_readiness_does_not_wait_for_performance_sampling() {
+        assert!(!fvr03_visual_capture_ready(7, 8));
+        assert!(fvr03_visual_capture_ready(8, 8));
+        assert!(fvr03_visual_capture_ready(u32::MAX, 8));
+    }
+
+    #[test]
+    fn developer_capture_prioritizes_gpu_runtime_evidence() {
+        assert_eq!(
+            fvr05_screenshot_step(0),
+            Some(("fvr05_gpu_panel", Fvr05ProductionInspectorTab::GpuRuntime))
+        );
     }
 
     #[test]
