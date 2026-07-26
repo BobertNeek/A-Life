@@ -99,8 +99,14 @@ mod live_brain_bridge;
 pub(crate) use live_brain_bridge::proposal;
 pub use live_brain_bridge::*;
 
-mod gpu_sleep_scheduler;
-pub use gpu_sleep_scheduler::*;
+#[cfg(feature = "gpu-runtime")]
+pub use alife_runtime::{
+    merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite, GpuBrainSidecarCapture,
+    GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuRuntimeError,
+    GpuSaveManifestCasOutcome, GpuSaveManifestDigest, GpuSleepConsolidationDriver,
+    GpuSleepScheduleEvent, GpuSleepScheduler, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
+    RetainedLearningCapture,
+};
 
 mod camera_inspector;
 pub use camera_inspector::*;
@@ -300,11 +306,6 @@ pub use graphical_gpu_runtime_controller::*;
 mod gpu_live_runtime;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_live_runtime::*;
-
-#[cfg(feature = "gpu-runtime")]
-mod gpu_checkpoint_assets;
-#[cfg(feature = "gpu-runtime")]
-pub use gpu_checkpoint_assets::*;
 
 #[cfg(feature = "gpu-runtime")]
 mod gpu_evidence;

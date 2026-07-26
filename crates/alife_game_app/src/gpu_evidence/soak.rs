@@ -29,6 +29,8 @@ use alife_core::{
 use alife_gpu_backend::GpuAllocationEventReceipt;
 #[cfg(feature = "gpu-tests")]
 use alife_gpu_backend::{GpuAdmissionReceipt, GpuClosedLoopBackend};
+#[cfg(feature = "gpu-tests")]
+use alife_runtime::current_backend_provenance;
 use alife_world::persistence::{GpuBackendProvenanceSave, NeuralGpuBackendApi};
 #[cfg(feature = "gpu-tests")]
 use alife_world::{
@@ -41,8 +43,8 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "gpu-tests")]
 use crate::{
-    compile_gpu_birth_components, gpu_checkpoint_assets::current_backend_provenance,
-    merge_gpu_checkpoint_manifest_entries, GpuCheckpointAssetStore, GpuLiveBrainRuntime,
+    compile_gpu_birth_components, merge_gpu_checkpoint_manifest_entries, GpuCheckpointAssetStore,
+    GpuLiveBrainRuntime,
 };
 
 use super::{

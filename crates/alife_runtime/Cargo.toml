@@ -1,0 +1,23 @@
+[package]
+name = "alife_runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+alife_core.workspace = true
+alife_gpu_backend = { path = "../alife_gpu_backend" }
+alife_world = { path = "../alife_world" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Storage_FileSystem",
+] }
+
+[features]
+default = []
+gpu-tests = ["alife_gpu_backend/gpu-tests"]

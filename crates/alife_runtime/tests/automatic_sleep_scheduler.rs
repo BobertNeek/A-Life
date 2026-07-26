@@ -1,13 +1,11 @@
 //! Canonical no-action scheduler cycle before the GPU consolidation driver is wired.
-#![cfg(feature = "gpu-runtime")]
-
 use alife_core::{
     ConsolidationDriverEvent, ConsolidationIntent, ConsolidationJobId, ConsolidationStagedOutput,
     GpuConsolidationRequest, HomeostaticParameters, HomeostaticSnapshot, NormalizedScalar,
     PhenotypeHash, SleepConsolidationConfig, SleepPhase, Tick,
     GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
 };
-use alife_game_app::{GpuSleepConsolidationDriver, GpuSleepScheduler};
+use alife_runtime::{GpuSleepConsolidationDriver, GpuSleepScheduler};
 
 #[derive(Default)]
 struct RecordingConsolidationDriver {

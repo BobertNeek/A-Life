@@ -7,13 +7,11 @@ use alife_core::{
     ScaffoldContractError, SensorProfile, Tick, Vec3f,
 };
 use alife_gpu_backend::{GpuAdmissionReceipt, GpuClosedLoopBackend};
+use alife_runtime::current_backend_provenance;
 use alife_world::{GpuBackendProvenanceSave, HeadlessScenarioBuilder};
 use thiserror::Error;
 
-use crate::{
-    compile_gpu_birth_components, gpu_checkpoint_assets::current_backend_provenance,
-    GameAppShellError, GpuLiveBrainRuntime,
-};
+use crate::{compile_gpu_birth_components, GameAppShellError, GpuLiveBrainRuntime};
 
 const BENCHMARK_PHENOTYPE_REFERENCE_POPULATION: u32 = 1;
 
@@ -125,7 +123,8 @@ pub fn run_gpu_closed_loop_benchmark_trial(
         }
         Err(error) => return Err(GameAppShellError::Core(error).into()),
     };
-    let backend_provenance = current_backend_provenance(&backend, &options.capacity)?;
+    let backend_provenance =
+        current_backend_provenance(&backend, &options.capacity).map_err(GameAppShellError::from)?;
     let phenotype_seed = benchmark_phenotype_seed(options)?;
     let mut runtime = match GpuLiveBrainRuntime::new_benchmark_profiled(
         backend,

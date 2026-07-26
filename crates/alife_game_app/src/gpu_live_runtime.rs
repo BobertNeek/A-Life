@@ -3,22 +3,26 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alife_core::{
-    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkReceipt, Confidence,
-    ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState, DecisionSnapshot,
-    DevelopmentState, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    FinalizedMemoryRecall, HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot,
-    MemoryBankConfig, MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt,
-    MemorySidecarState, MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId,
-    PerceptionFrame, PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome,
-    PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState, Tick,
-    TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, Validate, Vec3f,
+    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkReceipt,
+    CanonicalDigestBuilder, Confidence, ConsolidationDriverEvent, ConsolidationIntent,
+    ConsolidationState, DecisionSnapshot, DevelopmentState, ExperiencePatch,
+    ExperiencePatchBuilder, ExperienceSequenceId, FinalizedMemoryRecall, HomeostaticDelta,
+    HomeostaticParameters, HomeostaticSnapshot, MemoryBankConfig, MemoryCompactionCheckpoint,
+    MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
+    NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot, ScaffoldContractError,
+    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase,
+    SleepState, Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, Validate,
+    Vec3f,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
     GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuLearningReceipt, GpuMemoryContextUpload,
     PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
     GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_SELECTION_RECORD_BYTES,
+};
+use alife_runtime::{
+    DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority, GpuSessionConsumerKind,
 };
 use alife_world::{
     persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
@@ -105,7 +109,42 @@ impl GpuLiveRuntimeConstructionOptions {
 }
 
 impl GpuLiveCheckpointDurability {
-    fn publish(&mut self, replacement: PortableSaveFile) -> Result<(), GameAppShellError> {
+    fn durable_reference(&self) -> Result<DurableGpuCheckpointRef, GameAppShellError> {
+        let mut digest = CanonicalDigestBuilder::new(b"alife.runtime.durable-checkpoint-ref.v1");
+        digest.write_u64(self.published.save.world.tick.raw());
+        digest.write_utf8(self.published.digest.as_str());
+        digest.write_sequence_len(self.published.save.creatures.len());
+        for creature in &self.published.save.creatures {
+            digest.write_u64(creature.organism_id.raw());
+            match &creature.gpu_brain {
+                Some(brain) => {
+                    digest.write_some();
+                    for word in brain.phenotype_hash.0 {
+                        digest.write_u64(word);
+                    }
+                    digest.write_u64(brain.active_weight_generation);
+                    digest.write_u64(brain.learning_transaction_generation);
+                    digest.write_u64(brain.replay_journal_generation);
+                    digest.write_utf8(&brain.lifetime_weights.digest.0);
+                    digest.write_utf8(&brain.fast_weights.digest.0);
+                    digest.write_utf8(&brain.eligibility.digest.0);
+                    digest.write_utf8(&brain.activation_state.digest.0);
+                    digest.write_utf8(&brain.neuron_homeostasis.digest.0);
+                }
+                None => digest.write_none(),
+            }
+        }
+        Ok(DurableGpuCheckpointRef::try_new(
+            self.published.save.world.tick,
+            self.published.digest.as_str().to_string(),
+            digest.finish256(),
+        )?)
+    }
+
+    fn publish(
+        &mut self,
+        replacement: PortableSaveFile,
+    ) -> Result<DurableGpuCheckpointRef, GameAppShellError> {
         self.durable_manifest
             .compare_and_swap(&self.published.digest, &replacement)?;
         let published = self.durable_manifest.load()?;
@@ -116,7 +155,7 @@ impl GpuLiveCheckpointDurability {
             });
         }
         self.published = published;
-        Ok(())
+        self.durable_reference()
     }
 }
 
@@ -383,7 +422,7 @@ pub(crate) struct GpuLiveBrainEvidenceMetrics {
 
 /// Owns all production neural authority for one headless world.
 pub struct GpuLiveBrainRuntime {
-    backend: GpuClosedLoopBackend,
+    backend: GpuAuthoritativeSession,
     handles: BTreeMap<u64, GpuBrainHandle>,
     residents: BTreeMap<u64, ResidentCognition>,
     memories: BTreeMap<u64, MemorySidecarState>,
@@ -480,6 +519,12 @@ impl GpuLiveBrainRuntime {
             durable_manifest,
             published: loaded_save,
         });
+        let durable_reference = runtime
+            .checkpoint_durability
+            .as_ref()
+            .expect("durability was just installed")
+            .durable_reference()?;
+        runtime.backend.note_durable_checkpoint(durable_reference)?;
         if requires_checkpoint_reconciliation {
             runtime.persist_sleep_checkpoint_boundary()?;
         }
@@ -602,7 +647,7 @@ impl GpuLiveBrainRuntime {
         }
         options.homeostatic_parameters.validate_contract()?;
         let mut runtime = Self {
-            backend,
+            backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
             memories: BTreeMap::new(),
@@ -693,7 +738,7 @@ impl GpuLiveBrainRuntime {
         }
         let world_tick = world.tick();
         let mut runtime = Self {
-            backend,
+            backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
             memories: BTreeMap::new(),
@@ -883,7 +928,7 @@ impl GpuLiveBrainRuntime {
                 attempts: recovery.attempts,
                 last_error_code: recovery.last_error.slug(),
             });
-        store.capture_brain(
+        Ok(store.capture_brain(
             &mut self.backend,
             handle,
             &resident.phenotype,
@@ -898,7 +943,7 @@ impl GpuLiveBrainRuntime {
                 tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
                 retained_learning,
             },
-        )
+        )?)
     }
 
     /// Captures one exact, sealed-boundary portable save without publishing it.
@@ -1002,7 +1047,9 @@ impl GpuLiveBrainRuntime {
             durability.publish(replacement)
         })();
         self.checkpoint_durability = Some(durability);
-        result
+        let durable_reference = result?;
+        self.backend.note_durable_checkpoint(durable_reference)?;
+        Ok(())
     }
 
     fn promote_durable_completed_sleep(
@@ -1035,7 +1082,9 @@ impl GpuLiveBrainRuntime {
             durability.publish(replacement)
         })();
         self.checkpoint_durability = Some(durability);
-        result
+        let durable_reference = result?;
+        self.backend.note_durable_checkpoint(durable_reference)?;
+        Ok(())
     }
 
     pub fn reconcile_population(&mut self) -> Result<(), GameAppShellError> {
@@ -1250,6 +1299,36 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
+        self.backend.ensure_neural_actions_available()?;
+        let result = self.tick_with_sleep_progress_inner(&mut progress);
+        if let Err(error) = &result {
+            let contract_error = match error {
+                GameAppShellError::Core(error)
+                | GameAppShellError::GpuRuntime(alife_runtime::GpuRuntimeError::Core(error)) => {
+                    Some(error)
+                }
+                _ => None,
+            };
+            if let Some(error) = contract_error {
+                self.backend.record_contract_failure(error);
+            }
+        }
+        result
+    }
+
+    fn tick_with_sleep_progress_inner<F>(
+        &mut self,
+        progress: &mut F,
+    ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError>
+    where
+        F: FnMut(
+            &mut GpuClosedLoopBackend,
+            GpuBrainHandle,
+            OrganismId,
+            SleepState,
+            Option<ConsolidationIntent>,
+        ) -> SleepProgressResult,
+    {
         self.reconcile_population()?;
         self.last_sealed_patches.clear();
         self.last_learning_receipts.clear();
@@ -1306,7 +1385,7 @@ impl GpuLiveBrainRuntime {
                 let mut routed_driver = RoutedGpuSleepDriver {
                     backend: &mut self.backend,
                     handle,
-                    progress: &mut progress,
+                    progress,
                 };
                 resident.sleep_scheduler.scheduled_tick(
                     OrganismId(raw),
@@ -1465,6 +1544,11 @@ impl GpuLiveBrainRuntime {
             self.persist_sleep_checkpoint_boundary()?;
         }
         Ok(summaries_by_organism.into_values().collect())
+    }
+
+    /// Shared neural-session authority used by gameplay and laboratory hosts.
+    pub const fn session_authority(&self) -> &GpuSessionAuthority {
+        self.backend.authority()
     }
 
     pub fn sealed_patches(&self) -> &[ExperiencePatch] {
@@ -1634,7 +1718,7 @@ impl GpuLiveBrainRuntime {
     }
 
     pub(crate) const fn hardware_receipt(&self) -> &alife_gpu_backend::GpuHardwareReceipt {
-        self.backend.hardware_receipt()
+        self.backend.backend().hardware_receipt()
     }
 
     pub(crate) fn take_completed_neural_timing_sample(
@@ -1644,7 +1728,7 @@ impl GpuLiveBrainRuntime {
     }
 
     pub(crate) const fn admission_receipt(&self) -> &alife_gpu_backend::GpuAdmissionReceipt {
-        self.backend.admission_receipt()
+        self.backend.backend().admission_receipt()
     }
 
     pub(crate) fn runtime_profile_digest(&self) -> Result<[u64; 4], GameAppShellError> {
@@ -1652,7 +1736,7 @@ impl GpuLiveBrainRuntime {
     }
 
     pub(crate) const fn activity_policy_digest(&self) -> [u64; 4] {
-        self.backend.activity_policy().policy_digest
+        self.backend.backend().activity_policy().policy_digest
     }
 
     pub(crate) fn evidence_activity_snapshot(
@@ -2510,6 +2594,11 @@ impl GpuLiveBrainRuntime {
     ) -> Result<alife_gpu_backend::GpuLearningStateSnapshot, ScaffoldContractError> {
         let handle = self.evidence_handle(organism_id)?;
         self.backend.learning_state_snapshot_for_test(handle)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub fn force_device_lost_after_next_submit_for_test(&mut self) {
+        self.backend.force_device_lost_after_next_submit_for_test();
     }
 
     #[cfg(feature = "gpu-tests")]

@@ -133,6 +133,8 @@ fn gpu_live_runtime_keeps_handle_authority_private_and_reconciles_deaths_before_
     let source = include_str!("../src/gpu_live_runtime.rs");
 
     assert!(source.contains("struct GpuLiveBrainRuntime"));
+    assert!(source.contains("backend: GpuAuthoritativeSession"));
+    assert!(!source.contains("backend: GpuClosedLoopBackend,"));
     assert!(source.contains("handles: BTreeMap<u64, GpuBrainHandle>"));
     assert!(!source.contains("pub handles:"));
     assert!(!source.contains("pub backend:"));
