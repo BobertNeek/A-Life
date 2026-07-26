@@ -2,10 +2,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
-    BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkReceipt,
-    CanonicalDigestBuilder, Confidence, ConsolidationDriverEvent, ConsolidationIntent,
-    ConsolidationState, DecisionSnapshot, DevelopmentState, ExperiencePatch,
+    ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
+    Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
+    BrainWorkReceipt, CanonicalDigestBuilder, Confidence, ConsolidationDriverEvent,
+    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, FinalizedMemoryRecall, HomeostaticDelta,
     HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig,
     MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
@@ -458,6 +460,11 @@ pub struct GpuLiveBrainRuntime {
     last_post_seal_learning_failures: Vec<PostSealLearningFailure>,
     last_gpu_metrics: GpuLiveBrainEvidenceMetrics,
     checkpoint_durability: Option<GpuLiveCheckpointDurability>,
+    lineage_library: Option<LineageLibrary>,
+    lineage_run_id: Option<String>,
+    archive_learned_capture_policy: ArchiveLearnedCapturePolicy,
+    archive_birth_manifests: BTreeMap<u64, Blake3Digest>,
+    archive_retirement_receipts: BTreeMap<u64, ArchiveRetirementReceipt>,
 }
 
 impl GpuLiveBrainRuntime {
@@ -566,6 +573,31 @@ impl GpuLiveBrainRuntime {
         )
     }
 
+    /// Creates a production GPU runtime whose immutable genetic archives are
+    /// committed before each neural slot is allocated.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_profiled_archived(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
+        archive_config: LineageLibraryConfig,
+        source_run_id: impl Into<String>,
+        learned_capture_policy: ArchiveLearnedCapturePolicy,
+    ) -> Result<Self, GameAppShellError> {
+        let library = LineageLibrary::open(archive_config)?;
+        Self::new_profiled_with_parameters_and_archive(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            sensor_profile,
+            GpuLiveRuntimeConstructionOptions::production(),
+            Some((library, source_run_id.into(), learned_capture_policy)),
+        )
+    }
+
     pub(crate) fn new_benchmark_profiled(
         backend: GpuClosedLoopBackend,
         world: HeadlessWorld,
@@ -643,12 +675,38 @@ impl GpuLiveBrainRuntime {
         sensor_profile: SensorProfile,
         options: GpuLiveRuntimeConstructionOptions,
     ) -> Result<Self, GameAppShellError> {
+        Self::new_profiled_with_parameters_and_archive(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            sensor_profile,
+            options,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_profiled_with_parameters_and_archive(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
+        options: GpuLiveRuntimeConstructionOptions,
+        lineage_archive: Option<(LineageLibrary, String, ArchiveLearnedCapturePolicy)>,
+    ) -> Result<Self, GameAppShellError> {
         if deterministic_seed == 0 || brain_class.neuron_count().is_none() {
             return Err(GameAppShellError::Core(
                 ScaffoldContractError::PhenotypeCompile,
             ));
         }
         options.homeostatic_parameters.validate_contract()?;
+        let (lineage_library, lineage_run_id, archive_learned_capture_policy) =
+            match lineage_archive {
+                Some((library, run_id, policy)) => (Some(library), Some(run_id), policy),
+                None => (None, None, ArchiveLearnedCapturePolicy::GeneticOnly),
+            };
         let mut runtime = Self {
             backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
             handles: BTreeMap::new(),
@@ -683,6 +741,11 @@ impl GpuLiveBrainRuntime {
             last_post_seal_learning_failures: Vec::new(),
             last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
             checkpoint_durability: None,
+            lineage_library,
+            lineage_run_id,
+            archive_learned_capture_policy,
+            archive_birth_manifests: BTreeMap::new(),
+            archive_retirement_receipts: BTreeMap::new(),
         };
         runtime.reconcile_population()?;
         Ok(runtime)
@@ -774,6 +837,11 @@ impl GpuLiveBrainRuntime {
             last_post_seal_learning_failures: Vec::new(),
             last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
             checkpoint_durability: None,
+            lineage_library: None,
+            lineage_run_id: None,
+            archive_learned_capture_policy: ArchiveLearnedCapturePolicy::GeneticOnly,
+            archive_birth_manifests: BTreeMap::new(),
+            archive_retirement_receipts: BTreeMap::new(),
         };
         let mut tracked_object_states = Vec::new();
         for raw in live_ids {
@@ -1108,6 +1176,15 @@ impl GpuLiveBrainRuntime {
             .filter(|raw| !live_ids.contains(raw))
             .collect::<Vec<_>>();
         for raw in retired {
+            if self.lineage_library.is_some()
+                && !self.archive_retirement_receipts.contains_key(&raw)
+            {
+                return Err(GameAppShellError::InvalidProductionFrontend {
+                    message: format!(
+                        "organism {raw} must retire through the archive transaction before despawn"
+                    ),
+                });
+            }
             let handle = *self
                 .handles
                 .get(&raw)
@@ -1134,6 +1211,7 @@ impl GpuLiveBrainRuntime {
             }
             let organism_id = OrganismId(raw);
             let (phenotype, resident) = self.compile_birth(organism_id)?;
+            self.archive_birth_before_gpu_insert(organism_id, &resident)?;
             let handle = self.backend.insert_brain(organism_id, phenotype)?;
             if handle.organism_id().raw() != raw {
                 self.backend.remove_brain(handle)?;
@@ -1158,6 +1236,206 @@ impl GpuLiveBrainRuntime {
                 )?,
             );
         }
+        Ok(())
+    }
+
+    /// Attaches a lineage library to a restored runtime and backfills genetic
+    /// manifests for residents whose original birth predates archive support.
+    pub fn attach_lineage_archive(
+        &mut self,
+        config: LineageLibraryConfig,
+        source_run_id: impl Into<String>,
+        learned_capture_policy: ArchiveLearnedCapturePolicy,
+    ) -> Result<(), GameAppShellError> {
+        if self.lineage_library.is_some() {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "lineage archive is already attached".to_string(),
+            });
+        }
+        self.lineage_library = Some(LineageLibrary::open(config)?);
+        self.lineage_run_id = Some(source_run_id.into());
+        self.archive_learned_capture_policy = learned_capture_policy;
+        let residents = self
+            .residents
+            .iter()
+            .map(|(&raw, resident)| (raw, resident.clone()))
+            .collect::<Vec<_>>();
+        for (raw, resident) in residents {
+            self.archive_birth_before_gpu_insert(OrganismId(raw), &resident)?;
+        }
+        Ok(())
+    }
+
+    /// Performs the canonical death transaction. The immutable life manifest
+    /// and optional learned checkpoint are committed before GPU retirement,
+    /// and the world entity is despawned only after the receipt exists.
+    pub fn retire_organism(
+        &mut self,
+        organism_id: OrganismId,
+        death_reason: &str,
+    ) -> Result<ArchiveRetirementReceipt, GameAppShellError> {
+        organism_id.validate()?;
+        if death_reason.trim().is_empty() || death_reason.chars().count() > 160 {
+            return Err(ScaffoldContractError::InvalidId.into());
+        }
+        let raw = organism_id.raw();
+        let handle = *self
+            .handles
+            .get(&raw)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if !self
+            .world
+            .organism_entity_ids()
+            .iter()
+            .any(|(candidate, _)| *candidate == organism_id)
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
+        let birth_manifest_digest = *self.archive_birth_manifests.get(&raw).ok_or_else(|| {
+            GameAppShellError::InvalidProductionFrontend {
+                message: format!("organism {raw} has no committed genetic archive"),
+            }
+        })?;
+        let archive_root = self
+            .lineage_library
+            .as_ref()
+            .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+                message: "lineage archive is not attached".to_string(),
+            })?
+            .root()
+            .to_path_buf();
+        let checkpoint_retention = self.archive_learned_capture_policy.retention();
+        let checkpoint_bytes = checkpoint_retention
+            .map(|_| {
+                let checkpoint_store = GpuCheckpointAssetStore::new(archive_root)?;
+                let checkpoint = self.checkpoint_brain(organism_id, &checkpoint_store)?;
+                Ok::<_, GameAppShellError>(serde_json::to_vec(&serde_json::json!({
+                    "save_state": checkpoint.save_state,
+                    "manifest_entries": checkpoint.manifest_entries,
+                    "checkpoint_digest": checkpoint.checkpoint_digest,
+                }))?)
+            })
+            .transpose()?;
+        let final_experience_sequence = self
+            .sealed_patches
+            .iter()
+            .rev()
+            .find(|patch| patch.header().organism_id == organism_id)
+            .map(|patch| patch.header().sequence_id);
+        let resident = self
+            .residents
+            .get(&raw)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let statistics = serde_json::to_vec(&serde_json::json!({
+            "schema": "alife.life-statistics.v1",
+            "organism_id": raw,
+            "death_tick": self.world.tick().raw(),
+            "death_reason": death_reason,
+            "sealed_patch_count": self.sealed_patches.iter().filter(|patch| patch.header().organism_id == organism_id).count(),
+            "next_experience_sequence": resident.next_sequence,
+            "language_grounding_entries": resident.language_grounding.entries().len(),
+        }))?;
+        let receipt = self
+            .lineage_library
+            .as_mut()
+            .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+                message: "lineage archive is not attached".to_string(),
+            })?
+            .archive_life(LifeArchiveInput {
+                birth_manifest_digest,
+                death_tick: self.world.tick(),
+                final_experience_sequence,
+                statistics_bytes: &statistics,
+                learned_checkpoint_bytes: checkpoint_bytes.as_deref(),
+                checkpoint_retention: checkpoint_retention
+                    .unwrap_or(ArchiveCheckpointRetention::TemporaryPeak),
+            })?;
+        receipt.validate_contract()?;
+        self.archive_retirement_receipts
+            .insert(raw, receipt.clone());
+
+        self.backend.remove_brain(handle)?;
+        self.world.remove_organism(organism_id)?;
+        self.handles.remove(&raw);
+        self.residents.remove(&raw);
+        self.memories.remove(&raw);
+        self.topologies.remove(&raw);
+        self.retained_learning.remove(&raw);
+        Ok(receipt)
+    }
+
+    pub fn archive_birth_manifest(&self, organism_id: OrganismId) -> Option<Blake3Digest> {
+        self.archive_birth_manifests
+            .get(&organism_id.raw())
+            .copied()
+    }
+
+    pub fn archive_retirement_receipt(
+        &self,
+        organism_id: OrganismId,
+    ) -> Option<&ArchiveRetirementReceipt> {
+        self.archive_retirement_receipts.get(&organism_id.raw())
+    }
+
+    pub fn lineage_archive_manifest_count(&self) -> Result<Option<u64>, GameAppShellError> {
+        self.lineage_library
+            .as_ref()
+            .map(LineageLibrary::manifest_count)
+            .transpose()
+            .map_err(Into::into)
+    }
+
+    fn archive_birth_before_gpu_insert(
+        &mut self,
+        organism_id: OrganismId,
+        resident: &ResidentCognition,
+    ) -> Result<(), GameAppShellError> {
+        if self.lineage_library.is_none()
+            || self
+                .archive_birth_manifests
+                .contains_key(&organism_id.raw())
+        {
+            return Ok(());
+        }
+        let source_run_id = self.lineage_run_id.as_deref().ok_or_else(|| {
+            GameAppShellError::InvalidProductionFrontend {
+                message: "lineage archive source run id is missing".to_string(),
+            }
+        })?;
+        let foundation_bytes = if resident
+            .phenotype
+            .foundation_abi()
+            .foundation_payload_digest()
+            .is_some()
+        {
+            let foundation =
+                alife_core::FoundationWeightAsset::builtin_n2048_v1(self.sensor_profile)?;
+            if Some(foundation.digest())
+                != resident
+                    .phenotype
+                    .foundation_abi()
+                    .foundation_payload_digest()
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile.into());
+            }
+            Some(foundation.encode_canonical()?)
+        } else {
+            None
+        };
+        let digest = self
+            .lineage_library
+            .as_mut()
+            .expect("lineage library presence checked above")
+            .archive_birth(GeneticArchiveInput {
+                source_run_id,
+                organism_id,
+                birth_tick: self.world.tick(),
+                genome: &resident.genome,
+                phenotype: &resident.phenotype,
+                foundation_asset_bytes: foundation_bytes.as_deref(),
+            })?;
+        self.archive_birth_manifests
+            .insert(organism_id.raw(), digest);
         Ok(())
     }
 
@@ -3394,5 +3672,67 @@ mod tests {
         assert_eq!(runtime.backend.pending_eligibility(handle).unwrap(), None);
         assert_eq!(runtime.last_learning_receipts().len(), 1);
         assert!(runtime.last_eligibility_discard_receipts().is_empty());
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn archived_death_commits_before_gpu_scrub_and_world_despawn() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-gpu-retirement-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let config = LineageLibraryConfig::profile_default(&root);
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
+        let world = HeadlessScenarioBuilder::new(96)
+            .agent("archived", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
+            .build()
+            .unwrap();
+        let mut runtime = GpuLiveBrainRuntime::new_profiled_archived(
+            backend,
+            world,
+            96,
+            BrainScaleTier::Nano512,
+            SensorProfile::GroundedObjectSlotsV1,
+            config.clone(),
+            "gpu-retirement-test",
+            ArchiveLearnedCapturePolicy::Pinned,
+        )
+        .unwrap();
+        let birth = runtime.archive_birth_manifest(OrganismId(1)).unwrap();
+        assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(1));
+        assert!(runtime.handle_for(OrganismId(1)).is_some());
+
+        runtime.tick().unwrap();
+        let receipt = runtime
+            .retire_organism(OrganismId(1), "test-death")
+            .unwrap();
+        assert_eq!(
+            runtime.archive_retirement_receipt(OrganismId(1)),
+            Some(&receipt)
+        );
+        assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(2));
+        assert!(runtime.handle_for(OrganismId(1)).is_none());
+        assert!(runtime.world.organism_entity_ids().is_empty());
+        drop(runtime);
+
+        let library = LineageLibrary::open(config).unwrap();
+        let final_manifest = library
+            .load_manifest(receipt.committed_manifest_digest)
+            .unwrap();
+        assert_eq!(final_manifest.previous_manifest_digest, Some(birth));
+        assert!(matches!(
+            final_manifest.life.unwrap().checkpoint,
+            alife_core::ArchiveCheckpointDisposition::Stored(_)
+        ));
+        drop(library);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

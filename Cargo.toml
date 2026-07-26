@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_runtime", "crates/alife_training", "crates/alife_bevy_adapter", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools", "crates/alife_game_app"]
+members = ["crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_runtime", "crates/alife_training", "crates/alife_archive", "crates/alife_bevy_adapter", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools", "crates/alife_game_app"]
 resolver = "2"
 
 [workspace.package]
@@ -21,6 +21,8 @@ serde_json = "1.0.145"
 smallvec = "1.15.1"
 thiserror = "2.0.18"
 wgpu = "29.0.3"
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+zstd = "0.13.3"
 
 # Real-hardware brain acceptance runs execute tens of thousands of neural,
 # memory, topology, and evidence operations. Keep debug assertions enabled but
