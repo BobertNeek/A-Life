@@ -13,6 +13,7 @@ use crate::{
 const CURRICULUM_VERSION: u32 = 1;
 const HELD_OUT_EPISODES: u32 = 256;
 const ONE_SIDED_85_Z: f64 = 1.036_433_389_493_789_6;
+pub const N2048_FOUNDATION_TRAINING_SEED: u64 = 0x4E32_3034_385F_5452;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FoundationCurriculumStage {

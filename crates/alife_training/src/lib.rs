@@ -1,11 +1,13 @@
 //! Offline-only exact-graph WGSL foundation training.
 
 mod curriculum;
+mod evolution;
 mod program;
 mod trainer;
 mod types;
 
 pub use curriculum::*;
+pub use evolution::*;
 pub use program::*;
 pub use trainer::FoundationTrainer;
 pub use types::*;

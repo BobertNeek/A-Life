@@ -6,10 +6,9 @@ use alife_core::{
 };
 use alife_training::{
     AdamWConfig, FoundationCurriculumStage, FoundationTrainer, N2048CurriculumV1,
-    N2048FoundationProgram,
+    N2048FoundationProgram, N2048_FOUNDATION_TRAINING_SEED,
 };
 
-const TRAINING_SEED: u64 = 0x4E32_3034_385F_5452;
 const MAX_ATTEMPTS_PER_STAGE: u32 = 128;
 const OPTIMIZER_STEPS_PER_ATTEMPT: u32 = 8;
 
@@ -20,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
     let retrain_language = args.any(|arg| arg == "--retrain-language");
     let capacity = BrainCapacityClass::n2048();
-    let genome = BrainGenome::scaffold(TRAINING_SEED, capacity.id());
+    let genome = BrainGenome::scaffold(N2048_FOUNDATION_TRAINING_SEED, capacity.id());
     let development = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0)?);
     let partial = output.with_extension("partial.alife-foundation");
     if retrain_language && !partial.exists() && output.exists() {
@@ -67,7 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let receipt = program.run_stage(
                 stage,
                 OPTIMIZER_STEPS_PER_ATTEMPT,
-                TRAINING_SEED.wrapping_add(u64::from(stage.ordinal()) << 32),
+                N2048_FOUNDATION_TRAINING_SEED.wrapping_add(u64::from(stage.ordinal()) << 32),
             )?;
             println!(
                 "stage={} attempt={} successes={}/{} lower_bound={:.6} loss={:.6} regression={:.6} frozen={} passed={}",

@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use alife_core::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainGenome, BrainPhenotype, CanonicalDigestBuilder,
     CompiledSynapseKind, DecoderHeadKind, DevelopmentState, FoundationAbiBinding,
-    FoundationWeightAsset, LanguageCodebookV1, LanguageTokenClass, LanguageTokenId,
-    LifetimePlasticityBand, LobeKind, N2048FoundationLayoutV1, NormalizedScalar,
+    FoundationPromotionReceipt, FoundationWeightAsset, LanguageCodebookV1, LanguageTokenClass,
+    LanguageTokenId, LifetimePlasticityBand, LobeKind, N2048FoundationLayoutV1, NormalizedScalar,
     PersistentAddressMap, PhenotypeCompiler, PhenotypeCompilerInputs, SensorProfile, SpeechActKind,
     SpeechDecoderLayoutV1, Tick,
 };
@@ -600,6 +600,43 @@ fn foundation_payload_codec_round_trips_and_rejects_corruption() {
     let last = corrupt.last_mut().unwrap();
     *last ^= 0x01;
     assert!(FoundationWeightAsset::decode_canonical(&corrupt).is_err());
+}
+
+#[test]
+fn promoted_foundation_requires_and_preserves_explicit_evaluation_provenance() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0xF0A0_DA77, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let phenotype = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+    )
+    .unwrap();
+    let source = FoundationWeightAsset::from_phenotype_for_genetic_birth(&phenotype).unwrap();
+    let training = source.manifest().training_stage();
+    let promotion =
+        FoundationPromotionReceipt::promoted(training.digest(), source.digest(), source.digest())
+            .unwrap();
+    let promoted = FoundationWeightAsset::from_promoted_weights(
+        &phenotype,
+        source.weights().to_vec(),
+        training,
+        promotion,
+    )
+    .unwrap();
+    assert!(promoted.manifest().promotion_receipt().is_promoted());
+    let rebound = PhenotypeCompiler::compile_from_foundation_asset(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &promoted,
+    )
+    .unwrap();
+    promoted.validate_against(&rebound).unwrap();
 }
 
 #[test]

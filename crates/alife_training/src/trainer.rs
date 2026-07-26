@@ -115,7 +115,10 @@ impl FoundationTrainer {
         stage_mask: StageTrainableMask,
         config: AdamWConfig,
     ) -> Result<Self, TrainingError> {
-        if session.authority().consumer() != GpuSessionConsumerKind::Training {
+        if !matches!(
+            session.authority().consumer(),
+            GpuSessionConsumerKind::Training | GpuSessionConsumerKind::Evolution
+        ) {
             return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
         }
         config.validate()?;
@@ -149,6 +152,10 @@ impl FoundationTrainer {
 
     pub const fn optimizer_step(&self) -> u32 {
         self.optimizer_step
+    }
+
+    pub fn hardware_receipt(&self) -> &alife_gpu_backend::GpuHardwareReceipt {
+        self.session.backend().hardware_receipt()
     }
 
     pub fn set_stage_mask(&mut self, mask: StageTrainableMask) -> Result<(), TrainingError> {
