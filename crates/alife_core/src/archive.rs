@@ -9,6 +9,7 @@ use crate::{
 };
 
 pub const CREATURE_ARCHIVE_SCHEMA_VERSION: u16 = 1;
+pub const FOUNDER_COHORT_SCHEMA_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -275,6 +276,159 @@ pub struct ArchiveRetirementReceipt {
     pub committed_manifest_digest: Blake3Digest,
     pub learned_checkpoint_digest: Option<Blake3Digest>,
     pub death_tick: Tick,
+}
+
+/// Cross-save founder intent. Genetic rebuild is deliberately the default so
+/// acquired state never crosses worlds accidentally.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case", tag = "mode")]
+pub enum FounderMode {
+    #[default]
+    GeneticFounder,
+    MindStateClone {
+        checkpoint_digest: Blake3Digest,
+    },
+    GeneticOffspring {
+        mutation_seed: u64,
+    },
+}
+
+impl Validate for FounderMode {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        match self {
+            Self::GeneticFounder => Ok(()),
+            Self::MindStateClone { checkpoint_digest }
+                if checkpoint_digest.bytes().iter().any(|byte| *byte != 0) =>
+            {
+                Ok(())
+            }
+            Self::GeneticOffspring { mutation_seed } if *mutation_seed != 0 => Ok(()),
+            _ => Err(ScaffoldContractError::InvalidId),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FounderSelection {
+    pub source_manifest_digest: Blake3Digest,
+    #[serde(default)]
+    pub mode: FounderMode,
+}
+
+impl Validate for FounderSelection {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self
+            .source_manifest_digest
+            .bytes()
+            .iter()
+            .all(|byte| *byte == 0)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        self.mode.validate_contract()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FounderIdentityRemap {
+    pub source_organism_id: OrganismId,
+    pub source_genome_id: GenomeId,
+    pub source_lineage_id: Option<LineageId>,
+    pub target_organism_id: OrganismId,
+    pub target_genome_id: GenomeId,
+    pub target_lineage_id: LineageId,
+    pub target_name_id: u64,
+    pub target_social_id: u64,
+}
+
+impl Validate for FounderIdentityRemap {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.source_organism_id.validate()?;
+        self.source_genome_id.validate()?;
+        if let Some(lineage) = self.source_lineage_id {
+            lineage.validate()?;
+        }
+        self.target_organism_id.validate()?;
+        self.target_genome_id.validate()?;
+        self.target_lineage_id.validate()?;
+        if self.target_name_id == 0 || self.target_social_id == 0 {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FounderProvenance {
+    pub source_run_id: String,
+    pub source_manifest_digest: Blake3Digest,
+    pub source_checkpoint_digest: Option<Blake3Digest>,
+    pub mode: FounderMode,
+    pub remap: FounderIdentityRemap,
+}
+
+impl Validate for FounderProvenance {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.source_run_id.trim().is_empty() || self.source_run_id.chars().count() > 96 {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        self.mode.validate_contract()?;
+        self.remap.validate_contract()?;
+        if self
+            .source_manifest_digest
+            .bytes()
+            .iter()
+            .all(|byte| *byte == 0)
+            || self
+                .source_checkpoint_digest
+                .is_some_and(|digest| digest.bytes().iter().all(|byte| *byte == 0))
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        match (self.mode, self.source_checkpoint_digest) {
+            (FounderMode::MindStateClone { checkpoint_digest }, Some(actual))
+                if checkpoint_digest == actual =>
+            {
+                Ok(())
+            }
+            (FounderMode::MindStateClone { .. }, _) => Err(ScaffoldContractError::InvalidId),
+            (_, None) => Ok(()),
+            (_, Some(_)) => Err(ScaffoldContractError::InvalidId),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FounderCohortManifest {
+    pub schema_version: u16,
+    pub target_save_id: String,
+    pub deterministic_seed: u64,
+    pub founders: Vec<FounderProvenance>,
+}
+
+impl Validate for FounderCohortManifest {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.schema_version != FOUNDER_COHORT_SCHEMA_VERSION
+            || self.target_save_id.trim().is_empty()
+            || self.target_save_id.chars().count() > 128
+            || self.deterministic_seed == 0
+            || self.founders.is_empty()
+            || self.founders.len() > 256
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let mut organism_ids = std::collections::BTreeSet::new();
+        let mut genome_ids = std::collections::BTreeSet::new();
+        for founder in &self.founders {
+            founder.validate_contract()?;
+            if !organism_ids.insert(founder.remap.target_organism_id.raw())
+                || !genome_ids.insert(founder.remap.target_genome_id.raw())
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Validate for ArchiveRetirementReceipt {

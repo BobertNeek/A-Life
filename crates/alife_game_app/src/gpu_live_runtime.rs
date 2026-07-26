@@ -886,7 +886,12 @@ impl GpuLiveBrainRuntime {
                                 .raw()
                                 .checked_add(1)
                                 .ok_or(ScaffoldContractError::ScalarOutOfRange)?,
-                            None => 1,
+                            None => restored
+                                .memory
+                                .latest_durable_sequence_raw()
+                                .checked_add(1)
+                                .ok_or(ScaffoldContractError::ScalarOutOfRange)?
+                                .max(1),
                         },
                     },
                 };

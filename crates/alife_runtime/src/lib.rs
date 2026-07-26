@@ -6,9 +6,10 @@ mod sleep_scheduler;
 
 pub use checkpoint_assets::{
     current_backend_provenance, merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite,
-    GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
-    GpuSaveManifestCasOutcome, GpuSaveManifestDigest, RestoredGpuBrainCheckpoint,
-    RestoredRetainedLearning, RetainedLearningCapture,
+    GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableFounderWrite,
+    GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuSaveManifestCasOutcome,
+    GpuSaveManifestDigest, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
+    RetainedLearningCapture,
 };
 pub use session::*;
 pub use sleep_scheduler::*;

@@ -2,8 +2,8 @@
 
 use alife_core::{
     BoundedReplayBatch, BrainCapacityClass, BrainPhenotype, ConsolidationState, ExperiencePatch,
-    ExperiencePatchBuilder, LanguageGroundingLedger, MemorySidecarState, PassiveLifeStatistics,
-    PhenotypeCompiler, PhenotypeCompilerInputs, PortableMemoryBankAssetV2,
+    ExperiencePatchBuilder, LanguageGroundingLedger, MemorySidecarState, OrganismId,
+    PassiveLifeStatistics, PhenotypeCompiler, PhenotypeCompilerInputs, PortableMemoryBankAssetV2,
     PortableTopologySidecarAssetV1, ScaffoldContractError, SensorProfileIdentity,
     SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
 };
@@ -25,7 +25,10 @@ use alife_world::persistence::{
     GPU_BRAIN_SAVE_STATE_SCHEMA_VERSION, GPU_BRAIN_WEIGHT_LAYER_FAST,
     GPU_BRAIN_WEIGHT_LAYER_LIFETIME, THROTTLE_REPLAY_SAVE_SCHEMA_VERSION,
 };
-use alife_world::TrackedObjectRegistrySaveState;
+use alife_world::{
+    initial_tracked_object_id, TrackedObjectRegistrySaveState,
+    TRACKED_OBJECT_REGISTRY_SAVE_SCHEMA_VERSION,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{GameAppShellError, GpuAuthoritativeSession};
@@ -168,6 +171,14 @@ pub struct GpuBrainCheckpointWrite {
     pub checkpoint_digest: [u64; 4],
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuDurableFounderWrite {
+    pub checkpoint: GpuBrainCheckpointWrite,
+    pub phenotype: BrainPhenotype,
+    pub compiler_inputs: PhenotypeCompilerInputs,
+    pub next_experience_sequence_raw: u64,
+}
+
 #[derive(Debug)]
 pub struct RestoredGpuBrainCheckpoint {
     pub receipt: GpuBrainRestoreReceipt,
@@ -220,6 +231,124 @@ struct PendingExperienceTransactionV1 {
 }
 
 impl GpuCheckpointAssetStore {
+    /// Creates a healthy cross-save mind clone through the production GPU
+    /// checkpoint path. Only consolidated lifetime weights and durable learned
+    /// sidecars cross the boundary; transient neural and world state come from
+    /// a fresh birth slot for the target identity.
+    pub fn clone_durable_founder(
+        &self,
+        backend: &mut GpuAuthoritativeSession,
+        manifest: &AssetManifest,
+        source_state: &GpuBrainSaveState,
+        target_organism_id: OrganismId,
+        target_world_seed: u64,
+        target_tick: Tick,
+    ) -> Result<GpuDurableFounderWrite, GameAppShellError> {
+        target_organism_id.validate()?;
+        if target_world_seed == 0 || source_state.organism_id == target_organism_id {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
+        source_state.sleep.validate_contract()?;
+        if !matches!(
+            source_state.sleep.phase,
+            alife_core::SleepPhase::Awake | alife_core::SleepPhase::Waking
+        ) {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+
+        let restored = self.restore_brain(backend, manifest, source_state)?;
+        let source_handle = restored.receipt.handle;
+        let source_snapshot =
+            match backend.snapshot_brain(source_handle, source_state.checkpoint_tick) {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    let _ = backend.remove_brain(source_handle);
+                    return Err(error.into());
+                }
+            };
+        backend.remove_brain(source_handle)?;
+        let source_parts = source_snapshot.into_parts();
+        let learned_lifetime = if source_parts.active_weight_bank == 0 {
+            source_parts.lifetime_bank_0_bits
+        } else {
+            source_parts.lifetime_bank_1_bits
+        };
+
+        let phenotype = restored.phenotype;
+        let compiler_inputs = restored.compiler_inputs;
+        let fresh_handle = backend.insert_brain(target_organism_id, phenotype.clone())?;
+        let fresh_snapshot = match backend.snapshot_brain(fresh_handle, target_tick) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                let _ = backend.remove_brain(fresh_handle);
+                return Err(error.into());
+            }
+        };
+        backend.remove_brain(fresh_handle)?;
+        let mut fresh_parts = fresh_snapshot.into_parts();
+        if fresh_parts.lifetime_bank_0_bits.len() != learned_lifetime.len() {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+        }
+        fresh_parts
+            .lifetime_bank_0_bits
+            .clone_from(&learned_lifetime);
+        fresh_parts.lifetime_bank_1_bits = learned_lifetime;
+        let transplanted = GpuBrainCheckpointSnapshot::try_from_parts(fresh_parts)?;
+        let receipt = backend.restore_brain(
+            target_organism_id,
+            phenotype.clone(),
+            GpuBrainRestoreRequest::try_new(transplanted)?,
+        )?;
+        let target_handle = receipt.handle;
+
+        let memory = restored.memory.durable_founder_clone(target_organism_id)?;
+        let topology = restored
+            .topology
+            .durable_founder_clone(target_organism_id)?;
+        let tracked_objects = TrackedObjectRegistrySaveState {
+            schema_version: TRACKED_OBJECT_REGISTRY_SAVE_SCHEMA_VERSION,
+            world_seed: target_world_seed,
+            organism_id: target_organism_id,
+            capacity: restored.tracked_objects.capacity,
+            next_id: initial_tracked_object_id(target_world_seed, target_organism_id.raw()),
+            records: Vec::new(),
+        };
+        tracked_objects.validate_contract()?;
+        let statistics = PassiveLifeStatistics::new(target_organism_id, target_tick)?;
+        let next_experience_sequence_raw = memory
+            .latest_durable_sequence_raw()
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::ScalarOutOfRange)?
+            .max(1);
+        let checkpoint = self.capture_brain(
+            backend,
+            target_handle,
+            &phenotype,
+            &compiler_inputs,
+            SleepState::awake_at(target_tick),
+            target_tick,
+            None,
+            GpuBrainSidecarCapture {
+                sensor_profile: source_state.sensor_profile,
+                memory: &memory,
+                topology: &topology,
+                tracked_objects,
+                language_grounding: &restored.language_grounding,
+                life_statistics: &statistics,
+                retained_learning: None,
+            },
+        );
+        let removal = backend.remove_brain(target_handle);
+        let checkpoint = checkpoint?;
+        removal?;
+        Ok(GpuDurableFounderWrite {
+            checkpoint,
+            phenotype,
+            compiler_inputs,
+            next_experience_sequence_raw,
+        })
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn capture_brain(
         &self,

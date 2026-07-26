@@ -1,5 +1,12 @@
 //! Profile-local immutable creature archives with a rebuildable SQLite index.
 
+mod bundle;
+
+pub use bundle::{
+    BundleImportReceipt, FounderBundleKind, ResolvedFounder, ResolvedFounderCohort,
+    ResolvedGpuFounderCheckpoint, MAX_BUNDLE_UNCOMPRESSED_BYTES, MAX_COHORT_FOUNDERS,
+};
+
 use std::{
     fs::{self, OpenOptions},
     io::Write,

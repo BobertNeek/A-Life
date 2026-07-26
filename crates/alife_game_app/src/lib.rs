@@ -108,6 +108,11 @@ pub use alife_runtime::{
     RetainedLearningCapture,
 };
 
+#[cfg(feature = "gpu-runtime")]
+mod founder_import;
+#[cfg(feature = "gpu-runtime")]
+pub use founder_import::*;
+
 mod camera_inspector;
 pub use camera_inspector::*;
 

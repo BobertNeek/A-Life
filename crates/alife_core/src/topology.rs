@@ -1591,6 +1591,30 @@ impl TopologySidecar {
         &self.map
     }
 
+    /// Preserves learned concepts and relations for a new founder while
+    /// removing bindings whose identity belongs to the source world.
+    pub fn durable_founder_clone(
+        &self,
+        organism_id: OrganismId,
+    ) -> Result<Self, ScaffoldContractError> {
+        organism_id.validate()?;
+        let mut cloned = self.clone();
+        cloned.organism_id = organism_id;
+        for concept in &mut cloned.map.concepts {
+            concept.bindings.objects.clear();
+            concept.bindings.agents.clear();
+            concept.bindings.locations.clear();
+        }
+        cloned.diagnostics.organism_id_raw = organism_id.raw();
+        cloned.diagnostics.observations = 0;
+        cloned.diagnostics.terminal_errors = 0;
+        cloned.last_observed_sequence_id = None;
+        cloned.last_observed_key_digest = None;
+        cloned.diagnostics.canonical_digest = cloned.map.canonical_digest()?;
+        cloned.validate_contract()?;
+        Ok(cloned)
+    }
+
     pub(crate) fn map_mut(&mut self) -> &mut TopologicalMap {
         &mut self.map
     }

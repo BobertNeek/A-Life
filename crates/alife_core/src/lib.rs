@@ -60,7 +60,8 @@ pub use archive::{
     ArchiveAssetKind, ArchiveAssetRef, ArchiveCheckpointDisposition, ArchiveCheckpointRef,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchivePageRef,
     ArchiveRetirementReceipt, CreatureArchiveManifest, CreatureLifeArchiveRecord,
-    GeneticArchiveRecord, CREATURE_ARCHIVE_SCHEMA_VERSION,
+    FounderCohortManifest, FounderIdentityRemap, FounderMode, FounderProvenance, FounderSelection,
+    GeneticArchiveRecord, CREATURE_ARCHIVE_SCHEMA_VERSION, FOUNDER_COHORT_SCHEMA_VERSION,
 };
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{
