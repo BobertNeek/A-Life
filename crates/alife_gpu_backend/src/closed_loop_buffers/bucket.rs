@@ -82,6 +82,7 @@ pub struct GpuSlotWordRanges {
     pub candidate_logit_words: Range<u32>,
     pub diagnostic_words: Range<u32>,
     pub selection_words: Range<u32>,
+    pub speech_payload_words: Range<u32>,
     pub extension_words: Range<u32>,
     pub learning_state_words: Range<u32>,
     pub pending_eligibility_words: Range<u32>,
@@ -313,7 +314,8 @@ impl GpuClassBucketPlan {
         let candidate_logit_words = span(encoded_input_words.end, MAX_ACTION_CANDIDATES)?;
         let diagnostic_words = span(candidate_logit_words.end, 4)?;
         let selection_words = span(diagnostic_words.end, 12)?;
-        let extension_words = span(selection_words.end, 20)?;
+        let speech_payload_words = span(selection_words.end, 4)?;
+        let extension_words = span(speech_payload_words.end, 20)?;
         let learning_state_words = span(extension_words.end, 24)?;
         let pending_eligibility_words = span(
             learning_state_words.end,
@@ -369,6 +371,7 @@ impl GpuClassBucketPlan {
             candidate_logit_words,
             diagnostic_words,
             selection_words,
+            speech_payload_words,
             extension_words,
             learning_state_words,
             pending_eligibility_words,
@@ -746,7 +749,9 @@ fn make_slot_extension(
         learning_state_offset: ranges.learning_state_words.start,
         pending_eligibility_offset: ranges.pending_eligibility_words.start,
         replay_plan_identity_offset: ranges.replay_plan_identity_words.start,
-        reserved0: 0,
+        // Reserved in the frozen binary layout and activated here as the
+        // slot-local two-word GPU speech payload receipt offset.
+        reserved0: ranges.speech_payload_words.start,
         reserved1: 0,
     })
 }
@@ -887,6 +892,10 @@ fn validate_learning_slot_layout(
         (&ranges.recurrent_eligibility_bank_1_words, recurrent_count),
         (&ranges.decoder_eligibility_bank_1_words, decoder_count),
         (
+            &ranges.speech_payload_words,
+            std::mem::size_of::<crate::GpuSpeechPayloadRecord>() / 4,
+        ),
+        (
             &ranges.extension_words,
             std::mem::size_of::<GpuBrainSlotExtensionRecord>() / 4,
         ),
@@ -941,7 +950,7 @@ fn validate_learning_slot_layout(
         || extension.learning_state_offset != ranges.learning_state_words.start
         || extension.pending_eligibility_offset != ranges.pending_eligibility_words.start
         || extension.replay_plan_identity_offset != ranges.replay_plan_identity_words.start
-        || extension.reserved0 != 0
+        || extension.reserved0 != ranges.speech_payload_words.start
         || extension.reserved1 != 0
     {
         return Err(GpuClosedLoopError::MalformedUpload);
@@ -1774,6 +1783,7 @@ impl GpuFixedClassArenaPlan {
         let candidate_logit_words = span_u32(&mut cursor, candidates)?;
         let diagnostic_words = span_u32(&mut cursor, 4)?;
         let selection_words = span_u32(&mut cursor, 12)?;
+        let speech_payload_words = span_u32(&mut cursor, 4)?;
         let extension_words = span_u32(&mut cursor, 20)?;
         let learning_state_words = span_u32(&mut cursor, 24)?;
         let pending_eligibility_words =
@@ -1833,6 +1843,7 @@ impl GpuFixedClassArenaPlan {
             candidate_logit_words,
             diagnostic_words,
             selection_words,
+            speech_payload_words,
             extension_words,
             learning_state_words,
             pending_eligibility_words,
@@ -2045,6 +2056,7 @@ impl GpuFixedClassArenaPlan {
         let diagnostic_and_readback_bytes = sum_ranges(&[
             &layout.diagnostic_words,
             &layout.selection_words,
+            &layout.speech_payload_words,
             &layout.extension_words,
         ])?
         .checked_add(dispatch_row_bytes)
@@ -2190,6 +2202,7 @@ impl GpuFixedClassArenaPlan {
             &mut layout.candidate_logit_words,
             &mut layout.diagnostic_words,
             &mut layout.selection_words,
+            &mut layout.speech_payload_words,
             &mut layout.extension_words,
             &mut layout.learning_state_words,
             &mut layout.pending_eligibility_words,

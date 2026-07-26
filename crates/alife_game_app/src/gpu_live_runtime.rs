@@ -7,19 +7,19 @@ use alife_core::{
     CanonicalDigestBuilder, Confidence, ConsolidationDriverEvent, ConsolidationIntent,
     ConsolidationState, DecisionSnapshot, DevelopmentState, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, FinalizedMemoryRecall, HomeostaticDelta,
-    HomeostaticParameters, HomeostaticSnapshot, MemoryBankConfig, MemoryCompactionCheckpoint,
-    MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt,
-    NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeCompiler,
-    PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot, ScaffoldContractError,
-    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase,
-    SleepState, Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, Validate,
-    Vec3f,
+    HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig,
+    MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
+    MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionFrame,
+    PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot,
+    ScaffoldContractError, SensorProfile, SensorProfileIdentity, SensoryAbiVersion,
+    SleepConsolidationConfig, SleepPhase, SleepState, Tick, TopologicalMapConfig,
+    TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind, Validate, Vec3f,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
     GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuLearningReceipt, GpuMemoryContextUpload,
     PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
-    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_SELECTION_RECORD_BYTES,
+    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
 };
 use alife_runtime::{
     DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority, GpuSessionConsumerKind,
@@ -47,6 +47,7 @@ struct ResidentCognition {
     homeostasis: HomeostaticSnapshot,
     sleep_scheduler: GpuSleepScheduler,
     next_sequence: u64,
+    language_grounding: LanguageGroundingLedger,
 }
 
 #[derive(Debug, Clone)]
@@ -296,6 +297,8 @@ struct PreparedLiveSelection {
     outcome_tick: Tick,
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
+    speech_payload: Option<alife_core::SpeechMotorPayload>,
+    speech_prompted: bool,
 }
 
 struct SealedLiveSelection {
@@ -828,6 +831,7 @@ impl GpuLiveBrainRuntime {
                         restored.sleep,
                     )?,
                     next_sequence,
+                    language_grounding: restored.language_grounding,
                 };
                 runtime.handles.insert(raw, handle);
                 runtime.residents.insert(raw, resident);
@@ -941,6 +945,7 @@ impl GpuLiveBrainRuntime {
                 memory,
                 topology,
                 tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
+                language_grounding: &resident.language_grounding,
                 retained_learning,
             },
         )?)
@@ -1003,6 +1008,7 @@ impl GpuLiveBrainRuntime {
                         .get(&raw)
                         .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
                     tracked_objects: self.world.tracked_objects().save_state(OrganismId(raw))?,
+                    language_grounding: &resident.language_grounding,
                     retained_learning: self.retained_learning.get(&raw).map(|recovery| {
                         RetainedLearningCapture {
                             sealed_patch: &recovery.sealed_patch,
@@ -1845,6 +1851,7 @@ impl GpuLiveBrainRuntime {
             homeostasis: HomeostaticSnapshot::baseline(self.world.tick()),
             sleep_scheduler: GpuSleepScheduler::new(SleepConsolidationConfig::reference())?,
             next_sequence: 1,
+            language_grounding: LanguageGroundingLedger::default(),
         };
         Ok((phenotype, resident))
     }
@@ -2013,7 +2020,7 @@ impl GpuLiveBrainRuntime {
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
         let selection_readback_bytes = gpu_ticks
             .len()
-            .checked_mul(GPU_SELECTION_RECORD_BYTES)
+            .checked_mul(GPU_CLOSED_LOOP_TICK_READBACK_BYTES)
             .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
         let pending_eligibility_readback_bytes = 0;
         if selection_readback_bytes != compact_readback_bytes {
@@ -2135,6 +2142,13 @@ impl GpuLiveBrainRuntime {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         let command = candidate.to_command(organism_id, gpu_tick.selection.confidence)?;
+        let speech_prompted = frame
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .flatten()
+            .any(|token| token.source_kind == UtteranceSourceKind::Player);
         let pre_action = PreActionSnapshot::from_neural_frame(
             sequence_id,
             handle.class_id(),
@@ -2174,6 +2188,8 @@ impl GpuLiveBrainRuntime {
             outcome_tick,
             pre_action,
             decision,
+            speech_payload: gpu_tick.speech_payload,
+            speech_prompted,
         })
     }
 
@@ -2190,9 +2206,15 @@ impl GpuLiveBrainRuntime {
             outcome_tick,
             pre_action,
             decision,
+            speech_payload,
+            speech_prompted,
         } = prepared;
         let organism_id = handle.organism_id();
-        let action_result = self.world.apply_command(&decision.selected_action)?;
+        let action_result = self.world.apply_neural_command(
+            &decision.selected_action,
+            speech_payload,
+            speech_prompted,
+        )?;
         let mut outcome = PostActionOutcome::new(
             organism_id,
             sequence_id,
@@ -2221,6 +2243,7 @@ impl GpuLiveBrainRuntime {
         if resident.next_sequence != sequence_id.raw() {
             return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
         }
+        resident.language_grounding.observe_sealed(&patch)?;
         resident.homeostasis = resident.homeostasis.advance(
             outcome_tick,
             patch.outcome().homeostatic_delta,
@@ -3051,7 +3074,7 @@ mod tests {
         assert_eq!(runtime.world.tick(), Tick::new(1));
         assert_eq!(
             runtime.evidence_metrics().selection_readback_bytes,
-            GPU_SELECTION_RECORD_BYTES
+            GPU_CLOSED_LOOP_TICK_READBACK_BYTES
         );
     }
 
@@ -3127,7 +3150,10 @@ mod tests {
         assert_eq!(runtime.sealed_patches().len(), 1);
         assert_eq!(runtime.backend.pending_eligibility(handle).unwrap(), None);
         let metrics = runtime.evidence_metrics();
-        assert_eq!(metrics.selection_readback_bytes, GPU_SELECTION_RECORD_BYTES);
+        assert_eq!(
+            metrics.selection_readback_bytes,
+            GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+        );
         assert_eq!(metrics.pending_eligibility_readback_bytes, 0);
         assert_eq!(
             metrics.learning_readback_bytes,

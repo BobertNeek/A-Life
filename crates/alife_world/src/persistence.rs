@@ -30,6 +30,7 @@ use crate::{
         PhysicalTrackingKey, PhysicalTrackingProvenance,
         PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
     },
+    AudibleUtterance,
 };
 
 mod gpu_brain;
@@ -899,8 +900,13 @@ pub struct WorldSaveState {
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_spawn_sequence: u64,
+    pub next_utterance_id: u64,
     pub objects: Vec<WorldObjectSaveState>,
     pub last_touched_entities: Vec<WorldEntityId>,
+    #[serde(default)]
+    pub audible_utterances: Vec<AudibleUtterance>,
+    #[serde(default)]
+    pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
     #[serde(default)]
     pub ecology: EcologyState,
     #[serde(default)]
@@ -1035,6 +1041,12 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             objects: Vec<WorldObjectSaveWire>,
             last_touched_entities: Vec<WorldEntityId>,
             #[serde(default)]
+            audible_utterances: Vec<AudibleUtterance>,
+            #[serde(default)]
+            next_utterance_id: Option<u64>,
+            #[serde(default)]
+            last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+            #[serde(default)]
             ecology: EcologyState,
             #[serde(default)]
             voxel_backend: Option<PersistentVoxelWorldSaveState>,
@@ -1070,13 +1082,25 @@ impl<'de> Deserialize<'de> for WorldSaveState {
                 .checked_add(1)
                 .ok_or_else(|| D::Error::custom("world spawn identity space exhausted"))?,
         };
+        let max_utterance_id = wire
+            .audible_utterances
+            .iter()
+            .map(|utterance| utterance.utterance_id.raw())
+            .max()
+            .unwrap_or(0);
+        let next_utterance_id = wire
+            .next_utterance_id
+            .unwrap_or_else(|| max_utterance_id.saturating_add(1));
         Ok(Self {
             seed: wire.seed,
             tick: wire.tick,
             next_entity_id: wire.next_entity_id,
             next_spawn_sequence,
+            next_utterance_id,
             objects,
             last_touched_entities: wire.last_touched_entities,
+            audible_utterances: wire.audible_utterances,
+            last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
             ecology: wire.ecology,
             voxel_backend: wire.voxel_backend,
         })
@@ -1459,12 +1483,15 @@ impl WorldSaveState {
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
             next_spawn_sequence: parts.next_spawn_sequence,
+            next_utterance_id: parts.next_utterance_id,
             objects: parts
                 .objects
                 .into_iter()
                 .map(WorldObjectSaveState::from)
                 .collect(),
             last_touched_entities: parts.last_touched_entities,
+            audible_utterances: parts.audible_utterances,
+            last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
             ecology: parts.ecology,
             voxel_backend: None,
         }
@@ -1501,10 +1528,36 @@ impl WorldSaveState {
         if self.next_spawn_sequence == 0 || self.next_spawn_sequence <= max_spawn_sequence {
             return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
         }
+        let max_utterance_id = self
+            .audible_utterances
+            .iter()
+            .map(|utterance| utterance.utterance_id.raw())
+            .max()
+            .unwrap_or(0);
+        if self.next_utterance_id == 0 || self.next_utterance_id <= max_utterance_id {
+            return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+        }
+        let mut cooldown_organisms = BTreeSet::new();
+        for (organism, tick) in &self.last_creature_utterance_ticks {
+            organism.validate()?;
+            if tick.raw() > self.tick.raw() || !cooldown_organisms.insert(organism.raw()) {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
         for touched in &self.last_touched_entities {
             touched.validate()?;
             if !ids.contains(&touched.raw()) {
                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
+        for utterance in &self.audible_utterances {
+            utterance.validate_contract()?;
+            if utterance.emitted_tick.raw() > self.tick.raw()
+                || utterance.expires_after_tick.raw() < self.tick.raw()
+            {
+                return Err(PersistenceError::Contract(
+                    ScaffoldContractError::InvalidPerceptionFrame,
+                ));
             }
         }
         self.ecology.validate()?;
@@ -1534,6 +1587,7 @@ impl WorldSaveState {
             tick: self.tick,
             next_entity_id: self.next_entity_id,
             next_spawn_sequence: self.next_spawn_sequence,
+            next_utterance_id: self.next_utterance_id,
             objects: self
                 .objects
                 .iter()
@@ -1542,6 +1596,8 @@ impl WorldSaveState {
                 .collect(),
             last_touched_entities: self.last_touched_entities.clone(),
             ecology: self.ecology.clone(),
+            audible_utterances: self.audible_utterances.clone(),
+            last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
         };
         Ok(HeadlessWorld::from_persistence_parts(parts)?)
     }

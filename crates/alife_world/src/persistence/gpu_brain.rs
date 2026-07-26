@@ -5,11 +5,12 @@
 
 use alife_core::{
     ActionId, BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, CandidateActionFamily,
-    CandidateFeatureDigest, CanonicalDigestBuilder, ConsolidationState, MemoryCompactionCheckpoint,
-    MemoryCompactionPhase, MemorySidecarState, OrganismId, OutcomeCreditReplayKey,
-    PerceptionFrameDigest, PhenotypeHash, PortableTopologySidecarAssetV1, ReplayEligibilitySample,
-    ReplaySynapseSpan, ScaffoldContractError, SensorProfileIdentity, SleepReplayEvent, SleepState,
-    Tick, TopologyCounts, TopologySidecar, Validate, MAX_REPLAY_CAPTURE_SYNAPSES,
+    CandidateFeatureDigest, CanonicalDigestBuilder, ConsolidationState, LanguageGroundingLedger,
+    MemoryCompactionCheckpoint, MemoryCompactionPhase, MemorySidecarState, OrganismId,
+    OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeHash, PortableTopologySidecarAssetV1,
+    ReplayEligibilitySample, ReplaySynapseSpan, ScaffoldContractError, SensorProfileIdentity,
+    SleepReplayEvent, SleepState, Tick, TopologyCounts, TopologySidecar, Validate,
+    MAX_REPLAY_CAPTURE_SYNAPSES,
 };
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
@@ -771,6 +772,7 @@ pub struct GpuBrainSaveState {
     pub memory: MemorySidecarSaveState,
     pub topology: TopologySidecarSaveSummary,
     pub tracked_objects: TrackedObjectRegistrySaveState,
+    pub language_grounding: LanguageGroundingLedger,
     pub sleep: SleepState,
     pub sleep_assets: GpuSleepAssetState,
     pub backend_provenance: GpuBackendProvenanceSave,
@@ -798,6 +800,7 @@ impl GpuBrainSaveState {
         self.topology
             .validate_for(self.organism_id, self.sensor_profile)?;
         self.tracked_objects.validate_contract()?;
+        self.language_grounding.validate_contract()?;
         if self.tracked_objects.organism_id != self.organism_id {
             return Err(PersistenceError::Contract(
                 ScaffoldContractError::BrainOwnershipMismatch,
@@ -1084,6 +1087,8 @@ struct GpuBrainSaveStateWire {
     memory: MemorySidecarSaveState,
     topology: TopologySidecarSaveSummary,
     tracked_objects: TrackedObjectRegistrySaveState,
+    #[serde(default)]
+    language_grounding: LanguageGroundingLedger,
     sleep: SleepState,
     sleep_assets: GpuSleepAssetState,
     backend_provenance: GpuBackendProvenanceSave,
@@ -1124,6 +1129,7 @@ impl From<GpuBrainSaveStateWire> for GpuBrainSaveState {
             memory: wire.memory,
             topology: wire.topology,
             tracked_objects: wire.tracked_objects,
+            language_grounding: wire.language_grounding,
             sleep: wire.sleep,
             sleep_assets: wire.sleep_assets,
             backend_provenance: wire.backend_provenance,

@@ -10,7 +10,8 @@ use std::{
 };
 
 use alife_core::{
-    BrainCapacityClass, BrainPhenotype, NeuralThrottleDecision, PerceptionFrame, SchemaVersions,
+    ActionKind, BrainCapacityClass, BrainPhenotype, Confidence, LanguageTokenId,
+    NeuralThrottleDecision, PerceptionFrame, SchemaVersions, SpeechActKind, SpeechMotorPayload,
     CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
 use bytemuck::Zeroable;
@@ -21,10 +22,10 @@ use crate::{
     GpuEligibilityDiscardRecord, GpuFastPlasticityCommitRecord, GpuFixedClassArenaBuffers,
     GpuLearningHeader, GpuMemoryContextDispatchReceipt, GpuMemoryContextHeader,
     GpuMemoryContextUpload, GpuOutcomeCreditRecord, GpuPendingEligibilityRecord,
-    GpuPerceptionHeader, GpuPerceptionUpload, GpuSelectionRecord, CLOSED_LOOP_ELIGIBILITY_WGSL,
-    CLOSED_LOOP_MEMORY_CONTEXT_WGSL, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
-    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_FAST_PLASTICITY_COMMIT_WORDS, GPU_LEARNING_HEADER_WORDS,
-    GPU_OUTCOME_CREDIT_WORDS,
+    GpuPerceptionHeader, GpuPerceptionUpload, GpuSelectionRecord, GpuSpeechPayloadRecord,
+    CLOSED_LOOP_ELIGIBILITY_WGSL, CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
+    GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
+    GPU_FAST_PLASTICITY_COMMIT_WORDS, GPU_LEARNING_HEADER_WORDS, GPU_OUTCOME_CREDIT_WORDS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -398,6 +399,7 @@ pub struct GpuActiveBatchUpload {
     bucket_ownership_token: u64,
     authority_nonce: u64,
     selection_offsets: Vec<u32>,
+    speech_payload_offsets: Vec<u32>,
     memory_context_bindings: Vec<Option<GpuMemoryContextDispatchReceipt>>,
 }
 
@@ -696,6 +698,10 @@ impl GpuActiveBatchUpload {
                 .iter()
                 .map(|entry| entry.slot.record().selection_offset)
                 .collect(),
+            speech_payload_offsets: entries
+                .iter()
+                .map(|entry| entry.slot.word_ranges().speech_payload_words.start)
+                .collect(),
             memory_context_bindings,
         })
     }
@@ -794,6 +800,7 @@ pub(crate) struct GpuValidatedClassBatch {
     bucket_ownership_token: u64,
     authority_nonce: u64,
     records: Vec<GpuSelectionRecord>,
+    speech_payloads: Vec<Option<SpeechMotorPayload>>,
     pending_records: Vec<GpuPendingEligibilityRecord>,
     final_sides: Vec<(u32, u32, u32)>,
     readback_bytes: u64,
@@ -807,12 +814,64 @@ impl GpuValidatedClassBatch {
     pub(crate) fn pending_records(&self) -> &[GpuPendingEligibilityRecord] {
         &self.pending_records
     }
+
+    pub(crate) fn speech_payloads(&self) -> &[Option<SpeechMotorPayload>] {
+        &self.speech_payloads
+    }
 }
 
 pub(crate) struct GpuCommittedClassBatch {
     pub(crate) records: Vec<GpuSelectionRecord>,
+    pub(crate) speech_payloads: Vec<Option<SpeechMotorPayload>>,
     pub(crate) pending_records: Vec<GpuPendingEligibilityRecord>,
     pub(crate) readback_bytes: u64,
+}
+
+fn decode_speech_payload_record(
+    record: GpuSpeechPayloadRecord,
+) -> Result<Option<SpeechMotorPayload>, GpuClosedLoopError> {
+    let word0 = record.packed_header_and_tokens;
+    let word1 = record.packed_tokens_and_confidence;
+    if record.reserved != [0; 2] {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let status = word0 & 0b11;
+    if status == 0 {
+        return (word0 == 0 && word1 == 0)
+            .then_some(None)
+            .ok_or(GpuClosedLoopError::MalformedUpload);
+    }
+    if status != 1 {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let speech_act = SpeechActKind::try_from_raw(((word0 >> 2) & 0b111) as u8)
+        .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+    let count = ((word0 >> 5) & 0b111) as usize;
+    if !(1..=6).contains(&count) {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let raw_tokens = [
+        (word0 >> 8) & 0xff,
+        (word0 >> 16) & 0xff,
+        (word0 >> 24) & 0xff,
+        word1 & 0xff,
+        (word1 >> 8) & 0xff,
+        (word1 >> 16) & 0xff,
+    ];
+    if raw_tokens[..count].contains(&0) || raw_tokens[count..].iter().any(|token| *token != 0) {
+        return Err(GpuClosedLoopError::MalformedUpload);
+    }
+    let tokens = raw_tokens[..count]
+        .iter()
+        .map(|token| {
+            LanguageTokenId::new(*token as u16).map_err(|_| GpuClosedLoopError::MalformedUpload)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let confidence = Confidence::new(((word1 >> 24) & 0xff) as f32 / 255.0)
+        .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+    SpeechMotorPayload::try_new(speech_act, tokens, confidence)
+        .map(Some)
+        .map_err(|_| GpuClosedLoopError::MalformedUpload)
 }
 
 pub(crate) trait ClosedLoopBufferSet {
@@ -910,6 +969,7 @@ pub(crate) struct GpuClosedLoopKernelSet {
     decode_pipeline: wgpu::ComputePipeline,
     memory_context_pipeline: wgpu::ComputePipeline,
     select_pipeline: wgpu::ComputePipeline,
+    speech_decode_pipeline: wgpu::ComputePipeline,
     prevalidate_eligibility_pipeline: wgpu::ComputePipeline,
     recurrent_eligibility_pipeline: wgpu::ComputePipeline,
     decoder_eligibility_pipeline: wgpu::ComputePipeline,
@@ -940,7 +1000,11 @@ impl GpuClosedLoopKernelSet {
             ),
             (
                 CLOSED_LOOP_DECODE_WGSL,
-                &["decode_candidates", "select_candidate"][..],
+                &[
+                    "decode_candidates",
+                    "select_candidate",
+                    "decode_speech_payload",
+                ][..],
             ),
             (
                 CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
@@ -1070,6 +1134,13 @@ impl GpuClosedLoopKernelSet {
             "select_candidate",
             &[],
         );
+        let speech_decode_pipeline = create_compute_pipeline(
+            device,
+            &pipeline_layout,
+            &decode_shader,
+            "decode_speech_payload",
+            &[],
+        );
         let prevalidate_eligibility_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
@@ -1197,6 +1268,7 @@ impl GpuClosedLoopKernelSet {
             decode_pipeline,
             memory_context_pipeline,
             select_pipeline,
+            speech_decode_pipeline,
             prevalidate_eligibility_pipeline,
             recurrent_eligibility_pipeline,
             decoder_eligibility_pipeline,
@@ -2216,7 +2288,7 @@ impl GpuClosedLoopPipelines {
     }
 
     /// Records this class's complete closed-loop work and copies only the
-    /// 48-byte winner/eligibility-completion proof into caller-owned readback.
+    /// bounded winner/eligibility and GPU-authored speech receipt into readback.
     pub(crate) fn record_staged_closed_loop(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -2232,7 +2304,12 @@ impl GpuClosedLoopPipelines {
             self.authority.record_selection(batch.authority_nonce)?;
             self.authority.record_eligibility(batch.authority_nonce)?;
             let neural = buffers.neural_buffers();
-            for (row, selection_offset) in batch.selection_offsets.iter().enumerate() {
+            for (row, (selection_offset, speech_payload_offset)) in batch
+                .selection_offsets
+                .iter()
+                .zip(&batch.speech_payload_offsets)
+                .enumerate()
+            {
                 let readback_base = row as u64 * GPU_CLOSED_LOOP_TICK_READBACK_BYTES as u64;
                 encoder.copy_buffer_to_buffer(
                     neural[6],
@@ -2240,6 +2317,13 @@ impl GpuClosedLoopPipelines {
                     buffers.compact_readback(),
                     readback_base,
                     crate::GPU_SELECTION_RECORD_BYTES as u64,
+                );
+                encoder.copy_buffer_to_buffer(
+                    neural[6],
+                    u64::from(*speech_payload_offset) * 4,
+                    buffers.compact_readback(),
+                    readback_base + crate::GPU_SELECTION_RECORD_BYTES as u64,
+                    crate::GPU_SPEECH_PAYLOAD_RECORD_BYTES as u64,
                 );
             }
             Ok(readback_bytes)
@@ -2314,9 +2398,13 @@ impl GpuClosedLoopPipelines {
         if words.len() != batch.row_count() * row_words {
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
+        let selection_words = crate::GPU_SELECTION_RECORD_BYTES / 4;
         let mut records = Vec::with_capacity(batch.row_count());
+        let mut speech_payloads = Vec::with_capacity(batch.row_count());
         for row in words.chunks_exact(row_words) {
-            records.push(GpuSelectionRecord::from_words(row)?);
+            records.push(GpuSelectionRecord::from_words(&row[..selection_words])?);
+            let speech_record = GpuSpeechPayloadRecord::from_words(&row[selection_words..])?;
+            speech_payloads.push(decode_speech_payload_record(speech_record)?);
         }
         #[cfg(feature = "gpu-tests")]
         if let Some((slot, generation)) = self.force_all_invalid_slot.take() {
@@ -2329,7 +2417,9 @@ impl GpuClosedLoopPipelines {
             record.confidence_q16 = 0;
             record.status = 2;
         }
-        if !self.validate_selection_records(batch, &records) {
+        if !self.validate_selection_records(batch, &records)
+            || !self.validate_speech_payloads(batch, &records, &speech_payloads)
+        {
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
         let pending_records = self
@@ -2369,6 +2459,7 @@ impl GpuClosedLoopPipelines {
             bucket_ownership_token: self.bucket_ownership_token,
             authority_nonce: batch.authority_nonce,
             records,
+            speech_payloads,
             pending_records,
             final_sides,
             readback_bytes,
@@ -2396,6 +2487,7 @@ impl GpuClosedLoopPipelines {
             .submission_succeeded(validated.authority_nonce, &validated.final_sides)?;
         Ok(GpuCommittedClassBatch {
             records: validated.records,
+            speech_payloads: validated.speech_payloads,
             pending_records: validated.pending_records,
             readback_bytes: validated.readback_bytes,
         })
@@ -2579,6 +2671,9 @@ impl GpuClosedLoopPipelines {
         pass.set_pipeline(&self.kernels.select_pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(1, rows, 1);
+        pass.set_pipeline(&self.kernels.speech_decode_pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.dispatch_workgroups(1, rows, 1);
         Ok(())
     }
 
@@ -2630,6 +2725,32 @@ impl GpuClosedLoopPipelines {
                     _ => false,
                 }
             })
+    }
+
+    fn validate_speech_payloads(
+        &self,
+        batch: &GpuActiveBatchUpload,
+        selections: &[GpuSelectionRecord],
+        payloads: &[Option<SpeechMotorPayload>],
+    ) -> bool {
+        selections.len() == payloads.len()
+            && selections.len() == batch.headers.len()
+            && selections.iter().zip(payloads).zip(&batch.headers).all(
+                |((selection, payload), header)| {
+                    if selection.status != 3 || selection.candidate_index >= header.candidate_count
+                    {
+                        return payload.is_none();
+                    }
+                    let base = header.candidate_offset as usize
+                        + selection.candidate_index as usize * GPU_CANDIDATE_RECORD_WORDS;
+                    GpuCandidateRecord::from_words(
+                        &batch.dispatch_header_words[base..base + GPU_CANDIDATE_RECORD_WORDS],
+                    )
+                    .is_ok_and(|candidate| {
+                        candidate.kind == u32::from(ActionKind::Vocalize.raw()) || payload.is_none()
+                    })
+                },
+            )
     }
 
     fn build_pending_eligibility_records(
@@ -2899,6 +3020,7 @@ fn validate_dispatch(
         || batch.activity_headers.len() != batch.headers.len()
         || batch.pending_templates.len() != batch.headers.len()
         || batch.selection_offsets.len() != batch.headers.len()
+        || batch.speech_payload_offsets.len() != batch.headers.len()
         || batch.memory_context_bindings.len() != batch.headers.len()
         || batch.headers.iter().any(|header| {
             header.neuron_count == 0
@@ -3315,6 +3437,7 @@ mod lifecycle_tests {
             bucket_ownership_token: 1,
             authority_nonce: 7,
             selection_offsets: vec![0],
+            speech_payload_offsets: vec![0],
             memory_context_bindings: vec![None],
         };
 

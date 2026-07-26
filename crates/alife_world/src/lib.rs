@@ -12,6 +12,7 @@ pub mod persistence;
 pub mod persistent_voxel;
 pub mod procedural_chunks;
 pub mod scenario;
+pub mod speech;
 pub mod tracked_objects;
 
 pub use appearance::*;
@@ -23,6 +24,7 @@ pub use persistence::*;
 pub use persistent_voxel::*;
 pub use procedural_chunks::*;
 pub use scenario::*;
+pub use speech::*;
 pub use tracked_objects::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -86,7 +86,7 @@ fn learning_header_and_pending_record_have_the_exact_shared_abi() {
         std::mem::offset_of!(GpuEligibilityDiscardRecord, transaction_generation),
         40
     );
-    assert_eq!(GPU_CLOSED_LOOP_TICK_READBACK_BYTES, 48);
+    assert_eq!(GPU_CLOSED_LOOP_TICK_READBACK_BYTES, 64);
 }
 
 #[test]
@@ -222,7 +222,10 @@ fn pending_transaction_blocks_the_next_frame_until_gpu_discard() {
         .into_iter()
         .next()
         .unwrap();
-    assert_eq!(first.compact_readback_bytes, 48);
+    assert_eq!(
+        first.compact_readback_bytes,
+        GPU_CLOSED_LOOP_TICK_READBACK_BYTES
+    );
     assert_eq!(
         backend.pending_eligibility(handle).unwrap(),
         Some(first.pending_eligibility)

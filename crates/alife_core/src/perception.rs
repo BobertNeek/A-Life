@@ -1133,7 +1133,11 @@ fn encode_optional_heard_token(
         return Ok(());
     };
     builder.write_some();
+    builder.write_u64(token.utterance_id.raw());
+    builder.write_u8(token.sequence_position);
+    builder.write_u8(token.source_kind as u8);
     encode_optional_organism(builder, token.speaker_id);
+    encode_optional_organism(builder, token.addressee);
     encode_optional_world_entity(builder, token.source_entity);
     builder.write_u32(token.token_id);
     encode_vec3(builder, token.source_position)?;

@@ -112,8 +112,9 @@ pub use ids::{
     OrganismId, TrackedObjectId, WorldEntityId,
 };
 pub use language::{
-    LanguageCodebookId, LanguageCodebookV1, LanguageTokenClass, LanguageTokenId, SpeechActKind,
-    SpeechDecoderLayoutV1,
+    LanguageCodebookId, LanguageCodebookV1, LanguageGroundingEntry, LanguageGroundingLedger,
+    LanguageTokenClass, LanguageTokenId, PlayerUtterance, SpeechActKind, SpeechDecoderLayoutV1,
+    SpeechMotorPayload, UtteranceId, UtteranceSourceKind, LANGUAGE_GROUNDING_LEDGER_CAPACITY,
 };
 pub use learning::{
     validate_outcome_credit_schema, FastWeightSemantics, LearningCommitToken,

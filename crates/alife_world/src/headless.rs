@@ -15,13 +15,14 @@ use alife_core::{
     BrainTickOutput, Confidence, ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch,
     HeardToken, HomeostaticDelta, HomeostaticSnapshot, Intensity, LanguageContextSnapshot,
     NormalizedScalar, OrganismId, PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft,
-    PhysicalActionOutcome, PhysicalContactKind, Pose, Quatf, ReferenceActionExecution,
-    ReferenceActionExecutor, ReferenceActionFailure, ReferenceOutcomeObservation,
-    ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
-    ReferenceSensoryRequest, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
-    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, SleepConsolidationReport,
-    SleepTransition, SocialAgentSnapshot, SocialProximityEntry, TeacherPerceptionChannel, Tick,
-    Validate, Vec3f, Velocity, WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS,
+    PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
+    ReferenceActionExecution, ReferenceActionExecutor, ReferenceActionFailure,
+    ReferenceOutcomeObservation, ReferenceOutcomeObserver, ReferenceOutcomeRequest,
+    ReferenceSensoryAdapter, ReferenceSensoryRequest, ScaffoldContractError, SensorProfile,
+    SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
+    SleepConsolidationReport, SleepTransition, SocialAgentSnapshot, SocialProximityEntry,
+    SpeechMotorPayload, TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate,
+    Vec3f, Velocity, WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS,
     SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
@@ -36,8 +37,9 @@ use crate::ecology::{
     TerrainZone, TerrainZoneKind,
 };
 use crate::{
-    GroundedPhysicalProperties, GroundedSensorExtractor, PhysicalObservationSnapshot,
-    PhysicalObservedObject, PhysicalTrackingKey, PhysicalTrackingProvenance, TrackedObjectRegistry,
+    AudibleUtterance, GroundedPhysicalProperties, GroundedSensorExtractor,
+    PhysicalObservationSnapshot, PhysicalObservedObject, PhysicalTrackingKey,
+    PhysicalTrackingProvenance, SpatialSpeechBus, TrackedObjectRegistry,
     DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM, PHYSICAL_TRACKING_PROVENANCE_SCHEMA_VERSION,
 };
 
@@ -48,6 +50,8 @@ const EAT_RADIUS: f32 = 1.25;
 const MOVE_STEP: f32 = 1.0;
 const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
+const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
+const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeadlessActionIds;
@@ -142,6 +146,7 @@ pub struct HeadlessActionResult {
     pub execution: ReferenceActionExecution,
     pub observation: ReferenceOutcomeObservation,
     pub touched_entities: Vec<WorldEntityId>,
+    pub emitted_utterance: Option<AudibleUtterance>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -189,11 +194,14 @@ pub struct HeadlessWorld {
     tick: Tick,
     next_entity_id: u64,
     next_spawn_sequence: u64,
+    next_utterance_id: u64,
     objects: BTreeMap<u64, WorldObject>,
     labels: BTreeMap<String, WorldEntityId>,
     last_touched_entities: Vec<WorldEntityId>,
     last_action_result: Option<HeadlessActionResult>,
     ecology: EcologyState,
+    speech: SpatialSpeechBus,
+    last_creature_utterance_ticks: BTreeMap<u64, Tick>,
     tracked_objects: TrackedObjectRegistry,
 }
 
@@ -215,9 +223,12 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub tick: Tick,
     pub next_entity_id: u64,
     pub next_spawn_sequence: u64,
+    pub next_utterance_id: u64,
     pub objects: Vec<WorldObject>,
     pub last_touched_entities: Vec<WorldEntityId>,
     pub ecology: EcologyState,
+    pub audible_utterances: Vec<AudibleUtterance>,
+    pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
 }
 
 impl HeadlessWorld {
@@ -227,11 +238,14 @@ impl HeadlessWorld {
             tick: Tick::ZERO,
             next_entity_id: DEFAULT_ENTITY_ID_START,
             next_spawn_sequence: 1,
+            next_utterance_id: 1,
             objects: BTreeMap::new(),
             labels: BTreeMap::new(),
             last_touched_entities: Vec::new(),
             last_action_result: None,
             ecology: EcologyState::default(),
+            speech: SpatialSpeechBus::default(),
+            last_creature_utterance_ticks: BTreeMap::new(),
             tracked_objects: TrackedObjectRegistry::new(
                 seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
@@ -250,8 +264,43 @@ impl HeadlessWorld {
 
     pub fn advance_tick(&mut self) -> Tick {
         self.tick = Tick::new(self.tick.raw().saturating_add(1));
+        self.speech.retire_expired(self.tick);
         let _ = self.advance_ecology();
         self.tick
+    }
+
+    pub fn emit_player_utterance(
+        &mut self,
+        utterance: PlayerUtterance,
+    ) -> Result<(), ScaffoldContractError> {
+        self.next_utterance_id = self
+            .next_utterance_id
+            .max(utterance.utterance_id.raw().saturating_add(1));
+        self.speech
+            .emit(AudibleUtterance::from_player(utterance, self.tick)?)
+    }
+
+    pub fn emit_creature_utterance(
+        &mut self,
+        utterance_id: UtteranceId,
+        speaker_id: OrganismId,
+        addressee: Option<OrganismId>,
+        payload: SpeechMotorPayload,
+    ) -> Result<AudibleUtterance, ScaffoldContractError> {
+        self.next_utterance_id = self
+            .next_utterance_id
+            .max(utterance_id.raw().saturating_add(1));
+        let position = self.agent_for(speaker_id)?.position;
+        let utterance = AudibleUtterance::from_creature(
+            utterance_id,
+            speaker_id,
+            addressee,
+            position,
+            payload,
+            self.tick,
+        )?;
+        self.speech.emit(utterance.clone())?;
+        Ok(utterance)
     }
 
     pub fn advance_ecology(&mut self) -> EcologyStepReport {
@@ -581,9 +630,16 @@ impl HeadlessWorld {
             tick: self.tick,
             next_entity_id: self.next_entity_id,
             next_spawn_sequence: self.next_spawn_sequence,
+            next_utterance_id: self.next_utterance_id,
             objects: self.objects.values().cloned().collect(),
             last_touched_entities: self.last_touched_entities.clone(),
             ecology: self.ecology.clone(),
+            audible_utterances: self.speech.snapshot(),
+            last_creature_utterance_ticks: self
+                .last_creature_utterance_ticks
+                .iter()
+                .map(|(organism, tick)| (OrganismId(*organism), *tick))
+                .collect(),
         }
     }
 
@@ -623,6 +679,22 @@ impl HeadlessWorld {
         if parts.next_spawn_sequence <= max_spawn_sequence || parts.next_spawn_sequence == 0 {
             return Err(ScaffoldContractError::InvalidId);
         }
+        let max_utterance_id = parts
+            .audible_utterances
+            .iter()
+            .map(|utterance| utterance.utterance_id.raw())
+            .max()
+            .unwrap_or(0);
+        if parts.next_utterance_id == 0 || parts.next_utterance_id <= max_utterance_id {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let mut cooldown_organisms = std::collections::BTreeSet::new();
+        for (organism, tick) in &parts.last_creature_utterance_ticks {
+            organism.validate()?;
+            if tick.raw() > parts.tick.raw() || !cooldown_organisms.insert(organism.raw()) {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
         parts.ecology.validate()?;
         for resource in &parts.ecology.resources {
             let Some(object) = objects.get(&resource.object_id.raw()) else {
@@ -643,11 +715,18 @@ impl HeadlessWorld {
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
             next_spawn_sequence: parts.next_spawn_sequence,
+            next_utterance_id: parts.next_utterance_id,
             objects,
             labels,
             last_touched_entities: parts.last_touched_entities,
             last_action_result: None,
             ecology: parts.ecology,
+            speech: SpatialSpeechBus::restore(parts.audible_utterances, parts.tick)?,
+            last_creature_utterance_ticks: parts
+                .last_creature_utterance_ticks
+                .into_iter()
+                .map(|(organism, tick)| (organism.raw(), tick))
+                .collect(),
             tracked_objects: TrackedObjectRegistry::new(
                 parts.seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
@@ -941,7 +1020,11 @@ impl HeadlessWorld {
                             .expect("visible id exists");
                         if let Some(token_id) = object.token_id {
                             vocal_tokens[heard_index] = Some(HeardToken {
+                                utterance_id: UtteranceId::new(visible.id.raw())?,
+                                sequence_position: 0,
+                                source_kind: UtteranceSourceKind::Teacher,
                                 speaker_id: None,
+                                addressee: None,
                                 source_entity: Some(visible.id),
                                 token_id,
                                 source_position: object.position,
@@ -955,6 +1038,19 @@ impl HeadlessWorld {
                     }
                 }
             }
+        }
+
+        for heard in self
+            .speech
+            .heard_tokens(organism_id, agent.position, tick)?
+        {
+            if heard_index >= MAX_HEARD_TOKENS {
+                break;
+            }
+            auditory[0] = auditory[0].max(heard.confidence.raw());
+            teacher_channel_marker = teacher_channel_marker.or(heard.teacher_channel);
+            vocal_tokens[heard_index] = Some(heard);
+            heard_index += 1;
         }
 
         if !contact_entities.is_empty() {
@@ -1029,6 +1125,80 @@ impl HeadlessWorld {
         command.validate_contract()?;
         let result = self.execute_command(command)?;
         self.last_touched_entities = result.touched_entities.clone();
+        self.last_action_result = Some(result.clone());
+        Ok(result)
+    }
+
+    /// Executes a neural action while accepting speech content only from the
+    /// GPU-authored payload receipt. A missing payload cannot fall through to
+    /// the legacy deterministic token emitter.
+    pub fn apply_neural_command(
+        &mut self,
+        command: &ActionCommand,
+        speech_payload: Option<SpeechMotorPayload>,
+        prompted: bool,
+    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        command.validate_contract()?;
+        if command.kind != ActionKind::Vocalize {
+            if speech_payload.is_some() {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+            return self.apply_command(command);
+        }
+        let Some(payload) = speech_payload else {
+            let result = self.finish_action(
+                *command,
+                false,
+                Some(ReferenceActionFailure::ActionRejected),
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::missing_affordance(),
+                Vec::new(),
+            )?;
+            self.last_touched_entities.clear();
+            self.last_action_result = Some(result.clone());
+            return Ok(result);
+        };
+        let cooldown = if prompted {
+            PROMPTED_SPEECH_COOLDOWN_TICKS
+        } else {
+            SPONTANEOUS_SPEECH_COOLDOWN_TICKS
+        };
+        if self
+            .last_creature_utterance_ticks
+            .get(&command.organism_id.raw())
+            .is_some_and(|last| self.tick.raw().saturating_sub(last.raw()) < cooldown)
+        {
+            let result = self.finish_action(
+                *command,
+                false,
+                Some(ReferenceActionFailure::ActionRejected),
+                physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                OutcomeProfile::missing_affordance(),
+                Vec::new(),
+            )?;
+            self.last_touched_entities.clear();
+            self.last_action_result = Some(result.clone());
+            return Ok(result);
+        }
+        let utterance_id = UtteranceId::new(self.next_utterance_id)?;
+        self.next_utterance_id = self
+            .next_utterance_id
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let utterance =
+            self.emit_creature_utterance(utterance_id, command.organism_id, None, payload)?;
+        self.last_creature_utterance_ticks
+            .insert(command.organism_id.raw(), self.tick);
+        let mut result = self.finish_action(
+            *command,
+            true,
+            None,
+            physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.02)?,
+            OutcomeProfile::vocalize(),
+            Vec::new(),
+        )?;
+        result.emitted_utterance = Some(utterance);
+        self.last_touched_entities.clear();
         self.last_action_result = Some(result.clone());
         Ok(result)
     }
@@ -1413,6 +1583,7 @@ impl HeadlessWorld {
             execution,
             observation,
             touched_entities,
+            emitted_utterance: None,
         })
     }
 

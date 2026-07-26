@@ -219,7 +219,21 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
       local = bitcast<f32>(frame_payload_words[feature_index]);
     }
   } else if (metadata.decoder_head == DECODER_HEAD_SPEECH_PAYLOAD) {
-    // The dedicated speech pass owns speech-payload eligibility after Vocalize wins.
+    if (selected.kind == 6u) {
+      let activation_offset = select(
+        brain.activation_a_offset,
+        brain.activation_b_offset,
+        header.active_activation_side == 1u
+      );
+      let synapse = load_synapse_learning_metadata(
+        extension.synapse_metadata_offset + metadata.global_synapse_id * 8u
+      );
+      if (synapse.global_synapse_id != metadata.global_synapse_id
+          || synapse.source_neuron != metadata.motor_index
+          || synapse.target_neuron >= brain.neuron_count) { return; }
+      local = load_state_f32(activation_offset + synapse.source_neuron)
+        * load_state_f32(activation_offset + synapse.target_neuron);
+    }
   } else {
     atomicOr(
       &mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE],

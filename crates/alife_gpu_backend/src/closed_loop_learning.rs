@@ -15,7 +15,8 @@ pub const GPU_OUTCOME_CREDIT_BYTES: usize = GPU_OUTCOME_CREDIT_WORDS * 4;
 pub const GPU_FAST_PLASTICITY_COMMIT_WORDS: usize = 16;
 pub const GPU_FAST_PLASTICITY_COMMIT_BYTES: usize = GPU_FAST_PLASTICITY_COMMIT_WORDS * 4;
 pub const GPU_CLOSED_LOOP_TICK_READBACK_BYTES: usize =
-    std::mem::size_of::<crate::GpuSelectionRecord>();
+    std::mem::size_of::<crate::GpuSelectionRecord>()
+        + std::mem::size_of::<crate::GpuSpeechPayloadRecord>();
 pub const GPU_COMPACT_READBACK_CAPACITY_PER_ROW_BYTES: usize =
     if GPU_FAST_PLASTICITY_COMMIT_BYTES > GPU_CLOSED_LOOP_TICK_READBACK_BYTES {
         GPU_FAST_PLASTICITY_COMMIT_BYTES

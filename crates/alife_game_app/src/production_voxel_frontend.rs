@@ -817,7 +817,7 @@ impl ProductionGpuGameplayReceipt {
             unavailable_reason: None,
             adapter,
             active_creatures: u32::try_from(active_creatures).unwrap_or(u32::MAX),
-            compact_readback_bytes: active_creatures.saturating_mul(48),
+            compact_readback_bytes: active_creatures.saturating_mul(64),
             finite_rejections: 0,
             no_active_bulk_readback: true,
             authoritative: true,
@@ -842,7 +842,7 @@ impl ProductionGpuGameplayReceipt {
             || !self.no_active_bulk_readback
             || !self.authoritative
             || self.active_creatures == 0
-            || self.compact_readback_bytes != self.batch_size.saturating_mul(48)
+            || self.compact_readback_bytes != self.batch_size.saturating_mul(64)
         {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "FVR06 production GPU gameplay receipt violated schema or boundary"
@@ -2108,7 +2108,7 @@ mod tests {
         assert!(receipt.receipt_path.exists());
         assert!(receipt.production_save_path.exists());
         assert_eq!(receipt.active_creatures, 30);
-        assert_eq!(receipt.compact_readback_bytes, 30 * 48);
+        assert_eq!(receipt.compact_readback_bytes, 30 * 64);
         assert!(summary.signature_line().contains("gameplay="));
         assert!(!fixture_runtime_save_path.exists());
         assert!(!fixture_gameplay_receipt_path.exists());

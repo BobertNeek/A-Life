@@ -234,6 +234,7 @@ fn decode_wgsl_parses_and_abi_remains_compact_candidate_conditioned_and_entity_b
         vec![
             ("decode_candidates", ShaderStage::Compute, [32, 1, 1]),
             ("select_candidate", ShaderStage::Compute, [1, 1, 1]),
+            ("decode_speech_payload", ShaderStage::Compute, [1, 1, 1]),
         ]
     );
     let decode_body = &CLOSED_LOOP_DECODE_WGSL[CLOSED_LOOP_DECODE_WGSL
