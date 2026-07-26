@@ -113,8 +113,11 @@ pub use ids::{
 };
 pub use language::{
     LanguageCodebookId, LanguageCodebookV1, LanguageGroundingEntry, LanguageGroundingLedger,
-    LanguageTokenClass, LanguageTokenId, PlayerUtterance, SpeechActKind, SpeechDecoderLayoutV1,
-    SpeechMotorPayload, UtteranceId, UtteranceSourceKind, LANGUAGE_GROUNDING_LEDGER_CAPACITY,
+    LanguageTokenClass, LanguageTokenId, NovelLanguageToken, PlayerUtterance, SpeechActKind,
+    SpeechDecoderLayoutV1, SpeechMotorPayload, SpeechTranslationInput, SpeechTranslationReceipt,
+    SpeechTranslationRequest, SurfaceTokenBinding, UtteranceId, UtteranceSourceKind,
+    LANGUAGE_GROUNDING_LEDGER_CAPACITY, SPEECH_TRANSLATION_MAX_BINDINGS,
+    SPEECH_TRANSLATION_MAX_SURFACE_CHARS,
 };
 pub use learning::{
     validate_outcome_credit_schema, FastWeightSemantics, LearningCommitToken,
@@ -235,6 +238,8 @@ pub use topology::{
 };
 pub use traits::{
     NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,
+    SEMANTIC_PRIOR_MAX_GAIN, SEMANTIC_PRIOR_MAX_LEXICON_BIAS_SLOTS,
+    SEMANTIC_PRIOR_MAX_PACKET_TICKS,
 };
 pub use units::{
     Confidence, DurationTicks, FixedPointScale, Intensity, NormalizedScalar, Seconds,
