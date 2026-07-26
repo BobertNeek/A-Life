@@ -6,17 +6,20 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use alife_archive::{GeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
     BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus, Confidence,
-    ConsolidationState, DevelopmentState, DriveSnapshot, EndocrineSnapshot, HomeostaticSnapshot,
-    MemoryBankConfig, MemorySidecarState, NormalizedScalar, OrganismId, PhenotypeCompiler,
-    PhenotypeCompilerInputs, PolicyBackend, ScaffoldContractError, SensorProfile,
-    SensorProfileIdentity, SensoryAbiVersion, SleepPhase, SleepState, SleepTrigger, Tick,
-    TopologicalMapConfig, TopologySidecar, Validate, Vec3f, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+    ConsolidationState, DevelopmentState, DriveSnapshot, EndocrineSnapshot, FounderMode,
+    FounderSelection, HomeostaticSnapshot, MemoryBankConfig, MemorySidecarState, NormalizedScalar,
+    OrganismId, PhenotypeCompiler, PhenotypeCompilerInputs, PolicyBackend, ScaffoldContractError,
+    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepPhase, SleepState, SleepTrigger,
+    Tick, TopologicalMapConfig, TopologySidecar, Validate, Vec3f,
+    SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 use alife_game_app::{
-    merge_gpu_checkpoint_manifest_entries, AppShellLaunchConfig, GameAppShellError,
-    GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLiveBrainRuntime,
+    materialize_founder_gpu_states, merge_gpu_checkpoint_manifest_entries, AppShellLaunchConfig,
+    GameAppShellError, GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableSaveManifest,
+    GpuLiveBrainRuntime,
 };
 use alife_gpu_backend::GpuClosedLoopBackend;
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
@@ -615,6 +618,221 @@ fn n1024_and_n2048_restore_submitted_lost_jobs_and_completed_staging() {
             assert_restore_case(tier, case);
         }
     }
+}
+
+#[test]
+fn durable_mind_clone_keeps_consolidated_learning_and_clears_transient_world_state() {
+    let asset_root = unique_asset_root("durable-founder-clone");
+    fs::create_dir_all(&asset_root).unwrap();
+    let store = GpuCheckpointAssetStore::new(&asset_root).unwrap();
+    let organism_id = OrganismId(1);
+    let target_organism_id = OrganismId(91);
+    let mut source = learned_runtime(BrainScaleTier::Nano512);
+    advance_runtime_to_case(&mut source, BrainScaleTier::Nano512, RestoreCase::Waking);
+    assert!(source
+        .active_lifetime_weights_for_test(organism_id)
+        .unwrap()
+        .iter()
+        .any(|weight| *weight != 0.0));
+    let source_write = source.checkpoint_brain(organism_id, &store).unwrap();
+    let source_memory_count = source_write.save_state.memory.summary.record_count;
+    let source_topology_counts = source_write.save_state.topology.counts;
+    let mut manifest = AssetManifest::empty();
+    merge_gpu_checkpoint_manifest_entries(&mut manifest, source_write.manifest_entries).unwrap();
+
+    let mut clone_session = GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
+    let cloned = store
+        .clone_durable_founder(
+            &mut clone_session,
+            &manifest,
+            &source_write.save_state,
+            target_organism_id,
+            88_001,
+            Tick::ZERO,
+        )
+        .unwrap();
+    assert_eq!(cloned.checkpoint.save_state.organism_id, target_organism_id);
+    assert_eq!(
+        cloned.checkpoint.save_state.sleep,
+        SleepState::awake_at(Tick::ZERO)
+    );
+    assert_eq!(
+        cloned.checkpoint.save_state.memory.summary.record_count,
+        source_memory_count
+    );
+    assert_eq!(
+        cloned.checkpoint.save_state.topology.counts,
+        source_topology_counts
+    );
+    assert_eq!(
+        cloned.checkpoint.save_state.memory.summary.organism_id_raw,
+        target_organism_id.raw()
+    );
+    assert_eq!(
+        cloned.checkpoint.save_state.topology.organism_id_raw,
+        target_organism_id.raw()
+    );
+    assert_eq!(
+        cloned.checkpoint.save_state.tracked_objects.world_seed,
+        88_001
+    );
+    assert!(cloned
+        .checkpoint
+        .save_state
+        .tracked_objects
+        .records
+        .is_empty());
+    assert!(cloned.checkpoint.save_state.pending_eligibility.is_none());
+    assert!(cloned
+        .checkpoint
+        .save_state
+        .pending_experience_transaction
+        .is_none());
+
+    merge_gpu_checkpoint_manifest_entries(
+        &mut manifest,
+        cloned.checkpoint.manifest_entries.clone(),
+    )
+    .unwrap();
+    let mut restored_session = GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
+    let restored = store
+        .restore_brain(
+            &mut restored_session,
+            &manifest,
+            &cloned.checkpoint.save_state,
+        )
+        .unwrap();
+    let parts = restored_session
+        .snapshot_brain(restored.receipt.handle, Tick::ZERO)
+        .unwrap()
+        .into_parts();
+    let lifetime = if parts.active_weight_bank == 0 {
+        &parts.lifetime_bank_0_bits
+    } else {
+        &parts.lifetime_bank_1_bits
+    };
+    assert!(lifetime.iter().any(|bits| *bits != 0));
+    assert!(parts.fast_bank_0_bits.iter().all(|bits| *bits == 0));
+    assert!(parts.fast_bank_1_bits.iter().all(|bits| *bits == 0));
+    assert!(parts.activation_a_bits.iter().all(|bits| *bits == 0));
+    assert!(parts.activation_b_bits.iter().all(|bits| *bits == 0));
+    assert!(parts
+        .recurrent_eligibility_bank_0_bits
+        .iter()
+        .chain(&parts.recurrent_eligibility_bank_1_bits)
+        .chain(&parts.decoder_eligibility_bank_0_bits)
+        .chain(&parts.decoder_eligibility_bank_1_bits)
+        .all(|bits| *bits == 0));
+
+    fs::remove_dir_all(asset_root).unwrap();
+}
+
+#[test]
+fn archived_genetic_founder_builds_a_launch_ready_gpu_save() {
+    let archive_root = unique_asset_root("genetic-founder-archive");
+    let save_root = unique_asset_root("genetic-founder-save");
+    fs::create_dir_all(&archive_root).unwrap();
+    copy_tree(
+        std::path::Path::new("../alife_world/tests/fixtures/p34"),
+        &save_root,
+    );
+    let capacity = BrainCapacityClass::n512();
+    let genome = BrainGenome::scaffold(92_001, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.25).unwrap());
+    let phenotype = PhenotypeCompiler::compile(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+    )
+    .unwrap();
+    let mut library =
+        LineageLibrary::open(LineageLibraryConfig::profile_default(&archive_root)).unwrap();
+    let source_manifest = library
+        .archive_birth(GeneticArchiveInput {
+            source_run_id: "gpu-founder-source",
+            organism_id: OrganismId(82),
+            birth_tick: Tick::ZERO,
+            genome: &genome,
+            phenotype: &phenotype,
+            foundation_asset_bytes: None,
+        })
+        .unwrap();
+    let cohort = library
+        .resolve_founder_cohort(
+            "founder-world",
+            4242,
+            &[FounderSelection {
+                source_manifest_digest: source_manifest,
+                mode: FounderMode::GeneticFounder,
+            }],
+        )
+        .unwrap();
+
+    let mut base = PortableSaveFile::from_json_file(save_root.join("tiny_save.json")).unwrap();
+    let mut empty_world = base.restore_headless_world().unwrap();
+    empty_world.remove_organism(OrganismId(1)).unwrap();
+    base.replace_headless_world_snapshot(&empty_world).unwrap();
+    base.save_id = "founder-world".to_string();
+    base.gpu_runtime = None;
+    base.creatures.clear();
+    let skeleton = library
+        .create_new_save_from_founders(base, &save_root, &cohort)
+        .unwrap();
+    assert!(skeleton.creatures[0].gpu_brain.is_none());
+
+    let save = materialize_founder_gpu_states(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        skeleton,
+        &save_root,
+        &cohort,
+    )
+    .unwrap();
+    save.validate_with_asset_root(&save_root).unwrap();
+    let state = save.creatures[0]
+        .gpu_brain
+        .as_ref()
+        .expect("genetic founder was captured on GPU");
+    assert_eq!(state.phenotype_hash, phenotype.phenotype_hash());
+    assert_eq!(state.memory.summary.record_count, 0);
+    assert_eq!(state.topology.counts, alife_core::TopologyCounts::default());
+    assert_eq!(
+        state.language_grounding,
+        alife_core::LanguageGroundingLedger::default()
+    );
+
+    let store = GpuCheckpointAssetStore::new(&save_root).unwrap();
+    let restored = GpuLiveBrainRuntime::restore_with_checkpoints(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        save.restore_headless_world().unwrap(),
+        save.deterministic_seed,
+        BrainScaleTier::Nano512,
+        &store,
+        &save.assets,
+        std::slice::from_ref(state),
+    )
+    .unwrap();
+    assert_eq!(
+        restored
+            .homeostasis_for_test(save.creatures[0].organism_id)
+            .unwrap(),
+        HomeostaticSnapshot::baseline(save.world.tick)
+    );
+
+    drop(library);
+    fs::remove_dir_all(archive_root).unwrap();
+    fs::remove_dir_all(save_root).unwrap();
 }
 
 #[test]

@@ -291,6 +291,60 @@ impl MemorySidecarState {
         &self.compaction
     }
 
+    /// Carries durable episodic learning into a new identity while discarding
+    /// compaction staging and tracked-object bindings from the old world.
+    pub fn durable_founder_clone(
+        &self,
+        organism_id: OrganismId,
+    ) -> Result<Self, ScaffoldContractError> {
+        organism_id.validate()?;
+        let mut bank = self.bank.clone();
+        let previous_sequence = bank
+            .candidate_store
+            .last_sequence_by_organism
+            .get(&self.organism_id.raw())
+            .copied()
+            .unwrap_or(0);
+        for record in bank.candidate_store.records.values_mut() {
+            record.organism_id_raw = organism_id.raw();
+            record.tracked_object_id_raw = 0;
+        }
+        bank.candidate_store.last_sequence_by_organism.clear();
+        if previous_sequence != 0 {
+            bank.candidate_store
+                .last_sequence_by_organism
+                .insert(organism_id.raw(), previous_sequence);
+        }
+        bank.candidate_store.rebuild_indices();
+        let active_digest = bank.candidate_store.digest(bank.config.capacity)?;
+        let compaction = MemoryCompactionCheckpoint {
+            schema_version: MEMORY_RECALL_SCHEMA_VERSION,
+            organism_id_raw: organism_id.raw(),
+            active_generation: bank.candidate_store.generation,
+            active_digest,
+            last_committed_cycle_id: None,
+            next_cycle_id: 1,
+            phase: MemoryCompactionPhase::Idle,
+        };
+        compaction.validate_contract()?;
+        Ok(Self {
+            organism_id,
+            profile: self.profile,
+            bank,
+            compaction,
+            staged_bank: None,
+        })
+    }
+
+    pub fn latest_durable_sequence_raw(&self) -> u64 {
+        self.bank
+            .candidate_store
+            .last_sequence_by_organism
+            .get(&self.organism_id.raw())
+            .copied()
+            .unwrap_or(0)
+    }
+
     pub fn recall_frame(
         &self,
         draft: &PerceptionFrameDraft,

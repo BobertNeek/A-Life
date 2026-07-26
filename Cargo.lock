@@ -119,6 +119,7 @@ name = "alife_archive"
 version = "0.1.0"
 dependencies = [
  "alife_core",
+ "alife_world",
  "blake3",
  "rusqlite",
  "serde",
