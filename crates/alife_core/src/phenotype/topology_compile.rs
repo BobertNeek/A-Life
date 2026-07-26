@@ -230,7 +230,7 @@ fn compile_n2048_foundation(
             target.start,
             target.len,
             spec.synapse_count(),
-            genome.genetic_prior_seed
+            0xF0A0_DA71_2048_0001_u64
                 ^ u64::from(route_index)
                 ^ u64::from(density.density.raw().to_bits()).rotate_left(19),
             spec.active_tile_policy(),

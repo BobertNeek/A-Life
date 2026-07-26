@@ -1742,13 +1742,15 @@ impl GpuLiveBrainRuntime {
             self.sensor_profile,
         )?;
         let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
-        let compiler_inputs = PhenotypeCompilerInputs::try_new(
+        let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
             genome.clone(),
             &capacity,
             development.clone(),
             self.sensor_profile,
+            phenotype.foundation_abi().clone(),
         )?;
-        if PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)? != phenotype {
+        let verified_phenotype = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?;
+        if verified_phenotype != phenotype {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         let resident = ResidentCognition {
@@ -2628,7 +2630,23 @@ pub(crate) fn compile_gpu_birth_components(
     let birth_seed = deterministic_seed ^ organism_id.raw().rotate_left(17);
     let genome = BrainGenome::scaffold(birth_seed, capacity.id());
     let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35)?);
-    let phenotype = PhenotypeCompiler::compile(&genome, &capacity, &development, sensor_profile)?;
+    let phenotype = if capacity.id() == BrainCapacityClass::N2048_ID {
+        let foundation = alife_core::FoundationWeightAsset::builtin_n2048_v1(sensor_profile)?;
+        PhenotypeCompiler::compile_from_foundation_asset(
+            &genome,
+            &capacity,
+            &development,
+            sensor_profile,
+            &foundation,
+        )?
+    } else {
+        PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            sensor_profile,
+        )?
+    };
     Ok((phenotype, genome, development))
 }
 
@@ -2643,6 +2661,62 @@ mod tests {
     use alife_world::HeadlessScenarioBuilder;
 
     struct NoProgressSleepDriver;
+
+    #[test]
+    fn n2048_gpu_birth_uses_foundation_bound_compiler_inputs() {
+        let (phenotype, genome, development) = compile_gpu_birth_components(
+            0xB17A_DA7A,
+            BrainScaleTier::Standard2048,
+            OrganismId::new(77).unwrap(),
+            Tick::ZERO,
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .unwrap();
+        assert_eq!(phenotype.brain_class_id(), BrainCapacityClass::N2048_ID);
+        assert!(phenotype
+            .foundation_abi()
+            .foundation_payload_digest()
+            .is_some());
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+            genome,
+            &capacity,
+            development,
+            SensorProfile::PrivilegedAffordanceV1,
+            phenotype.foundation_abi().clone(),
+        )
+        .unwrap();
+        assert_eq!(inputs.foundation_abi(), phenotype.foundation_abi());
+    }
+
+    #[test]
+    fn checked_in_n2048_assets_decode_for_every_production_sensor_profile() {
+        for (index, profile) in [
+            SensorProfile::PrivilegedAffordanceV1,
+            SensorProfile::GroundedObjectSlotsV1,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let asset = alife_core::FoundationWeightAsset::builtin_n2048_v1(profile).unwrap();
+            assert_eq!(asset.manifest().training_stage().completed_stage_count(), 0);
+            assert!(!asset.manifest().promotion_receipt().is_promoted());
+            assert!(!asset.weights().is_empty());
+            let (phenotype, _, _) = compile_gpu_birth_components(
+                0xB17A_DA7B,
+                BrainScaleTier::Standard2048,
+                OrganismId::new(78 + index as u64).unwrap(),
+                Tick::ZERO,
+                profile,
+            )
+            .unwrap();
+            assert_eq!(phenotype.sensor_profile(), profile);
+            assert_eq!(
+                phenotype.foundation_abi().foundation_payload_digest(),
+                Some(asset.digest())
+            );
+        }
+    }
 
     impl GpuSleepConsolidationDriver for NoProgressSleepDriver {
         fn progress(

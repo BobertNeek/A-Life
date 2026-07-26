@@ -243,6 +243,9 @@ impl CompiledSynapse {
     pub(super) fn set_receptor_index(&mut self, receptor_index: u16) {
         self.receptor_index = receptor_index;
     }
+    pub(super) fn set_genetic_weight(&mut self, genetic_weight: f32) {
+        self.genetic_weight = genetic_weight;
+    }
     pub(super) fn validate_local(&self) -> Result<(), ScaffoldContractError> {
         if !self.genetic_weight.is_finite()
             || !self.alpha.is_finite()

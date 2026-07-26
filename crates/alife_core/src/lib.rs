@@ -82,8 +82,10 @@ pub use experience::{
     PreActionBrainEvidence, PreActionSnapshot, TeacherFeedbackObservation,
 };
 pub use foundation::{
-    FoundationAbiBinding, FoundationLayoutId, FoundationSectionPolicy, LifetimePlasticityBand,
-    N2048FoundationLayoutV1, N2048FoundationRouteSpec,
+    FoundationAbiBinding, FoundationCompatibilityFamilyId, FoundationId, FoundationLayoutId,
+    FoundationManifest, FoundationPromotionReceipt, FoundationSectionPolicy, FoundationVersion,
+    FoundationWeightAsset, FoundationWeightAssetRef, LifetimePlasticityBand,
+    N2048FoundationLayoutV1, N2048FoundationRouteSpec, TrainingStageManifest,
 };
 pub use genome::{
     AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy, DevelopmentStage,
