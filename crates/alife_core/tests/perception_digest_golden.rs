@@ -38,7 +38,11 @@ fn rich_sensory(tick: Tick) -> SensorySnapshot {
         ..Default::default()
     };
     streams.vocal_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(70).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Creature,
         speaker_id: Some(OrganismId(8)),
+        addressee: None,
         source_entity: Some(WorldEntityId(70)),
         token_id: 101,
         source_position: Vec3f::new(0.5, -0.25, 1.5),
@@ -74,7 +78,11 @@ fn rich_sensory(tick: Tick) -> SensorySnapshot {
         proximity: NormalizedScalar::new(0.75).unwrap(),
     });
     sensory.language_context.heard_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(71).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Teacher,
         speaker_id: None,
+        addressee: None,
         source_entity: Some(WorldEntityId(71)),
         token_id: 102,
         source_position: Vec3f::new(0.25, 0.0, 1.25),
@@ -223,10 +231,10 @@ fn perception_digest_golden_vectors_are_stable() {
     assert_eq!(
         draft.base_digest(),
         PerceptionBaseDigest([
-            0xb9e6_553a_8a7c_02a7,
-            0xb1ed_a030_f362_93ca,
-            0xc176_ff6c_05ca_f8c6,
-            0x02c9_ac28_7401_2c99,
+            0xa536_86af_bdc3_60f9,
+            0xf9d1_213d_bebd_c2fa,
+            0xe4e8_24ec_7d6f_da40,
+            0x142b_8309_b05a_5799,
         ])
     );
 
@@ -252,10 +260,10 @@ fn perception_digest_golden_vectors_are_stable() {
     assert_eq!(
         frame.frame_digest(),
         PerceptionFrameDigest([
-            0x485c_3578_8fcb_d2b5,
-            0x72df_599f_352d_a9fe,
-            0xcce9_78b2_3cdd_7c38,
-            0x5baf_03df_f1eb_ca98,
+            0xdc56_7e80_f842_ed7a,
+            0x5f57_f9df_8703_345d,
+            0x0fe8_5463_c661_8bbb,
+            0xe3f0_e2d4_86c2_eb59,
         ])
     );
 }

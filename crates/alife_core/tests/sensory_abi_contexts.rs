@@ -213,7 +213,11 @@ fn social_and_language_context_use_stable_ids_and_perception_markers() {
         proximity: NormalizedScalar::new(0.7).unwrap(),
     });
     snapshot.language_context.heard_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(20).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Creature,
         speaker_id: Some(OrganismId(2)),
+        addressee: None,
         source_entity: Some(WorldEntityId(20)),
         token_id: 101,
         source_position: Vec3f::new(0.0, 1.0, 2.0),

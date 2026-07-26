@@ -15,8 +15,9 @@ use alife_core::{
     FinalizedMemoryRecall, GpuPressureSample, GpuPressureSampleInput, LearningCommitToken,
     LearningSequenceGuard, NeuralActionSelection, NeuralThrottleDecision, NeuralThrottleLevel,
     OrganismId, OutcomeCreditPacket, PerceptionBaseDigest, PerceptionFrame, PerceptionFrameDigest,
-    PhenotypeHash, ScaffoldContractError, SensorProfile, BRAIN_ATP_BASAL_DEBIT_Q16,
-    BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16, REQUIRED_GPU_FEATURE_MASK,
+    PhenotypeHash, ScaffoldContractError, SensorProfile, SpeechMotorPayload,
+    BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
+    REQUIRED_GPU_FEATURE_MASK,
 };
 use serde::{Deserialize, Serialize};
 
@@ -319,6 +320,7 @@ pub struct GpuClosedLoopTick {
     pub memory_context_binding: Option<GpuMemoryContextDispatchReceipt>,
     pub active_activation_side: u8,
     pub selection: NeuralActionSelection,
+    pub speech_payload: Option<SpeechMotorPayload>,
     pub pending_eligibility: PendingEligibilityReceipt,
     pub pressure: GpuPressureSample,
     pub throttle: NeuralThrottleDecision,
@@ -2244,6 +2246,7 @@ impl GpuClosedLoopBackend {
         }
 
         let mut ordered_records = vec![None; batch.len()];
+        let mut ordered_speech_payloads = vec![None; batch.len()];
         let mut ordered_pending_receipts = vec![None; batch.len()];
         let mut ordered_pending_records = vec![None; batch.len()];
         let mut ordered_next_transaction_generations = vec![None; batch.len()];
@@ -2256,10 +2259,14 @@ impl GpuClosedLoopBackend {
                     .as_ref()
                     .expect("validated batch retains its upload")
                     .memory_context_bindings();
-                for (((original_index, selection), pending_record), memory_binding) in dispatch
+                for (
+                    (((original_index, selection), speech_payload), pending_record),
+                    memory_binding,
+                ) in dispatch
                     .original_indices
                     .iter()
                     .zip(validated.records())
+                    .zip(validated.speech_payloads())
                     .zip(validated.pending_records())
                     .zip(memory_bindings)
                 {
@@ -2328,6 +2335,7 @@ impl GpuClosedLoopBackend {
                         .checked_add(1)
                         .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
                     ordered_records[*original_index] = Some(*selection);
+                    ordered_speech_payloads[*original_index] = speech_payload.clone();
                     ordered_pending_receipts[*original_index] = Some(receipt);
                     ordered_pending_records[*original_index] = Some(*pending_record);
                     ordered_next_transaction_generations[*original_index] =
@@ -2417,6 +2425,7 @@ impl GpuClosedLoopBackend {
                         active_tiles: record.active_tiles,
                         active_synapses: record.active_synapses,
                     },
+                    speech_payload: ordered_speech_payloads[index].clone(),
                     pending_eligibility,
                     pressure: activity_decisions[index].pressure,
                     throttle: activity_decisions[index].clone(),
@@ -2464,18 +2473,21 @@ impl GpuClosedLoopBackend {
             if committed.readback_bytes as usize
                 != dispatch.original_indices.len() * crate::GPU_CLOSED_LOOP_TICK_READBACK_BYTES
                 || committed.records.len() != dispatch.original_indices.len()
+                || committed.speech_payloads.len() != dispatch.original_indices.len()
                 || committed.pending_records.len() != dispatch.original_indices.len()
             {
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
-            for ((original_index, record), pending_record) in dispatch
+            for (((original_index, record), speech_payload), pending_record) in dispatch
                 .original_indices
                 .iter()
                 .zip(committed.records)
+                .zip(committed.speech_payloads)
                 .zip(committed.pending_records)
             {
                 commit_mismatch |= ordered_records[*original_index] != Some(record)
+                    || ordered_speech_payloads[*original_index] != speech_payload
                     || ordered_pending_records[*original_index] != Some(pending_record);
             }
         }

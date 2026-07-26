@@ -93,6 +93,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         .unwrap()
         .save_state(organism_id)
         .unwrap();
+    let language_grounding = alife_core::LanguageGroundingLedger::default();
     let mut source = GpuAuthoritativeSession::new(
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
             .expect("required Vulkan adapter"),
@@ -113,6 +114,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
                 memory: &memory,
                 topology: &topology,
                 tracked_objects,
+                language_grounding: &language_grounding,
                 retained_learning: None,
             },
         )
@@ -132,6 +134,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
     assert_eq!(restored.sleep, SleepState::awake_at(Tick::ZERO));
     assert_eq!(restored.phenotype, phenotype);
     assert_eq!(restored.compiler_inputs, inputs);
+    assert_eq!(restored.language_grounding, language_grounding);
     let restored_snapshot = target
         .snapshot_brain(restored.receipt.handle, Tick::ZERO)
         .unwrap();

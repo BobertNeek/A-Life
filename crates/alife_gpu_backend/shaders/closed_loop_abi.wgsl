@@ -391,7 +391,9 @@ fn validate_slice_a_slot(slot_index:u32, header:GpuPerceptionHeader) -> bool {
   if (!valid) { return false; }
   let extension = load_slot_extension(slot);
   valid = extension.schema_version == GPU_CLOSED_LOOP_LAYOUT_VERSION
-    && extension.reserved0 == 0u && extension.reserved1 == 0u
+    && extension.reserved0 != 0xffffffffu
+    && state_span_within(extension.reserved0, 4u)
+    && extension.reserved1 == 0u
     && state_span_within(extension.learning_state_offset, 24u)
     && extension.pending_eligibility_offset != 0xffffffffu
     && extension.replay_plan_identity_offset != 0xffffffffu

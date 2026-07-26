@@ -79,7 +79,11 @@ fn rich_sensory(tick: Tick, organism_id: OrganismId) -> SensorySnapshot {
         proximity: NormalizedScalar::new(0.75).unwrap(),
     });
     sensory.context_streams.vocal_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(70).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Creature,
         speaker_id: Some(OrganismId(8)),
+        addressee: None,
         source_entity: Some(WorldEntityId(70)),
         token_id: 101,
         source_position: Vec3f::new(0.5, 0.0, 1.0),
@@ -87,7 +91,11 @@ fn rich_sensory(tick: Tick, organism_id: OrganismId) -> SensorySnapshot {
         teacher_channel: Some(TeacherPerceptionChannel::Hearing),
     });
     sensory.language_context.heard_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(71).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Teacher,
         speaker_id: None,
+        addressee: None,
         source_entity: Some(WorldEntityId(71)),
         token_id: 102,
         source_position: Vec3f::new(0.25, 0.0, 1.25),

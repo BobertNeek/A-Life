@@ -2,9 +2,10 @@
 
 use alife_core::{
     BoundedReplayBatch, BrainCapacityClass, BrainPhenotype, ConsolidationState, ExperiencePatch,
-    ExperiencePatchBuilder, MemorySidecarState, PhenotypeCompiler, PhenotypeCompilerInputs,
-    PortableMemoryBankAssetV2, PortableTopologySidecarAssetV1, ScaffoldContractError,
-    SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
+    ExperiencePatchBuilder, LanguageGroundingLedger, MemorySidecarState, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PortableMemoryBankAssetV2, PortableTopologySidecarAssetV1,
+    ScaffoldContractError, SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick,
+    TopologySidecar, Validate,
 };
 use alife_gpu_backend::{
     GpuActivityRestoreInput, GpuActivityRuntimeSnapshot, GpuBrainCheckpointParts,
@@ -177,6 +178,7 @@ pub struct RestoredGpuBrainCheckpoint {
     pub memory: MemorySidecarState,
     pub topology: TopologySidecar,
     pub tracked_objects: TrackedObjectRegistrySaveState,
+    pub language_grounding: LanguageGroundingLedger,
     pub retained_learning: Option<RestoredRetainedLearning>,
 }
 
@@ -185,6 +187,7 @@ pub struct GpuBrainSidecarCapture<'a> {
     pub memory: &'a MemorySidecarState,
     pub topology: &'a TopologySidecar,
     pub tracked_objects: TrackedObjectRegistrySaveState,
+    pub language_grounding: &'a LanguageGroundingLedger,
     pub retained_learning: Option<RetainedLearningCapture<'a>>,
 }
 
@@ -257,6 +260,7 @@ impl GpuCheckpointAssetStore {
             .map(pending_checkpoint_from_parts)
             .transpose()?;
         sidecars.tracked_objects.validate_contract()?;
+        sidecars.language_grounding.validate_contract()?;
         match (
             pending_checkpoint,
             pending_transaction,
@@ -466,6 +470,7 @@ impl GpuCheckpointAssetStore {
             memory,
             topology,
             tracked_objects: sidecars.tracked_objects,
+            language_grounding: sidecars.language_grounding.clone(),
             sleep,
             sleep_assets,
             backend_provenance,
@@ -721,6 +726,7 @@ impl GpuCheckpointAssetStore {
             memory,
             topology,
             tracked_objects: state.tracked_objects.clone(),
+            language_grounding: state.language_grounding.clone(),
             retained_learning,
         })
     }

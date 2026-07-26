@@ -91,7 +91,11 @@ fn sensory(tick: Tick, organism_id: OrganismId, target: WorldEntityId) -> Sensor
     )
     .unwrap();
     snapshot.context_streams.vocal_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(target.raw()).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Creature,
         speaker_id: Some(OrganismId(8)),
+        addressee: None,
         source_entity: Some(target),
         token_id: 101,
         source_position: Vec3f::new(1.5, 2.0, 3.0),
@@ -99,7 +103,11 @@ fn sensory(tick: Tick, organism_id: OrganismId, target: WorldEntityId) -> Sensor
         teacher_channel: Some(TeacherPerceptionChannel::Hearing),
     });
     snapshot.language_context.heard_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(target.raw() + 1).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Creature,
         speaker_id: Some(OrganismId(8)),
+        addressee: None,
         source_entity: Some(target),
         token_id: 202,
         source_position: Vec3f::new(1.25, 2.0, 3.0),

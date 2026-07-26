@@ -6,6 +6,7 @@ pub const GPU_PERCEPTION_HEADER_BYTES: usize = 64;
 pub const GPU_BRAIN_SLOT_RECORD_BYTES: usize = 144;
 pub const GPU_CANDIDATE_RECORD_BYTES: usize = 32;
 pub const GPU_SELECTION_RECORD_BYTES: usize = 48;
+pub const GPU_SPEECH_PAYLOAD_RECORD_BYTES: usize = 16;
 /// Exact number of storage-buffer bindings shared by every production neural pass.
 pub const GPU_CLOSED_LOOP_STORAGE_BINDINGS: u32 = 7;
 /// Exact executable ordering/layout ABI understood by the current closed-loop shaders.
@@ -111,6 +112,11 @@ gpu_record!(GpuSelectionRecord {
     dispatch_generation_lo: u32,
     dispatch_generation_hi: u32,
     active_activation_side: u32
+});
+gpu_record!(GpuSpeechPayloadRecord {
+    packed_header_and_tokens: u32,
+    packed_tokens_and_confidence: u32,
+    reserved: [u32; 2]
 });
 gpu_record!(GpuEncoderPlanRecord {
     schema_version: u32,

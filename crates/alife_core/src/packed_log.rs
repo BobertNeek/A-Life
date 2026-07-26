@@ -333,6 +333,7 @@ pub enum PackedSideBufferKind {
     GaussianRef = 10,
     TeacherSchoolRef = 11,
     DiagnosticExtra = 12,
+    HeardUtteranceContext = 13,
 }
 
 impl PackedSideBufferKind {
@@ -799,6 +800,21 @@ fn append_heard_token(
             token.confidence.raw(),
         ],
         flags,
+    )?)?;
+    let (addressee_id, context_flags) = token.addressee.map_or((0, 0), |addressee| {
+        (addressee.raw(), SIDE_RECORD_FLAG_ORGANISM_ID)
+    });
+    builder.push(PackedSideBufferRecord::new(
+        PackedSideBufferKind::HeardUtteranceContext,
+        token.utterance_id.raw(),
+        addressee_id,
+        [
+            f32::from(token.sequence_position),
+            token.source_kind as u8 as f32,
+            0.0,
+            0.0,
+        ],
+        context_flags,
     )?)
 }
 

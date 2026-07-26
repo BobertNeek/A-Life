@@ -202,7 +202,11 @@ fn brain_handle_source_keeps_capability_fields_private_and_nonserializable() {
 #[cfg(feature = "gpu-tests")]
 mod hardware {
     use alife_core::{
-        BrainCapacityClass, OrganismId, PerceptionFrame, ScaffoldContractError, SensorProfile,
+        ActionCandidate, ActionKind, ActionTarget, BodySnapshot, BrainCapacityClass,
+        CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
+        DurationTicks, HomeostaticSnapshot, NormalizedScalar, OrganismId, PerceptionFrame, Pose,
+        ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
+        SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity,
     };
     use alife_gpu_backend::{
         GpuBackendState, GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopTick,
@@ -262,6 +266,47 @@ mod hardware {
         assert!(tick.selection.logit.is_finite());
         assert!(tick.selection.active_tiles > 0);
         assert!(tick.selection.active_synapses > 0);
+    }
+
+    fn vocalize_frame(organism_id: OrganismId, tick: Tick) -> PerceptionFrame {
+        let profile = SensorProfile::PrivilegedAffordanceV1;
+        let sensory = SensorySnapshot::new(
+            organism_id,
+            tick,
+            Vec3f::ZERO,
+            SensoryChannels::ZERO,
+            Default::default(),
+        )
+        .unwrap();
+        let candidate = ActionCandidate::new(
+            0,
+            ActionKind::Vocalize.canonical_id(),
+            ActionKind::Vocalize,
+            CandidateActionFamily::Other,
+            CandidateObservationRef::None,
+            ActionTarget::NONE,
+            CandidateFeatureVector::zero(),
+            Confidence::new(1.0).unwrap(),
+            NormalizedScalar::new(0.01).unwrap(),
+            DurationTicks::new(1),
+            DurationTicks::new(1),
+        )
+        .unwrap();
+        PerceptionFrame::new(
+            organism_id,
+            tick,
+            profile,
+            sensory,
+            BodySnapshot {
+                pose: Pose::IDENTITY,
+                velocity: Velocity::ZERO,
+            },
+            HomeostaticSnapshot::baseline(tick),
+            vec![candidate],
+            SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, tick).unwrap(),
+            Vec::new(),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -499,6 +544,36 @@ mod hardware {
         assert_eq!(backend.completed_selection_count(), 2);
         assert_eq!(backend.perception_upload_count(), 2);
         assert_eq!(backend.shared_kernel_set_count_for_test(), 1);
+    }
+
+    #[test]
+    fn n2048_vocalize_payload_is_authored_by_the_gpu_speech_head() {
+        let mut backend = required_backend();
+        let organism = OrganismId(21);
+        let phenotype = phenotype_for_capacity_at_maturation(
+            BrainCapacityClass::n2048(),
+            92,
+            0.35,
+            SensorProfile::PrivilegedAffordanceV1,
+        );
+        assert!(phenotype.speech_decoder().is_some());
+        let handle = backend.insert_brain(organism, phenotype).unwrap();
+        let frame = vocalize_frame(organism, Tick::new(220));
+        let tick = backend
+            .tick_batch(&[(handle, frame.clone())])
+            .unwrap()
+            .remove(0);
+        assert_eq!(
+            frame.candidates()[usize::from(tick.selection.candidate_index)].kind,
+            ActionKind::Vocalize
+        );
+        let payload = tick
+            .speech_payload
+            .as_ref()
+            .expect("the deterministic N2048 fixture emits a GPU speech payload");
+        assert!(!payload.tokens.is_empty());
+        assert!(payload.tokens.len() <= 6);
+        discard_tick(&mut backend, &tick);
     }
 
     #[test]

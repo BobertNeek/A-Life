@@ -183,6 +183,7 @@ fn save_for_sleep(sleep: SleepState) -> GpuBrainSaveState {
         memory,
         topology,
         tracked_objects,
+        language_grounding: alife_core::LanguageGroundingLedger::default(),
         sleep,
         sleep_assets: GpuSleepAssetState {
             replay_batch: replay_required.then(|| asset("sleep-replay")),
