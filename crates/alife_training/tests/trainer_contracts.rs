@@ -4,8 +4,8 @@ use alife_core::{
     Tick,
 };
 use alife_training::{
-    AdamWConfig, CandidateTrainingTarget, StageTrainableMask, TrainingSequence32, TrainingTick,
-    TRAINING_SEQUENCE_TICKS,
+    AdamWConfig, CandidateTrainingTarget, SpeechTrainingTarget, StageTrainableMask,
+    TrainingSequence32, TrainingTick, TRAINING_SEQUENCE_TICKS,
 };
 
 fn phenotype_and_foundation() -> (alife_core::BrainPhenotype, FoundationWeightAsset) {
@@ -64,7 +64,10 @@ fn training_sequences_are_exactly_32_ticks_and_auxiliary_taps_are_ephemeral() {
         vec![0.0; neuron_count],
         Some(candidate),
     )
+    .unwrap()
+    .with_speech_target(SpeechTrainingTarget::try_new(7, 0.9, 1.0).unwrap())
     .unwrap();
+    assert_eq!(tick.speech_target().unwrap().output_index, 7);
     assert!(TrainingSequence32::try_new(vec![tick.clone(); TRAINING_SEQUENCE_TICKS - 1]).is_err());
     let sequence = TrainingSequence32::try_new(vec![tick; TRAINING_SEQUENCE_TICKS]).unwrap();
     sequence.validate_for(&phenotype).unwrap();

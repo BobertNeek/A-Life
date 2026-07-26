@@ -2,7 +2,7 @@
 
 use alife_core::{
     BrainPhenotype, CandidateActionFamily, CandidateFeatureVector, CompiledSynapseKind,
-    ScaffoldContractError, Validate, CANDIDATE_FEATURE_COUNT,
+    ScaffoldContractError, SpeechDecoderLayoutV1, Validate, CANDIDATE_FEATURE_COUNT,
 };
 
 pub const TRAINING_SEQUENCE_TICKS: usize = 32;
@@ -64,6 +64,41 @@ pub struct CandidateTrainingTarget {
     pub loss_weight: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpeechTrainingTarget {
+    pub output_index: u16,
+    pub target_logit: f32,
+    pub loss_weight: f32,
+}
+
+impl SpeechTrainingTarget {
+    pub fn try_new(
+        output_index: u16,
+        target_logit: f32,
+        loss_weight: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            output_index,
+            target_logit,
+            loss_weight,
+        };
+        value.validate()?;
+        Ok(value)
+    }
+
+    fn validate(self) -> Result<(), ScaffoldContractError> {
+        if self.output_index < SpeechDecoderLayoutV1::OUTPUT_WIDTH
+            && self.target_logit.is_finite()
+            && self.loss_weight.is_finite()
+            && self.loss_weight > 0.0
+        {
+            Ok(())
+        } else {
+            Err(ScaffoldContractError::PhenotypeCompile)
+        }
+    }
+}
+
 impl CandidateTrainingTarget {
     pub fn try_new(
         family: CandidateActionFamily,
@@ -97,6 +132,7 @@ pub struct TrainingTick {
     target_activations: Vec<f32>,
     target_weights: Vec<f32>,
     candidate_target: Option<CandidateTrainingTarget>,
+    speech_target: Option<SpeechTrainingTarget>,
 }
 
 impl TrainingTick {
@@ -111,6 +147,7 @@ impl TrainingTick {
             target_activations,
             target_weights,
             candidate_target,
+            speech_target: None,
         };
         value.validate_finite()?;
         Ok(value)
@@ -132,6 +169,19 @@ impl TrainingTick {
         self.candidate_target
     }
 
+    pub fn with_speech_target(
+        mut self,
+        speech_target: SpeechTrainingTarget,
+    ) -> Result<Self, ScaffoldContractError> {
+        speech_target.validate()?;
+        self.speech_target = Some(speech_target);
+        Ok(self)
+    }
+
+    pub const fn speech_target(&self) -> Option<SpeechTrainingTarget> {
+        self.speech_target
+    }
+
     fn validate_finite(&self) -> Result<(), ScaffoldContractError> {
         if self.encoded_inputs.is_empty()
             || self.encoded_inputs.len() != self.target_activations.len()
@@ -148,6 +198,9 @@ impl TrainingTick {
         }
         if let Some(candidate) = self.candidate_target {
             candidate.validate()?;
+        }
+        if let Some(speech) = self.speech_target {
+            speech.validate()?;
         }
         Ok(())
     }
@@ -282,4 +335,61 @@ pub struct TrainingStepReceipt {
     pub trained_weight_count: u32,
 }
 
-pub(crate) const CANDIDATE_RECORD_WORDS: usize = 4 + CANDIDATE_FEATURE_COUNT + 4;
+#[derive(Debug, Clone, PartialEq)]
+pub struct SequenceEvaluation {
+    mean_loss: f32,
+    candidate_logits: Vec<f32>,
+    speech_logits: Vec<f32>,
+    episode_count: u32,
+    success_count: u32,
+}
+
+impl SequenceEvaluation {
+    pub(crate) fn new(
+        mean_loss: f32,
+        candidate_logits: Vec<f32>,
+        speech_logits: Vec<f32>,
+        episode_count: u32,
+        success_count: u32,
+    ) -> Result<Self, ScaffoldContractError> {
+        if !mean_loss.is_finite()
+            || mean_loss < 0.0
+            || candidate_logits.len() != TRAINING_SEQUENCE_TICKS
+            || speech_logits.len() != TRAINING_SEQUENCE_TICKS
+            || candidate_logits.iter().any(|value| !value.is_finite())
+            || speech_logits.iter().any(|value| !value.is_finite())
+            || success_count > episode_count
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(Self {
+            mean_loss,
+            candidate_logits,
+            speech_logits,
+            episode_count,
+            success_count,
+        })
+    }
+
+    pub const fn mean_loss(&self) -> f32 {
+        self.mean_loss
+    }
+
+    pub fn candidate_logits(&self) -> &[f32] {
+        &self.candidate_logits
+    }
+
+    pub fn speech_logits(&self) -> &[f32] {
+        &self.speech_logits
+    }
+
+    pub const fn episode_count(&self) -> u32 {
+        self.episode_count
+    }
+
+    pub const fn success_count(&self) -> u32 {
+        self.success_count
+    }
+}
+
+pub(crate) const CANDIDATE_RECORD_WORDS: usize = 4 + CANDIDATE_FEATURE_COUNT + 8;

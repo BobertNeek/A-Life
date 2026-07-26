@@ -4,15 +4,15 @@ use std::{num::NonZeroU64, sync::mpsc};
 
 use alife_core::{
     BrainPhenotype, CompiledSynapseKind, FoundationWeightAsset, ProjectionType,
-    ScaffoldContractError, TrainingStageManifest, CANDIDATE_FEATURE_COUNT,
+    ScaffoldContractError, SpeechDecoderLayoutV1, TrainingStageManifest, CANDIDATE_FEATURE_COUNT,
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use wgpu::util::DeviceExt;
 
 use crate::{
-    AdamWConfig, StageTrainableMask, TrainingError, TrainingSequence32, TrainingStepReceipt,
-    CANDIDATE_RECORD_WORDS, TRAINING_SEQUENCE_TICKS,
+    AdamWConfig, SequenceEvaluation, StageTrainableMask, TrainingError, TrainingSequence32,
+    TrainingStepReceipt, CANDIDATE_RECORD_WORDS, TRAINING_SEQUENCE_TICKS,
 };
 
 const TRAINER_SCHEMA_VERSION: u32 = 1;
@@ -42,7 +42,9 @@ struct PackedLayout {
     deltas: u32,
     weight_gradients: u32,
     candidate_logits: u32,
+    speech_logits: u32,
     metrics: u32,
+    speech_target_start: u32,
     optimizer_v: u32,
     state_words: u64,
     gradient_words: u64,
@@ -53,12 +55,15 @@ struct PackedLayout {
 struct TrainerPipelines {
     forward: wgpu::ComputePipeline,
     candidate_forward: wgpu::ComputePipeline,
+    speech_forward: wgpu::ComputePipeline,
     loss: wgpu::ComputePipeline,
     seed_candidate: wgpu::ComputePipeline,
+    seed_speech: wgpu::ComputePipeline,
     backward_local: wgpu::ComputePipeline,
     backward_sources: wgpu::ComputePipeline,
     recurrent_gradients: wgpu::ComputePipeline,
     candidate_gradients: wgpu::ComputePipeline,
+    speech_gradients: wgpu::ComputePipeline,
     gradient_norm: wgpu::ComputePipeline,
     adamw: wgpu::ComputePipeline,
 }
@@ -195,6 +200,14 @@ impl FoundationTrainer {
         );
         dispatch(
             &mut encoder,
+            &self.gpu.pipelines.speech_forward,
+            &self.gpu.bind_group,
+            TRAINING_SEQUENCE_TICKS as u32,
+            1,
+            "foundation-trainer-speech-forward",
+        );
+        dispatch(
+            &mut encoder,
             &self.gpu.pipelines.loss,
             &self.gpu.bind_group,
             1,
@@ -216,6 +229,14 @@ impl FoundationTrainer {
             TRAINING_SEQUENCE_TICKS as u32,
             "foundation-trainer-seed-candidate-gradients",
         );
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.seed_speech,
+            &self.gpu.bind_group,
+            neuron_groups,
+            TRAINING_SEQUENCE_TICKS as u32,
+            "foundation-trainer-seed-speech-gradients",
+        );
         self.record_backward(&mut encoder, total_steps, neuron_groups);
         dispatch(
             &mut encoder,
@@ -232,6 +253,14 @@ impl FoundationTrainer {
             synapse_groups,
             1,
             "foundation-trainer-candidate-weight-gradients",
+        );
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.speech_gradients,
+            &self.gpu.bind_group,
+            synapse_groups,
+            1,
+            "foundation-trainer-speech-weight-gradients",
         );
         dispatch(
             &mut encoder,
@@ -267,6 +296,14 @@ impl FoundationTrainer {
             TRAINING_SEQUENCE_TICKS as u32,
             1,
             "foundation-trainer-candidate-forward-after",
+        );
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.speech_forward,
+            &self.gpu.bind_group,
+            TRAINING_SEQUENCE_TICKS as u32,
+            1,
+            "foundation-trainer-speech-forward-after",
         );
         dispatch(
             &mut encoder,
@@ -338,6 +375,129 @@ impl FoundationTrainer {
             &self.phenotype,
             weights,
             training_stage,
+        )?)
+    }
+
+    /// Runs the exact production-graph forward path without dispatching a
+    /// gradient or optimizer kernel.
+    pub fn evaluate_sequence(
+        &self,
+        sequence: &TrainingSequence32,
+    ) -> Result<SequenceEvaluation, TrainingError> {
+        sequence.validate_for(&self.phenotype)?;
+        let training_words = pack_training_sequence(sequence, self.phenotype.neuron_count())?;
+        let headers = build_step_headers(
+            &self.phenotype,
+            self.gpu.layout,
+            self.config,
+            self.optimizer_step.max(1),
+        )?;
+        let (device, queue) = self.session.backend().offline_training_device_queue()?;
+        queue.write_buffer(&self.gpu.training, 0, bytemuck::cast_slice(&training_words));
+        queue.write_buffer(&self.gpu.step_headers, 0, bytemuck::cast_slice(&headers));
+        let total_steps =
+            u32::from(self.phenotype.microstep_count()) * TRAINING_SEQUENCE_TICKS as u32;
+        let neuron_groups = self.phenotype.neuron_count().div_ceil(WORKGROUP_SIZE);
+        let readback_bytes = ((TRAINING_SEQUENCE_TICKS * 2 + 1) * 4) as u64;
+        let staging = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("foundation-trainer-evaluation-readback"),
+            size: readback_bytes,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("foundation-trainer-evaluation"),
+        });
+        encoder.clear_buffer(&self.gpu.state, 0, None);
+        encoder.clear_buffer(&self.gpu.outputs, 0, None);
+        self.record_forward(&mut encoder, total_steps, neuron_groups);
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.candidate_forward,
+            &self.gpu.bind_group,
+            TRAINING_SEQUENCE_TICKS as u32,
+            1,
+            "foundation-trainer-evaluation-candidate-forward",
+        );
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.speech_forward,
+            &self.gpu.bind_group,
+            TRAINING_SEQUENCE_TICKS as u32,
+            1,
+            "foundation-trainer-evaluation-speech-forward",
+        );
+        dispatch(
+            &mut encoder,
+            &self.gpu.pipelines.loss,
+            &self.gpu.bind_group,
+            1,
+            1,
+            "foundation-trainer-evaluation-loss",
+        );
+        encoder.copy_buffer_to_buffer(
+            &self.gpu.outputs,
+            u64::from(self.gpu.layout.candidate_logits) * 4,
+            &staging,
+            0,
+            readback_bytes,
+        );
+        let command_buffer = encoder.finish();
+        let (sender, receiver) = mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            &staging,
+            wgpu::MapMode::Read,
+            0..readback_bytes,
+            move |result| {
+                let _ = sender.send(result);
+            },
+        );
+        let submission = queue.submit(Some(command_buffer));
+        if device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err()
+            || receiver.recv().ok().and_then(Result::ok).is_none()
+        {
+            return Err(TrainingError::GpuSubmission);
+        }
+        let mapped = staging.slice(..readback_bytes).get_mapped_range();
+        let values = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
+        drop(mapped);
+        staging.unmap();
+        let (candidate_logits, remainder) = values.split_at(TRAINING_SEQUENCE_TICKS);
+        let (speech_logits, metric) = remainder.split_at(TRAINING_SEQUENCE_TICKS);
+        let Some(mean_loss) = metric.first().copied() else {
+            return Err(TrainingError::MalformedReadback);
+        };
+        let mut episode_count = 0_u32;
+        let mut success_count = 0_u32;
+        for ((tick, observed), speech_observed) in sequence
+            .ticks()
+            .iter()
+            .zip(candidate_logits)
+            .zip(speech_logits)
+        {
+            let Some(target) = tick.candidate_target() else {
+                continue;
+            };
+            episode_count += 1;
+            let candidate_correct = (*observed >= 0.0) == (target.target_logit >= 0.0);
+            let speech_correct = tick
+                .speech_target()
+                .is_none_or(|speech| (*speech_observed >= 0.0) == (speech.target_logit >= 0.0));
+            if candidate_correct && speech_correct {
+                success_count += 1;
+            }
+        }
+        Ok(SequenceEvaluation::new(
+            mean_loss,
+            candidate_logits.to_vec(),
+            speech_logits.to_vec(),
+            episode_count,
+            success_count,
         )?)
     }
 
@@ -563,12 +723,19 @@ impl TrainerGpuState {
                 &shader,
                 "forward_candidate_logits",
             ),
+            speech_forward: pipeline(device, &pipeline_layout, &shader, "forward_speech_logits"),
             loss: pipeline(device, &pipeline_layout, &shader, "reduce_loss"),
             seed_candidate: pipeline(
                 device,
                 &pipeline_layout,
                 &shader,
                 "seed_candidate_activation_gradients",
+            ),
+            seed_speech: pipeline(
+                device,
+                &pipeline_layout,
+                &shader,
+                "seed_speech_activation_gradients",
             ),
             backward_local: pipeline(device, &pipeline_layout, &shader, "backward_local"),
             backward_sources: pipeline(
@@ -588,6 +755,12 @@ impl TrainerGpuState {
                 &pipeline_layout,
                 &shader,
                 "candidate_weight_gradients",
+            ),
+            speech_gradients: pipeline(
+                device,
+                &pipeline_layout,
+                &shader,
+                "speech_weight_gradients",
             ),
             gradient_norm: pipeline(device, &pipeline_layout, &shader, "reduce_gradient_norm"),
             adamw: pipeline(device, &pipeline_layout, &shader, "apply_adamw"),
@@ -723,8 +896,11 @@ fn pack_metadata_and_layout(
         .and_then(|value| value.checked_add(synapse_count as u64))
         .ok_or(ScaffoldContractError::PhenotypeCompile)?;
     let candidate_logits = 0;
-    let metrics = TRAINING_SEQUENCE_TICKS as u32;
-    let output_words = TRAINING_SEQUENCE_TICKS as u64 + 4;
+    let speech_logits = TRAINING_SEQUENCE_TICKS as u32;
+    let metrics = (TRAINING_SEQUENCE_TICKS * 2) as u32;
+    let output_words = (TRAINING_SEQUENCE_TICKS * 2) as u64 + 4;
+    let speech_target_start =
+        phenotype.candidate_decoder().motor_start() + SpeechDecoderLayoutV1::MOTOR_TARGET_OFFSET;
     Ok((
         meta,
         PackedLayout {
@@ -746,7 +922,9 @@ fn pack_metadata_and_layout(
             deltas,
             weight_gradients,
             candidate_logits,
+            speech_logits,
             metrics,
+            speech_target_start,
             optimizer_v: synapse_count as u32,
             state_words,
             gradient_words,
@@ -811,9 +989,19 @@ fn pack_training_sequence(
         } else {
             words.extend(std::iter::repeat_n(0, 4 + CANDIDATE_FEATURE_COUNT));
         }
+        if let Some(speech) = tick.speech_target() {
+            words.extend_from_slice(&[
+                1,
+                u32::from(speech.output_index),
+                speech.target_logit.to_bits(),
+                speech.loss_weight.to_bits(),
+            ]);
+        } else {
+            words.extend(std::iter::repeat_n(0, 4));
+        }
         words.extend(std::iter::repeat_n(
             0,
-            CANDIDATE_RECORD_WORDS - (4 + CANDIDATE_FEATURE_COUNT),
+            CANDIDATE_RECORD_WORDS - (8 + CANDIDATE_FEATURE_COUNT),
         ));
         if words.len() - start != CANDIDATE_RECORD_WORDS {
             return Err(TrainingError::MalformedReadback);
@@ -881,8 +1069,10 @@ fn build_step_headers(
         header[34] = config.epsilon.to_bits();
         header[35] = config.weight_decay.to_bits();
         header[36] = config.gradient_clip.to_bits();
+        header[37] = layout.speech_target_start;
         header[38] = layout.family_biases;
         header[39] = CANDIDATE_FEATURE_COUNT as u32;
+        header[40] = layout.speech_logits;
         headers.extend_from_slice(&header);
     }
     Ok(headers)
@@ -1020,12 +1210,15 @@ mod tests {
         for required in [
             "forward_microstep",
             "forward_candidate_logits",
+            "forward_speech_logits",
             "reduce_loss",
             "seed_candidate_activation_gradients",
+            "seed_speech_activation_gradients",
             "backward_local",
             "backward_recurrent_sources",
             "recurrent_weight_gradients",
             "candidate_weight_gradients",
+            "speech_weight_gradients",
             "reduce_gradient_norm",
             "apply_adamw",
         ] {
