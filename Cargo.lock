@@ -144,6 +144,7 @@ dependencies = [
  "alife_bevy_adapter",
  "alife_core",
  "alife_gpu_backend",
+ "alife_runtime",
  "alife_school",
  "alife_semantic",
  "alife_world",
@@ -173,6 +174,19 @@ dependencies = [
  "pollster",
  "serde",
  "wgpu 29.0.3",
+]
+
+[[package]]
+name = "alife_runtime"
+version = "0.1.0"
+dependencies = [
+ "alife_core",
+ "alife_gpu_backend",
+ "alife_world",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -19,6 +19,7 @@ use alife_game_app::{
     GpuBrainSidecarCapture, GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLiveBrainRuntime,
 };
 use alife_gpu_backend::GpuClosedLoopBackend;
+use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile};
 use alife_world::{HeadlessScenarioBuilder, TrackedObjectRegistry};
 
@@ -92,9 +93,11 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         .unwrap()
         .save_state(organism_id)
         .unwrap();
-    let mut source =
+    let mut source = GpuAuthoritativeSession::new(
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
-            .expect("required Vulkan adapter");
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
     let handle = source.insert_brain(organism_id, phenotype.clone()).unwrap();
     let write = store
         .capture_brain(
@@ -118,9 +121,11 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
     merge_gpu_checkpoint_manifest_entries(&mut manifest, write.manifest_entries).unwrap();
     manifest.validate_with_root(&asset_root).unwrap();
 
-    let mut target =
+    let mut target = GpuAuthoritativeSession::new(
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
-            .expect("required Vulkan adapter");
+            .expect("required Vulkan adapter"),
+        GpuSessionConsumerKind::Challenge,
+    );
     let restored = store
         .restore_brain(&mut target, &manifest, &write.save_state)
         .unwrap();
@@ -652,6 +657,10 @@ fn manual_portable_checkpoint_atomically_restores_awake_fast_learning() {
         &launch,
     )
     .unwrap();
+    assert!(runtime
+        .session_authority()
+        .latest_durable_checkpoint()
+        .is_some());
     runtime.tick().unwrap();
     let fast_before = runtime.active_fast_weights_for_test(organism_id).unwrap();
     assert!(fast_before.iter().any(|value| *value != 0.0));
@@ -680,6 +689,14 @@ fn manual_portable_checkpoint_atomically_restores_awake_fast_learning() {
         &restore_launch,
     )
     .unwrap();
+    assert_eq!(
+        restored
+            .session_authority()
+            .latest_durable_checkpoint()
+            .expect("restored session retains its durable manifest")
+            .checkpoint_tick,
+        state.checkpoint_tick
+    );
     assert_eq!(
         restored.active_fast_weights_for_test(organism_id).unwrap(),
         fast_before
@@ -813,6 +830,63 @@ fn production_save_persists_recovered_submission_and_atomically_promotes_complet
         committed.active_weight_generation,
         "restart after manifest CAS must not promote a second time",
     );
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn device_loss_fail_stops_live_actions_and_retains_the_last_durable_reference() {
+    let root = unique_asset_root("device-loss-fail-stop");
+    copy_tree(
+        std::path::Path::new("../alife_world/tests/fixtures/p34"),
+        &root,
+    );
+    let save_path = root.join("tiny_save.json");
+    let mut source_save = PortableSaveFile::from_json_file(&save_path).unwrap();
+    source_save.gpu_runtime = None;
+    for creature in &mut source_save.creatures {
+        creature.gpu_brain = None;
+    }
+    source_save
+        .assets
+        .entries
+        .retain(|entry| !entry.asset_id.starts_with("gpu-brain."));
+    let stale_gpu_assets = root.join("gpu-brain");
+    if stale_gpu_assets.exists() {
+        fs::remove_dir_all(stale_gpu_assets).unwrap();
+    }
+    source_save.to_json_file(&save_path).unwrap();
+    let launch = AppShellLaunchConfig::from_p34_fixture_root(&root)
+        .with_brain_policy(PolicyBackend::NeuralClosedLoopGpu);
+    let mut runtime = GpuLiveBrainRuntime::from_p34_launch(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .expect("required Vulkan adapter"),
+        &launch,
+    )
+    .unwrap();
+    let durable_before = runtime
+        .session_authority()
+        .latest_durable_checkpoint()
+        .cloned()
+        .expect("production launch has a durable checkpoint reference");
+
+    runtime.force_device_lost_after_next_submit_for_test();
+    assert!(matches!(
+        runtime.tick(),
+        Err(GameAppShellError::Core(
+            ScaffoldContractError::NeuralBackendUnavailable
+        ))
+    ));
+    assert_eq!(
+        runtime.session_authority().latest_durable_checkpoint(),
+        Some(&durable_before)
+    );
+    assert!(matches!(
+        runtime.tick(),
+        Err(GameAppShellError::Core(
+            ScaffoldContractError::NeuralBackendUnavailable
+        ))
+    ));
 
     fs::remove_dir_all(root).unwrap();
 }

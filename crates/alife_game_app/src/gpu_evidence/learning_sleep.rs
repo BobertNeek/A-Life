@@ -26,6 +26,7 @@ use alife_gpu_backend::{
     GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuBrainRestoreRequest, GpuClosedLoopBackend,
     GpuHardwareReceipt,
 };
+use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
     persistence::{
         AssetManifest, CreatureMindSaveSummary, CreatureSaveState, GpuBrainAssetRef,
@@ -914,6 +915,8 @@ fn run_replay_restore_probe(
     )?;
 
     let submitted_state = submitted_sleep_state(checkpoint_tick, replayed_request, replayed_job)?;
+    let mut replayed_backend =
+        GpuAuthoritativeSession::new(replayed_backend, GpuSessionConsumerKind::Challenge);
     let temporary = TemporaryEvidenceRoot::new("slice-b")?;
     let store = GpuCheckpointAssetStore::new(temporary.path())?;
     let world = evidence_world(options.deterministic_seed, organism_id, checkpoint_tick)?;
@@ -1797,8 +1800,10 @@ fn validate_checkpoint_payloads(
     store: &GpuCheckpointAssetStore,
     save: &PortableSaveFile,
 ) -> Result<(), GpuEvidenceError> {
-    let mut backend =
-        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?;
+    let mut backend = GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())?,
+        GpuSessionConsumerKind::Challenge,
+    );
     for state in save
         .creatures
         .iter()

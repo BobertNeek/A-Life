@@ -7,6 +7,7 @@ pub mod adapter;
 mod blake3_digest;
 pub mod brain_class;
 pub mod canonical_digest;
+pub mod checkpoint;
 pub mod chemistry;
 pub mod diagnostics;
 pub mod error;
@@ -58,6 +59,7 @@ pub use brain_class::{
     BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,
 };
 pub use canonical_digest::CanonicalDigestBuilder;
+pub use checkpoint::{BrainCheckpointMode, BRAIN_CHECKPOINT_MODE_SCHEMA_VERSION};
 pub use chemistry::{
     ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta, EndocrineProfile,
     EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand, HomeostaticDelta,

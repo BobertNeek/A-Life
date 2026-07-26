@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_bevy_adapter", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools", "crates/alife_game_app"]
+members = ["crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_runtime", "crates/alife_bevy_adapter", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools", "crates/alife_game_app"]
 resolver = "2"
 
 [workspace.package]
@@ -33,6 +33,9 @@ opt-level = 2
 opt-level = 2
 
 [profile.test.package.alife_gpu_backend]
+opt-level = 2
+
+[profile.test.package.alife_runtime]
 opt-level = 2
 
 [profile.test.package.alife_game_app]

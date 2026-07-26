@@ -1,9 +1,7 @@
 //! Durable GPU checkpoint save-manifest compare-and-swap contracts.
-#![cfg(feature = "gpu-runtime")]
-
 use std::{fs, path::Path};
 
-use alife_game_app::{GameAppShellError, GpuDurableSaveManifest, GpuSaveManifestCasOutcome};
+use alife_runtime::{GpuDurableSaveManifest, GpuRuntimeError, GpuSaveManifestCasOutcome};
 
 fn copy_tree(source: &Path, destination: &Path) {
     fs::create_dir_all(destination).unwrap();
@@ -53,7 +51,7 @@ fn save_manifest_compare_and_swap_is_atomic_idempotent_and_conflict_typed() {
     conflicting.save_id = "gpu-cas-conflict".to_string();
     assert!(matches!(
         durable.compare_and_swap(&loaded.digest, &conflicting),
-        Err(GameAppShellError::GpuCheckpointManifestConflict { .. })
+        Err(GpuRuntimeError::GpuCheckpointManifestConflict { .. })
     ));
 
     fs::remove_dir_all(root).unwrap();

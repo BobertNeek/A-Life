@@ -27,7 +27,7 @@ use alife_world::persistence::{
 use alife_world::TrackedObjectRegistrySaveState;
 use serde::{Deserialize, Serialize};
 
-use crate::GameAppShellError;
+use crate::{GameAppShellError, GpuAuthoritativeSession};
 
 use super::{
     content_store::GpuCheckpointAssetStore,
@@ -36,7 +36,7 @@ use super::{
 
 const PENDING_TRANSACTION_SCHEMA_VERSION: u16 = 1;
 
-pub(crate) fn current_backend_provenance(
+pub fn current_backend_provenance(
     backend: &GpuClosedLoopBackend,
     capacity: &BrainCapacityClass,
 ) -> Result<GpuBackendProvenanceSave, GameAppShellError> {
@@ -218,7 +218,7 @@ impl GpuCheckpointAssetStore {
     #[allow(clippy::too_many_arguments)]
     pub fn capture_brain(
         &self,
-        backend: &mut GpuClosedLoopBackend,
+        backend: &mut GpuAuthoritativeSession,
         handle: GpuBrainHandle,
         phenotype: &BrainPhenotype,
         compiler_inputs: &PhenotypeCompilerInputs,
@@ -485,7 +485,7 @@ impl GpuCheckpointAssetStore {
 
     pub fn restore_brain(
         &self,
-        backend: &mut GpuClosedLoopBackend,
+        backend: &mut GpuAuthoritativeSession,
         manifest: &AssetManifest,
         state: &GpuBrainSaveState,
     ) -> Result<RestoredGpuBrainCheckpoint, GameAppShellError> {

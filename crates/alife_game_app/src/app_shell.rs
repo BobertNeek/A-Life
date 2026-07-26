@@ -5,6 +5,8 @@ use crate::*;
 
 #[derive(Debug, Error)]
 pub enum GameAppShellError {
+    #[error("GPU runtime error: {0}")]
+    GpuRuntime(#[from] alife_runtime::GpuRuntimeError),
     #[error("persistence/config error: {0}")]
     Persistence(#[from] PersistenceError),
     #[error("core contract error: {0}")]

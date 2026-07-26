@@ -77,6 +77,8 @@ pub enum GpuEvidenceError {
     #[error(transparent)]
     App(#[from] GameAppShellError),
     #[error(transparent)]
+    Runtime(#[from] alife_runtime::GpuRuntimeError),
+    #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
