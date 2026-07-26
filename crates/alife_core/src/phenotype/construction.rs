@@ -13,6 +13,22 @@ pub(super) fn compile(
     inputs: &PhenotypeCompilerInputs,
     capacity: &BrainCapacityClass,
 ) -> Result<BrainPhenotype, ScaffoldContractError> {
+    compile_inner(inputs, capacity, None)
+}
+
+pub(super) fn compile_with_foundation_asset(
+    inputs: &PhenotypeCompilerInputs,
+    capacity: &BrainCapacityClass,
+    foundation: &crate::FoundationWeightAsset,
+) -> Result<BrainPhenotype, ScaffoldContractError> {
+    compile_inner(inputs, capacity, Some(foundation))
+}
+
+fn compile_inner(
+    inputs: &PhenotypeCompilerInputs,
+    capacity: &BrainCapacityClass,
+    foundation: Option<&crate::FoundationWeightAsset>,
+) -> Result<BrainPhenotype, ScaffoldContractError> {
     inputs.validate_against(capacity)?;
     let genome = inputs.genome();
     let development = inputs.development();
@@ -94,7 +110,7 @@ pub(super) fn compile(
         .region(crate::LobeKind::MotorArbitration)
         .filter(|region| region.enabled)
         .ok_or_else(compile_error)?;
-    let dynamics = (0..execution.max_neurons())
+    let dynamics: Vec<NeuronDynamics> = (0..execution.max_neurons())
         .map(|neuron| {
             let bias = if motor.contains_neuron(neuron) {
                 0.05
@@ -109,6 +125,50 @@ pub(super) fn compile(
         value if value < 2.0 / 3.0 => 3,
         _ => 4,
     };
+    if let Some(foundation) = foundation {
+        let coordinate_plan = BrainPhenotype::try_new(
+            inputs,
+            capacity,
+            execution.max_neurons(),
+            microstep_count,
+            layout.clone(),
+            projections.clone(),
+            synapses.clone(),
+            dynamics.clone(),
+            encoder.clone(),
+            decoders.candidate.clone(),
+            decoders.speech.clone(),
+            decoders.memory.clone(),
+            learning.receptors.clone(),
+            learning.replay.clone(),
+            learning.sleep,
+            learning.digest,
+            budgets.clone(),
+        )?;
+        foundation.validate_against(&coordinate_plan)?;
+        for (global_index, (synapse, weight)) in
+            synapses.iter_mut().zip(foundation.weights()).enumerate()
+        {
+            let projection = projections
+                .get(usize::from(synapse.route_index()))
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let delta = genome_weight_delta(genome.genetic_prior_seed, global_index as u32);
+            let mut composed = *weight + delta;
+            match projection.projection_type() {
+                crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
+                    composed = -0.000_1;
+                }
+                crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
+                    if composed < 0.0 =>
+                {
+                    composed = 0.000_1;
+                }
+                _ => {}
+            }
+            synapse.set_genetic_weight(composed);
+        }
+    }
+
     BrainPhenotype::try_new(
         inputs,
         capacity,
@@ -156,4 +216,20 @@ fn validate_supported_inputs(
 
 const fn compile_error() -> ScaffoldContractError {
     ScaffoldContractError::PhenotypeCompile
+}
+
+fn genome_weight_delta(seed: u64, global_index: u32) -> f32 {
+    let bits = splitmix64(seed ^ (u64::from(global_index) << 21) ^ 0x9D39_2EA1_A903_347B);
+    if bits & 0x0F != 0 {
+        return 0.0;
+    }
+    let centered = ((bits >> 40) as f32 / ((1_u32 << 24) - 1) as f32) - 0.5;
+    centered * 0.01
+}
+
+fn splitmix64(mut value: u64) -> u64 {
+    value = value.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    value ^ (value >> 31)
 }

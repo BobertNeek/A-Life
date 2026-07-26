@@ -121,6 +121,23 @@ impl PhenotypeCompilerInputs {
         for byte in self.foundation_abi.layout_digest().bytes() {
             d.write_u8(*byte);
         }
+        if let (Some(id), Some(version), Some(family), Some(asset)) = (
+            self.foundation_abi.foundation_id(),
+            self.foundation_abi.foundation_version(),
+            self.foundation_abi.compatibility_family_id(),
+            self.foundation_abi.foundation_weight_asset(),
+        ) {
+            // No marker is emitted for the legacy no-foundation form, preserving
+            // its v3 digest exactly. Foundation-bound inputs use a reserved tag.
+            d.write_u8(0xF1);
+            d.write_u64(id.raw());
+            d.write_u32(version.raw());
+            d.write_u64(family.raw());
+            for byte in asset.digest().bytes() {
+                d.write_u8(*byte);
+            }
+            d.write_u32(asset.weight_count());
+        }
         d.write_u32(self.foundation_abi.language_codebook().id().0);
         for byte in self
             .foundation_abi
