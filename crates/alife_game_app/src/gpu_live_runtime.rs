@@ -7,11 +7,12 @@ use alife_core::{
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
     BrainWorkReceipt, CanonicalDigestBuilder, Confidence, ConsolidationDriverEvent,
-    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, FinalizedMemoryRecall, HomeostaticDelta,
-    HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig,
-    MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
-    MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionFrame,
+    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
+    EnvironmentalRegime, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
+    FinalizedMemoryRecall, HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot,
+    LanguageGroundingLedger, MemoryBankConfig, MemoryCompactionCheckpoint, MemoryCompactionReceipt,
+    MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt, NeuralActionSelection,
+    NormalizedScalar, OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame,
     PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot,
     ScaffoldContractError, SensorProfile, SensorProfileIdentity, SensoryAbiVersion,
     SleepConsolidationConfig, SleepPhase, SleepState, Tick, TopologicalMapConfig,
@@ -50,6 +51,7 @@ struct ResidentCognition {
     sleep_scheduler: GpuSleepScheduler,
     next_sequence: u64,
     language_grounding: LanguageGroundingLedger,
+    life_statistics: PassiveLifeStatistics,
 }
 
 #[derive(Debug, Clone)]
@@ -900,6 +902,9 @@ impl GpuLiveBrainRuntime {
                     )?,
                     next_sequence,
                     language_grounding: restored.language_grounding,
+                    life_statistics: restored
+                        .life_statistics
+                        .unwrap_or(PassiveLifeStatistics::new(OrganismId(raw), world_tick)?),
                 };
                 runtime.handles.insert(raw, handle);
                 runtime.residents.insert(raw, resident);
@@ -1014,6 +1019,7 @@ impl GpuLiveBrainRuntime {
                 topology,
                 tracked_objects: self.world.tracked_objects().save_state(organism_id)?,
                 language_grounding: &resident.language_grounding,
+                life_statistics: &resident.life_statistics,
                 retained_learning,
             },
         )?)
@@ -1077,6 +1083,7 @@ impl GpuLiveBrainRuntime {
                         .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?,
                     tracked_objects: self.world.tracked_objects().save_state(OrganismId(raw))?,
                     language_grounding: &resident.language_grounding,
+                    life_statistics: &resident.life_statistics,
                     retained_learning: self.retained_learning.get(&raw).map(|recovery| {
                         RetainedLearningCapture {
                             sealed_patch: &recovery.sealed_patch,
@@ -1326,15 +1333,9 @@ impl GpuLiveBrainRuntime {
             .residents
             .get(&raw)
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let statistics = serde_json::to_vec(&serde_json::json!({
-            "schema": "alife.life-statistics.v1",
-            "organism_id": raw,
-            "death_tick": self.world.tick().raw(),
-            "death_reason": death_reason,
-            "sealed_patch_count": self.sealed_patches.iter().filter(|patch| patch.header().organism_id == organism_id).count(),
-            "next_experience_sequence": resident.next_sequence,
-            "language_grounding_entries": resident.language_grounding.entries().len(),
-        }))?;
+        let mut final_statistics = resident.life_statistics.clone();
+        final_statistics.finalize(self.world.tick(), death_reason)?;
+        let statistics = serde_json::to_vec(&final_statistics)?;
         let receipt = self
             .lineage_library
             .as_mut()
@@ -1383,6 +1384,28 @@ impl GpuLiveBrainRuntime {
             .map(LineageLibrary::manifest_count)
             .transpose()
             .map_err(Into::into)
+    }
+
+    pub fn passive_life_statistics(
+        &self,
+        organism_id: OrganismId,
+    ) -> Option<&PassiveLifeStatistics> {
+        self.residents
+            .get(&organism_id.raw())
+            .map(|resident| &resident.life_statistics)
+    }
+
+    pub fn observe_passive_life_event(
+        &mut self,
+        organism_id: OrganismId,
+        event: PassiveLifeEvent,
+    ) -> Result<(), GameAppShellError> {
+        self.residents
+            .get_mut(&organism_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .life_statistics
+            .observe(event)?;
+        Ok(())
     }
 
     fn archive_birth_before_gpu_insert(
@@ -1823,6 +1846,7 @@ impl GpuLiveBrainRuntime {
         if summaries_by_organism.len() != self.handles.len() {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
+        self.observe_passive_tick(tick_before, tick_after)?;
         self.world.advance_tick();
         if persist_sleep_boundary {
             self.persist_sleep_checkpoint_boundary()?;
@@ -2130,6 +2154,7 @@ impl GpuLiveBrainRuntime {
             sleep_scheduler: GpuSleepScheduler::new(SleepConsolidationConfig::reference())?,
             next_sequence: 1,
             language_grounding: LanguageGroundingLedger::default(),
+            life_statistics: PassiveLifeStatistics::new(organism_id, self.world.tick())?,
         };
         Ok((phenotype, resident))
     }
@@ -2322,6 +2347,63 @@ impl GpuLiveBrainRuntime {
                 .max()
                 .unwrap_or(0),
         };
+        Ok(())
+    }
+
+    fn observe_passive_tick(
+        &mut self,
+        tick_before: Tick,
+        tick_after: Tick,
+    ) -> Result<(), ScaffoldContractError> {
+        let mut movement_by_organism = BTreeMap::<u64, u32>::new();
+        let (residents, retained, recent) = (
+            &mut self.residents,
+            &self.sealed_patches,
+            &self.last_sealed_patches,
+        );
+        for patch in retained
+            .iter()
+            .rev()
+            .take(residents.len())
+            .chain(recent)
+            .filter(|patch| {
+                patch.header().world_tick == tick_before
+                    && patch.outcome().outcome_tick == tick_after
+            })
+        {
+            let raw = patch.header().organism_id.raw();
+            let displacement = patch.outcome().physical.displacement;
+            let distance = (displacement.x * displacement.x
+                + displacement.y * displacement.y
+                + displacement.z * displacement.z)
+                .sqrt()
+                .clamp(0.0, 1.0);
+            movement_by_organism.insert(raw, unit_f32_to_q16(distance));
+            residents
+                .get_mut(&raw)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .life_statistics
+                .observe_sealed_patch(patch)?;
+        }
+        for (&raw, resident) in residents {
+            let work = self.last_activity_work_receipts.iter().find(|receipt| {
+                receipt.organism_id_raw == raw && receipt.tick == tick_before.raw()
+            });
+            let gpu_dispatched = work.is_some();
+            let gpu_throttled = work.is_some_and(|receipt| {
+                receipt.counters.microsteps < u32::from(resident.phenotype.microstep_count())
+            });
+            resident
+                .life_statistics
+                .observe(PassiveLifeEvent::SurvivalTick {
+                    tick: tick_after,
+                    regime: EnvironmentalRegime::Temperate,
+                    energy_q16: unit_f32_to_q16(resident.homeostasis.drives.brain_atp),
+                    movement_distance_q16: movement_by_organism.get(&raw).copied().unwrap_or(0),
+                    gpu_dispatched,
+                    gpu_throttled,
+                })?;
+        }
         Ok(())
     }
 
@@ -2982,6 +3064,10 @@ fn gpu_sleep_state_label(state: SleepState) -> String {
             state.active_cycle_id
         }
     )
+}
+
+fn unit_f32_to_q16(value: f32) -> u32 {
+    (value.clamp(0.0, 1.0) * 65_535.0).round() as u32
 }
 
 const fn gpu_sleep_phase_overlay_label(phase: SleepPhase) -> &'static str {
@@ -3711,6 +3797,9 @@ mod tests {
         assert!(runtime.handle_for(OrganismId(1)).is_some());
 
         runtime.tick().unwrap();
+        let live_statistics = runtime.passive_life_statistics(OrganismId(1)).unwrap();
+        assert_eq!(live_statistics.survival_ticks(), 1);
+        assert_eq!(live_statistics.gpu_dispatches(), 1);
         let receipt = runtime
             .retire_organism(OrganismId(1), "test-death")
             .unwrap();
@@ -3728,8 +3817,11 @@ mod tests {
             .load_manifest(receipt.committed_manifest_digest)
             .unwrap();
         assert_eq!(final_manifest.previous_manifest_digest, Some(birth));
+        let final_statistics = library.load_life_statistics(&final_manifest).unwrap();
+        assert_eq!(final_statistics.survival_ticks(), 1);
+        assert_eq!(final_statistics.death_tick(), Some(Tick(1)));
         assert!(matches!(
-            final_manifest.life.unwrap().checkpoint,
+            final_manifest.life.as_ref().unwrap().checkpoint,
             alife_core::ArchiveCheckpointDisposition::Stored(_)
         ));
         drop(library);

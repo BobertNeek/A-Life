@@ -4,10 +4,10 @@ use alife_core::{
     ActionId, BrainActivityPolicyV1, BrainCapacityClass, CandidateActionFamily,
     CandidateFeatureDigest, Confidence, ConsolidationIntent, ConsolidationJobId,
     ConsolidationStagedOutput, ConsolidationState, ExperienceSequenceId, GpuConsolidationRequest,
-    MemoryBankConfig, MemorySidecarState, NeuromodulatorSample, OrganismId, PerceptionFrameDigest,
-    PhenotypeHash, ReplayEligibilitySample, ReplaySynapseSpan, SensorProfile,
-    SensorProfileIdentity, SensoryAbiVersion, SleepPhase, SleepReplayEvent, SleepState,
-    SleepTrigger, Tick, TopologicalMapConfig, TopologySidecar, Validate,
+    MemoryBankConfig, MemorySidecarState, NeuromodulatorSample, OrganismId, PassiveLifeStatistics,
+    PerceptionFrameDigest, PhenotypeHash, ReplayEligibilitySample, ReplaySynapseSpan,
+    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepPhase, SleepReplayEvent,
+    SleepState, SleepTrigger, Tick, TopologicalMapConfig, TopologySidecar, Validate,
     GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 use alife_world::persistence::{
@@ -184,6 +184,7 @@ fn save_for_sleep(sleep: SleepState) -> GpuBrainSaveState {
         topology,
         tracked_objects,
         language_grounding: alife_core::LanguageGroundingLedger::default(),
+        life_statistics: Some(PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap()),
         sleep,
         sleep_assets: GpuSleepAssetState {
             replay_batch: replay_required.then(|| asset("sleep-replay")),
@@ -255,6 +256,7 @@ fn every_sleep_phase_roundtrips_without_duplicate_consolidation() {
             sleep.last_consolidated_cycle_id
         );
         assert_eq!(loaded.sleep.consolidation, sleep.consolidation);
+        assert_eq!(loaded.life_statistics, save.life_statistics);
     }
 }
 

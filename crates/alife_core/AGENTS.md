@@ -21,6 +21,8 @@ Rules:
   app/tool layers may ingest them but may not redefine their meanings.
 - Own foundation, language-codebook, persistent-address, checkpoint, and
   archive-provenance contracts.
+- `evaluation.rs` owns the fixed-size passive life-statistics and exact
+  15-challenge battery contracts. Missing exposure is `Unknown`, never zero.
 - Never equate a language token ID with a neuron or packed GPU offset.
 - Genetic birth must not inherit lifetime weights, memories, learned lexicon
   bindings, eligibility, or transient state.

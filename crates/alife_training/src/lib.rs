@@ -3,12 +3,14 @@
 mod curriculum;
 mod evolution;
 mod program;
+mod ranking;
 mod trainer;
 mod types;
 
 pub use curriculum::*;
 pub use evolution::*;
 pub use program::*;
+pub use ranking::*;
 pub use trainer::FoundationTrainer;
 pub use types::*;
 

@@ -951,6 +951,10 @@ fn run_replay_restore_probe(
                 topology: &topology,
                 tracked_objects: world.tracked_objects().save_state(organism_id)?,
                 language_grounding: &alife_core::LanguageGroundingLedger::default(),
+                life_statistics: &alife_core::PassiveLifeStatistics::new(
+                    organism_id,
+                    checkpoint_tick,
+                )?,
                 retained_learning: None,
             },
         ),
@@ -1025,6 +1029,10 @@ fn run_replay_restore_probe(
                 topology: &topology,
                 tracked_objects: world.tracked_objects().save_state(organism_id)?,
                 language_grounding: &alife_core::LanguageGroundingLedger::default(),
+                life_statistics: &alife_core::PassiveLifeStatistics::new(
+                    organism_id,
+                    checkpoint_tick,
+                )?,
                 retained_learning: None,
             },
         ),

@@ -94,6 +94,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         .save_state(organism_id)
         .unwrap();
     let language_grounding = alife_core::LanguageGroundingLedger::default();
+    let life_statistics = alife_core::PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap();
     let mut source = GpuAuthoritativeSession::new(
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
             .expect("required Vulkan adapter"),
@@ -115,6 +116,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
                 topology: &topology,
                 tracked_objects,
                 language_grounding: &language_grounding,
+                life_statistics: &life_statistics,
                 retained_learning: None,
             },
         )

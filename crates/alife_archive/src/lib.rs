@@ -11,8 +11,8 @@ use alife_core::{
     ArchiveAssetKind, ArchiveAssetRef, ArchiveCheckpointDisposition, ArchiveCheckpointRef,
     ArchiveCheckpointRetention, ArchivePageRef, ArchiveRetirementReceipt, Blake3Digest,
     BrainGenome, BrainPhenotype, CreatureArchiveManifest, CreatureLifeArchiveRecord,
-    ExperienceSequenceId, GeneticArchiveRecord, OrganismId, ScaffoldContractError, Tick, Validate,
-    CREATURE_ARCHIVE_SCHEMA_VERSION,
+    ExperienceSequenceId, GeneticArchiveRecord, OrganismId, PassiveLifeStatistics,
+    ScaffoldContractError, Tick, Validate, CREATURE_ARCHIVE_SCHEMA_VERSION,
 };
 use rusqlite::{params, Connection};
 
@@ -278,6 +278,53 @@ impl LineageLibrary {
             ));
         }
         Ok(output)
+    }
+
+    pub fn load_life_statistics(
+        &self,
+        manifest: &CreatureArchiveManifest,
+    ) -> Result<PassiveLifeStatistics, ArchiveError> {
+        manifest.validate_contract()?;
+        let life = manifest.life.as_ref().ok_or_else(|| {
+            ArchiveError::Integrity("birth manifest has no life statistics".to_string())
+        })?;
+        let reference = &life.statistics_asset;
+        if reference.kind != ArchiveAssetKind::LifeStatistics {
+            return Err(ArchiveError::Integrity(
+                "life manifest references the wrong asset kind".to_string(),
+            ));
+        }
+        let path = self
+            .config
+            .root
+            .join("assets")
+            .join(digest_hex(reference.digest))
+            .join("payload.bin");
+        let bytes = fs::read(path)?;
+        if bytes.len() as u64 != reference.size_bytes || digest_bytes(&bytes) != reference.digest {
+            return Err(ArchiveError::Integrity(
+                "life statistics asset digest mismatch".to_string(),
+            ));
+        }
+        let statistics = serde_json::from_slice::<PassiveLifeStatistics>(&bytes)?;
+        statistics.validate_contract()?;
+        if statistics.organism_id() != manifest.genetic.organism_id
+            || statistics.death_tick() != Some(life.death_tick)
+        {
+            return Err(ArchiveError::Integrity(
+                "life statistics identity does not match manifest".to_string(),
+            ));
+        }
+        Ok(statistics)
+    }
+
+    pub fn life_manifest_digests(&self) -> Result<Vec<Blake3Digest>, ArchiveError> {
+        let mut statement = self.connection.prepare(
+            "SELECT digest FROM manifests WHERE is_life=1 \
+             ORDER BY source_run_id, organism_id, rowid",
+        )?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        rows.map(|row| parse_digest_hex(&row?)).collect()
     }
 
     pub fn rebuild_index(&mut self) -> Result<(), ArchiveError> {

@@ -12,3 +12,6 @@ evolutionary hardening.
 - Stage masks must preserve frozen weights bit-for-bit.
 - N2048 is the only trained foundation until another class receives a separate
   approved curriculum and evidence program.
+- Cross-run screening is capped at 64 candidates per run and 16 active-battery
+  candidates. Ranking may display ancestry and genome distance but never apply
+  an implicit kinship penalty.
