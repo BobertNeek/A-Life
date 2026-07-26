@@ -681,16 +681,44 @@ impl FoundationWeightAsset {
         training_stage: TrainingStageManifest,
         promotion_receipt: FoundationPromotionReceipt,
     ) -> Result<Self, ScaffoldContractError> {
-        if phenotype.brain_class_id() != BrainCapacityClass::N2048_ID {
-            return Err(ScaffoldContractError::PhenotypeCompile);
-        }
-        training_stage.validate()?;
-        promotion_receipt.validate(training_stage)?;
         let weights = phenotype
             .synapses()
             .iter()
             .map(|synapse| synapse.genetic_weight())
             .collect::<Vec<_>>();
+        Self::from_weights_with_provenance(phenotype, weights, training_stage, promotion_receipt)
+    }
+
+    /// Builds an unpromoted training candidate from canonical phenotype-order
+    /// weights. Optimizer moments, gradients, targets, and auxiliary heads are
+    /// intentionally absent from the production foundation asset.
+    pub fn from_trained_weights(
+        phenotype: &BrainPhenotype,
+        weights: Vec<f32>,
+        training_stage: TrainingStageManifest,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::from_weights_with_provenance(
+            phenotype,
+            weights,
+            training_stage,
+            FoundationPromotionReceipt::bootstrap(training_stage),
+        )
+    }
+
+    fn from_weights_with_provenance(
+        phenotype: &BrainPhenotype,
+        weights: Vec<f32>,
+        training_stage: TrainingStageManifest,
+        promotion_receipt: FoundationPromotionReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        if phenotype.brain_class_id() != BrainCapacityClass::N2048_ID
+            || weights.len() != phenotype.synapses().len()
+            || weights.iter().any(|weight| !weight.is_finite())
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        training_stage.validate()?;
+        promotion_receipt.validate(training_stage)?;
         let mut manifest = FoundationManifest::from_phenotype(
             phenotype,
             FoundationWeightAssetRef {

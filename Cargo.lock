@@ -225,6 +225,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alife_training"
+version = "0.1.0"
+dependencies = [
+ "alife_core",
+ "alife_gpu_backend",
+ "alife_runtime",
+ "bytemuck",
+ "naga 29.0.3",
+ "thiserror 2.0.18",
+ "wgpu 29.0.3",
+]
+
+[[package]]
 name = "alife_world"
 version = "0.1.0"
 dependencies = [

@@ -1064,6 +1064,19 @@ impl GpuClosedLoopBackend {
         &self.hardware
     }
 
+    /// Returns the shared authoritative device only for quiescent offline
+    /// training work. Training pipelines remain owned by `alife_training` and
+    /// are never packaged into the gameplay backend.
+    pub fn offline_training_device_queue(
+        &self,
+    ) -> Result<(&wgpu::Device, &wgpu::Queue), ScaffoldContractError> {
+        if !matches!(self.state, GpuBackendState::Ready) || self.device_lost.load(Ordering::Acquire)
+        {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        Ok((&self.device, &self.queue))
+    }
+
     /// Installs an exact pressure sequence for same-adapter evidence replay.
     ///
     /// This exact-replay boundary replaces only the host pressure sample;
