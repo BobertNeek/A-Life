@@ -4,6 +4,7 @@ pub mod action;
 pub mod action_abi;
 pub mod activity;
 pub mod adapter;
+pub mod archive;
 mod blake3_digest;
 pub mod brain_class;
 pub mod canonical_digest;
@@ -54,6 +55,12 @@ pub use activity::{
     BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
 };
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
+pub use archive::{
+    ArchiveAssetKind, ArchiveAssetRef, ArchiveCheckpointDisposition, ArchiveCheckpointRef,
+    ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchivePageRef,
+    ArchiveRetirementReceipt, CreatureArchiveManifest, CreatureLifeArchiveRecord,
+    GeneticArchiveRecord, CREATURE_ARCHIVE_SCHEMA_VERSION,
+};
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{
     BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,

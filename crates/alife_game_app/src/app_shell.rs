@@ -5,6 +5,9 @@ use crate::*;
 
 #[derive(Debug, Error)]
 pub enum GameAppShellError {
+    #[cfg(feature = "gpu-runtime")]
+    #[error("lineage archive error: {0}")]
+    Archive(#[from] alife_archive::ArchiveError),
     #[error("GPU runtime error: {0}")]
     GpuRuntime(#[from] alife_runtime::GpuRuntimeError),
     #[error("persistence/config error: {0}")]

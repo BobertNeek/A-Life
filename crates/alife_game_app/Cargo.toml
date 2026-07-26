@@ -7,6 +7,7 @@ repository.workspace = true
 
 [dependencies]
 alife_core = { path = "../alife_core" }
+alife_archive = { path = "../alife_archive", optional = true }
 alife_bevy_adapter = { path = "../alife_bevy_adapter", optional = true }
 alife_gpu_backend = { path = "../alife_gpu_backend", optional = true }
 alife_runtime = { path = "../alife_runtime", optional = true }
@@ -60,7 +61,7 @@ bevy-app = [
     "bevy/zstd_rust",
     "dep:wgpu",
 ]
-gpu-runtime = ["dep:alife_gpu_backend", "dep:alife_runtime"]
+gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
 gpu-tests = ["gpu-runtime", "alife_gpu_backend/gpu-tests", "alife_runtime/gpu-tests"]
 voxel-backend = ["bevy-app", "dep:bevy_voxel_world"]
 voxel-internal-mesh = ["bevy-app", "dep:block-mesh"]
