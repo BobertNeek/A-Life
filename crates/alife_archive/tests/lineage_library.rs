@@ -6,7 +6,7 @@ use alife_archive::{
 use alife_core::{
     ArchiveCheckpointDisposition, ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy,
     BrainCapacityClass, BrainGenome, DevelopmentState, FoundationWeightAsset, NormalizedScalar,
-    OrganismId, PhenotypeCompiler, SensorProfile, Tick,
+    OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PhenotypeCompiler, SensorProfile, Tick,
 };
 
 fn temp_root(label: &str) -> PathBuf {
@@ -94,6 +94,49 @@ fn genetic_birth_life_checkpoint_and_rebuilt_index_are_durable() {
         Some(receipt.committed_manifest_digest)
     );
     drop(rebuilt);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn typed_life_statistics_round_trip_from_the_content_store() {
+    let root = temp_root("statistics");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let (genome, phenotype) = fixture(151, 77);
+    let birth = library
+        .archive_birth(GeneticArchiveInput {
+            source_run_id: "run-statistics",
+            organism_id: OrganismId(77),
+            birth_tick: Tick(2),
+            genome: &genome,
+            phenotype: &phenotype,
+            foundation_asset_bytes: None,
+        })
+        .unwrap();
+    let mut statistics = PassiveLifeStatistics::new(OrganismId(77), Tick(2)).unwrap();
+    statistics
+        .observe(PassiveLifeEvent::FoodOutcome { beneficial: true })
+        .unwrap();
+    statistics.finalize(Tick(9), "hazard").unwrap();
+    let bytes = serde_json::to_vec(&statistics).unwrap();
+    let receipt = library
+        .archive_life(LifeArchiveInput {
+            birth_manifest_digest: birth,
+            death_tick: Tick(9),
+            final_experience_sequence: None,
+            statistics_bytes: &bytes,
+            learned_checkpoint_bytes: None,
+            checkpoint_retention: ArchiveCheckpointRetention::TemporaryPeak,
+        })
+        .unwrap();
+    let manifest = library
+        .load_manifest(receipt.committed_manifest_digest)
+        .unwrap();
+    assert_eq!(library.load_life_statistics(&manifest).unwrap(), statistics);
+    assert_eq!(
+        library.life_manifest_digests().unwrap(),
+        vec![receipt.committed_manifest_digest]
+    );
+    drop(library);
     fs::remove_dir_all(root).unwrap();
 }
 

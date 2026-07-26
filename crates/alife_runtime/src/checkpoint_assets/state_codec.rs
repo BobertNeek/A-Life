@@ -2,10 +2,10 @@
 
 use alife_core::{
     BoundedReplayBatch, BrainCapacityClass, BrainPhenotype, ConsolidationState, ExperiencePatch,
-    ExperiencePatchBuilder, LanguageGroundingLedger, MemorySidecarState, PhenotypeCompiler,
-    PhenotypeCompilerInputs, PortableMemoryBankAssetV2, PortableTopologySidecarAssetV1,
-    ScaffoldContractError, SensorProfileIdentity, SensoryAbiVersion, SleepState, Tick,
-    TopologySidecar, Validate,
+    ExperiencePatchBuilder, LanguageGroundingLedger, MemorySidecarState, PassiveLifeStatistics,
+    PhenotypeCompiler, PhenotypeCompilerInputs, PortableMemoryBankAssetV2,
+    PortableTopologySidecarAssetV1, ScaffoldContractError, SensorProfileIdentity,
+    SensoryAbiVersion, SleepState, Tick, TopologySidecar, Validate,
 };
 use alife_gpu_backend::{
     GpuActivityRestoreInput, GpuActivityRuntimeSnapshot, GpuBrainCheckpointParts,
@@ -179,6 +179,7 @@ pub struct RestoredGpuBrainCheckpoint {
     pub topology: TopologySidecar,
     pub tracked_objects: TrackedObjectRegistrySaveState,
     pub language_grounding: LanguageGroundingLedger,
+    pub life_statistics: Option<PassiveLifeStatistics>,
     pub retained_learning: Option<RestoredRetainedLearning>,
 }
 
@@ -188,6 +189,7 @@ pub struct GpuBrainSidecarCapture<'a> {
     pub topology: &'a TopologySidecar,
     pub tracked_objects: TrackedObjectRegistrySaveState,
     pub language_grounding: &'a LanguageGroundingLedger,
+    pub life_statistics: &'a PassiveLifeStatistics,
     pub retained_learning: Option<RetainedLearningCapture<'a>>,
 }
 
@@ -261,6 +263,10 @@ impl GpuCheckpointAssetStore {
             .transpose()?;
         sidecars.tracked_objects.validate_contract()?;
         sidecars.language_grounding.validate_contract()?;
+        sidecars.life_statistics.validate_contract()?;
+        if sidecars.life_statistics.organism_id() != handle.organism_id() {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
         match (
             pending_checkpoint,
             pending_transaction,
@@ -471,6 +477,7 @@ impl GpuCheckpointAssetStore {
             topology,
             tracked_objects: sidecars.tracked_objects,
             language_grounding: sidecars.language_grounding.clone(),
+            life_statistics: Some(sidecars.life_statistics.clone()),
             sleep,
             sleep_assets,
             backend_provenance,
@@ -727,6 +734,7 @@ impl GpuCheckpointAssetStore {
             topology,
             tracked_objects: state.tracked_objects.clone(),
             language_grounding: state.language_grounding.clone(),
+            life_statistics: state.life_statistics.clone(),
             retained_learning,
         })
     }

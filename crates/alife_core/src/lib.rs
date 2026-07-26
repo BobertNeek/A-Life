@@ -12,6 +12,7 @@ pub mod checkpoint;
 pub mod chemistry;
 pub mod diagnostics;
 pub mod error;
+pub mod evaluation;
 pub mod evidence_digest;
 pub mod experience;
 pub mod foundation;
@@ -75,6 +76,11 @@ pub use chemistry::{
 };
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
+pub use evaluation::{
+    ActiveBatteryReceipt, ActiveChallengeKind, ActiveChallengeResult, EnvironmentalRegime,
+    MetricReading, PassiveLifeEvent, PassiveLifeStatistics, PassiveMetricKind,
+    ACTIVE_BATTERY_SCHEMA_VERSION, ACTIVE_CHALLENGE_COUNT, PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION,
+};
 pub use evidence_digest::{
     lobe_layout_evidence_digest, projection_plan_evidence_digest, synapse_payload_evidence_digest,
     GpuClosedLoopBenchmarkProtocolV1, PhenotypeEvidenceManifest,
