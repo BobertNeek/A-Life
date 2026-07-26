@@ -3,6 +3,9 @@
 use alife_core::{ScaffoldContractError, SemanticPriorProvider};
 use serde::{Deserialize, Serialize};
 
+mod developmental_prior;
+mod translation;
+
 #[cfg(feature = "fake-semantic-provider")]
 mod fake;
 #[cfg(feature = "gaussian-adapter")]
@@ -42,6 +45,13 @@ impl SemanticBoundaryManifest {
 
 pub const G11_SEMANTIC_PROVIDER_SCHEMA: &str = "alife.g11.semantic_provider.v1";
 pub const G11_SEMANTIC_PROVIDER_SCHEMA_VERSION: u16 = 1;
+
+pub use developmental_prior::{
+    DevelopmentalPriorController, FADE_START_UNAIDED_EXPOSURES,
+    NOVELTY_REACTIVATION_COOLDOWN_TICKS, NOVELTY_REACTIVATION_GAIN, NOVELTY_REACTIVATION_TICKS,
+    PASSING_PROBES_TO_ZERO, PASSING_PROBE_LOWER_CONFIDENCE, UNAIDED_PROBE_INTERVAL_EXPOSURES,
+};
+pub use translation::{BoundedSpeechTranslator, LanguageEvaluationScores, TranslationAssistance};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
