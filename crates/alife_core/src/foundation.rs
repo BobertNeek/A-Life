@@ -705,6 +705,20 @@ impl FoundationWeightAsset {
         )
     }
 
+    /// Builds a production foundation whose immutable weights have passed an
+    /// explicit evaluation and provenance gate.
+    pub fn from_promoted_weights(
+        phenotype: &BrainPhenotype,
+        weights: Vec<f32>,
+        training_stage: TrainingStageManifest,
+        promotion_receipt: FoundationPromotionReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        if !promotion_receipt.is_promoted() {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Self::from_weights_with_provenance(phenotype, weights, training_stage, promotion_receipt)
+    }
+
     fn from_weights_with_provenance(
         phenotype: &BrainPhenotype,
         weights: Vec<f32>,
