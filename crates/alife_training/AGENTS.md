@@ -15,3 +15,7 @@ evolutionary hardening.
 - Cross-run screening is capped at 64 candidates per run and 16 active-battery
   candidates. Ranking may display ancestry and genome distance but never apply
   an implicit kinship penalty.
+- `active_battery.rs` owns the executable 15-challenge N2048 battery. It must
+  use grounded headless worlds, the shared `Challenge` GPU session, world
+  legality/outcomes, and sealed patches; synthetic scored frames are not
+  active-battery evidence.

@@ -420,7 +420,7 @@ impl LlamaCppErrorValue {
     }
 }
 
-fn parse_llamacpp_chat_response(response: &str) -> Result<String, String> {
+pub(crate) fn parse_llamacpp_chat_response(response: &str) -> Result<String, String> {
     let (header, body) = response
         .split_once("\r\n\r\n")
         .ok_or_else(|| "local llama.cpp generation response missing HTTP body".to_string())?;

@@ -1,5 +1,6 @@
 //! Offline-only exact-graph WGSL foundation training.
 
+mod active_battery;
 mod curriculum;
 mod evolution;
 mod program;
@@ -7,6 +8,7 @@ mod ranking;
 mod trainer;
 mod types;
 
+pub use active_battery::*;
 pub use curriculum::*;
 pub use evolution::*;
 pub use program::*;

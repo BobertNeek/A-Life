@@ -115,7 +115,7 @@ fn perception_and_candidates_share_one_authoritative_tick_and_empty_context() {
     assert_eq!(draft.candidates(), enumerated);
     assert_eq!(draft.candidates(), frame.candidates());
     let visible = &report.visible_entities[0];
-    for candidate in &draft.candidates()[1..6] {
+    for candidate in &draft.candidates()[3..8] {
         assert_eq!(candidate.target.entity, Some(visible.id));
         assert_eq!(candidate.observation, CandidateObservationRef::None);
         assert!(candidate.features.0[CANDIDATE_FEATURE_BEARING_SIN_LANE].abs() < 1e-6);
@@ -195,6 +195,31 @@ fn idle_is_index_zero_and_all_candidate_indices_are_contiguous() {
             .collect::<Vec<_>>(),
         (0..frame.candidates().len() as u16).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn rest_and_vocalize_are_unscored_intrinsic_opportunities_in_both_profiles() {
+    for profile in [
+        SensorProfile::PrivilegedAffordanceV1,
+        SensorProfile::GroundedObjectSlotsV1,
+    ] {
+        let mut world = frame_world(SemanticFixtureKind::Food);
+        let frame = perception_frame(&mut world, Tick::new(5), profile);
+        for (kind, family) in [
+            (ActionKind::Rest, CandidateActionFamily::Rest),
+            (ActionKind::Vocalize, CandidateActionFamily::Other),
+        ] {
+            let candidate = frame
+                .candidates()
+                .iter()
+                .find(|candidate| candidate.kind == kind)
+                .expect("intrinsic opportunity");
+            assert_eq!(candidate.family, family);
+            assert_eq!(candidate.observation, CandidateObservationRef::None);
+            assert_eq!(candidate.target.entity, None);
+            assert_eq!(candidate.target.position, None);
+        }
+    }
 }
 
 #[test]
@@ -286,8 +311,8 @@ fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved
     golden[CANDIDATE_FEATURE_CONTACT_LANE] = 0.0;
     golden[CANDIDATE_FEATURE_EVIDENCE_LANE] = 1.0;
 
-    for candidate in &candidates[1..6] {
-        assert_eq!(candidate.features, candidates[1].features);
+    for candidate in &candidates[3..8] {
+        assert_eq!(candidate.features, candidates[3].features);
         candidate.features.validate().unwrap();
         for (lane, (actual, expected)) in candidate.features.0.iter().zip(golden).enumerate() {
             assert!(
@@ -305,7 +330,7 @@ fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved
 }
 
 #[test]
-fn distance_then_entity_order_is_stable_and_caps_at_six_objects() {
+fn distance_then_entity_order_is_stable_and_caps_at_five_objects() {
     let mut world = HeadlessScenarioBuilder::new(99)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
         .food("id2_d3", pos(3.0, 0.0), 0.5)
@@ -325,8 +350,8 @@ fn distance_then_entity_order_is_stable_and_caps_at_six_objects() {
     );
 
     assert_eq!(MAX_ACTION_CANDIDATES, 32);
-    assert_eq!(frame.candidates().len(), 1 + 6 * 5);
-    let retained_targets = frame.candidates()[1..]
+    assert_eq!(frame.candidates().len(), 3 + 5 * 5);
+    let retained_targets = frame.candidates()[3..]
         .chunks_exact(5)
         .map(|family_group| {
             assert!(family_group
@@ -337,9 +362,10 @@ fn distance_then_entity_order_is_stable_and_caps_at_six_objects() {
         .collect::<Vec<_>>();
     assert_eq!(
         retained_targets,
-        ["id8_d0_5", "id3_d1", "id4_d1", "id5_d2", "id7_d2", "id2_d3",]
+        ["id8_d0_5", "id3_d1", "id4_d1", "id5_d2", "id7_d2"]
             .map(|label| world.entity_id(label).unwrap())
     );
+    assert!(!retained_targets.contains(&world.entity_id("id2_d3").unwrap()));
     assert!(!retained_targets.contains(&world.entity_id("id6_d4").unwrap()));
     assert!(!retained_targets.contains(&world.entity_id("id9_d5").unwrap()));
 }
@@ -387,8 +413,8 @@ fn every_retained_object_gets_the_same_five_mechanical_families() {
         ),
     ];
 
-    assert_eq!(frame.candidates().len(), 1 + 4 * expected.len());
-    for family_group in frame.candidates()[1..].chunks_exact(5) {
+    assert_eq!(frame.candidates().len(), 3 + 4 * expected.len());
+    for family_group in frame.candidates()[3..].chunks_exact(5) {
         let target_entity = family_group[0].target.entity;
         assert!(target_entity.is_some());
         assert!(family_group
@@ -420,12 +446,12 @@ fn semantic_relabelling_changes_features_not_candidate_transport() {
         transport_signature(&hazard_frame)
     );
     assert_ne!(
-        food_frame.candidates()[1].features,
-        hazard_frame.candidates()[1].features
+        food_frame.candidates()[3].features,
+        hazard_frame.candidates()[3].features
     );
     assert_ne!(food_frame.base_digest(), hazard_frame.base_digest());
-    let food_features = food_frame.candidates()[1].features.0;
-    let hazard_features = hazard_frame.candidates()[1].features.0;
+    let food_features = food_frame.candidates()[3].features.0;
+    let hazard_features = hazard_frame.candidates()[3].features.0;
     for lane in 0..CANDIDATE_FEATURE_COUNT {
         let may_differ = lane == CANDIDATE_FEATURE_AFFORDANCE_START_LANE
             || lane == CANDIDATE_FEATURE_AFFORDANCE_START_LANE + 2;
@@ -483,11 +509,11 @@ fn teacher_token_adds_teacher_affordance_without_changing_candidate_transport() 
 
     let glyph_lane = CANDIDATE_FEATURE_AFFORDANCE_START_LANE + 7;
     let teacher_lane = CANDIDATE_FEATURE_AFFORDANCE_START_LANE + 8;
-    for candidate in &ordinary_frame.candidates()[1..6] {
+    for candidate in &ordinary_frame.candidates()[3..8] {
         assert_eq!(candidate.features.0[glyph_lane], 1.0);
         assert_eq!(candidate.features.0[teacher_lane], 0.0);
     }
-    for candidate in &teacher_frame.candidates()[1..6] {
+    for candidate in &teacher_frame.candidates()[3..8] {
         assert_eq!(candidate.features.0[glyph_lane], 1.0);
         assert_eq!(candidate.features.0[teacher_lane], 1.0);
     }

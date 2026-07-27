@@ -9,6 +9,7 @@ repository.workspace = true
 alife_core.workspace = true
 alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_runtime = { path = "../alife_runtime" }
+alife_world = { path = "../alife_world" }
 bytemuck.workspace = true
 thiserror.workspace = true
 wgpu.workspace = true

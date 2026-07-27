@@ -157,7 +157,7 @@ fn relabelling_private_world_semantics_cannot_change_a_grounded_frame() {
 }
 
 #[test]
-fn sixteen_slots_yield_six_complete_family_groups_and_never_a_partial_group() {
+fn sixteen_slots_yield_five_complete_family_groups_and_never_a_partial_group() {
     let mut builder = HeadlessScenarioBuilder::new(4_305).agent("agent", ORGANISM, Vec3f::ZERO);
     for index in 0..16 {
         let label = format!("object-{index}");
@@ -174,9 +174,11 @@ fn sixteen_slots_yield_six_complete_family_groups_and_never_a_partial_group() {
     let frame = grounded_draft(&mut world, Tick::new(5));
 
     assert_eq!(frame.grounded_object_slots().len(), 16);
-    assert_eq!(frame.candidates().len(), 1 + 6 * 5);
+    assert_eq!(frame.candidates().len(), 3 + 5 * 5);
     assert_eq!(frame.candidates()[0].family, CandidateActionFamily::Idle);
-    for group in frame.candidates()[1..].chunks_exact(5) {
+    assert_eq!(frame.candidates()[1].family, CandidateActionFamily::Rest);
+    assert_eq!(frame.candidates()[2].kind, alife_core::ActionKind::Vocalize);
+    for group in frame.candidates()[3..].chunks_exact(5) {
         assert_eq!(
             group
                 .iter()
@@ -203,12 +205,12 @@ fn duplicate_looking_objects_keep_distinct_tracked_bindings() {
     let frame = grounded_draft(&mut world, Tick::new(5));
 
     assert_eq!(
-        frame.candidates()[1].features,
-        frame.candidates()[6].features
+        frame.candidates()[3].features,
+        frame.candidates()[8].features
     );
     assert_ne!(
-        frame.candidates()[1].observation,
-        frame.candidates()[6].observation
+        frame.candidates()[3].observation,
+        frame.candidates()[8].observation
     );
     assert_ne!(
         frame.grounded_object_slots()[0].tracked_object_id,

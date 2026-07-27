@@ -66,6 +66,27 @@ impl AudibleUtterance {
         )
     }
 
+    pub fn from_teacher(
+        utterance_id: UtteranceId,
+        addressee: Option<OrganismId>,
+        source_position: Vec3f,
+        tokens: Vec<LanguageTokenId>,
+        teacher_channel: TeacherPerceptionChannel,
+        emitted_tick: Tick,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::try_new(
+            utterance_id,
+            UtteranceSourceKind::Teacher,
+            None,
+            addressee,
+            source_position,
+            tokens,
+            Confidence::new(1.0)?,
+            Some(teacher_channel),
+            emitted_tick,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn try_new(
         utterance_id: UtteranceId,

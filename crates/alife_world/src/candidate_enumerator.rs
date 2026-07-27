@@ -27,7 +27,8 @@ pub const CANDIDATE_FEATURE_CONTACT_LANE: usize = 16;
 pub const CANDIDATE_FEATURE_EVIDENCE_LANE: usize = 17;
 pub const CANDIDATE_FEATURE_RESERVED_START_LANE: usize = 18;
 
-const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - 1) / 5;
+const INTRINSIC_CANDIDATE_COUNT: usize = 3;
+const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - INTRINSIC_CANDIDATE_COUNT) / 5;
 const KNOWN_AFFORDANCE_MASK: u32 = (1 << CANDIDATE_FEATURE_AFFORDANCE_COUNT) - 1;
 
 pub trait CandidateEnumerator {
@@ -60,20 +61,8 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
         });
         visible.truncate(MAX_CANDIDATE_OBJECTS);
 
-        let mut candidates = Vec::with_capacity(1 + visible.len() * 5);
-        candidates.push(ActionCandidate::new(
-            0,
-            ActionKind::Idle.canonical_id(),
-            ActionKind::Idle,
-            CandidateActionFamily::Idle,
-            CandidateObservationRef::None,
-            ActionTarget::NONE,
-            CandidateFeatureVector::zero(),
-            Confidence::new(1.0)?,
-            NormalizedScalar::new(0.0)?,
-            DurationTicks::new(1),
-            DurationTicks::new(1),
-        )?);
+        let mut candidates = Vec::with_capacity(INTRINSIC_CANDIDATE_COUNT + visible.len() * 5);
+        push_intrinsic_candidates(&mut candidates)?;
 
         for entity in visible {
             let features = features_for(report, entity)?;
@@ -149,21 +138,10 @@ impl GroundedCandidateEnumerator {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
 
-        let mut candidates =
-            Vec::with_capacity(1 + grounded.slots().len().min(MAX_CANDIDATE_OBJECTS) * 5);
-        candidates.push(ActionCandidate::new(
-            0,
-            ActionKind::Idle.canonical_id(),
-            ActionKind::Idle,
-            CandidateActionFamily::Idle,
-            CandidateObservationRef::None,
-            ActionTarget::NONE,
-            CandidateFeatureVector::zero(),
-            Confidence::new(1.0)?,
-            NormalizedScalar::new(0.0)?,
-            DurationTicks::new(1),
-            DurationTicks::new(1),
-        )?);
+        let mut candidates = Vec::with_capacity(
+            INTRINSIC_CANDIDATE_COUNT + grounded.slots().len().min(MAX_CANDIDATE_OBJECTS) * 5,
+        );
+        push_intrinsic_candidates(&mut candidates)?;
 
         for (slot, transport) in grounded
             .slots()
@@ -230,6 +208,32 @@ impl GroundedCandidateEnumerator {
         }
         Ok(candidates)
     }
+}
+
+fn push_intrinsic_candidates(
+    candidates: &mut Vec<ActionCandidate>,
+) -> Result<(), ScaffoldContractError> {
+    for (kind, family, effort) in [
+        (ActionKind::Idle, CandidateActionFamily::Idle, 0.0),
+        (ActionKind::Rest, CandidateActionFamily::Rest, 0.05),
+        (ActionKind::Vocalize, CandidateActionFamily::Other, 0.05),
+    ] {
+        candidates.push(ActionCandidate::new(
+            u16::try_from(candidates.len())
+                .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+            kind.canonical_id(),
+            kind,
+            family,
+            CandidateObservationRef::None,
+            ActionTarget::NONE,
+            CandidateFeatureVector::zero(),
+            Confidence::new(1.0)?,
+            NormalizedScalar::new(effort)?,
+            DurationTicks::new(1),
+            DurationTicks::new(1),
+        )?);
+    }
+    Ok(())
 }
 
 fn validate_report(report: &HeadlessSensoryReport) -> Result<(), ScaffoldContractError> {
