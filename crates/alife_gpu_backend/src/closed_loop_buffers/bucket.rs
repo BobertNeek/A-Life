@@ -137,7 +137,7 @@ pub struct GpuClassBucketPlan {
 
 impl GpuClassBucketPlan {
     pub fn for_phenotype(phenotype: &BrainPhenotype) -> Result<Self, GpuClosedLoopError> {
-        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())
+        let capacity = BrainCapacityClass::supported_for_id(phenotype.brain_class_id())
             .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
         phenotype
             .validate_against(&capacity)
@@ -157,7 +157,7 @@ impl GpuClassBucketPlan {
         phenotype: &BrainPhenotype,
         runtime: &crate::GpuRuntimeBudget,
     ) -> Result<(), GpuClosedLoopError> {
-        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())
+        let capacity = BrainCapacityClass::supported_for_id(phenotype.brain_class_id())
             .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
         phenotype
             .validate_against(&capacity)

@@ -9,8 +9,8 @@ use alife_core::{
     compute_gpu_sleep_output_weight_digest, ActionId, BoundedReplayBatch, BrainPhenotype,
     CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder, ConsolidationIntent,
     ConsolidationStagedOutput, GpuConsolidationRequest, LearningSequenceGuard, OrganismId,
-    OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeHash, ScaffoldContractError,
-    SchemaVersions, Tick, Validate,
+    OutcomeCreditReplayKey, PerceptionFrameDigest, PhenotypeGrowthMigration, PhenotypeHash,
+    ScaffoldContractError, SchemaVersions, Tick, Validate,
 };
 use bytemuck::Zeroable;
 
@@ -210,6 +210,88 @@ impl GpuBrainCheckpointSnapshot {
         self.parts
     }
 
+    /// Maps a sealed N2048 snapshot into its research N4096 phenotype. New
+    /// neurons, weights, and eligibility remain exact zero; no CPU neural step
+    /// is executed.
+    pub fn migrate_n2048_to_n4096(
+        self,
+        migration: &PhenotypeGrowthMigration,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.validate()?;
+        let source_hash = migration.receipt.source_hash;
+        let target = &migration.phenotype;
+        let mut source = self.into_parts();
+        if source.phenotype_hash != source_hash
+            || source.pending_eligibility.is_some()
+            || source.inactive_eligibility_generation != 0
+            || source.activation_a_bits.len() != migration.receipt.source_to_target_neurons.len()
+            || source.lifetime_bank_0_bits.len()
+                != migration.receipt.source_to_target_synapses.len()
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let neuron_map = &migration.receipt.source_to_target_neurons;
+        let synapse_map = &migration.receipt.source_to_target_synapses;
+        let target_neurons = target.neuron_count() as usize;
+        let target_synapses = target.synapses().len();
+        let target_recurrent = target.budgets().global.recurrent_synapses as usize;
+        let source_recurrent = source.recurrent_eligibility_bank_0_bits.len();
+
+        source.activation_a_bits =
+            remap_neuron_words(&source.activation_a_bits, neuron_map, target_neurons, 1)?;
+        source.activation_b_bits =
+            remap_neuron_words(&source.activation_b_bits, neuron_map, target_neurons, 1)?;
+        source.neuron_homeostasis_bits = remap_neuron_words(
+            &source.neuron_homeostasis_bits,
+            neuron_map,
+            target_neurons,
+            2,
+        )?;
+        source.lifetime_bank_0_bits =
+            remap_synapse_words(&source.lifetime_bank_0_bits, synapse_map, target_synapses)?;
+        source.lifetime_bank_1_bits =
+            remap_synapse_words(&source.lifetime_bank_1_bits, synapse_map, target_synapses)?;
+        source.fast_bank_0_bits =
+            remap_synapse_words(&source.fast_bank_0_bits, synapse_map, target_synapses)?;
+        source.fast_bank_1_bits =
+            remap_synapse_words(&source.fast_bank_1_bits, synapse_map, target_synapses)?;
+        let (recurrent_0, decoder_0) = remap_eligibility_words(
+            &source.recurrent_eligibility_bank_0_bits,
+            &source.decoder_eligibility_bank_0_bits,
+            source_recurrent,
+            synapse_map,
+            target_recurrent,
+            target_synapses,
+        )?;
+        let (recurrent_1, decoder_1) = remap_eligibility_words(
+            &source.recurrent_eligibility_bank_1_bits,
+            &source.decoder_eligibility_bank_1_bits,
+            source_recurrent,
+            synapse_map,
+            target_recurrent,
+            target_synapses,
+        )?;
+        source.recurrent_eligibility_bank_0_bits = recurrent_0;
+        source.recurrent_eligibility_bank_1_bits = recurrent_1;
+        source.decoder_eligibility_bank_0_bits = decoder_0;
+        source.decoder_eligibility_bank_1_bits = decoder_1;
+        for span in &mut source.replay_spans {
+            span.local_synapse_id = *synapse_map
+                .get(span.local_synapse_id as usize)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        }
+        if source
+            .replay_spans
+            .windows(2)
+            .any(|rows| rows[0].local_synapse_id >= rows[1].local_synapse_id)
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        source.phenotype_hash = target.phenotype_hash();
+        source.last_learning_replay_key = None;
+        GpuBrainCheckpointSnapshot::try_from_parts(source)
+    }
+
     fn validate(&self) -> Result<(), ScaffoldContractError> {
         validate_checkpoint_parts(&self.parts)?;
         if self.canonical_digest != checkpoint_digest(&self.parts)? {
@@ -217,6 +299,79 @@ impl GpuBrainCheckpointSnapshot {
         }
         Ok(())
     }
+}
+
+fn remap_neuron_words(
+    source: &[u32],
+    map: &[u32],
+    target_neurons: usize,
+    words_per_neuron: usize,
+) -> Result<Vec<u32>, ScaffoldContractError> {
+    if source.len() != map.len().saturating_mul(words_per_neuron) {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let mut target = vec![0; target_neurons.saturating_mul(words_per_neuron)];
+    for (old, new) in map.iter().enumerate() {
+        let new = usize::try_from(*new)
+            .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        let source_start = old * words_per_neuron;
+        let target_start = new
+            .checked_mul(words_per_neuron)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?;
+        target
+            .get_mut(target_start..target_start + words_per_neuron)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?
+            .copy_from_slice(&source[source_start..source_start + words_per_neuron]);
+    }
+    Ok(target)
+}
+
+fn remap_synapse_words(
+    source: &[u32],
+    map: &[u32],
+    target_len: usize,
+) -> Result<Vec<u32>, ScaffoldContractError> {
+    if source.len() != map.len() {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let mut target = vec![0; target_len];
+    for (old, new) in map.iter().enumerate() {
+        *target
+            .get_mut(*new as usize)
+            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)? = source[old];
+    }
+    Ok(target)
+}
+
+fn remap_eligibility_words(
+    recurrent: &[u32],
+    decoder: &[u32],
+    source_recurrent: usize,
+    map: &[u32],
+    target_recurrent: usize,
+    target_total: usize,
+) -> Result<(Vec<u32>, Vec<u32>), ScaffoldContractError> {
+    if recurrent.len() != source_recurrent || recurrent.len() + decoder.len() != map.len() {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let mut target_recurrent_words = vec![0; target_recurrent];
+    let mut target_decoder_words = vec![0; target_total - target_recurrent];
+    for (old, new) in map.iter().enumerate() {
+        let value = if old < source_recurrent {
+            recurrent[old]
+        } else {
+            decoder[old - source_recurrent]
+        };
+        let new = *new as usize;
+        if new < target_recurrent {
+            target_recurrent_words[new] = value;
+        } else {
+            *target_decoder_words
+                .get_mut(new - target_recurrent)
+                .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)? = value;
+        }
+    }
+    Ok((target_recurrent_words, target_decoder_words))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -248,6 +403,107 @@ pub struct GpuBrainRestoreReceipt {
     pub replay_journal_cursor: u32,
     pub replay_journal_event_count: u32,
     pub checkpoint_digest: [u64; 4],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuResearchGrowthHandoffReceipt {
+    pub source_handle: GpuBrainHandle,
+    pub target_handle: GpuBrainHandle,
+    pub rollback_checkpoint_digest: [u64; 4],
+    pub target_checkpoint_digest: [u64; 4],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuResearchGrowthFailureKind {
+    BackendUnavailable,
+    ContractRejected,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuResearchGrowthRollbackReceipt {
+    pub source_handle: GpuBrainHandle,
+    pub rollback_checkpoint_digest: [u64; 4],
+    pub failure: GpuResearchGrowthFailureKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuResearchGrowthHandoffOutcome {
+    Committed(GpuResearchGrowthHandoffReceipt),
+    RolledBack(GpuResearchGrowthRollbackReceipt),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GpuResearchGrowthEquivalenceReceipt {
+    source_hash: PhenotypeHash,
+    target_hash: PhenotypeHash,
+    source_checkpoint_digest: [u64; 4],
+    target_checkpoint_digest: [u64; 4],
+    selected_candidate_index: u16,
+    max_logit_delta: f32,
+    adapter_driver_digest: [u64; 4],
+    adapter_limits_digest: [u64; 4],
+}
+
+impl GpuResearchGrowthEquivalenceReceipt {
+    pub const fn selected_candidate_index(self) -> u16 {
+        self.selected_candidate_index
+    }
+
+    pub const fn max_logit_delta(self) -> f32 {
+        self.max_logit_delta
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn verify_research_growth_equivalence(
+    source_hardware: &crate::GpuHardwareReceipt,
+    target_hardware: &crate::GpuHardwareReceipt,
+    migration: &PhenotypeGrowthMigration,
+    source_checkpoint: &GpuBrainCheckpointSnapshot,
+    target_checkpoint: &GpuBrainCheckpointSnapshot,
+    source_tick: &crate::GpuClosedLoopTick,
+    target_tick: &crate::GpuClosedLoopTick,
+    source_logits: &GpuCandidateLogitEvidenceSnapshot,
+    target_logits: &GpuCandidateLogitEvidenceSnapshot,
+) -> Result<GpuResearchGrowthEquivalenceReceipt, ScaffoldContractError> {
+    source_checkpoint.validate()?;
+    target_checkpoint.validate()?;
+    let same_adapter = source_hardware.backend_api == target_hardware.backend_api
+        && source_hardware.adapter_name == target_hardware.adapter_name
+        && source_hardware.vendor_id == target_hardware.vendor_id
+        && source_hardware.device_id == target_hardware.device_id
+        && source_hardware.driver_digest == target_hardware.driver_digest
+        && source_hardware.feature_digest == target_hardware.feature_digest
+        && source_hardware.limits_digest == target_hardware.limits_digest;
+    if !same_adapter
+        || source_checkpoint.parts.phenotype_hash != migration.receipt.source_hash
+        || target_checkpoint.parts.phenotype_hash != migration.receipt.target_hash
+        || source_tick.selection.candidate_index != target_tick.selection.candidate_index
+        || source_logits.frame_digest != target_logits.frame_digest
+        || source_logits.logits.len() != target_logits.logits.len()
+        || source_logits.logits.is_empty()
+    {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    let max_logit_delta = source_logits
+        .logits
+        .iter()
+        .zip(&target_logits.logits)
+        .map(|(source, target)| (source - target).abs())
+        .fold(0.0_f32, f32::max);
+    if !max_logit_delta.is_finite() || max_logit_delta > 1.0e-6 {
+        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+    }
+    Ok(GpuResearchGrowthEquivalenceReceipt {
+        source_hash: migration.receipt.source_hash,
+        target_hash: migration.receipt.target_hash,
+        source_checkpoint_digest: source_checkpoint.canonical_digest(),
+        target_checkpoint_digest: target_checkpoint.canonical_digest(),
+        selected_candidate_index: source_tick.selection.candidate_index,
+        max_logit_delta,
+        adapter_driver_digest: source_hardware.driver_digest,
+        adapter_limits_digest: source_hardware.limits_digest,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1210,6 +1466,114 @@ impl GpuClosedLoopBackend {
             let _ = self.remove_brain(handle);
         }
         restore
+    }
+
+    pub fn restore_research_brain(
+        &mut self,
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+        request: GpuBrainRestoreRequest,
+    ) -> Result<GpuBrainRestoreReceipt, ScaffoldContractError> {
+        self.ensure_ready()?;
+        let snapshot = request.into_snapshot();
+        snapshot.validate()?;
+        let checkpoint_digest = snapshot.canonical_digest();
+        let parts = snapshot.into_parts();
+        if organism_id != parts.organism_id
+            || phenotype.brain_class_id() != alife_core::BrainCapacityClass::N4096_RESEARCH_ID
+            || phenotype.phenotype_hash() != parts.phenotype_hash
+            || phenotype.neuron_count() as usize != parts.activation_a_bits.len()
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let handle = self.insert_research_brain(organism_id, phenotype)?;
+        let restore = self.restore_brain_inner(handle, parts, checkpoint_digest);
+        if restore.is_err() {
+            let _ = self.remove_brain(handle);
+        }
+        restore
+    }
+
+    /// Performs the final sealed handoff. Failure restores the immutable source
+    /// checkpoint before returning, so exactly one phenotype remains active.
+    pub fn replace_brain_with_research_growth(
+        &mut self,
+        source_handle: GpuBrainHandle,
+        migration: &PhenotypeGrowthMigration,
+        rollback: GpuBrainCheckpointSnapshot,
+        target: GpuBrainCheckpointSnapshot,
+        equivalence: &GpuResearchGrowthEquivalenceReceipt,
+    ) -> Result<GpuResearchGrowthHandoffOutcome, ScaffoldContractError> {
+        self.validate_handle_backend(source_handle)?;
+        rollback.validate()?;
+        target.validate()?;
+        let rollback_digest = rollback.canonical_digest();
+        let target_digest = target.canonical_digest();
+        let rollback_parts = rollback.clone().into_parts();
+        let target_parts = target.clone().into_parts();
+        if rollback_parts.organism_id != source_handle.organism_id()
+            || rollback_parts.phenotype_hash != source_handle.phenotype_hash()
+            || migration.receipt.source_hash != source_handle.phenotype_hash()
+            || target_parts.organism_id != source_handle.organism_id()
+            || target_parts.phenotype_hash != migration.phenotype.phenotype_hash()
+            || equivalence.source_hash != migration.receipt.source_hash
+            || equivalence.target_hash != migration.receipt.target_hash
+            || equivalence.source_checkpoint_digest != rollback_digest
+            || equivalence.target_checkpoint_digest != target_digest
+            || equivalence.max_logit_delta > 1.0e-6
+            || equivalence.adapter_driver_digest != self.hardware.driver_digest
+            || equivalence.adapter_limits_digest != self.hardware.limits_digest
+            || rollback_parts.pending_eligibility.is_some()
+            || target_parts.pending_eligibility.is_some()
+            || self
+                .sleep_jobs
+                .values()
+                .any(|job| job.handle == source_handle)
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let source_phenotype = self
+            .class_buckets
+            .get(&source_handle.class_id().raw())
+            .and_then(|pool| pool.resident(source_handle).ok())
+            .map(|resident| resident.phenotype.clone())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        self.remove_brain(source_handle)?;
+        match self.restore_research_brain(
+            source_handle.organism_id(),
+            migration.phenotype.clone(),
+            GpuBrainRestoreRequest::try_new(target)?,
+        ) {
+            Ok(restored) => Ok(GpuResearchGrowthHandoffOutcome::Committed(
+                GpuResearchGrowthHandoffReceipt {
+                    source_handle,
+                    target_handle: restored.handle,
+                    rollback_checkpoint_digest: rollback_digest,
+                    target_checkpoint_digest: target_digest,
+                },
+            )),
+            Err(error) => {
+                let restored = self
+                    .restore_brain(
+                        source_handle.organism_id(),
+                        source_phenotype,
+                        GpuBrainRestoreRequest::try_new(rollback)?,
+                    )
+                    .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+                let failure = if error == ScaffoldContractError::NeuralBackendUnavailable {
+                    GpuResearchGrowthFailureKind::BackendUnavailable
+                } else {
+                    GpuResearchGrowthFailureKind::ContractRejected
+                };
+                Ok(GpuResearchGrowthHandoffOutcome::RolledBack(
+                    GpuResearchGrowthRollbackReceipt {
+                        source_handle: restored.handle,
+                        rollback_checkpoint_digest: rollback_digest,
+                        failure,
+                    },
+                ))
+            }
+        }
     }
 
     fn restore_brain_inner(

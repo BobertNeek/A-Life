@@ -397,7 +397,7 @@ impl GpuSlotAllocationReceipt {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        BrainCapacityClass::production_for_id(alife_core::BrainClassId(self.class_id_raw))?;
+        BrainCapacityClass::supported_for_id(alife_core::BrainClassId(self.class_id_raw))?;
         if self.schema_version != ADMISSION_SCHEMA_VERSION
             || [
                 self.immutable_topology_bytes,
@@ -500,7 +500,7 @@ impl GpuAllocationEventReceipt {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        BrainCapacityClass::production_for_id(alife_core::BrainClassId(self.class_id_raw))?;
+        BrainCapacityClass::supported_for_id(alife_core::BrainClassId(self.class_id_raw))?;
         let transition_is_valid = match self.event_kind_raw {
             value if value == GpuAllocationEventKind::AdmitFromNewChunk as u16 => {
                 self.logical_committed_after_bytes > self.logical_committed_before_bytes

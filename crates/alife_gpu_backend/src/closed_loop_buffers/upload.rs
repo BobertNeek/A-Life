@@ -105,7 +105,7 @@ impl GpuPhenotypeUpload {
         }
     }
     pub fn validate_against(&self, phenotype: &BrainPhenotype) -> Result<(), GpuClosedLoopError> {
-        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())
+        let capacity = BrainCapacityClass::supported_for_id(phenotype.brain_class_id())
             .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
         if self.gpu_layout_version != capacity.execution().gpu_layout_version() {
             return Err(GpuClosedLoopError::LayoutMismatch);
@@ -118,7 +118,7 @@ impl GpuPhenotypeUpload {
     }
 
     fn build(phenotype: &BrainPhenotype) -> Result<Self, GpuClosedLoopError> {
-        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())
+        let capacity = BrainCapacityClass::supported_for_id(phenotype.brain_class_id())
             .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
         if u32::from(capacity.execution().gpu_layout_version()) != GPU_CLOSED_LOOP_LAYOUT_VERSION {
             return Err(GpuClosedLoopError::LayoutMismatch);

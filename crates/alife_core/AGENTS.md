@@ -34,6 +34,8 @@ Rules:
 - N2048 compiles exactly 24,576 recurrent, 4,096 action (3,072 candidate plus
   1,024 reserved speech), and 4,096 memory-decoder synapses. N512/N1024 remain
   valid independent procedural phenotypes until their own foundations exist.
+- `phenotype/migration.rs` owns the research-only, persistent-address-preserving
+  N2048-to-N4096 compiler; production class lookup must continue rejecting N4096.
 - Phenotypes own versioned receptor, bounded replay-capture, and sleep plans.
   The replay identity ceiling is the shared `MAX_REPLAY_CAPTURE_SYNAPSES`
   contract; GPU crates must not duplicate that value.

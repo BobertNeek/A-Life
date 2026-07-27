@@ -15,6 +15,7 @@ mod io_compile;
 mod layout_compile;
 mod learning;
 mod memory_channel;
+mod migration;
 mod persistent_address;
 mod record;
 mod topology_compile;
@@ -34,6 +35,7 @@ pub use learning::{
     PlasticityReceptorPlan, ReplayCapturePlan, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,
 };
 pub use memory_channel::MemoryChannelPlan;
+pub use migration::{N4096ResearchLayoutV1, PhenotypeGrowthMigration, PhenotypeGrowthReceipt};
 pub use persistent_address::{
     PersistentAddressMap, PersistentDecoderAddress, PersistentDecoderAddressEntry,
     PersistentNeuronAddress, PersistentNeuronAddressEntry, PersistentProjectionAddress,

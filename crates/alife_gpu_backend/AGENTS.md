@@ -19,6 +19,8 @@ Rules:
 - Neural `Vocalize` payload selection remains GPU-authoritative.
 - Training-only WGSL and optimizer state stay out of production game binaries
   and saves.
+- N4096 may enter this backend only through the sealed research-growth path with
+  same-adapter equivalence and rollback receipts; normal insertion stays promoted-only.
 - Persistent logical addresses must be resolved to runtime-local packed offsets
   before dispatch; packed offsets are never durable identity.
 - Use sparse class-bucketed storage concepts, not dense `[M, N, N]` buffers.

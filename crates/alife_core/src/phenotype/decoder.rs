@@ -122,7 +122,7 @@ impl CandidateDecoderPlan {
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_local()?;
-        let capacity = crate::BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        let capacity = crate::BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;
         let execution = capacity.execution();
         let expected_stride = self
             .memory_channel

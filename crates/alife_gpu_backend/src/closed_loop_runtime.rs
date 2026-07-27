@@ -916,6 +916,12 @@ fn capacity_for_promoted_class(
     BrainCapacityClass::production_for_id(class_id)
 }
 
+fn capacity_for_gpu_class(
+    class_id: BrainClassId,
+) -> Result<BrainCapacityClass, ScaffoldContractError> {
+    BrainCapacityClass::supported_for_id(class_id)
+}
+
 fn live_pressure_sample(
     policy: &BrainActivityPolicyV1,
     identity: BrainDispatchIdentity,
@@ -1173,7 +1179,7 @@ impl GpuClosedLoopBackend {
             resident.last_work.as_ref(),
         ) {
             pressure.validate_for(&self.activity_policy)?;
-            let capacity = BrainCapacityClass::production_for_id(handle.class_id)?;
+            let capacity = capacity_for_gpu_class(handle.class_id)?;
             throttle.validate_for(&resident.phenotype, capacity.execution())?;
             work.validate_for(&self.activity_policy, throttle)?;
             if pressure.handle_slot != handle.slot
@@ -1266,7 +1272,7 @@ impl GpuClosedLoopBackend {
                         brain_atp_capacity_q16: BRAIN_ATP_Q16_MAX,
                     },
                 )?;
-                let capacity = BrainCapacityClass::production_for_id(handle.class_id)?;
+                let capacity = capacity_for_gpu_class(handle.class_id)?;
                 let throttle = NeuralThrottleDecision::derive(
                     &self.activity_policy,
                     &phenotype,
@@ -1935,7 +1941,7 @@ impl GpuClosedLoopBackend {
                         &self.runtime_budget,
                     )?,
                 };
-                let capacity = capacity_for_promoted_class(handle.class_id)?;
+                let capacity = capacity_for_gpu_class(handle.class_id)?;
                 NeuralThrottleDecision::derive(
                     &self.activity_policy,
                     &resident.phenotype,
@@ -2719,6 +2725,24 @@ impl GpuClosedLoopBackend {
         organism_id: OrganismId,
         phenotype: BrainPhenotype,
     ) -> Result<GpuBrainHandle, ScaffoldContractError> {
+        self.insert_brain_inner(organism_id, phenotype, false)
+    }
+
+    /// Research-only insertion used by sealed, equivalence-checked growth.
+    pub fn insert_research_brain(
+        &mut self,
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+    ) -> Result<GpuBrainHandle, ScaffoldContractError> {
+        self.insert_brain_inner(organism_id, phenotype, true)
+    }
+
+    fn insert_brain_inner(
+        &mut self,
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+        allow_research: bool,
+    ) -> Result<GpuBrainHandle, ScaffoldContractError> {
         self.ensure_ready()?;
         organism_id
             .validate()
@@ -2727,7 +2751,14 @@ impl GpuClosedLoopBackend {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
         let class_id = phenotype.brain_class_id();
-        let capacity = capacity_for_promoted_class(class_id)?;
+        let capacity = if allow_research {
+            if class_id != BrainCapacityClass::N4096_RESEARCH_ID {
+                return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
+            }
+            capacity_for_gpu_class(class_id)?
+        } else {
+            capacity_for_promoted_class(class_id)?
+        };
         validate_required_gpu_layout_version(u32::from(capacity.execution().gpu_layout_version()))?;
         phenotype
             .validate_against(&capacity)

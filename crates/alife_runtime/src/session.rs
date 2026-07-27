@@ -1,7 +1,10 @@
 use std::ops::{Deref, DerefMut};
 
-use alife_core::{ScaffoldContractError, Tick};
-use alife_gpu_backend::GpuClosedLoopBackend;
+use alife_core::{PhenotypeGrowthMigration, ScaffoldContractError, Tick};
+use alife_gpu_backend::{
+    GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
+    GpuResearchGrowthEquivalenceReceipt, GpuResearchGrowthHandoffOutcome,
+};
 
 /// Identifies the production consumer using the shared neural session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -160,6 +163,31 @@ impl GpuAuthoritativeSession {
         if *error == ScaffoldContractError::NeuralBackendUnavailable {
             self.fail_stop(GpuSessionFailStopCause::BackendUnavailable);
         }
+    }
+
+    /// Commits an already verified sealed growth handoff. Cognitive sidecars
+    /// remain owned by the caller and are therefore preserved unchanged while
+    /// only the opaque GPU handle is replaced.
+    pub fn commit_research_growth(
+        &mut self,
+        source_handle: GpuBrainHandle,
+        migration: &PhenotypeGrowthMigration,
+        rollback: GpuBrainCheckpointSnapshot,
+        target: GpuBrainCheckpointSnapshot,
+        equivalence: &GpuResearchGrowthEquivalenceReceipt,
+    ) -> Result<GpuResearchGrowthHandoffOutcome, ScaffoldContractError> {
+        self.ensure_neural_actions_available()?;
+        let result = self.backend.replace_brain_with_research_growth(
+            source_handle,
+            migration,
+            rollback,
+            target,
+            equivalence,
+        );
+        if let Err(error) = &result {
+            self.record_contract_failure(error);
+        }
+        result
     }
 }
 
