@@ -199,6 +199,11 @@ mod production_voxel_renderer;
 #[cfg(feature = "bevy-app")]
 pub use production_voxel_renderer::*;
 
+#[cfg(all(feature = "bevy-app", feature = "gpu-runtime"))]
+mod production_conversation_lineage_ui;
+#[cfg(all(feature = "bevy-app", feature = "gpu-runtime"))]
+pub use production_conversation_lineage_ui::*;
+
 mod interactive_runtime;
 pub use interactive_runtime::*;
 

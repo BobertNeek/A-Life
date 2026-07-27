@@ -566,7 +566,6 @@ pub(crate) struct ProductionGpuBrainAuthorityResource {
 }
 
 #[cfg(feature = "gpu-runtime")]
-#[derive(Resource)]
 pub(crate) struct ProductionGpuBrainRuntimeResource {
     pub(crate) runtime: crate::GpuLiveBrainRuntime,
 }
@@ -643,7 +642,7 @@ fn prepare_production_gpu_runtime_launch(
 
 #[cfg(feature = "gpu-runtime")]
 fn tick_production_gpu_brain(
-    mut runtime: ResMut<ProductionGpuBrainRuntimeResource>,
+    mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut authority: ResMut<ProductionGpuBrainAuthorityResource>,
     mut schedule: ResMut<ProductionGpuBrainTickScheduleResource>,
 ) {
@@ -4924,7 +4923,7 @@ pub fn build_production_voxel_frontend_app_shell(
             .insert_resource(ProductionGpuBrainTickScheduleResource::new(
                 PRODUCTION_GPU_STARTUP_RENDER_FRAMES,
             ))
-            .insert_resource(ProductionGpuBrainRuntimeResource { runtime })
+            .insert_non_send_resource(ProductionGpuBrainRuntimeResource { runtime })
             .add_systems(Update, tick_production_gpu_brain);
     }
     crate::spawn_fvr03_production_voxel_scene(&mut app, &summary)?;

@@ -334,6 +334,32 @@ impl LineageLibrary {
         rows.map(|row| parse_digest_hex(&row?)).collect()
     }
 
+    /// Returns one current manifest per archived creature. A completed life
+    /// record supersedes its birth record; living creatures remain available
+    /// through their immutable genetic archive.
+    pub fn latest_manifest_digests(&self) -> Result<Vec<Blake3Digest>, ArchiveError> {
+        let mut statement = self.connection.prepare(
+            "SELECT digest,source_run_id,organism_id,is_life,rowid FROM manifests \
+             ORDER BY source_run_id,organism_id,is_life DESC,rowid DESC",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut seen = std::collections::BTreeSet::new();
+        let mut digests = Vec::new();
+        for row in rows {
+            let (digest, source_run_id, organism_id) = row?;
+            if seen.insert((source_run_id, organism_id)) {
+                digests.push(parse_digest_hex(&digest)?);
+            }
+        }
+        Ok(digests)
+    }
+
     pub fn rebuild_index(&mut self) -> Result<(), ArchiveError> {
         let transaction = self.connection.transaction()?;
         transaction.execute("DELETE FROM checkpoints", [])?;
