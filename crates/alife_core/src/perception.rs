@@ -860,6 +860,14 @@ fn validate_frame_base(
             for candidate in candidates {
                 match (candidate.family, candidate.observation) {
                     (CandidateActionFamily::Idle, CandidateObservationRef::None) => {}
+                    (CandidateActionFamily::Rest, CandidateObservationRef::None)
+                        if candidate.kind == ActionKind::Rest
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features == CandidateFeatureVector::zero() => {}
+                    (CandidateActionFamily::Other, CandidateObservationRef::None)
+                        if candidate.kind == ActionKind::Vocalize
+                            && candidate.target == ActionTarget::NONE
+                            && candidate.features == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Idle, CandidateObservationRef::ObjectSlot(_))
                     | (_, CandidateObservationRef::None) => {
                         return Err(ScaffoldContractError::InvalidPerceptionFrame);

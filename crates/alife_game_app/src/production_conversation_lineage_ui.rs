@@ -9,7 +9,10 @@ use alife_core::{
     PassiveMetricKind, SpeechTranslationInput, SpeechTranslationReceipt, SpeechTranslationRequest,
     SurfaceTokenBinding, UtteranceId, UtteranceSourceKind, Validate, Vec3f,
 };
-use alife_semantic::{BoundedSpeechTranslator, TranslationAssistance};
+use alife_semantic::{
+    BoundedSpeechTranslator, LlamaCppSpeechTranslationConfig, LlamaCppSpeechTranslator,
+    TranslationAssistance,
+};
 use alife_world::{persistence::PortableSaveFile, StableVoxelRefKind, WorldObjectKind};
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
@@ -431,21 +434,13 @@ fn send_player_speech(
         .map_or(Vec3f::ZERO, |tile| {
             Vec3f::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5)
         });
-    let translator = BoundedSpeechTranslator::new(
-        "alife-bounded-speech-ui-v1",
-        if state.slm_off {
-            TranslationAssistance::Disabled
-        } else {
-            TranslationAssistance::SlmAssisted
-        },
-    )?;
     let request = SpeechTranslationRequest::try_new(
         UtteranceId::new(1)?,
         addressee,
         SpeechTranslationInput::PlayerText { text: text.clone() },
         state.bindings.clone(),
     )?;
-    let mut receipt = translator.translate(&request)?;
+    let (mut receipt, translation_warning) = translate_speech(&request, state.slm_off)?;
     let audible =
         runtime.emit_player_tokens(addressee, source_position, receipt.literal_tokens.clone())?;
     receipt.utterance_id = audible.utterance_id;
@@ -467,10 +462,10 @@ fn send_player_speech(
     state.last_player_receipt = Some(receipt);
     state.input.clear();
     state.input_open = false;
-    state.status = match addressee {
+    state.status = translation_warning.unwrap_or_else(|| match addressee {
         Some(organism) => format!("Spoke spatially to creature {}", organism.raw()),
         None => "Spoke spatially to every creature in hearing range".to_string(),
-    };
+    });
     Ok(())
 }
 
@@ -532,24 +527,15 @@ fn refresh_creature_speech_receipt(
     if state.last_creature_utterance_id == Some(utterance.utterance_id) {
         return;
     }
-    let assistance = if state.slm_off {
-        TranslationAssistance::Disabled
-    } else {
-        TranslationAssistance::SlmAssisted
-    };
-    let receipt = BoundedSpeechTranslator::new("alife-bounded-speech-ui-v1", assistance).and_then(
-        |translator| {
-            SpeechTranslationRequest::try_new(
-                utterance.utterance_id,
-                utterance.addressee,
-                SpeechTranslationInput::CreatureTokens {
-                    tokens: utterance.tokens.clone(),
-                },
-                state.bindings.clone(),
-            )
-            .and_then(|request| translator.translate(&request))
+    let receipt = SpeechTranslationRequest::try_new(
+        utterance.utterance_id,
+        utterance.addressee,
+        SpeechTranslationInput::CreatureTokens {
+            tokens: utterance.tokens.clone(),
         },
-    );
+        state.bindings.clone(),
+    )
+    .and_then(|request| translate_speech(&request, state.slm_off).map(|value| value.0));
     match receipt {
         Ok(receipt) => {
             state.last_creature_utterance_id = Some(utterance.utterance_id);
@@ -558,6 +544,27 @@ fn refresh_creature_speech_receipt(
         }
         Err(error) => state.status = format!("Creature speech translation failed: {error}"),
     }
+}
+
+fn translate_speech(
+    request: &SpeechTranslationRequest,
+    slm_off: bool,
+) -> Result<(SpeechTranslationReceipt, Option<String>), alife_core::ScaffoldContractError> {
+    if !slm_off {
+        let assisted = LlamaCppSpeechTranslator::new(LlamaCppSpeechTranslationConfig::default())
+            .map_err(|error| error.to_string())
+            .and_then(|translator| translator.translate(request));
+        if let Ok(receipt) = assisted {
+            return Ok((receipt, None));
+        }
+    }
+    let translator =
+        BoundedSpeechTranslator::new("alife-bounded-unaided-v1", TranslationAssistance::Disabled)?;
+    let receipt = translator.translate(request)?;
+    let warning = (!slm_off).then(|| {
+        "Local SLM unavailable or rejected its bounded output; used literal translation".to_string()
+    });
+    Ok((receipt, warning))
 }
 
 fn handle_lineage_input(

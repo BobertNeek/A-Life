@@ -35,7 +35,7 @@ fn candidate(
         passive,
         active: ActiveBatteryReceipt::empty(organism_id),
         novelty_q16: (ordinal as u32).saturating_mul(100),
-        mutation_representative: ordinal % 17 == 0,
+        mutation_representative: ordinal.is_multiple_of(17),
         pinned,
     }
 }

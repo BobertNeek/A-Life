@@ -4,12 +4,17 @@
 //! signal is represented as ordinary perceptual or social evidence.
 
 pub mod curriculum;
+pub mod language_nursery;
 pub mod lesson_api;
 pub mod runner;
 pub mod teacher;
 pub mod verifier;
 
 pub use curriculum::{Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation};
+pub use language_nursery::{
+    LanguageNursery, LanguageNurseryExposure, LanguageNurseryLesson, NurseryDemonstration,
+    NurserySpeaker,
+};
 pub use lesson_api::{LessonId, LessonResponse, LessonResponseKind};
 pub use runner::{HeadlessCurriculumRunner, LessonDispatch};
 pub use teacher::{

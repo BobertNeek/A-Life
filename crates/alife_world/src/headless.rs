@@ -326,6 +326,30 @@ impl HeadlessWorld {
         Ok(utterance)
     }
 
+    pub fn emit_teacher_tokens(
+        &mut self,
+        addressee: Option<OrganismId>,
+        source_position: Vec3f,
+        tokens: Vec<alife_core::LanguageTokenId>,
+        teacher_channel: TeacherPerceptionChannel,
+    ) -> Result<AudibleUtterance, ScaffoldContractError> {
+        let utterance_id = UtteranceId::new(self.next_utterance_id)?;
+        self.next_utterance_id = self
+            .next_utterance_id
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let utterance = AudibleUtterance::from_teacher(
+            utterance_id,
+            addressee,
+            source_position,
+            tokens,
+            teacher_channel,
+            self.tick,
+        )?;
+        self.speech.emit(utterance.clone())?;
+        Ok(utterance)
+    }
+
     pub fn advance_ecology(&mut self) -> EcologyStepReport {
         self.advance_ecology_at_current_tick()
     }
@@ -830,7 +854,24 @@ impl HeadlessWorld {
                 let grounded =
                     GroundedSensorExtractor::extract(&snapshot, &mut self.tracked_objects)?;
                 let candidates = GroundedCandidateEnumerator.enumerate_candidates(&grounded)?;
-                let (sensory, body, slots, _transports) = grounded.into_parts();
+                let (mut sensory, body, slots, _transports) = grounded.into_parts();
+                let heard = self
+                    .speech
+                    .heard_tokens(organism_id, body.pose.translation, tick)?;
+                let mut language_context = LanguageContextSnapshot::default();
+                for (index, token) in heard.into_iter().take(MAX_HEARD_TOKENS).enumerate() {
+                    sensory.channels.auditory_acoustic[0] =
+                        sensory.channels.auditory_acoustic[0].max(token.confidence.raw());
+                    language_context.teacher_channel_marker = language_context
+                        .teacher_channel_marker
+                        .or(token.teacher_channel);
+                    language_context.heard_tokens[index] = Some(token);
+                }
+                if language_context.heard_tokens.iter().any(Option::is_some) {
+                    language_context.word_confidence = Confidence::new(0.8)?;
+                }
+                sensory.language_context = language_context;
+                sensory.validate_contract()?;
                 PerceptionFrameDraft::new(
                     organism_id,
                     tick,

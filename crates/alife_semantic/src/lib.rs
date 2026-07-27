@@ -52,6 +52,8 @@ pub use developmental_prior::{
     PASSING_PROBES_TO_ZERO, PASSING_PROBE_LOWER_CONFIDENCE, UNAIDED_PROBE_INTERVAL_EXPOSURES,
 };
 pub use translation::{BoundedSpeechTranslator, LanguageEvaluationScores, TranslationAssistance};
+#[cfg(feature = "local-llamacpp")]
+pub use translation::{LlamaCppSpeechTranslationConfig, LlamaCppSpeechTranslator};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

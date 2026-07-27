@@ -6,6 +6,8 @@ use alife_semantic::{
     BoundedSpeechTranslator, DevelopmentalPriorController, LanguageEvaluationScores,
     TranslationAssistance,
 };
+#[cfg(feature = "local-llamacpp")]
+use alife_semantic::{LlamaCppSpeechTranslationConfig, LlamaCppSpeechTranslator};
 
 #[test]
 fn developmental_prior_fades_after_three_passing_unaided_probes() {
@@ -88,7 +90,7 @@ fn player_translation_is_bounded_preserves_addressee_and_marks_unknowns() {
     )
     .unwrap();
     let translator =
-        BoundedSpeechTranslator::new("local-test-model", TranslationAssistance::SlmAssisted)
+        BoundedSpeechTranslator::new("alife-bounded-unaided-v1", TranslationAssistance::Disabled)
             .unwrap();
     let receipt = translator.translate(&request).unwrap();
 
@@ -108,8 +110,8 @@ fn player_translation_is_bounded_preserves_addressee_and_marks_unknowns() {
         .novel_tokens
         .iter()
         .any(|token| token.surface == "glimmer"));
-    assert!(receipt.assisted);
-    assert_eq!(receipt.model_identity, "local-test-model");
+    assert!(!receipt.assisted);
+    assert_eq!(receipt.model_identity, "alife-bounded-unaided-v1");
 }
 
 #[test]
@@ -127,7 +129,7 @@ fn creature_translation_renders_only_supplied_raw_tokens_and_exposes_uncertainty
     )
     .unwrap();
     let translator =
-        BoundedSpeechTranslator::new("local-test-model", TranslationAssistance::SlmAssisted)
+        BoundedSpeechTranslator::new("alife-bounded-unaided-v1", TranslationAssistance::Disabled)
             .unwrap();
     let receipt = translator.translate(&request).unwrap();
 
@@ -135,6 +137,75 @@ fn creature_translation_renders_only_supplied_raw_tokens_and_exposes_uncertainty
     assert!(receipt.uncertain);
     assert!(receipt.rendered_text.starts_with("[uncertain] rest "));
     assert!(!receipt.rendered_text.contains("eat"));
+}
+
+#[test]
+fn deterministic_translation_cannot_claim_slm_assistance() {
+    assert!(BoundedSpeechTranslator::new(
+        "not-a-real-model-call",
+        TranslationAssistance::SlmAssisted,
+    )
+    .is_err());
+}
+
+#[cfg(feature = "local-llamacpp")]
+#[test]
+fn slm_assistance_requires_a_successful_local_model_response() {
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+    };
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = [0_u8; 8192];
+        let read = stream.read(&mut request).unwrap();
+        let request = String::from_utf8_lossy(&request[..read]);
+        assert!(request.starts_with("POST /v1/chat/completions HTTP/1.1"));
+        let content = serde_json::json!({"normalized_words": ["come", "glimmer"]}).to_string();
+        let body = serde_json::json!({
+            "choices": [{"message": {"content": content}}]
+        })
+        .to_string();
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        )
+        .unwrap();
+    });
+
+    let request = SpeechTranslationRequest::try_new(
+        UtteranceId::new(101).unwrap(),
+        Some(OrganismId(42)),
+        SpeechTranslationInput::PlayerText {
+            text: "come glimmer".to_string(),
+        },
+        vec![SurfaceTokenBinding::try_new("come", LanguageTokenId::new(1).unwrap()).unwrap()],
+    )
+    .unwrap();
+    let translator = LlamaCppSpeechTranslator::new(LlamaCppSpeechTranslationConfig {
+        host: "127.0.0.1".to_string(),
+        port,
+        model: "local-test-model".to_string(),
+        timeout_ms: 2_000,
+        num_predict: 64,
+    })
+    .unwrap();
+    let receipt = translator.translate(&request).unwrap();
+    server.join().unwrap();
+
+    assert!(receipt.assisted);
+    assert_eq!(receipt.model_identity, "local-test-model");
+    assert_eq!(receipt.literal_tokens[0], LanguageTokenId::new(1).unwrap());
+    assert!(receipt
+        .novel_tokens
+        .iter()
+        .any(|token| token.surface == "glimmer"));
 }
 
 #[test]

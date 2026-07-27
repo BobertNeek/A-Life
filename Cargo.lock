@@ -246,6 +246,7 @@ dependencies = [
  "alife_core",
  "alife_gpu_backend",
  "alife_runtime",
+ "alife_world",
  "bytemuck",
  "naga 29.0.3",
  "thiserror 2.0.18",
