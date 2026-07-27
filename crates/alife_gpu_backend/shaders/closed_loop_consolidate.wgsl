@@ -146,7 +146,7 @@ fn copy_sleep_weight_banks(@builtin(global_invocation_id) gid:vec3<u32>) {
     consolidate_reject(header.completion_offset); return;
   }
   store_state_f32(inactive.lifetime+gid.x,lifetime);
-  store_state_f32(inactive.fast+gid.x,fast);
+  store_state_f32(inactive.fast+gid.x,canonicalize_state_zero(fast));
 }
 
 @compute @workgroup_size(64)
@@ -171,8 +171,8 @@ fn consolidate_fast_weights(@builtin(global_invocation_id) gid:vec3<u32>) {
       || !consolidate_finite(next_fast)) {
     consolidate_reject(header.completion_offset); return;
   }
-  store_state_f32(inactive.lifetime+gid.x,next_lifetime);
-  store_state_f32(inactive.fast+gid.x,next_fast);
+  store_state_f32(inactive.lifetime+gid.x,canonicalize_state_zero(next_lifetime));
+  store_state_f32(inactive.fast+gid.x,canonicalize_state_zero(next_fast));
 }
 
 @compute @workgroup_size(1)

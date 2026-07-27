@@ -759,6 +759,12 @@ fn run_gpu_closed_loop_soak_with_provenance(
                 "Slice D soak lost its one-organism runtime binding",
             ));
         }
+        if !runtime.last_memory_preparation_errors().is_empty() {
+            return Err(GpuEvidenceError::ContractDetail(format!(
+                "Slice D production tick {completed_tick} failed perception or memory preparation: {:?}",
+                runtime.last_memory_preparation_errors(),
+            )));
+        }
         let metrics = runtime.evidence_metrics();
         max_compact_readback_bytes = max_compact_readback_bytes.max(
             u32::try_from(metrics.compact_readback_bytes)
@@ -1326,12 +1332,15 @@ fn rotate_stimuli(
             2 => WorldObjectKind::Obstacle,
             _ => WorldObjectKind::Token,
         };
-        let token_id = (kind == WorldObjectKind::Token).then_some(
-            u32::try_from(tick)
-                .unwrap_or(u32::MAX)
-                .saturating_add(index)
-                .max(1),
-        );
+        let token_id = if kind == WorldObjectKind::Token {
+            let max_token_id = u64::from(alife_core::LanguageCodebookV1::CODE_COUNT - 1);
+            let raw = 1 + (tick % max_token_id + u64::from(index)) % max_token_id;
+            Some(u32::try_from(raw).map_err(|_| {
+                GpuEvidenceError::Contract("Slice D token ID exceeds the language ABI")
+            })?)
+        } else {
+            None
+        };
         active.push(world.editor_spawn_object(WorldEditorSpawnSpec {
             label: format!("soak-{tick}-{index}"),
             kind,

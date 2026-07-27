@@ -190,6 +190,23 @@ fn sleep_header_layout_matches_wgsl() {
 }
 
 #[test]
+fn sleep_weight_writes_canonicalize_zero_before_gpu_storage() {
+    let consolidate = alife_gpu_backend::CLOSED_LOOP_CONSOLIDATE_WGSL;
+    assert!(consolidate.contains("fn canonicalize_state_zero(value:f32) -> f32"));
+    assert!(
+        consolidate.contains("store_state_f32(inactive.fast+gid.x,canonicalize_state_zero(fast))")
+    );
+    assert!(consolidate.contains(
+        "store_state_f32(inactive.lifetime+gid.x,canonicalize_state_zero(next_lifetime))"
+    ));
+    assert!(consolidate
+        .contains("store_state_f32(inactive.fast+gid.x,canonicalize_state_zero(next_fast))"));
+
+    let replay = alife_gpu_backend::CLOSED_LOOP_REPLAY_LEARNING_WGSL;
+    assert!(replay.contains("store_state_f32(fast_index,canonicalize_state_zero(next))"));
+}
+
+#[test]
 fn consolidation_promotes_fast_preserves_genetic_and_commits_once() {
     let (mut backend, handle, phenotype) = learned_backend(5_001);
     let genetic_before = backend

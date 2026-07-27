@@ -232,6 +232,7 @@ fn load_state_u32(base:u32) -> u32 { return atomicLoad(&mutable_state_words[base
 fn store_state_u32(base:u32, value:u32) { atomicStore(&mutable_state_words[base], value); }
 fn load_state_f32(base:u32) -> f32 { return bitcast<f32>(load_state_u32(base)); }
 fn store_state_f32(base:u32, value:f32) { store_state_u32(base, bitcast<u32>(value)); }
+fn canonicalize_state_zero(value:f32) -> f32 { return select(value,0.0,value==0.0); }
 fn state_span_within(start:u32, count:u32) -> bool {
   let limit = arrayLength(&mutable_state_words);
   return start <= limit && count <= limit - start;
