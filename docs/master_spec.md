@@ -880,6 +880,10 @@ neurons, 49,152 recurrent synapses, 8,192 action-decoder synapses, and 8,192
 memory-decoder synapses while preserving language token IDs and speech ABI. It
 remains research-only.
 
+Implementation status: the research compiler, full GPU checkpoint remap,
+same-adapter `1e-6` equivalence receipt, atomic commit, and verified rollback
+path are implemented. This status does not promote N4096.
+
 Migration process:
 
 1. Suspend production dispatch at a sealed boundary.

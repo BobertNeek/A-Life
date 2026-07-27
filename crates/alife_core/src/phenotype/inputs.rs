@@ -182,7 +182,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             capacity_digest: w.capacity_digest,
             canonical_digest: w.canonical_digest,
         };
-        let capacity = BrainCapacityClass::production_for_id(value.capacity_class_id)
+        let capacity = BrainCapacityClass::supported_for_id(value.capacity_class_id)
             .map_err(D::Error::custom)?;
         value
             .validate_against(&capacity)

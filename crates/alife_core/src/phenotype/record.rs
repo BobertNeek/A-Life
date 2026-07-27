@@ -544,6 +544,7 @@ impl BrainPhenotype {
             &self.sleep_consolidation_plan,
         )?;
         let n2048 = capacity.id() == BrainCapacityClass::N2048_ID;
+        let n4096 = capacity.id() == BrainCapacityClass::N4096_RESEARCH_ID;
         if candidate_count.checked_add(speech_count)
             != Some(self.budgets.global.action_decoder_synapses)
             || memory_count != self.budgets.global.memory_decoder_synapses
@@ -555,7 +556,12 @@ impl BrainPhenotype {
                         != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT
                     || memory_count
                         != crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT))
-            || (!n2048 && self.speech_decoder.is_some())
+            || (n4096
+                && (candidate_count != 7_168
+                    || speech_count
+                        != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT
+                    || memory_count != 8_192))
+            || (!n2048 && !n4096 && self.speech_decoder.is_some())
             || self.route_abi_digest != route_abi_digest
             || self.plasticity_abi_digest != plasticity_abi_digest
             || self.plasticity_plan_digest != plasticity_plan_digest
@@ -642,8 +648,8 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             budgets: w.budgets,
             phenotype_hash: w.phenotype_hash,
         };
-        let capacity = BrainCapacityClass::production_for_id(value.brain_class_id)
-            .map_err(D::Error::custom)?;
+        let capacity =
+            BrainCapacityClass::supported_for_id(value.brain_class_id).map_err(D::Error::custom)?;
         value
             .validate_against(&capacity)
             .map_err(D::Error::custom)?;

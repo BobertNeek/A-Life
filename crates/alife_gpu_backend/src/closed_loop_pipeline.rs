@@ -597,7 +597,7 @@ impl GpuActiveBatchUpload {
             }
             upload.header.dispatch_generation_lo = dispatch_generation.get() as u32;
             upload.header.dispatch_generation_hi = (dispatch_generation.get() >> 32) as u32;
-            let capacity = BrainCapacityClass::production_for_id(entry.phenotype.brain_class_id())
+            let capacity = BrainCapacityClass::supported_for_id(entry.phenotype.brain_class_id())
                 .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
             if entry.activity.organism_id_raw != entry.frame.organism_id().raw()
                 || entry.activity.tick != entry.frame.tick().0

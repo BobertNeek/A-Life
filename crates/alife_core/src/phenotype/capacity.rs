@@ -279,7 +279,7 @@ impl BrainExecutionBudget {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        let canonical = BrainCapacityClass::production_classes();
+        let canonical = BrainCapacityClass::supported_classes();
         if canonical.iter().any(|capacity| capacity.execution == *self) {
             Ok(())
         } else {
@@ -342,6 +342,7 @@ impl BrainCapacityClass {
     pub const N512_ID: BrainClassId = BrainClassId(1);
     pub const N1024_ID: BrainClassId = BrainClassId(2);
     pub const N2048_ID: BrainClassId = BrainClassId(3);
+    pub const N4096_RESEARCH_ID: BrainClassId = BrainClassId(4);
 
     pub const fn n512() -> Self {
         Self {
@@ -370,6 +371,15 @@ impl BrainCapacityClass {
         }
     }
 
+    pub const fn n4096_research() -> Self {
+        Self {
+            id: Self::N4096_RESEARCH_ID,
+            execution: BrainExecutionBudget::production(
+                4_096, 65_536, 49_152, 8_192, 8_192, 384, 256, 16_384,
+            ),
+        }
+    }
+
     pub fn production_for_id(id: BrainClassId) -> Result<Self, ScaffoldContractError> {
         match id {
             Self::N512_ID => Ok(Self::n512()),
@@ -377,6 +387,24 @@ impl BrainCapacityClass {
             Self::N2048_ID => Ok(Self::n2048()),
             _ => Err(ScaffoldContractError::UnsupportedProductionBrainClass),
         }
+    }
+
+    /// Returns every GPU layout understood by this build, including explicitly
+    /// unpromoted research classes.
+    pub fn supported_for_id(id: BrainClassId) -> Result<Self, ScaffoldContractError> {
+        match id {
+            Self::N4096_RESEARCH_ID => Ok(Self::n4096_research()),
+            _ => Self::production_for_id(id),
+        }
+    }
+
+    pub const fn supported_classes() -> [Self; 4] {
+        [
+            Self::n512(),
+            Self::n1024(),
+            Self::n2048(),
+            Self::n4096_research(),
+        ]
     }
 
     pub const fn production_classes() -> [Self; 3] {
@@ -399,7 +427,7 @@ impl BrainCapacityClass {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        let canonical = Self::production_for_id(self.id)?;
+        let canonical = Self::supported_for_id(self.id)?;
         if *self != canonical {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -519,7 +547,7 @@ impl<'de> Deserialize<'de> for BrainCapacityClass {
         D: Deserializer<'de>,
     {
         let wire = BrainCapacityClassWire::deserialize(deserializer)?;
-        let canonical = Self::production_for_id(wire.id).map_err(D::Error::custom)?;
+        let canonical = Self::supported_for_id(wire.id).map_err(D::Error::custom)?;
         let execution = BrainExecutionBudget::from(wire.execution);
         if execution != *canonical.execution() {
             return Err(D::Error::custom("noncanonical brain execution budget"));
