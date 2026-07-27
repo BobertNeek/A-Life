@@ -55,6 +55,7 @@ fn genetic_birth_life_checkpoint_and_rebuilt_index_are_durable() {
             foundation_asset_bytes: None,
         })
         .unwrap();
+    assert_eq!(library.latest_manifest_digests().unwrap(), vec![birth]);
     let checkpoint_bytes = (0..(ARCHIVE_PAGE_BYTES * 2 + 137))
         .map(|index| (index % 251) as u8)
         .collect::<Vec<_>>();
@@ -82,6 +83,10 @@ fn genetic_birth_life_checkpoint_and_rebuilt_index_are_durable() {
         checkpoint_bytes
     );
     assert_eq!(library.manifest_count().unwrap(), 2);
+    assert_eq!(
+        library.latest_manifest_digests().unwrap(),
+        vec![receipt.committed_manifest_digest]
+    );
     drop(library);
 
     fs::remove_file(root.join("lineage.db")).unwrap();

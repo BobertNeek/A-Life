@@ -280,6 +280,29 @@ impl HeadlessWorld {
             .emit(AudibleUtterance::from_player(utterance, self.tick)?)
     }
 
+    pub fn emit_player_tokens(
+        &mut self,
+        addressee: Option<OrganismId>,
+        source_position: Vec3f,
+        tokens: Vec<alife_core::LanguageTokenId>,
+    ) -> Result<AudibleUtterance, ScaffoldContractError> {
+        let utterance_id = UtteranceId::new(self.next_utterance_id)?;
+        self.next_utterance_id = self
+            .next_utterance_id
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let audible = AudibleUtterance::from_player(
+            PlayerUtterance::try_new(utterance_id, addressee, source_position, tokens)?,
+            self.tick,
+        )?;
+        self.speech.emit(audible.clone())?;
+        Ok(audible)
+    }
+
+    pub fn audible_utterances(&self) -> Vec<AudibleUtterance> {
+        self.speech.snapshot()
+    }
+
     pub fn emit_creature_utterance(
         &mut self,
         utterance_id: UtteranceId,

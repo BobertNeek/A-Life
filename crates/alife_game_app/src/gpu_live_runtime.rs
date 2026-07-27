@@ -1941,6 +1941,21 @@ impl GpuLiveBrainRuntime {
         self.world.clone()
     }
 
+    pub fn emit_player_tokens(
+        &mut self,
+        addressee: Option<OrganismId>,
+        source_position: Vec3f,
+        tokens: Vec<alife_core::LanguageTokenId>,
+    ) -> Result<alife_world::AudibleUtterance, GameAppShellError> {
+        Ok(self
+            .world
+            .emit_player_tokens(addressee, source_position, tokens)?)
+    }
+
+    pub fn active_utterances(&self) -> Vec<alife_world::AudibleUtterance> {
+        self.world.audible_utterances()
+    }
+
     /// Compact receipts from the most recently attempted world tick. Receipts
     /// contain generation and causal identity only, never weight payloads.
     pub fn last_learning_receipts(&self) -> &[GpuLearningReceipt] {

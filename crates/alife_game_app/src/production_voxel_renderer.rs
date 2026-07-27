@@ -60,9 +60,9 @@ use crate::{
     CreatureVisualSnapshot, Fvr05ProductionDebugAuthorityReport, Fvr05ProductionInspectorTab,
     Fvr05ProductionOverlayKind, Fvr05ProductionUxSettings, Fvr11ProductionTerrainLayer,
     Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, GameAppShellError,
-    ProductionFrontendProfileBudget, ProductionFrontendProfileId, ProductionSaveMetadata,
-    ProductionVoxelLaunchSummary, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
-    PRODUCTION_VOXEL_RENDERER_PROFILE,
+    ProductionConversationLineageUiState, ProductionFrontendProfileBudget,
+    ProductionFrontendProfileId, ProductionSaveMetadata, ProductionVoxelLaunchSummary,
+    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION, PRODUCTION_VOXEL_RENDERER_PROFILE,
 };
 use crate::{
     terrain_dressing::{
@@ -650,6 +650,12 @@ pub struct Fvr03ProductionVoxelSceneResource {
 }
 
 impl Fvr03ProductionVoxelSceneResource {
+    pub fn selection_position(&self, stable_id: alife_core::WorldEntityId) -> Option<Vec3> {
+        self.selection_positions_by_raw_id
+            .get(&stable_id.raw())
+            .copied()
+    }
+
     pub fn contains_tile(&self, tile: VoxelTileCoord) -> bool {
         self.visible_tiles.contains(&tile)
     }
@@ -1766,6 +1772,8 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_fvr05_footer_status_bar,
         ),
     );
+    #[cfg(feature = "gpu-runtime")]
+    crate::install_production_conversation_lineage_ui(app, summary);
     if summary.record_performance && !summary.dry_run {
         let screenshot_path = PathBuf::from(FVR03_PERFORMANCE_ARTIFACT_DIR).join(format!(
             "{}_runtime_screenshot.png",
@@ -4314,13 +4322,23 @@ fn handle_fvr03_mouse_selection(
 
 fn handle_fvr05_production_ux_input(
     keyboard: Res<ButtonInput<KeyCode>>,
+    #[cfg(feature = "gpu-runtime")] conversation: Option<
+        Res<crate::ProductionConversationLineageUiState>,
+    >,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
     #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
-        ResMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
+        bevy::prelude::NonSendMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
     >,
 ) {
+    #[cfg(feature = "gpu-runtime")]
+    if conversation
+        .as_ref()
+        .is_some_and(|conversation| conversation.blocks_world_shortcuts())
+    {
+        return;
+    }
     ux.update_selection_snapshot(selection.selected, follow.enabled);
     if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyP) {
         ux.settings.paused = !ux.settings.paused;
@@ -4888,6 +4906,7 @@ fn request_fvr03_recorded_screenshot(
     mut capture: ResMut<Fvr03ProductionVoxelScreenshotResource>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     mut ux: Option<ResMut<Fvr05ProductionUxStateResource>>,
+    mut conversation: Option<ResMut<ProductionConversationLineageUiState>>,
     mut overlay_batches: bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionOverlayBatch>>,
     mut exits: MessageWriter<AppExit>,
 ) {
@@ -4944,7 +4963,7 @@ fn request_fvr03_recorded_screenshot(
         capture.fvr05_next_capture_frame =
             capture.frame.saturating_add(FVR05_SCREENSHOT_SETTLE_FRAMES);
         if !capture.developer_overlay {
-            capture.fvr05_sequence_complete = true;
+            capture.fvr05_capture_index = 4;
         }
         return;
     }
@@ -4971,11 +4990,19 @@ fn request_fvr03_recorded_screenshot(
         }
     }
     if let Some(ux) = ux.as_mut() {
-        ux.settings.show_menu = true;
-        ux.settings.show_settings = true;
-        ux.settings.show_overlays = true;
+        let show_developer_surfaces = capture.fvr05_capture_index < 4 || capture.developer_overlay;
+        ux.settings.show_menu = show_developer_surfaces;
+        ux.settings.show_settings = show_developer_surfaces;
+        ux.settings.show_overlays = show_developer_surfaces;
         ux.settings.active_inspector_tab = tab;
         ux.last_action = format!("Recorded FVR05 screenshot state: {}", tab.label());
+    }
+    if let Some(conversation) = conversation.as_mut() {
+        match capture.fvr05_capture_index {
+            4 => conversation.prepare_recorded_speech_capture(),
+            5 => conversation.prepare_recorded_lineage_capture(),
+            _ => conversation.clear_recorded_capture(),
+        }
     }
     let path = fvr05_screenshot_path(&capture.path, suffix);
     commands
@@ -5008,6 +5035,8 @@ fn fvr05_screenshot_step(index: usize) -> Option<(&'static str, Fvr05ProductionI
         )),
         2 => Some(("fvr05_tile_inspector", Fvr05ProductionInspectorTab::Tile)),
         3 => Some(("fvr05_world_inspector", Fvr05ProductionInspectorTab::World)),
+        4 => Some(("m14_player_speech", Fvr05ProductionInspectorTab::Creature)),
+        5 => Some(("m14_lineage_library", Fvr05ProductionInspectorTab::Creature)),
         _ => None,
     }
 }

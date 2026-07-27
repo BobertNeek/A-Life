@@ -63,6 +63,23 @@ fn named_player_speech_reaches_only_the_named_creature() {
 }
 
 #[test]
+fn world_allocates_collision_free_player_utterance_ids() {
+    let listener = OrganismId(1);
+    let mut world = HeadlessScenarioBuilder::new(71_005)
+        .agent("listener", listener, Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let first = world
+        .emit_player_tokens(None, Vec3f::ZERO, vec![token(1)])
+        .unwrap();
+    let second = world
+        .emit_player_tokens(Some(listener), Vec3f::ZERO, vec![token(2)])
+        .unwrap();
+    assert_eq!(first.utterance_id.raw() + 1, second.utterance_id.raw());
+    assert_eq!(world.audible_utterances(), vec![first, second]);
+}
+
+#[test]
 fn broadcast_range_and_creature_raw_token_identity_are_preserved() {
     let speaker = OrganismId(1);
     let near = OrganismId(2);
