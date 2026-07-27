@@ -383,6 +383,22 @@ fn parallel_learning_loops_trust_the_validated_row_and_immutable_upload() {
 }
 
 #[test]
+fn fast_plasticity_canonicalizes_zero_before_gpu_storage() {
+    let source = alife_gpu_backend::CLOSED_LOOP_PLASTICITY_WGSL;
+    let body = source
+        .split_once("fn apply_fast_plasticity")
+        .expect("fast plasticity entry exists")
+        .1
+        .split_once("fn capture_fast_plasticity_replay")
+        .expect("fast plasticity entry is bounded")
+        .0;
+    assert!(source.contains("fn canonicalize_state_zero(value:f32) -> f32"));
+    assert!(
+        body.contains("store_state_f32(inactive_fast_index,canonicalize_state_zero(next_fast))")
+    );
+}
+
+#[test]
 fn recurrent_eligibility_obeys_the_validated_activity_route_mask() {
     let source = alife_gpu_backend::CLOSED_LOOP_ELIGIBILITY_WGSL;
     let body = source

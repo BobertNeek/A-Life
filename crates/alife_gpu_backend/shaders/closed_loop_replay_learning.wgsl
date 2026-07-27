@@ -111,5 +111,5 @@ fn replay_sleep_learning(@builtin(global_invocation_id) gid:vec3<u32>) {
   if (!sleep_finite(replay_credit) || !sleep_finite(previous) || !sleep_finite(next)) {
     sleep_reject(completion); return;
   }
-  store_state_f32(fast_index,next);
+  store_state_f32(fast_index,canonicalize_state_zero(next));
 }

@@ -285,7 +285,7 @@ fn apply_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     reject_plasticity(receipt_base); return;
   }
   store_state_f32(inactive_lifetime_index,lifetime);
-  store_state_f32(inactive_fast_index,next_fast);
+  store_state_f32(inactive_fast_index,canonicalize_state_zero(next_fast));
   let applied = abs(next_fast-fast);
   if (applied > 0.0) {
     atomicAdd(&mutable_state_words[receipt_base+14u],1u);
