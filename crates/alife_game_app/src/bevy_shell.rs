@@ -1,8 +1,9 @@
 //! Feature-gated Bevy playground shell split during R13 remediation.
 
+#[cfg(feature = "gpu-runtime")]
+use std::path::PathBuf;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -12,12 +13,14 @@ use alife_bevy_adapter::{
     SensoryEmitter,
 };
 use alife_core::{ActionKind, AffordanceBits, Vec3f, WorldEntityId};
+#[cfg(feature = "gpu-runtime")]
+use alife_world::persistence::PortableSaveFile;
 use alife_world::{
     activate_procedural_chunks_around_creatures, generate_procedural_world_content,
-    persistence::PortableSaveFile, sample_procedural_terrain_tile, CreatureWorldAnchor,
-    ProceduralChunkActivationReport, ProceduralChunkCoord, ProceduralTerrainSample,
-    ProceduralTileCoord, ProceduralWorldConfig, ProceduralWorldContentCandidate,
-    ProceduralWorldContentKind, ProceduralWorldContentReport, TerrainZoneKind, WorldObjectKind,
+    sample_procedural_terrain_tile, CreatureWorldAnchor, ProceduralChunkActivationReport,
+    ProceduralChunkCoord, ProceduralTerrainSample, ProceduralTileCoord, ProceduralWorldConfig,
+    ProceduralWorldContentCandidate, ProceduralWorldContentKind, ProceduralWorldContentReport,
+    TerrainZoneKind, WorldObjectKind,
 };
 use bevy::{
     app::AppExit,
@@ -81,11 +84,13 @@ use crate::{
     CreatureVisualSnapshot, EntitySelectionSnapshot, GameAppShellError, GameAppState,
     GraphicalGpuRuntimeController, GraphicalGpuRuntimeTelemetry, GraphicalPlaygroundLaunchConfig,
     GraphicalPlaygroundLaunchSummary, GraphicalPlaygroundMode, GraphicalPlaygroundViewMode,
-    LiveBrainLoop, LiveBrainTickSummary, ProductionVoxelLaunchConfig, ProductionVoxelLaunchSummary,
-    RuntimeControlCommand, RuntimeControlPanel, RuntimePlaybackState, VisibleMaterialKind,
-    VisiblePlaceholderShape, VisibleWorldObjectPresentation, VisibleWorldPresentation,
-    CA13_FIXED_SIM_TICK_HZ, CA13_TARGET_RENDER_FRAME_HZ, S02_MAX_SMOKE_TICKS,
+    LiveBrainLoop, LiveBrainTickSummary, RuntimeControlCommand, RuntimeControlPanel,
+    RuntimePlaybackState, VisibleMaterialKind, VisiblePlaceholderShape,
+    VisibleWorldObjectPresentation, VisibleWorldPresentation, CA13_FIXED_SIM_TICK_HZ,
+    CA13_TARGET_RENDER_FRAME_HZ, S02_MAX_SMOKE_TICKS,
 };
+#[cfg(feature = "gpu-runtime")]
+use crate::{ProductionVoxelLaunchConfig, ProductionVoxelLaunchSummary};
 
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct BevyAppShellSummary {

@@ -8,6 +8,7 @@ pub enum GameAppShellError {
     #[cfg(feature = "gpu-runtime")]
     #[error("lineage archive error: {0}")]
     Archive(#[from] alife_archive::ArchiveError),
+    #[cfg(feature = "gpu-runtime")]
     #[error("GPU runtime error: {0}")]
     GpuRuntime(#[from] alife_runtime::GpuRuntimeError),
     #[error("persistence/config error: {0}")]

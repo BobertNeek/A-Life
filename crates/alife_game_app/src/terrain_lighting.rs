@@ -51,15 +51,15 @@ pub(crate) fn spawn_production_terrain_camera(
     let camera_extent = production_camera_extent(settings.profile_id);
     let directional_shadows = !settings.minimum_floor;
     let shadow_cascades = if directional_shadows { 2 } else { 0 };
-    let fog_alpha = if settings.minimum_floor { 0.12 } else { 0.30 };
-    let fog_start = if settings.minimum_floor { 42.0 } else { 34.0 };
-    let fog_end = if settings.minimum_floor { 96.0 } else { 88.0 };
+    let fog_alpha = if settings.minimum_floor { 0.10 } else { 0.22 };
+    let fog_start = if settings.minimum_floor { 44.0 } else { 38.0 };
+    let fog_end = if settings.minimum_floor { 98.0 } else { 92.0 };
     app.world_mut().spawn((
         Name::new("A-Life FVR11 creature-stage terrain camera"),
         Camera3d::default(),
         Camera {
             order: 0,
-            clear_color: ClearColorConfig::Custom(Color::srgb(0.035, 0.145, 0.155)),
+            clear_color: ClearColorConfig::Custom(Color::srgb(0.075, 0.165, 0.145)),
             ..default()
         },
         Projection::from(OrthographicProjection {
@@ -74,14 +74,14 @@ pub(crate) fn spawn_production_terrain_camera(
         Tonemapping::TonyMcMapface,
         Msaa::Off,
         AmbientLight {
-            color: Color::srgb(0.56, 0.68, 0.78),
-            brightness: if settings.minimum_floor { 400.0 } else { 650.0 },
+            color: Color::srgb(0.73, 0.76, 0.70),
+            brightness: if settings.minimum_floor { 520.0 } else { 760.0 },
             affects_lightmapped_meshes: true,
         },
         DistanceFog {
-            color: Color::srgba(0.18, 0.30, 0.28, fog_alpha),
-            directional_light_color: Color::srgba(0.95, 0.78, 0.52, 0.22),
-            directional_light_exponent: 18.0,
+            color: Color::srgba(0.22, 0.34, 0.25, fog_alpha),
+            directional_light_color: Color::srgba(1.0, 0.74, 0.42, 0.28),
+            directional_light_exponent: 14.0,
             falloff: FogFalloff::Linear {
                 start: fog_start,
                 end: fog_end,
@@ -114,8 +114,8 @@ pub(crate) fn spawn_production_terrain_lighting(
 ) {
     let directional_shadows = !settings.minimum_floor;
     let light = DirectionalLight {
-        color: Color::srgb(1.0, 0.91, 0.74),
-        illuminance: 5200.0,
+        color: Color::srgb(1.0, 0.86, 0.66),
+        illuminance: 5800.0,
         shadows_enabled: directional_shadows,
         ..default()
     };
@@ -155,20 +155,20 @@ pub(crate) fn production_camera_transform(
 ) -> Transform {
     match mode {
         Fvr03ProductionVoxelCameraMode::OrthographicIsometric => {
-            Transform::from_xyz(extent * 0.52, extent * 0.68, extent * 0.82)
-                .looking_at(Vec3::new(4.0, 0.35, 1.5), Vec3::Y)
+            Transform::from_xyz(extent * 0.50, extent * 0.72, extent * 0.84)
+                .looking_at(Vec3::new(2.5, 0.45, 0.75), Vec3::Y)
         }
         Fvr03ProductionVoxelCameraMode::Orbit => {
-            Transform::from_xyz(extent * 0.72, extent * 0.52, extent * 0.94)
-                .looking_at(Vec3::new(4.0, 0.35, 1.5), Vec3::Y)
+            Transform::from_xyz(extent * 0.70, extent * 0.55, extent * 0.92)
+                .looking_at(Vec3::new(2.5, 0.45, 0.75), Vec3::Y)
         }
     }
 }
 
-fn production_camera_extent(profile_id: ProductionFrontendProfileId) -> f32 {
+pub(crate) fn production_camera_extent(profile_id: ProductionFrontendProfileId) -> f32 {
     match profile_id {
-        ProductionFrontendProfileId::MinimumSettings30x30 => 18.8,
-        ProductionFrontendProfileId::MinSpecComfort1080p => 17.2,
+        ProductionFrontendProfileId::MinimumSettings30x30 => 17.2,
+        ProductionFrontendProfileId::MinSpecComfort1080p => 15.8,
         ProductionFrontendProfileId::Balanced1080p => 30.0,
         ProductionFrontendProfileId::HighSpecScaleUp => 40.0,
         ProductionFrontendProfileId::ResearchScale => 34.0,
