@@ -1,12 +1,88 @@
+use std::{path::PathBuf, process::Command};
+
 use alife_core::{
     BrainScaleTier, GenomeId, LineageId, PackedExperienceFrame, PackedExperienceRecord,
     PackedSideBufferSpans, PackedSideBuffers, PACKED_FLAG_SUCCESS,
 };
 use alife_tools::p33_evaluation::{
-    evaluate_battery, AssistanceKind, BatteryLayer, BatterySuite, BatteryTrial, ComputeProvenance,
-    EvaluationError, EvaluationFlag, EvaluationProvenance, LineageProvenance, TeamMode,
-    TrialDomain, TrialPhase, TrialTrace, EI0_EVALUATION_SCHEMA_VERSION,
+    evaluate_battery, AssistanceKind, BatteryLayer, BatteryReport, BatterySuite, BatteryTrial,
+    ComputeProvenance, EvaluationError, EvaluationFlag, EvaluationProvenance, LineageProvenance,
+    ScenarioBatteryFixture, TeamMode, TrialDomain, TrialPhase, TrialTrace,
+    EI0_EVALUATION_SCHEMA_VERSION,
 };
+
+#[test]
+fn committed_scenario_fixture_evaluates_real_packed_logs_deterministically() {
+    let fixture = ScenarioBatteryFixture::from_json_file(real_fixture_path()).unwrap();
+
+    let first = fixture.run().unwrap();
+    let second = fixture.run().unwrap();
+
+    assert_eq!(first, second);
+    assert!(first.packed_record_count >= 8);
+    assert!(first.objectives.ecological.value.is_some());
+    assert!(first.objectives.cognitive.value.is_none());
+    assert!(first.objectives.social.value.is_none());
+    assert!(first.objectives.group.value.is_none());
+    assert!(first.measures.learning.value.is_none());
+    assert!(first.measures.transfer.value.is_none());
+    assert!(first.measures.reversal.value.is_none());
+    assert!(first.measures.delayed_memory.value.is_none());
+    assert!(first.measures.abstraction.value.is_none());
+    assert!(first.measures.social_contribution.value.is_none());
+    assert_eq!(first.source_backends, vec!["HeuristicBaseline"]);
+    assert_eq!(first.layer_counts.hidden_promotion, 0);
+    assert!(!first.evidence_scope.promotion_backend_eligible);
+    assert!(first
+        .evidence_scope
+        .unsupported_measures
+        .contains(&"delayed_memory".to_string()));
+    assert!(first
+        .evidence_scope
+        .notes
+        .iter()
+        .any(|note| note.contains("not GPU-authoritative promotion evidence")));
+    assert!(!first.promotion_eligible);
+}
+
+#[test]
+fn evaluate_fixture_cli_writes_machine_readable_report() {
+    let out = std::env::temp_dir().join(format!(
+        "alife_ei0_battery_report_{}.json",
+        std::process::id()
+    ));
+    let bin = std::env::var("CARGO_BIN_EXE_p33_genome_lab")
+        .expect("Cargo should expose the p33_genome_lab test binary path");
+
+    let status = Command::new(bin)
+        .args([
+            "evaluate-fixture",
+            "--fixture",
+            real_fixture_path().to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+        ])
+        .status()
+        .expect("evaluation command runs");
+
+    assert!(status.success());
+    let report: BatteryReport =
+        serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+    assert_eq!(report.suite_id, "ei0-real-scenario-battery-v1");
+    assert!(report.packed_record_count >= 8);
+    assert_eq!(report.source_backends, vec!["HeuristicBaseline"]);
+    assert!(!report.evidence_scope.promotion_backend_eligible);
+    assert!(report
+        .evidence_scope
+        .unsupported_measures
+        .contains(&"social_contribution".to_string()));
+    assert!(!report.promotion_eligible);
+    let _ = std::fs::remove_file(out);
+}
+
+fn real_fixture_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/p33_ei0_real_battery.json")
+}
 
 #[test]
 fn hidden_promotion_requires_complete_provenance() {

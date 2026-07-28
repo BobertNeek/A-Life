@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "suite_id": "ei0-real-scenario-battery-v1",
+  "packed_record_count": 9,
+  "source_run_ids": [
+    "curiosity-contradiction@4105",
+    "fatigue-sleep@4104",
+    "food-seeking@4101",
+    "obstacle-frustration@4103",
+    "poison-pain-avoidance@4102",
+    "simple-social-trust-fear@4107",
+    "teacher-perception-event@4108",
+    "word-token-grounding@4106"
+  ],
+  "source_backends": [
+    "HeuristicBaseline"
+  ],
+  "layer_counts": {
+    "permanent_anchor": 2,
+    "procedural_breeding": 6,
+    "hidden_promotion": 0
+  },
+  "evidence_scope": {
+    "promotion_backend_eligible": false,
+    "unsupported_measures": [
+      "learning",
+      "transfer",
+      "reversal",
+      "delayed_memory",
+      "abstraction",
+      "social_contribution",
+      "cognitive_objective",
+      "social_objective",
+      "group_objective"
+    ],
+    "notes": [
+      "HeuristicBaseline traces are deterministic tooling evidence, not GPU-authoritative promotion evidence.",
+      "UNKNOWN means the fixture lacks a genuine phase or exposure; it is not a zero score.",
+      "No hidden promotion trials were supplied."
+    ]
+  },
+  "measures": {
+    "learning": {
+      "value": null,
+      "samples": 0
+    },
+    "transfer": {
+      "value": null,
+      "samples": 0
+    },
+    "reversal": {
+      "value": null,
+      "samples": 0
+    },
+    "delayed_memory": {
+      "value": null,
+      "samples": 0
+    },
+    "abstraction": {
+      "value": null,
+      "samples": 0
+    },
+    "social_contribution": {
+      "value": null,
+      "samples": 0
+    }
+  },
+  "objectives": {
+    "ecological": {
+      "value": 0.625,
+      "samples": 4
+    },
+    "cognitive": {
+      "value": null,
+      "samples": 0
+    },
+    "social": {
+      "value": null,
+      "samples": 0
+    },
+    "group": {
+      "value": null,
+      "samples": 0
+    },
+    "stability": {
+      "value": 0.21800005,
+      "samples": 8
+    },
+    "efficiency": {
+      "value": 0.5392082,
+      "samples": 8
+    },
+    "diversity": {
+      "value": 0.7843751,
+      "samples": 8
+    }
+  },
+  "flags": [],
+  "promotion_eligible": false
+}

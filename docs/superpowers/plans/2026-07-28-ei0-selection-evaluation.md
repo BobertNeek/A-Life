@@ -237,7 +237,9 @@ fn committed_scenario_fixture_evaluates_real_packed_logs_deterministically() {
     assert_eq!(first, second);
     assert!(first.packed_record_count >= 8);
     assert!(first.objectives.ecological.value.is_some());
-    assert!(first.objectives.cognitive.value.is_some());
+    assert!(first.objectives.cognitive.value.is_none());
+    assert!(first.objectives.social.value.is_none());
+    assert!(first.objectives.group.value.is_none());
     assert!(!first.promotion_eligible);
 }
 ```
@@ -250,7 +252,7 @@ Expected: FAIL because `ScenarioBatteryFixture` and its committed fixture do not
 
 - [ ] **Step 3: Add the committed scenario manifest and adapter**
 
-Include at least two seeds and permanent/procedural cases drawn from all eight existing `ScenarioName` variants. Each case declares layer, domain, phase, team mode, variant, source run, foundation, exposure, assistance, lineage novelty/share, and honest `HeuristicBaseline` compute provenance. `ScenarioBatteryFixture::run` executes `ScenarioFixture::with_seed`, collects each tick's real `packed_record`, builds `BatterySuite`, and calls `evaluate_battery`.
+Include at least two seeds and permanent/procedural cases drawn from all eight existing `ScenarioName` variants. Each case declares layer, domain, phase, team mode, variant, source run, foundation, exposure, assistance, lineage novelty/share, and honest `HeuristicBaseline` compute provenance. Map each scenario run to one honest `ObservedOutcome` phase. Never duplicate or relabel an identical scenario and seed as baseline/acquisition, removal/replacement, transfer, reversal, or delayed recall. Unsupported measures remain `UNKNOWN`. `ScenarioBatteryFixture::run` executes `ScenarioFixture::with_seed`, collects each tick's real `packed_record`, builds `BatterySuite`, and calls `evaluate_battery`.
 
 - [ ] **Step 4: Run the exact fixture test and confirm real-log determinism**
 
@@ -276,7 +278,7 @@ Run:
 cargo run -p alife_tools --bin p33_genome_lab -- evaluate-fixture --fixture crates/alife_tools/tests/fixtures/p33_ei0_real_battery.json --out crates/alife_tools/reports/ei0_real_fixture_report.json
 ```
 
-Expected: exit 0 and a report whose source backend is explicitly `HeuristicBaseline`, not GPU-authoritative promotion evidence.
+Expected: exit 0 and a report whose source backend is explicitly `HeuristicBaseline`, whose unsupported cognitive/social/group measures are `UNKNOWN`, and whose promotion eligibility is false.
 
 - [ ] **Step 8: Run the full fixture and CLI target**
 
@@ -293,96 +295,27 @@ git commit -m "feat: evaluate real packed-log battery fixtures"
 
 ---
 
-### Task 3: Managed Pareto and lexicase breeding
+### Task 3: Authoritative composite-genome integration checkpoint
 
 **Files:**
-- Create: `crates/alife_tools/src/p33_selection.rs`
-- Modify: `crates/alife_tools/src/lib.rs`
-- Test: `crates/alife_tools/tests/managed_selection.rs`
+- No implementation files change until the biology dependency is present on this branch.
+- Modify after integration: this focused plan with exact authoritative signatures.
 
 **Interfaces:**
-- Consumes: `p33_evaluation::ObjectiveVector`, `p33_evolution::crossover_genomes`, and validated `BrainGenome` records.
-- Produces: `BreedingCandidate`, `BreedingLineageProfile`, `ManagedBreedingConfig`, `ManagedBreedingReport`, and `run_managed_breeding(...)`.
-- Produces: `ManagedPairing` with `PairingLane::{Ordinary, CognitiveIntrogression}` and optional `ProbationCohort`.
+- Must consume the biology branch's composite `CreatureGenome`, seeded reproduction result, and lineage provenance contracts from `alife_core`.
+- Must not use legacy `BrainGenome` or `p33_evolution::crossover_genomes` as the final breeding substrate.
 
-- [ ] **Step 1: Write failing tests for Pareto preservation and wild constraints**
+- [ ] **Step 1: Commit Task 2 and checkpoint the supervisor**
 
-```rust
-#[test]
-fn managed_selection_preserves_wild_minority_and_specialist_lineages() {
-    let report = run_managed_breeding(&managed(), &wild(), &spec(), config()).unwrap();
-    assert_eq!(report.preserved_wild_genome_ids, wild_ids());
-    assert!(report.retained_lineage_ids.contains(&minority_lineage()));
-    assert!(report.retained_specialists.contains(&"teacher".to_string()));
-    assert!(report.pairings.iter().all(|pair| !wild_ids().contains(&pair.parent_a)));
-}
-```
+Report the Task 2 commit, focused verification, real report summary, and explicit unsupported measures. Request the shortest integration path for the authoritative biology contracts.
 
-Use candidates where survival, cognition, social contribution, and efficiency have different winners. Assert that changing survival alone cannot erase every non-survival specialist.
+- [ ] **Step 2: Stop before managed-selection tests or code until the dependency is present**
 
-- [ ] **Step 2: Run the target and confirm the selection module is missing**
+Verify the current branch exposes composite genome validation, deterministic seeded reproduction, parent and lineage provenance, and offspring viability. If any contract is absent, send one exact interface request and continue no managed-breeding implementation.
 
-Run: `cargo test -p alife_tools --test managed_selection --no-fail-fast`
+- [ ] **Step 3: Replace this checkpoint with an exact self-reviewed Task 3 plan after integration**
 
-Expected: FAIL because `alife_tools::p33_selection` does not exist.
-
-- [ ] **Step 3: Implement validation, Pareto fronts, and deterministic lexicase ordering**
-
-`BreedingCandidate` includes a valid genome, seven-axis objective vector, lineage ID, ancestors, population share, specialist tags, and integrity state. Reject corrupt genomes, invalid phenotypes, reproduction failure, missing objective exposure, non-finite values, and zero seeds. Preserve every nondominated candidate before lexicase tie-breaking. Add one valid representative for each minority lineage and useful specialist even when this expands the requested breeder count.
-
-- [ ] **Step 4: Run the Pareto and wild-preservation test**
-
-Run: `cargo test -p alife_tools --test managed_selection managed_selection_preserves_wild_minority_and_specialist_lineages -- --exact`
-
-Expected: PASS with unchanged wild IDs and retained protected roles.
-
-- [ ] **Step 5: Write failing introgression, inbreeding, and probation tests**
-
-```rust
-#[test]
-fn fragile_high_cognition_candidate_breeds_only_with_robust_unrelated_mate() {
-    let report = run_managed_breeding(&introgression_candidates(), &wild(), &spec(), config()).unwrap();
-    let pair = report.pairings.iter().find(|p| p.parent_a == fragile_id() || p.parent_b == fragile_id()).unwrap();
-    assert_eq!(pair.lane, PairingLane::CognitiveIntrogression);
-    assert!(pair.parent_a == robust_unrelated_id() || pair.parent_b == robust_unrelated_id());
-    assert!(pair.probation.as_ref().unwrap().sibling_control_required);
-    assert!(pair.probation.as_ref().unwrap().population_control_required);
-    assert!(pair.probation.as_ref().unwrap().scrutiny_multiplier >= 2);
-}
-```
-
-Add hostile cases where the only mate shares an ancestor, two fragile candidates are otherwise attractive, and a robust candidate has the same lineage. Assert there is no illegal pairing and every exclusion has a typed reason.
-
-- [ ] **Step 6: Run the hostile pairing tests and confirm legal pairing is absent**
-
-Run: `cargo test -p alife_tools --test managed_selection --no-fail-fast`
-
-Expected: FAIL on introgression, inbreeding, or probation assertions.
-
-- [ ] **Step 7: Implement legal pairing, crossover, and probation cohorts**
-
-`run_managed_breeding` must:
-
-1. Leave the wild reservoir unchanged and outside managed parent selection.
-2. Reject pairs sharing a lineage, direct parent relation, or any ancestor ID.
-3. Classify cognition `>= 0.75` plus ecology `< 0.35` as an introgression exception.
-4. Require its mate to have ecology `>= 0.65`, valid reproduction state, and no fragility classification.
-5. Never pair two introgression exceptions.
-6. Call `crossover_genomes` with a deterministic nonzero seed for each accepted pairing.
-7. Put each introgression child in probation covering ecology, cognition, transfer, health/stability, and development, with sibling and population controls and scrutiny multiplier `2`.
-
-- [ ] **Step 8: Run all managed-selection tests**
-
-Run: `cargo test -p alife_tools --test managed_selection --no-fail-fast`
-
-Expected: PASS with deterministic offspring, no inbreeding, no fragile-fragile pair, and complete probation metadata.
-
-- [ ] **Step 9: Commit the managed-selection slice**
-
-```powershell
-git add crates/alife_tools/src/p33_selection.rs crates/alife_tools/src/lib.rs crates/alife_tools/tests/managed_selection.rs
-git commit -m "feat: add managed multi-level breeding selection"
-```
+The revised task must use the integrated public signatures in its tests and implementation. It must retain Pareto/lexicase selection, wild preservation, minority and specialist retention, inbreeding rejection, robust-mate-only cognitive introgression, and controlled probation cohorts.
 
 ---
 

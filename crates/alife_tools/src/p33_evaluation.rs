@@ -4,12 +4,17 @@
 //! evidence without issuing actions, injecting rewards, or becoming runtime
 //! policy authority.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::Path,
+};
 
 use alife_core::{
-    GenomeId, LineageId, PackedExperienceRecord, ScaffoldContractError, Validate,
+    BrainGenome, GenomeId, LineageId, PackedExperienceRecord, ScaffoldContractError, Validate,
     PACKED_FLAG_SUCCESS,
 };
+use alife_world::{ScenarioFixture, ScenarioName};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -30,6 +35,10 @@ pub enum EvaluationError {
     MissingPromotionProvenance { test_id: String },
     #[error("hidden promotion trial `{test_id}` has assistance or prior exposure")]
     ContaminatedPromotionEvidence { test_id: String },
+    #[error("failed to read battery fixture: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("failed to parse battery fixture: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -43,6 +52,7 @@ pub enum BatteryLayer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TrialDomain {
+    ObservedBehavior,
     Ecology,
     Learning,
     Transfer,
@@ -55,6 +65,7 @@ pub enum TrialDomain {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TrialPhase {
+    ObservedOutcome,
     Baseline,
     Acquisition,
     Transfer,
@@ -221,10 +232,249 @@ pub struct BatteryReport {
     pub source_run_ids: Vec<String>,
     pub source_backends: Vec<String>,
     pub layer_counts: BatteryLayerCounts,
+    pub evidence_scope: EvidenceScope,
     pub measures: CognitiveMeasures,
     pub objectives: ObjectiveVector,
     pub flags: Vec<EvaluationFlag>,
     pub promotion_eligible: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EvidenceScope {
+    pub promotion_backend_eligible: bool,
+    pub unsupported_measures: Vec<String>,
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScenarioBatteryFixture {
+    pub schema_version: u16,
+    pub suite_id: String,
+    pub cases: Vec<ScenarioBatteryCase>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScenarioBatteryCase {
+    pub test_id: String,
+    pub layer: BatteryLayer,
+    pub domain: TrialDomain,
+    pub team_mode: TeamMode,
+    pub variant_id: String,
+    pub answer_fingerprint: Option<String>,
+    pub hidden_set_id: Option<String>,
+    pub foundation_id: String,
+    pub foundation_version: u32,
+    pub exposure_count: u32,
+    pub assistance: Vec<AssistanceKind>,
+    pub lineage_id: u64,
+    pub ancestor_genome_ids: Vec<GenomeId>,
+    pub population_share: f32,
+    pub genome_novelty: f32,
+    pub compute: ScenarioComputeProvenance,
+    pub sources: Vec<ScenarioTraceSource>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScenarioComputeProvenance {
+    pub adapter: String,
+    pub backend: String,
+    pub elapsed_micros: u64,
+    pub energy_milliunits: u64,
+    pub budget_units: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScenarioTraceSource {
+    pub scenario: ScenarioSource,
+    pub seed: u64,
+    pub phase: TrialPhase,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScenarioSource {
+    FoodSeeking,
+    PoisonPainAvoidance,
+    ObstacleFrustration,
+    FatigueSleep,
+    CuriosityContradiction,
+    WordTokenGrounding,
+    SimpleSocialTrustFear,
+    TeacherPerceptionEvent,
+}
+
+impl ScenarioSource {
+    fn scenario_name(self) -> ScenarioName {
+        match self {
+            Self::FoodSeeking => ScenarioName::FoodSeeking,
+            Self::PoisonPainAvoidance => ScenarioName::PoisonPainAvoidance,
+            Self::ObstacleFrustration => ScenarioName::ObstacleFrustration,
+            Self::FatigueSleep => ScenarioName::FatigueSleep,
+            Self::CuriosityContradiction => ScenarioName::CuriosityContradiction,
+            Self::WordTokenGrounding => ScenarioName::WordTokenGrounding,
+            Self::SimpleSocialTrustFear => ScenarioName::SimpleSocialTrustFear,
+            Self::TeacherPerceptionEvent => ScenarioName::TeacherPerceptionEvent,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::FoodSeeking => "food-seeking",
+            Self::PoisonPainAvoidance => "poison-pain-avoidance",
+            Self::ObstacleFrustration => "obstacle-frustration",
+            Self::FatigueSleep => "fatigue-sleep",
+            Self::CuriosityContradiction => "curiosity-contradiction",
+            Self::WordTokenGrounding => "word-token-grounding",
+            Self::SimpleSocialTrustFear => "simple-social-trust-fear",
+            Self::TeacherPerceptionEvent => "teacher-perception-event",
+        }
+    }
+}
+
+impl ScenarioBatteryFixture {
+    pub fn from_json_file(path: impl AsRef<Path>) -> Result<Self, EvaluationError> {
+        let fixture: Self = serde_json::from_str(&fs::read_to_string(path)?)?;
+        if fixture.schema_version != EI0_EVALUATION_SCHEMA_VERSION {
+            return Err(EvaluationError::InvalidSuite(
+                "scenario fixture schema version mismatch",
+            ));
+        }
+        if fixture.suite_id.trim().is_empty() || fixture.cases.is_empty() {
+            return Err(EvaluationError::InvalidSuite(
+                "scenario fixture needs a suite id and cases",
+            ));
+        }
+        Ok(fixture)
+    }
+
+    pub fn run(&self) -> Result<BatteryReport, EvaluationError> {
+        if self.schema_version != EI0_EVALUATION_SCHEMA_VERSION
+            || self.suite_id.trim().is_empty()
+            || self.cases.is_empty()
+        {
+            return Err(EvaluationError::InvalidSuite(
+                "scenario fixture header is invalid",
+            ));
+        }
+        let trials = self
+            .cases
+            .iter()
+            .map(ScenarioBatteryCase::run)
+            .collect::<Result<Vec<_>, _>>()?;
+        evaluate_battery(&BatterySuite {
+            schema_version: EI0_EVALUATION_SCHEMA_VERSION,
+            suite_id: self.suite_id.clone(),
+            trials,
+        })
+    }
+}
+
+impl ScenarioBatteryCase {
+    fn run(&self) -> Result<BatteryTrial, EvaluationError> {
+        if self.sources.is_empty() {
+            return Err(EvaluationError::InvalidTrial {
+                test_id: self.test_id.clone(),
+                message: "scenario case needs at least one source",
+            });
+        }
+        let first_seed = self.sources[0].seed;
+        if first_seed == 0 || self.sources.iter().any(|source| source.seed != first_seed) {
+            return Err(EvaluationError::InvalidTrial {
+                test_id: self.test_id.clone(),
+                message: "scenario phases must use one nonzero candidate seed",
+            });
+        }
+
+        let mut phase_records: BTreeMap<TrialPhase, Vec<PackedExperienceRecord>> = BTreeMap::new();
+        let mut source_run_ids = Vec::with_capacity(self.sources.len());
+        let mut focal_organism_id = None;
+        let mut genome_id = None;
+        let mut packed_record_count = 0_u64;
+
+        for source in &self.sources {
+            let fixture = ScenarioFixture::with_seed(source.scenario.scenario_name(), source.seed)?;
+            let candidate_genome = BrainGenome::scaffold(
+                fixture.creature.genome_seed,
+                fixture.creature.brain_tier.default_class_id(),
+            );
+            if genome_id
+                .replace(candidate_genome.id)
+                .is_some_and(|id| id != candidate_genome.id)
+            {
+                return Err(EvaluationError::InvalidTrial {
+                    test_id: self.test_id.clone(),
+                    message: "scenario phases resolved different candidate genomes",
+                });
+            }
+            let run = fixture.run()?;
+            let records = run
+                .ticks
+                .into_iter()
+                .filter_map(|tick| tick.brain.packed_record)
+                .collect::<Vec<_>>();
+            if records.is_empty() {
+                return Err(EvaluationError::InvalidTrial {
+                    test_id: self.test_id.clone(),
+                    message: "scenario source emitted no packed records",
+                });
+            }
+            let organism_id = records[0].frame.organism_id;
+            if focal_organism_id
+                .replace(organism_id)
+                .is_some_and(|id| id != organism_id)
+            {
+                return Err(EvaluationError::InvalidTrial {
+                    test_id: self.test_id.clone(),
+                    message: "scenario phases resolved different focal organisms",
+                });
+            }
+            packed_record_count += records.len() as u64;
+            phase_records
+                .entry(source.phase)
+                .or_default()
+                .extend(records);
+            source_run_ids.push(format!("{}@{}", source.scenario.label(), source.seed));
+        }
+
+        Ok(BatteryTrial {
+            test_id: self.test_id.clone(),
+            layer: self.layer,
+            domain: self.domain,
+            team_mode: self.team_mode,
+            seed: first_seed,
+            variant_id: self.variant_id.clone(),
+            answer_fingerprint: self.answer_fingerprint.clone(),
+            hidden_set_id: self.hidden_set_id.clone(),
+            focal_organism_id: focal_organism_id.expect("nonempty source records set organism"),
+            provenance: EvaluationProvenance {
+                source_run_id: source_run_ids.join("+"),
+                foundation_id: self.foundation_id.clone(),
+                foundation_version: self.foundation_version,
+                exposure_count: self.exposure_count,
+                assistance: self.assistance.clone(),
+                compute: ComputeProvenance {
+                    adapter: self.compute.adapter.clone(),
+                    backend: self.compute.backend.clone(),
+                    dispatches: packed_record_count,
+                    neural_ticks: packed_record_count,
+                    elapsed_micros: self.compute.elapsed_micros,
+                    energy_milliunits: self.compute.energy_milliunits,
+                    budget_units: self.compute.budget_units,
+                },
+                lineage: LineageProvenance {
+                    lineage_id: LineageId(self.lineage_id),
+                    genome_id: genome_id.expect("nonempty source records set genome"),
+                    ancestor_genome_ids: self.ancestor_genome_ids.clone(),
+                    population_share: self.population_share,
+                    genome_novelty: self.genome_novelty,
+                },
+            },
+            traces: phase_records
+                .into_iter()
+                .map(|(phase, records)| TrialTrace { phase, records })
+                .collect(),
+        })
+    }
 }
 
 pub fn evaluate_battery(suite: &BatterySuite) -> Result<BatteryReport, EvaluationError> {
@@ -282,6 +532,25 @@ pub fn evaluate_battery(suite: &BatterySuite) -> Result<BatteryReport, Evaluatio
             .map(|trial| trial.provenance.compute.backend.clone()),
     );
 
+    let layer_counts = BatteryLayerCounts {
+        permanent_anchor: suite
+            .trials
+            .iter()
+            .filter(|trial| trial.layer == BatteryLayer::PermanentAnchor)
+            .count(),
+        procedural_breeding: suite
+            .trials
+            .iter()
+            .filter(|trial| trial.layer == BatteryLayer::ProceduralBreeding)
+            .count(),
+        hidden_promotion: suite
+            .trials
+            .iter()
+            .filter(|trial| trial.layer == BatteryLayer::HiddenPromotion)
+            .count(),
+    };
+    let evidence_scope = evidence_scope(&source_backends, layer_counts, &measures, &objectives);
+
     Ok(BatteryReport {
         schema_version: EI0_EVALUATION_SCHEMA_VERSION,
         suite_id: suite.suite_id.clone(),
@@ -293,28 +562,62 @@ pub fn evaluate_battery(suite: &BatterySuite) -> Result<BatteryReport, Evaluatio
             .sum(),
         source_run_ids,
         source_backends,
-        layer_counts: BatteryLayerCounts {
-            permanent_anchor: suite
-                .trials
-                .iter()
-                .filter(|trial| trial.layer == BatteryLayer::PermanentAnchor)
-                .count(),
-            procedural_breeding: suite
-                .trials
-                .iter()
-                .filter(|trial| trial.layer == BatteryLayer::ProceduralBreeding)
-                .count(),
-            hidden_promotion: suite
-                .trials
-                .iter()
-                .filter(|trial| trial.layer == BatteryLayer::HiddenPromotion)
-                .count(),
-        },
+        layer_counts,
+        evidence_scope,
         measures,
         objectives,
         flags,
         promotion_eligible,
     })
+}
+
+fn evidence_scope(
+    backends: &[String],
+    layers: BatteryLayerCounts,
+    measures: &CognitiveMeasures,
+    objectives: &ObjectiveVector,
+) -> EvidenceScope {
+    let promotion_backend_eligible = !backends.is_empty()
+        && backends
+            .iter()
+            .all(|backend| backend != "HeuristicBaseline");
+    let mut unsupported_measures = Vec::new();
+    for (name, value) in [
+        ("learning", measures.learning.value),
+        ("transfer", measures.transfer.value),
+        ("reversal", measures.reversal.value),
+        ("delayed_memory", measures.delayed_memory.value),
+        ("abstraction", measures.abstraction.value),
+        ("social_contribution", measures.social_contribution.value),
+        ("cognitive_objective", objectives.cognitive.value),
+        ("social_objective", objectives.social.value),
+        ("group_objective", objectives.group.value),
+    ] {
+        if value.is_none() {
+            unsupported_measures.push(name.to_string());
+        }
+    }
+    let mut notes = Vec::new();
+    if !promotion_backend_eligible {
+        notes.push(
+            "HeuristicBaseline traces are deterministic tooling evidence, not GPU-authoritative promotion evidence."
+                .to_string(),
+        );
+    }
+    if !unsupported_measures.is_empty() {
+        notes.push(
+            "UNKNOWN means the fixture lacks a genuine phase or exposure; it is not a zero score."
+                .to_string(),
+        );
+    }
+    if layers.hidden_promotion == 0 {
+        notes.push("No hidden promotion trials were supplied.".to_string());
+    }
+    EvidenceScope {
+        promotion_backend_eligible,
+        unsupported_measures,
+        notes,
+    }
 }
 
 fn validate_suite(suite: &BatterySuite) -> Result<(), EvaluationError> {

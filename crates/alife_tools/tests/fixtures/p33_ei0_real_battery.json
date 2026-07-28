@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "suite_id": "ei0-real-scenario-battery-v1",
+  "cases": [
+    {
+      "test_id": "anchor-food-seeking-observation",
+      "layer": "permanent_anchor",
+      "domain": "ecology",
+      "team_mode": "individual",
+      "variant_id": "food-seeking-4101",
+      "answer_fingerprint": null,
+      "hidden_set_id": null,
+      "foundation_id": "scaffold-headless-reference-v1",
+      "foundation_version": 1,
+      "exposure_count": 6,
+      "assistance": [],
+      "lineage_id": 1001,
+      "ancestor_genome_ids": [],
+      "population_share": 0.22,
+      "genome_novelty": 0.48,
+      "compute": {
+        "adapter": "alife_world::ScenarioFixture",
+        "backend": "HeuristicBaseline",
+        "elapsed_micros": 700,
+        "energy_milliunits": 9,
+        "budget_units": 100
+      },
+      "sources": [
+        { "scenario": "food_seeking", "seed": 4101, "phase": "observed_outcome" }
+      ]
+    },
+    {
+      "test_id": "anchor-poison-avoidance-observation",
+      "layer": "permanent_anchor",
+      "domain": "ecology",
+      "team_mode": "individual",
+      "variant_id": "poison-avoidance-4102",
+      "answer_fingerprint": null,
+      "hidden_set_id": null,
+      "foundation_id": "scaffold-headless-reference-v1",
+      "foundation_version": 1,
+      "exposure_count": 6,
+      "assistance": [],
+      "lineage_id": 1002,
+      "ancestor_genome_ids": [],
+      "population_share": 0.18,
+      "genome_novelty": 0.57,
+      "compute": {
+        "adapter": "alife_world::ScenarioFixture",
+        "backend": "HeuristicBaseline",
+        "elapsed_micros": 720,
+        "energy_milliunits": 11,
+        "budget_units": 100
+      },
+      "sources": [
+        { "scenario": "poison_pain_avoidance", "seed": 4102, "phase": "observed_outcome" }
+      ]
+    },
+    {
+      "test_id": "procedural-obstacle-observation",
+      "layer": "procedural_breeding",
+      "domain": "ecology",
+      "team_mode": "individual",
+      "variant_id": "obstacle-layout-4103",
+      "answer_fingerprint": null,
+      "hidden_set_id": null,
+      "foundation_id": "scaffold-headless-reference-v1",
+      "foundation_version": 1,
+      "exposure_count": 0,
+      "assistance": [],
+      "lineage_id": 1003,
+      "ancestor_genome_ids": [],
+      "population_share": 0.14,
+      "genome_novelty": 0.66,
+      "compute": {
+        "adapter": "alife_world::ScenarioFixture",
+        "backend": "HeuristicBaseline",
+        "elapsed_micros": 760,
+        "energy_milliunits": 13,
+        "budget_units": 100
+      },
+      "sources": [
+        { "scenario": "obstacle_frustration", "seed": 4103, "phase": "observed_outcome" }
+      ]
+    },
+    {
+      "test_id": "procedural-fatigue-sleep-observation",
+      "layer": "procedural_breeding",
+      "domain": "ecology",
+      "team_mode": "individual",
+      "variant_id": "fatigue-sleep-4104",
+      "answer_fingerprint": null,
+      "hidden_set_id": null,
+      "foundation_id": "scaffold-headless-reference-v1",
+      "foundation_version": 1,
+      "exposure_count": 0,
+      "assistance": [],
+      "lineage_id": 1004,
+      "ancestor_genome_ids": [],
+      "population_share": 0.12,
+      "genome_novelty": 0.69,
+      "compute": {
+        "adapter": "alife_world::ScenarioFixture",
+        "backend": "HeuristicBaseline",
+        "elapsed_micros": 820,
+        "energy_milliunits": 14,
+        "budget_units": 100
+      },
+      "sources": [
+        { "scenario": "fatigue_sleep", "seed": 4104, "phase": "observed_outcome" }
+      ]
+    },
+    {
+      "test_id": "procedural-curiosity-observation",
+      "layer": "procedural_breeding",
+      "domain": "observed_behavior",
+      "team_mode": "individual",
+      "variant_id": "curiosity-4105",
+      "answer_fingerprint": null,
+      "hidden_set_id": null,
+      "foundation_id": "scaffold-headless-reference-v1",
+      "foundation_version": 1,
+      "exposure_count": 0,
+      "assistance": [],
+      "lineage_id": 1005,
+      "ancestor_genome_ids": [],
+      "population_share": 0.10,
+      "genome_novelty": 0.73,
+      "compute": {
+        "adapter": "alife_world::ScenarioFixture",
+        "backend": "HeuristicBaseline",
+        "elapsed_micros": 780,
+        "energy_milliunits": 12,
+        "budget_units": 100
+      },
+      "sources": [
+        { "scenario": "curiosity_contradiction", "seed": 4105, "phase": "observed_outcome" }
+      ]
+    },
+    {
+      "test_id": "procedural-word-grounding-observation",
+      "layer": "procedural_breeding",
+      "domain": "observed_behavior",
+      "team_mode": "individual",
+      "variant_id": "word-grounding-4106",
+      "answer_fingerprint": null,
+      "hidden_set_id": null,
+      "foundation_id": "scaffold-headless-reference-v1",
+      "foundation_version": 1,
+      "exposure_count": 0,
+      "assistance": [],
+      "lineage_id": 1006,
+      "ancestor_genome_ids": [],
+      "population_share": 0.09,
+      "genome_novelty": 0.77,
+      "compute": {
+        "adapter": "alife_world::ScenarioFixture",
+        "backend": "HeuristicBaseline",
+        "elapsed_micros": 790,
+        "energy_milliunits": 12,
+        "budget_units": 100
+      },
+      "sources": [
+        { "scenario": "word_token_grounding", "seed": 4106, "phase": "observed_outcome" }
+      ]
+    },
+    {
+      "test_id": "procedural-social-context-observation",
+      "layer": "procedural_breeding",
+      "domain": "observed_behavior",
+      "team_mode": "individual",
+      "variant_id": "social-context-4107",
+      "answer_fingerprint": null,
+      "hidden_set_id": null,
+      "foundation_id": "scaffold-headless-reference-v1",
+      "foundation_version": 1,
+      "exposure_count": 0,
+      "assistance": [],
+      "lineage_id": 1007,
+      "ancestor_genome_ids": [],
+      "population_share": 0.08,
+      "genome_novelty": 0.81,
+      "compute": {
+        "adapter": "alife_world::ScenarioFixture",
+        "backend": "HeuristicBaseline",
+        "elapsed_micros": 810,
+        "energy_milliunits": 13,
+        "budget_units": 100
+      },
+      "sources": [
+        { "scenario": "simple_social_trust_fear", "seed": 4107, "phase": "observed_outcome" }
+      ]
+    },
+    {
+      "test_id": "procedural-teacher-perception-observation",
+      "layer": "procedural_breeding",
+      "domain": "observed_behavior",
+      "team_mode": "individual",
+      "variant_id": "teacher-perception-4108",
+      "answer_fingerprint": null,
+      "hidden_set_id": null,
+      "foundation_id": "scaffold-headless-reference-v1",
+      "foundation_version": 1,
+      "exposure_count": 1,
+      "assistance": ["teacher"],
+      "lineage_id": 1008,
+      "ancestor_genome_ids": [],
+      "population_share": 0.07,
+      "genome_novelty": 0.84,
+      "compute": {
+        "adapter": "alife_world::ScenarioFixture",
+        "backend": "HeuristicBaseline",
+        "elapsed_micros": 840,
+        "energy_milliunits": 15,
+        "budget_units": 100
+      },
+      "sources": [
+        { "scenario": "teacher_perception_event", "seed": 4108, "phase": "observed_outcome" }
+      ]
+    }
+  ]
+}
