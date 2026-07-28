@@ -31,8 +31,8 @@ use bevy::{
         Color, Commands, Component, Cuboid, DetectChanges, Entity, EulerRot, GlobalTransform,
         Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, Meshable, MessageWriter,
         MouseButton, Name, Node, ParamSet, PositionType, Projection, Quat, Res, ResMut, Resource,
-        Sphere, StandardMaterial, Text, Text2d, TextColor, TextFont, Time, Transform, Update, Val,
-        Vec3, Visibility, Window, With,
+        Sphere, StandardMaterial, Text, Text2d, TextColor, TextFont, Time, Torus, Transform,
+        Update, Val, Vec3, Visibility, Window, With,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -524,6 +524,8 @@ pub struct Fvr04CreatureRenderBucket {
 pub struct Fvr04CreatureExpressionSample {
     pub stable_id: alife_core::WorldEntityId,
     pub organism_id: alife_core::OrganismId,
+    pub display_label: String,
+    pub brain_neuron_count: Option<u32>,
     pub hunger: f32,
     pub fatigue: f32,
     pub fear: f32,
@@ -532,6 +534,11 @@ pub struct Fvr04CreatureExpressionSample {
     pub reproductive_drive: f32,
     pub sleep_pressure: f32,
     pub social: f32,
+    pub memory_record_count: u32,
+    pub concept_count: u32,
+    pub unresolved_gap_count: u32,
+    pub lifetime_learning_enabled: bool,
+    pub last_consolidated_tick: Option<u64>,
     pub expression: CreatureExpressionState,
     pub animation: CreatureAnimationState,
 }
@@ -1087,6 +1094,15 @@ pub struct Fvr05ProductionBottomOverlayToolbar;
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Fvr05ProductionFooterStatusBar;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub struct V0PlayerStatusChip;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub struct V0PlayerCreaturePanel;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub struct V0PlayerControlStrip;
+
 struct Fvr11TerrainSpawnReceipt {
     mesh_stats: Fvr09GreedyMeshStats,
     top_layer_count: usize,
@@ -1119,8 +1135,15 @@ struct Fvr05OverlayCell {
 struct Fvr04CreatureVisualRecord {
     stable_ref: StableVoxelObjectRef,
     tile: VoxelTileCoord,
+    display_label: String,
+    brain_neuron_count: Option<u32>,
     social_affinity: f32,
     reproductive_drive: f32,
+    memory_record_count: u32,
+    concept_count: u32,
+    unresolved_gap_count: u32,
+    lifetime_learning_enabled: bool,
+    last_consolidated_tick: Option<u64>,
     visual: CreatureVisualSnapshot,
 }
 
@@ -1712,6 +1735,14 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_fvr05_bottom_overlay_toolbar,
             sync_fvr05_footer_status_bar,
         ),
+    )
+    .add_systems(
+        Update,
+        (
+            sync_v0_player_status_chip,
+            sync_v0_player_creature_panel,
+            sync_v0_player_control_strip,
+        ),
     );
     if summary.record_performance && !summary.dry_run {
         let screenshot_path = PathBuf::from(FVR03_PERFORMANCE_ARTIFACT_DIR).join(format!(
@@ -1738,6 +1769,7 @@ pub fn spawn_fvr03_production_voxel_scene(
     spawn_fvr03_diagnostics_ui(app, summary, &settings);
     spawn_fvr04_creature_inspector_panel(app);
     spawn_fvr05_production_ux_ui(app);
+    spawn_v0_player_experience_ui(app);
     spawn_fvr04_creature_world_label(app, selected);
     Ok(())
 }
@@ -1847,8 +1879,18 @@ fn fvr04_creature_visual_records_from_save(
                 tile: Some(anchor.tile),
             },
             tile: anchor.tile,
+            display_label: object.label.clone(),
+            brain_neuron_count: creature.brain_class.neuron_count(),
             social_affinity: object.social_affinity,
             reproductive_drive: creature.mind.homeostasis.drives.reproductive_drive,
+            memory_record_count: creature.mind.memory_record_count,
+            concept_count: creature.mind.concept_count,
+            unresolved_gap_count: creature.mind.unresolved_gap_count,
+            lifetime_learning_enabled: creature.learning.lifetime_learning_enabled,
+            last_consolidated_tick: creature
+                .learning
+                .last_consolidated_tick
+                .map(|tick| tick.raw()),
             visual,
         });
     }
@@ -3472,6 +3514,8 @@ fn spawn_fvr04_creatures(
         expression_buffer.push(Fvr04CreatureExpressionSample {
             stable_id: visual.stable_id,
             organism_id: visual.organism_id,
+            display_label: creature.display_label.clone(),
+            brain_neuron_count: creature.brain_neuron_count,
             hunger: visual.cues.hunger.value,
             fatigue: visual.cues.fatigue.value,
             fear: visual.cues.fear.value,
@@ -3480,6 +3524,11 @@ fn spawn_fvr04_creatures(
             reproductive_drive: creature.reproductive_drive,
             sleep_pressure: visual.cues.sleep_pressure.value,
             social: ((creature.social_affinity + 1.0) * 0.5).clamp(0.0, 1.0),
+            memory_record_count: creature.memory_record_count,
+            concept_count: creature.concept_count,
+            unresolved_gap_count: creature.unresolved_gap_count,
+            lifetime_learning_enabled: creature.lifetime_learning_enabled,
+            last_consolidated_tick: creature.last_consolidated_tick,
             expression: visual.expression,
             animation: visual.animation,
         });
@@ -4010,7 +4059,7 @@ fn spawn_fvr03_selection_marker(
     };
     let mesh = {
         let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
-        meshes.add(Cuboid::new(1.28, 0.08, 1.28))
+        meshes.add(Torus::new(0.54, 0.70))
     };
     let material = materials
         .get(&Fvr03ProductionVoxelMaterialKind::Selection)
@@ -4020,7 +4069,7 @@ fn spawn_fvr03_selection_marker(
         Name::new(format!("A-Life FVR03 selected tile {}:{}", tile.x, tile.z)),
         Mesh3d(mesh),
         MeshMaterial3d(material),
-        Transform::from_xyz(tile.x as f32 + 0.5, 1.42, tile.z as f32 + 0.5),
+        Transform::from_xyz(tile.x as f32 + 0.5, 1.45, tile.z as f32 + 0.5),
         Fvr03ProductionVoxelSelectionMarker,
     ));
 }
@@ -4226,6 +4275,208 @@ fn spawn_fvr05_production_ux_ui(app: &mut App) {
     ));
 }
 
+fn spawn_v0_player_experience_ui(app: &mut App) {
+    app.world_mut().spawn((
+        Name::new("A-Life V0 player status chip"),
+        Text::new("A-LIFE"),
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.96, 0.91, 0.70)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(18.0),
+            left: Val::Px(18.0),
+            padding: bevy::ui::UiRect::axes(Val::Px(14.0), Val::Px(9.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.055, 0.075, 0.048, 0.88)),
+        V0PlayerStatusChip,
+    ));
+    app.world_mut().spawn((
+        Name::new("A-Life V0 selected creature panel"),
+        Text::new("Select a creature"),
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.95, 0.93, 0.82)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(62.0),
+            right: Val::Px(18.0),
+            width: Val::Px(318.0),
+            max_width: Val::Px(318.0),
+            padding: bevy::ui::UiRect::all(Val::Px(16.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.055, 0.070, 0.046, 0.91)),
+        V0PlayerCreaturePanel,
+    ));
+    app.world_mut().spawn((
+        Name::new("A-Life V0 player control strip"),
+        Text::new("LMB Select  |  R Recover view"),
+        TextFont {
+            font_size: 13.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.89, 0.88, 0.74)),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(92.0),
+            right: Val::Px(92.0),
+            bottom: Val::Px(18.0),
+            padding: bevy::ui::UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.050, 0.066, 0.044, 0.88)),
+        V0PlayerControlStrip,
+    ));
+}
+
+fn sync_v0_player_status_chip(
+    scene: Res<Fvr03ProductionVoxelSceneResource>,
+    ux: Res<Fvr05ProductionUxStateResource>,
+    mut chips: bevy::prelude::Query<&mut Text, With<V0PlayerStatusChip>>,
+) {
+    if !scene.is_changed() && !ux.is_changed() {
+        return;
+    }
+    let state = if ux.settings.paused {
+        "PAUSED"
+    } else {
+        "LIVING"
+    };
+    let text = format!(
+        "A-LIFE  |  {}  |  {} CREATURES",
+        state, scene.creature_render_count
+    );
+    for mut chip in &mut chips {
+        chip.0 = text.clone();
+    }
+}
+
+fn sync_v0_player_creature_panel(
+    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    creatures: Res<Fvr04ProductionCreatureSceneResource>,
+    follow: Res<Fvr04ProductionCreatureFollowResource>,
+    mut panels: bevy::prelude::Query<&mut Text, With<V0PlayerCreaturePanel>>,
+) {
+    if !selection.is_changed() && !creatures.is_changed() && !follow.is_changed() {
+        return;
+    }
+    let text = selection
+        .selected
+        .filter(|selected| selected.kind == StableVoxelRefKind::Creature)
+        .and_then(|selected| selected.stable_id)
+        .and_then(|stable_id| creatures.sample_for_stable_id(stable_id))
+        .map(|sample| v0_selected_creature_text(sample, follow.enabled))
+        .unwrap_or_else(|| {
+            "CREATURES\nNo creature selected\n\nLMB selects a creature or terrain.\nR restores the default view."
+                .to_string()
+        });
+    for mut panel in &mut panels {
+        panel.0 = text.clone();
+    }
+}
+
+fn sync_v0_player_control_strip(
+    ux: Res<Fvr05ProductionUxStateResource>,
+    follow: Res<Fvr04ProductionCreatureFollowResource>,
+    mut strips: bevy::prelude::Query<&mut Text, With<V0PlayerControlStrip>>,
+) {
+    if !ux.is_changed() && !follow.is_changed() {
+        return;
+    }
+    let playback = if ux.settings.paused {
+        "Paused"
+    } else {
+        "Running"
+    };
+    let follow_state = if follow.enabled {
+        "Following"
+    } else {
+        "Free camera"
+    };
+    let text = format!(
+        "{}  {:.1}x  |  {}  |  LMB Select  O Orbit  I Isometric  F Follow  R Recover view  Space Pause",
+        playback, ux.settings.simulation_speed, follow_state
+    );
+    for mut strip in &mut strips {
+        strip.0 = text.clone();
+    }
+}
+
+fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample, following: bool) -> String {
+    let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
+    let brain = sample
+        .brain_neuron_count
+        .map(|count| format!("{} neurons", count))
+        .unwrap_or_else(|| "custom brain".to_string());
+    let learning = if sample.lifetime_learning_enabled {
+        "active"
+    } else {
+        "sealed"
+    };
+    let last_sleep = sample
+        .last_consolidated_tick
+        .map(|tick| format!("Last sleep learning: tick {tick}"))
+        .unwrap_or_else(|| "Last sleep learning: none yet".to_string());
+    let follow_state = if following { "FOLLOWING" } else { "SELECTED" };
+    format!(
+        "{display_name}  |  {brain}\n{follow_state}  |  {}  |  {}\n\nNEEDS\nHunger   {} {:>3}%\nFatigue  {} {:>3}%\nSafety   {} {:>3}%\nSleep    {} {:>3}%\n\nSOCIAL\nReadiness {} {:>3}%\n\nLEARNING\n{}  |  memories {}  |  concepts {}\nOpen curiosity gaps: {}\n{}",
+        sample.animation.label(),
+        sample.expression.label(),
+        v0_need_bar(sample.hunger),
+        v0_percent(sample.hunger),
+        v0_need_bar(sample.fatigue),
+        v0_percent(sample.fatigue),
+        v0_need_bar(1.0 - sample.fear),
+        v0_percent(1.0 - sample.fear),
+        v0_need_bar(sample.sleep_pressure),
+        v0_percent(sample.sleep_pressure),
+        v0_need_bar(sample.social),
+        v0_percent(sample.social),
+        learning,
+        sample.memory_record_count,
+        sample.concept_count,
+        sample.unresolved_gap_count,
+        last_sleep,
+    )
+}
+
+fn v0_player_creature_name(label: &str, stable_id: u64) -> String {
+    let trimmed = label.trim();
+    if trimmed.is_empty() || trimmed.starts_with("production-creature-") {
+        return format!("Creature #{stable_id}");
+    }
+    let mut words = trimmed
+        .split(['-', '_', ' '])
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            chars
+                .next()
+                .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    if words.is_empty() {
+        words.push("Creature".to_string());
+    }
+    format!("{}  #{}", words.join(" "), stable_id)
+}
+
+fn v0_need_bar(value: f32) -> String {
+    let filled = (value.clamp(0.0, 1.0) * 8.0).round() as usize;
+    format!("[{}{}]", "=".repeat(filled), "-".repeat(8 - filled))
+}
+
+fn v0_percent(value: f32) -> u32 {
+    (value.clamp(0.0, 1.0) * 100.0).round() as u32
+}
+
 fn handle_fvr03_mouse_selection(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: bevy::prelude::Query<&Window, With<PrimaryWindow>>,
@@ -4262,7 +4513,7 @@ fn handle_fvr03_mouse_selection(
 fn handle_fvr05_production_ux_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    follow: Res<Fvr04ProductionCreatureFollowResource>,
+    mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
 ) {
     ux.update_selection_snapshot(selection.selected, follow.enabled);
@@ -4323,6 +4574,13 @@ fn handle_fvr05_production_ux_input(
             "Preferred next-launch profile: {}",
             ux.settings.preferred_profile_for_next_launch.label()
         );
+    }
+    if keyboard.just_pressed(KeyCode::KeyR) {
+        follow.enabled = false;
+        ux.settings.show_menu = false;
+        ux.settings.show_settings = false;
+        ux.settings.show_overlays = false;
+        ux.last_action = "Recovered the player view".to_string();
     }
     if let Some(kind) = fvr05_overlay_key_pressed(&keyboard) {
         ux.toggle_overlay(kind);
@@ -4632,7 +4890,7 @@ fn handle_fvr03_camera_mode_input(
 ) {
     let next_mode = if keyboard.just_pressed(KeyCode::KeyO) {
         Some(Fvr03ProductionVoxelCameraMode::Orbit)
-    } else if keyboard.just_pressed(KeyCode::KeyI) {
+    } else if keyboard.just_pressed(KeyCode::KeyI) || keyboard.just_pressed(KeyCode::KeyR) {
         Some(Fvr03ProductionVoxelCameraMode::OrthographicIsometric)
     } else {
         None
@@ -4673,7 +4931,7 @@ fn sync_fvr04_selection_marker(
         return;
     };
     for (mut transform, mut visibility) in &mut markers {
-        transform.translation = Vec3::new(position.x, 1.42, position.z);
+        transform.translation = Vec3::new(position.x, 1.45, position.z);
         *visibility = Visibility::Visible;
     }
 }
@@ -4767,8 +5025,8 @@ fn sync_fvr04_creature_label(
     };
     for (mut text, mut transform, mut visibility) in &mut labels {
         text.0 = format!(
-            "#{} {} {}",
-            sample.stable_id.raw(),
+            "{}\n{}  |  {}",
+            v0_player_creature_name(&sample.display_label, sample.stable_id.raw()),
             sample.animation.label(),
             sample.expression.label()
         );

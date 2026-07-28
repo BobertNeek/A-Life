@@ -7,16 +7,16 @@ use alife_game_app::{
     Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk, Fvr03ProductionVoxelMaterialKind,
     Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionResource,
     Fvr03ProductionVoxelTerrainBatch, Fvr03ProductionVoxelTerrainTile,
-    Fvr04ProductionCreatureVisualMarker, Fvr05ProductionUxStateResource,
-    Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVfxKind,
-    Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker,
-    Fvr09MesherMode, Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker,
-    Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
+    Fvr04ProductionCreatureFollowResource, Fvr04ProductionCreatureVisualMarker,
+    Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
+    Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
+    Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
+    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
     Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
     Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionCreatureAssemblyRoot,
     ProductionCreatureJoinCoverMarker, ProductionCreaturePartMarker, ProductionFrontendProfileId,
-    ProductionVoxelLaunchConfig, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
-    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+    ProductionVoxelLaunchConfig, V0PlayerControlStrip, V0PlayerCreaturePanel, V0PlayerStatusChip,
+    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
     CreatureAppearanceGenome, StableVoxelRefKind, CREATURE_APPEARANCE_SPECIES_COUNT,
@@ -25,8 +25,8 @@ use alife_world::{
 use bevy::{
     mesh::VertexAttributeValues,
     prelude::{
-        AlphaMode, AmbientLight, Assets, ChildOf, DirectionalLight, Entity, Mesh, Mesh3d,
-        MeshMaterial3d, Projection, StandardMaterial, Transform,
+        AlphaMode, AmbientLight, Assets, ButtonInput, ChildOf, DirectionalLight, Entity, KeyCode,
+        Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Text, Transform, Visibility,
     },
 };
 
@@ -544,6 +544,87 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
     assert!(!selection_text.to_ascii_lowercase().contains("entity("));
     assert!(!selection_text.to_ascii_lowercase().contains("bevy"));
     assert!(!selection_text.to_ascii_lowercase().contains("wgpu"));
+}
+
+#[test]
+fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
+    assert!(!ux.settings.show_menu);
+    assert!(!ux.settings.show_settings);
+    assert!(!ux.settings.show_overlays);
+
+    let mut status_query = app
+        .world_mut()
+        .query::<(&V0PlayerStatusChip, &Text, &Visibility)>();
+    let statuses = status_query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(statuses.len(), 1);
+    assert_ne!(*statuses[0].2, Visibility::Hidden);
+
+    let mut panel_query = app
+        .world_mut()
+        .query::<(&V0PlayerCreaturePanel, &Text, &Visibility)>();
+    let panels = panel_query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(panels.len(), 1);
+    assert_ne!(*panels[0].2, Visibility::Hidden);
+    let panel_text = panels[0].1 .0.as_str();
+    for real_state_heading in ["NEEDS", "LEARNING", "SOCIAL"] {
+        assert!(panel_text.contains(real_state_heading), "{panel_text}");
+    }
+    for debug_term in ["backend", "chunk", "wgpu", "GPU"] {
+        assert!(!panel_text.contains(debug_term), "{panel_text}");
+    }
+
+    let mut controls_query = app
+        .world_mut()
+        .query::<(&V0PlayerControlStrip, &Text, &Visibility)>();
+    let controls = controls_query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(controls.len(), 1);
+    assert_ne!(*controls[0].2, Visibility::Hidden);
+    assert!(controls[0].1 .0.contains("R Recover view"));
+}
+
+#[test]
+fn v0_recovery_key_restores_the_clean_isometric_player_view() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    {
+        let mut ux = app
+            .world_mut()
+            .resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.settings.show_menu = true;
+        ux.settings.show_settings = true;
+        ux.settings.show_overlays = true;
+    }
+    app.world_mut()
+        .resource_mut::<Fvr04ProductionCreatureFollowResource>()
+        .enabled = true;
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyR);
+    app.update();
+
+    let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
+    assert!(!ux.settings.show_menu);
+    assert!(!ux.settings.show_settings);
+    assert!(!ux.settings.show_overlays);
+    assert_eq!(ux.last_action, "Recovered the player view");
+    assert!(
+        !app.world()
+            .resource::<Fvr04ProductionCreatureFollowResource>()
+            .enabled
+    );
+    let mut camera_query = app.world_mut().query::<&Fvr03ProductionVoxelCamera>();
+    assert!(camera_query
+        .iter(app.world())
+        .all(|camera| camera.mode == Fvr03ProductionVoxelCameraMode::OrthographicIsometric));
 }
 
 #[test]
