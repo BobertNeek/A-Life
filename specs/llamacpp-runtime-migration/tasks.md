@@ -15,7 +15,7 @@
    - Verify with focused app tests and smoke commands.
 
 4. Update manifests, scripts, and docs.
-   - Target: `examples/model_manifests`, `docs/creatures_agi_roadmap_pack`, `scripts`.
+   - Target: `examples/model_manifests`, archived migration evidence, and `scripts`.
    - Done when active docs mark Ollama superseded and no model/binary files are tracked.
    - Verify with scans and docs check.
 

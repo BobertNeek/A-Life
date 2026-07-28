@@ -8,7 +8,9 @@ R2 separate reviewer pass. The reviewer will inspect the diff, active Ollama rem
 
 - `crates/alife_semantic` owns the local llama.cpp clients and bounded output validation.
 - `crates/alife_game_app` owns product smoke summaries and CLI commands.
-- `docs/creatures_agi_roadmap_pack` records active model runtime status.
+- `docs/archive/creatures_agi_roadmap_pack_v1/model_selection` preserves the
+  historical model-runtime migration report. Current runtime authority is the
+  semantic crate and its tests.
 - `scripts/` owns local Windows launcher helpers for llama-server.
 
 ## Implementation Steps

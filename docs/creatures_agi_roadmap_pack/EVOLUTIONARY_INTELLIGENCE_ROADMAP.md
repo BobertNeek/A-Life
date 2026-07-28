@@ -88,6 +88,27 @@ At approved era boundaries, distill robust population-wide improvements into a
 new audited foundation. Keep ordinary births Baldwinian. Preserve older
 foundations for experiments and rollback.
 
+### 4.7 Product and research workstreams retained from the legacy roadmap
+
+The legacy CA roadmap contained useful work that remains necessary, without its
+obsolete baseline or milestone machinery:
+
+- player controls, camera, selection, visible intent, and recovery;
+- player-facing save/load, environment setup, and sandbox editing;
+- resource ecology, terrain zones, lifecycle, reproduction, death, and lineage;
+- school presentation, embodied teachers, curriculum authoring, and exact
+  verifiers;
+- memory, topology, chemistry, neural activity, and behavior comparison tools;
+- GPU telemetry, population batching, bounded performance, and long soaks;
+- coherent art, animation, drive-coupled audio and effects, and onboarding;
+- Windows packaging, prerequisite diagnostics, crash capture, external testing,
+  and release review;
+- culture, observational learning, curiosity, world-model research, continual
+  learning, self-modeling, planning, and causal ablations.
+
+These are workstreams inside the eras below. They are not a second numbered
+roadmap and do not override promotion gates.
+
 ## 5. Era 0: Playable ecosystem and selection laboratory
 
 **Purpose:** Make the existing creature world enjoyable and create the tools
@@ -96,10 +117,15 @@ needed to observe evolution.
 ### Deliverables
 
 - Complete the approved visual overhaul.
+- Finish camera, selection, visible-intent, reset, and recovery interactions.
 - Make creature actions, speech, needs, relationships, and learning readable.
+- Provide player-facing save/load, environment setup, and sandbox editing.
 - Provide wild, reserve, managed, and school habitat controls.
+- Complete resource ecology, terrain zones, lifecycle, reproduction, and death.
 - Add pedigree, chemistry, cognition, and provenance inspection.
+- Add memory, topology, neural activity, and behavior-comparison views.
 - Add test arenas and replayable intelligence trials.
+- Provide stable packaging, diagnostics, crash capture, and tester feedback.
 - Establish hardware-based population budgets.
 
 ### Exit gate
@@ -401,3 +427,15 @@ hardware cost, and rollback.
 7. Review the measured ceiling before selecting the next brain class.
 
 Later eras stay documented but dormant until their preceding gate passes.
+
+## 18. Legacy roadmap disposition
+
+The CA00-CA59 pack is archived under
+`docs/archive/creatures_agi_roadmap_pack_v1/`. Git history preserves its original
+state. The active roadmap retains its useful product, ecology, school,
+inspection, performance, polish, release, culture, world-model, and continual-
+learning workstreams.
+
+The active roadmap discards the old assumed baseline, superseded neural
+authority models, scaffold-first completion language, fixed CA milestone order,
+automatic goal-driver prompts, and theoretical labels that outran evidence.

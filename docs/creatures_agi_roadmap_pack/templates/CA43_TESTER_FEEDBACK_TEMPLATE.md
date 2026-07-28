@@ -20,7 +20,7 @@ model files, or caches to git. Record external media paths or links only.
 
 - Exact command:
 - Window opened: yes/no
-- GPU status visible: GPU / CPU fallback / unavailable
+- GPU brain status visible: authoritative / unavailable
 - Crash summary path, if any:
 - App exited cleanly without leaving a process: yes/no
 
