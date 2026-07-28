@@ -11,6 +11,7 @@ and School change world permissions only. They all retain
 
 `HeadlessWorld::habitat_presentation_projection` is a read-only presentation
 boundary. It returns stable organism/world IDs, literal creature utterance token
-IDs, and only relationship evidence present in current world snapshots. Missing
-trust, fear, speech, or entity evidence is `Unknown` or `None`; the projection
-does not infer it and exposes no mutation path.
+IDs only when backed by utterance-level grounding evidence, and only relationship
+evidence present in current world snapshots. Emission alone does not prove
+grounding. Missing trust, fear, grounded speech, or entity evidence is `Unknown`
+or `None`; the projection does not infer it and exposes no mutation path.

@@ -296,7 +296,6 @@ impl HeadlessWorld {
             .into_iter()
             .map(|(organism_id, entity_id)| (organism_id.raw(), entity_id))
             .collect::<BTreeMap<_, _>>();
-        let utterances = self.speech.snapshot();
         let mut creatures = Vec::with_capacity(self.habitats.memberships().len());
 
         for membership in self.habitats.memberships() {
@@ -305,18 +304,10 @@ impl HeadlessWorld {
                 .habitat(membership.habitat_id)
                 .map(|habitat| habitat.mode)
                 .ok_or(ScaffoldContractError::InvalidId)?;
-            let latest_grounded_utterance = utterances
-                .iter()
-                .filter(|utterance| utterance.speaker_id == Some(membership.organism_id))
-                .max_by_key(|utterance| {
-                    (utterance.emitted_tick.raw(), utterance.utterance_id.raw())
-                })
-                .map_or(PresentationEvidence::Unknown, |utterance| {
-                    PresentationEvidence::Observed {
-                        value: utterance.tokens.clone(),
-                        tick: utterance.emitted_tick,
-                    }
-                });
+            // Audible speech proves emission, not learned grounding. Keep this
+            // unknown until world state owns an utterance-level grounding
+            // receipt that can support the token sequence and evidence tick.
+            let latest_grounded_utterance = PresentationEvidence::Unknown;
 
             let mut relationships = Vec::new();
             if stable_entities.contains_key(&membership.organism_id.raw()) {

@@ -56,7 +56,7 @@ fn managed_transfer(organism_id: OrganismId, tick: Tick) -> HabitatTransferReque
 }
 
 #[test]
-fn projection_reports_only_grounded_speech_and_observed_relationship_evidence() {
+fn projection_keeps_ungrounded_emitted_speech_unknown_and_reports_relationship_evidence() {
     let speaker = organism(1);
     let neighbor = organism(2);
     let mut world = HeadlessScenarioBuilder::new(81_001)
@@ -91,11 +91,13 @@ fn projection_reports_only_grounded_speech_and_observed_relationship_evidence() 
         .unwrap();
     assert!(speaker_view.stable_world_entity_id.is_some());
     assert_eq!(
+        world.audible_utterances()[0].tokens,
+        vec![token(89), token(105)]
+    );
+    assert_eq!(
         speaker_view.latest_grounded_utterance,
-        PresentationEvidence::Observed {
-            value: vec![token(89), token(105)],
-            tick: Tick::ZERO,
-        }
+        PresentationEvidence::Unknown,
+        "emission alone must not be presented as grounding"
     );
     let edge = speaker_view
         .relationships
