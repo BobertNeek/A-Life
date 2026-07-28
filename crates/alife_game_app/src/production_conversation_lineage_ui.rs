@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 
 use alife_archive::{LineageLibrary, LineageLibraryConfig};
 use alife_core::{
-    ArchiveCheckpointDisposition, ArchiveCheckpointRetention, Blake3Digest, FounderMode,
-    FounderSelection, LanguageCodebookV1, MetricReading, OrganismId, PassiveLifeStatistics,
-    PassiveMetricKind, SpeechTranslationInput, SpeechTranslationReceipt, SpeechTranslationRequest,
-    SurfaceTokenBinding, UtteranceId, UtteranceSourceKind, Validate, Vec3f,
+    ArchiveCheckpointDisposition, ArchiveCheckpointRetention, Blake3Digest, BrainClassId,
+    FounderMode, FounderSelection, GenomeId, LanguageCodebookV1, LineageId, MetricReading,
+    OrganismId, PassiveLifeStatistics, PassiveMetricKind, SpeechTranslationInput,
+    SpeechTranslationReceipt, SpeechTranslationRequest, SurfaceTokenBinding, Tick, UtteranceId,
+    UtteranceSourceKind, Validate, Vec3f,
 };
 use alife_semantic::{
     BoundedSpeechTranslator, LlamaCppSpeechTranslationConfig, LlamaCppSpeechTranslator,
@@ -17,9 +18,10 @@ use alife_world::{persistence::PortableSaveFile, StableVoxelRefKind, WorldObject
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::{
-        App, BackgroundColor, ButtonInput, Color, Component, GlobalZIndex, KeyCode, MessageReader,
-        Name, Node, NonSend, NonSendMut, ParamSet, PositionType, Res, ResMut, Resource, Text,
-        Text2d, TextColor, TextFont, Transform, Update, Val, Visibility, With,
+        App, BackgroundColor, ButtonInput, ChildOf, Color, Component, FlexDirection, FlexWrap,
+        GlobalZIndex, KeyCode, MessageReader, Name, Node, NonSend, NonSendMut, ParamSet,
+        PositionType, Res, ResMut, Resource, Text, Text2d, TextColor, TextFont, Transform, UiRect,
+        Update, Val, Visibility, With,
     },
 };
 
@@ -32,6 +34,8 @@ use crate::{
 
 const MAX_TYPED_CHARS: usize = 512;
 const MAX_COHORT_SIZE: usize = 16;
+const MIN_COHORT_SIZE: usize = 4;
+const MAX_LIST_ROW_NODES: usize = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NarrationDisplayFrequency {
@@ -62,13 +66,13 @@ impl NarrationDisplayFrequency {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LineageFilter {
+enum LineageDataFilter {
     All,
     GeneticArchives,
     LearnedCheckpoints,
 }
 
-impl LineageFilter {
+impl LineageDataFilter {
     const fn next(self) -> Self {
         match self {
             Self::All => Self::GeneticArchives,
@@ -79,9 +83,55 @@ impl LineageFilter {
 
     const fn label(self) -> &'static str {
         match self {
-            Self::All => "all runs",
+            Self::All => "all evidence",
             Self::GeneticArchives => "genetic archives",
             Self::LearnedCheckpoints => "learned checkpoints",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LineageSourceFilter {
+    All,
+    Run(String),
+}
+
+impl LineageSourceFilter {
+    fn label(&self) -> &str {
+        match self {
+            Self::All => "All runs",
+            Self::Run(run) => run,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineageSort {
+    Overall,
+    Survival,
+    ProblemSolving,
+    Language,
+    Creature,
+}
+
+impl LineageSort {
+    const fn next(self) -> Self {
+        match self {
+            Self::Overall => Self::Survival,
+            Self::Survival => Self::ProblemSolving,
+            Self::ProblemSolving => Self::Language,
+            Self::Language => Self::Creature,
+            Self::Creature => Self::Overall,
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Overall => "Overall evidence",
+            Self::Survival => "Survival",
+            Self::ProblemSolving => "Problem solving",
+            Self::Language => "Language (unaided)",
+            Self::Creature => "Creature ID",
         }
     }
 }
@@ -93,11 +143,168 @@ struct LineageUiRow {
     organism_id: OrganismId,
     deceased: bool,
     checkpoint: Option<(Blake3Digest, ArchiveCheckpointRetention)>,
+    survival_ticks: Option<u64>,
     survival: String,
+    problem_q16: Option<u32>,
     problem_solving: String,
+    language_unaided_q16: Option<u32>,
     language_unaided: String,
     language_assisted: String,
     overall_q16: Option<u32>,
+    genome_id: Option<GenomeId>,
+    lineage_id: Option<LineageId>,
+    brain_class_id: Option<BrainClassId>,
+    birth_tick: Option<Tick>,
+    death_tick: Option<Tick>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct LineageLabRect {
+    left: f32,
+    top: f32,
+    width: f32,
+    height: f32,
+}
+
+impl LineageLabRect {
+    const fn right(self) -> f32 {
+        self.left + self.width
+    }
+
+    const fn bottom(self) -> f32 {
+        self.top + self.height
+    }
+
+    fn overlaps(self, other: Self) -> bool {
+        self.left < other.right()
+            && self.right() > other.left
+            && self.top < other.bottom()
+            && self.bottom() > other.top
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineageLabSectionKind {
+    Filters,
+    List,
+    Details,
+    Founder,
+    Cohort,
+}
+
+#[derive(Debug, Clone, Copy, Resource)]
+struct LineageLabLayout {
+    critical_font_size: f32,
+    visible_rows: usize,
+    filters: LineageLabRect,
+    list: LineageLabRect,
+    details: LineageLabRect,
+    founder: LineageLabRect,
+    cohort: LineageLabRect,
+}
+
+impl LineageLabLayout {
+    fn for_resolution(width: u32, height: u32) -> Self {
+        let compact = width < 1_600 || height < 900;
+        Self {
+            critical_font_size: if compact { 12.0 } else { 14.0 },
+            visible_rows: if compact { 8 } else { MAX_LIST_ROW_NODES },
+            filters: LineageLabRect {
+                left: 1.0,
+                top: 9.0,
+                width: 20.0,
+                height: 63.0,
+            },
+            list: LineageLabRect {
+                left: 22.0,
+                top: 9.0,
+                width: 48.0,
+                height: 63.0,
+            },
+            details: LineageLabRect {
+                left: 71.0,
+                top: 9.0,
+                width: 28.0,
+                height: 41.0,
+            },
+            founder: LineageLabRect {
+                left: 71.0,
+                top: 51.0,
+                width: 28.0,
+                height: 21.0,
+            },
+            cohort: LineageLabRect {
+                left: 1.0,
+                top: 73.0,
+                width: 98.0,
+                height: 22.0,
+            },
+        }
+    }
+
+    const fn section(self, kind: LineageLabSectionKind) -> LineageLabRect {
+        match kind {
+            LineageLabSectionKind::Filters => self.filters,
+            LineageLabSectionKind::List => self.list,
+            LineageLabSectionKind::Details => self.details,
+            LineageLabSectionKind::Founder => self.founder,
+            LineageLabSectionKind::Cohort => self.cohort,
+        }
+    }
+
+    const fn primary_sections(self) -> [LineageLabRect; 5] {
+        [
+            self.filters,
+            self.list,
+            self.details,
+            self.founder,
+            self.cohort,
+        ]
+    }
+
+    fn primary_sections_overlap(self) -> bool {
+        let sections = self.primary_sections();
+        sections.iter().enumerate().any(|(index, section)| {
+            sections[index + 1..]
+                .iter()
+                .any(|other| section.overlaps(*other))
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CohortEditError {
+    Duplicate,
+    Full,
+}
+
+fn add_founder_selection(
+    cohort: &mut Vec<FounderSelection>,
+    selection: FounderSelection,
+) -> Result<(), CohortEditError> {
+    if cohort
+        .iter()
+        .any(|existing| existing.source_manifest_digest == selection.source_manifest_digest)
+    {
+        return Err(CohortEditError::Duplicate);
+    }
+    if cohort.len() >= MAX_COHORT_SIZE {
+        return Err(CohortEditError::Full);
+    }
+    cohort.push(selection);
+    Ok(())
+}
+
+fn founder_cohort_ready(cohort: &[FounderSelection]) -> bool {
+    (MIN_COHORT_SIZE..=MAX_COHORT_SIZE).contains(&cohort.len())
+}
+
+fn lineage_panel_visibility(open: bool) -> Visibility {
+    if open {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    }
 }
 
 #[derive(Debug, Clone, Resource)]
@@ -120,7 +327,9 @@ pub struct ProductionConversationLineageUiState {
     status: String,
     lineage_root: PathBuf,
     lineage_open: bool,
-    lineage_filter: LineageFilter,
+    lineage_source_filter: LineageSourceFilter,
+    lineage_data_filter: LineageDataFilter,
+    lineage_sort: LineageSort,
     lineage_rows: Vec<LineageUiRow>,
     lineage_cursor: usize,
     pending_founder_mode: FounderMode,
@@ -155,7 +364,9 @@ impl ProductionConversationLineageUiState {
             status,
             lineage_root,
             lineage_open: false,
-            lineage_filter: LineageFilter::All,
+            lineage_source_filter: LineageSourceFilter::All,
+            lineage_data_filter: LineageDataFilter::All,
+            lineage_sort: LineageSort::Overall,
             lineage_rows,
             lineage_cursor: 0,
             pending_founder_mode: FounderMode::GeneticFounder,
@@ -187,15 +398,12 @@ impl ProductionConversationLineageUiState {
     }
 
     fn filtered_indices(&self) -> Vec<usize> {
-        self.lineage_rows
-            .iter()
-            .enumerate()
-            .filter_map(|(index, row)| match self.lineage_filter {
-                LineageFilter::All | LineageFilter::GeneticArchives => Some(index),
-                LineageFilter::LearnedCheckpoints if row.checkpoint.is_some() => Some(index),
-                LineageFilter::LearnedCheckpoints => None,
-            })
-            .collect()
+        filtered_lineage_indices(
+            &self.lineage_rows,
+            &self.lineage_source_filter,
+            self.lineage_data_filter,
+            self.lineage_sort,
+        )
     }
 
     fn current_row(&self) -> Option<&LineageUiRow> {
@@ -204,6 +412,84 @@ impl ProductionConversationLineageUiState {
             .get(self.lineage_cursor.min(filtered.len().saturating_sub(1)))
             .and_then(|index| self.lineage_rows.get(*index))
     }
+
+    fn cycle_source_filter(&mut self) {
+        let mut runs = self
+            .lineage_rows
+            .iter()
+            .map(|row| row.source_run_id.clone())
+            .collect::<Vec<_>>();
+        runs.sort();
+        runs.dedup();
+        self.lineage_source_filter = match &self.lineage_source_filter {
+            LineageSourceFilter::All => runs
+                .first()
+                .cloned()
+                .map(LineageSourceFilter::Run)
+                .unwrap_or(LineageSourceFilter::All),
+            LineageSourceFilter::Run(current) => runs
+                .iter()
+                .position(|run| run == current)
+                .and_then(|index| runs.get(index + 1))
+                .cloned()
+                .map(LineageSourceFilter::Run)
+                .unwrap_or(LineageSourceFilter::All),
+        };
+        self.lineage_cursor = 0;
+    }
+}
+
+fn compare_optional_desc<T: Ord>(left: Option<T>, right: Option<T>) -> std::cmp::Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => right.cmp(&left),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    }
+}
+
+fn filtered_lineage_indices(
+    rows: &[LineageUiRow],
+    source_filter: &LineageSourceFilter,
+    data_filter: LineageDataFilter,
+    sort: LineageSort,
+) -> Vec<usize> {
+    let mut indices = rows
+        .iter()
+        .enumerate()
+        .filter_map(|(index, row)| {
+            let source_matches = match source_filter {
+                LineageSourceFilter::All => true,
+                LineageSourceFilter::Run(run) => row.source_run_id == *run,
+            };
+            let data_matches = match data_filter {
+                LineageDataFilter::All | LineageDataFilter::GeneticArchives => true,
+                LineageDataFilter::LearnedCheckpoints => row.checkpoint.is_some(),
+            };
+            (source_matches && data_matches).then_some(index)
+        })
+        .collect::<Vec<_>>();
+    indices.sort_by(|left_index, right_index| {
+        let left = &rows[*left_index];
+        let right = &rows[*right_index];
+        let ordering = match sort {
+            LineageSort::Overall => compare_optional_desc(left.overall_q16, right.overall_q16),
+            LineageSort::Survival => {
+                compare_optional_desc(left.survival_ticks, right.survival_ticks)
+            }
+            LineageSort::ProblemSolving => {
+                compare_optional_desc(left.problem_q16, right.problem_q16)
+            }
+            LineageSort::Language => {
+                compare_optional_desc(left.language_unaided_q16, right.language_unaided_q16)
+            }
+            LineageSort::Creature => left.organism_id.raw().cmp(&right.organism_id.raw()),
+        };
+        ordering
+            .then_with(|| left.source_run_id.cmp(&right.source_run_id))
+            .then_with(|| left.organism_id.raw().cmp(&right.organism_id.raw()))
+    });
+    indices
 }
 
 #[derive(Component)]
@@ -217,23 +503,52 @@ struct ProductionCreatureSpeechBubble;
 #[derive(Component)]
 struct ProductionLineageLibraryPanel;
 
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+struct LineageLabSectionMarker(LineageLabSectionKind);
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+enum LineageLabTextRole {
+    Header,
+    FilterTitle,
+    FilterSource,
+    FilterData,
+    FilterSort,
+    ListTitle,
+    ListHeader,
+    ListRow(usize),
+    DetailTitle,
+    DetailIdentity,
+    DetailProvenance,
+    DetailMetrics,
+    FounderTitle,
+    FounderGenetic,
+    FounderMind,
+    FounderMutation,
+    CohortHeader,
+    CohortSlot(usize),
+    Footer,
+}
+
 pub fn install_production_conversation_lineage_ui(
     app: &mut App,
     summary: &ProductionVoxelLaunchSummary,
 ) {
     app.insert_resource(ProductionConversationLineageUiState::new(summary));
-    spawn_ui(app);
+    let layout = LineageLabLayout::for_resolution(summary.resolution.0, summary.resolution.1);
+    app.insert_resource(layout);
+    spawn_ui(app, layout);
     app.add_systems(
         Update,
         (
             handle_production_conversation_lineage_input,
             refresh_creature_speech_receipt,
             sync_production_conversation_lineage_ui,
+            sync_production_lineage_laboratory_ui,
         ),
     );
 }
 
-fn spawn_ui(app: &mut App) {
+fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
     app.world_mut().spawn((
         Name::new("A-Life player Hand speech entry"),
         Text::new("Speak near the Hand"),
@@ -308,28 +623,235 @@ fn spawn_ui(app: &mut App) {
         Visibility::Hidden,
         ProductionCreatureSpeechBubble,
     ));
-    app.world_mut().spawn((
-        Name::new("A-Life Lineage Library"),
-        Text::new("Lineage Library"),
-        TextFont {
-            font_size: 15.0,
-            ..Default::default()
-        },
-        TextColor(Color::srgb(0.94, 0.91, 0.74)),
+    let root = app
+        .world_mut()
+        .spawn((
+            Name::new("A-Life Lineage Library"),
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Percent(5.0),
+                left: Val::Percent(7.0),
+                right: Val::Percent(7.0),
+                bottom: Val::Percent(7.0),
+                padding: bevy::ui::UiRect::all(Val::Px(18.0)),
+                ..Default::default()
+            },
+            BackgroundColor(Color::srgba(0.014, 0.028, 0.020, 0.97)),
+            GlobalZIndex(100),
+            Visibility::Hidden,
+            ProductionLineageLibraryPanel,
+        ))
+        .id();
+
+    spawn_lab_text(
+        app,
+        root,
+        LineageLabTextRole::Header,
+        "LINEAGE LIBRARY  /  ERA 0 SELECTION LABORATORY",
+        layout.critical_font_size + 8.0,
         Node {
             position_type: PositionType::Absolute,
-            top: Val::Percent(5.0),
-            left: Val::Percent(7.0),
-            right: Val::Percent(7.0),
-            bottom: Val::Percent(7.0),
-            padding: bevy::ui::UiRect::all(Val::Px(18.0)),
+            left: Val::Percent(1.0),
+            top: Val::Percent(1.0),
+            width: Val::Percent(98.0),
+            height: Val::Percent(6.0),
             ..Default::default()
         },
-        BackgroundColor(Color::srgba(0.014, 0.028, 0.020, 0.97)),
-        GlobalZIndex(100),
-        Visibility::Hidden,
-        ProductionLineageLibraryPanel,
+    );
+
+    let filters = spawn_lab_section(app, root, layout, LineageLabSectionKind::Filters);
+    for (role, text) in [
+        (LineageLabTextRole::FilterTitle, "SOURCE / DATA FILTERS"),
+        (LineageLabTextRole::FilterSource, "Source: All runs"),
+        (LineageLabTextRole::FilterData, "Data: all evidence"),
+        (LineageLabTextRole::FilterSort, "Sort: Overall evidence"),
+    ] {
+        spawn_lab_text(
+            app,
+            filters,
+            role,
+            text,
+            layout.critical_font_size,
+            lab_flow_text_node(),
+        );
+    }
+
+    let list = spawn_lab_section(app, root, layout, LineageLabSectionKind::List);
+    spawn_lab_text(
+        app,
+        list,
+        LineageLabTextRole::ListTitle,
+        "CREATURE ARCHIVES",
+        layout.critical_font_size + 2.0,
+        lab_flow_text_node(),
+    );
+    spawn_lab_text(
+        app,
+        list,
+        LineageLabTextRole::ListHeader,
+        "CREATURE      RUN          SURVIVAL   PROBLEM   LANGUAGE   CHECKPOINT",
+        layout.critical_font_size - 1.0,
+        lab_flow_text_node(),
+    );
+    for index in 0..MAX_LIST_ROW_NODES {
+        spawn_lab_text(
+            app,
+            list,
+            LineageLabTextRole::ListRow(index),
+            "",
+            layout.critical_font_size,
+            lab_flow_text_node(),
+        );
+    }
+
+    let details = spawn_lab_section(app, root, layout, LineageLabSectionKind::Details);
+    for (role, text) in [
+        (LineageLabTextRole::DetailTitle, "SELECTED CREATURE"),
+        (LineageLabTextRole::DetailIdentity, "No archive selected"),
+        (LineageLabTextRole::DetailProvenance, "Provenance: Unknown"),
+        (LineageLabTextRole::DetailMetrics, "Evidence: Unknown"),
+    ] {
+        spawn_lab_text(
+            app,
+            details,
+            role,
+            text,
+            layout.critical_font_size,
+            lab_flow_text_node(),
+        );
+    }
+
+    let founder = spawn_lab_section(app, root, layout, LineageLabSectionKind::Founder);
+    for (role, text) in [
+        (LineageLabTextRole::FounderTitle, "FOUNDER MODE  [F cycle]"),
+        (LineageLabTextRole::FounderGenetic, "Genetic Founder"),
+        (LineageLabTextRole::FounderMind, "Mind Clone"),
+        (LineageLabTextRole::FounderMutation, "Mutation Seed"),
+    ] {
+        spawn_lab_text(
+            app,
+            founder,
+            role,
+            text,
+            layout.critical_font_size,
+            lab_flow_text_node(),
+        );
+    }
+
+    let cohort = spawn_lab_section(app, root, layout, LineageLabSectionKind::Cohort);
+    spawn_lab_text(
+        app,
+        cohort,
+        LineageLabTextRole::CohortHeader,
+        "FOUNDER COHORT 0/16  /  4 required  [A add] [X remove] [Enter create]",
+        layout.critical_font_size,
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(20.0),
+            ..Default::default()
+        },
+    );
+    for index in 0..MAX_COHORT_SIZE {
+        spawn_lab_text(
+            app,
+            cohort,
+            LineageLabTextRole::CohortSlot(index),
+            &format!("{}  Empty", index + 1),
+            layout.critical_font_size - 1.0,
+            Node {
+                width: Val::Percent(12.5),
+                height: Val::Percent(38.0),
+                padding: UiRect::all(Val::Px(3.0)),
+                ..Default::default()
+            },
+        );
+    }
+
+    spawn_lab_text(
+        app,
+        root,
+        LineageLabTextRole::Footer,
+        "S source  D/Tab data  O sort  Up/Down select  F founder mode  A add  X remove  R refresh  Y/Esc close",
+        layout.critical_font_size,
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Percent(1.0),
+            top: Val::Percent(95.0),
+            width: Val::Percent(98.0),
+            height: Val::Percent(4.0),
+            ..Default::default()
+        },
+    );
+}
+
+fn spawn_lab_section(
+    app: &mut App,
+    root: bevy::prelude::Entity,
+    layout: LineageLabLayout,
+    kind: LineageLabSectionKind,
+) -> bevy::prelude::Entity {
+    let rect = layout.section(kind);
+    let is_cohort = kind == LineageLabSectionKind::Cohort;
+    app.world_mut()
+        .spawn((
+            Name::new(format!("Lineage laboratory {kind:?} section")),
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Percent(rect.left),
+                top: Val::Percent(rect.top),
+                width: Val::Percent(rect.width),
+                height: Val::Percent(rect.height),
+                flex_direction: if is_cohort {
+                    FlexDirection::Row
+                } else {
+                    FlexDirection::Column
+                },
+                flex_wrap: if is_cohort {
+                    FlexWrap::Wrap
+                } else {
+                    FlexWrap::NoWrap
+                },
+                padding: UiRect::all(Val::Px(10.0)),
+                row_gap: Val::Px(4.0),
+                ..Default::default()
+            },
+            BackgroundColor(Color::srgba(0.028, 0.050, 0.035, 0.92)),
+            ChildOf(root),
+            LineageLabSectionMarker(kind),
+        ))
+        .id()
+}
+
+fn spawn_lab_text(
+    app: &mut App,
+    parent: bevy::prelude::Entity,
+    role: LineageLabTextRole,
+    value: &str,
+    font_size: f32,
+    node: Node,
+) {
+    app.world_mut().spawn((
+        Name::new(format!("Lineage laboratory {role:?}")),
+        Text::new(value),
+        TextFont {
+            font_size,
+            ..Default::default()
+        },
+        TextColor(Color::srgb(0.92, 0.90, 0.74)),
+        node,
+        Visibility::Inherited,
+        ChildOf(parent),
+        role,
     ));
+}
+
+fn lab_flow_text_node() -> Node {
+    Node {
+        width: Val::Percent(100.0),
+        min_height: Val::Px(18.0),
+        padding: UiRect::axes(Val::Px(3.0), Val::Px(2.0)),
+        ..Default::default()
+    }
 }
 
 fn handle_production_conversation_lineage_input(
@@ -577,8 +1099,15 @@ fn handle_lineage_input(
         state.status = "Lineage Library closed".to_string();
         return;
     }
-    if keyboard.just_pressed(KeyCode::Tab) {
-        state.lineage_filter = state.lineage_filter.next();
+    if keyboard.just_pressed(KeyCode::KeyS) {
+        state.cycle_source_filter();
+    }
+    if keyboard.just_pressed(KeyCode::Tab) || keyboard.just_pressed(KeyCode::KeyD) {
+        state.lineage_data_filter = state.lineage_data_filter.next();
+        state.lineage_cursor = 0;
+    }
+    if keyboard.just_pressed(KeyCode::KeyO) {
+        state.lineage_sort = state.lineage_sort.next();
         state.lineage_cursor = 0;
     }
     let count = state.filtered_indices().len();
@@ -606,21 +1135,26 @@ fn handle_lineage_input(
     if keyboard.just_pressed(KeyCode::KeyA) {
         if let Some(row) = state.current_row() {
             let digest = row.digest;
-            if state.cohort.len() < MAX_COHORT_SIZE
-                && !state
-                    .cohort
-                    .iter()
-                    .any(|selection| selection.source_manifest_digest == digest)
-            {
-                let mode = state.pending_founder_mode;
-                state.cohort.push(FounderSelection {
+            let mode = state.pending_founder_mode;
+            match add_founder_selection(
+                &mut state.cohort,
+                FounderSelection {
                     source_manifest_digest: digest,
                     mode,
-                });
-                state.status = format!(
-                    "Added creature to founder cohort ({}/{MAX_COHORT_SIZE})",
-                    state.cohort.len()
-                );
+                },
+            ) {
+                Ok(()) => {
+                    state.status = format!(
+                        "Added creature to founder cohort ({}/{MAX_COHORT_SIZE})",
+                        state.cohort.len()
+                    )
+                }
+                Err(CohortEditError::Duplicate) => {
+                    state.status = "Founder cohort rejected duplicate creature".to_string()
+                }
+                Err(CohortEditError::Full) => {
+                    state.status = "Founder cohort is already at 16 creatures".to_string()
+                }
             }
         }
     }
@@ -637,10 +1171,16 @@ fn handle_lineage_input(
             Err(error) => state.status = format!("Lineage refresh failed: {error}"),
         }
     }
-    if keyboard.just_pressed(KeyCode::Enter) && !state.cohort.is_empty() {
-        match create_founder_world(state, ux) {
-            Ok(path) => state.status = format!("Created new founder world: {}", path.display()),
-            Err(error) => state.status = format!("Founder world creation failed: {error}"),
+    if keyboard.just_pressed(KeyCode::Enter) {
+        if founder_cohort_ready(&state.cohort) {
+            match create_founder_world(state, ux) {
+                Ok(path) => state.status = format!("Created new founder world: {}", path.display()),
+                Err(error) => state.status = format!("Founder world creation failed: {error}"),
+            }
+        } else {
+            state.status = format!(
+                "Founder cohort needs {MIN_COHORT_SIZE}-{MAX_COHORT_SIZE} distinct creatures"
+            );
         }
     }
 }
@@ -695,7 +1235,6 @@ fn sync_production_conversation_lineage_ui(
             (&mut Text2d, &mut Transform, &mut Visibility),
             With<ProductionCreatureSpeechBubble>,
         >,
-        bevy::prelude::Query<(&mut Text, &mut Visibility), With<ProductionLineageLibraryPanel>>,
     )>,
 ) {
     for (mut text, mut visibility) in &mut panels.p0() {
@@ -809,86 +1348,208 @@ fn sync_production_conversation_lineage_ui(
         }
         *visibility = Visibility::Visible;
     }
-    for (mut text, mut visibility) in &mut panels.p4() {
-        text.0 = lineage_panel_text(&state);
-        *visibility = if state.lineage_open {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
+}
+
+fn sync_production_lineage_laboratory_ui(
+    state: Res<ProductionConversationLineageUiState>,
+    layout: Res<LineageLabLayout>,
+    mut roots: bevy::prelude::Query<
+        &mut Visibility,
+        (
+            With<ProductionLineageLibraryPanel>,
+            bevy::prelude::Without<LineageLabTextRole>,
+        ),
+    >,
+    mut texts: bevy::prelude::Query<
+        (&LineageLabTextRole, &mut Text, &mut Visibility),
+        With<LineageLabTextRole>,
+    >,
+) {
+    for mut visibility in &mut roots {
+        *visibility = lineage_panel_visibility(state.lineage_open);
+    }
+
+    let filtered = state.filtered_indices();
+    let cursor = state.lineage_cursor.min(filtered.len().saturating_sub(1));
+    let visible_count = layout.visible_rows.min(MAX_LIST_ROW_NODES);
+    let window_start = if cursor >= visible_count {
+        cursor + 1 - visible_count
+    } else {
+        0
+    };
+    let selected = state.current_row();
+
+    for (role, mut text, mut visibility) in &mut texts {
+        *visibility = Visibility::Inherited;
+        text.0 = match *role {
+            LineageLabTextRole::Header => {
+                "LINEAGE LIBRARY  /  ERA 0 SELECTION LABORATORY".to_string()
+            }
+            LineageLabTextRole::FilterTitle => "SOURCE / DATA FILTERS".to_string(),
+            LineageLabTextRole::FilterSource => format!(
+                "Source run [S]\n{}",
+                state.lineage_source_filter.label()
+            ),
+            LineageLabTextRole::FilterData => {
+                format!("Data type [D/Tab]\n{}", state.lineage_data_filter.label())
+            }
+            LineageLabTextRole::FilterSort => {
+                format!("Sort by [O]\n{}", state.lineage_sort.label())
+            }
+            LineageLabTextRole::ListTitle => {
+                format!("CREATURE ARCHIVES  /  {} shown", filtered.len())
+            }
+            LineageLabTextRole::ListHeader => {
+                "CREATURE      RUN          SURVIVAL   PROBLEM   LANGUAGE   CHECKPOINT".to_string()
+            }
+            LineageLabTextRole::ListRow(slot) => {
+                let visible_index = window_start + slot;
+                let Some(row_index) = filtered.get(visible_index) else {
+                    *visibility = Visibility::Hidden;
+                    text.0.clear();
+                    continue;
+                };
+                let row = &state.lineage_rows[*row_index];
+                format_lineage_row(row, visible_index == cursor)
+            }
+            LineageLabTextRole::DetailTitle => "SELECTED CREATURE".to_string(),
+            LineageLabTextRole::DetailIdentity => selected.map_or_else(
+                || "No archive selected".to_string(),
+                |row| {
+                    format!(
+                        "Creature {}  /  {}\nRun {}  /  {}",
+                        row.organism_id.raw(),
+                        if row.deceased { "Deceased" } else { "Archived" },
+                        row.source_run_id,
+                        checkpoint_label(row.checkpoint),
+                    )
+                },
+            ),
+            LineageLabTextRole::DetailProvenance => selected.map_or_else(
+                || "Manifest: Unknown\nGenome: Unknown\nLineage: Unknown".to_string(),
+                |row| {
+                    format!(
+                        "Manifest {}\nGenome {}  /  Lineage {}\nBrain {}  /  Born {}  /  Died {}",
+                        short_digest(row.digest),
+                        debug_option(row.genome_id),
+                        debug_option(row.lineage_id),
+                        debug_option(row.brain_class_id),
+                        tick_option(row.birth_tick),
+                        tick_option(row.death_tick),
+                    )
+                },
+            ),
+            LineageLabTextRole::DetailMetrics => selected.map_or_else(
+                || "Overall Unknown\nSurvival Unknown\nProblem Unknown\nLanguage Unknown / Unknown".to_string(),
+                |row| {
+                    format!(
+                        "Overall {}\nSurvival {}\nProblem {}\nLanguage unaided {} / SLM {}",
+                        option_q16(row.overall_q16),
+                        row.survival,
+                        row.problem_solving,
+                        row.language_unaided,
+                        row.language_assisted,
+                    )
+                },
+            ),
+            LineageLabTextRole::FounderTitle => "FOUNDER MODE  [F cycle]".to_string(),
+            LineageLabTextRole::FounderGenetic => founder_mode_card(
+                "Genetic Founder",
+                "Genome + foundation only",
+                matches!(state.pending_founder_mode, FounderMode::GeneticFounder),
+            ),
+            LineageLabTextRole::FounderMind => founder_mode_card(
+                "Mind Clone",
+                "Requires stored checkpoint",
+                matches!(state.pending_founder_mode, FounderMode::MindStateClone { .. }),
+            ),
+            LineageLabTextRole::FounderMutation => founder_mode_card(
+                "Mutation Seed",
+                "Deterministic genetic offspring",
+                matches!(state.pending_founder_mode, FounderMode::GeneticOffspring { .. }),
+            ),
+            LineageLabTextRole::CohortHeader => format!(
+                "FOUNDER COHORT {}/{}  /  {}  [A add] [X remove] [Enter create]",
+                state.cohort.len(),
+                MAX_COHORT_SIZE,
+                if founder_cohort_ready(&state.cohort) {
+                    "Ready"
+                } else {
+                    "4 required"
+                }
+            ),
+            LineageLabTextRole::CohortSlot(slot) => state.cohort.get(slot).map_or_else(
+                || format!("{}  Empty", slot + 1),
+                |selection| {
+                    let row = state
+                        .lineage_rows
+                        .iter()
+                        .find(|row| row.digest == selection.source_manifest_digest);
+                    format!(
+                        "{}  {}\n{}",
+                        slot + 1,
+                        row.map(|row| format!("Creature {}", row.organism_id.raw()))
+                            .unwrap_or_else(|| short_digest(selection.source_manifest_digest)),
+                        founder_mode_label(selection.mode),
+                    )
+                },
+            ),
+            LineageLabTextRole::Footer => format!(
+                "S source  D/Tab data  O sort  Up/Down select  F mode  A add  X remove  R refresh  Y/Esc close\n{}",
+                state.status
+            ),
         };
     }
 }
 
-fn lineage_panel_text(state: &ProductionConversationLineageUiState) -> String {
-    let filtered = state.filtered_indices();
-    let cursor = state.lineage_cursor.min(filtered.len().saturating_sub(1));
-    let mut lines = vec![
-        "Lineage Library".to_string(),
-        format!(
-            "Filter: {}  |  Tab filter  ↑/↓ select  F founder mode  A add  X remove  R refresh  Enter Create New World  Y/Esc close",
-            state.lineage_filter.label()
-        ),
-        "Creature             Run              State       Survival    Problem     Language unaided/SLM  Checkpoint".to_string(),
-    ];
-    for (visible_index, row_index) in filtered.iter().take(14).enumerate() {
-        let row = &state.lineage_rows[*row_index];
-        lines.push(format!(
-            "{} Creature {:<8} {:<16} {:<10} {:<11} {:<11} {:>7}/{:<7} {}",
-            if visible_index == cursor { ">" } else { " " },
-            row.organism_id.raw(),
-            row.source_run_id,
-            if row.deceased { "Deceased" } else { "Archived" },
-            row.survival,
-            row.problem_solving,
-            row.language_unaided,
-            row.language_assisted,
-            row.checkpoint
-                .map_or("genetic", |(_, retention)| match retention {
-                    ArchiveCheckpointRetention::Pinned => "pinned checkpoint",
-                    ArchiveCheckpointRetention::AutomaticPermanent => "learned checkpoint",
-                    ArchiveCheckpointRetention::TemporaryPeak => "temporary checkpoint",
-                }),
-        ));
-    }
-    let selected = state.current_row();
-    lines.push(String::new());
-    lines.push(format!(
-        "Selected: {} | Provenance: {} | Overall: {} | Founder mode: {}",
-        selected
-            .map(|row| format!("Creature {}", row.organism_id.raw()))
-            .unwrap_or_else(|| "none".to_string()),
-        selected
-            .map(|row| short_digest(row.digest))
-            .unwrap_or_else(|| "none".to_string()),
-        selected
-            .and_then(|row| row.overall_q16)
-            .map(q16_text)
-            .unwrap_or_else(|| "Unknown".to_string()),
-        founder_mode_label(state.pending_founder_mode),
-    ));
-    lines.push(format!(
-        "Founder Cohort {}/{} (genome distance and ancestry remain visible in provenance; no default kinship penalty)",
-        state.cohort.len(),
-        MAX_COHORT_SIZE
-    ));
-    lines.push(
-        state
-            .cohort
-            .iter()
-            .enumerate()
-            .map(|(index, selection)| {
-                format!(
-                    "{}. {} [{}]",
-                    index + 1,
-                    short_digest(selection.source_manifest_digest),
-                    founder_mode_label(selection.mode)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("   "),
-    );
-    lines.push(format!("Status: {}", state.status));
-    lines.join("\n")
+fn format_lineage_row(row: &LineageUiRow, selected: bool) -> String {
+    format!(
+        "{} Creature {:<5} {:<12} {:>8} {:>9} {:>10}   {}",
+        if selected { ">" } else { " " },
+        row.organism_id.raw(),
+        bounded_text(&row.source_run_id, 12),
+        row.survival,
+        row.problem_solving,
+        row.language_unaided,
+        checkpoint_label(row.checkpoint),
+    )
+}
+
+fn bounded_text(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
+}
+
+fn checkpoint_label(
+    checkpoint: Option<(Blake3Digest, ArchiveCheckpointRetention)>,
+) -> &'static str {
+    checkpoint.map_or("Genetic", |(_, retention)| match retention {
+        ArchiveCheckpointRetention::Pinned => "Pinned",
+        ArchiveCheckpointRetention::AutomaticPermanent => "Learned",
+        ArchiveCheckpointRetention::TemporaryPeak => "Temporary",
+    })
+}
+
+fn option_q16(value: Option<u32>) -> String {
+    value.map(q16_text).unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn debug_option<T: std::fmt::Debug>(value: Option<T>) -> String {
+    value
+        .map(|value| format!("{value:?}"))
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn tick_option(value: Option<Tick>) -> String {
+    value
+        .map(|tick| tick.raw().to_string())
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn founder_mode_card(title: &str, description: &str, selected: bool) -> String {
+    format!(
+        "{} {title}\n{description}",
+        if selected { ">" } else { " " }
+    )
 }
 
 fn load_lineage_rows(root: &Path) -> Result<Vec<LineageUiRow>, alife_archive::ArchiveError> {
@@ -910,32 +1571,41 @@ fn load_lineage_rows(root: &Path) -> Result<Vec<LineageUiRow>, alife_archive::Ar
                 }
                 _ => None,
             });
+        let survival_ticks = statistics.as_ref().map(|stats| stats.survival_ticks());
+        let problem_q16 = combined_metric_value(
+            statistics.as_ref(),
+            &[
+                PassiveMetricKind::LearningSlope,
+                PassiveMetricKind::ReversalRecovery,
+            ],
+        );
+        let language_unaided_q16 =
+            metric_value(statistics.as_ref(), PassiveMetricKind::UnaidedComprehension);
+        let language_assisted_q16 = metric_value(
+            statistics.as_ref(),
+            PassiveMetricKind::SlmAssistedComprehension,
+        );
         rows.push(LineageUiRow {
             digest,
-            source_run_id: manifest.genetic.source_run_id,
+            source_run_id: manifest.genetic.source_run_id.clone(),
             organism_id: manifest.genetic.organism_id,
             deceased: manifest.life.is_some(),
             checkpoint,
-            survival: statistics
-                .as_ref()
-                .map(|stats| stats.survival_ticks().to_string())
+            survival_ticks,
+            survival: survival_ticks
+                .map(|ticks| ticks.to_string())
                 .unwrap_or_else(|| "Unknown".to_string()),
-            problem_solving: combined_metric(
-                statistics.as_ref(),
-                &[
-                    PassiveMetricKind::LearningSlope,
-                    PassiveMetricKind::ReversalRecovery,
-                ],
-            ),
-            language_unaided: metric_text(
-                statistics.as_ref(),
-                PassiveMetricKind::UnaidedComprehension,
-            ),
-            language_assisted: metric_text(
-                statistics.as_ref(),
-                PassiveMetricKind::SlmAssistedComprehension,
-            ),
+            problem_q16,
+            problem_solving: option_q16(problem_q16),
+            language_unaided_q16,
+            language_unaided: option_q16(language_unaided_q16),
+            language_assisted: option_q16(language_assisted_q16),
             overall_q16: overall_score(statistics.as_ref()),
+            genome_id: Some(manifest.genetic.genome_id),
+            lineage_id: manifest.genetic.lineage_id,
+            brain_class_id: Some(manifest.genetic.brain_class_id),
+            birth_tick: Some(manifest.genetic.birth_tick),
+            death_tick: manifest.life.as_ref().map(|life| life.death_tick),
         });
     }
     rows.sort_by(|left, right| {
@@ -964,23 +1634,34 @@ fn combined_metric(
     statistics: Option<&PassiveLifeStatistics>,
     kinds: &[PassiveMetricKind],
 ) -> String {
+    option_q16(combined_metric_value(statistics, kinds))
+}
+
+fn combined_metric_value(
+    statistics: Option<&PassiveLifeStatistics>,
+    kinds: &[PassiveMetricKind],
+) -> Option<u32> {
     let values = statistics
         .into_iter()
         .flat_map(|statistics| kinds.iter().map(|kind| statistics.metric(*kind)))
         .filter_map(MetricReading::value_q16)
         .collect::<Vec<_>>();
     if values.is_empty() {
-        "Unknown".to_string()
+        None
     } else {
-        q16_text(values.iter().sum::<u32>() / values.len() as u32)
+        Some(values.iter().sum::<u32>() / values.len() as u32)
     }
 }
 
 fn metric_text(statistics: Option<&PassiveLifeStatistics>, kind: PassiveMetricKind) -> String {
-    statistics
-        .and_then(|statistics| statistics.metric(kind).value_q16())
-        .map(q16_text)
-        .unwrap_or_else(|| "Unknown".to_string())
+    option_q16(metric_value(statistics, kind))
+}
+
+fn metric_value(
+    statistics: Option<&PassiveLifeStatistics>,
+    kind: PassiveMetricKind,
+) -> Option<u32> {
+    statistics.and_then(|statistics| statistics.metric(kind).value_q16())
 }
 
 fn q16_text(value: u32) -> String {
@@ -1019,6 +1700,64 @@ fn default_lineage_root() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{fs, time::SystemTime};
+
+    use alife_archive::GeneticArchiveInput;
+    use alife_core::{
+        BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
+        SensorProfile,
+    };
+    use bevy::prelude::{Children, Entity};
+
+    fn temp_lineage_root(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "alife-game-app-lineage-{label}-{}-{nonce}",
+            std::process::id()
+        ))
+    }
+
+    fn row(
+        run: &str,
+        organism: u64,
+        overall_q16: Option<u32>,
+        survival_ticks: Option<u64>,
+        problem_q16: Option<u32>,
+        checkpoint: bool,
+    ) -> LineageUiRow {
+        LineageUiRow {
+            digest: Blake3Digest::from_bytes([organism as u8; 32]),
+            source_run_id: run.to_string(),
+            organism_id: OrganismId::new(organism).unwrap(),
+            deceased: false,
+            checkpoint: checkpoint.then(|| {
+                (
+                    Blake3Digest::from_bytes([organism as u8 + 1; 32]),
+                    ArchiveCheckpointRetention::Pinned,
+                )
+            }),
+            survival_ticks,
+            survival: survival_ticks
+                .map(|ticks| ticks.to_string())
+                .unwrap_or_else(|| "Unknown".to_string()),
+            problem_q16,
+            problem_solving: problem_q16
+                .map(q16_text)
+                .unwrap_or_else(|| "Unknown".to_string()),
+            language_unaided_q16: None,
+            language_unaided: "Unknown".to_string(),
+            language_assisted: "Unknown".to_string(),
+            overall_q16,
+            genome_id: None,
+            lineage_id: None,
+            brain_class_id: None,
+            birth_tick: None,
+            death_tick: None,
+        }
+    }
 
     #[test]
     fn unknown_metrics_remain_unknown() {
@@ -1030,6 +1769,58 @@ mod tests {
             combined_metric(None, &[PassiveMetricKind::LearningSlope]),
             "Unknown"
         );
+    }
+
+    #[test]
+    fn real_lineage_library_manifest_maps_provenance_and_preserves_unknown_metrics() {
+        let root = temp_lineage_root("ui-mapping");
+        let mut library =
+            LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+        let capacity = BrainCapacityClass::production_for_id(BrainCapacityClass::N512_ID).unwrap();
+        let genome = BrainGenome::scaffold(812_001, capacity.id());
+        let development = DevelopmentState::new(
+            genome.id,
+            Tick::new(4),
+            NormalizedScalar::new(0.25).unwrap(),
+        );
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let digest = library
+            .archive_birth(GeneticArchiveInput {
+                source_run_id: "selection-ui-real-run",
+                organism_id: OrganismId::new(77).unwrap(),
+                birth_tick: Tick::new(4),
+                genome: &genome,
+                phenotype: &phenotype,
+                foundation_asset_bytes: None,
+            })
+            .unwrap();
+        drop(library);
+
+        let rows = load_lineage_rows(&root).unwrap();
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.digest, digest);
+        assert_eq!(row.source_run_id, "selection-ui-real-run");
+        assert_eq!(row.organism_id, OrganismId::new(77).unwrap());
+        assert_eq!(row.genome_id, Some(genome.id));
+        assert_eq!(row.lineage_id, genome.lineage_id);
+        assert_eq!(row.brain_class_id, Some(capacity.id()));
+        assert_eq!(row.birth_tick, Some(Tick::new(4)));
+        assert_eq!(row.death_tick, None);
+        assert_eq!(row.checkpoint, None);
+        assert_eq!(row.survival, "Unknown");
+        assert_eq!(row.problem_solving, "Unknown");
+        assert_eq!(row.language_unaided, "Unknown");
+        assert_eq!(row.language_assisted, "Unknown");
+        assert_eq!(row.overall_q16, None);
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1045,5 +1836,153 @@ mod tests {
         let digest = Blake3Digest::from_bytes([7; 32]);
         assert_eq!(mutation_seed(digest), mutation_seed(digest));
         assert_ne!(mutation_seed(digest), 0);
+    }
+
+    #[test]
+    fn source_data_filters_and_sorting_keep_unknown_values_last() {
+        let rows = vec![
+            row("run-b", 3, None, None, None, true),
+            row("run-a", 2, Some(20_000), Some(200), Some(40_000), false),
+            row("run-a", 1, Some(50_000), Some(100), Some(10_000), true),
+        ];
+
+        let filtered = filtered_lineage_indices(
+            &rows,
+            &LineageSourceFilter::Run("run-a".to_string()),
+            LineageDataFilter::LearnedCheckpoints,
+            LineageSort::ProblemSolving,
+        );
+        assert_eq!(filtered, vec![2]);
+
+        let sorted = filtered_lineage_indices(
+            &rows,
+            &LineageSourceFilter::All,
+            LineageDataFilter::All,
+            LineageSort::Overall,
+        );
+        assert_eq!(sorted, vec![2, 1, 0]);
+    }
+
+    #[test]
+    fn founder_cohort_rejects_duplicates_and_overflow_and_requires_four_members() {
+        let mut cohort = Vec::new();
+        for id in 1..=4 {
+            assert_eq!(
+                add_founder_selection(
+                    &mut cohort,
+                    FounderSelection {
+                        source_manifest_digest: Blake3Digest::from_bytes([id; 32]),
+                        mode: FounderMode::GeneticFounder,
+                    },
+                ),
+                Ok(())
+            );
+        }
+        assert!(founder_cohort_ready(&cohort));
+        let duplicate = cohort[0].clone();
+        assert_eq!(
+            add_founder_selection(&mut cohort, duplicate),
+            Err(CohortEditError::Duplicate)
+        );
+
+        for id in 5..=16 {
+            add_founder_selection(
+                &mut cohort,
+                FounderSelection {
+                    source_manifest_digest: Blake3Digest::from_bytes([id; 32]),
+                    mode: FounderMode::GeneticFounder,
+                },
+            )
+            .unwrap();
+        }
+        assert_eq!(cohort.len(), 16);
+        assert_eq!(
+            add_founder_selection(
+                &mut cohort,
+                FounderSelection {
+                    source_manifest_digest: Blake3Digest::from_bytes([17; 32]),
+                    mode: FounderMode::GeneticFounder,
+                },
+            ),
+            Err(CohortEditError::Full)
+        );
+    }
+
+    #[test]
+    fn closed_laboratory_hides_the_entire_structured_surface() {
+        assert_eq!(lineage_panel_visibility(false), Visibility::Hidden);
+        assert_eq!(lineage_panel_visibility(true), Visibility::Visible);
+    }
+
+    #[test]
+    fn target_layouts_keep_primary_sections_inside_the_viewport() {
+        for (width, height, minimum_rows) in [(1_920, 1_080, 12), (1_366, 768, 8)] {
+            let layout = LineageLabLayout::for_resolution(width, height);
+            assert!(layout.critical_font_size >= 12.0);
+            assert!(layout.visible_rows >= minimum_rows);
+            for section in layout.primary_sections() {
+                assert!(section.left >= 0.0 && section.top >= 0.0);
+                assert!(section.right() <= 100.0, "{section:?}");
+                assert!(section.bottom() <= 100.0, "{section:?}");
+                assert!(section.width > 0.0 && section.height > 0.0);
+            }
+            assert!(!layout.primary_sections_overlap());
+        }
+    }
+
+    #[test]
+    fn lineage_laboratory_is_a_real_section_and_content_node_hierarchy() {
+        for (width, height) in [(1_920, 1_080), (1_366, 768)] {
+            let layout = LineageLabLayout::for_resolution(width, height);
+            let mut app = App::new();
+            spawn_ui(&mut app, layout);
+            let world = app.world_mut();
+            let root = world
+                .query_filtered::<Entity, With<ProductionLineageLibraryPanel>>()
+                .single(world)
+                .unwrap();
+            assert_eq!(world.get::<Visibility>(root), Some(&Visibility::Hidden));
+            assert!(world.get::<Text>(root).is_none());
+            let root_children = world.get::<Children>(root).unwrap().to_vec();
+
+            let sections = world
+                .query::<(Entity, &LineageLabSectionMarker, &Node, Option<&Text>)>()
+                .iter(world)
+                .map(|(entity, marker, node, text)| {
+                    (entity, marker.0, node.clone(), text.is_some())
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(sections.len(), 5);
+            for (entity, kind, node, has_text) in sections {
+                assert!(root_children.contains(&entity));
+                assert!(!has_text, "{kind:?} container must not be a Text blob");
+                assert_eq!(node.position_type, PositionType::Absolute);
+                let expected = layout.section(kind);
+                assert_eq!(node.left, Val::Percent(expected.left));
+                assert_eq!(node.top, Val::Percent(expected.top));
+                assert_eq!(node.width, Val::Percent(expected.width));
+                assert_eq!(node.height, Val::Percent(expected.height));
+                assert!(expected.right() <= 100.0);
+                assert!(expected.bottom() <= 100.0);
+                let children = world.get::<Children>(entity).unwrap();
+                assert!(
+                    children.len() >= 2,
+                    "{kind:?} lacks structured content nodes"
+                );
+            }
+
+            let list_rows = world
+                .query::<&LineageLabTextRole>()
+                .iter(world)
+                .filter(|role| matches!(role, LineageLabTextRole::ListRow(_)))
+                .count();
+            let cohort_slots = world
+                .query::<&LineageLabTextRole>()
+                .iter(world)
+                .filter(|role| matches!(role, LineageLabTextRole::CohortSlot(_)))
+                .count();
+            assert_eq!(list_rows, MAX_LIST_ROW_NODES);
+            assert_eq!(cohort_slots, MAX_COHORT_SIZE);
+        }
     }
 }

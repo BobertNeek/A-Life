@@ -198,6 +198,7 @@ impl SaveLoadErrorDisplay {
             PersistenceError::MigrationUnsupported { .. } => "migration-unsupported",
             PersistenceError::HugeInlinePayload { .. } => "huge-inline-payload",
             PersistenceError::Contract(_) => "core-contract",
+            PersistenceError::Habitat(_) => "habitat",
             PersistenceError::Json(_) => "json",
             PersistenceError::Io(_) => "io",
         };
