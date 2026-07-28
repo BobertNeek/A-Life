@@ -77,11 +77,9 @@
 **Files:**
 
 - Modify: `crates/alife_world/README.md`
-- Modify: `crates/alife_world/AGENTS.md`
 
-- [ ] Document the implemented ownership boundary and no-policy rule.
+- [ ] Document the implemented public ownership boundary and no-policy rule in the crate README.
 - [ ] Run `cargo fmt --all -- --check`.
 - [ ] Run `cargo test -p alife_world`.
 - [ ] Run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1`.
 - [ ] Commit the final coherent slice and verify `git status --short` is empty.
-
