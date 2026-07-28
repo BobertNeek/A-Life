@@ -58,11 +58,13 @@ pub use chemistry::{
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
 pub use evolutionary_genetics::{
-    AlleleDominance, BodyChromosome, BodyFrame, BrainChromosome, ChemistryChromosome,
-    ContinuousLocus, CreatureGenome, DevelopmentChromosome, DiscreteAllele, DiscreteExpression,
-    DiscreteLocus, FoundationGeneticIdentity, MatePreference, PredispositionChromosome,
-    ReproductionChromosome, StarterVocabularyProfile, CREATURE_GENOME_SCHEMA_VERSION,
-    MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA,
+    AlleleDominance, AlleleSide, BodyChromosome, BodyFrame, BrainChromosome, ChemistryChromosome,
+    ChromosomeKind, ChromosomeRecombinationRecord, ContinuousLocus, CreatureGenome,
+    DevelopmentChromosome, DiscreteAllele, DiscreteExpression, DiscreteLocus,
+    FoundationGeneticIdentity, GeneticLineageProvenance, MatePreference, MutationRecord,
+    PredispositionChromosome, ReproductionChromosome, StarterVocabularyProfile,
+    CREATURE_GENOME_SCHEMA_VERSION, MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA,
+    MAX_MUTATION_RECORDS,
 };
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,

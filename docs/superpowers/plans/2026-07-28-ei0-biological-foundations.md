@@ -136,6 +136,9 @@ fn reproduction_rejects_incompatible_classes_and_foundation_families() {
 ```
 
 Round-trip the complete offspring through `serde_json`, validate it after decoding, and assert ordinary offspring carry no lifetime or transient mind-state payload.
+Add deterministic tests that force discrete mutation for body frame, mate
+preference, brain class, and starter-vocabulary profile. Each result must remain
+inside its declared enum domain and each changed allele must have provenance.
 
 - [ ] **Step 2: Run the focused test and confirm RED**
 
@@ -155,7 +158,7 @@ impl CreatureGenome {
 }
 ```
 
-Use one deterministic local RNG state derived from both genome IDs and `conception_seed`. Each chromosome starts on one parental homolog and may switch only while its crossover count is below the expressed `max_crossover_segments`. Select one gamete from each parent, mutate selected continuous alleles with a signed delta no larger than the expressed `max_mutation_delta`, reject non-finite arithmetic, and reflect results into locus bounds. Record every crossover count and changed allele. Select a child foundation only when both parents share the compatibility family and expressed brain class. Force ordinary-child inheritance flags to the non-Lamarckian default.
+Use one deterministic local RNG state derived from both genome IDs and `conception_seed`. Each chromosome starts on one parental homolog and may switch only while its crossover count is below the expressed `max_crossover_segments`. Select one gamete from each parent, mutate selected continuous alleles with a signed delta no larger than the expressed `max_mutation_delta`, reject non-finite arithmetic, and reflect results into locus bounds. Mutate selected discrete alleles only to another declared variant of the same locus domain; brain-class mutation remains limited to promoted compatible classes. Record every crossover count and every continuous or discrete allele change. Select a child foundation only when both parents share the compatibility family and expressed brain class. Force ordinary-child inheritance flags to the non-Lamarckian default.
 
 - [ ] **Step 4: Run the focused test and confirm GREEN**
 
