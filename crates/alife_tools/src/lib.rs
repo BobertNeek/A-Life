@@ -11,6 +11,7 @@ pub mod p31_offline_tools;
 pub mod p32_weights;
 pub mod p33_evaluation;
 pub mod p33_evolution;
+pub mod p33_selection;
 pub mod p35_playground;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

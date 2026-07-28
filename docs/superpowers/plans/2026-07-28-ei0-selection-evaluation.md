@@ -4,7 +4,7 @@
 
 **Goal:** Extend the P33 genome lab into a deterministic packed-log intelligence battery and managed multi-level breeding system.
 
-**Architecture:** Add one tooling module for exposure-aware intelligence evaluation and one for managed breeding selection. Evaluation consumes validated `PackedExperienceRecord` traces, keeps unknown metrics explicit, and emits separate cognitive and seven-axis objective vectors. Selection uses Pareto preservation plus deterministic lexicase ordering, protects wild and minority lineages, and breeds only legal unrelated pairs through the existing P33 crossover contract.
+**Architecture:** Add one tooling module for exposure-aware intelligence evaluation and one for managed breeding selection. Evaluation consumes validated `PackedExperienceRecord` traces, keeps unknown metrics explicit, and emits separate cognitive and seven-axis objective vectors. Selection uses Pareto preservation plus deterministic lexicase ordering, protects wild and minority lineages, and breeds only legal unrelated pairs through the authoritative `alife_core::CreatureGenome` reproduction and phenotype contracts.
 
 **Tech Stack:** Rust 2021, `alife_core` contracts, existing `alife_world::ScenarioFixture` traces, Serde JSON, Cargo integration tests.
 
@@ -295,27 +295,66 @@ git commit -m "feat: evaluate real packed-log battery fixtures"
 
 ---
 
-### Task 3: Authoritative composite-genome integration checkpoint
+### Task 3: Managed selection on the authoritative composite genome
 
 **Files:**
-- No implementation files change until the biology dependency is present on this branch.
-- Modify after integration: this focused plan with exact authoritative signatures.
+- Create: `crates/alife_tools/src/p33_selection.rs`
+- Modify: `crates/alife_tools/src/lib.rs`
+- Test: `crates/alife_tools/tests/managed_selection.rs`
+
+**Authoritative path:**
+- Validate each managed candidate and offspring with the public `Validate::validate_contract(&CreatureGenome) -> Result<(), ScaffoldContractError>` implementation in `alife_core::evolutionary_genetics`.
+- Breed only with `CreatureGenome::reproduce(maternal: &CreatureGenome, paternal: &CreatureGenome, conception_seed: u64) -> Result<CreatureGenome, ScaffoldContractError>`.
+- Preserve the resulting `CreatureGenome::{id, parent_genome_ids, lineage_id, provenance}` and its `GeneticLineageProvenance { conception_seed, ordinary_birth, recombination, mutations }` in the breeding receipt.
+- Express with `CreatureGenome::express(&self) -> Result<CreaturePhenotype, ScaffoldContractError>` and build a mature `DevelopmentState` through `CreaturePhenotype::development_state_at(Tick)`.
+- Prove compiled phenotype viability with `BrainCapacityClass::production_for_id`, then `PhenotypeCompiler::compile(&expressed.brain_genome, &capacity, &development, SensorProfile::PrivilegedAffordanceV1) -> Result<BrainPhenotype, ScaffoldContractError>`.
+- Do not call `p33_evolution::crossover_genomes`, breed a legacy `BrainGenome`, create a second composite-genome type, or edit `alife_core`.
 
 **Interfaces:**
-- Must consume the biology branch's composite `CreatureGenome`, seeded reproduction result, and lineage provenance contracts from `alife_core`.
-- Must not use legacy `BrainGenome` or `p33_evolution::crossover_genomes` as the final breeding substrate.
+- Consumes: Task 1 `ObjectiveVector`; authoritative `CreatureGenome`, `GeneticLineageProvenance`, `GenomeId`, `LineageId`, `PhenotypeHash`, and validation/compiler contracts from `alife_core`.
+- Produces: `SelectionCandidate`, `ManagedSelectionConfig`, `ManagedBreedingPlan`, `ManagedPairing`, `ViableOffspring`, `CompiledPhenotypeViability`, and `run_managed_selection`.
+- A candidate carries only evaluation-side ancestry evidence, population share, population lane, and specialist roles beside its authoritative `CreatureGenome`; these fields do not duplicate genome or phenotype authority.
 
-- [ ] **Step 1: Commit Task 2 and checkpoint the supervisor**
+- [ ] **Step 1: Write failing managed-selection contract tests**
 
-Report the Task 2 commit, focused verification, real report summary, and explicit unsupported measures. Request the shortest integration path for the authoritative biology contracts.
+Cover deterministic Pareto/lexicase retention, exact wild-genome preservation, minority-lineage retention, useful-specialist retention, and rejection of missing objective evidence. Use real `CreatureGenome::early_mammal_founder` instances as all test parents.
 
-- [ ] **Step 2: Stop before managed-selection tests or code until the dependency is present**
+- [ ] **Step 2: Run the focused target once and confirm the selection API is missing**
 
-Verify the current branch exposes composite genome validation, deterministic seeded reproduction, parent and lineage provenance, and offspring viability. If any contract is absent, send one exact interface request and continue no managed-breeding implementation.
+Run: `cargo test -p alife_tools --test managed_selection --no-fail-fast`
 
-- [ ] **Step 3: Replace this checkpoint with an exact self-reviewed Task 3 plan after integration**
+Expected: FAIL because `alife_tools::p33_selection` does not exist.
 
-The revised task must use the integrated public signatures in its tests and implementation. It must retain Pareto/lexicase selection, wild preservation, minority and specialist retention, inbreeding rejection, robust-mate-only cognitive introgression, and controlled probation cohorts.
+- [ ] **Step 3: Implement deterministic multi-objective retention and legal pairing**
+
+Build the managed parent pool from the Pareto frontier, deterministic seeded lexicase order, one representative for each minority lineage, and the best holder of every declared specialist role. Never combine the seven objectives into a survival or weighted scalar. Clone wild genomes into the preservation receipt and exclude them from every managed pairing.
+
+Reject pairings when genomes share a lineage, direct parent, known ancestor, or parent ancestor. Require foundation compatibility. A fragile high-cognition exception may pair only with a robust unrelated mate; no fragile-fragile pair is legal. A fragile candidate without the cognitive exception remains out of managed pairings but is not treated as a corrupt genome.
+
+- [ ] **Step 4: Add hostile pairing and introgression tests**
+
+Prove shared-lineage, shared-parent, and known-ancestor pairs never reproduce. Prove two fragile high-cognition candidates never pair. Prove a fragile high-cognition candidate can reproduce with a robust unrelated mate and that all such children enter elevated probation.
+
+- [ ] **Step 5: Breed and validate authoritative offspring**
+
+Derive deterministic nonzero conception seeds per pairing and sibling. Call `CreatureGenome::reproduce` once per child, validate the returned genome and `GeneticLineageProvenance`, express it, compile the mature phenotype, and store genome ID, parent IDs, authoritative provenance, phenotype hash, neuron count, and synapse count in the receipt. A reproduction, expression, or compilation failure disqualifies that offspring and returns an explicit selection error.
+
+Generate at least two siblings for cognitive introgression. Each elevated probation receipt must require cognition, ecology, transfer, stability/health, and development checks; list the other generated sibling and at least one viable non-parent population control.
+
+- [ ] **Step 6: Run the focused managed-selection gate**
+
+Run: `cargo fmt -p alife_tools`
+
+Run: `cargo test -p alife_tools --test managed_selection --no-fail-fast`
+
+Expected: PASS with deterministic pairings and offspring, intact core genetic provenance, compiled phenotype viability receipts, wild preservation, and all hostile constraints.
+
+- [ ] **Step 7: Commit the complete managed-breeding slice**
+
+```powershell
+git add docs/superpowers/plans/2026-07-28-ei0-selection-evaluation.md crates/alife_tools/src/p33_selection.rs crates/alife_tools/src/lib.rs crates/alife_tools/tests/managed_selection.rs
+git commit -m "feat: add managed CreatureGenome selection"
+```
 
 ---
 
