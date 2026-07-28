@@ -188,6 +188,34 @@ fn seeded_discrete_mutation_changes_only_declared_domains_and_records_provenance
 }
 
 #[test]
+fn ordinary_reproduction_keeps_brain_class_bound_to_the_promoted_foundation() {
+    let mut maternal = early_mammal(0xE10_0251);
+    let mut paternal = early_mammal(0xE10_0252);
+    for parent in [&mut maternal, &mut paternal] {
+        parent.reproduction.discrete_mutation_rate = ContinuousLocus::mean(1.0, 1.0).unwrap();
+    }
+
+    let offspring = CreatureGenome::reproduce(&maternal, &paternal, 0xC1A5_5001).unwrap();
+    assert_eq!(
+        offspring.brain.brain_class.maternal.value,
+        offspring.foundation.brain_class_id
+    );
+    assert_eq!(
+        offspring.brain.brain_class.paternal.value,
+        offspring.foundation.brain_class_id
+    );
+    assert!(offspring.provenance.mutations.iter().all(|record| {
+        !matches!(
+            record,
+            MutationRecord::Discrete {
+                chromosome: ChromosomeKind::Brain,
+                ..
+            }
+        )
+    }));
+}
+
+#[test]
 fn reproduction_rejects_incompatible_brain_classes_and_foundation_families() {
     let maternal = early_mammal(0xE10_0301);
     let different_class = CreatureGenome::early_mammal_founder(
