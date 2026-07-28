@@ -1,8 +1,8 @@
 use std::{fs, path::PathBuf};
 
 use alife_core::{
-    BrainScaleTier, GenomeId, HomeostaticSnapshot, OrganismId, PolicyBackend, Tick, Vec3f,
-    WorldEntityId,
+    BrainScaleTier, FoundationId, GenomeId, HomeostaticSnapshot, OrganismId, PolicyBackend, Tick,
+    Vec3f, WorldEntityId,
 };
 use alife_world::{
     persistence::{
@@ -17,7 +17,10 @@ use alife_world::{
         P34_ASSET_MANIFEST_SCHEMA, P34_ASSET_MANIFEST_SCHEMA_VERSION, P34_SAVE_FILE_SCHEMA,
         P34_SAVE_FILE_SCHEMA_VERSION,
     },
-    HeadlessScenarioBuilder,
+    AssistanceProvenance, FoundationProvenance, Habitat, HabitatActor, HabitatAuthority,
+    HabitatAuthorityKind, HabitatId, HabitatMode, HabitatTransferProvenance,
+    HabitatTransferRequest, HeadlessScenarioBuilder, PossessionProvenance, QuarantineProvenance,
+    SelectionExposureProvenance,
 };
 
 fn fixture_world() -> alife_world::HeadlessWorld {
@@ -114,6 +117,20 @@ fn assert_no_runtime_fallback_keys(value: &serde_json::Value) {
         }
         _ => {}
     }
+}
+
+fn habitat_id(raw: u64) -> HabitatId {
+    HabitatId::new(raw).unwrap()
+}
+
+fn four_habitat_authority() -> HabitatAuthority {
+    HabitatAuthority::new(vec![
+        Habitat::new(habitat_id(1), "Wild", HabitatMode::Wild).unwrap(),
+        Habitat::new(habitat_id(2), "Reserve", HabitatMode::Reserve).unwrap(),
+        Habitat::new(habitat_id(3), "Managed", HabitatMode::Managed).unwrap(),
+        Habitat::new(habitat_id(4), "School", HabitatMode::School).unwrap(),
+    ])
+    .unwrap()
 }
 
 #[test]
@@ -258,6 +275,103 @@ fn tiny_save_load_round_trip_restores_stable_world_and_summaries() {
             .as_deref(),
         Some("tiny-generated-weights")
     );
+}
+
+#[test]
+fn habitat_authority_round_trips_with_membership_and_transfer_provenance() {
+    let mut world = fixture_world();
+    let mut habitats = four_habitat_authority();
+    habitats
+        .register_creature(OrganismId(1), habitat_id(1), Tick::ZERO)
+        .unwrap();
+    habitats
+        .transfer(HabitatTransferRequest {
+            organism_id: OrganismId(1),
+            expected_prior_habitat_id: habitat_id(1),
+            new_habitat_id: habitat_id(3),
+            tick: Tick::ZERO,
+            provenance: HabitatTransferProvenance {
+                actor: Some(HabitatActor::Player),
+                authority: Some(HabitatAuthorityKind::ManagedController),
+                quarantine: Some(QuarantineProvenance::NotRequired),
+                assistance: Some(AssistanceProvenance::Unassisted),
+                foundation: Some(FoundationProvenance::Known(FoundationId::N2048_V1)),
+                possession: Some(PossessionProvenance::NotPossessed),
+                selection_exposure: Some(SelectionExposureProvenance::Unexposed),
+            },
+        })
+        .unwrap();
+    world.replace_habitat_authority(habitats.clone()).unwrap();
+
+    let save = PortableSaveFile::from_headless_world(
+        "habitat-roundtrip",
+        &world,
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+        fixture_manifest(),
+        vec![fixture_creature()],
+    )
+    .unwrap();
+    save.validate_with_asset_root(temp_root("habitat_roundtrip"))
+        .unwrap();
+    let json = save.to_json_string_pretty().unwrap();
+    let loaded = PortableSaveFile::from_json_str(&json).unwrap();
+    loaded
+        .validate_with_asset_root(temp_root("habitat_roundtrip_load"))
+        .unwrap();
+
+    assert_eq!(loaded.world.habitats, habitats);
+    assert_eq!(loaded.world.habitats.habitats().len(), 4);
+    assert_eq!(loaded.world.habitats.transfers().len(), 1);
+    let restored = loaded.restore_headless_world().unwrap();
+    assert_eq!(restored.habitat_authority(), &habitats);
+}
+
+#[test]
+fn legacy_save_without_habitats_defaults_every_creature_to_wild() {
+    let save = PortableSaveFile::from_headless_world(
+        "legacy-habitat-default",
+        &fixture_world(),
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+        fixture_manifest(),
+        vec![fixture_creature()],
+    )
+    .unwrap();
+    let mut legacy = serde_json::to_value(save).unwrap();
+    legacy["world"].as_object_mut().unwrap().remove("habitats");
+
+    let loaded = PortableSaveFile::from_json_str(&legacy.to_string()).unwrap();
+    loaded
+        .validate_with_asset_root(temp_root("legacy_habitat_default"))
+        .unwrap();
+    let membership = loaded.world.habitats.membership(OrganismId(1)).unwrap();
+    assert_eq!(membership.habitat_id, HabitatId::DEFAULT_WILD);
+    assert_eq!(membership.origin_tick, Tick::ZERO);
+    assert!(loaded.world.habitats.transfers().is_empty());
+    assert!(serde_json::to_value(&loaded).unwrap()["world"]
+        .get("habitats")
+        .is_some());
+}
+
+#[test]
+fn present_but_incomplete_habitat_state_is_not_treated_as_legacy() {
+    let save = PortableSaveFile::from_headless_world(
+        "invalid-current-habitat",
+        &fixture_world(),
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+        fixture_manifest(),
+        vec![fixture_creature()],
+    )
+    .unwrap();
+    let mut current = serde_json::to_value(save).unwrap();
+    current["world"]["habitats"]["memberships"] = serde_json::json!([]);
+
+    let loaded = PortableSaveFile::from_json_str(&current.to_string()).unwrap();
+    assert!(matches!(
+        loaded.validate_with_asset_root(temp_root("invalid_current_habitat")),
+        Err(PersistenceError::Habitat(
+            alife_world::HabitatAuthorityError::MissingMembership(OrganismId(1))
+        ))
+    ));
 }
 
 #[test]

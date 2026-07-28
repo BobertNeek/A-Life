@@ -36,6 +36,11 @@ use crate::ecology::{
     EcologyState, EcologyStepReport, EcologyZoneId, ResourceLifecycle, ResourceSpawnPolicy,
     TerrainZone, TerrainZoneKind,
 };
+use crate::habitat::{HabitatAuthority, HabitatAuthorityError};
+use crate::presentation::{
+    HabitatCreaturePresentation, HabitatPresentationProjection, PairwiseRelationshipProjection,
+    PresentationEvidence,
+};
 use crate::{
     AudibleUtterance, GroundedPhysicalProperties, GroundedSensorExtractor,
     PhysicalObservationSnapshot, PhysicalObservedObject, PhysicalTrackingKey,
@@ -203,6 +208,7 @@ pub struct HeadlessWorld {
     speech: SpatialSpeechBus,
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
     tracked_objects: TrackedObjectRegistry,
+    habitats: HabitatAuthority,
 }
 
 /// Opaque, immutable lookup built once for one same-snapshot perception batch.
@@ -229,6 +235,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub ecology: EcologyState,
     pub audible_utterances: Vec<AudibleUtterance>,
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+    pub habitats: HabitatAuthority,
 }
 
 impl HeadlessWorld {
@@ -251,6 +258,7 @@ impl HeadlessWorld {
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )
             .expect("the canonical tracked-object capacity is valid"),
+            habitats: HabitatAuthority::default(),
         }
     }
 
@@ -260,6 +268,83 @@ impl HeadlessWorld {
 
     pub const fn tick(&self) -> Tick {
         self.tick
+    }
+
+    pub fn habitat_authority(&self) -> &HabitatAuthority {
+        &self.habitats
+    }
+
+    pub fn replace_habitat_authority(
+        &mut self,
+        authority: HabitatAuthority,
+    ) -> Result<(), HabitatAuthorityError> {
+        let known_creatures = authority
+            .memberships()
+            .iter()
+            .map(|membership| membership.organism_id)
+            .collect::<Vec<_>>();
+        authority.validate(&known_creatures)?;
+        self.habitats = authority;
+        Ok(())
+    }
+
+    pub fn habitat_presentation_projection(
+        &self,
+    ) -> Result<HabitatPresentationProjection, ScaffoldContractError> {
+        let stable_entities = self
+            .organism_entity_ids()
+            .into_iter()
+            .map(|(organism_id, entity_id)| (organism_id.raw(), entity_id))
+            .collect::<BTreeMap<_, _>>();
+        let mut creatures = Vec::with_capacity(self.habitats.memberships().len());
+
+        for membership in self.habitats.memberships() {
+            let habitat_mode = self
+                .habitats
+                .habitat(membership.habitat_id)
+                .map(|habitat| habitat.mode)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            // Audible speech proves emission, not learned grounding. Keep this
+            // unknown until world state owns an utterance-level grounding
+            // receipt that can support the token sequence and evidence tick.
+            let latest_grounded_utterance = PresentationEvidence::Unknown;
+
+            let mut relationships = Vec::new();
+            if stable_entities.contains_key(&membership.organism_id.raw()) {
+                let report = self.sensory_report(membership.organism_id, self.tick)?;
+                for agent in report.core_snapshot.social_context.nearest_agents {
+                    let Some(agent) = agent else {
+                        continue;
+                    };
+                    relationships.push(PairwiseRelationshipProjection {
+                        source_organism_id: membership.organism_id,
+                        target_organism_id: agent.agent_id,
+                        target_stable_world_entity_id: agent.body_entity,
+                        affinity: PresentationEvidence::Observed {
+                            value: agent.affinity,
+                            tick: self.tick,
+                        },
+                        trust: PresentationEvidence::Unknown,
+                        fear: PresentationEvidence::Unknown,
+                    });
+                }
+                relationships.sort_by_key(|edge| edge.target_organism_id.raw());
+            }
+
+            creatures.push(HabitatCreaturePresentation {
+                organism_id: membership.organism_id,
+                stable_world_entity_id: stable_entities.get(&membership.organism_id.raw()).copied(),
+                habitat_id: membership.habitat_id,
+                habitat_mode,
+                latest_grounded_utterance,
+                relationships,
+            });
+        }
+
+        Ok(HabitatPresentationProjection {
+            tick: self.tick,
+            creatures,
+        })
     }
 
     pub fn advance_tick(&mut self) -> Tick {
@@ -687,6 +772,7 @@ impl HeadlessWorld {
                 .iter()
                 .map(|(organism, tick)| (OrganismId(*organism), *tick))
                 .collect(),
+            habitats: self.habitats.clone(),
         }
     }
 
@@ -778,6 +864,7 @@ impl HeadlessWorld {
                 parts.seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )?,
+            habitats: parts.habitats,
         })
     }
 
