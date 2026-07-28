@@ -21,6 +21,7 @@ use crate::{
     appearance::CreatureAppearanceGenome,
     ecology::EcologyState,
     grounded_sensing::GroundedPhysicalProperties,
+    habitat::{HabitatAuthority, HabitatAuthorityError, HabitatId},
     headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
     legacy_neural_policy_v1::LegacyBackendConfigV1,
     persistent_voxel::{
@@ -66,6 +67,8 @@ pub enum PersistenceError {
     },
     #[error("core contract violation: {0}")]
     Contract(#[from] ScaffoldContractError),
+    #[error("habitat authority violation: {0}")]
+    Habitat(#[from] HabitatAuthorityError),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("io error: {0}")]
@@ -911,6 +914,9 @@ pub struct WorldSaveState {
     pub ecology: EcologyState,
     #[serde(default)]
     pub voxel_backend: Option<PersistentVoxelWorldSaveState>,
+    pub habitats: HabitatAuthority,
+    #[serde(skip)]
+    habitat_authority_was_missing: bool,
 }
 
 #[derive(Deserialize)]
@@ -1050,6 +1056,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             ecology: EcologyState,
             #[serde(default)]
             voxel_backend: Option<PersistentVoxelWorldSaveState>,
+            #[serde(default)]
+            habitats: Option<HabitatAuthority>,
         }
 
         let mut wire = Wire::deserialize(deserializer)?;
@@ -1091,6 +1099,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         let next_utterance_id = wire
             .next_utterance_id
             .unwrap_or_else(|| max_utterance_id.saturating_add(1));
+        let habitat_authority_was_missing = wire.habitats.is_none();
         Ok(Self {
             seed: wire.seed,
             tick: wire.tick,
@@ -1103,6 +1112,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
             ecology: wire.ecology,
             voxel_backend: wire.voxel_backend,
+            habitats: wire.habitats.unwrap_or_default(),
+            habitat_authority_was_missing,
         })
     }
 }
@@ -1147,6 +1158,7 @@ impl PortableSaveFile {
             .filter_map(|creature| creature.weights.generated_weight_asset_id.clone())
             .collect();
         let mut world_state = WorldSaveState::from_parts(parts);
+        world_state.populate_default_habitat_memberships_if_unassigned(&creatures)?;
         world_state.voxel_backend = Some(
             migrated_voxel_backend_for_world(
                 &world_state,
@@ -1175,7 +1187,8 @@ impl PortableSaveFile {
 
     pub fn from_json_str(text: &str) -> Result<Self, PersistenceError> {
         peek_schema(text, P34_SAVE_FILE_SCHEMA, P34_SAVE_FILE_SCHEMA_VERSION)?;
-        let save: Self = serde_json::from_str(text)?;
+        let mut save: Self = serde_json::from_str(text)?;
+        save.world.migrate_legacy_habitats(&save.creatures)?;
         Ok(save)
     }
 
@@ -1243,6 +1256,9 @@ impl PortableSaveFile {
         for creature in &self.creatures {
             creature.validate(&self.assets, self.world.seed)?;
         }
+        self.world
+            .habitats
+            .validate_at_tick(&creature_ids(&self.creatures)?, self.world.tick)?;
         for asset_id in self
             .generated_weight_asset_refs
             .iter()
@@ -1254,6 +1270,9 @@ impl PortableSaveFile {
     }
 
     pub fn restore_headless_world(&self) -> Result<HeadlessWorld, PersistenceError> {
+        self.world
+            .habitats
+            .validate_at_tick(&creature_ids(&self.creatures)?, self.world.tick)?;
         self.world.restore()
     }
 
@@ -1275,6 +1294,8 @@ impl PortableSaveFile {
         }
         let voxel_backend = self.world.voxel_backend.clone();
         self.world = WorldSaveState::from_parts(world.persistence_parts());
+        self.world
+            .populate_default_habitat_memberships_if_unassigned(&self.creatures)?;
         self.world.voxel_backend = voxel_backend;
         if let Some(gpu_runtime) = self.gpu_runtime.as_mut() {
             gpu_runtime.last_safe_checkpoint.world_tick = self.world.tick;
@@ -1476,7 +1497,57 @@ impl AdapterRemapTable {
     }
 }
 
+fn creature_ids(creatures: &[CreatureSaveState]) -> Result<Vec<OrganismId>, PersistenceError> {
+    let mut seen = BTreeSet::new();
+    let mut ids = Vec::with_capacity(creatures.len());
+    for creature in creatures {
+        if !creature.organism_id.is_valid() {
+            return Err(PersistenceError::Habitat(
+                HabitatAuthorityError::UnknownCreature(creature.organism_id),
+            ));
+        }
+        if !seen.insert(creature.organism_id.raw()) {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creatures.organism_id",
+                message: "creature organism ids must be unique",
+            });
+        }
+        ids.push(creature.organism_id);
+    }
+    Ok(ids)
+}
+
 impl WorldSaveState {
+    fn populate_default_habitat_memberships_if_unassigned(
+        &mut self,
+        creatures: &[CreatureSaveState],
+    ) -> Result<(), PersistenceError> {
+        let ids = creature_ids(creatures)?;
+        if self.habitats.is_unassigned_default() {
+            for organism_id in &ids {
+                self.habitats.register_creature(
+                    *organism_id,
+                    HabitatId::DEFAULT_WILD,
+                    Tick::ZERO,
+                )?;
+            }
+        }
+        self.habitats.validate_at_tick(&ids, self.tick)?;
+        Ok(())
+    }
+
+    fn migrate_legacy_habitats(
+        &mut self,
+        creatures: &[CreatureSaveState],
+    ) -> Result<(), PersistenceError> {
+        if self.habitat_authority_was_missing {
+            self.habitats = HabitatAuthority::default();
+            self.populate_default_habitat_memberships_if_unassigned(creatures)?;
+            self.habitat_authority_was_missing = false;
+        }
+        Ok(())
+    }
+
     fn from_parts(parts: HeadlessWorldPersistenceParts) -> Self {
         Self {
             seed: parts.seed,
@@ -1494,6 +1565,8 @@ impl WorldSaveState {
             last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
             ecology: parts.ecology,
             voxel_backend: None,
+            habitats: parts.habitats,
+            habitat_authority_was_missing: false,
         }
     }
 
@@ -1577,6 +1650,14 @@ impl WorldSaveState {
                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
             }
         }
+        let habitat_creatures = self
+            .habitats
+            .memberships()
+            .iter()
+            .map(|membership| membership.organism_id)
+            .collect::<Vec<_>>();
+        self.habitats
+            .validate_at_tick(&habitat_creatures, self.tick)?;
         Ok(())
     }
 
@@ -1598,6 +1679,7 @@ impl WorldSaveState {
             ecology: self.ecology.clone(),
             audible_utterances: self.audible_utterances.clone(),
             last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
+            habitats: self.habitats.clone(),
         };
         Ok(HeadlessWorld::from_persistence_parts(parts)?)
     }

@@ -3,9 +3,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alife_core::{FoundationId, OrganismId, PolicyBackend, Tick};
+use serde::{Deserialize, Serialize};
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct HabitatId(u64);
 
 impl HabitatId {
@@ -28,7 +29,7 @@ impl HabitatId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HabitatMode {
     Wild,
     Reserve,
@@ -36,7 +37,7 @@ pub enum HabitatMode {
     School,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HabitatOperation {
     Tag,
     Capture,
@@ -46,13 +47,13 @@ pub enum HabitatOperation {
     StructuredEducation,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HabitatBreedingKind {
     CreatureChosen,
     Explicit,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Habitat {
     pub id: HabitatId,
     pub label: String,
@@ -87,7 +88,7 @@ impl Habitat {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HabitatActor {
     Organism(OrganismId),
     Player,
@@ -95,7 +96,7 @@ pub enum HabitatActor {
     WorldAuthority,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HabitatAuthorityKind {
     CreatureChoice,
     ReserveKeeper,
@@ -104,13 +105,13 @@ pub enum HabitatAuthorityKind {
     WorldSystem,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QuarantineProvenance {
     NotRequired,
     RequiredUntil(Tick),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AssistanceProvenance {
     Unassisted,
     CaptureTransport,
@@ -118,19 +119,19 @@ pub enum AssistanceProvenance {
     PlayerPossession,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FoundationProvenance {
     Unknown,
     Known(FoundationId),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PossessionProvenance {
     NotPossessed,
     Assisted { started_tick: Tick },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SelectionExposureProvenance {
     Unknown,
     Unexposed,
@@ -140,7 +141,7 @@ pub enum SelectionExposureProvenance {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatTransferProvenance {
     pub actor: Option<HabitatActor>,
     pub authority: Option<HabitatAuthorityKind>,
@@ -234,7 +235,7 @@ impl HabitatTransferProvenance {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatMembership {
     pub organism_id: OrganismId,
     pub habitat_id: HabitatId,
@@ -245,7 +246,7 @@ pub struct HabitatMembership {
     pub quarantine_until: Option<Tick>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatTransferRecord {
     pub sequence: u64,
     pub organism_id: OrganismId,
@@ -255,7 +256,7 @@ pub struct HabitatTransferRecord {
     pub provenance: HabitatTransferProvenance,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatTransferRequest {
     pub organism_id: OrganismId,
     pub expected_prior_habitat_id: HabitatId,
@@ -264,7 +265,7 @@ pub struct HabitatTransferRequest {
     pub provenance: HabitatTransferProvenance,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatTagRecord {
     pub sequence: u64,
     pub reserve_id: HabitatId,
@@ -273,7 +274,7 @@ pub struct HabitatTagRecord {
     pub actor: HabitatActor,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatOperationRequest {
     pub habitat_id: HabitatId,
     pub organism_id: OrganismId,
@@ -282,7 +283,7 @@ pub struct HabitatOperationRequest {
     pub tick: Tick,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatPermissionReceipt {
     pub habitat_id: HabitatId,
     pub organism_id: OrganismId,
@@ -293,7 +294,7 @@ pub struct HabitatPermissionReceipt {
     pub cognition_policy: PolicyBackend,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatBreedingRequest {
     pub habitat_id: HabitatId,
     pub first_parent: OrganismId,
@@ -303,7 +304,7 @@ pub struct HabitatBreedingRequest {
     pub tick: Tick,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatBreedingReceipt {
     pub habitat_id: HabitatId,
     pub first_parent: OrganismId,
@@ -315,7 +316,7 @@ pub struct HabitatBreedingReceipt {
     pub cognition_policy: PolicyBackend,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatAuthoritySnapshot {
     pub next_transfer_sequence: u64,
     pub next_tag_sequence: u64,
@@ -325,7 +326,7 @@ pub struct HabitatAuthoritySnapshot {
     pub transfers: Vec<HabitatTransferRecord>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HabitatAuthority {
     next_transfer_sequence: u64,
     next_tag_sequence: u64,
@@ -333,6 +334,23 @@ pub struct HabitatAuthority {
     memberships: Vec<HabitatMembership>,
     tags: Vec<HabitatTagRecord>,
     transfers: Vec<HabitatTransferRecord>,
+}
+
+impl Default for HabitatAuthority {
+    fn default() -> Self {
+        Self {
+            next_transfer_sequence: 1,
+            next_tag_sequence: 1,
+            habitats: vec![Habitat {
+                id: HabitatId::DEFAULT_WILD,
+                label: "Wild".to_string(),
+                mode: HabitatMode::Wild,
+            }],
+            memberships: Vec::new(),
+            tags: Vec::new(),
+            transfers: Vec::new(),
+        }
+    }
 }
 
 impl HabitatAuthority {
@@ -372,6 +390,19 @@ impl HabitatAuthority {
 
     pub fn habitats(&self) -> &[Habitat] {
         &self.habitats
+    }
+
+    pub fn memberships(&self) -> &[HabitatMembership] {
+        &self.memberships
+    }
+
+    pub(crate) fn is_unassigned_default(&self) -> bool {
+        self.habitats.len() == 1
+            && self.habitats[0].id == HabitatId::DEFAULT_WILD
+            && self.habitats[0].mode == HabitatMode::Wild
+            && self.memberships.is_empty()
+            && self.tags.is_empty()
+            && self.transfers.is_empty()
     }
 
     pub fn habitat(&self, habitat_id: HabitatId) -> Option<&Habitat> {
@@ -1128,6 +1159,40 @@ impl HabitatAuthority {
                         ));
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn validate_at_tick(
+        &self,
+        known_creatures: &[OrganismId],
+        world_tick: Tick,
+    ) -> Result<(), HabitatAuthorityError> {
+        self.validate(known_creatures)?;
+        for membership in &self.memberships {
+            if membership.origin_tick.raw() > world_tick.raw()
+                || membership.entered_tick.raw() > world_tick.raw()
+            {
+                return Err(HabitatAuthorityError::MalformedTransfer(
+                    "membership tick cannot exceed the world tick",
+                ));
+            }
+        }
+        for tag in &self.tags {
+            if tag.tick.raw() > world_tick.raw() {
+                return Err(HabitatAuthorityError::StaleTag {
+                    sequence: tag.sequence,
+                    organism_id: tag.organism_id,
+                });
+            }
+        }
+        for transfer in &self.transfers {
+            if transfer.tick.raw() > world_tick.raw() {
+                return Err(HabitatAuthorityError::StaleTransfer {
+                    sequence: transfer.sequence,
+                    organism_id: transfer.organism_id,
+                });
             }
         }
         Ok(())

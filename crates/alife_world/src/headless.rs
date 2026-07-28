@@ -36,6 +36,7 @@ use crate::ecology::{
     EcologyState, EcologyStepReport, EcologyZoneId, ResourceLifecycle, ResourceSpawnPolicy,
     TerrainZone, TerrainZoneKind,
 };
+use crate::habitat::{HabitatAuthority, HabitatAuthorityError};
 use crate::{
     AudibleUtterance, GroundedPhysicalProperties, GroundedSensorExtractor,
     PhysicalObservationSnapshot, PhysicalObservedObject, PhysicalTrackingKey,
@@ -203,6 +204,7 @@ pub struct HeadlessWorld {
     speech: SpatialSpeechBus,
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
     tracked_objects: TrackedObjectRegistry,
+    habitats: HabitatAuthority,
 }
 
 /// Opaque, immutable lookup built once for one same-snapshot perception batch.
@@ -229,6 +231,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub ecology: EcologyState,
     pub audible_utterances: Vec<AudibleUtterance>,
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+    pub habitats: HabitatAuthority,
 }
 
 impl HeadlessWorld {
@@ -251,6 +254,7 @@ impl HeadlessWorld {
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )
             .expect("the canonical tracked-object capacity is valid"),
+            habitats: HabitatAuthority::default(),
         }
     }
 
@@ -260,6 +264,24 @@ impl HeadlessWorld {
 
     pub const fn tick(&self) -> Tick {
         self.tick
+    }
+
+    pub fn habitat_authority(&self) -> &HabitatAuthority {
+        &self.habitats
+    }
+
+    pub fn replace_habitat_authority(
+        &mut self,
+        authority: HabitatAuthority,
+    ) -> Result<(), HabitatAuthorityError> {
+        let known_creatures = authority
+            .memberships()
+            .iter()
+            .map(|membership| membership.organism_id)
+            .collect::<Vec<_>>();
+        authority.validate(&known_creatures)?;
+        self.habitats = authority;
+        Ok(())
     }
 
     pub fn advance_tick(&mut self) -> Tick {
@@ -687,6 +709,7 @@ impl HeadlessWorld {
                 .iter()
                 .map(|(organism, tick)| (OrganismId(*organism), *tick))
                 .collect(),
+            habitats: self.habitats.clone(),
         }
     }
 
@@ -778,6 +801,7 @@ impl HeadlessWorld {
                 parts.seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )?,
+            habitats: parts.habitats,
         })
     }
 
