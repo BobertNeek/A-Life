@@ -232,19 +232,32 @@ impl GeneticLineageProvenance {
 impl Validate for GeneticLineageProvenance {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.conception_seed == 0
-            || self.recombination.len() > 6
             || self.mutations.len() > MAX_MUTATION_RECORDS
+            || (self.ordinary_birth && self.recombination.len() != 6)
+            || (!self.ordinary_birth
+                && (!self.recombination.is_empty() || !self.mutations.is_empty()))
         {
             return Err(ScaffoldContractError::MutationOverflow);
         }
+        let mut seen_chromosomes = [false; 6];
         for record in &self.recombination {
+            let chromosome_index = match record.chromosome {
+                ChromosomeKind::Body => 0,
+                ChromosomeKind::Brain => 1,
+                ChromosomeKind::Chemistry => 2,
+                ChromosomeKind::Development => 3,
+                ChromosomeKind::Reproduction => 4,
+                ChromosomeKind::Predisposition => 5,
+            };
             if record.maternal_segments == 0
                 || record.paternal_segments == 0
                 || record.maternal_segments > MAX_CROSSOVER_SEGMENTS
                 || record.paternal_segments > MAX_CROSSOVER_SEGMENTS
+                || seen_chromosomes[chromosome_index]
             {
                 return Err(ScaffoldContractError::MutationOverflow);
             }
+            seen_chromosomes[chromosome_index] = true;
         }
         for record in &self.mutations {
             match *record {
@@ -829,15 +842,15 @@ impl CreaturePhenotype {
                 SensorChannelKind::Touch,
             ]);
         }
-        let mut active_motor_affordances =
-            vec![MotorAffordanceKind::Move, MotorAffordanceKind::Rest];
-        if age >= self.development.puberty_tick {
-            active_motor_affordances.extend([
-                MotorAffordanceKind::Interact,
-                MotorAffordanceKind::Vocalize,
-                MotorAffordanceKind::Reproduce,
-            ]);
-        }
+        let active_motor_affordances = self
+            .brain_genome
+            .motor_affordances
+            .iter()
+            .filter(|gene| {
+                gene.enabled && f32::from(gene.enabled_at_maturation) <= maturation * 100.0
+            })
+            .map(|gene| gene.kind)
+            .collect();
         let open_critical_periods = (age >= self.development.critical_period.opens_at
             && age <= self.development.critical_period.closes_at)
             .then_some(self.development.critical_period)
@@ -1029,20 +1042,22 @@ fn express_brain_genome(
     let sensory_ratio = source.brain.sensory_lobe_ratio.expressed()?;
     let association_ratio = source.brain.association_lobe_ratio.expressed()?;
     let working_memory_ratio = source.brain.working_memory_ratio.expressed()?;
-    genome.lobe_ratios = LobeRatioPlan::InlineOverrides(vec![
-        LobeRatioOverride {
-            lobe: LobeKind::SensoryGrounding,
-            ratio: normalized(sensory_ratio)?,
-        },
-        LobeRatioOverride {
-            lobe: LobeKind::CoreAssociation,
-            ratio: normalized(association_ratio)?,
-        },
-        LobeRatioOverride {
-            lobe: LobeKind::WorkingMemory,
-            ratio: normalized(working_memory_ratio)?,
-        },
-    ]);
+    if brain_class_id != BrainCapacityClass::N2048_ID {
+        genome.lobe_ratios = LobeRatioPlan::InlineOverrides(vec![
+            LobeRatioOverride {
+                lobe: LobeKind::SensoryGrounding,
+                ratio: normalized(sensory_ratio)?,
+            },
+            LobeRatioOverride {
+                lobe: LobeKind::CoreAssociation,
+                ratio: normalized(association_ratio)?,
+            },
+            LobeRatioOverride {
+                lobe: LobeKind::WorkingMemory,
+                ratio: normalized(working_memory_ratio)?,
+            },
+        ]);
+    }
 
     let connectivity = source.brain.connectivity_density.expressed()?;
     if brain_class_id != BrainCapacityClass::N2048_ID {

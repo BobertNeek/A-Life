@@ -3,8 +3,8 @@
 use alife_core::{
     AlleleDominance, BodyFrame, BrainCapacityClass, ChromosomeKind, ContinuousLocus,
     CreatureGenome, DiscreteAllele, DiscreteExpression, DiscreteLocus, FoundationGeneticIdentity,
-    MatePreference, MutationRecord, ScaffoldContractError, StarterVocabularyProfile, Validate,
-    MAX_CROSSOVER_SEGMENTS,
+    MatePreference, MutationRecord, ScaffoldContractError, StarterVocabularyProfile, Tick,
+    Validate, MAX_CROSSOVER_SEGMENTS,
 };
 
 fn foundation(
@@ -216,6 +216,38 @@ fn ordinary_reproduction_keeps_brain_class_bound_to_the_promoted_foundation() {
 }
 
 #[test]
+fn ordinary_birth_requires_complete_unique_chromosome_provenance() {
+    let maternal = early_mammal(0xE10_0261);
+    let paternal = early_mammal(0xE10_0262);
+    let child = CreatureGenome::reproduce(&maternal, &paternal, 0xC1A5_6001).unwrap();
+
+    let mut missing = child.clone();
+    missing.provenance.recombination.pop();
+    assert_eq!(
+        missing.validate_contract().unwrap_err(),
+        ScaffoldContractError::MutationOverflow
+    );
+
+    let mut duplicate = child;
+    duplicate.provenance.recombination[1].chromosome =
+        duplicate.provenance.recombination[0].chromosome;
+    assert_eq!(
+        duplicate.validate_contract().unwrap_err(),
+        ScaffoldContractError::MutationOverflow
+    );
+
+    let mut malformed_founder = maternal;
+    malformed_founder
+        .provenance
+        .recombination
+        .push(duplicate.provenance.recombination[0]);
+    assert_eq!(
+        malformed_founder.validate_contract().unwrap_err(),
+        ScaffoldContractError::MutationOverflow
+    );
+}
+
+#[test]
 fn reproduction_rejects_incompatible_brain_classes_and_foundation_families() {
     let maternal = early_mammal(0xE10_0301);
     let different_class = CreatureGenome::early_mammal_founder(
@@ -319,4 +351,23 @@ fn each_chromosome_family_changes_its_causal_phenotype_surface() {
         predisposition_variant.express().unwrap().predisposition,
         expected.predisposition
     );
+}
+
+#[test]
+fn juvenile_motor_affordances_follow_their_individual_maturation_genes() {
+    let expressed = early_mammal(0xE10_0502).express().unwrap();
+    let age =
+        Tick((f64::from(expressed.development.maturation_duration_ticks) * 0.30).round() as u64);
+    assert!(age < expressed.development.puberty_tick);
+    let development = expressed.development_state_at(age).unwrap();
+
+    assert!(development
+        .active_motor_affordances
+        .contains(&alife_core::MotorAffordanceKind::Interact));
+    assert!(development
+        .active_motor_affordances
+        .contains(&alife_core::MotorAffordanceKind::Vocalize));
+    assert!(!development
+        .active_motor_affordances
+        .contains(&alife_core::MotorAffordanceKind::Reproduce));
 }

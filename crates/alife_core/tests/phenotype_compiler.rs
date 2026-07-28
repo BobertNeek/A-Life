@@ -21,9 +21,13 @@ fn compile(class_id: BrainClassId, seed: u64) -> alife_core::BrainPhenotype {
 }
 
 fn creature(seed: u64) -> CreatureGenome {
+    creature_for_class(seed, BrainCapacityClass::N512_ID)
+}
+
+fn creature_for_class(seed: u64, class_id: BrainClassId) -> CreatureGenome {
     CreatureGenome::early_mammal_founder(
         seed,
-        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        FoundationGeneticIdentity::new(10, 1, 7, class_id).unwrap(),
     )
     .unwrap()
 }
@@ -187,6 +191,35 @@ fn reproduced_creature_genome_compiles_deterministically_with_non_founder_identi
     )
     .unwrap();
     assert_eq!(one, two);
+}
+
+#[test]
+fn creature_founders_and_offspring_compile_for_every_promoted_brain_class() {
+    for (index, class_id) in [
+        BrainCapacityClass::N512_ID,
+        BrainCapacityClass::N1024_ID,
+        BrainCapacityClass::N2048_ID,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let maternal = creature_for_class(0xE10_0651 + index as u64 * 2, class_id);
+        let paternal = creature_for_class(0xE10_0652 + index as u64 * 2, class_id);
+        let child =
+            CreatureGenome::reproduce(&maternal, &paternal, 0xE10_0660 + index as u64).unwrap();
+        for genome in [maternal, child] {
+            let expressed = genome.express().unwrap();
+            let capacity = BrainCapacityClass::production_for_id(class_id).unwrap();
+            let development = expressed.development_state_at(Tick(4_000)).unwrap();
+            PhenotypeCompiler::compile(
+                &expressed.brain_genome,
+                &capacity,
+                &development,
+                SensorProfile::PrivilegedAffordanceV1,
+            )
+            .unwrap();
+        }
+    }
 }
 
 #[test]
