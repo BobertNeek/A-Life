@@ -427,6 +427,19 @@ fn validate_alpha_keys(genome: &BrainGenome) -> Result<(), ScaffoldContractError
             return Err(compile_error());
         }
     }
+    let mut plasticity = BTreeSet::new();
+    for row in &genome.plasticity_mask.projection_masks {
+        if !plasticity.insert((
+            row.projection.source_lobe.raw(),
+            row.projection.target_lobe.raw(),
+        )) || !genome
+            .macro_connectome_masks
+            .iter()
+            .any(|mask| mask.enabled && mask.projection == row.projection)
+        {
+            return Err(compile_error());
+        }
+    }
     Ok(())
 }
 
@@ -437,48 +450,56 @@ fn alpha_for(
     target: u32,
     target_start: u32,
 ) -> f32 {
-    if let Some(row) = genome
+    let base_alpha = if let Some(row) = genome
         .alpha_mask
         .per_synapse_overrides
         .iter()
         .find(|row| row.synapse.source.0 == source && row.synapse.target.0 == target)
     {
-        return row.alpha.raw();
-    }
-    let tile = (target - target_start) / 16;
-    if let Some(row) = genome
-        .alpha_mask
-        .tile_overrides
-        .iter()
-        .find(|row| row.tile.lobe == route.target_lobe && row.tile.tile_index == tile)
-    {
-        return row.alpha.raw();
-    }
-    if let Some(row) = genome
+        row.alpha.raw()
+    } else if let Some(row) = genome.alpha_mask.tile_overrides.iter().find(|row| {
+        row.tile.lobe == route.target_lobe && row.tile.tile_index == (target - target_start) / 16
+    }) {
+        row.alpha.raw()
+    } else if let Some(row) = genome
         .alpha_mask
         .projection_overrides
         .iter()
         .find(|row| row.projection == ProjectionKey::new(route.source_lobe, route.target_lobe))
     {
-        return row.alpha.raw();
-    }
-    if let Some(row) = genome
+        row.alpha.raw()
+    } else if let Some(row) = genome
         .alpha_mask
         .lobe_overrides
         .iter()
         .find(|row| row.lobe == route.target_lobe)
     {
-        return row.alpha.raw();
-    }
-    if let Some(row) = genome
+        row.alpha.raw()
+    } else if let Some(row) = genome
         .alpha_mask
         .lobe_overrides
         .iter()
         .find(|row| row.lobe == route.source_lobe)
     {
-        return row.alpha.raw();
+        row.alpha.raw()
+    } else {
+        genome.alpha_mask.default_alpha.raw()
+    };
+    if !genome.plasticity_mask.oja_enabled && !genome.plasticity_mask.hebbian_enabled {
+        return 0.0;
     }
-    genome.alpha_mask.default_alpha.raw()
+    genome
+        .plasticity_mask
+        .projection_masks
+        .iter()
+        .find(|row| row.projection == ProjectionKey::new(route.source_lobe, route.target_lobe))
+        .map_or(base_alpha, |row| {
+            if row.plasticity_enabled {
+                base_alpha * row.learning_rate_scale.raw()
+            } else {
+                0.0
+            }
+        })
 }
 
 pub(super) fn validate_alpha_matches(

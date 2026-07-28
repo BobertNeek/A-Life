@@ -505,14 +505,16 @@ mod task3_causal_genome_and_routing_red_tests {
     }
 
     #[test]
-    fn unsupported_neutral_evolution_field_returns_phenotype_compile() {
+    fn disabled_plasticity_is_causal_and_zeroes_compiled_alpha() {
         let (mut genome, development) = fixture();
         genome.plasticity_mask.oja_enabled = false;
+        genome.plasticity_mask.hebbian_enabled = false;
 
-        assert_eq!(
-            compile_result(&genome, &development).unwrap_err(),
-            ScaffoldContractError::PhenotypeCompile,
-        );
+        let phenotype = compile_ok(&genome, &development);
+        assert!(phenotype
+            .synapses()
+            .iter()
+            .all(|synapse| synapse.alpha() == 0.0));
     }
 
     #[test]
@@ -533,18 +535,17 @@ mod task3_causal_genome_and_routing_red_tests {
     }
 
     #[test]
-    fn open_critical_periods_are_rejected_until_they_are_causal() {
+    fn open_critical_periods_are_accepted_and_change_compiler_identity() {
         let (genome, mut development) = fixture();
+        let baseline = compile_ok(&genome, &development);
         development.open_critical_periods.push(CriticalPeriod {
             lobe: LobeKind::CoreAssociation,
             opens_at: Tick::ZERO,
             closes_at: Tick(10),
             plasticity_bias: NormalizedScalar::new(0.5).unwrap(),
         });
-        assert_eq!(
-            compile_result(&genome, &development).unwrap_err(),
-            ScaffoldContractError::PhenotypeCompile,
-        );
+        let critical = compile_ok(&genome, &development);
+        assert_ne!(baseline.phenotype_hash(), critical.phenotype_hash());
     }
 
     #[test]

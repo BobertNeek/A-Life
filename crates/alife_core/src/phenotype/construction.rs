@@ -1,8 +1,6 @@
 //! Deterministic orchestration for immutable GPU phenotype construction.
 
-use crate::{
-    ActivationFunction, AlphaStoragePolicy, BrainGenome, GenomeSeedSet, ScaffoldContractError,
-};
+use crate::{ActivationFunction, AlphaStoragePolicy, BrainGenome, ScaffoldContractError};
 
 use super::{
     BrainCapacityClass, BrainPhenotype, CompiledBudgets, GlobalPhenotypeBudgetReceipt,
@@ -16,9 +14,6 @@ pub(super) fn compile(
     inputs.validate_against(capacity)?;
     let genome = inputs.genome();
     let development = inputs.development();
-    if !development.open_critical_periods.is_empty() {
-        return Err(compile_error());
-    }
     validate_supported_inputs(genome, capacity)?;
     let layout = super::layout_compile::compile_layout(
         genome,
@@ -113,18 +108,7 @@ fn validate_supported_inputs(
     genome: &BrainGenome,
     capacity: &BrainCapacityClass,
 ) -> Result<(), ScaffoldContractError> {
-    let expected_seeds = GenomeSeedSet::from_species_seed(genome.species_seed, capacity.id());
-    let baseline = BrainGenome::scaffold(genome.species_seed, capacity.id());
-    if genome.seeds != expected_seeds
-        || genome.genetic_prior_seed != expected_seeds.genetic_prior_seed
-        || genome.id.0 != expected_seeds.genome_id_seed
-        || genome.plasticity_mask != baseline.plasticity_mask
-        || genome.endocrine_constants != baseline.endocrine_constants
-        || genome.drive_thresholds != baseline.drive_thresholds
-        || genome.mutation_rates != baseline.mutation_rates
-        || genome.crossover != baseline.crossover
-        || genome.developmental_schedule != baseline.developmental_schedule
-        || genome.inheritance != baseline.inheritance
+    if genome.brain_class_id != capacity.id()
         || genome.alpha_mask.storage_policy != AlphaStoragePolicy::HierarchicalSparse
         || genome.alpha_mask.dense_reference_opt_in
     {

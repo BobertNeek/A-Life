@@ -20,6 +20,9 @@ pub enum DiagnosticCode {
     ScalarOutOfRange,
     DenseAlphaRequiresOptIn,
     LamarckianInheritanceRequiresOptIn,
+    InvalidGeneticBounds,
+    IncompatibleGeneticClass,
+    MutationOverflow,
     NonMonotonicTick,
     InvalidBounds,
     MissingPhaseData,
@@ -103,6 +106,13 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
             ScaffoldContractError::LamarckianInheritanceRequiresOptIn => {
                 Self::new(DiagnosticCode::LamarckianInheritanceRequiresOptIn)
             }
+            ScaffoldContractError::InvalidGeneticBounds => {
+                Self::new(DiagnosticCode::InvalidGeneticBounds)
+            }
+            ScaffoldContractError::IncompatibleGeneticClass => {
+                Self::new(DiagnosticCode::IncompatibleGeneticClass)
+            }
+            ScaffoldContractError::MutationOverflow => Self::new(DiagnosticCode::MutationOverflow),
             ScaffoldContractError::NonMonotonicTick => Self::new(DiagnosticCode::NonMonotonicTick),
             ScaffoldContractError::InvalidBounds => Self::new(DiagnosticCode::InvalidBounds),
             ScaffoldContractError::MissingPhaseData => Self::new(DiagnosticCode::MissingPhaseData),
