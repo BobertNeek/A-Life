@@ -625,6 +625,85 @@ fn v0_recovery_key_restores_the_clean_isometric_player_view() {
     assert!(camera_query
         .iter(app.world())
         .all(|camera| camera.mode == Fvr03ProductionVoxelCameraMode::OrthographicIsometric));
+    let mut projection_query = app.world_mut().query::<&Projection>();
+    assert!(projection_query.iter(app.world()).all(|projection| {
+        matches!(projection, Projection::Orthographic(orthographic) if orthographic.area.height() <= 16.0)
+    }));
+}
+
+#[test]
+fn v0_render_world_direction_is_warm_readable_and_creature_led() {
+    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.update();
+
+    let terrain_handles = {
+        let mut query = app.world_mut().query::<(
+            &Fvr11ProductionTerrainLayer,
+            &MeshMaterial3d<StandardMaterial>,
+        )>();
+        query
+            .iter(app.world())
+            .filter(|(layer, _)| layer.role == Fvr11TerrainSurfaceRole::Top)
+            .map(|(layer, material)| (layer.material, material.0.clone()))
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    let materials = app.world().resource::<Assets<StandardMaterial>>();
+    let terrain_color = |kind| {
+        materials
+            .get(&terrain_handles[&kind])
+            .expect("terrain material remains resident")
+            .base_color
+            .to_srgba()
+    };
+    let grass = terrain_color(Fvr03ProductionVoxelMaterialKind::SafeGrass);
+    let soil = terrain_color(Fvr03ProductionVoxelMaterialKind::Soil);
+    assert!(grass.green > grass.red * 1.05 && grass.green > grass.blue * 1.12);
+    assert!(soil.red > soil.green * 1.10 && soil.green > soil.blue * 1.08);
+
+    let (ambient, vertical_area) = {
+        let mut query = app.world_mut().query::<(&AmbientLight, &Projection)>();
+        let (ambient, projection) = query.iter(app.world()).next().expect("player camera");
+        let Projection::Orthographic(orthographic) = projection else {
+            panic!("player camera must stay orthographic");
+        };
+        (ambient.clone(), orthographic.area.height())
+    };
+    let ambient_color = ambient.color.to_srgba();
+    assert!(ambient_color.red >= ambient_color.blue * 0.92);
+    assert!(ambient.brightness >= 700.0);
+    assert!(vertical_area <= 16.0);
+    let mut sun_query = app.world_mut().query::<&DirectionalLight>();
+    let sun = sun_query.iter(app.world()).next().expect("warm sun");
+    assert!(sun.shadows_enabled);
+    assert!((5_600.0..=6_000.0).contains(&sun.illuminance));
+
+    let mut roots = app.world_mut().query::<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr04ProductionCreatureVisualMarker,
+    )>();
+    assert!(roots
+        .iter(app.world())
+        .all(|(root, creature)| root.display_only && creature.base_scale.z >= 1.20));
+    let creature_material_handle = {
+        let mut parts = app.world_mut().query::<(
+            &ProductionCreaturePartMarker,
+            &MeshMaterial3d<StandardMaterial>,
+        )>();
+        parts
+            .iter(app.world())
+            .next()
+            .map(|(_, material)| material.0.clone())
+            .expect("visible creature part")
+    };
+    let creature_material = app
+        .world()
+        .resource::<Assets<StandardMaterial>>()
+        .get(&creature_material_handle)
+        .expect("creature material remains resident");
+    assert!(creature_material.perceptual_roughness <= 0.70);
+    assert!(creature_material.reflectance >= 0.30);
 }
 
 #[test]

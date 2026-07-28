@@ -220,11 +220,11 @@ impl CreaturePartAssetLibrary {
         image.sampler = ImageSampler::nearest();
         let image = image_assets.add(image);
         let material = material_assets.add(StandardMaterial {
-            base_color: Color::WHITE,
+            base_color: Color::srgb(1.0, 0.96, 0.88),
             base_color_texture: Some(image.clone()),
-            perceptual_roughness: 0.78,
+            perceptual_roughness: 0.68,
             metallic: 0.0,
-            reflectance: 0.24,
+            reflectance: 0.32,
             ..default()
         });
         self.acquire_coat_assets(

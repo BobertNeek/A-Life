@@ -4,7 +4,7 @@
 
 **Goal:** Turn the real production voxel app into a coherent player view with warm art direction, readable creatures, restrained HUD, honest creature-state cues, and verified screenshot evidence.
 
-**Architecture:** Keep `alife_world` and the GPU brain authoritative. Add one focused presentation model in `alife_game_app`, project real saved/runtime state into it, and render a compact Bevy HUD beside the existing world scene. Reuse the existing selection, camera, follow, save, and GPU tick paths; add only view recovery and screenshot naming needed for player-facing acceptance.
+**Architecture:** Keep `alife_world` and the GPU brain authoritative. Project only existing saved creature state into a compact Bevy HUD beside the existing world scene. Reuse selection, camera, follow, and save paths. Tune only existing production materials, lighting, camera composition, and creature presentation. Missing live utterance and pairwise bond telemetry is omitted, not fabricated or bridged in this slice.
 
 **Tech Stack:** Rust 2021, Bevy 0.18 UI/PBR, existing A-Life production voxel renderer, Image 2 blueprint, Cargo tests, real Vulkan screenshots.
 
@@ -18,14 +18,24 @@
 - Preserve `MinimumSettings30x30`, `MinSpecComfort1080p`, real save/load, stable IDs, and renderer display-only boundaries.
 - Actual production screenshots at 1920x1080 and 1366x768 are visual acceptance. A mockup, compile, or headless table is not acceptance.
 
+## Execution Amendment (2026-07-28)
+
+This amendment supersedes Tasks 1–3 below where they conflict with the supervisor's reviewed shortest path.
+
+- Keep the player presentation inside the existing production renderer. Do not create a new presentation module or renderer abstraction for V0.
+- Project only existing save fields: label, brain size, needs, normalized social affinity, memory/concept/gap counts, learning enablement, and consolidation tick.
+- Omit unavailable per-creature live action, utterance-token, and pairwise bond telemetry. Do not modify `bevy_shell.rs` or request a backend interface for this visual slice.
+- The first implementation boundary is commit `71214b4a`: clean default HUD, real selected-creature state, amber selection ring, and `R` view recovery.
+- The second implementation boundary is Task 4: existing terrain material separation, ambient/directional/fog/contact readability, tuned camera composition, and existing creature scale/material/silhouette legibility.
+- Acceptance remains the two real GPU-required production screenshots in Task 5. They must show the actual app, not a detached mockup.
+
 ---
 
 ## File Structure
 
-- Create `crates/alife_game_app/src/v0_player_experience.rs`: pure presentation vocabulary, responsive layout, readable need bands, action labels, and player-panel text derived from real values.
-- Modify `crates/alife_game_app/src/lib.rs`: export the V0 presentation contracts.
-- Modify `crates/alife_game_app/src/bevy_shell.rs`: retain the most recent real per-creature GPU action summary for the renderer; do not change GPU decisions.
-- Modify `crates/alife_game_app/src/production_voxel_renderer.rs`: render the clean HUD, inspector, intent bubble, selection ring, view recovery, and resolution-specific screenshot paths.
+- Modify `crates/alife_game_app/src/production_voxel_renderer.rs`: render the clean HUD, real saved creature state, selection ring, view recovery, creature legibility, and resolution-specific screenshot paths.
+- Modify `crates/alife_game_app/src/terrain_materials.rs`: warm and separate the existing terrain surface families without adding an asset system.
+- Modify `crates/alife_game_app/src/terrain_lighting.rs`: tune existing ambient, directional, fog, shadow, and camera composition settings.
 - Modify `crates/alife_game_app/tests/fvr03_voxel_renderer.rs`: integration checks for visible product UI, display-only state, responsive layout, readable selection, and hidden developer chrome.
 - Modify `docs/productization_s_plans/fullstack_bevy_voxel_frontend_replacement/FVR10_VISUAL_AUDIT.md`: record the new baseline failure and final screenshot comparison.
 - Modify `docs/productization_s_plans/fullstack_bevy_voxel_frontend_replacement/FVR10_COMPLETION.md`: replace stale completion claims with the V0 branch receipt and exact evidence.
@@ -224,7 +234,47 @@ git add crates/alife_game_app/src/production_voxel_renderer.rs crates/alife_game
 git commit -m "feat: ship the V0 production player view"
 ```
 
-### Task 4: Representative Screenshots and Final Receipt
+### Task 4: Bounded Production-Render Legibility Pass
+
+**Files:**
+- Modify: `crates/alife_game_app/src/terrain_materials.rs`
+- Modify: `crates/alife_game_app/src/terrain_lighting.rs`
+- Modify: `crates/alife_game_app/src/production_voxel_renderer.rs`
+- Modify: `crates/alife_game_app/src/creature_part_assets.rs`
+- Modify: `crates/alife_game_app/tests/fvr03_voxel_renderer.rs`
+
+**Interfaces:**
+- Consumes: existing terrain material families, production lights/fog, production camera transforms, modular creature roots/materials, and the selected-creature marker.
+- Produces: a warmer terrain hierarchy, readable contact/light separation, tighter camera framing, and larger high-contrast creature silhouettes. All changes remain display-only.
+
+- [ ] **Step 1: Write failing renderer-contract tests for the approved visual direction**
+
+Assert the production scene uses warm non-primary terrain colors with useful top/side separation, a warm ambient/directional light pair with shadows, tighter player-view camera framing, visible contact shadows, and creature roots large enough to read at the default camera extent.
+
+- [ ] **Step 2: Run the focused FVR10/FVR11 tests and confirm the visual thresholds fail**
+
+Run: `$env:CARGO_TARGET_DIR='C:\Users\PC\AppData\Local\Temp\codex-alife-v0-target'; cargo test -p alife_game_app --features bevy-app --test fvr03_voxel_renderer v0_render_ -j 1`
+
+Expected: FAIL on at least one pre-pass palette, lighting, camera, or creature-legibility threshold.
+
+- [ ] **Step 3: Tune the existing production renderer only**
+
+Warm grass/soil/sand/stone while preserving material identity. Use warm sun and cool-soft fill, readable fog/background separation, active shadows, and existing contact-shadow geometry. Tighten the isometric/orbit composition without hiding world edges. Increase creature root scale and selected-creature contrast only enough to make heads, limbs, faces, and coat families readable. Do not change simulation coordinates, selection IDs, collision, neural state, or asset loading.
+
+- [ ] **Step 4: Run the same focused tests**
+
+Run: `$env:CARGO_TARGET_DIR='C:\Users\PC\AppData\Local\Temp\codex-alife-v0-target'; cargo test -p alife_game_app --features bevy-app --test fvr03_voxel_renderer v0_render_ -j 1`
+
+Expected: PASS with display-only renderer boundaries unchanged.
+
+- [ ] **Step 5: Commit the renderer pass separately from the HUD slice**
+
+```powershell
+git add docs/superpowers/plans/2026-07-28-v0-player-facing-visual-overhaul.md crates/alife_game_app/src/terrain_materials.rs crates/alife_game_app/src/terrain_lighting.rs crates/alife_game_app/src/production_voxel_renderer.rs crates/alife_game_app/tests/fvr03_voxel_renderer.rs
+git commit -m "feat: warm the V0 production world"
+```
+
+### Task 5: Representative Screenshots and Final Receipt
 
 **Files:**
 - Modify: `crates/alife_game_app/src/production_voxel_renderer.rs`
@@ -295,8 +345,8 @@ git commit -m "docs: record V0 rendered acceptance"
 
 ## Plan Self-Review
 
-- Spec coverage: Task 1 covers responsive hierarchy and honest needs, social, learning, memory, and voice cues. Task 2 carries real GPU-selected actions. Task 3 covers clean default HUD, selection, camera, follow, and recovery. Task 4 covers real screenshots, performance, docs, and boundary evidence.
-- Placeholder scan: no deferred implementation, scaffold milestone, or mock acceptance remains. Raw speech tokens and pairwise bonds are explicitly excluded because current production presentation state does not expose them.
+- Spec coverage: Tasks 1–3 cover honest needs/social/learning cues, clean default HUD, selection, camera, follow, and recovery. Task 4 now covers the required terrain, lighting, composition, and creature-legibility pass. Task 5 covers real screenshots, performance, docs, and boundary evidence.
+- Placeholder scan: no deferred implementation, scaffold milestone, or mock acceptance remains. Raw utterance tokens and pairwise bonds are explicitly excluded because current production presentation state does not expose them. The renderer pass uses only existing materials, lights, fog, meshes, and creature assets.
 - Type consistency: `V0RecentCreatureAction` is produced in Task 2 and consumed in Task 3. `V0PlayerHudLayout` and `V0PlayerCreaturePresentation` are created in Task 1 and consumed by the renderer in Task 3. Screenshot naming is isolated to Task 4.
 - Scope check: all production edits remain inside `alife_game_app`. The plan does not require `alife_core`, `alife_gpu_backend`, `alife_tools`, or world-authority changes.
-- Acceptance check: final proof requires original-resolution production PNGs at both requested resolutions plus the focused test and boundary commands.
+- Acceptance check: the same original-resolution production PNGs at 1920x1080 and 1366x768 must prove both the restrained HUD and the warmer, more legible world. No detached visual proof is accepted.

@@ -104,56 +104,56 @@ pub(crate) fn production_terrain_material_specs() -> [ProductionTerrainMaterialS
             Fvr03ProductionVoxelMaterialKind::SafeGrass,
             0,
             1,
-            [0.99, 1.00, 0.96, 1.0],
+            [0.82, 0.98, 0.72, 1.0],
             0.86,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Soil,
             2,
             3,
-            [1.00, 0.98, 0.94, 1.0],
+            [0.98, 0.79, 0.58, 1.0],
             0.94,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Resource,
             4,
             5,
-            [0.98, 1.00, 0.93, 1.0],
+            [0.91, 0.98, 0.68, 1.0],
             0.78,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Hazard,
             6,
             7,
-            [1.00, 0.95, 0.97, 1.0],
+            [0.98, 0.67, 0.56, 1.0],
             0.72,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Decay,
             8,
             9,
-            [0.98, 0.95, 0.90, 1.0],
+            [0.78, 0.62, 0.43, 1.0],
             0.90,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Stone,
             10,
             11,
-            [0.98, 1.00, 0.97, 1.0],
+            [0.80, 0.85, 0.75, 1.0],
             0.92,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Water,
             12,
             13,
-            [0.94, 1.00, 1.00, 1.0],
+            [0.66, 0.91, 0.94, 1.0],
             0.18,
         ),
         spec(
             Fvr03ProductionVoxelMaterialKind::Sand,
             14,
             15,
-            [1.00, 0.98, 0.92, 1.0],
+            [1.00, 0.89, 0.63, 1.0],
             0.88,
         ),
     ]
@@ -198,11 +198,11 @@ pub(crate) fn create_production_terrain_material_library(app: &mut App) -> Terra
             );
             side.insert(
                 spec.kind,
-                materials.add(opaque_terrain_material(spec, textures.as_ref(), 0.96)),
+                materials.add(opaque_terrain_material(spec, textures.as_ref(), 0.78)),
             );
             transition.insert(
                 spec.kind,
-                materials.add(opaque_terrain_material(spec, textures.as_ref(), 1.0)),
+                materials.add(opaque_terrain_material(spec, textures.as_ref(), 0.90)),
             );
         }
         let water_spec = specs

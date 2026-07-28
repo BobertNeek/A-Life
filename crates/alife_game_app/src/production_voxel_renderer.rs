@@ -69,7 +69,7 @@ use crate::{
         create_terrain_dressing_library, plan_production_terrain_dressing, TerrainDressingTile,
     },
     terrain_lighting::{
-        production_camera_transform, spawn_production_terrain_camera,
+        production_camera_extent, production_camera_transform, spawn_production_terrain_camera,
         spawn_production_terrain_lighting,
     },
     terrain_materials::{create_production_terrain_material_library, TerrainMaterialLibrary},
@@ -224,6 +224,7 @@ impl Fvr03ProductionVoxelMaterialEntry {
             } else {
                 AlphaMode::Opaque
             },
+            unlit: self.kind == Fvr03ProductionVoxelMaterialKind::Selection,
             ..default()
         }
     }
@@ -417,7 +418,7 @@ impl Fvr03ProductionVoxelRendererSettings {
             Fvr03ProductionVoxelMaterialEntry {
                 kind: Fvr03ProductionVoxelMaterialKind::Selection,
                 label: "selection",
-                rgba: [1.0, 0.86, 0.18, 0.58],
+                rgba: [1.0, 0.86, 0.18, 0.90],
                 roughness: 0.48,
                 top_texture: "selection-hover-ring",
                 side_texture: "selection-hover-edge",
@@ -3924,13 +3925,13 @@ fn fvr04_creature_scale(visual: &CreatureVisualSnapshot, lod: Fvr04CreatureLod) 
     let energy = 0.92 + visual.cues.energy.value * 0.14;
     match lod {
         Fvr04CreatureLod::FullVoxel => {
-            Vec3::new(1.18 * fear_narrow, 1.18 * fatigue_squash * energy, 1.18)
+            Vec3::new(1.32 * fear_narrow, 1.32 * fatigue_squash * energy, 1.32)
         }
         Fvr04CreatureLod::CompactVoxel => {
-            Vec3::new(1.08 * fear_narrow, 1.08 * fatigue_squash, 1.08)
+            Vec3::new(1.22 * fear_narrow, 1.22 * fatigue_squash, 1.22)
         }
         Fvr04CreatureLod::ImpostorVoxel => {
-            Vec3::new(0.86 * fear_narrow, 0.86 * fatigue_squash, 0.72)
+            Vec3::new(0.98 * fear_narrow, 0.98 * fatigue_squash, 0.86)
         }
     }
 }
@@ -4898,7 +4899,7 @@ fn handle_fvr03_camera_mode_input(
     let Some(next_mode) = next_mode else {
         return;
     };
-    let extent = 18.0 + f32::from(scene.draw_radius_chunks) * 9.0;
+    let extent = production_camera_extent(scene.profile_id);
     for (mut transform, mut projection, mut camera) in &mut cameras {
         camera.mode = next_mode;
         *transform = production_camera_transform(next_mode, extent);
@@ -4977,7 +4978,7 @@ fn sync_fvr04_camera_follow(
         return;
     };
     let target = Vec3::new(position.x, 0.0, position.z);
-    let extent = 18.0 + f32::from(scene.draw_radius_chunks) * 9.0;
+    let extent = production_camera_extent(scene.profile_id);
     for (mut transform, mut projection, camera) in &mut cameras {
         *transform = fvr04_follow_camera_transform(camera.mode, extent, target);
         if let Projection::Orthographic(orthographic) = &mut *projection {
