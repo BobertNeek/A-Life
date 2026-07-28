@@ -37,6 +37,10 @@ use crate::ecology::{
     TerrainZone, TerrainZoneKind,
 };
 use crate::habitat::{HabitatAuthority, HabitatAuthorityError};
+use crate::presentation::{
+    HabitatCreaturePresentation, HabitatPresentationProjection, PairwiseRelationshipProjection,
+    PresentationEvidence,
+};
 use crate::{
     AudibleUtterance, GroundedPhysicalProperties, GroundedSensorExtractor,
     PhysicalObservationSnapshot, PhysicalObservedObject, PhysicalTrackingKey,
@@ -282,6 +286,74 @@ impl HeadlessWorld {
         authority.validate(&known_creatures)?;
         self.habitats = authority;
         Ok(())
+    }
+
+    pub fn habitat_presentation_projection(
+        &self,
+    ) -> Result<HabitatPresentationProjection, ScaffoldContractError> {
+        let stable_entities = self
+            .organism_entity_ids()
+            .into_iter()
+            .map(|(organism_id, entity_id)| (organism_id.raw(), entity_id))
+            .collect::<BTreeMap<_, _>>();
+        let utterances = self.speech.snapshot();
+        let mut creatures = Vec::with_capacity(self.habitats.memberships().len());
+
+        for membership in self.habitats.memberships() {
+            let habitat_mode = self
+                .habitats
+                .habitat(membership.habitat_id)
+                .map(|habitat| habitat.mode)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            let latest_grounded_utterance = utterances
+                .iter()
+                .filter(|utterance| utterance.speaker_id == Some(membership.organism_id))
+                .max_by_key(|utterance| {
+                    (utterance.emitted_tick.raw(), utterance.utterance_id.raw())
+                })
+                .map_or(PresentationEvidence::Unknown, |utterance| {
+                    PresentationEvidence::Observed {
+                        value: utterance.tokens.clone(),
+                        tick: utterance.emitted_tick,
+                    }
+                });
+
+            let mut relationships = Vec::new();
+            if stable_entities.contains_key(&membership.organism_id.raw()) {
+                let report = self.sensory_report(membership.organism_id, self.tick)?;
+                for agent in report.core_snapshot.social_context.nearest_agents {
+                    let Some(agent) = agent else {
+                        continue;
+                    };
+                    relationships.push(PairwiseRelationshipProjection {
+                        source_organism_id: membership.organism_id,
+                        target_organism_id: agent.agent_id,
+                        target_stable_world_entity_id: agent.body_entity,
+                        affinity: PresentationEvidence::Observed {
+                            value: agent.affinity,
+                            tick: self.tick,
+                        },
+                        trust: PresentationEvidence::Unknown,
+                        fear: PresentationEvidence::Unknown,
+                    });
+                }
+                relationships.sort_by_key(|edge| edge.target_organism_id.raw());
+            }
+
+            creatures.push(HabitatCreaturePresentation {
+                organism_id: membership.organism_id,
+                stable_world_entity_id: stable_entities.get(&membership.organism_id.raw()).copied(),
+                habitat_id: membership.habitat_id,
+                habitat_mode,
+                latest_grounded_utterance,
+                relationships,
+            });
+        }
+
+        Ok(HabitatPresentationProjection {
+            tick: self.tick,
+            creatures,
+        })
     }
 
     pub fn advance_tick(&mut self) -> Tick {
