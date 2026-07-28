@@ -3,6 +3,7 @@
 pub mod action;
 pub mod action_abi;
 pub mod adapter;
+pub mod biochemistry;
 mod blake3_digest;
 pub mod brain_class;
 pub mod canonical_digest;
@@ -44,6 +45,10 @@ pub use action::{
 };
 pub use action_abi::ActionAbiVersion;
 pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
+pub use biochemistry::{
+    BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
+    NeuralModulation, ReproductionReadiness, MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+};
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{
     BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,
