@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf, process};
 
-use alife_tools::p33_evolution::tiny_generation_smoke;
+use alife_tools::{p33_evaluation::ScenarioBatteryFixture, p33_evolution::tiny_generation_smoke};
 
 fn main() {
     if let Err(message) = run(std::env::args().skip(1).collect()) {
@@ -14,12 +14,72 @@ fn run(args: Vec<String>) -> Result<(), String> {
     let command = args.next().ok_or_else(usage)?;
     match command.as_str() {
         "smoke" => run_smoke(args.collect()),
+        "evaluate-fixture" => run_evaluate_fixture(args.collect()),
         "help" | "--help" | "-h" => {
             println!("{}", usage());
             Ok(())
         }
         _ => Err(format!("unknown command `{command}`\n{}", usage())),
     }
+}
+
+fn run_evaluate_fixture(args: Vec<String>) -> Result<(), String> {
+    let options = parse_fixture_args(&args)?;
+    let fixture = ScenarioBatteryFixture::from_json_file(&options.fixture)
+        .map_err(|err| format!("EI0 fixture failed: {err}"))?;
+    let report = fixture
+        .run()
+        .map_err(|err| format!("EI0 evaluation failed: {err}"))?;
+    let json = serde_json::to_string_pretty(&report).map_err(|err| err.to_string())?;
+    if let Some(parent) = options.output.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    fs::write(&options.output, json).map_err(|err| err.to_string())?;
+    println!("wrote EI0 battery report: {}", options.output.display());
+    println!("packed records: {}", report.packed_record_count);
+    println!("promotion eligible: {}", report.promotion_eligible);
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct FixtureOptions {
+    fixture: PathBuf,
+    output: PathBuf,
+}
+
+fn parse_fixture_args(args: &[String]) -> Result<FixtureOptions, String> {
+    let mut fixture = None;
+    let mut output = None;
+    let mut index = 0usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--fixture" => {
+                index += 1;
+                fixture = Some(PathBuf::from(
+                    args.get(index)
+                        .ok_or_else(|| "--fixture requires a path".to_string())?,
+                ));
+            }
+            "--out" | "--output" => {
+                index += 1;
+                output = Some(PathBuf::from(
+                    args.get(index)
+                        .ok_or_else(|| "--out requires a path".to_string())?,
+                ));
+            }
+            other => {
+                return Err(format!(
+                    "unknown evaluate-fixture argument `{other}`\n{}",
+                    fixture_usage()
+                ));
+            }
+        }
+        index += 1;
+    }
+    Ok(FixtureOptions {
+        fixture: fixture.ok_or_else(|| "--fixture is required".to_string())?,
+        output: output.ok_or_else(|| "--out is required".to_string())?,
+    })
 }
 
 fn run_smoke(args: Vec<String>) -> Result<(), String> {
@@ -103,9 +163,10 @@ fn parse_smoke_args(args: &[String]) -> Result<SmokeOptions, String> {
 
 fn usage() -> String {
     format!(
-        "{}\n\n{}",
-        "Usage:\n  p33_genome_lab smoke [options]",
-        smoke_usage()
+        "{}\n\n{}\n\n{}",
+        "Usage:\n  p33_genome_lab smoke [options]\n  p33_genome_lab evaluate-fixture [options]",
+        smoke_usage(),
+        fixture_usage()
     )
 }
 
@@ -118,4 +179,10 @@ Defaults:
   --seed 270467123
   --generations 1
   --out target/artifacts/p33_generation_smoke.json"
+}
+
+fn fixture_usage() -> &'static str {
+    "\
+Usage:
+  p33_genome_lab evaluate-fixture --fixture <path> --out <path>"
 }
