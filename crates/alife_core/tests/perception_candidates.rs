@@ -3,8 +3,8 @@ use alife_core::{
     CandidateFeatureVector, CandidateObservationRef, Confidence, DurationTicks,
     HomeostaticSnapshot, NormalizedScalar, OrganismId, PerceptionContextBlock,
     PerceptionContextKind, PerceptionFrame, PerceptionFrameDraft, PolicyBackend, Pose,
-    ScaffoldContractError, SensorProfile, SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity,
-    WorldEntityId, MAX_ACTION_CANDIDATES,
+    ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, Tick, Vec3f, Velocity, WorldEntityId, MAX_ACTION_CANDIDATES,
 };
 
 fn organism() -> OrganismId {
@@ -18,6 +18,15 @@ fn sensory(tick: Tick) -> SensorySnapshot {
         Vec3f::ZERO,
         SensoryChannels::ZERO,
         Default::default(),
+    )
+    .unwrap()
+}
+
+fn privileged_provenance(tick: Tick) -> SensorProfileProvenance {
+    SensorProfileProvenance::new(
+        SensorProfile::PrivilegedAffordanceV1,
+        SensoryAbiVersion::CURRENT,
+        tick,
     )
     .unwrap()
 }
@@ -63,7 +72,7 @@ fn perception_draft_fixture() -> PerceptionFrameDraft {
                 ActionId(101),
                 ActionKind::Move,
                 CandidateActionFamily::Approach,
-                CandidateObservationRef::ObjectSlot(3),
+                CandidateObservationRef::None,
                 ActionTarget::new(Some(WorldEntityId(44)), Some(Vec3f::new(1.0, 0.0, 2.0))),
                 CandidateFeatureVector::zero(),
                 Confidence::new(0.9).unwrap(),
@@ -73,8 +82,17 @@ fn perception_draft_fixture() -> PerceptionFrameDraft {
             )
             .unwrap(),
         ],
+        privileged_provenance(tick),
+        Vec::new(),
     )
     .unwrap()
+}
+
+fn episodic_context_fixture() -> PerceptionContextBlock {
+    let mut values = vec![0.0; alife_core::MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE];
+    values[0] = 0.25;
+    values[1] = -0.5;
+    PerceptionContextBlock::try_new(1, PerceptionContextKind::EpisodicCandidateV1, values).unwrap()
 }
 
 #[test]
@@ -106,6 +124,8 @@ fn candidate_is_unscored_and_frame_is_same_tick() {
         },
         HomeostaticSnapshot::baseline(tick),
         vec![candidate],
+        privileged_provenance(tick),
+        Vec::new(),
     )
     .unwrap();
 
@@ -143,6 +163,8 @@ fn candidate_validation_rejects_duplicate_indices_and_non_finite_features() {
         },
         HomeostaticSnapshot::baseline(tick),
         duplicate,
+        privileged_provenance(tick),
+        Vec::new(),
     )
     .is_err());
 }
@@ -178,6 +200,8 @@ fn frame_validation_enforces_bounds_identity_and_family_compatibility() {
         body,
         homeostasis,
         Vec::new(),
+        privileged_provenance(tick),
+        Vec::new(),
     )
     .is_err());
 
@@ -199,6 +223,8 @@ fn frame_validation_enforces_bounds_identity_and_family_compatibility() {
         body,
         homeostasis,
         too_many,
+        privileged_provenance(tick),
+        Vec::new(),
     )
     .is_err());
 
@@ -237,6 +263,8 @@ fn frame_validation_enforces_bounds_identity_and_family_compatibility() {
             ActionKind::Inspect,
             CandidateActionFamily::Inspect,
         )],
+        privileged_provenance(tick),
+        Vec::new(),
     )
     .is_err());
 }
@@ -262,16 +290,7 @@ fn base_digest_precedes_context_and_final_digest_without_a_cycle() {
         .clone()
         .finalize(PerceptionContextBlock::empty())
         .unwrap();
-    let recalled = draft
-        .finalize(
-            PerceptionContextBlock::try_new(
-                1,
-                PerceptionContextKind::EpisodicCandidateV1,
-                vec![0.25, -0.5],
-            )
-            .unwrap(),
-        )
-        .unwrap();
+    let recalled = draft.finalize(episodic_context_fixture()).unwrap();
 
     assert_eq!(empty.base_digest(), base);
     assert_eq!(recalled.base_digest(), base);
@@ -297,6 +316,8 @@ fn candidate_feature_digest_excludes_transport_entity_but_frame_digest_binds_it(
         first.body(),
         *first.homeostasis(),
         vec![first.candidates()[0], changed_candidate],
+        first.profile_provenance(),
+        first.grounded_object_slots().to_vec(),
     )
     .unwrap();
 
@@ -311,14 +332,7 @@ fn candidate_feature_digest_excludes_transport_entity_but_frame_digest_binds_it(
 #[test]
 fn tampered_serialized_base_context_or_final_digest_is_rejected() {
     let frame = perception_draft_fixture()
-        .finalize(
-            PerceptionContextBlock::try_new(
-                1,
-                PerceptionContextKind::EpisodicCandidateV1,
-                vec![0.25, -0.5],
-            )
-            .unwrap(),
-        )
+        .finalize(episodic_context_fixture())
         .unwrap();
     let original = serde_json::to_value(frame).unwrap();
 

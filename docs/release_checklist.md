@@ -57,9 +57,9 @@ If unavailable, record the gate as manual/unknown; do not fabricate results.
 | Gate | Command | Notes |
 |---|---|---|
 | P25 GPU static parity | `cargo test -p alife_gpu_backend --features gpu-tests --test static_forward_parity -- --ignored --nocapture` | Requires a local wgpu adapter |
-| P26 GPU plasticity parity | `cargo test -p alife_gpu_backend --features gpu-tests --test plasticity_oja_parity -- --ignored --nocapture` | Requires a local wgpu adapter |
-| P26 saturation smoke | `cargo test -p alife_gpu_backend --test plasticity_oja_parity -- --ignored --nocapture` | Manual extended diagnostic |
-| GPU runtime performance report | `cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime` | Records CPU fallback unless hardware flags are explicitly set after validation |
+| GPU closed-loop causal behavior | `cargo test -p alife_gpu_backend --features gpu-tests --test closed_loop_gpu_behavior -j 1 -- --nocapture` | Requires a local wgpu adapter |
+| GPU sealed-outcome fast plasticity | `cargo test -p alife_gpu_backend --features gpu-tests --test closed_loop_fast_plasticity -j 1 -- --nocapture` | Requires a local wgpu adapter |
+| GPU runtime performance report | `cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime` | Records typed unavailable status when required hardware is absent |
 | Full benchmark tiers | `cargo run -p alife_tools --bin benchmark_tiers -- --all --gpu-runtime` | Manual expected-slow |
 | Bevy adapter smoke | `cargo run -p alife_bevy_adapter --example minimal_adapter` | Requires graphics-capable environment |
 
@@ -80,7 +80,7 @@ Before marking a candidate ready:
 - Confirm `alife_core` has no Bevy, Avian, wgpu, renderer, ECS, OS-windowing,
   Python runtime, Unity, C#, or HLSL dependency leak.
 - Confirm save/load uses stable IDs and versioned schemas.
-- Confirm GPU paths remain optional and CPU fallback works.
+- Confirm neural mode is GPU-required, and GPU failure stops learned actions with a typed unavailable result.
 - Confirm active gameplay does not require synchronous neural readback.
 - Confirm performance misses and unknown GPU hardware status are documented in
   `docs/final_status_report.md`.

@@ -20,6 +20,10 @@ pub struct GpuBrainAuthorityTelemetry {
     pub last_learning_delta: f32,
     pub active_ticks: u32,
     pub no_active_bulk_readback: bool,
+    pub checkpoint_tick: Option<u64>,
+    pub checkpoint_sleep_phase: String,
+    pub checkpoint_consolidation_state: String,
+    pub recovery_status: String,
     pub wgsl: GpuBrainTimingTelemetry,
 }
 
@@ -53,6 +57,10 @@ impl GpuBrainAuthorityTelemetry {
             last_learning_delta: 0.0,
             active_ticks: 0,
             no_active_bulk_readback: true,
+            checkpoint_tick: None,
+            checkpoint_sleep_phase: "Pending".to_string(),
+            checkpoint_consolidation_state: "Pending".to_string(),
+            recovery_status: "GPU required".to_string(),
             wgsl: GpuBrainTimingTelemetry::default(),
         }
     }
@@ -67,13 +75,36 @@ impl GpuBrainAuthorityTelemetry {
                 )
             },
         );
+        let checkpoint_tick = self
+            .checkpoint_tick
+            .map_or_else(|| "pending".to_string(), |tick| tick.to_string());
         format!(
-            "GPU neural: {}\nAdapter: {}\nPhenotype: {}\nClass: {}\nSelected: {}\nFailure policy: stop learned actions",
-            if self.authoritative { "authoritative" } else { "initializing" },
+            concat!(
+                "GPU neural: {}\n",
+                "Adapter: {}\n",
+                "Class: {}\n",
+                "Selected: {}\n\n",
+                "GPU BRAIN CHECKPOINT\n",
+                "Phenotype: {}\n",
+                "Checkpoint tick: {}\n",
+                "Sleep phase: {}\n",
+                "Consolidation: {}\n",
+                "Recovery: {}\n",
+                "Failure policy: stop learned actions"
+            ),
+            if self.authoritative {
+                "authoritative"
+            } else {
+                "initializing"
+            },
             self.adapter,
-            self.phenotype_hash_prefix,
             self.capacity_class,
             selected,
+            self.phenotype_hash_prefix,
+            checkpoint_tick,
+            self.checkpoint_sleep_phase,
+            self.checkpoint_consolidation_state,
+            self.recovery_status,
         )
     }
 }

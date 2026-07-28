@@ -2,7 +2,7 @@
 //!
 //! This module mirrors existing P09 structured arbitration as fixed-order
 //! action-channel display data. It does not choose actions and does not bypass
-//! the core `cpu_reference_arbitrate` decision path.
+//! the core `heuristic_baseline_arbitrate` decision path.
 
 use crate::prelude::*;
 use crate::*;
@@ -152,8 +152,11 @@ impl MotorRingPresentation {
         organism_id: OrganismId,
         proposals: &[ActionProposal],
     ) -> Result<Self, GameAppShellError> {
-        let decision =
-            cpu_reference_arbitrate(organism_id, proposals, ActionArbitrationConfig::default())?;
+        let decision = heuristic_baseline_arbitrate(
+            organism_id,
+            proposals,
+            ActionArbitrationConfig::default(),
+        )?;
         let mut channels = MotorRingChannelKind::all()
             .into_iter()
             .map(|kind| channel_from_kind(kind, proposals, &decision))

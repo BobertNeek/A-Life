@@ -6,11 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use alife_core::BrainClassId;
+use serde::Serialize;
 
-use super::{
-    capacity_slug, GitProvenance, GpuEvidenceError, GpuSliceAAcceptanceReceipt,
-    GPU_EVIDENCE_MAX_ARTIFACT_BYTES,
-};
+use super::{capacity_slug, GitProvenance, GpuEvidenceError, GPU_EVIDENCE_MAX_ARTIFACT_BYTES};
 
 pub(super) fn read_git_provenance() -> Result<GitProvenance, GpuEvidenceError> {
     let commit = git_stdout(&["rev-parse", "HEAD"])?;
@@ -81,9 +79,9 @@ pub(super) fn validate_output_filename(
     Ok(())
 }
 
-pub(super) fn atomic_write_receipt(
+pub(super) fn atomic_write_receipt<T: Serialize>(
     path: &Path,
-    receipt: &GpuSliceAAcceptanceReceipt,
+    receipt: &T,
 ) -> Result<(), GpuEvidenceError> {
     let parent = path.parent().ok_or(GpuEvidenceError::Contract(
         "GPU evidence output has no parent directory",

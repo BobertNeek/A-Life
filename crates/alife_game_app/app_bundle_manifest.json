@@ -52,8 +52,18 @@
       "required": true
     },
     {
+      "id": "closed-loop-activity-validation",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_activity_validation.wgsl",
+      "required": true
+    },
+    {
       "id": "closed-loop-clear-diagnostics",
       "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_clear_diagnostics.wgsl",
+      "required": true
+    },
+    {
+      "id": "closed-loop-consolidate",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_consolidate.wgsl",
       "required": true
     },
     {
@@ -67,8 +77,23 @@
       "required": true
     },
     {
+      "id": "closed-loop-eligibility",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_eligibility.wgsl",
+      "required": true
+    },
+    {
+      "id": "closed-loop-memory-context",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl",
+      "required": true
+    },
+    {
       "id": "closed-loop-recurrent",
       "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_recurrent.wgsl",
+      "required": true
+    },
+    {
+      "id": "closed-loop-replay-learning",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_replay_learning.wgsl",
       "required": true
     },
     {
@@ -82,8 +107,8 @@
       "required": true
     },
     {
-      "id": "p26-plasticity",
-      "relative_path": "crates/alife_gpu_backend/shaders/p26_plasticity.wgsl",
+      "id": "closed-loop-plasticity",
+      "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_plasticity.wgsl",
       "required": true
     },
     {

@@ -3,4 +3,5 @@
 /graphify-out
 /models/local
 /.cache/alife_models
+/crates/alife_world/tests/fixtures/production_voxel/gpu-brain/
 .DS_Store

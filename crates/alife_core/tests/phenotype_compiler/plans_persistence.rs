@@ -25,6 +25,78 @@ fn compile_genome(
     PhenotypeCompiler::compile(genome, &capacity, development, sensor_profile).unwrap()
 }
 
+#[test]
+fn inherited_decoder_priors_favor_safe_ingestion_and_target_pain_avoidance() {
+    for class_id in [
+        BrainCapacityClass::N512_ID,
+        BrainCapacityClass::N1024_ID,
+        BrainCapacityClass::N2048_ID,
+    ] {
+        let capacity = BrainCapacityClass::production_for_id(class_id).unwrap();
+        let genome = BrainGenome::scaffold(4_303, class_id);
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        for family in [CandidateActionFamily::Ingest, CandidateActionFamily::Avoid] {
+            let plan = phenotype
+                .candidate_decoder()
+                .families()
+                .iter()
+                .find(|row| row.family() == family)
+                .unwrap();
+            assert!(plan.decoder_synapse_count() > 0);
+        }
+        let memory_lane_start = phenotype
+            .candidate_decoder()
+            .memory_channel()
+            .unwrap()
+            .target_latent_lane_start() as u16;
+        let motor = phenotype
+            .lobe_layout()
+            .region(LobeKind::MotorArbitration)
+            .unwrap();
+        assert!(phenotype
+            .neuron_dynamics()
+            .iter()
+            .enumerate()
+            .all(|(index, dynamics)| {
+                let expected = if motor.contains_neuron(index as u32) {
+                    0.05_f32
+                } else {
+                    0.0_f32
+                };
+                dynamics.bias().to_bits() == expected.to_bits()
+            }));
+        let mut ingest_pain = 0.0_f32;
+        let mut ingest_danger = 0.0_f32;
+        let mut avoid_pain = 0.0_f32;
+        for synapse in phenotype.synapses() {
+            let CompiledSynapseKind::Decoder(coordinate) = synapse.kind() else {
+                continue;
+            };
+            if coordinate.head() != DecoderHeadKind::MemoryContext {
+                continue;
+            }
+            let lane = coordinate.input_lane() - memory_lane_start;
+            match (coordinate.family(), lane) {
+                (CandidateActionFamily::Ingest, 2) => ingest_pain += synapse.genetic_weight(),
+                (CandidateActionFamily::Ingest, 10) => ingest_danger += synapse.genetic_weight(),
+                (CandidateActionFamily::Avoid, 2) => avoid_pain += synapse.genetic_weight(),
+                _ => {}
+            }
+        }
+        assert!(ingest_pain < 0.0);
+        assert!(ingest_danger < 0.0);
+        assert!(avoid_pain > 0.0);
+    }
+}
+
 fn sensor_lane_spec(kind: SensorChannelKind) -> (SensorEncoderSourceGroup, Range<u16>) {
     match kind {
         SensorChannelKind::Vision | SensorChannelKind::GlyphVision => {
@@ -74,7 +146,7 @@ fn recurrent_coordinate(synapse: &CompiledSynapse) -> Option<(u16, u32, u32)> {
     ))
 }
 
-fn decoder_coordinate(synapse: &CompiledSynapse) -> Option<(u16, u8, u8, u16, u16, u32, u32)> {
+fn decoder_coordinate(synapse: &CompiledSynapse) -> Option<(u16, u32, u8, u16, u16, u32, u32)> {
     match synapse.kind() {
         CompiledSynapseKind::Recurrent => None,
         CompiledSynapseKind::Decoder(coordinate) => Some((
@@ -213,13 +285,37 @@ fn recurrent_and_decoder_coordinates_are_sorted_unique_and_in_range() {
         "decoder coordinates must be strictly sorted and unique",
     );
     for &(_, head, family, input_lane, motor_index, source, target) in &decoder_coordinates {
-        assert_eq!(head, DecoderHeadKind::ActionCandidate.raw());
         assert!(family < 8);
         assert!(input_lane < decoder.flattened_input_lane_count());
-        assert!(motor_index < decoder.motor_width());
         assert!(source < phenotype.neuron_count());
         assert!(target < phenotype.neuron_count());
-        assert_eq!(target, decoder.motor_start() + u32::from(motor_index));
+        match DecoderHeadKind::try_from_raw(head).unwrap() {
+            DecoderHeadKind::ActionCandidate => {
+                assert!(input_lane < decoder.feature_count());
+                assert!(motor_index < decoder.motor_width());
+                assert_eq!(source, decoder.motor_start() + u32::from(motor_index));
+                assert_eq!(target, decoder.motor_start() + u32::from(motor_index));
+            }
+            DecoderHeadKind::MemoryContext => {
+                let channel = decoder.memory_channel().unwrap();
+                let episodic = phenotype
+                    .lobe_layout()
+                    .region(LobeKind::EpisodicMemory)
+                    .unwrap();
+                let core = phenotype
+                    .lobe_layout()
+                    .region(LobeKind::CoreAssociation)
+                    .unwrap();
+                assert!(input_lane >= channel.target_latent_lane_start() as u16);
+                assert!(input_lane < channel.decoder_input_stride() as u16);
+                assert_eq!(motor_index, u16::from(family));
+                assert!(episodic.contains_neuron(source));
+                assert_eq!(target, core.start + u32::from(motor_index));
+            }
+            DecoderHeadKind::SpeechPayload => {
+                panic!("procedural N512 must not compile a speech decoder")
+            }
+        }
     }
 }
 
@@ -515,7 +611,13 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
         CandidateActionFamily::Other,
     ];
     assert_eq!(decoder.feature_count(), 24);
-    assert_eq!(decoder.flattened_input_lane_count(), 24);
+    assert_eq!(decoder.flattened_input_lane_count(), 36);
+    let memory_channel = decoder.memory_channel().unwrap();
+    assert_eq!(memory_channel.target_latent_lane_start(), 24);
+    assert_eq!(memory_channel.family_value_lane_start(), 32);
+    assert_eq!(memory_channel.decoder_input_stride(), 36);
+    assert_eq!(memory_channel.memory_decoder_synapse_count(), 96);
+    assert_eq!(memory_channel.synapses_per_family(), 12);
     assert_eq!(decoder.families().len(), expected_families.len());
     assert_eq!(
         decoder
@@ -535,7 +637,13 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
     let action_end = recurrent_end
         .checked_add(phenotype.budgets().global.action_decoder_synapses)
         .unwrap();
-    let decoder_projection = phenotype.projections().last().unwrap();
+    let decoder_projection = phenotype
+        .projections()
+        .iter()
+        .find(|projection| {
+            projection.synapse_range() == (recurrent_end, action_end - recurrent_end)
+        })
+        .unwrap();
     assert_eq!(decoder_projection.source_lobe(), LobeKind::MotorArbitration);
     assert_eq!(decoder_projection.target_lobe(), LobeKind::MotorArbitration);
     assert_eq!(
@@ -545,6 +653,27 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
     assert_eq!(
         decoder_projection.synapse_range(),
         (recurrent_end, action_end - recurrent_end)
+    );
+
+    let memory_decoder = phenotype.memory_decoder().unwrap();
+    let memory_end = action_end
+        .checked_add(phenotype.budgets().global.memory_decoder_synapses)
+        .unwrap();
+    assert_eq!(memory_decoder.head(), DecoderHeadKind::MemoryContext);
+    assert_eq!(memory_decoder.input_width(), 12);
+    assert_eq!(memory_decoder.output_width(), 8);
+    assert_eq!(memory_decoder.decoder_synapse_start(), action_end);
+    assert_eq!(memory_decoder.decoder_synapse_count(), 96);
+    let memory_projection = phenotype
+        .projections()
+        .iter()
+        .find(|projection| projection.synapse_range() == (action_end, memory_end - action_end))
+        .unwrap();
+    assert_eq!(memory_projection.source_lobe(), LobeKind::EpisodicMemory);
+    assert_eq!(memory_projection.target_lobe(), LobeKind::CoreAssociation);
+    assert_eq!(
+        memory_projection.projection_type(),
+        alife_core::ProjectionType::Feedback,
     );
 
     let mut cursor = recurrent_end;
@@ -591,7 +720,42 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
     }
 
     assert_eq!(cursor, action_end);
-    assert_eq!(action_end, phenotype.budgets().global.total_synapses);
+    let episodic = phenotype
+        .lobe_layout()
+        .region(LobeKind::EpisodicMemory)
+        .unwrap();
+    let core = phenotype
+        .lobe_layout()
+        .region(LobeKind::CoreAssociation)
+        .unwrap();
+    let mut memory_coordinates = BTreeSet::new();
+    for synapse in &phenotype.synapses()[action_end as usize..memory_end as usize] {
+        let coordinate = match synapse.kind() {
+            CompiledSynapseKind::Decoder(coordinate) => coordinate,
+            CompiledSynapseKind::Recurrent => panic!("memory span contains recurrent synapse"),
+        };
+        assert_eq!(coordinate.head(), DecoderHeadKind::MemoryContext);
+        assert!(coordinate.input_lane() >= memory_channel.target_latent_lane_start() as u16);
+        assert!(coordinate.input_lane() < memory_channel.decoder_input_stride() as u16);
+        assert_eq!(
+            coordinate.motor_index(),
+            u16::from(coordinate.family().raw())
+        );
+        assert!(episodic.contains_neuron(synapse.source()));
+        assert_eq!(
+            synapse.target(),
+            core.start + u32::from(coordinate.motor_index()),
+        );
+        assert!(memory_coordinates.insert((
+            coordinate.family().raw(),
+            coordinate.input_lane(),
+            coordinate.motor_index(),
+            synapse.source(),
+            synapse.target(),
+        )));
+    }
+    assert_eq!(memory_coordinates.len(), 96);
+    assert_eq!(memory_end, phenotype.budgets().global.total_synapses);
     let action_decoder_synapses = phenotype
         .synapses()
         .iter()
@@ -611,12 +775,7 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
         decoder.decoder_synapse_count(),
         phenotype.budgets().global.action_decoder_synapses,
     );
-    assert_eq!(phenotype.budgets().global.memory_decoder_synapses, 0);
-    assert!(phenotype.synapses().iter().all(|synapse| !matches!(
-        synapse.kind(),
-        CompiledSynapseKind::Decoder(coordinate)
-            if coordinate.head() == DecoderHeadKind::MemoryContext
-    )));
+    assert_eq!(phenotype.budgets().global.memory_decoder_synapses, 96);
 }
 
 #[test]
@@ -632,8 +791,28 @@ fn decoder_serialized_identity_contains_no_raw_entity_id_lane() {
             "feature_count",
             "flattened_input_lane_count",
             "families",
+            "memory_channel",
             "canonical_digest",
         ]),
+    );
+    assert_eq!(
+        decoder_wire_keys(&decoder["memory_channel"]),
+        BTreeSet::from([
+            "schema_version",
+            "target_latent_lane_start",
+            "family_value_lane_start",
+            "decoder_input_stride",
+            "max_candidate_gain",
+            "memory_decoder_synapse_count",
+            "canonical_digest",
+        ]),
+    );
+    assert_eq!(decoder["memory_channel"]["target_latent_lane_start"], 24);
+    assert_eq!(decoder["memory_channel"]["family_value_lane_start"], 32);
+    assert_eq!(decoder["memory_channel"]["decoder_input_stride"], 36);
+    assert_eq!(
+        decoder["memory_channel"]["memory_decoder_synapse_count"],
+        96
     );
     let family_rows = decoder["families"].as_array().unwrap();
     assert_eq!(family_rows.len(), 8);
@@ -649,9 +828,10 @@ fn decoder_serialized_identity_contains_no_raw_entity_id_lane() {
         );
     }
 
-    let mut decoder_coordinate_count = 0_usize;
+    let mut action_coordinate_count = 0_usize;
+    let mut memory_coordinate_count = 0_usize;
     for synapse in phenotype.synapses() {
-        if let CompiledSynapseKind::Decoder(_) = synapse.kind() {
+        if let CompiledSynapseKind::Decoder(compiled_coordinate) = synapse.kind() {
             let serialized_kind = serde_json::to_value(synapse.kind()).unwrap();
             let coordinate = serialized_kind
                 .get("Decoder")
@@ -660,12 +840,22 @@ fn decoder_serialized_identity_contains_no_raw_entity_id_lane() {
                 decoder_wire_keys(coordinate),
                 BTreeSet::from(["head", "family", "input_lane", "motor_index"]),
             );
-            decoder_coordinate_count += 1;
+            match compiled_coordinate.head() {
+                DecoderHeadKind::ActionCandidate => action_coordinate_count += 1,
+                DecoderHeadKind::MemoryContext => memory_coordinate_count += 1,
+                DecoderHeadKind::SpeechPayload => {
+                    panic!("procedural N512 must not serialize a speech coordinate")
+                }
+            }
         }
     }
     assert_eq!(
-        decoder_coordinate_count,
+        action_coordinate_count,
         phenotype.budgets().global.action_decoder_synapses as usize,
+    );
+    assert_eq!(
+        memory_coordinate_count,
+        phenotype.budgets().global.memory_decoder_synapses as usize,
     );
 }
 

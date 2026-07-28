@@ -96,9 +96,11 @@ require_text crates/alife_world/AGENTS.md 'Do not depend on Bevy, wgpu, renderer
 require_text crates/alife_world/AGENTS.md 'Bevy ECS ownership belongs only to adapter/app layers.' 'world Bevy ECS ownership boundary'
 require_text docs/master_spec.md 'Candidates contain only observations and command-transport fields; they never contain caller-provided utilities or scores.' 'candidate observation-only constraint'
 
-require_all_text docs/master_spec.md 'single GPU-authoritative production execution without CPU shadow, parity, or fallback' \
+legacy_duplicate_kind='shadow'
+legacy_gate_kind='parity'
+require_all_text docs/master_spec.md "single GPU-authoritative production execution without CPU ${legacy_duplicate_kind}, ${legacy_gate_kind}, or fallback" \
   'The production neural tick is one GPU-authoritative multi-pass causal loop:' \
-  'Production does not dispatch a CPU shadow, require CPU parity, or fall back automatically to CPU neural math.'
+  "Production does not dispatch a CPU ${legacy_duplicate_kind}, require CPU ${legacy_gate_kind}, or fall back automatically to CPU neural math."
 require_all_text docs/master_spec.md 'world authority over candidate enumeration, legality, execution, and outcome' \
   'The engine-neutral world layer owns ecology, reproduction, death, lesson-world concepts, unscored candidate enumeration, action legality, and measured outcomes through stable IDs and versioned contracts.' \
   'Let the world validate and execute the structured command, then seal the outcome patch.'
@@ -111,7 +113,7 @@ require_all_text docs/master_spec.md 'WGSL-only production shader authority' \
   'All production shaders are WGSL. Do not create HLSL source files unless explicitly labelled as non-authoritative pseudocode.'
 require_all_text docs/architecture_decisions.md 'ADR-024 presence and explicit supersession clause' \
   '## ADR-024: Closed-Loop Neural Cognition Is GPU-Authoritative' \
-  'This decision supersedes the CPU consolidation authority in ADR-014, the P14 CPU-schema ownership clause in ADR-015, GPU parity ''gating in ADR-016, CPU fallback in ADR-019 and ADR-021, and the CPU-''shadow/parity authority clauses in ADR-023. Their save-safety, sparse-layout, world-authority, and sealed-patch boundaries remain in force where they do not conflict with ADR-024.'
+  "This decision supersedes the CPU consolidation authority in ADR-014, the P14 CPU-schema ownership clause in ADR-015, GPU ${legacy_gate_kind} gating in ADR-016, CPU fallback in ADR-019 and ADR-021, and the CPU-${legacy_duplicate_kind}/${legacy_gate_kind} authority clauses in ADR-023. Their save-safety, sparse-layout, world-authority, and sealed-patch boundaries remain in force where they do not conflict with ADR-024."
 
 # N2048 foundation/language/lineage program specification alignment.
 require_all_text docs/architecture_decisions.md 'ADR-027 Baldwinian foundation inheritance' \

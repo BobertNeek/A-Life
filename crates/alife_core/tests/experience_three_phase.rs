@@ -1,13 +1,14 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
     ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
     CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
     DecisionEvidence, DevelopmentState, DurationTicks, ExperiencePatchBuilder,
     ExperiencePatchPhase, ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity,
     LobeKind, MemoryExpectancySnapshot, NormalizedScalar, OrganismId, PerceptionFrame,
     PhysicalActionOutcome, PhysicalContactKind, Pose, PostActionOutcome, ScaffoldContractError,
-    SchemaKind, SensorProfile, SensoryChannels, SensorySnapshot, SignedValence, Tick, Validate,
-    Vec3f, Velocity, WeightSplitContract, WorldEntityId,
+    SchemaKind, SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels,
+    SensorySnapshot, SignedValence, Tick, Validate, Vec3f, Velocity, WeightSplitContract,
+    WorldEntityId,
 };
 
 fn organism() -> OrganismId {
@@ -105,6 +106,13 @@ fn pre_action_at(tick: Tick, organism_id: OrganismId) -> alife_core::PreActionSn
             )
             .unwrap(),
         ],
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
     )
     .unwrap();
     alife_core::PreActionSnapshot::from_heuristic_frame(
@@ -144,7 +152,7 @@ fn decision_at(tick: Tick, organism_id: OrganismId) -> alife_core::DecisionSnaps
         proposal(300, ActionKind::Move, 0.35, Some(WorldEntityId(1))),
         proposal(400, ActionKind::Interact, 0.75, Some(WorldEntityId(2))),
     ];
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         organism_id,
         &proposals,
         ActionArbitrationConfig {
@@ -181,9 +189,8 @@ fn outcome_at(tick: Tick, organism_id: OrganismId) -> PostActionOutcome {
     .unwrap()
 }
 
-#[test]
-fn valid_three_phase_patch_seals_and_exposes_learning_view() {
-    let patch = ExperiencePatchBuilder::new(sequence())
+fn sealed_patch() -> alife_core::ExperiencePatch {
+    ExperiencePatchBuilder::new(sequence())
         .record_pre_action(pre_action_at(Tick::new(10), organism()))
         .unwrap()
         .record_decision(decision_at(Tick::new(10), organism()))
@@ -191,7 +198,12 @@ fn valid_three_phase_patch_seals_and_exposes_learning_view() {
         .record_outcome(outcome_at(Tick::new(11), organism()))
         .unwrap()
         .seal()
-        .unwrap();
+        .unwrap()
+}
+
+#[test]
+fn valid_three_phase_patch_seals_and_exposes_learning_view() {
+    let patch = sealed_patch();
 
     assert_eq!(patch.header().phase, ExperiencePatchPhase::Sealed);
     assert_eq!(
@@ -220,6 +232,47 @@ fn valid_three_phase_patch_seals_and_exposes_learning_view() {
     assert!(view.outcome().success);
     assert_eq!(view.outcome().reward_valence.raw(), 0.25);
     assert!(patch.validate_contract().is_ok());
+}
+
+#[test]
+fn sealed_header_carries_exact_sensor_profile_provenance() {
+    let patch = sealed_patch();
+    let expected = patch.pre_action().perception().profile_provenance();
+
+    assert_eq!(patch.header().sensor_profile, expected);
+    assert_eq!(
+        patch.header().sensor_profile.source_tick,
+        patch.header().world_tick
+    );
+}
+
+#[test]
+fn unprofiled_v2_patch_migrates_to_profiled_current_schema() {
+    let mut wire = serde_json::to_value(sealed_patch()).unwrap();
+    wire["header"]["abi_version"] = serde_json::json!(2);
+    wire["header"]
+        .as_object_mut()
+        .unwrap()
+        .remove("sensor_profile");
+    wire["pre_action"]["abi_version"] = serde_json::json!(2);
+    wire["decision"]["abi_version"] = serde_json::json!(2);
+    wire["outcome"]["abi_version"] = serde_json::json!(2);
+
+    let migrated: alife_core::ExperiencePatch = serde_json::from_value(wire).unwrap();
+    assert_eq!(migrated.header().abi_version, 3);
+    assert_eq!(
+        migrated.header().sensor_profile,
+        migrated.pre_action().perception().profile_provenance()
+    );
+    assert!(migrated.validate_contract().is_ok());
+}
+
+#[test]
+fn unknown_header_profile_id_is_rejected_during_decode() {
+    let mut wire = serde_json::to_value(sealed_patch()).unwrap();
+    wire["header"]["sensor_profile"]["profile"] = serde_json::json!(99);
+
+    assert!(serde_json::from_value::<alife_core::ExperiencePatch>(wire).is_err());
 }
 
 #[test]
@@ -271,7 +324,7 @@ fn incompatible_versions_and_invalid_learning_values_are_rejected() {
         ExperiencePatchBuilder::new(sequence()).record_pre_action(pre),
         Err(ScaffoldContractError::IncompatibleAbi {
             kind: SchemaKind::Experience,
-            expected: 2,
+            expected: 3,
             actual: 999,
         })
     );

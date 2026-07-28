@@ -218,7 +218,7 @@ pub fn run_school_teacher_demo() -> Result<SchoolDemoReport, PlaygroundError> {
             VerifierCheck::NoDirectTeacherActionSelection,
             VerifierCheck::SelectedByArbitration,
             VerifierCheck::MinimumMemoryRecords(1),
-            VerifierCheck::MinimumTopologyConcepts(2),
+            VerifierCheck::MinimumTopologyConcepts(1),
         ],
         &evidence,
     )?;

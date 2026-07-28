@@ -1,21 +1,31 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
-    ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainScaleTier,
-    CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
-    CreatureMind, DenseTile, DriveDelta, DurationTicks, EndocrineDelta, HomeostaticDelta,
-    HomeostaticParameters, HomeostaticSnapshot, Intensity, LobeKind, MemoryBank, MemoryBankConfig,
-    MemoryExpectancy, MemoryOutcomeSummary, MemoryRecord, NeuralProjectionSchema, NormalizedScalar,
-    OrganismId, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
-    ProjectionRoutingRef, ProjectionTile, ScaffoldContractError, SensorProfile, SensoryChannels,
-    SensorySnapshot, SignedValence, SleepConsolidationConfig, SleepConsolidator, SleepController,
-    SleepPhase, SleepTrigger, SparseTileCoord, SparseTilePayload, StableLifetimeTraitKind,
-    StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
-    SynapseWeightSplit, Tick, TopologicalMap, TopologicalMapConfig, Vec3f, Velocity, WorldEntityId,
-    MICROTILE_CELLS,
+    ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainClassSpec,
+    BrainScaleTier, CandidateActionFamily, CandidateObservationRef, Confidence, CreatureMind,
+    DenseTile, DriveDelta, DurationTicks, EndocrineDelta, HomeostaticDelta, HomeostaticParameters,
+    HomeostaticSnapshot, LobeKind, MemoryBank, MemoryBankConfig, MemoryExpectancy,
+    MemoryOutcomeSummary, MemoryRecord, NeuralActionSelection, NeuralProjectionSchema,
+    NormalizedScalar, OrganismId, PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, ProjectionRoutingRef, ProjectionTile,
+    ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, SignedValence, SleepConsolidationConfig, SleepConsolidator,
+    SleepController, SleepPhase, SleepTrigger, SparseTileCoord, SparseTilePayload,
+    StableLifetimeTraitKind, StructuralEditBatch, StructuralEditCandidate, StructuralEditKind,
+    StructuralEditReason, SynapseWeightSplit, Tick, TopologicalMapConfig, TopologySidecar,
+    TrackedObjectId, Vec3f, Velocity, WorldEntityId, MICROTILE_CELLS,
 };
 
 fn organism() -> OrganismId {
     OrganismId(77)
+}
+
+fn grounded_profile() -> alife_core::SensorProfileIdentity {
+    SensorProfileProvenance::new(
+        SensorProfile::GroundedObjectSlotsV1,
+        SensoryAbiVersion::CURRENT,
+        Tick::ZERO,
+    )
+    .unwrap()
+    .identity()
 }
 
 fn spec() -> BrainClassSpec {
@@ -120,8 +130,7 @@ fn memory_bank_with_three_records() -> MemoryBank {
 }
 
 fn sensory(tick: Tick, target: WorldEntityId) -> SensorySnapshot {
-    let mut visual = [0.0; alife_core::SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT];
-    visual[0] = 0.9;
+    let visual = [0.0; alife_core::SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT];
     let channels = SensoryChannels::try_from_groups(
         visual,
         [0.0; alife_core::SENSORY_AUDITORY_CHANNEL_COUNT],
@@ -169,11 +178,27 @@ fn sealed_patch(
         velocity: Velocity::ZERO,
     };
     let homeostasis = HomeostaticSnapshot::baseline(Tick::new(tick_raw));
+    let slot = alife_core::GroundedObjectSlotV1 {
+        slot_index: 0,
+        tracked_object_id: TrackedObjectId(target.raw()),
+        bearing: [0.0, 0.5],
+        distance: 0.5,
+        relative_velocity: [0.0; 3],
+        color: [0.2, 0.4, 0.7],
+        material: [0.3, 0.5, 0.1],
+        shape: [0.6, 0.2, 0.4],
+        chemical: [0.0, 0.1, 0.0],
+        contact: 0.0,
+        proprioception: [0.0; 2],
+        temperature: 0.1,
+        terrain: [0.2, 0.3],
+        confidence: Confidence::new(0.9).unwrap(),
+    };
     let candidate_target = ActionTarget::new(Some(target), Some(Vec3f::new(0.0, 0.0, 1.0)));
-    let perception = PerceptionFrame::new(
+    let draft = PerceptionFrameDraft::new(
         organism(),
         Tick::new(tick_raw),
-        SensorProfile::PrivilegedAffordanceV1,
+        SensorProfile::GroundedObjectSlotsV1,
         sensory(Tick::new(tick_raw), target),
         body,
         homeostasis,
@@ -182,22 +207,39 @@ fn sealed_patch(
             ActionId(400),
             ActionKind::Interact,
             CandidateActionFamily::Contact,
-            CandidateObservationRef::None,
+            CandidateObservationRef::ObjectSlot(0),
             candidate_target,
-            CandidateFeatureVector::zero(),
+            slot.candidate_features().unwrap(),
             Confidence::new(0.8).unwrap(),
             NormalizedScalar::new(0.0).unwrap(),
             DurationTicks::new(4),
             DurationTicks::new(4),
         )
         .unwrap()],
+        SensorProfileProvenance::new(
+            SensorProfile::GroundedObjectSlotsV1,
+            SensoryAbiVersion::CURRENT,
+            Tick::new(tick_raw),
+        )
+        .unwrap(),
+        vec![slot],
     )
     .unwrap();
-    let pre = alife_core::PreActionSnapshot::from_heuristic_frame(
+    let memory = MemoryBank::new(
+        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
+    )
+    .unwrap();
+    let (perception, recall) = memory
+        .recall_frame(&draft)
+        .unwrap()
+        .finalize(draft)
+        .unwrap();
+    let pre = alife_core::PreActionSnapshot::from_neural_frame(
         sequence_id,
-        perception,
-        spec.clone(),
-        genome.clone(),
+        spec.id,
+        PhenotypeHash([1, 2, 3, 4]),
+        genome.id,
+        genome.schema_version,
         alife_core::DevelopmentState::new(
             genome.id,
             Tick::new(tick_raw),
@@ -208,43 +250,29 @@ fn sealed_patch(
             LobeKind::CoreAssociation,
             LobeKind::MotorArbitration,
         ]),
-        alife_core::WeightSplitContract::for_brain_class(
-            spec.id,
-            spec.max_active_synapses,
-            spec.max_active_microtiles,
-            genome.genetic_prior_seed,
-        )
-        .unwrap(),
-        alife_core::MemoryExpectancySnapshot::neutral(),
+        perception.clone(),
     )
     .unwrap();
-    let proposals = vec![ActionProposal::new(
-        ActionId::new(400).unwrap(),
-        ActionKind::Interact,
-        0.8,
-        Confidence::new(0.8).unwrap(),
-        None,
-        0b101,
-        ActionTarget::new(Some(target), Some(Vec3f::new(0.0, 0.0, 1.0))),
-        NormalizedScalar::new(0.6).unwrap(),
+    let command = perception.candidates()[0]
+        .to_command(organism(), Confidence::new(0.8).unwrap())
+        .unwrap();
+    let decision = alife_core::DecisionSnapshot::from_neural_selection(
+        sequence_id,
+        PhenotypeHash([1, 2, 3, 4]),
+        sequence_raw,
+        (sequence_raw & 1) as u8,
+        &perception,
+        NeuralActionSelection {
+            candidate_index: 0,
+            logit: 0.8,
+            confidence: Confidence::new(0.8).unwrap(),
+            active_tiles: 8,
+            active_synapses: 64,
+        },
+        command,
     )
     .unwrap()
-    .with_intensity(Intensity::new(0.7).unwrap())];
-    let decision = cpu_reference_arbitrate(
-        organism(),
-        &proposals,
-        ActionArbitrationConfig {
-            default_duration_ticks: DurationTicks::new(4),
-            ..ActionArbitrationConfig::default()
-        },
-    )
-    .unwrap();
-    let decision = alife_core::DecisionSnapshot::from_action_decision(
-        sequence_id,
-        Tick::new(tick_raw),
-        proposals,
-        decision,
-    )
+    .with_finalized_memory_recall(&perception, &recall, 0)
     .unwrap();
     let mut outcome = PostActionOutcome::new(
         organism(),
@@ -288,19 +316,23 @@ fn sealed_patch(
         .unwrap()
 }
 
-fn topology_with_gap() -> TopologicalMap {
-    let mut map = TopologicalMap::new(TopologicalMapConfig {
-        max_concepts: 16,
-        max_edges: 32,
-        max_simplexes: 16,
-        max_unresolved_gaps: 8,
-        edge_decay_per_tick: NormalizedScalar::new(0.05).unwrap(),
-    })
+fn topology_with_gap() -> TopologySidecar {
+    let mut map = TopologySidecar::new_profiled(
+        organism(),
+        grounded_profile(),
+        TopologicalMapConfig {
+            max_concepts: 16,
+            max_edges: 32,
+            max_simplexes: 16,
+            max_unresolved_gaps: 8,
+            edge_decay_per_tick: NormalizedScalar::new(0.05).unwrap(),
+        },
+    )
     .unwrap();
-    map.apply_patch(&sealed_patch(1, 10, WorldEntityId(2), false))
-        .unwrap();
-    map.apply_patch(&sealed_patch(2, 20, WorldEntityId(2), true))
-        .unwrap();
+    let first = map.observe_sealed_patch(&sealed_patch(1, 10, WorldEntityId(2), false));
+    assert!(!first.rejected_invalid);
+    let second = map.observe_sealed_patch(&sealed_patch(2, 20, WorldEntityId(2), true));
+    assert!(!second.rejected_invalid);
     map
 }
 
@@ -492,7 +524,9 @@ fn concept_consolidation_preserves_gaps_and_cannot_emit_actions() {
     let mut map = topology_with_gap();
     let consolidator = SleepConsolidator::new(config()).unwrap();
 
-    let report = consolidator.consolidate_topology(&mut map, 3).unwrap();
+    let report = consolidator
+        .consolidate_topology_sidecar(&mut map, 3)
+        .unwrap();
 
     assert!(report.concepts_considered > 0);
     assert!(report.simplexes_considered > 0);

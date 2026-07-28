@@ -127,7 +127,8 @@ pub fn run_multi_hour_soak_isolation_smoke() -> Result<SoakIsolationSummary, Gam
             manual: true,
             min_ticks: Some(CA36_MIN_MANUAL_TICKS),
             expected_artifact: Some("target/ca36_soak_isolation/gpu_sustained_learning_10k.json".to_string()),
-            evidence_boundary: "Manual local GPU evidence; CPU shadow parity remains the gate.".to_string(),
+            evidence_boundary:
+                "Manual local evidence; production neural authority remains GPU-only.".to_string(),
         },
         SoakIsolationCommand {
             name: "gpu_longrun_10k".to_string(),

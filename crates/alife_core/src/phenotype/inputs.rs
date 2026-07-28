@@ -9,8 +9,8 @@ use crate::{
     Validate,
 };
 
-const INPUTS_SCHEMA_VERSION: u16 = 2;
-const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v2";
+const INPUTS_SCHEMA_VERSION: u16 = 3;
+const INPUTS_DOMAIN: &[u8] = b"alife.phenotype.compiler-inputs.v3";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PhenotypeCompilerInputs {
@@ -82,10 +82,10 @@ impl PhenotypeCompilerInputs {
     pub const fn foundation_abi(&self) -> &FoundationAbiBinding {
         &self.foundation_abi
     }
-    pub(super) const fn genome(&self) -> &BrainGenome {
+    pub const fn genome(&self) -> &BrainGenome {
         &self.genome
     }
-    pub(super) const fn development(&self) -> &DevelopmentState {
+    pub const fn development(&self) -> &DevelopmentState {
         &self.development
     }
 
@@ -120,6 +120,23 @@ impl PhenotypeCompilerInputs {
         d.write_u64(self.foundation_abi.layout_id().0);
         for byte in self.foundation_abi.layout_digest().bytes() {
             d.write_u8(*byte);
+        }
+        if let (Some(id), Some(version), Some(family), Some(asset)) = (
+            self.foundation_abi.foundation_id(),
+            self.foundation_abi.foundation_version(),
+            self.foundation_abi.compatibility_family_id(),
+            self.foundation_abi.foundation_weight_asset(),
+        ) {
+            // No marker is emitted for the legacy no-foundation form, preserving
+            // its v3 digest exactly. Foundation-bound inputs use a reserved tag.
+            d.write_u8(0xF1);
+            d.write_u64(id.raw());
+            d.write_u32(version.raw());
+            d.write_u64(family.raw());
+            for byte in asset.digest().bytes() {
+                d.write_u8(*byte);
+            }
+            d.write_u32(asset.weight_count());
         }
         d.write_u32(self.foundation_abi.language_codebook().id().0);
         for byte in self
@@ -165,7 +182,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             capacity_digest: w.capacity_digest,
             canonical_digest: w.canonical_digest,
         };
-        let capacity = BrainCapacityClass::production_for_id(value.capacity_class_id)
+        let capacity = BrainCapacityClass::supported_for_id(value.capacity_class_id)
             .map_err(D::Error::custom)?;
         value
             .validate_against(&capacity)
@@ -270,6 +287,19 @@ fn encode_genome(
         d.write_f32(row.learning_rate_scale.raw())?;
         d.write_bool(row.plasticity_enabled);
     }
+    let plasticity = g.plasticity_parameters();
+    d.write_u16(plasticity.schema_version());
+    d.write_f32(plasticity.eligibility_decay())?;
+    d.write_f32(plasticity.base_learning_rate())?;
+    d.write_f32(plasticity.normalization_rate())?;
+    d.write_f32(plasticity.sleep_replay_rate())?;
+    d.write_f32(plasticity.modulator_sign())?;
+    let (fast_min, fast_max) = plasticity.fast_bounds();
+    d.write_f32(fast_min)?;
+    d.write_f32(fast_max)?;
+    d.write_f32(plasticity.sleep_staging_rate())?;
+    d.write_f32(plasticity.sleep_weight_limit())?;
+    d.write_f32(plasticity.sleep_fast_decay_rate())?;
     d.write_sequence_len(g.endocrine_constants.len());
     for row in &g.endocrine_constants {
         d.write_u8(row.kind.raw());

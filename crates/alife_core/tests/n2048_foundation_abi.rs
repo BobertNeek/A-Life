@@ -5,9 +5,10 @@ use std::collections::BTreeSet;
 use alife_core::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainGenome, BrainPhenotype, CanonicalDigestBuilder,
     CompiledSynapseKind, DecoderHeadKind, DevelopmentState, FoundationAbiBinding,
-    LanguageCodebookV1, LanguageTokenClass, LanguageTokenId, LifetimePlasticityBand, LobeKind,
-    N2048FoundationLayoutV1, NormalizedScalar, PersistentAddressMap, PhenotypeCompiler,
-    PhenotypeCompilerInputs, SensorProfile, SpeechActKind, SpeechDecoderLayoutV1, Tick,
+    FoundationPromotionReceipt, FoundationWeightAsset, LanguageCodebookV1, LanguageTokenClass,
+    LanguageTokenId, LifetimePlasticityBand, LobeKind, N2048FoundationLayoutV1, NormalizedScalar,
+    PersistentAddressMap, PhenotypeCompiler, PhenotypeCompilerInputs, SensorProfile, SpeechActKind,
+    SpeechDecoderLayoutV1, Tick,
 };
 
 fn compile(class: BrainCapacityClass, seed: u64) -> BrainPhenotype {
@@ -32,7 +33,7 @@ fn auxiliary_decoder_digest(
 ) -> [u64; 4] {
     let mut digest = CanonicalDigestBuilder::new(b"alife.phenotype.auxiliary-decoder.v1");
     digest.write_u16(1);
-    digest.write_u8(head.raw());
+    digest.write_u32(head.raw());
     digest.write_u16(input_width);
     digest.write_u16(output_width);
     digest.write_u32(start);
@@ -332,7 +333,24 @@ fn persistent_addresses_are_unique_packing_independent_and_blake3_bound() {
     assert_eq!(synapse_addresses.len(), map.synapses().len());
 
     let other = compile(BrainCapacityClass::n2048(), 0xADD2_0481);
-    assert_ne!(map.digest(), other.persistent_address_map().digest());
+    assert_eq!(
+        map.digest(),
+        other.persistent_address_map().digest(),
+        "foundation-compatible N2048 addresses must remain stable across genome seeds",
+    );
+    assert_ne!(
+        phenotype
+            .synapses()
+            .iter()
+            .map(|row| row.genetic_weight().to_bits())
+            .collect::<Vec<_>>(),
+        other
+            .synapses()
+            .iter()
+            .map(|row| row.genetic_weight().to_bits())
+            .collect::<Vec<_>>(),
+        "genome seeds must still alter heritable weights without moving addresses",
+    );
     assert_eq!(map.digest().algorithm(), "BLAKE3-256");
 }
 
@@ -386,6 +404,289 @@ fn foundation_and_language_mismatch_reject_before_phenotype_construction() {
         let value = target.as_u64().unwrap();
         *target = serde_json::json!(value ^ 1);
         assert!(serde_json::from_value::<PhenotypeCompilerInputs>(forged).is_err());
+    }
+}
+
+#[test]
+fn legacy_no_foundation_compiler_inputs_keep_their_v3_wire_identity() {
+    let capacity = BrainCapacityClass::n1024();
+    let genome = BrainGenome::scaffold(0xAB10_1024, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let inputs = PhenotypeCompilerInputs::try_new(
+        genome,
+        &capacity,
+        development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let expected_digest = inputs.canonical_digest();
+    let mut legacy = serde_json::to_value(inputs).unwrap();
+    let binding = legacy["foundation_abi"].as_object_mut().unwrap();
+    for field in [
+        "foundation_id",
+        "foundation_version",
+        "compatibility_family_id",
+        "weight_asset",
+    ] {
+        binding.remove(field);
+    }
+    let migrated: PhenotypeCompilerInputs = serde_json::from_value(legacy).unwrap();
+    assert_eq!(migrated.canonical_digest(), expected_digest);
+    assert!(migrated.foundation_abi().foundation_id().is_none());
+}
+
+#[test]
+fn production_n2048_birth_loads_immutable_foundation_asset_and_binds_payload_identity() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0xF0A0_DA71, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let asset =
+        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::PrivilegedAffordanceV1).unwrap();
+    let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+        &asset,
+    )
+    .unwrap();
+    let foundation = phenotype.foundation_abi();
+    assert_eq!(foundation.capacity_class_id(), BrainCapacityClass::N2048_ID);
+    assert_eq!(
+        foundation.foundation_id().unwrap().raw(),
+        0x4E32_3034_385F_5631
+    );
+    assert_eq!(foundation.foundation_version().unwrap().raw(), 1);
+    assert_eq!(foundation.foundation_payload_digest(), Some(asset.digest()));
+    assert_ne!(
+        phenotype
+            .synapses()
+            .iter()
+            .map(|row| row.genetic_weight().to_bits())
+            .collect::<Vec<_>>(),
+        asset
+            .weights()
+            .iter()
+            .map(|weight| weight.to_bits())
+            .collect::<Vec<_>>(),
+    );
+    let changed_weights = phenotype
+        .synapses()
+        .iter()
+        .zip(asset.weights())
+        .filter(|(synapse, foundation)| synapse.genetic_weight().to_bits() != foundation.to_bits())
+        .count();
+    assert!(changed_weights > 0);
+    assert!(
+        changed_weights <= asset.weights().len() / 8,
+        "heritable genome deltas must remain sparse"
+    );
+
+    let inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+        genome,
+        &capacity,
+        development,
+        SensorProfile::PrivilegedAffordanceV1,
+        phenotype.foundation_abi().clone(),
+    )
+    .unwrap();
+    assert_eq!(
+        PhenotypeCompiler::compile_validated(&inputs, &capacity).unwrap(),
+        phenotype,
+        "checkpoint reconstruction must resolve the same immutable foundation asset",
+    );
+}
+
+#[test]
+fn production_n2048_birth_rejects_missing_or_mismatched_foundation_asset_before_gpu_upload() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0xF0A0_DA72, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let baseline = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let foundation = FoundationWeightAsset::from_phenotype_for_genetic_birth(&baseline).unwrap();
+    let mut forged = serde_json::to_value(&foundation).unwrap();
+    let original = forged["weights"][0].as_f64().unwrap();
+    forged["weights"][0] = serde_json::json!(-original);
+    let foundation: FoundationWeightAsset = serde_json::from_value(forged).unwrap();
+    assert!(PhenotypeCompiler::compile_from_foundation_asset(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+        &foundation,
+    )
+    .is_err());
+}
+
+#[test]
+fn one_n2048_foundation_asset_reuses_stable_addresses_across_distinct_genomes() {
+    let capacity = BrainCapacityClass::n2048();
+    let foundation_genome = BrainGenome::scaffold(0xF0A0_DA73, capacity.id());
+    let foundation_development = DevelopmentState::new(
+        foundation_genome.id,
+        Tick::ZERO,
+        NormalizedScalar::new(1.0).unwrap(),
+    );
+    let baseline = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &foundation_genome,
+        &capacity,
+        &foundation_development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&baseline).unwrap();
+
+    let child_genome = BrainGenome::scaffold(0xF0A0_DA74, capacity.id());
+    let child_development = DevelopmentState::new(
+        child_genome.id,
+        Tick::ZERO,
+        NormalizedScalar::new(1.0).unwrap(),
+    );
+    let child = PhenotypeCompiler::compile_from_foundation_asset(
+        &child_genome,
+        &capacity,
+        &child_development,
+        SensorProfile::PrivilegedAffordanceV1,
+        &asset,
+    )
+    .unwrap();
+
+    assert_eq!(
+        baseline.persistent_address_map().digest(),
+        child.persistent_address_map().digest(),
+    );
+    assert_eq!(
+        child.foundation_abi().foundation_payload_digest(),
+        Some(asset.digest())
+    );
+    assert_ne!(baseline.phenotype_hash(), child.phenotype_hash());
+}
+
+#[test]
+fn foundation_payload_codec_round_trips_and_rejects_corruption() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0xF0A0_DA76, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let baseline = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+    )
+    .unwrap();
+    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&baseline).unwrap();
+
+    let bytes = asset.encode_canonical().unwrap();
+    let decoded = FoundationWeightAsset::decode_canonical(&bytes).unwrap();
+    assert_eq!(decoded, asset);
+    assert_eq!(decoded.encode_canonical().unwrap(), bytes);
+    assert_eq!(
+        decoded.manifest().training_stage().completed_stage_count(),
+        0
+    );
+    assert!(!decoded.manifest().promotion_receipt().is_promoted());
+
+    let mut corrupt = bytes;
+    let last = corrupt.last_mut().unwrap();
+    *last ^= 0x01;
+    assert!(FoundationWeightAsset::decode_canonical(&corrupt).is_err());
+}
+
+#[test]
+fn promoted_foundation_requires_and_preserves_explicit_evaluation_provenance() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0xF0A0_DA77, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let phenotype = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+    )
+    .unwrap();
+    let source = FoundationWeightAsset::from_phenotype_for_genetic_birth(&phenotype).unwrap();
+    let training = source.manifest().training_stage();
+    let promotion =
+        FoundationPromotionReceipt::promoted(training.digest(), source.digest(), source.digest())
+            .unwrap();
+    let promoted = FoundationWeightAsset::from_promoted_weights(
+        &phenotype,
+        source.weights().to_vec(),
+        training,
+        promotion,
+    )
+    .unwrap();
+    assert!(promoted.manifest().promotion_receipt().is_promoted());
+    let rebound = PhenotypeCompiler::compile_from_foundation_asset(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &promoted,
+    )
+    .unwrap();
+    promoted.validate_against(&rebound).unwrap();
+}
+
+#[test]
+fn foundation_asset_rejects_every_bound_abi_mismatch() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0xF0A0_DA75, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let baseline = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&baseline).unwrap();
+    assert!(PhenotypeCompiler::compile_from_foundation_asset(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &asset,
+    )
+    .is_err());
+
+    let canonical = serde_json::to_value(&asset).unwrap();
+    for pointer in [
+        "/manifest/capacity_class_id",
+        "/manifest/layout_digest/0",
+        "/manifest/language_codebook_digest/0",
+        "/manifest/action_decoder_digest/0",
+        "/manifest/route_abi_digest/0",
+        "/manifest/plasticity_abi_digest/0",
+        "/manifest/address_map_digest/0",
+    ] {
+        let mut forged = canonical.clone();
+        let value = forged.pointer(pointer).unwrap().as_u64().unwrap();
+        *forged.pointer_mut(pointer).unwrap() = serde_json::json!(value ^ 1);
+        let forged: FoundationWeightAsset = serde_json::from_value(forged).unwrap();
+        assert!(
+            PhenotypeCompiler::compile_from_foundation_asset(
+                &genome,
+                &capacity,
+                &development,
+                SensorProfile::PrivilegedAffordanceV1,
+                &forged,
+            )
+            .is_err(),
+            "forged foundation field accepted: {pointer}"
+        );
     }
 }
 

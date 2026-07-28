@@ -8,6 +8,8 @@ Rules:
 - Do not depend on Bevy, wgpu, renderer types, or OS handles.
 - Bevy ECS ownership belongs only to adapter/app layers.
 - Keep the world layer authoritative for action legality and outcomes.
+- Keep every candidate unscored and derived from the same authoritative world
+  snapshot bound into promotion evidence.
 - Use stable IDs and core ABI types rather than Bevy ECS internals.
 - Do not store renderer, GPU backend, or teacher-private state here.
 - Do not let neural outputs bypass world validation.

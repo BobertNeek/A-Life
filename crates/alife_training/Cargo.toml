@@ -1,0 +1,22 @@
+[package]
+name = "alife_training"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+alife_core.workspace = true
+alife_gpu_backend = { path = "../alife_gpu_backend" }
+alife_runtime = { path = "../alife_runtime" }
+alife_world = { path = "../alife_world" }
+bytemuck.workspace = true
+thiserror.workspace = true
+wgpu.workspace = true
+
+[dev-dependencies]
+naga = { version = "29.0.3", features = ["wgsl-in"] }
+
+[features]
+default = []
+gpu-tests = ["alife_gpu_backend/gpu-tests", "alife_runtime/gpu-tests"]

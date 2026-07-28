@@ -62,6 +62,7 @@ fn fixture_creature() -> CreatureSaveState {
             lamarckian_mode_enabled: false,
             last_consolidated_tick: Some(Tick::new(2)),
         },
+        gpu_brain: None,
     }
 }
 
@@ -249,6 +250,7 @@ fn tiny_save_load_round_trip_restores_stable_world_and_summaries() {
     assert_eq!(restored.tick(), world.tick());
     assert_eq!(restored.stable_signature(), world.stable_signature());
     assert_eq!(loaded.creatures[0].mind.memory_record_count, 2);
+    assert!(loaded.creatures[0].gpu_brain.is_none());
     assert_eq!(
         loaded.creatures[0]
             .weights
@@ -256,6 +258,83 @@ fn tiny_save_load_round_trip_restores_stable_world_and_summaries() {
             .as_deref(),
         Some("tiny-generated-weights")
     );
+}
+
+#[test]
+fn legacy_world_objects_migrate_by_canonical_order_and_resave_current_identity() {
+    let save = PortableSaveFile::from_headless_world(
+        "legacy-grounded-migration",
+        &fixture_world(),
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+        fixture_manifest(),
+        vec![fixture_creature()],
+    )
+    .unwrap();
+    let mut canonical = serde_json::to_value(&save).unwrap();
+    canonical["world"]
+        .as_object_mut()
+        .unwrap()
+        .remove("next_spawn_sequence");
+    for object in canonical["world"]["objects"].as_array_mut().unwrap() {
+        let object = object.as_object_mut().unwrap();
+        object.remove("schema_version");
+        object.remove("grounded_physical");
+        object.remove("tracking_provenance");
+        object.remove("tracking_key");
+    }
+    let mut reversed = canonical.clone();
+    reversed["world"]["objects"]
+        .as_array_mut()
+        .unwrap()
+        .reverse();
+
+    let canonical_loaded = PortableSaveFile::from_json_str(&canonical.to_string()).unwrap();
+    let reversed_loaded = PortableSaveFile::from_json_str(&reversed.to_string()).unwrap();
+
+    assert_eq!(canonical_loaded.world, reversed_loaded.world);
+    assert_eq!(
+        canonical_loaded.world.next_spawn_sequence,
+        canonical_loaded.world.objects.len() as u64 + 1
+    );
+    for (index, object) in canonical_loaded.world.objects.iter().enumerate() {
+        assert_eq!(object.tracking_provenance.spawn_sequence, index as u64 + 1);
+        assert_eq!(
+            object.tracking_key,
+            object.tracking_provenance.canonical_key()
+        );
+    }
+    let current = serde_json::to_value(&canonical_loaded).unwrap();
+    assert!(current["world"].get("next_spawn_sequence").is_some());
+    for object in current["world"]["objects"].as_array().unwrap() {
+        assert!(object.get("schema_version").is_some());
+        assert!(object.get("grounded_physical").is_some());
+        assert!(object.get("tracking_provenance").is_some());
+        assert!(object.get("tracking_key").is_some());
+    }
+}
+
+#[test]
+fn current_world_objects_reject_tampered_or_partial_tracking_identity() {
+    let save = PortableSaveFile::from_headless_world(
+        "grounded-tamper-rejection",
+        &fixture_world(),
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512),
+        fixture_manifest(),
+        vec![fixture_creature()],
+    )
+    .unwrap();
+    let current = serde_json::to_value(&save).unwrap();
+
+    let mut tampered = current.clone();
+    tampered["world"]["objects"][0]["tracking_key"][0] = serde_json::json!(0);
+    assert!(PortableSaveFile::from_json_str(&tampered.to_string()).is_err());
+
+    let mut partial = current;
+    partial["world"]["objects"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("tracking_key");
+    assert!(PortableSaveFile::from_json_str(&partial.to_string()).is_err());
 }
 
 #[test]

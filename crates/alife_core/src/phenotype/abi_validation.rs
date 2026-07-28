@@ -100,13 +100,30 @@ pub(super) fn validate_decoder_synapse(
                 .lobe_layout()
                 .region(crate::LobeKind::CoreAssociation)
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let channel = phenotype
+                .candidate_decoder()
+                .memory_channel()
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let source_end = episodic
+                .start
+                .checked_add(episodic.len)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+            let target_end = core
+                .start
+                .checked_add(core.len)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?;
             if projection_kind != ProjectionKind::MemoryDecoder
                 || plan.head() != DecoderHeadKind::MemoryContext
-                || coordinate.family() != crate::CandidateActionFamily::Other
-                || coordinate.input_lane() >= plan.input_width()
+                || u32::from(coordinate.input_lane()) < channel.target_latent_lane_start()
+                || u32::from(coordinate.input_lane()) >= channel.decoder_input_stride()
                 || coordinate.motor_index() >= plan.output_width()
-                || synapse.source() != episodic.start + u32::from(coordinate.input_lane())
+                || coordinate.family().raw()
+                    != u8::try_from(coordinate.motor_index() % 8)
+                        .map_err(|_| ScaffoldContractError::PhenotypeCompile)?
+                || synapse.source() < episodic.start
+                || synapse.source() >= source_end
                 || synapse.target() != core.start + u32::from(coordinate.motor_index())
+                || synapse.target() >= target_end
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }

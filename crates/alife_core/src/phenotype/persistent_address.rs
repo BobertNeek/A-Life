@@ -390,7 +390,7 @@ fn encode_projection(h: &mut blake3::Hasher, address: PersistentProjectionAddres
 }
 
 fn encode_decoder(h: &mut blake3::Hasher, address: PersistentDecoderAddress) {
-    h.write_u8(address.head.raw());
+    h.write_u32(address.head.raw());
     h.write_u8(address.logical_group);
     h.write_u16(address.input_lane);
     h.write_u16(address.output_index);

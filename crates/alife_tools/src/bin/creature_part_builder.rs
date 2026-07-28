@@ -724,13 +724,13 @@ fn transform_audit_point(
         part_pose.rotation_xyz.map(f64::from),
     );
     let mut world = transform_matrix_point(matrix, posed_local);
-    for axis in 0..3 {
-        world[axis] += f64::from(part_pose.translation[axis]);
+    for (coordinate, translation) in world.iter_mut().zip(part_pose.translation) {
+        *coordinate += f64::from(translation);
     }
     let root = creature_root_pose(animation, 0.0, 0.0);
     world = rotate_xyz(world, root.rotation_xyz.map(f64::from));
-    for axis in 0..3 {
-        world[axis] += f64::from(root.translation[axis]);
+    for (coordinate, translation) in world.iter_mut().zip(root.translation) {
+        *coordinate += f64::from(translation);
     }
     rotate_xyz(world, [0.0, view_angle, 0.0])
 }
@@ -1889,52 +1889,85 @@ mod tests {
     }
 
     #[test]
-    fn canonical_production_catalog_validates_committed_packs() {
-        validate(&workspace_path(DEFAULT_CATALOG)).unwrap();
+    fn geneforge_production_catalog_validates_every_committed_lod() {
+        let recipes = workspace_path(DEFAULT_GENEFORGE_RECIPES);
+        let catalog =
+            GeneForgeCreaturePartCatalog::from_json_str(&fs::read_to_string(&recipes).unwrap())
+                .unwrap();
+        let root = recipes
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::parent)
+            .unwrap();
+        let preparations = load_geneforge_assembly_preparation_index(root, &catalog).unwrap();
+        let mut mesh_cache = BTreeMap::new();
+
+        for lod in [
+            CreaturePartLodId::Full,
+            CreaturePartLodId::Compact,
+            CreaturePartLodId::Impostor,
+        ] {
+            let models =
+                load_audit_models(root, &catalog, &preparations, lod, &mut mesh_cache).unwrap();
+            assert_eq!(models.len(), 12);
+            assert!(models.iter().all(|model| {
+                model.parts.len() == CreaturePartSlot::ALL.len()
+                    && model.triangle_count > 0
+                    && model.attachment_error.is_finite()
+            }));
+        }
     }
 
     #[test]
-    fn refreshed_manifest_records_canonical_parts_and_surfaces_as_mit_outputs() {
-        let artifact =
-            workspace_path("target/artifacts/creature_parts/canonical_manifest_validation.json");
-        if let Some(parent) = artifact.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::copy(workspace_path(DEFAULT_MANIFEST), &artifact).unwrap();
-        update_manifest(&workspace_path(DEFAULT_CATALOG), &artifact).unwrap();
-
+    fn production_manifest_records_exact_geneforge_outputs_and_provenance() {
+        let workspace = workspace_path("");
         let manifest: Value =
-            serde_json::from_str(&fs::read_to_string(&artifact).unwrap()).unwrap();
+            serde_json::from_str(&fs::read_to_string(workspace_path(DEFAULT_MANIFEST)).unwrap())
+                .unwrap();
         let entries = manifest["entries"].as_array().unwrap();
-        let canonical = entries
+        let geneforge = entries
             .iter()
             .filter(|entry| {
                 entry["asset_id"]
                     .as_str()
-                    .is_some_and(|id| id.starts_with("creature-part-family-"))
+                    .is_some_and(|id| id.starts_with("geneforge-"))
             })
             .collect::<Vec<_>>();
-        let surfaces = entries
-            .iter()
-            .filter(|entry| {
-                entry["asset_id"]
-                    .as_str()
-                    .is_some_and(|id| id.starts_with("creature-surface-family-"))
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(canonical.len(), 48);
-        assert_eq!(surfaces.len(), 8);
-        assert!(canonical.iter().chain(&surfaces).all(|entry| {
-            entry["license"] == "MIT"
-                && entry["author"] == "A-Life contributors"
-                && entry["source"] == "scripts/generate_canonical_creature_parts.py"
-                && entry["generated"] == true
-                && entry["external"] == false
-        }));
-        assert!(entries.iter().all(|entry| {
-            !entry["asset_id"]
-                .as_str()
-                .is_some_and(|id| id.starts_with("quirky-texture-t-"))
-        }));
+        assert_eq!(geneforge.len(), 168);
+        for suffix in ["-obj", "-sockets", "-semantic", "-anatomy"] {
+            assert_eq!(
+                geneforge
+                    .iter()
+                    .filter(|entry| entry["asset_id"].as_str().unwrap().ends_with(suffix))
+                    .count(),
+                42,
+                "unexpected {suffix} entry count"
+            );
+        }
+        for entry in geneforge {
+            let local_path = entry["local_path"].as_str().unwrap();
+            let path = workspace.join(local_path);
+            let bytes = fs::read(&path).unwrap();
+            assert_eq!(entry["size_bytes"].as_u64().unwrap(), bytes.len() as u64);
+            assert_eq!(
+                entry["digest"].as_str().unwrap(),
+                PortableAssetDigest::for_file(&path).unwrap().0
+            );
+            assert_eq!(entry["license"], "MIT");
+            assert_eq!(
+                entry["license_ref"],
+                "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md"
+            );
+            assert_eq!(entry["generator"]["tool"], "alife.geneforge_importer.v2");
+            assert_eq!(entry["generator"]["config_path"], DEFAULT_GENEFORGE_RECIPES);
+            assert_eq!(
+                entry["replacement_policy"],
+                "regenerate-from-pinned-geneforge-sources-and-validated-v2-recipe"
+            );
+            assert_eq!(entry["generated"], true);
+            assert_eq!(entry["external"], false);
+            assert_eq!(entry["final_art"], true);
+            assert_eq!(entry["placeholder"], false);
+        }
     }
 }

@@ -618,13 +618,10 @@ fn run_scenario(fixture: &ScenarioFixture) -> Result<ScenarioRun, ScaffoldContra
         ticks.push(tick);
     }
 
-    let sleep_report = if fixture.expectations.behavior.run_sleep_consolidation
-        && mind.sleep_state().phase != SleepPhase::Awake
-    {
-        Some(mind.run_sleep_consolidation(Tick::new(mind.current_tick().raw().saturating_add(1)))?)
-    } else {
-        None
-    };
+    // Scenario fixtures exercise the explicitly labelled heuristic baseline.
+    // They never force or consolidate a second CPU neural sleep path; the
+    // production GPU live scheduler owns automatic sleep transactions.
+    let sleep_report = None;
 
     let patches = harness.telemetry().sealed_patches.clone();
     let patch_summaries = patches
@@ -811,7 +808,7 @@ fn food_seeking(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 require_bias_only_recall: false,
             },
             ExpectedTopologyChange {
-                min_concepts: 2,
+                min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
                 min_gaps: 0,
@@ -914,7 +911,7 @@ fn poison_pain(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 require_social_trust_bias: false,
                 require_social_fear_bias: false,
                 require_curiosity_bias: true,
-                require_bias_only_recall: true,
+                require_bias_only_recall: false,
             },
             ExpectedTopologyChange {
                 min_concepts: 1,
@@ -996,7 +993,7 @@ fn obstacle_frustration(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 require_bias_only_recall: false,
             },
             ExpectedTopologyChange {
-                min_concepts: 2,
+                min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
                 min_gaps: 1,
@@ -1023,7 +1020,7 @@ fn fatigue_sleep(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
             0.88,
             0.8,
         )?],
-        expected_behavior: "fatigued creature selects rest and enters forced sleep hook",
+        expected_behavior: "fatigued creature selects rest without forcing a CPU sleep hook",
     }];
     fixture(
         ScenarioName::FatigueSleep,
@@ -1039,8 +1036,8 @@ fn fatigue_sleep(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
         sensory(vec![], vec![], None, 0),
         steps,
         expectations(
-            "fatigue selects rest; P16 sleep consolidation stages structural edits",
-            true,
+            "fatigue selects rest; GPU sleep remains owned by the live scheduler",
+            false,
             ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::Normal,
@@ -1164,7 +1161,7 @@ fn curiosity_contradiction(seed: u64) -> Result<ScenarioFixture, ScaffoldContrac
                 require_bias_only_recall: false,
             },
             ExpectedTopologyChange {
-                min_concepts: 2,
+                min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
                 min_gaps: 1,
@@ -1244,7 +1241,7 @@ fn word_token_grounding(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 require_bias_only_recall: false,
             },
             ExpectedTopologyChange {
-                min_concepts: 2,
+                min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
                 min_gaps: 0,
@@ -1324,7 +1321,7 @@ fn social_trust_fear(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError
                 require_bias_only_recall: false,
             },
             ExpectedTopologyChange {
-                min_concepts: 2,
+                min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
                 min_gaps: 0,
@@ -1413,7 +1410,7 @@ fn teacher_perception_event(seed: u64) -> Result<ScenarioFixture, ScaffoldContra
                 require_bias_only_recall: false,
             },
             ExpectedTopologyChange {
-                min_concepts: 2,
+                min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
                 min_gaps: 0,

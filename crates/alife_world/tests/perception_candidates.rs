@@ -65,7 +65,7 @@ fn transport_signature(frame: &alife_core::PerceptionFrame) -> Vec<TransportSign
 }
 
 fn perception_frame(
-    world: &HeadlessWorld,
+    world: &mut HeadlessWorld,
     tick: Tick,
     profile: SensorProfile,
 ) -> alife_core::PerceptionFrame {
@@ -76,7 +76,7 @@ fn perception_frame(
 
 #[test]
 fn perception_and_candidates_share_one_authoritative_tick_and_empty_context() {
-    let world = frame_world(SemanticFixtureKind::Food);
+    let mut world = frame_world(SemanticFixtureKind::Food);
     let tick = Tick::new(3);
     let homeostasis = HomeostaticSnapshot::baseline(tick);
     let report = world.sensory_report(ORGANISM, tick).unwrap();
@@ -115,12 +115,9 @@ fn perception_and_candidates_share_one_authoritative_tick_and_empty_context() {
     assert_eq!(draft.candidates(), enumerated);
     assert_eq!(draft.candidates(), frame.candidates());
     let visible = &report.visible_entities[0];
-    for candidate in &draft.candidates()[1..6] {
+    for candidate in &draft.candidates()[3..8] {
         assert_eq!(candidate.target.entity, Some(visible.id));
-        assert_eq!(
-            candidate.observation,
-            CandidateObservationRef::ObjectSlot(0)
-        );
+        assert_eq!(candidate.observation, CandidateObservationRef::None);
         assert!(candidate.features.0[CANDIDATE_FEATURE_BEARING_SIN_LANE].abs() < 1e-6);
         assert!((candidate.features.0[CANDIDATE_FEATURE_BEARING_COS_LANE] - 1.0).abs() < 1e-6);
         assert!(
@@ -137,9 +134,45 @@ fn perception_and_candidates_share_one_authoritative_tick_and_empty_context() {
 }
 
 #[test]
+fn batch_perception_index_matches_canonical_privileged_and_grounded_frames() {
+    let world = HeadlessScenarioBuilder::new(4_404)
+        .agent("indexed-agent-a", OrganismId(1), pos(0.0, 0.0))
+        .agent("indexed-agent-b", OrganismId(2), pos(1.0, 0.5))
+        .agent("indexed-agent-c", OrganismId(3), pos(1_024.0, 0.0))
+        .food("indexed-food", pos(1.5, 0.0), 0.4)
+        .hazard("indexed-hazard", pos(-1.5, 0.0), 0.3)
+        .build()
+        .unwrap();
+    let index = world.build_perception_batch_index().unwrap();
+    let tick = Tick::ZERO;
+
+    for profile in [
+        SensorProfile::PrivilegedAffordanceV1,
+        SensorProfile::GroundedObjectSlotsV1,
+    ] {
+        for organism_id in [OrganismId(1), OrganismId(2), OrganismId(3)] {
+            let mut canonical_world = world.clone();
+            let mut indexed_world = world.clone();
+            let homeostasis = HomeostaticSnapshot::baseline(tick);
+            let canonical = canonical_world
+                .perception_frame_draft(organism_id, tick, profile, homeostasis)
+                .unwrap();
+            let indexed = indexed_world
+                .perception_frame_draft_indexed(organism_id, tick, profile, homeostasis, &index)
+                .unwrap();
+            assert_eq!(indexed, canonical, "{profile:?} organism {organism_id:?}");
+        }
+    }
+}
+
+#[test]
 fn idle_is_index_zero_and_all_candidate_indices_are_contiguous() {
-    let world = frame_world(SemanticFixtureKind::Food);
-    let frame = perception_frame(&world, Tick::new(5), SensorProfile::PrivilegedAffordanceV1);
+    let mut world = frame_world(SemanticFixtureKind::Food);
+    let frame = perception_frame(
+        &mut world,
+        Tick::new(5),
+        SensorProfile::PrivilegedAffordanceV1,
+    );
 
     assert_eq!(frame.candidates()[0].candidate_index, 0);
     assert_eq!(
@@ -162,6 +195,31 @@ fn idle_is_index_zero_and_all_candidate_indices_are_contiguous() {
             .collect::<Vec<_>>(),
         (0..frame.candidates().len() as u16).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn rest_and_vocalize_are_unscored_intrinsic_opportunities_in_both_profiles() {
+    for profile in [
+        SensorProfile::PrivilegedAffordanceV1,
+        SensorProfile::GroundedObjectSlotsV1,
+    ] {
+        let mut world = frame_world(SemanticFixtureKind::Food);
+        let frame = perception_frame(&mut world, Tick::new(5), profile);
+        for (kind, family) in [
+            (ActionKind::Rest, CandidateActionFamily::Rest),
+            (ActionKind::Vocalize, CandidateActionFamily::Other),
+        ] {
+            let candidate = frame
+                .candidates()
+                .iter()
+                .find(|candidate| candidate.kind == kind)
+                .expect("intrinsic opportunity");
+            assert_eq!(candidate.family, family);
+            assert_eq!(candidate.observation, CandidateObservationRef::None);
+            assert_eq!(candidate.target.entity, None);
+            assert_eq!(candidate.target.position, None);
+        }
+    }
 }
 
 #[test]
@@ -253,8 +311,8 @@ fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved
     golden[CANDIDATE_FEATURE_CONTACT_LANE] = 0.0;
     golden[CANDIDATE_FEATURE_EVIDENCE_LANE] = 1.0;
 
-    for candidate in &candidates[1..6] {
-        assert_eq!(candidate.features, candidates[1].features);
+    for candidate in &candidates[3..8] {
+        assert_eq!(candidate.features, candidates[3].features);
         candidate.features.validate().unwrap();
         for (lane, (actual, expected)) in candidate.features.0.iter().zip(golden).enumerate() {
             assert!(
@@ -272,8 +330,8 @@ fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved
 }
 
 #[test]
-fn distance_then_entity_order_is_stable_and_caps_at_six_objects() {
-    let world = HeadlessScenarioBuilder::new(99)
+fn distance_then_entity_order_is_stable_and_caps_at_five_objects() {
+    let mut world = HeadlessScenarioBuilder::new(99)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
         .food("id2_d3", pos(3.0, 0.0), 0.5)
         .food("id3_d1", pos(1.0, 0.0), 0.5)
@@ -285,32 +343,36 @@ fn distance_then_entity_order_is_stable_and_caps_at_six_objects() {
         .food("id9_d5", pos(5.0, 0.0), 0.5)
         .build()
         .unwrap();
-    let frame = perception_frame(&world, Tick::new(7), SensorProfile::PrivilegedAffordanceV1);
+    let frame = perception_frame(
+        &mut world,
+        Tick::new(7),
+        SensorProfile::PrivilegedAffordanceV1,
+    );
 
     assert_eq!(MAX_ACTION_CANDIDATES, 32);
-    assert_eq!(frame.candidates().len(), 1 + 6 * 5);
-    let retained_targets = frame.candidates()[1..]
+    assert_eq!(frame.candidates().len(), 3 + 5 * 5);
+    let retained_targets = frame.candidates()[3..]
         .chunks_exact(5)
-        .enumerate()
-        .map(|(object_slot, family_group)| {
-            assert!(family_group.iter().all(|candidate| {
-                candidate.observation == CandidateObservationRef::ObjectSlot(object_slot as u16)
-            }));
+        .map(|family_group| {
+            assert!(family_group
+                .iter()
+                .all(|candidate| candidate.observation == CandidateObservationRef::None));
             family_group[0].target.entity.unwrap()
         })
         .collect::<Vec<_>>();
     assert_eq!(
         retained_targets,
-        ["id8_d0_5", "id3_d1", "id4_d1", "id5_d2", "id7_d2", "id2_d3",]
+        ["id8_d0_5", "id3_d1", "id4_d1", "id5_d2", "id7_d2"]
             .map(|label| world.entity_id(label).unwrap())
     );
+    assert!(!retained_targets.contains(&world.entity_id("id2_d3").unwrap()));
     assert!(!retained_targets.contains(&world.entity_id("id6_d4").unwrap()));
     assert!(!retained_targets.contains(&world.entity_id("id9_d5").unwrap()));
 }
 
 #[test]
 fn every_retained_object_gets_the_same_five_mechanical_families() {
-    let world = HeadlessScenarioBuilder::new(13)
+    let mut world = HeadlessScenarioBuilder::new(13)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
         .food("food", pos(1.0, 0.0), 0.5)
         .hazard("hazard", pos(0.0, 2.0), 0.5)
@@ -318,7 +380,11 @@ fn every_retained_object_gets_the_same_five_mechanical_families() {
         .token("token", pos(0.0, 4.0), 77)
         .build()
         .unwrap();
-    let frame = perception_frame(&world, Tick::new(11), SensorProfile::PrivilegedAffordanceV1);
+    let frame = perception_frame(
+        &mut world,
+        Tick::new(11),
+        SensorProfile::PrivilegedAffordanceV1,
+    );
     let expected = [
         (
             ActionKind::Inspect.canonical_id(),
@@ -347,16 +413,16 @@ fn every_retained_object_gets_the_same_five_mechanical_families() {
         ),
     ];
 
-    assert_eq!(frame.candidates().len(), 1 + 4 * expected.len());
-    for (object_slot, family_group) in frame.candidates()[1..].chunks_exact(5).enumerate() {
+    assert_eq!(frame.candidates().len(), 3 + 4 * expected.len());
+    for family_group in frame.candidates()[3..].chunks_exact(5) {
         let target_entity = family_group[0].target.entity;
         assert!(target_entity.is_some());
         assert!(family_group
             .iter()
             .all(|candidate| candidate.target.entity == target_entity));
-        assert!(family_group.iter().all(|candidate| {
-            candidate.observation == CandidateObservationRef::ObjectSlot(object_slot as u16)
-        }));
+        assert!(family_group
+            .iter()
+            .all(|candidate| { candidate.observation == CandidateObservationRef::None }));
         assert_eq!(
             family_group
                 .iter()
@@ -369,23 +435,23 @@ fn every_retained_object_gets_the_same_five_mechanical_families() {
 
 #[test]
 fn semantic_relabelling_changes_features_not_candidate_transport() {
-    let food = frame_world(SemanticFixtureKind::Food);
-    let hazard = frame_world(SemanticFixtureKind::Hazard);
+    let mut food = frame_world(SemanticFixtureKind::Food);
+    let mut hazard = frame_world(SemanticFixtureKind::Hazard);
     let tick = Tick::new(17);
-    let food_frame = perception_frame(&food, tick, SensorProfile::PrivilegedAffordanceV1);
-    let hazard_frame = perception_frame(&hazard, tick, SensorProfile::PrivilegedAffordanceV1);
+    let food_frame = perception_frame(&mut food, tick, SensorProfile::PrivilegedAffordanceV1);
+    let hazard_frame = perception_frame(&mut hazard, tick, SensorProfile::PrivilegedAffordanceV1);
 
     assert_eq!(
         transport_signature(&food_frame),
         transport_signature(&hazard_frame)
     );
     assert_ne!(
-        food_frame.candidates()[1].features,
-        hazard_frame.candidates()[1].features
+        food_frame.candidates()[3].features,
+        hazard_frame.candidates()[3].features
     );
     assert_ne!(food_frame.base_digest(), hazard_frame.base_digest());
-    let food_features = food_frame.candidates()[1].features.0;
-    let hazard_features = hazard_frame.candidates()[1].features.0;
+    let food_features = food_frame.candidates()[3].features.0;
+    let hazard_features = hazard_frame.candidates()[3].features.0;
     for lane in 0..CANDIDATE_FEATURE_COUNT {
         let may_differ = lane == CANDIDATE_FEATURE_AFFORDANCE_START_LANE
             || lane == CANDIDATE_FEATURE_AFFORDANCE_START_LANE + 2;
@@ -399,12 +465,12 @@ fn semantic_relabelling_changes_features_not_candidate_transport() {
 
 #[test]
 fn teacher_token_adds_teacher_affordance_without_changing_candidate_transport() {
-    let ordinary = HeadlessScenarioBuilder::new(101)
+    let mut ordinary = HeadlessScenarioBuilder::new(101)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
         .token("token", pos(3.0, 4.0), 77)
         .build()
         .unwrap();
-    let teacher = HeadlessScenarioBuilder::new(101)
+    let mut teacher = HeadlessScenarioBuilder::new(101)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
         .teacher_token("token", pos(3.0, 4.0), 77, TeacherPerceptionChannel::Object)
         .build()
@@ -412,8 +478,9 @@ fn teacher_token_adds_teacher_affordance_without_changing_candidate_transport() 
     let tick = Tick::new(18);
     let ordinary_report = ordinary.sensory_report(ORGANISM, tick).unwrap();
     let teacher_report = teacher.sensory_report(ORGANISM, tick).unwrap();
-    let ordinary_frame = perception_frame(&ordinary, tick, SensorProfile::PrivilegedAffordanceV1);
-    let teacher_frame = perception_frame(&teacher, tick, SensorProfile::PrivilegedAffordanceV1);
+    let ordinary_frame =
+        perception_frame(&mut ordinary, tick, SensorProfile::PrivilegedAffordanceV1);
+    let teacher_frame = perception_frame(&mut teacher, tick, SensorProfile::PrivilegedAffordanceV1);
 
     assert_eq!(
         transport_signature(&ordinary_frame),
@@ -442,11 +509,11 @@ fn teacher_token_adds_teacher_affordance_without_changing_candidate_transport() 
 
     let glyph_lane = CANDIDATE_FEATURE_AFFORDANCE_START_LANE + 7;
     let teacher_lane = CANDIDATE_FEATURE_AFFORDANCE_START_LANE + 8;
-    for candidate in &ordinary_frame.candidates()[1..6] {
+    for candidate in &ordinary_frame.candidates()[3..8] {
         assert_eq!(candidate.features.0[glyph_lane], 1.0);
         assert_eq!(candidate.features.0[teacher_lane], 0.0);
     }
-    for candidate in &teacher_frame.candidates()[1..6] {
+    for candidate in &teacher_frame.candidates()[3..8] {
         assert_eq!(candidate.features.0[glyph_lane], 1.0);
         assert_eq!(candidate.features.0[teacher_lane], 1.0);
     }
@@ -522,8 +589,8 @@ fn candidate_enumerator_rejects_missing_genuine_visible_contact() {
 }
 
 #[test]
-fn grounded_profile_fails_closed_until_slice_c_provides_grounded_features() {
-    let world = frame_world(SemanticFixtureKind::Food);
+fn grounded_profile_uses_the_dedicated_physical_extractor() {
+    let mut world = frame_world(SemanticFixtureKind::Food);
     let tick = Tick::new(19);
     let report = world.sensory_report(ORGANISM, tick).unwrap();
 
@@ -533,34 +600,38 @@ fn grounded_profile_fails_closed_until_slice_c_provides_grounded_features() {
             .unwrap_err(),
         ScaffoldContractError::SensorProfileMismatch
     );
-    assert_eq!(
-        world
-            .perception_frame(
-                ORGANISM,
-                tick,
-                SensorProfile::GroundedObjectSlotsV1,
-                HomeostaticSnapshot::baseline(tick),
-            )
-            .unwrap_err(),
-        ScaffoldContractError::SensorProfileMismatch
-    );
+    let frame = world
+        .perception_frame(
+            ORGANISM,
+            tick,
+            SensorProfile::GroundedObjectSlotsV1,
+            HomeostaticSnapshot::baseline(tick),
+        )
+        .unwrap();
+    assert_eq!(frame.grounded_object_slots().len(), 1);
+    assert!(frame
+        .sensory()
+        .channels
+        .visual_affordance
+        .iter()
+        .all(|value| *value == 0.0));
 }
 
 #[test]
 fn same_seed_snapshot_and_inputs_replay_identical_frames() {
-    let first = frame_world(SemanticFixtureKind::Food);
-    let second = frame_world(SemanticFixtureKind::Food);
+    let mut first = frame_world(SemanticFixtureKind::Food);
+    let mut second = frame_world(SemanticFixtureKind::Food);
     let tick = Tick::new(23);
 
     assert_eq!(
-        perception_frame(&first, tick, SensorProfile::PrivilegedAffordanceV1),
-        perception_frame(&second, tick, SensorProfile::PrivilegedAffordanceV1)
+        perception_frame(&mut first, tick, SensorProfile::PrivilegedAffordanceV1),
+        perception_frame(&mut second, tick, SensorProfile::PrivilegedAffordanceV1)
     );
 }
 
 #[test]
 fn invalid_organism_and_mismatched_homeostasis_tick_are_rejected() {
-    let world = frame_world(SemanticFixtureKind::Food);
+    let mut world = frame_world(SemanticFixtureKind::Food);
     let tick = Tick::new(29);
 
     assert_eq!(

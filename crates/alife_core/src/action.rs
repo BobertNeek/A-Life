@@ -509,7 +509,7 @@ impl Default for ActionArbitrationConfig {
     }
 }
 
-pub fn cpu_reference_arbitrate(
+pub fn heuristic_baseline_arbitrate(
     organism_id: OrganismId,
     proposals: &[ActionProposal],
     config: ActionArbitrationConfig,

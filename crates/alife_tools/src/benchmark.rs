@@ -4,6 +4,8 @@
 //! population-tier harness. It intentionally does not require Bevy, wgpu, or
 //! GPU devices, and it does not optimize runtime internals.
 
+pub mod gpu_closed_loop;
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -296,7 +298,7 @@ impl BenchmarkReport {
     pub fn to_markdown(&self) -> String {
         let mut out = String::new();
         out.push_str("# A-Life benchmark tiers report\n\n");
-        out.push_str("Mode: CPU reference smoke; Bevy/GPU required: no/no.\n\n");
+        out.push_str("Mode: deterministic host baseline; Bevy/GPU required: no/no.\n\n");
         out.push_str("| Population | Brain tier | Manual expected-slow | Tick time ms | Patches/sec | Memory bytes | Success |\n");
         out.push_str("|---:|---|---|---:|---:|---:|---:|\n");
         for run in &self.runs {

@@ -21,7 +21,7 @@ fn gpu_timing_report_marks_diagnostic_evidence_not_product_runtime() {
             fixture_dimensions: "neurons=512, tiles=2, synapses=258".to_string(),
             warmup_iterations: 1,
             measured_iterations: 2,
-            cpu_reference_mean_ms: Some(0.01),
+            host_fixture_mean_ms: Some(0.01),
             gpu_submit_poll_mean_ms: Some(0.25),
             readback_mean_ms: Some(0.4),
             gpu_total_mean_ms: Some(0.65),
@@ -36,6 +36,8 @@ fn gpu_timing_report_marks_diagnostic_evidence_not_product_runtime() {
 
     report.validate().unwrap();
     let markdown = report.to_markdown();
+    assert!(markdown.contains("Host fixture mean ms"));
+    assert!(!markdown.contains("CPU mean ms"));
     assert!(markdown.contains("Product gameplay timing claim: None"));
     assert!(markdown.contains("HostObservedDiagnostic"));
     assert!(markdown.contains("DiagnosticOnly"));
@@ -51,7 +53,7 @@ fn gpu_timing_report_rejects_fake_timing_claims_without_gpu_measurements() {
         fixture_dimensions: "neurons=512, tiles=2, synapses=258".to_string(),
         warmup_iterations: 1,
         measured_iterations: 2,
-        cpu_reference_mean_ms: Some(0.01),
+        host_fixture_mean_ms: Some(0.01),
         gpu_submit_poll_mean_ms: None,
         readback_mean_ms: None,
         gpu_total_mean_ms: None,
@@ -73,7 +75,7 @@ fn local_gpu_diagnostic_timing_report_measures_real_adapter() {
     let report = alife_gpu_backend::run_local_gpu_diagnostic_timing(1, 2).unwrap();
     println!("{}", report.to_markdown());
     report.validate().unwrap();
-    assert_eq!(report.workloads.len(), 2);
+    assert_eq!(report.workloads.len(), 1);
     assert!(report
         .workloads
         .iter()

@@ -1,5 +1,5 @@
 
-const ACTIVE_DISPATCH_ROW_WORDS:u32 = 272u;
+const ACTIVE_DISPATCH_ROW_WORDS:u32 = 332u;
 const INVALID_LANE:u32 = 0xffffffffu;
 
 fn resolve_encoder_source_lane(encoder:GpuEncoderPlanRecord, assignment:GpuEncoderAssignmentRecord) -> u32 {
@@ -20,7 +20,7 @@ fn resolve_encoder_source_lane(encoder:GpuEncoderPlanRecord, assignment:GpuEncod
 @compute @workgroup_size(64)
 fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
-  if (!validate_slice_a_slot(header.brain_slot_index, header)) { return; }
+  if (!activity_contract_prevalidated(header)) { return; }
   let brain = brain_slots[header.brain_slot_index];
   if (brain.slot_generation != header.slot_generation) { return; }
   let index = gid.x;

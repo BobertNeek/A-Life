@@ -98,7 +98,7 @@ impl Ca18GraphicalPopulationSummary {
                 .join(", ")
         };
         format!(
-            "Population: {}/{} creatures | selected stable:{}\nCycle: Tab stable IDs only | peers: {}\nSocial proximity cues: {} | CPU shadow gate preserved",
+            "Population: {}/{} creatures | selected stable:{}\nCycle: Tab stable IDs only | peers: {}\nSocial proximity cues: {} | GPU neural authority preserved",
             self.creature_count,
             self.population_cap,
             self.selected_stable_id.raw(),

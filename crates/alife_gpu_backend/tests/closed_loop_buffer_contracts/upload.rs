@@ -60,7 +60,7 @@ fn promoted_classes_have_exact_phenotype_owned_count_and_byte_plans() {
         assert_eq!(counts.recurrent_synapses, recurrent);
         assert_eq!(counts.candidate_decoder_synapses, candidate_decoder);
         assert_eq!(bytes.immutable_weight_bytes, phenotype.synapses().len() * 8);
-        assert_eq!(bytes.mutable_weight_bytes, phenotype.synapses().len() * 12);
+        assert_eq!(bytes.mutable_weight_bytes, phenotype.synapses().len() * 24);
         assert_eq!(
             bytes.activation_bytes,
             phenotype.neuron_count() as usize * 3 * 4
@@ -82,6 +82,22 @@ fn promoted_classes_have_exact_phenotype_owned_count_and_byte_plans() {
             }
             other => panic!("unexpected production class {other:?}"),
         }
+    }
+}
+
+#[test]
+fn replay_capture_gpu_local_ids_preserve_the_bounded_batch_ordering_contract() {
+    for phenotype in production_phenotypes() {
+        let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
+        assert!(
+            upload
+                .replay_capture_local_synapse_ids
+                .windows(2)
+                .all(|pair| pair[0] < pair[1]),
+            "class {:?} translated replay capture IDs out of GPU-local order: {:?}",
+            phenotype.brain_class_id(),
+            upload.replay_capture_local_synapse_ids,
+        );
     }
 }
 

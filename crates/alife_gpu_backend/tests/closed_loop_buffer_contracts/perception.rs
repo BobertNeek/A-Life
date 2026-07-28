@@ -1,4 +1,6 @@
-use alife_core::{BrainCapacityClass, CandidateObservationRef, MAX_ACTION_CANDIDATES};
+use alife_core::{
+    BrainCapacityClass, CandidateObservationRef, CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
+};
 use alife_gpu_backend::{
     GpuBufferAccess, GpuCandidateRecord, GpuClassBucketBufferRole, GpuClassBucketBuffers,
     GpuClassBucketPlan, GpuClosedLoopError, GpuOffsetDomain, GpuPerceptionHeader,
@@ -87,10 +89,22 @@ fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
     );
     expected_payload.extend(frame.homeostasis().drives.to_array().map(f32::to_bits));
     expected_payload.extend(frame.homeostasis().hormones.to_array().map(f32::to_bits));
+    let decoder_input_stride = usize::try_from(
+        phenotype
+            .candidate_decoder()
+            .memory_channel()
+            .unwrap()
+            .decoder_input_stride(),
+    )
+    .unwrap();
     for candidate in frame.candidates() {
         expected_payload.extend(candidate.features.0.map(f32::to_bits));
+        expected_payload.extend(std::iter::repeat_n(
+            0,
+            decoder_input_stride - CANDIDATE_FEATURE_COUNT,
+        ));
     }
-    assert_eq!(expected_payload.len(), 77 + 2 * 24);
+    assert_eq!(expected_payload.len(), 77 + 2 * decoder_input_stride);
     assert_eq!(upload.frame_payload_words, expected_payload);
     assert_eq!(upload.candidates.len(), 2);
 
@@ -99,7 +113,10 @@ fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
         assert_eq!(gpu.kind, candidate.kind.raw() as u32);
         assert_eq!(gpu.family, candidate.family.raw() as u32);
         assert_eq!(gpu.candidate_index, index as u32);
-        assert_eq!(gpu.feature_offset, 77 + index as u32 * 24);
+        assert_eq!(
+            gpu.feature_offset,
+            77 + index as u32 * decoder_input_stride as u32
+        );
         let expected_slot = match candidate.observation {
             CandidateObservationRef::None => u32::MAX,
             CandidateObservationRef::ObjectSlot(slot) => u32::from(slot),
@@ -234,7 +251,7 @@ fn class_bucket_buffers_expose_exactly_seven_neural_bindings() {
         ),
         (
             GpuClassBucketBufferRole::FramePayloadWords,
-            GpuBufferAccess::ReadOnly,
+            GpuBufferAccess::ReadWrite,
         ),
         (
             GpuClassBucketBufferRole::MutableStateWords,

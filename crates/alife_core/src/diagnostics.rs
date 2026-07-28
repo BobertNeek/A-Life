@@ -43,7 +43,19 @@ pub enum DiagnosticCode {
     UnsupportedProductionBrainClass,
     GpuLayoutMismatch,
     SensorProfileMismatch,
+    TrackedObjectIdentityExhausted,
+    InvalidMemoryQuery,
+    MemoryModeConflict,
+    MemoryReplayRejected,
+    MemoryCompactionConflict,
     BrainOwnershipMismatch,
+    LearningEvidenceMismatch,
+    LearningReplayRejected,
+    ConsolidationGenerationMismatch,
+    BrainActivityPolicyMismatch,
+    BrainActivitySequenceMismatch,
+    BrainAtpExhausted,
+    GpuTimestampQueryUnavailable,
     NeuralBackendUnavailable,
 }
 
@@ -172,8 +184,44 @@ impl From<&ScaffoldContractError> for ContractDiagnostic {
             ScaffoldContractError::SensorProfileMismatch => {
                 Self::new(DiagnosticCode::SensorProfileMismatch)
             }
+            ScaffoldContractError::TrackedObjectIdentityExhausted => {
+                Self::new(DiagnosticCode::TrackedObjectIdentityExhausted)
+            }
+            ScaffoldContractError::InvalidMemoryQuery => {
+                Self::new(DiagnosticCode::InvalidMemoryQuery)
+            }
+            ScaffoldContractError::MemoryModeConflict => {
+                Self::new(DiagnosticCode::MemoryModeConflict)
+            }
+            ScaffoldContractError::MemoryReplayRejected => {
+                Self::new(DiagnosticCode::MemoryReplayRejected)
+            }
+            ScaffoldContractError::MemoryCompactionConflict => {
+                Self::new(DiagnosticCode::MemoryCompactionConflict)
+            }
             ScaffoldContractError::BrainOwnershipMismatch => {
                 Self::new(DiagnosticCode::BrainOwnershipMismatch)
+            }
+            ScaffoldContractError::LearningEvidenceMismatch => {
+                Self::new(DiagnosticCode::LearningEvidenceMismatch)
+            }
+            ScaffoldContractError::LearningReplayRejected => {
+                Self::new(DiagnosticCode::LearningReplayRejected)
+            }
+            ScaffoldContractError::ConsolidationGenerationMismatch => {
+                Self::new(DiagnosticCode::ConsolidationGenerationMismatch)
+            }
+            ScaffoldContractError::BrainActivityPolicyMismatch => {
+                Self::new(DiagnosticCode::BrainActivityPolicyMismatch)
+            }
+            ScaffoldContractError::BrainActivitySequenceMismatch => {
+                Self::new(DiagnosticCode::BrainActivitySequenceMismatch)
+            }
+            ScaffoldContractError::BrainAtpExhausted => {
+                Self::new(DiagnosticCode::BrainAtpExhausted)
+            }
+            ScaffoldContractError::GpuTimestampQueryUnavailable => {
+                Self::new(DiagnosticCode::GpuTimestampQueryUnavailable)
             }
             ScaffoldContractError::NeuralBackendUnavailable => {
                 Self::new(DiagnosticCode::NeuralBackendUnavailable)

@@ -171,7 +171,15 @@ pub fn gather_sensory_from_observed(
             if heard_index < MAX_HEARD_TOKENS && audible_salience > 0.0 {
                 auditory[0] = auditory[0].max(audible_salience);
                 vocal_tokens[heard_index] = Some(HeardToken {
+                    utterance_id: alife_core::UtteranceId::new(entity.world_id.raw())?,
+                    sequence_position: 0,
+                    source_kind: if entity.organism_id.is_some() {
+                        alife_core::UtteranceSourceKind::Creature
+                    } else {
+                        alife_core::UtteranceSourceKind::Teacher
+                    },
                     speaker_id: entity.organism_id,
+                    addressee: None,
                     source_entity: Some(entity.world_id),
                     token_id,
                     source_position: bevy_vec3_to_core(entity.position)?,

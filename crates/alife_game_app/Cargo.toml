@@ -7,8 +7,10 @@ repository.workspace = true
 
 [dependencies]
 alife_core = { path = "../alife_core" }
+alife_archive = { path = "../alife_archive", optional = true }
 alife_bevy_adapter = { path = "../alife_bevy_adapter", optional = true }
 alife_gpu_backend = { path = "../alife_gpu_backend", optional = true }
+alife_runtime = { path = "../alife_runtime", optional = true }
 alife_school = { path = "../alife_school" }
 alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider", "local-llamacpp"] }
 alife_world = { path = "../alife_world" }
@@ -25,6 +27,14 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 wgpu = { version = "=27.0.1", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+] }
 
 [features]
 default = []
@@ -51,7 +61,8 @@ bevy-app = [
     "bevy/zstd_rust",
     "dep:wgpu",
 ]
-gpu-runtime = ["dep:alife_gpu_backend"]
+gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
+gpu-tests = ["gpu-runtime", "alife_gpu_backend/gpu-tests", "alife_runtime/gpu-tests"]
 voxel-backend = ["bevy-app", "dep:bevy_voxel_world"]
 voxel-internal-mesh = ["bevy-app", "dep:block-mesh"]
 creature-sprites = ["bevy-app", "dep:bevy_sprite3d"]

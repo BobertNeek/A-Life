@@ -1,5 +1,5 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
     ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
     CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, ConceptCellId,
     Confidence, ContextFeatureFlags, DevelopmentState, DurationTicks, ExperiencePacker,
@@ -10,11 +10,11 @@ use alife_core::{
     PackedExperienceSink, PackedLogEntryRef, PackedSideBufferKind, PackedSideBufferRecord,
     PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
     ScaffoldContractError, SchemaKind, SemanticContextRef, SemanticSalienceEntry, SensorProfile,
-    SensoryChannels, SensorySnapshot, SignedValence, SocialAgentSnapshot,
-    TeacherFeedbackObservation, TeacherLessonMetadata, TeacherLessonResponseChannel,
-    TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity, VocalizedToken, WeightSplitContract,
-    WorldEntityId, PACKED_EXPERIENCE_SCHEMA_VERSION, PACKED_FLAG_HAS_GAUSSIAN_CONTEXT,
-    PACKED_FLAG_HAS_SEMANTIC_CONTEXT, PACKED_FLAG_SUCCESS,
+    SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
+    SocialAgentSnapshot, TeacherFeedbackObservation, TeacherLessonMetadata,
+    TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
+    VocalizedToken, WeightSplitContract, WorldEntityId, PACKED_EXPERIENCE_SCHEMA_VERSION,
+    PACKED_FLAG_HAS_GAUSSIAN_CONTEXT, PACKED_FLAG_HAS_SEMANTIC_CONTEXT, PACKED_FLAG_SUCCESS,
 };
 
 fn organism() -> OrganismId {
@@ -79,7 +79,11 @@ fn rich_sensory(tick: Tick, organism_id: OrganismId) -> SensorySnapshot {
         proximity: NormalizedScalar::new(0.75).unwrap(),
     });
     sensory.context_streams.vocal_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(70).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Creature,
         speaker_id: Some(OrganismId(8)),
+        addressee: None,
         source_entity: Some(WorldEntityId(70)),
         token_id: 101,
         source_position: Vec3f::new(0.5, 0.0, 1.0),
@@ -87,7 +91,11 @@ fn rich_sensory(tick: Tick, organism_id: OrganismId) -> SensorySnapshot {
         teacher_channel: Some(TeacherPerceptionChannel::Hearing),
     });
     sensory.language_context.heard_tokens[0] = Some(HeardToken {
+        utterance_id: alife_core::UtteranceId::new(71).unwrap(),
+        sequence_position: 0,
+        source_kind: alife_core::UtteranceSourceKind::Teacher,
         speaker_id: None,
+        addressee: None,
         source_entity: Some(WorldEntityId(71)),
         token_id: 102,
         source_position: Vec3f::new(0.25, 0.0, 1.25),
@@ -178,6 +186,13 @@ fn pre_action_at(tick: Tick, organism_id: OrganismId, rich: bool) -> alife_core:
             )
             .unwrap(),
         ],
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
     )
     .unwrap();
     alife_core::PreActionSnapshot::from_heuristic_frame(
@@ -238,7 +253,7 @@ fn decision_at(tick: Tick, organism_id: OrganismId, rich: bool) -> alife_core::D
         proposal(300, ActionKind::Move, 0.35, Some(WorldEntityId(1))),
         top,
     ];
-    let decision = cpu_reference_arbitrate(
+    let decision = heuristic_baseline_arbitrate(
         organism_id,
         &proposals,
         ActionArbitrationConfig {
@@ -322,6 +337,19 @@ fn packed_frame_has_fixed_size_and_schema() {
         PackedExperienceFrame::SCHEMA_VERSION,
         PACKED_EXPERIENCE_SCHEMA_VERSION
     );
+    assert_eq!(core::mem::offset_of!(PackedExperienceFrame, flags), 8);
+    assert_eq!(
+        core::mem::offset_of!(PackedExperienceFrame, sensor_profile_id),
+        12
+    );
+    assert_eq!(
+        core::mem::offset_of!(PackedExperienceFrame, sensor_profile_schema_version),
+        14
+    );
+    assert_eq!(
+        core::mem::offset_of!(PackedExperienceFrame, organism_id),
+        16
+    );
 }
 
 #[test]
@@ -330,6 +358,8 @@ fn valid_sealed_patch_packs_into_lossy_frame_and_side_buffers() {
     let frame = record.frame;
 
     assert_eq!(frame.schema_version, PACKED_EXPERIENCE_SCHEMA_VERSION);
+    assert_eq!(frame.sensor_profile_id, 1);
+    assert_eq!(frame.sensor_profile_schema_version, 1);
     assert_eq!(frame.organism_id, organism().raw());
     assert_eq!(frame.sequence_id, sequence().raw());
     assert_eq!(frame.pre_action_tick, 10);
@@ -354,6 +384,20 @@ fn valid_sealed_patch_packs_into_lossy_frame_and_side_buffers() {
         .iter()
         .any(|record| record.kind == PackedSideBufferKind::RankedActionProposal));
     assert!(record.validate_contract().is_ok());
+}
+
+#[test]
+fn packed_frame_rejects_unknown_sensor_profile_id() {
+    let mut frame = ExperiencePacker::default()
+        .pack(&patch(false))
+        .unwrap()
+        .frame;
+    frame.sensor_profile_id = 99;
+
+    assert_eq!(
+        frame.validate_contract(),
+        Err(ScaffoldContractError::SensorProfileMismatch)
+    );
 }
 
 #[test]

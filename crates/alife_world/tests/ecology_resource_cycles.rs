@@ -243,5 +243,6 @@ fn fixture_creature() -> CreatureSaveState {
             lamarckian_mode_enabled: false,
             last_consolidated_tick: None,
         },
+        gpu_brain: None,
     }
 }

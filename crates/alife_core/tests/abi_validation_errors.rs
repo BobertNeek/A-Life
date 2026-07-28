@@ -69,8 +69,18 @@ fn validated_wrapper_accepts_good_contracts_and_rejects_bad_versions() {
 
 #[test]
 fn existing_headers_and_manifests_validate_versions_and_ids() {
-    let header =
-        ExperiencePatchHeader::new(OrganismId(1), ExperienceSequenceId(2), Tick(3)).unwrap();
+    let header = ExperiencePatchHeader::new(
+        OrganismId(1),
+        ExperienceSequenceId(2),
+        Tick(3),
+        alife_core::SensorProfileProvenance::new(
+            alife_core::SensorProfile::PrivilegedAffordanceV1,
+            alife_core::SensoryAbiVersion::CURRENT,
+            Tick(3),
+        )
+        .unwrap(),
+    )
+    .unwrap();
     assert!(header.validate_contract().is_ok());
 
     let mut bad_header = header;

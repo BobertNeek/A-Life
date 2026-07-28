@@ -177,7 +177,11 @@ mod tests {
             sensory_abi_version: 1,
             action_abi_version: 2,
             flags: 0,
-            reserved_header: 0,
+            sensor_profile_id: alife_core::SensorProfile::PrivilegedAffordanceV1.raw(),
+            sensor_profile_schema_version: alife_core::SchemaVersions::current_for(
+                alife_core::SchemaKind::SensorProfile,
+            )
+            .raw(),
             organism_id: 1,
             sequence_id: 1,
             pre_action_tick: 1,

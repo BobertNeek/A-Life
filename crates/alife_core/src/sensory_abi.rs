@@ -429,7 +429,11 @@ impl TeacherPerceptionChannel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct HeardToken {
+    pub utterance_id: crate::UtteranceId,
+    pub sequence_position: u8,
+    pub source_kind: crate::UtteranceSourceKind,
     pub speaker_id: Option<OrganismId>,
+    pub addressee: Option<OrganismId>,
     pub source_entity: Option<WorldEntityId>,
     pub token_id: u32,
     pub source_position: Vec3f,
@@ -440,8 +444,12 @@ pub struct HeardToken {
 impl Validate for HeardToken {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         validate_optional_organism_id(self.speaker_id)?;
+        validate_optional_organism_id(self.addressee)?;
         validate_optional_target(self.source_entity)?;
-        if self.token_id == 0 {
+        if self.token_id == 0
+            || self.token_id >= u32::from(crate::LanguageCodebookV1::CODE_COUNT)
+            || self.sequence_position >= crate::LanguageCodebookV1::MAX_HEARD_TOKENS
+        {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.source_position.validate()?;

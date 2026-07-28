@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 
+use alife_core::{ConsolidationState, SleepPhase};
 use alife_world::persistence::{PortableAssetDigest, P34_SAVE_FILE_SCHEMA_VERSION};
 
 use crate::prelude::*;
@@ -91,6 +92,14 @@ pub struct SaveSlotMetadata {
     pub schema: Option<String>,
     pub schema_version: Option<u16>,
     pub json_bytes: usize,
+    #[serde(default)]
+    pub gpu_checkpoint_count: usize,
+    #[serde(default)]
+    pub gpu_checkpoint_tick: Option<Tick>,
+    #[serde(default)]
+    pub gpu_sleep_phase: Option<String>,
+    #[serde(default)]
+    pub gpu_consolidation_state: Option<String>,
 }
 
 impl SaveSlotMetadata {
@@ -108,6 +117,10 @@ impl SaveSlotMetadata {
             schema: None,
             schema_version: None,
             json_bytes: 0,
+            gpu_checkpoint_count: 0,
+            gpu_checkpoint_tick: None,
+            gpu_sleep_phase: None,
+            gpu_consolidation_state: None,
         }
     }
 
@@ -116,6 +129,23 @@ impl SaveSlotMetadata {
         save: &PortableSaveFile,
         json_bytes: usize,
     ) -> Self {
+        let checkpoints = save
+            .creatures
+            .iter()
+            .filter_map(|creature| creature.gpu_brain.as_ref())
+            .collect::<Vec<_>>();
+        let gpu_checkpoint_tick =
+            uniform_checkpoint_value(checkpoints.iter().map(|state| state.checkpoint_tick));
+        let gpu_sleep_phase = uniform_checkpoint_value(
+            checkpoints
+                .iter()
+                .map(|state| save_sleep_phase_label(state.sleep.phase).to_string()),
+        );
+        let gpu_consolidation_state = uniform_checkpoint_value(
+            checkpoints
+                .iter()
+                .map(|state| save_consolidation_label(&state.sleep.consolidation).to_string()),
+        );
         Self {
             slot_id: descriptor.slot_id.clone(),
             display_name: descriptor.display_name.clone(),
@@ -129,6 +159,10 @@ impl SaveSlotMetadata {
             schema: Some(save.schema.clone()),
             schema_version: Some(save.schema_version),
             json_bytes,
+            gpu_checkpoint_count: checkpoints.len(),
+            gpu_checkpoint_tick,
+            gpu_sleep_phase,
+            gpu_consolidation_state,
         }
     }
 }
@@ -840,14 +874,23 @@ pub fn graphical_save_load_menu_text(session: &GraphicalSaveLoadMenuSession) -> 
         || "Slot 1: empty".to_string(),
         |slot| {
             format!(
-                "Slot 1: {} occupied={} save={} objects={} tick={}",
+                "Slot 1: {} occupied={} save={} objects={} tick={} GPU checkpoints={} checkpoint_tick={} recovery={}",
                 slot.display_name,
                 slot.occupied,
                 slot.save_id.as_deref().unwrap_or("empty"),
                 slot.object_count,
                 slot.world_tick
                     .map(|tick| tick.raw().to_string())
-                    .unwrap_or_else(|| "n/a".to_string())
+                    .unwrap_or_else(|| "n/a".to_string()),
+                slot.gpu_checkpoint_count,
+                slot.gpu_checkpoint_tick
+                    .map(|tick| tick.raw().to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+                if slot.gpu_checkpoint_count > 0 {
+                    "GPU required"
+                } else {
+                    "not checkpointed"
+                }
             )
         },
     );
@@ -972,7 +1015,7 @@ fn save_slot_menu_line(slot: &SaveSlotMetadata) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "- {} ({}) occupied={} save={}\n  tick={} objects={} stable_ids=[{}] schema={} v{} bytes={}",
+        "- {} ({}) occupied={} save={}\n  tick={} objects={} stable_ids=[{}] schema={} v{} bytes={}\n  GPU checkpoints={} checkpoint_tick={} sleep={} consolidation={} recovery={}",
         slot.display_name,
         slot.kind.label(),
         slot.occupied,
@@ -986,8 +1029,47 @@ fn save_slot_menu_line(slot: &SaveSlotMetadata) -> String {
         slot.schema_version
             .map(|version| version.to_string())
             .unwrap_or_else(|| "n/a".to_string()),
-        slot.json_bytes
+        slot.json_bytes,
+        slot.gpu_checkpoint_count,
+        slot.gpu_checkpoint_tick
+            .map(|tick| tick.raw().to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        slot.gpu_sleep_phase.as_deref().unwrap_or("none"),
+        slot.gpu_consolidation_state.as_deref().unwrap_or("none"),
+        if slot.gpu_checkpoint_count > 0 {
+            "GPU required"
+        } else {
+            "not checkpointed"
+        }
     )
+}
+
+fn uniform_checkpoint_value<T: Clone + PartialEq>(
+    mut values: impl Iterator<Item = T>,
+) -> Option<T> {
+    let first = values.next()?;
+    values.all(|value| value == first).then_some(first)
+}
+
+const fn save_sleep_phase_label(phase: SleepPhase) -> &'static str {
+    match phase {
+        SleepPhase::Awake => "Awake",
+        SleepPhase::EnteringSleep => "Entering sleep",
+        SleepPhase::Consolidating => "Consolidating",
+        SleepPhase::Waking => "Waking",
+        SleepPhase::ForcedRecoverySleep => "Forced recovery sleep",
+    }
+}
+
+const fn save_consolidation_label(state: &ConsolidationState) -> &'static str {
+    match state {
+        ConsolidationState::None => "None",
+        ConsolidationState::Pending { .. } => "Pending",
+        ConsolidationState::Prepared { .. } => "Prepared",
+        ConsolidationState::Submitted { .. } => "Submitted",
+        ConsolidationState::Completed { .. } => "Completed",
+        ConsolidationState::Committed { .. } => "Committed",
+    }
 }
 
 pub fn run_graphical_save_load_menu_smoke(

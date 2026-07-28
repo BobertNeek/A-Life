@@ -1,15 +1,15 @@
 use alife_core::{
-    cpu_reference_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand, ActionId,
-    ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassId, BrainClassSpec,
+    heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionCommand,
+    ActionId, ActionKind, ActionProposal, ActionTarget, BodySnapshot, BrainClassId, BrainClassSpec,
     BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateFeatureVector,
     CandidateObservationRef, Confidence, DecisionSnapshot, DevelopmentState, DurationTicks,
-    EvidenceKind, ExperiencePacker, ExperiencePatch, ExperiencePatchBuilder, ExperiencePatchHeader,
-    ExperiencePatchPhase, ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity,
-    LobeKind, MemoryBank, MemoryBankConfig, MemoryExpectancySnapshot, NeuralActionSelection,
-    NormalizedScalar, OrganismId, PerceptionFrame, PhenotypeHash, PhysicalActionOutcome,
-    PhysicalContactKind, PolicyBackend, Pose, PostActionOutcome, PostSealLearningToken,
-    PreActionSnapshot, ScaffoldContractError, SensorProfile, SensoryChannels, SensorySnapshot,
-    SignedValence, Tick, TopologicalMap, TopologicalMapConfig, Validate, Vec3f, Velocity,
+    EvidenceKind, ExperiencePacker, ExperiencePatch, ExperiencePatchBuilder, ExperiencePatchPhase,
+    ExperienceSequenceId, HomeostaticDelta, HomeostaticSnapshot, Intensity, LobeKind, MemoryBank,
+    MemoryBankConfig, MemoryExpectancySnapshot, NeuralActionSelection, NormalizedScalar,
+    OrganismId, PerceptionFrame, PhenotypeHash, PhysicalActionOutcome, PhysicalContactKind,
+    PolicyBackend, Pose, PostActionOutcome, PreActionSnapshot, ScaffoldContractError,
+    SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+    SignedValence, Tick, TopologicalMapConfig, TopologySidecar, Validate, Vec3f, Velocity,
     WeightSplitContract, WorldEntityId,
 };
 use serde::Serialize;
@@ -74,7 +74,7 @@ fn perception_fixture() -> PerceptionFrame {
             ActionId(101),
             ActionKind::Move,
             CandidateActionFamily::Approach,
-            CandidateObservationRef::ObjectSlot(2),
+            CandidateObservationRef::None,
             ActionTarget::new(Some(WorldEntityId(55)), Some(Vec3f::new(1.0, 0.0, 2.0))),
             CandidateFeatureVector::zero(),
             Confidence::new(0.9).unwrap(),
@@ -95,6 +95,13 @@ fn perception_fixture() -> PerceptionFrame {
         },
         HomeostaticSnapshot::baseline(tick),
         candidates,
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        Vec::new(),
     )
     .unwrap()
 }
@@ -310,6 +317,8 @@ fn signed_zero_cannot_change_digest_bound_command_bits() {
         original.body(),
         *original.homeostasis(),
         vec![original.candidates()[0], changed],
+        original.profile_provenance(),
+        original.grounded_object_slots().to_vec(),
     )
     .unwrap();
     let selection = NeuralActionSelection {
@@ -533,9 +542,8 @@ fn neural_patch_consumers_use_common_evidence_without_baseline_payloads() {
     .unwrap();
     let patch = seal_with_decision(frame, decision).unwrap();
 
-    let token = PostSealLearningToken::from_sealed_patch(&patch).unwrap();
     assert_eq!(
-        token.frame_digest(),
+        patch.decision().neural_evidence().unwrap().frame_digest,
         patch.pre_action().frame_digest().unwrap()
     );
 
@@ -545,8 +553,10 @@ fn neural_patch_consumers_use_common_evidence_without_baseline_payloads() {
     .unwrap();
     assert_eq!(memory.insert_from_patch(&patch).unwrap().raw(), 1);
 
-    let mut topology = TopologicalMap::new(TopologicalMapConfig::default()).unwrap();
-    assert!(topology.apply_patch(&patch).is_ok());
+    let mut topology = TopologySidecar::new(organism(), TopologicalMapConfig::default()).unwrap();
+    let rejected = topology.observe_sealed_patch(&patch);
+    assert!(rejected.rejected_invalid);
+    assert_eq!(rejected.before_digest, rejected.after_digest);
 
     let packed = ExperiencePacker::default().pack(&patch).unwrap();
     assert_eq!(packed.frame.selected_action_id, 101);
@@ -600,8 +610,17 @@ struct LegacyDecisionSnapshotV1 {
 }
 
 #[derive(Serialize)]
+struct LegacyExperiencePatchHeaderV1 {
+    abi_version: u16,
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    world_tick: Tick,
+    phase: ExperiencePatchPhase,
+}
+
+#[derive(Serialize)]
 struct LegacyExperiencePatchV1 {
-    header: ExperiencePatchHeader,
+    header: LegacyExperiencePatchHeaderV1,
     pre_action: LegacyPreActionSnapshotV1,
     decision: LegacyDecisionSnapshotV1,
     outcome: PostActionOutcome,
@@ -632,7 +651,7 @@ fn legacy_patch_v1() -> LegacyExperiencePatchV1 {
     )
     .unwrap();
     let proposals = vec![proposal];
-    let action_decision = cpu_reference_arbitrate(
+    let action_decision = heuristic_baseline_arbitrate(
         organism(),
         &proposals,
         ActionArbitrationConfig {
@@ -645,7 +664,7 @@ fn legacy_patch_v1() -> LegacyExperiencePatchV1 {
     outcome.abi_version = 1;
 
     LegacyExperiencePatchV1 {
-        header: ExperiencePatchHeader {
+        header: LegacyExperiencePatchHeaderV1 {
             abi_version: 1,
             organism_id: organism(),
             sequence_id: sequence_id(),
@@ -724,7 +743,7 @@ fn install_legacy_decision(
     proposals: Vec<ActionProposal>,
     config: ActionArbitrationConfig,
 ) -> alife_core::ActionDecision {
-    let action_decision = cpu_reference_arbitrate(organism(), &proposals, config).unwrap();
+    let action_decision = heuristic_baseline_arbitrate(organism(), &proposals, config).unwrap();
     legacy.decision.proposals = proposals;
     legacy.decision.selected_action = action_decision.selected;
     legacy.decision.rejected_top_proposal = action_decision.rejected_top_proposal;
@@ -755,7 +774,11 @@ fn legacy_v1_patch_deserializes_as_explicit_heuristic_baseline_evidence() {
     let value = serde_json::to_value(legacy_patch_v1()).unwrap();
     let migrated: ExperiencePatch = serde_json::from_value(value).unwrap();
 
-    assert_eq!(migrated.header().abi_version, 2);
+    assert_eq!(migrated.header().abi_version, 3);
+    assert_eq!(
+        migrated.header().sensor_profile,
+        migrated.pre_action().perception().profile_provenance()
+    );
     assert_eq!(
         migrated.pre_action().evidence_kind(),
         EvidenceKind::HeuristicBaseline

@@ -1,10 +1,15 @@
 //! Stable, bounded language codes and speech-act protocol contracts.
 
+use std::collections::BTreeSet;
+
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::blake3_digest::{domain_hasher, Blake3Write};
-use crate::{Blake3Digest, ScaffoldContractError};
+use crate::{
+    ActionKind, Blake3Digest, Confidence, ExperiencePatch, OrganismId, ScaffoldContractError,
+    Validate, Vec3f,
+};
 
 const CODEBOOK_DOMAIN: &[u8] = b"alife.language-codebook.v1";
 
@@ -23,6 +28,386 @@ impl LanguageTokenId {
 
     pub const fn raw(self) -> u16 {
         self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+pub struct UtteranceId(u64);
+
+impl UtteranceId {
+    pub fn new(raw: u64) -> Result<Self, ScaffoldContractError> {
+        (raw != 0)
+            .then_some(Self(raw))
+            .ok_or(ScaffoldContractError::InvalidId)
+    }
+
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for UtteranceId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(u64::deserialize(deserializer)?).map_err(D::Error::custom)
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum UtteranceSourceKind {
+    Player = 0,
+    Creature = 1,
+    Teacher = 2,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayerUtterance {
+    pub utterance_id: UtteranceId,
+    pub source_kind: UtteranceSourceKind,
+    pub addressee: Option<OrganismId>,
+    pub source_position: Vec3f,
+    pub tokens: Vec<LanguageTokenId>,
+}
+
+impl PlayerUtterance {
+    pub fn try_new(
+        utterance_id: UtteranceId,
+        addressee: Option<OrganismId>,
+        source_position: Vec3f,
+        tokens: Vec<LanguageTokenId>,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            utterance_id,
+            source_kind: UtteranceSourceKind::Player,
+            addressee,
+            source_position,
+            tokens,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+}
+
+impl Validate for PlayerUtterance {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.source_kind != UtteranceSourceKind::Player
+            || self.tokens.is_empty()
+            || self.tokens.len() > usize::from(LanguageCodebookV1::MAX_HEARD_TOKENS)
+            || self.tokens.iter().any(|token| token.raw() == 0)
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        if let Some(addressee) = self.addressee {
+            addressee.validate()?;
+        }
+        self.source_position.validate()?;
+        Ok(())
+    }
+}
+
+pub const SPEECH_TRANSLATION_MAX_SURFACE_CHARS: usize = 512;
+pub const SPEECH_TRANSLATION_MAX_BINDINGS: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SurfaceTokenBinding {
+    pub surface: String,
+    pub token: LanguageTokenId,
+}
+
+impl SurfaceTokenBinding {
+    pub fn try_new(
+        surface: impl Into<String>,
+        token: LanguageTokenId,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            surface: surface.into().trim().to_lowercase(),
+            token,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+}
+
+impl Validate for SurfaceTokenBinding {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.surface.is_empty()
+            || self.surface.chars().count() > 64
+            || self.surface.chars().any(char::is_whitespace)
+            || self.token.raw() == 0
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechTranslationInput {
+    PlayerText { text: String },
+    CreatureTokens { tokens: Vec<LanguageTokenId> },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeechTranslationRequest {
+    pub utterance_id: UtteranceId,
+    pub addressee: Option<OrganismId>,
+    pub input: SpeechTranslationInput,
+    pub known_bindings: Vec<SurfaceTokenBinding>,
+}
+
+impl SpeechTranslationRequest {
+    pub fn try_new(
+        utterance_id: UtteranceId,
+        addressee: Option<OrganismId>,
+        input: SpeechTranslationInput,
+        known_bindings: Vec<SurfaceTokenBinding>,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            utterance_id,
+            addressee,
+            input,
+            known_bindings,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+
+    pub fn raw_tokens(&self) -> Vec<LanguageTokenId> {
+        match &self.input {
+            SpeechTranslationInput::PlayerText { .. } => Vec::new(),
+            SpeechTranslationInput::CreatureTokens { tokens } => tokens.clone(),
+        }
+    }
+}
+
+impl Validate for SpeechTranslationRequest {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if let Some(addressee) = self.addressee {
+            addressee.validate()?;
+        }
+        if self.known_bindings.len() > SPEECH_TRANSLATION_MAX_BINDINGS {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        for binding in &self.known_bindings {
+            binding.validate_contract()?;
+        }
+        let unique_surfaces = self
+            .known_bindings
+            .iter()
+            .map(|binding| binding.surface.as_str())
+            .collect::<BTreeSet<_>>();
+        if unique_surfaces.len() != self.known_bindings.len() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        match &self.input {
+            SpeechTranslationInput::PlayerText { text } => {
+                let length = text.chars().count();
+                if length == 0 || length > SPEECH_TRANSLATION_MAX_SURFACE_CHARS {
+                    return Err(ScaffoldContractError::InvalidPerceptionFrame);
+                }
+            }
+            SpeechTranslationInput::CreatureTokens { tokens } => {
+                if tokens.is_empty()
+                    || tokens.len() > usize::from(LanguageCodebookV1::MAX_GENERATED_TOKENS)
+                    || tokens.iter().any(|token| token.raw() == 0)
+                {
+                    return Err(ScaffoldContractError::InvalidPerceptionFrame);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NovelLanguageToken {
+    pub token: LanguageTokenId,
+    pub surface: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpeechTranslationReceipt {
+    pub utterance_id: UtteranceId,
+    pub addressee: Option<OrganismId>,
+    pub literal_tokens: Vec<LanguageTokenId>,
+    pub novel_tokens: Vec<NovelLanguageToken>,
+    pub literal_text: String,
+    pub rendered_text: String,
+    pub confidence: Confidence,
+    pub model_identity: String,
+    pub assisted: bool,
+    pub uncertain: bool,
+}
+
+impl Validate for SpeechTranslationReceipt {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if let Some(addressee) = self.addressee {
+            addressee.validate()?;
+        }
+        if self.literal_tokens.is_empty()
+            || self.literal_tokens.len() > usize::from(LanguageCodebookV1::MAX_HEARD_TOKENS)
+            || self.literal_tokens.iter().any(|token| token.raw() == 0)
+            || self.novel_tokens.len() > self.literal_tokens.len()
+            || self.novel_tokens.iter().any(|novel| {
+                novel.surface.trim().is_empty()
+                    || novel.surface.chars().count() > 64
+                    || !self.literal_tokens.contains(&novel.token)
+            })
+            || self.literal_text.trim().is_empty()
+            || self.rendered_text.trim().is_empty()
+            || self.model_identity.trim().is_empty()
+            || self.model_identity.chars().count() > 128
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        Confidence::new(self.confidence.raw())?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpeechMotorPayload {
+    pub speech_act: SpeechActKind,
+    pub tokens: Vec<LanguageTokenId>,
+    pub confidence: Confidence,
+}
+
+pub const LANGUAGE_GROUNDING_LEDGER_CAPACITY: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageGroundingEntry {
+    pub token: LanguageTokenId,
+    pub action: ActionKind,
+    pub exposures: u32,
+    pub successful_outcomes: u32,
+}
+
+/// Bounded, non-authoritative associations observed only from sealed life
+/// experience. The ledger never supplies action scores or neural activations.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageGroundingLedger {
+    last_sequence_id: u64,
+    entries: Vec<LanguageGroundingEntry>,
+}
+
+impl LanguageGroundingLedger {
+    pub fn entries(&self) -> &[LanguageGroundingEntry] {
+        &self.entries
+    }
+
+    pub const fn last_sequence_id(&self) -> u64 {
+        self.last_sequence_id
+    }
+
+    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.entries.len() > LANGUAGE_GROUNDING_LEDGER_CAPACITY
+            || (!self.entries.is_empty() && self.last_sequence_id == 0)
+            || self.entries.iter().any(|entry| {
+                entry.token.raw() == 0
+                    || entry.exposures == 0
+                    || entry.successful_outcomes > entry.exposures
+            })
+            || self.entries.windows(2).any(|pair| {
+                (pair[0].token.raw(), pair[0].action.raw())
+                    >= (pair[1].token.raw(), pair[1].action.raw())
+            })
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        Ok(())
+    }
+
+    pub fn observe_sealed(&mut self, patch: &ExperiencePatch) -> Result<(), ScaffoldContractError> {
+        patch.validate_contract()?;
+        let sequence = patch.header().sequence_id.raw();
+        if sequence <= self.last_sequence_id {
+            return Err(ScaffoldContractError::LearningReplayRejected);
+        }
+        self.last_sequence_id = sequence;
+        let action = patch.decision().selected_action.kind;
+        let succeeded = patch.outcome().success;
+        let mut tokens = patch
+            .pre_action()
+            .perception()
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .flatten()
+            .filter_map(|heard| u16::try_from(heard.token_id).ok())
+            .filter_map(|raw| LanguageTokenId::new(raw).ok())
+            .filter(|token| token.raw() != 0)
+            .collect::<Vec<_>>();
+        tokens.sort_unstable();
+        tokens.dedup();
+        for token in tokens {
+            if let Some(entry) = self
+                .entries
+                .iter_mut()
+                .find(|entry| entry.token == token && entry.action == action)
+            {
+                entry.exposures = entry.exposures.saturating_add(1);
+                entry.successful_outcomes = entry
+                    .successful_outcomes
+                    .saturating_add(u32::from(succeeded));
+                continue;
+            }
+            if self.entries.len() == LANGUAGE_GROUNDING_LEDGER_CAPACITY {
+                let eviction = self
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .min_by_key(|(_, entry)| {
+                        (entry.exposures, entry.token.raw(), entry.action.raw())
+                    })
+                    .map(|(index, _)| index)
+                    .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
+                self.entries.remove(eviction);
+            }
+            self.entries.push(LanguageGroundingEntry {
+                token,
+                action,
+                exposures: 1,
+                successful_outcomes: u32::from(succeeded),
+            });
+        }
+        self.entries
+            .sort_by_key(|entry| (entry.token.raw(), entry.action.raw()));
+        self.validate_contract()?;
+        Ok(())
+    }
+}
+
+impl SpeechMotorPayload {
+    pub fn try_new(
+        speech_act: SpeechActKind,
+        tokens: Vec<LanguageTokenId>,
+        confidence: Confidence,
+    ) -> Result<Self, ScaffoldContractError> {
+        let value = Self {
+            speech_act,
+            tokens,
+            confidence,
+        };
+        value.validate_contract()?;
+        Ok(value)
+    }
+}
+
+impl Validate for SpeechMotorPayload {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.tokens.is_empty()
+            || self.tokens.len() > usize::from(LanguageCodebookV1::MAX_GENERATED_TOKENS)
+            || self.tokens.iter().any(|token| token.raw() == 0)
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Confidence::new(self.confidence.raw())?;
+        Ok(())
     }
 }
 

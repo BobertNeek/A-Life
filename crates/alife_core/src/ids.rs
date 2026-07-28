@@ -40,6 +40,12 @@ pub struct ConceptCellId(pub u64);
 pub struct MemoryId(pub u64);
 
 #[repr(transparent)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Pod, Zeroable,
+)]
+pub struct TrackedObjectId(pub u64);
+
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Pod, Zeroable)]
 pub struct ActionId(pub u32);
 
@@ -95,6 +101,7 @@ impl_nonzero_id!(LineageId);
 impl_nonzero_id!(GaussianClusterId);
 impl_nonzero_id!(ConceptCellId);
 impl_nonzero_id!(MemoryId);
+impl_nonzero_id!(TrackedObjectId);
 impl_nonzero_id!(ExperienceSequenceId);
 
 impl BrainClassId {

@@ -1,13 +1,11 @@
 use alife_core::{
-    BrainClassSpec, BrainScaleTier, CooEntry, CooTile, NeuralProjectionSchema, OjaUpdateConfig,
-    ProjectionTile, ScaffoldContractError, SparseTileCoord, SynapseWeightSplit,
-    WeightSplitContract,
+    BrainClassSpec, BrainScaleTier, CooEntry, CooTile, NeuralProjectionSchema, ProjectionTile,
+    ScaffoldContractError, SparseTileCoord, SynapseWeightSplit, WeightSplitContract,
 };
 use alife_gpu_backend::{
-    GpuActiveTileMaskConfig, GpuFixedPointPolicy, GpuOjaFixedPointConfig, GpuPlasticityPlan,
-    GpuReadbackClass, GpuReadbackPolicy, GpuRoutingMaskPlan, GpuStaticForwardPlan,
-    GpuSupertileIndex, GpuSupertileMaskWords, GpuUploadBuffers, P27_SUPERTILE_MICROTILES,
-    P27_WGSL_SUPERTILE_ROUTING,
+    GpuActiveTileMaskConfig, GpuFixedPointPolicy, GpuReadbackClass, GpuReadbackPolicy,
+    GpuRoutingMaskPlan, GpuStaticForwardPlan, GpuSupertileIndex, GpuSupertileMaskWords,
+    GpuUploadBuffers, P27_SUPERTILE_MICROTILES, P27_WGSL_SUPERTILE_ROUTING,
 };
 
 fn weights(
@@ -287,46 +285,6 @@ fn static_forward_can_consume_p27_masks_without_output_drift() {
     assert_eq!(result.diagnostics.mask_skipped_tiles, 0);
     assert_ne!(result.activations_q[0], 0);
     assert_ne!(result.activations_q[16], 0);
-}
-
-#[test]
-fn plasticity_respects_p27_masks_without_mutating_baseline_layers() {
-    let policy = GpuFixedPointPolicy::reference();
-    let mut schema = two_tile_schema();
-    schema.projections[0].supertile_masks[0].active_microtile_mask = 1;
-    let upload = GpuUploadBuffers::from_cpu_schema(&schema, policy).unwrap();
-    let plan = GpuPlasticityPlan::from_upload(
-        &upload,
-        policy,
-        GpuOjaFixedPointConfig::from_oja_config(
-            OjaUpdateConfig {
-                learning_rate: 0.5,
-                learning_rate_scale: 1.0,
-                decay: 1.0,
-                shadow_min: -1.0,
-                shadow_max: 1.0,
-            },
-            policy,
-            0xC011,
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    let pre_q = plan
-        .quantize_activations(&activation_vec(0.75, 0.5))
-        .unwrap();
-    let post_q = plan
-        .quantize_activations(&activation_vec(0.5, 0.25))
-        .unwrap();
-    let result = plan.execute_cpu_diagnostic(&pre_q, &post_q).unwrap();
-
-    assert_eq!(result.diagnostics.active_tiles, 1);
-    assert_eq!(result.diagnostics.mask_skipped_tiles, 1);
-    assert_ne!(result.h_shadow_q[0], plan.h_shadow_initial_q[0]);
-    assert_eq!(result.h_shadow_q[1], plan.h_shadow_initial_q[1]);
-    assert_eq!(result.genetic_fixed_q, plan.genetic_fixed_q);
-    assert_eq!(result.lifetime_consolidated_q, plan.lifetime_consolidated_q);
-    assert_eq!(result.h_operational_q, plan.h_operational_q);
 }
 
 #[test]

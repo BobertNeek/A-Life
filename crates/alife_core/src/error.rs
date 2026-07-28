@@ -84,8 +84,32 @@ pub enum ScaffoldContractError {
     GpuLayoutMismatch,
     #[error("sensor profile does not match the compiled phenotype or perception")]
     SensorProfileMismatch,
+    #[error("tracked-object identity space is exhausted")]
+    TrackedObjectIdentityExhausted,
+    #[error("candidate-conditioned memory query or retrieval context is invalid")]
+    InvalidMemoryQuery,
+    #[error("legacy diagnostic memory and candidate-conditioned memory cannot share one bank")]
+    MemoryModeConflict,
+    #[error("sealed episodic sequence was already observed or is not strictly newer")]
+    MemoryReplayRejected,
+    #[error("memory compaction cycle, policy, generation, or digest conflicts with active state")]
+    MemoryCompactionConflict,
     #[error("brain handle or evidence belongs to a different organism")]
     BrainOwnershipMismatch,
+    #[error("sealed outcome credit does not match the installed neural decision evidence")]
+    LearningEvidenceMismatch,
+    #[error("sealed outcome credit sequence was already applied or is not strictly newer")]
+    LearningReplayRejected,
+    #[error("sleep consolidation generation does not match the installed GPU brain slot")]
+    ConsolidationGenerationMismatch,
+    #[error("brain activity policy, fixed-point cost, or pressure contract mismatch")]
+    BrainActivityPolicyMismatch,
+    #[error("brain activity pressure, throttle, or work sequence mismatch")]
+    BrainActivitySequenceMismatch,
+    #[error("brain ATP is insufficient for the completed neural dispatch")]
+    BrainAtpExhausted,
+    #[error("required GPU timestamp queries are unavailable")]
+    GpuTimestampQueryUnavailable,
     #[error("the GPU-authoritative neural backend is unavailable")]
     NeuralBackendUnavailable,
 }

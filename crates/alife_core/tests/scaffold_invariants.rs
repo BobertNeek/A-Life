@@ -57,8 +57,18 @@ fn genome_and_endocrine_profile_reference_brain_class_without_runtime_weights() 
 
 #[test]
 fn experience_patch_and_action_command_use_versioned_structured_contracts() {
-    let patch =
-        ExperiencePatchHeader::new(OrganismId(11), ExperienceSequenceId(22), Tick(33)).unwrap();
+    let patch = ExperiencePatchHeader::new(
+        OrganismId(11),
+        ExperienceSequenceId(22),
+        Tick(33),
+        alife_core::SensorProfileProvenance::new(
+            alife_core::SensorProfile::PrivilegedAffordanceV1,
+            alife_core::SensoryAbiVersion::CURRENT,
+            Tick(33),
+        )
+        .unwrap(),
+    )
+    .unwrap();
     let action = ActionCommand::new(
         OrganismId(11),
         ActionKind::Interact,

@@ -13,4 +13,7 @@ Rules:
   thought or speech.
 - Unknown concepts remain novel tokens, and uncertain rendering remains visibly
   uncertain.
+- Deterministic tokenization may never label a receipt SLM-assisted. Assisted
+  receipts require a successful bounded provider response that passes content
+  validation.
 - Keep provider traits vendor-neutral.

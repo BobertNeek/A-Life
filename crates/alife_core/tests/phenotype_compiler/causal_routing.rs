@@ -89,13 +89,14 @@ mod task3_causal_genome_and_routing_red_tests {
     fn decoder_coordinate_evidence(
         phenotype: &BrainPhenotype,
         expected_family: CandidateActionFamily,
-    ) -> Vec<(u8, u8, u16, u16, u32)> {
+    ) -> Vec<(u32, u8, u16, u16, u32)> {
         phenotype
             .synapses()
             .iter()
             .filter_map(|synapse| match synapse.kind() {
                 CompiledSynapseKind::Decoder(coordinate)
-                    if coordinate.family() == expected_family =>
+                    if coordinate.head() == DecoderHeadKind::ActionCandidate
+                        && coordinate.family() == expected_family =>
                 {
                     Some((
                         coordinate.head().raw(),
@@ -255,7 +256,7 @@ mod task3_causal_genome_and_routing_red_tests {
 
     fn mutate_motor_gene(genome: &mut BrainGenome, _: &mut DevelopmentState) {
         genome.motor_affordances.push(MotorAffordanceGene {
-            kind: MotorAffordanceKind::Eat,
+            kind: MotorAffordanceKind::Vocalize,
             enabled: true,
             motor_lobe_units: 1,
             enabled_at_maturation: 0,
@@ -263,8 +264,8 @@ mod task3_causal_genome_and_routing_red_tests {
     }
 
     fn assert_motor_gene_change(before: &BrainPhenotype, after: &BrainPhenotype) {
-        assert!(decoder_coordinate_evidence(before, CandidateActionFamily::Ingest).is_empty());
-        let coordinates = decoder_coordinate_evidence(after, CandidateActionFamily::Ingest);
+        assert!(decoder_coordinate_evidence(before, CandidateActionFamily::Other).is_empty());
+        let coordinates = decoder_coordinate_evidence(after, CandidateActionFamily::Other);
         assert_eq!(coordinates.len(), CANDIDATE_FEATURE_COUNT);
 
         let expected_input_lanes: BTreeSet<_> = (0_u16..CANDIDATE_FEATURE_COUNT as u16).collect();
@@ -272,7 +273,7 @@ mod task3_causal_genome_and_routing_red_tests {
             .iter()
             .map(|(head, family, input_lane, motor_index, target)| {
                 assert_eq!(*head, DecoderHeadKind::ActionCandidate.raw());
-                assert_eq!(*family, CandidateActionFamily::Ingest.raw());
+                assert_eq!(*family, CandidateActionFamily::Other.raw());
                 assert_eq!(
                     *target,
                     after.candidate_decoder().motor_start() + u32::from(*motor_index),
@@ -376,12 +377,17 @@ mod task3_causal_genome_and_routing_red_tests {
         for case in cases {
             let (mut genome, mut development) = fixture();
             (case.prepare)(&mut genome, &mut development);
-            let before = compile_ok(&genome, &development);
+            let before = compile_result(&genome, &development).unwrap_or_else(|error| {
+                panic!("{} baseline failed to compile: {error}", case.name)
+            });
 
             let mut mutated_genome = genome.clone();
             let mut mutated_development = development.clone();
             (case.mutate)(&mut mutated_genome, &mut mutated_development);
-            let after = compile_ok(&mutated_genome, &mutated_development);
+            let after =
+                compile_result(&mutated_genome, &mutated_development).unwrap_or_else(|error| {
+                    panic!("{} mutation failed to compile: {error}", case.name)
+                });
 
             assert_ne!(
                 before.phenotype_hash(),
@@ -533,17 +539,24 @@ mod task3_causal_genome_and_routing_red_tests {
     }
 
     #[test]
-    fn open_critical_periods_are_rejected_until_they_are_causal() {
+    fn open_critical_periods_causally_change_the_plasticity_plan() {
         let (genome, mut development) = fixture();
+        let baseline = compile_result(&genome, &development).unwrap();
         development.open_critical_periods.push(CriticalPeriod {
             lobe: LobeKind::CoreAssociation,
             opens_at: Tick::ZERO,
             closes_at: Tick(10),
             plasticity_bias: NormalizedScalar::new(0.5).unwrap(),
         });
-        assert_eq!(
-            compile_result(&genome, &development).unwrap_err(),
-            ScaffoldContractError::PhenotypeCompile,
+        let critical = compile_result(&genome, &development).unwrap();
+        assert_ne!(
+            critical.plasticity_plan_digest(),
+            baseline.plasticity_plan_digest()
+        );
+        assert_ne!(critical.phenotype_hash(), baseline.phenotype_hash());
+        assert_ne!(
+            critical.plasticity_receptors(),
+            baseline.plasticity_receptors()
         );
     }
 

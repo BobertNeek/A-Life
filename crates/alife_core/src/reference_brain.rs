@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::LifetimeTraitLedger;
 use crate::{
-    cpu_reference_arbitrate, cpu_spmv_projection, finalize_cpu_activations,
+    cpu_spmv_projection, finalize_cpu_activations, heuristic_baseline_arbitrate,
     update_oja_shadow_traces, validate_finite_slice, ActionArbitrationConfig,
     ActionArbitrationTraceRef, ActionBiasSource, ActionCandidate, ActionCommand,
     ActionDecisionStatus, ActionKind, ActionProposal, ActionScoreBias, BodySnapshot,
@@ -16,16 +16,15 @@ use crate::{
     CandidateObservationRef, ChemistryModulation, Confidence, ContractDiagnostic, CpuNeuralState,
     DecisionSnapshot, DevelopmentState, DurationTicks, ExperiencePacker, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, HomeostaticDelta, HomeostaticParameters,
-    HomeostaticSnapshot, Intensity, LobeKind, MemoryBank, MemoryBankConfig, MemoryExpectancy,
-    MemoryExpectancySnapshot, MemoryId, MemoryQuery, NeuralActivationConfig, NeuralDiagnostics,
+    HomeostaticSnapshot, Intensity, LobeKind, MemoryBank, MemoryBankConfig,
+    MemoryExpectancySnapshot, MemoryId, NeuralActivationConfig, NeuralDiagnostics,
     NeuralProjectionSchema, NeuralUpdateReport, NormalizedScalar, OjaUpdateConfig, OrganismId,
     PackedExperienceRecord, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, Pose,
-    PostActionOutcome, PostSealLearningToken, PostSealLifetimeDeltaBatch,
-    PostSealLifetimeDeltaReceipt, PreActionSnapshot, ScaffoldContractError, SensorProfile,
-    SensorySnapshot, SignedValence, SleepConsolidationConfig, SleepConsolidationReport,
-    SleepConsolidator, SleepController, SleepPhase, SleepState, SleepTransition, SleepTrigger,
-    StructuralEditBatch, Tick, TopologicalMap, TopologicalMapConfig, TopologyUpdate, Validate,
-    Vec3f, Velocity, WeightSplitContract,
+    PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorySnapshot,
+    SignedValence, SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator,
+    SleepController, SleepPhase, SleepState, SleepTransition, SleepTrigger, StructuralEditBatch,
+    Tick, TopologicalMap, TopologicalMapConfig, TopologySidecar, TopologyUpdate, Validate, Vec3f,
+    Velocity, WeightSplitContract,
 };
 
 const DEFAULT_MEMORY_CAPACITY: usize = 64;
@@ -421,15 +420,13 @@ pub struct CreatureMind {
     neural_state: CpuNeuralState,
     neural_schema: NeuralProjectionSchema,
     memory_bank: MemoryBank,
-    topological_map: TopologicalMap,
+    topology_sidecar: TopologySidecar,
     action_state: CreatureActionState,
     sleep_controller: SleepController,
     lifetime_traits: LifetimeTraitLedger,
     pending_structural_edits: Vec<StructuralEditBatch>,
     tick: Tick,
     next_sequence_id: u64,
-    #[serde(default)]
-    last_post_seal_lifetime_delta_sequence: Option<ExperienceSequenceId>,
     deterministic_seed: u64,
     diagnostics: BrainTickDiagnostics,
 }
@@ -475,14 +472,13 @@ impl CreatureMind {
             neural_state,
             neural_schema,
             memory_bank: MemoryBank::new(memory_config)?,
-            topological_map: TopologicalMap::new(TopologicalMapConfig::default())?,
+            topology_sidecar: TopologySidecar::new(organism_id, TopologicalMapConfig::default())?,
             action_state: CreatureActionState::reference(),
             sleep_controller: SleepController::new(SleepConsolidationConfig::reference())?,
             lifetime_traits: LifetimeTraitLedger::new(64)?,
             pending_structural_edits: Vec::new(),
             tick,
             next_sequence_id: 1,
-            last_post_seal_lifetime_delta_sequence: None,
             deterministic_seed,
             diagnostics: BrainTickDiagnostics::default(),
         };
@@ -511,7 +507,7 @@ impl CreatureMind {
     }
 
     pub const fn topological_map(&self) -> &TopologicalMap {
-        &self.topological_map
+        self.topology_sidecar.map()
     }
 
     pub const fn development_state(&self) -> &DevelopmentState {
@@ -538,7 +534,7 @@ impl CreatureMind {
         &mut self,
         schema: NeuralProjectionSchema,
     ) -> Result<(), ScaffoldContractError> {
-        if self.next_sequence_id != 1 || self.last_post_seal_lifetime_delta_sequence.is_some() {
+        if self.next_sequence_id != 1 {
             return Err(ScaffoldContractError::NonMonotonicTick);
         }
         schema.validate()?;
@@ -550,66 +546,6 @@ impl CreatureMind {
         self.neural_schema = schema;
         self.neural_state.projections = self.neural_schema.projections.clone();
         self.validate_ready(self.tick)
-    }
-
-    pub fn apply_post_seal_lifetime_deltas(
-        &mut self,
-        sealed_patch: &ExperiencePatch,
-        deltas: PostSealLifetimeDeltaBatch,
-    ) -> Result<PostSealLifetimeDeltaReceipt, ScaffoldContractError> {
-        let token = PostSealLearningToken::from_sealed_patch(sealed_patch)?;
-        self.apply_validated_post_seal_hshadow_deltas(token, deltas)
-    }
-
-    fn apply_validated_post_seal_hshadow_deltas(
-        &mut self,
-        token: PostSealLearningToken,
-        deltas: PostSealLifetimeDeltaBatch,
-    ) -> Result<PostSealLifetimeDeltaReceipt, ScaffoldContractError> {
-        deltas.validate_against_token(&token)?;
-        if token.organism_id() != self.organism_id
-            || token.brain_class_id() != self.brain_class.id
-            || token.outcome_tick() != self.tick
-            || deltas.neuron_count != self.brain_class.neuron_count
-            || deltas.max_active_synapses != self.brain_class.max_active_synapses
-        {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-        if let Some(last_sequence) = self.last_post_seal_lifetime_delta_sequence {
-            if token.sealed_sequence_id().raw() <= last_sequence.raw() {
-                return Err(ScaffoldContractError::NonMonotonicTick);
-            }
-        }
-        let mut next_schema = self.neural_schema.clone();
-        let stats = crate::post_seal_lifetime::apply_hshadow_delta_records_to_schema(
-            &mut next_schema,
-            &deltas.records,
-        )?;
-        self.neural_schema = next_schema;
-        self.neural_state.projections = self.neural_schema.projections.clone();
-        self.last_post_seal_lifetime_delta_sequence = Some(token.sealed_sequence_id());
-        self.validate_ready(self.tick)?;
-        let receipt = PostSealLifetimeDeltaReceipt {
-            schema_version: crate::POST_SEAL_LIFETIME_DELTA_SCHEMA_VERSION,
-            organism_id: self.organism_id,
-            brain_class_id: self.brain_class.id,
-            originating_tick: token.originating_tick(),
-            outcome_tick: token.outcome_tick(),
-            sealed_sequence_id: token.sealed_sequence_id(),
-            frame_digest: token.frame_digest(),
-            source_kind: deltas.source_kind,
-            applied_records: stats.applied_records,
-            changed_records: stats.changed_records,
-            max_abs_delta: stats.max_abs_delta,
-            h_shadow_changed: stats.changed_records > 0,
-            genetic_fixed_unchanged: true,
-            lifetime_consolidated_unchanged: true,
-            h_operational_unchanged: true,
-            post_seal_only: true,
-            replay_protected: true,
-        };
-        receipt.validate_contract()?;
-        Ok(receipt)
     }
 
     pub fn force_sleep(
@@ -631,7 +567,7 @@ impl CreatureMind {
             .records_chronological()
             .iter()
             .try_for_each(|record| record.validate_contract())?;
-        self.topological_map.validate_contract()?;
+        self.topology_sidecar.validate_contract()?;
 
         let consolidator = SleepConsolidator::new(self.sleep_controller.config())?;
         let neural = consolidator.consolidate_neural_schema(
@@ -641,10 +577,10 @@ impl CreatureMind {
         )?;
         self.neural_state.projections = self.neural_schema.projections.clone();
         let memory = consolidator.compress_memory_bank(&mut self.memory_bank)?;
-        let topology = consolidator.consolidate_topology(&mut self.topological_map, 1)?;
+        let topology = consolidator.consolidate_topology_sidecar(&mut self.topology_sidecar, 1)?;
         let structural_edits = consolidator.generate_structural_edit_batch(
             &self.neural_schema,
-            &self.topological_map,
+            self.topology_sidecar.map(),
             tick,
         )?;
         self.pending_structural_edits.push(structural_edits.clone());
@@ -744,23 +680,6 @@ impl CreatureMind {
             ExperienceSequenceId::new(self.next_sequence_id)
                 .ok_or(ScaffoldContractError::InvalidId),
         )?;
-        let neutral_pre = fallible(
-            &mut diagnostics,
-            self.build_pre_action(
-                sequence_id,
-                input.tick,
-                sensory.clone(),
-                &input.proposals,
-                input.action_duration,
-                input.fallback_kind,
-                MemoryExpectancySnapshot::neutral(),
-            ),
-        )?;
-        let memory_expectancy = fallible(&mut diagnostics, self.recall_memory(&neutral_pre))?;
-        let memory_snapshot = fallible(
-            &mut diagnostics,
-            memory_expectancy_snapshot(&memory_expectancy),
-        )?;
         let pre_action = fallible(
             &mut diagnostics,
             self.build_pre_action(
@@ -770,13 +689,13 @@ impl CreatureMind {
                 &input.proposals,
                 input.action_duration,
                 input.fallback_kind,
-                memory_snapshot,
+                MemoryExpectancySnapshot::neutral(),
             ),
         )?;
 
-        let biased_proposals = fallible(
+        let modulated_proposals = fallible(
             &mut diagnostics,
-            self.bias_proposals(&input.proposals, &memory_expectancy, input.tick),
+            self.modulate_baseline_proposals(&input.proposals, input.tick),
         )?;
         let trace_ref = fallible(
             &mut diagnostics,
@@ -787,9 +706,9 @@ impl CreatureMind {
         let fallback_intensity = fallible(&mut diagnostics, Intensity::new(0.0))?;
         let decision = fallible(
             &mut diagnostics,
-            cpu_reference_arbitrate(
+            heuristic_baseline_arbitrate(
                 self.organism_id,
-                &biased_proposals,
+                &modulated_proposals,
                 ActionArbitrationConfig {
                     min_score: input.min_action_score,
                     min_confidence: input.min_action_confidence,
@@ -815,7 +734,7 @@ impl CreatureMind {
             DecisionSnapshot::from_action_decision(
                 sequence_id,
                 input.tick,
-                biased_proposals,
+                modulated_proposals,
                 decision,
             ),
         )?;
@@ -859,9 +778,12 @@ impl CreatureMind {
         let mut staged_memory = self.memory_bank.clone();
         let memory_update = fallible(&mut diagnostics, staged_memory.insert_from_patch(&patch))?;
         diagnostics.memory_updates = diagnostics.memory_updates.saturating_add(1);
-        let mut staged_topology = self.topological_map.clone();
-        let topology_update = fallible(&mut diagnostics, staged_topology.apply_patch(&patch))?;
-        diagnostics.topology_updates = diagnostics.topology_updates.saturating_add(1);
+        let mut staged_topology = self.topology_sidecar.clone();
+        let topology_receipt = staged_topology.observe_legacy_patch(&patch);
+        let topology_update = topology_receipt.update;
+        diagnostics.topology_updates = diagnostics
+            .topology_updates
+            .saturating_add(u32::from(topology_update.is_some()));
         let next_homeostasis = fallible(
             &mut diagnostics,
             self.homeostasis.advance(
@@ -911,7 +833,7 @@ impl CreatureMind {
         };
 
         self.memory_bank = staged_memory;
-        self.topological_map = staged_topology;
+        self.topology_sidecar = staged_topology;
         self.homeostasis = next_homeostasis;
         self.development_state.age_ticks = self.homeostasis.tick;
         self.neural_state = next_neural_state;
@@ -931,7 +853,7 @@ impl CreatureMind {
             experience_patch: Some(patch),
             packed_record,
             memory_update: Some(memory_update),
-            topology_update: Some(topology_update),
+            topology_update,
             endocrine_update: Some(next_homeostasis),
             neural_report: NeuralUpdateReport {
                 active_tiles: diagnostics.active_tiles,
@@ -957,7 +879,7 @@ impl CreatureMind {
         for batch in &self.pending_structural_edits {
             batch.validate_contract()?;
         }
-        self.topological_map.validate_contract()?;
+        self.topology_sidecar.validate_contract()?;
         validate_finite_slice(&self.neural_state.activations)?;
         validate_finite_slice(&self.neural_state.previous_activations)?;
         validate_finite_slice(&self.neural_state.accumulators)?;
@@ -1036,6 +958,12 @@ impl CreatureMind {
             },
             self.homeostasis,
             candidates,
+            crate::SensorProfileProvenance::new(
+                SensorProfile::PrivilegedAffordanceV1,
+                crate::SensoryAbiVersion::CURRENT,
+                tick,
+            )?,
+            Vec::new(),
         )?;
         PreActionSnapshot::from_heuristic_frame(
             sequence_id,
@@ -1048,36 +976,15 @@ impl CreatureMind {
         )
     }
 
-    fn recall_memory(
-        &self,
-        pre_action: &PreActionSnapshot,
-    ) -> Result<MemoryExpectancy, ScaffoldContractError> {
-        let query = MemoryQuery::from_pre_action(pre_action, DEFAULT_MEMORY_FEATURES)?;
-        self.memory_bank.recall(&query)
-    }
-
-    fn bias_proposals(
+    fn modulate_baseline_proposals(
         &self,
         proposals: &[ActionProposal],
-        expectancy: &MemoryExpectancy,
         tick: Tick,
     ) -> Result<Vec<ActionProposal>, ScaffoldContractError> {
         let salience_weight =
             ChemistryModulation::salience_weight(&self.homeostasis, self.homeostatic_parameters)?;
-        let topology_bias = self
-            .topological_map
-            .curiosity_biases()
-            .into_iter()
-            .map(|bias| bias.salience.raw().max(bias.curiosity_voltage.raw()))
-            .fold(0.0_f32, f32::max);
         let endocrine_delta =
             (self.homeostasis.hormones.dopamine - self.homeostasis.hormones.cortisol) * 0.05;
-        let memory_delta = expectancy.expected_valence.raw() * 0.12
-            + expectancy.affordance_bias.raw() * 0.15
-            + expectancy.safety_bias.raw() * 0.05
-            - expectancy.danger_bias.raw() * 0.25
-            - expectancy.social_fear_bias.raw() * 0.05
-            + expectancy.curiosity_bias.raw() * 0.04;
 
         proposals
             .iter()
@@ -1085,9 +992,7 @@ impl CreatureMind {
             .map(|mut proposal| {
                 let existing_bias = proposal.score_bias.map_or(0.0, |bias| bias.score_delta);
                 let score_delta = existing_bias
-                    + memory_delta
                     + proposal.salience.raw() * salience_weight * 0.1
-                    + topology_bias * 0.03
                     + endocrine_delta
                     + self.action_state.recent_penalty_for(&proposal, tick);
                 crate::validate_finite(score_delta)?;
@@ -1098,34 +1003,13 @@ impl CreatureMind {
                 )?;
                 proposal.confidence = confidence;
                 proposal.score_bias = Some(ActionScoreBias {
-                    source: ActionBiasSource::MemoryExpectancy,
+                    source: ActionBiasSource::EndocrineDrive,
                     score_delta,
                 });
                 Ok(proposal)
             })
             .collect()
     }
-}
-
-fn memory_expectancy_snapshot(
-    expectancy: &MemoryExpectancy,
-) -> Result<MemoryExpectancySnapshot, ScaffoldContractError> {
-    expectancy.validate_contract()?;
-    MemoryExpectancySnapshot {
-        expected_valence: expectancy.expected_valence,
-        predicted_drive_delta: expectancy.predicted_drive_delta,
-        affordance_bias: expectancy.affordance_bias,
-        danger_bias: expectancy.danger_bias,
-        safety_bias: expectancy.safety_bias,
-        salience_hint: NormalizedScalar::new(
-            expectancy
-                .curiosity_bias
-                .raw()
-                .max(expectancy.novelty_bias.raw())
-                .max(expectancy.confidence.raw() * 0.25),
-        )?,
-    }
-    .tap_validate()
 }
 
 fn build_post_action(
@@ -1170,15 +1054,6 @@ fn fallible<T>(
         (error, *diagnostics)
     })
 }
-
-trait TapValidate: Sized + Validate {
-    fn tap_validate(self) -> Result<Self, ScaffoldContractError> {
-        self.validate_contract()?;
-        Ok(self)
-    }
-}
-
-impl<T> TapValidate for T where T: Sized + Validate {}
 
 #[allow(dead_code)]
 fn idle_physical_outcome() -> Result<PhysicalActionOutcome, ScaffoldContractError> {

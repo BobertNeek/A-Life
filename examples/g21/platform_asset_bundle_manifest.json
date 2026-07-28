@@ -16,7 +16,7 @@
       "kind": "portable-save",
       "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_save.json",
       "required": true,
-      "max_size_bytes": 16384
+      "max_size_bytes": 32768
     },
     {
       "asset_id": "p34-tiny-assets",

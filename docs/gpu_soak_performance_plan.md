@@ -2,10 +2,10 @@
 
 Status: manual GPU release-gate plan.
 
-The CPU reference path remains the correctness oracle. GPU checks in this file
-are diagnostics, parity, and performance-report gates for machines with a local
-wgpu adapter. If hardware is unavailable, record the GPU status as manual or
-unknown. Do not infer GPU product readiness from CPU fallback reports.
+Production neural causality is GPU-authoritative. GPU checks in this file are
+behavioral, causal, and performance-report gates for machines with a local wgpu
+adapter. If hardware is unavailable, record the neural gate as blocked or
+unknown; do not substitute a CPU neural run or claim a neural tick occurred.
 
 ## Preconditions
 
@@ -15,34 +15,35 @@ unknown. Do not infer GPU product readiness from CPU fallback reports.
   or weight readback.
 - Write reports under `target/artifacts/`.
 
-## Parity Commands
+## Contract Commands
 
 ```powershell
 cargo test -p alife_gpu_backend --test gpu_buffer_contracts
 cargo test -p alife_gpu_backend --test static_forward_parity
-cargo test -p alife_gpu_backend --test plasticity_oja_parity
 cargo test -p alife_gpu_backend --test supertile_routing_masks
 cargo test -p alife_gpu_backend --test recompaction_autophagy
 cargo test -p alife_gpu_backend --test gpu_runtime_performance
+cargo test -p alife_gpu_backend --test closed_loop_learning_buffers
+cargo test -p alife_gpu_backend --test closed_loop_wgsl
 ```
 
 Manual hardware-backed checks:
 
 ```powershell
 cargo test -p alife_gpu_backend --features gpu-tests --test static_forward_parity -- --ignored --nocapture
-cargo test -p alife_gpu_backend --features gpu-tests --test plasticity_oja_parity -- --ignored --nocapture
-cargo test -p alife_gpu_backend --test plasticity_oja_parity -- --ignored --nocapture
+cargo test -p alife_gpu_backend --features gpu-tests --test closed_loop_gpu_behavior -j 1 -- --nocapture
+cargo test -p alife_gpu_backend --features gpu-tests --test closed_loop_fast_plasticity -j 1 -- --nocapture
 ```
 
 ## Runtime And Performance Report
 
-Default CPU-fallback report:
+Runtime report:
 
 ```powershell
 cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
 ```
 
-Validated GPU report after hardware parity passes:
+Validated GPU report after hardware causal gates pass:
 
 ```powershell
 $env:ALIFE_GPU_RUNTIME_AVAILABLE='1'
@@ -66,14 +67,14 @@ Record:
 
 - OS, GPU model, driver version, and adapter name when available.
 - Feature flags and environment variables used.
-- P25/P26/P27/P28 parity status.
-- P29 backend selected and fallback reason, if any.
+- closed-loop selection, eligibility, fast-plasticity, and sleep evidence status.
+- requested adapter and typed GPU-unavailable reason, if any.
 - Tick time, GPU neural time, skipped tile counters, and 60 FPS target status
   exactly as reported.
 - Bottlenecks and unknown values. Unknown is preferable to fabricated data.
 
 ## Manual Status For This Repository Snapshot
 
-The CI/default release gate does not require GPU hardware. GPU runtime maturity
-is limited to schema, parity, diagnostic, and fallback contracts unless manual
-hardware evidence is recorded for the current release candidate.
+Headless contract checks may run without GPU hardware only when they explicitly
+select `HeuristicBaseline`. Neural release and promotion gates require current
+real-hardware evidence from the GPU-authoritative runtime.

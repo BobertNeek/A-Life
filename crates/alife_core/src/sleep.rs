@@ -1,4 +1,5 @@
-//! v0 runtime scaffold: deterministic CPU sleep consolidation contracts.
+//! Engine-neutral sleep scheduling, durable GPU consolidation transactions,
+//! and legacy offline consolidation diagnostics.
 //!
 //! Sleep consolidation is an explicit offline/sleep-phase path. It may drain
 //! plastic traces and stage structural edit candidates, but it does not resize
@@ -6,25 +7,48 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
+
+mod gpu_contracts;
+pub use gpu_contracts::*;
+mod replay;
+pub use replay::*;
 
 use crate::{
     require_current_version, validate_finite, ChemistryModulation, Confidence, DurationTicks,
     HomeostaticParameters, HomeostaticSnapshot, LobeKind, MemoryBank, MemoryId,
     NeuralProjectionSchema, NormalizedScalar, ProjectionRoutingRef, RecoveryTrigger,
     ScaffoldContractError, SchemaKind, SchemaVersions, SparseTilePayload, SynapseWeightSplit, Tick,
-    TopologicalMap, Validate,
+    TopologicalMap, TopologySidecar, Validate,
 };
 
 pub const SLEEP_CONSOLIDATION_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.sleep_consolidation.0;
 
+#[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SleepPhase {
-    Awake,
-    EnteringSleep,
-    Consolidating,
-    Waking,
-    ForcedRecoverySleep,
+    Awake = 1,
+    EnteringSleep = 2,
+    Consolidating = 3,
+    Waking = 4,
+    ForcedRecoverySleep = 5,
+}
+
+impl SleepPhase {
+    pub const fn raw(self) -> u16 {
+        self as u16
+    }
+
+    pub fn try_from_raw(raw: u16) -> Result<Self, ScaffoldContractError> {
+        match raw {
+            1 => Ok(Self::Awake),
+            2 => Ok(Self::EnteringSleep),
+            3 => Ok(Self::Consolidating),
+            4 => Ok(Self::Waking),
+            5 => Ok(Self::ForcedRecoverySleep),
+            _ => Err(ScaffoldContractError::ScalarOutOfRange),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,7 +70,7 @@ pub struct SleepTransition {
     pub trigger: SleepTrigger,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SleepState {
     pub schema_version: u16,
     pub phase: SleepPhase,
@@ -54,6 +78,9 @@ pub struct SleepState {
     pub entered_sleep_tick: Option<Tick>,
     pub cycles_completed: u32,
     pub last_trigger: Option<SleepTrigger>,
+    pub active_cycle_id: u64,
+    pub last_consolidated_cycle_id: u64,
+    pub consolidation: ConsolidationState,
 }
 
 impl SleepState {
@@ -65,7 +92,58 @@ impl SleepState {
             entered_sleep_tick: None,
             cycles_completed: 0,
             last_trigger: None,
+            active_cycle_id: 0,
+            last_consolidated_cycle_id: 0,
+            consolidation: ConsolidationState::None,
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for SleepState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wire {
+            schema_version: u16,
+            phase: SleepPhase,
+            phase_started_tick: Tick,
+            entered_sleep_tick: Option<Tick>,
+            cycles_completed: u32,
+            last_trigger: Option<SleepTrigger>,
+            #[serde(default)]
+            active_cycle_id: u64,
+            #[serde(default)]
+            last_consolidated_cycle_id: u64,
+            #[serde(default)]
+            consolidation: ConsolidationState,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        let migrated_last = if wire.last_consolidated_cycle_id == 0 && wire.cycles_completed != 0 {
+            u64::from(wire.cycles_completed)
+        } else {
+            wire.last_consolidated_cycle_id
+        };
+        let migrated_active = if wire.active_cycle_id == 0 && wire.phase != SleepPhase::Awake {
+            migrated_last.saturating_add(1)
+        } else {
+            wire.active_cycle_id
+        };
+        let state = Self {
+            schema_version: wire.schema_version,
+            phase: wire.phase,
+            phase_started_tick: wire.phase_started_tick,
+            entered_sleep_tick: wire.entered_sleep_tick,
+            cycles_completed: wire.cycles_completed,
+            last_trigger: wire.last_trigger,
+            active_cycle_id: migrated_active,
+            last_consolidated_cycle_id: migrated_last,
+            consolidation: wire.consolidation,
+        };
+        state.validate_contract().map_err(D::Error::custom)?;
+        Ok(state)
     }
 }
 
@@ -74,6 +152,21 @@ impl Validate for SleepState {
         require_current_version(SchemaKind::SleepConsolidation, self.schema_version)?;
         if let Some(entered) = self.entered_sleep_tick {
             Tick::validate_monotonic(entered, self.phase_started_tick)?;
+        }
+        if self.last_consolidated_cycle_id > u64::from(self.cycles_completed)
+            || (self.phase == SleepPhase::Awake
+                && (self.active_cycle_id != 0 || self.consolidation != ConsolidationState::None))
+            || (self.phase != SleepPhase::Awake && self.active_cycle_id == 0)
+            || (!matches!(self.phase, SleepPhase::Consolidating | SleepPhase::Waking)
+                && self.consolidation != ConsolidationState::None)
+            || (self.phase == SleepPhase::Waking
+                && !matches!(self.consolidation, ConsolidationState::Committed { .. }))
+        {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        if matches!(self.phase, SleepPhase::Consolidating | SleepPhase::Waking) {
+            self.consolidation
+                .validate_for_cycle(self.active_cycle_id)?;
         }
         Ok(())
     }
@@ -170,6 +263,17 @@ impl SleepController {
         })
     }
 
+    /// Restores an already validated durable sleep transaction without
+    /// replaying phase transitions or manufacturing consolidation progress.
+    pub fn restore(
+        config: SleepConsolidationConfig,
+        state: SleepState,
+    ) -> Result<Self, ScaffoldContractError> {
+        config.validate_contract()?;
+        state.validate_contract()?;
+        Ok(Self { config, state })
+    }
+
     pub const fn config(&self) -> SleepConsolidationConfig {
         self.config
     }
@@ -245,7 +349,12 @@ impl SleepController {
             SleepPhase::EnteringSleep if elapsed >= self.config.entering_duration.raw() => {
                 Some(SleepPhase::Consolidating)
             }
-            SleepPhase::Consolidating if elapsed >= self.config.consolidation_duration.raw() => {
+            SleepPhase::Consolidating
+                if matches!(
+                    self.state.consolidation,
+                    ConsolidationState::Committed { .. }
+                ) =>
+            {
                 Some(SleepPhase::Waking)
             }
             SleepPhase::Waking if elapsed >= self.config.waking_duration.raw() => {
@@ -269,6 +378,102 @@ impl SleepController {
         Ok(Some(self.transition_to(next_phase, tick, trigger)?))
     }
 
+    pub fn apply_consolidation_driver_event(
+        &mut self,
+        event: ConsolidationDriverEvent,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.state.phase != SleepPhase::Consolidating || self.state.active_cycle_id == 0 {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        let active_cycle_id = self.state.active_cycle_id;
+        let next = match (self.state.consolidation, event) {
+            (
+                ConsolidationState::None,
+                ConsolidationDriverEvent::ReplayAssetPersisted {
+                    intent,
+                    replay_digest,
+                    replay_event_count,
+                    replay_eligibility_sample_count,
+                },
+            ) if intent.cycle_id == active_cycle_id => ConsolidationState::Pending {
+                intent,
+                replay_digest,
+                replay_event_count,
+                replay_eligibility_sample_count,
+            },
+            (
+                ConsolidationState::Pending {
+                    intent,
+                    replay_digest,
+                    replay_event_count,
+                    replay_eligibility_sample_count,
+                },
+                ConsolidationDriverEvent::Prepared { request },
+            ) if request.cycle_id == intent.cycle_id
+                && request.replay_digest == replay_digest
+                && replay_event_count <= request.max_replay_events
+                && replay_eligibility_sample_count <= request.max_replay_eligibility_samples =>
+            {
+                request.validate_contract()?;
+                ConsolidationState::Prepared { request }
+            }
+            (
+                ConsolidationState::Prepared { request: expected },
+                ConsolidationDriverEvent::Submitted { request, job_id },
+            ) if request == expected => ConsolidationState::Submitted { request, job_id },
+            (
+                ConsolidationState::Submitted {
+                    request: expected,
+                    job_id: expected_lost_job,
+                },
+                ConsolidationDriverEvent::RecoveredSubmitted {
+                    request,
+                    lost_job_id,
+                    recovered_job_id,
+                },
+            ) if request == expected
+                && lost_job_id == expected_lost_job
+                && recovered_job_id != lost_job_id =>
+            {
+                ConsolidationState::Submitted {
+                    request,
+                    job_id: recovered_job_id,
+                }
+            }
+            (
+                ConsolidationState::Submitted {
+                    request: expected,
+                    job_id,
+                },
+                ConsolidationDriverEvent::Completed { request, staged },
+            ) if request == expected && staged.job_id == job_id => {
+                staged.validate_against(&request, 1, 1)?;
+                ConsolidationState::Completed { request, staged }
+            }
+            (
+                ConsolidationState::Completed { request, staged },
+                ConsolidationDriverEvent::Committed {
+                    cycle_id,
+                    output_generation,
+                    output_digest,
+                },
+            ) if cycle_id == request.cycle_id
+                && output_generation == staged.output_generation
+                && output_digest == staged.output_digest =>
+            {
+                ConsolidationState::Committed {
+                    cycle_id,
+                    output_generation,
+                    output_digest,
+                }
+            }
+            _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch),
+        };
+        next.validate_for_cycle(active_cycle_id)?;
+        self.state.consolidation = next;
+        self.state.validate_contract()
+    }
+
     fn transition_to(
         &mut self,
         phase: SleepPhase,
@@ -287,6 +492,45 @@ impl SleepController {
         } else {
             self.state.cycles_completed
         };
+        let (active_cycle_id, last_consolidated_cycle_id, consolidation) = match (from, phase) {
+            (SleepPhase::Awake, SleepPhase::Awake) => (
+                0,
+                self.state.last_consolidated_cycle_id,
+                ConsolidationState::None,
+            ),
+            (SleepPhase::Awake, _) => (
+                self.state
+                    .last_consolidated_cycle_id
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::InvalidId)?,
+                self.state.last_consolidated_cycle_id,
+                ConsolidationState::None,
+            ),
+            (_, SleepPhase::Awake) => {
+                if !matches!(
+                    self.state.consolidation,
+                    ConsolidationState::Committed { .. }
+                ) {
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                }
+                (0, self.state.active_cycle_id, ConsolidationState::None)
+            }
+            (_, SleepPhase::Consolidating) => (
+                self.state.active_cycle_id,
+                self.state.last_consolidated_cycle_id,
+                self.state.consolidation,
+            ),
+            (_, SleepPhase::Waking) => (
+                self.state.active_cycle_id,
+                self.state.last_consolidated_cycle_id,
+                self.state.consolidation,
+            ),
+            _ => (
+                self.state.active_cycle_id,
+                self.state.last_consolidated_cycle_id,
+                ConsolidationState::None,
+            ),
+        };
         self.state = SleepState {
             schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
             phase,
@@ -294,6 +538,9 @@ impl SleepController {
             entered_sleep_tick,
             cycles_completed,
             last_trigger: Some(trigger),
+            active_cycle_id,
+            last_consolidated_cycle_id,
+            consolidation,
         };
         self.state.validate_contract()?;
         Ok(SleepTransition {
@@ -807,6 +1054,16 @@ impl SleepConsolidator {
             decayed_gap_count: 0,
             curiosity_bias_count: topology.curiosity_biases().len() as u32,
         })
+    }
+
+    pub fn consolidate_topology_sidecar(
+        &self,
+        topology: &mut TopologySidecar,
+        elapsed_ticks: u64,
+    ) -> Result<ConceptConsolidationReport, ScaffoldContractError> {
+        let report = self.consolidate_topology(topology.map_mut(), elapsed_ticks)?;
+        topology.refresh_diagnostics_after_map_mutation()?;
+        Ok(report)
     }
 
     pub fn generate_structural_edit_batch(

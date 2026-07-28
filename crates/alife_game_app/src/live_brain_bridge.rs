@@ -41,12 +41,18 @@ impl LiveBrainTickControl {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LiveBrainCausalStage {
+    EvaluateSleep,
+    AdvanceSleep,
     GatherSensory,
+    RecallMemory,
     CpuBrainTick,
     GpuBrainTick,
     ExecuteAction,
     MeasureOutcome,
     SealPatch,
+    ApplyLearning,
+    ObserveMemory,
+    ObserveTopology,
     UpdateLogs,
 }
 
@@ -205,16 +211,6 @@ impl LiveBrainLoop {
     ) -> Result<(), GameAppShellError> {
         self.mind.initialize_neural_projection_schema(schema)?;
         Ok(())
-    }
-
-    pub fn apply_post_seal_lifetime_deltas(
-        &mut self,
-        sealed_patch: &ExperiencePatch,
-        deltas: PostSealLifetimeDeltaBatch,
-    ) -> Result<PostSealLifetimeDeltaReceipt, GameAppShellError> {
-        Ok(self
-            .mind
-            .apply_post_seal_lifetime_deltas(sealed_patch, deltas)?)
     }
 
     pub fn creature_visual_snapshot(

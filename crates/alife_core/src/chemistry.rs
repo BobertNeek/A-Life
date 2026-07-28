@@ -432,6 +432,25 @@ impl HomeostaticDelta {
         }
     }
 
+    /// Bounded recovery applied once per non-awake world tick.
+    ///
+    /// Ordinary drift still advances hunger and other drives. These lanes only
+    /// model the restorative effects required for a completed sleep cycle to
+    /// return below its own fatigue and sleep-pressure entry thresholds.
+    pub const fn sleep_recovery_per_tick() -> Self {
+        Self {
+            drives: DriveDelta {
+                fatigue: -0.05,
+                brain_atp: 0.04,
+                ..DriveDelta::zero()
+            },
+            hormones: EndocrineDelta {
+                sleep_pressure: -0.06,
+                ..EndocrineDelta::zero()
+            },
+        }
+    }
+
     pub fn pain_frustration_spike(
         pain: f32,
         cortisol: f32,

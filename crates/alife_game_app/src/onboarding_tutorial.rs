@@ -116,7 +116,8 @@ pub fn ca40_tutorial_checklist_items() -> Vec<Ca40TutorialChecklistItem> {
             id: "read-gpu-authority",
             label: "Read GPU authority state",
             instruction: "GPU should show authoritative; an unavailable GPU stops learned actions.",
-            expected_signal: "CPU shadow gate stays visible; no full action-authoritative claim.",
+            expected_signal:
+                "GPU neural authority is visible; unavailability stops learned actions.",
         },
     ]
 }

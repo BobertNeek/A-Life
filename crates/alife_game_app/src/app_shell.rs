@@ -5,6 +5,11 @@ use crate::*;
 
 #[derive(Debug, Error)]
 pub enum GameAppShellError {
+    #[cfg(feature = "gpu-runtime")]
+    #[error("lineage archive error: {0}")]
+    Archive(#[from] alife_archive::ArchiveError),
+    #[error("GPU runtime error: {0}")]
+    GpuRuntime(#[from] alife_runtime::GpuRuntimeError),
     #[error("persistence/config error: {0}")]
     Persistence(#[from] PersistenceError),
     #[error("core contract error: {0}")]
@@ -24,6 +29,10 @@ pub enum GameAppShellError {
     InvalidGraphicalLaunch { message: &'static str },
     #[error("required neural GPU backend unavailable: {message}")]
     NeuralBackendUnavailable { message: String },
+    #[error(
+        "GPU checkpoint manifest compare-and-swap conflict: expected {expected}, found {actual}"
+    )]
+    GpuCheckpointManifestConflict { expected: String, actual: String },
     #[error("invalid production voxel frontend launch: {message}")]
     InvalidProductionFrontend { message: String },
     #[error("environment launcher error: {message}")]

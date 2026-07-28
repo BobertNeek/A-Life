@@ -17,8 +17,12 @@ Rules:
   legality and outcomes.
 - Promote only N512, N1024, and N2048 until larger tiers pass the documented
   causal and performance gates.
+- Own canonical capacity, phenotype, budget, and evidence-digest contracts;
+  app/tool layers may ingest them but may not redefine their meanings.
 - Own foundation, language-codebook, persistent-address, checkpoint, and
   archive-provenance contracts.
+- `evaluation.rs` owns the fixed-size passive life-statistics and exact
+  15-challenge battery contracts. Missing exposure is `Unknown`, never zero.
 - Never equate a language token ID with a neuron or packed GPU offset.
 - Genetic birth must not inherit lifetime weights, memories, learned lexicon
   bindings, eligibility, or transient state.
@@ -30,3 +34,11 @@ Rules:
 - N2048 compiles exactly 24,576 recurrent, 4,096 action (3,072 candidate plus
   1,024 reserved speech), and 4,096 memory-decoder synapses. N512/N1024 remain
   valid independent procedural phenotypes until their own foundations exist.
+- `phenotype/migration.rs` owns the research-only, persistent-address-preserving
+  N2048-to-N4096 compiler; production class lookup must continue rejecting N4096.
+- Phenotypes own versioned receptor, bounded replay-capture, and sleep plans.
+  The replay identity ceiling is the shared `MAX_REPLAY_CAPTURE_SYNAPSES`
+  contract; GPU crates must not duplicate that value.
+- Topology is an organism-owned, diagnostic-only `TopologySidecar`. It consumes
+  sealed episodic keys, binds objects only by `TrackedObjectId`, degrades
+  deterministically at capacity, and never returns action or score authority.

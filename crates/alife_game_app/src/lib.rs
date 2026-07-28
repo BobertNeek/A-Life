@@ -8,15 +8,15 @@ mod prelude {
     pub(crate) use std::path::{Path, PathBuf};
 
     pub(crate) use alife_core::{
-        cpu_reference_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId, ActionKind,
-        ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput, BrainTickStatus,
-        ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence, ContractDiagnostic,
-        CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch, GapResolutionStatus,
-        GaussianClusterId, GenomeId, HomeostaticParameters, HomeostaticSnapshot, Intensity,
-        LineageId, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
-        PolicyBackend, PostSealLifetimeDeltaBatch, PostSealLifetimeDeltaReceipt,
-        ReferenceActionFailure, ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel,
-        TeacherPerceptionChannel, Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
+        heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId,
+        ActionKind, ActionProposal, ActionTarget, BrainGenome, BrainScaleTier, BrainTickInput,
+        BrainTickStatus, ChemistryModulation, CognitiveEdgeId, ConceptCellId, Confidence,
+        ContractDiagnostic, CreatureMind, DurationTicks, EdgeRelationKind, ExperiencePatch,
+        GapResolutionStatus, GaussianClusterId, GenomeId, HomeostaticParameters,
+        HomeostaticSnapshot, Intensity, LineageId, NeuralProjectionSchema, NormalizedScalar,
+        OrganismId, PhysicalContactKind, PolicyBackend, ReferenceActionFailure,
+        ScaffoldContractError, SleepPhase, TeacherLessonResponseChannel, TeacherPerceptionChannel,
+        Tick, UnresolvedGapId, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_school::{
         Curriculum, CurriculumStep, CurriculumStepKind, ExpectedObservation, FeedbackPolarity,
@@ -98,6 +98,20 @@ pub use creature_part_pose::*;
 mod live_brain_bridge;
 pub(crate) use live_brain_bridge::proposal;
 pub use live_brain_bridge::*;
+
+#[cfg(feature = "gpu-runtime")]
+pub use alife_runtime::{
+    merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite, GpuBrainSidecarCapture,
+    GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuRuntimeError,
+    GpuSaveManifestCasOutcome, GpuSaveManifestDigest, GpuSleepConsolidationDriver,
+    GpuSleepScheduleEvent, GpuSleepScheduler, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
+    RetainedLearningCapture,
+};
+
+#[cfg(feature = "gpu-runtime")]
+mod founder_import;
+#[cfg(feature = "gpu-runtime")]
+pub use founder_import::*;
 
 mod camera_inspector;
 pub use camera_inspector::*;
@@ -184,6 +198,11 @@ pub use terrain_lighting::{Fvr11ProductionContactShadow, Fvr11ProductionTerrainL
 mod production_voxel_renderer;
 #[cfg(feature = "bevy-app")]
 pub use production_voxel_renderer::*;
+
+#[cfg(all(feature = "bevy-app", feature = "gpu-runtime"))]
+mod production_conversation_lineage_ui;
+#[cfg(all(feature = "bevy-app", feature = "gpu-runtime"))]
+pub use production_conversation_lineage_ui::*;
 
 mod interactive_runtime;
 pub use interactive_runtime::*;
@@ -302,6 +321,11 @@ pub use gpu_live_runtime::*;
 mod gpu_evidence;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_evidence::*;
+
+#[cfg(feature = "gpu-runtime")]
+mod gpu_closed_loop_promotion;
+#[cfg(feature = "gpu-runtime")]
+pub use gpu_closed_loop_promotion::*;
 
 mod soak_isolation;
 pub use soak_isolation::*;

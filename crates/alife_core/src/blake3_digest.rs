@@ -17,6 +17,10 @@ impl Blake3Digest {
         &self.0
     }
 
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
     pub const fn algorithm(&self) -> &'static str {
         "BLAKE3-256"
     }
