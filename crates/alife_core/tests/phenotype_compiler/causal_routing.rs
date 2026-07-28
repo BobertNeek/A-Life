@@ -511,14 +511,16 @@ mod task3_causal_genome_and_routing_red_tests {
     }
 
     #[test]
-    fn unsupported_neutral_evolution_field_returns_phenotype_compile() {
+    fn disabled_plasticity_is_causal_and_zeroes_compiled_alpha() {
         let (mut genome, development) = fixture();
         genome.plasticity_mask.oja_enabled = false;
+        genome.plasticity_mask.hebbian_enabled = false;
 
-        assert_eq!(
-            compile_result(&genome, &development).unwrap_err(),
-            ScaffoldContractError::PhenotypeCompile,
-        );
+        let phenotype = compile_ok(&genome, &development);
+        assert!(phenotype
+            .synapses()
+            .iter()
+            .all(|synapse| synapse.alpha() == 0.0));
     }
 
     #[test]

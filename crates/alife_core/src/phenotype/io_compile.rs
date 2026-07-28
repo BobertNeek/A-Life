@@ -287,7 +287,7 @@ pub(super) fn compile_decoders(
                 source,
                 target,
                 inherited_memory_decoder_weight(family, channel, 1),
-                1.0,
+                super::topology_compile::inherited_memory_decoder_alpha(genome),
                 memory_route_index,
                 CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
                     DecoderHeadKind::MemoryContext,
@@ -520,7 +520,7 @@ fn compile_n2048_decoders(
                             channel,
                             n2048_memory_channel_synapse_count(channel),
                         ),
-                        1.0,
+                        super::topology_compile::inherited_memory_decoder_alpha(genome),
                         memory_route_index,
                         CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
                             DecoderHeadKind::MemoryContext,

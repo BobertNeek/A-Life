@@ -5,6 +5,7 @@ pub mod action_abi;
 pub mod activity;
 pub mod adapter;
 pub mod archive;
+pub mod biochemistry;
 mod blake3_digest;
 pub mod brain_class;
 pub mod canonical_digest;
@@ -14,6 +15,7 @@ pub mod diagnostics;
 pub mod error;
 pub mod evaluation;
 pub mod evidence_digest;
+pub mod evolutionary_genetics;
 pub mod experience;
 pub mod foundation;
 pub mod genome;
@@ -63,6 +65,10 @@ pub use archive::{
     FounderCohortManifest, FounderIdentityRemap, FounderMode, FounderProvenance, FounderSelection,
     GeneticArchiveRecord, CREATURE_ARCHIVE_SCHEMA_VERSION, FOUNDER_COHORT_SCHEMA_VERSION,
 };
+pub use biochemistry::{
+    BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
+    NeuralModulation, ReproductionReadiness, MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+};
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{
     BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,
@@ -89,6 +95,16 @@ pub use evidence_digest::{
     GPU_CLOSED_LOOP_BENCHMARK_PROTOCOL_VERSION, GPU_CLOSED_LOOP_BENCHMARK_SCHEMA,
     GPU_CLOSED_LOOP_BENCHMARK_TIMESTAMP_SCOPE_SPLIT, GPU_CLOSED_LOOP_BENCHMARK_WARMUP_TICKS,
     GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA,
+};
+pub use evolutionary_genetics::{
+    AlleleDominance, AlleleSide, BodyChromosome, BodyFrame, BodyPhenotype, BrainChromosome,
+    ChemistryChromosome, ChemistryPhenotype, ChromosomeKind, ChromosomeRecombinationRecord,
+    ContinuousLocus, CreatureGenome, CreaturePhenotype, DevelopmentChromosome,
+    DevelopmentPhenotype, DiscreteAllele, DiscreteExpression, DiscreteLocus,
+    FoundationGeneticIdentity, GeneticLineageProvenance, MatePreference, MutationRecord,
+    PredispositionChromosome, PredispositionPhenotype, ReproductionChromosome,
+    ReproductionPhenotype, StarterVocabularyProfile, CREATURE_GENOME_SCHEMA_VERSION,
+    MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA, MAX_MUTATION_RECORDS,
 };
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,

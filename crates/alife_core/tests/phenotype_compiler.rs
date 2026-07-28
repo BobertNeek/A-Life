@@ -1,9 +1,9 @@
 //! Contract tests for deterministic, compiler-owned production phenotypes.
 
 use alife_core::{
-    BrainCapacityClass, BrainClassId, BrainGenome, BrainScaleTier, DevelopmentState,
-    LegacyBrainClassAdapter, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick,
-    CANDIDATE_FEATURE_COUNT,
+    BrainCapacityClass, BrainClassId, BrainGenome, BrainScaleTier, ContinuousLocus, CreatureGenome,
+    DevelopmentState, FoundationGeneticIdentity, LegacyBrainClassAdapter, NormalizedScalar,
+    PhenotypeCompiler, SensorProfile, Tick, CANDIDATE_FEATURE_COUNT,
 };
 
 fn compile(class_id: BrainClassId, seed: u64) -> alife_core::BrainPhenotype {
@@ -16,6 +16,18 @@ fn compile(class_id: BrainClassId, seed: u64) -> alife_core::BrainPhenotype {
         &capacity,
         &development,
         SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap()
+}
+
+fn creature(seed: u64) -> CreatureGenome {
+    creature_for_class(seed, BrainCapacityClass::N512_ID)
+}
+
+fn creature_for_class(seed: u64, class_id: BrainClassId) -> CreatureGenome {
+    CreatureGenome::early_mammal_founder(
+        seed,
+        FoundationGeneticIdentity::new(10, 1, 7, class_id).unwrap(),
     )
     .unwrap()
 }
@@ -150,6 +162,99 @@ fn maturation_compiles_the_immutable_two_three_four_microstep_schedule() {
     assert_ne!(hashes[0], hashes[1]);
     assert_ne!(hashes[1], hashes[2]);
     assert_ne!(hashes[0], hashes[2]);
+}
+
+#[test]
+fn reproduced_creature_genome_compiles_deterministically_with_non_founder_identity() {
+    let maternal = creature(0xE10_0601);
+    let paternal = creature(0xE10_0602);
+    let child = CreatureGenome::reproduce(&maternal, &paternal, 0xE10_0603).unwrap();
+    let expressed = child.express().unwrap();
+    assert_ne!(expressed.brain_genome.id, maternal.id);
+    assert_eq!(expressed.brain_genome.parent_genome_ids.len(), 2);
+
+    let capacity =
+        BrainCapacityClass::production_for_id(expressed.foundation.brain_class_id).unwrap();
+    let development = expressed.development_state_at(Tick(4_000)).unwrap();
+    let one = PhenotypeCompiler::compile(
+        &expressed.brain_genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let two = PhenotypeCompiler::compile(
+        &expressed.brain_genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    assert_eq!(one, two);
+}
+
+#[test]
+fn creature_founders_and_offspring_compile_for_every_promoted_brain_class() {
+    for (index, class_id) in [
+        BrainCapacityClass::N512_ID,
+        BrainCapacityClass::N1024_ID,
+        BrainCapacityClass::N2048_ID,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let maternal = creature_for_class(0xE10_0651 + index as u64 * 2, class_id);
+        let paternal = creature_for_class(0xE10_0652 + index as u64 * 2, class_id);
+        let child =
+            CreatureGenome::reproduce(&maternal, &paternal, 0xE10_0660 + index as u64).unwrap();
+        for genome in [maternal, child] {
+            let expressed = genome.express().unwrap();
+            let capacity = BrainCapacityClass::production_for_id(class_id).unwrap();
+            let development = expressed.development_state_at(Tick(4_000)).unwrap();
+            PhenotypeCompiler::compile(
+                &expressed.brain_genome,
+                &capacity,
+                &development,
+                SensorProfile::PrivilegedAffordanceV1,
+            )
+            .unwrap();
+        }
+    }
+}
+
+#[test]
+fn expressed_plasticity_changes_compiled_synapse_alpha() {
+    let mut low = creature(0xE10_0701);
+    low.brain.plasticity = ContinuousLocus::mean(0.20, 0.20).unwrap();
+    let mut high = low.clone();
+    high.brain.plasticity = ContinuousLocus::mean(0.80, 0.80).unwrap();
+    let low = low.express().unwrap();
+    let high = high.express().unwrap();
+    let capacity = BrainCapacityClass::n512();
+    let low_development = low.development_state_at(Tick(4_000)).unwrap();
+    let high_development = high.development_state_at(Tick(4_000)).unwrap();
+
+    let low_brain = PhenotypeCompiler::compile(
+        &low.brain_genome,
+        &capacity,
+        &low_development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    let high_brain = PhenotypeCompiler::compile(
+        &high.brain_genome,
+        &capacity,
+        &high_development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+
+    assert_eq!(low_brain.synapses().len(), high_brain.synapses().len());
+    assert!(low_brain
+        .synapses()
+        .iter()
+        .zip(high_brain.synapses())
+        .any(|(left, right)| left.alpha() != right.alpha()));
 }
 
 #[path = "phenotype_compiler/capacity.rs"]
