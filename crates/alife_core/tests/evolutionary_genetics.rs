@@ -274,3 +274,49 @@ fn offspring_serialization_round_trip_keeps_dna_and_excludes_acquired_mind_state
         ])
     );
 }
+
+#[test]
+fn each_chromosome_family_changes_its_causal_phenotype_surface() {
+    let baseline = early_mammal(0xE10_0501);
+    let expected = baseline.express().unwrap();
+
+    let mut body_variant = baseline.clone();
+    body_variant.body.size = ContinuousLocus::mean(0.88, 0.92).unwrap();
+    assert_ne!(body_variant.express().unwrap().body, expected.body);
+
+    let mut brain_variant = baseline.clone();
+    brain_variant.brain.plasticity = ContinuousLocus::mean(0.82, 0.86).unwrap();
+    assert_ne!(
+        brain_variant.express().unwrap().brain_genome,
+        expected.brain_genome
+    );
+
+    let mut chemistry_variant = baseline.clone();
+    chemistry_variant.chemistry.reward_sensitivity = ContinuousLocus::mean(0.82, 0.88).unwrap();
+    assert_ne!(
+        chemistry_variant.express().unwrap().chemistry,
+        expected.chemistry
+    );
+
+    let mut development_variant = baseline.clone();
+    development_variant.development.maturation_rate = ContinuousLocus::mean(0.75, 0.79).unwrap();
+    assert_ne!(
+        development_variant.express().unwrap().development,
+        expected.development
+    );
+
+    let mut reproduction_variant = baseline.clone();
+    reproduction_variant.reproduction.fertility = ContinuousLocus::mean(0.84, 0.90).unwrap();
+    assert_ne!(
+        reproduction_variant.express().unwrap().reproduction,
+        expected.reproduction
+    );
+
+    let mut predisposition_variant = baseline;
+    predisposition_variant.predisposition.social_attention =
+        ContinuousLocus::mean(0.82, 0.90).unwrap();
+    assert_ne!(
+        predisposition_variant.express().unwrap().predisposition,
+        expected.predisposition
+    );
+}
