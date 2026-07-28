@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use alife_core::{FoundationId, OrganismId, Tick};
+use alife_core::{FoundationId, OrganismId, PolicyBackend, Tick};
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -34,6 +34,22 @@ pub enum HabitatMode {
     Reserve,
     Managed,
     School,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HabitatOperation {
+    Tag,
+    Capture,
+    Test,
+    Reintroduce,
+    MembershipControl,
+    StructuredEducation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HabitatBreedingKind {
+    CreatureChosen,
+    Explicit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -209,6 +225,13 @@ impl HabitatTransferProvenance {
         }
         Ok(())
     }
+
+    fn quarantine_until(&self) -> Option<Tick> {
+        match self.quarantine {
+            Some(QuarantineProvenance::RequiredUntil(until)) => Some(until),
+            Some(QuarantineProvenance::NotRequired) | None => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -219,6 +242,7 @@ pub struct HabitatMembership {
     pub origin_habitat_id: HabitatId,
     pub origin_tick: Tick,
     pub last_transfer_sequence: Option<u64>,
+    pub quarantine_until: Option<Tick>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -241,18 +265,73 @@ pub struct HabitatTransferRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HabitatTagRecord {
+    pub sequence: u64,
+    pub reserve_id: HabitatId,
+    pub organism_id: OrganismId,
+    pub tick: Tick,
+    pub actor: HabitatActor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HabitatOperationRequest {
+    pub habitat_id: HabitatId,
+    pub organism_id: OrganismId,
+    pub operation: HabitatOperation,
+    pub actor: HabitatActor,
+    pub tick: Tick,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HabitatPermissionReceipt {
+    pub habitat_id: HabitatId,
+    pub organism_id: OrganismId,
+    pub mode: HabitatMode,
+    pub operation: HabitatOperation,
+    pub actor: HabitatActor,
+    pub tick: Tick,
+    pub cognition_policy: PolicyBackend,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HabitatBreedingRequest {
+    pub habitat_id: HabitatId,
+    pub first_parent: OrganismId,
+    pub second_parent: OrganismId,
+    pub kind: HabitatBreedingKind,
+    pub actor: HabitatActor,
+    pub tick: Tick,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HabitatBreedingReceipt {
+    pub habitat_id: HabitatId,
+    pub first_parent: OrganismId,
+    pub second_parent: OrganismId,
+    pub mode: HabitatMode,
+    pub kind: HabitatBreedingKind,
+    pub actor: HabitatActor,
+    pub tick: Tick,
+    pub cognition_policy: PolicyBackend,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HabitatAuthoritySnapshot {
     pub next_transfer_sequence: u64,
+    pub next_tag_sequence: u64,
     pub habitats: Vec<Habitat>,
     pub memberships: Vec<HabitatMembership>,
+    pub tags: Vec<HabitatTagRecord>,
     pub transfers: Vec<HabitatTransferRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HabitatAuthority {
     next_transfer_sequence: u64,
+    next_tag_sequence: u64,
     habitats: Vec<Habitat>,
     memberships: Vec<HabitatMembership>,
+    tags: Vec<HabitatTagRecord>,
     transfers: Vec<HabitatTransferRecord>,
 }
 
@@ -261,8 +340,10 @@ impl HabitatAuthority {
         Self::restore(
             HabitatAuthoritySnapshot {
                 next_transfer_sequence: 1,
+                next_tag_sequence: 1,
                 habitats,
                 memberships: Vec::new(),
+                tags: Vec::new(),
                 transfers: Vec::new(),
             },
             &[],
@@ -279,8 +360,10 @@ impl HabitatAuthority {
             .sort_by_key(|membership| membership.organism_id.raw());
         let authority = Self {
             next_transfer_sequence: snapshot.next_transfer_sequence,
+            next_tag_sequence: snapshot.next_tag_sequence,
             habitats: snapshot.habitats,
             memberships: snapshot.memberships,
+            tags: snapshot.tags,
             transfers: snapshot.transfers,
         };
         authority.validate(known_creatures)?;
@@ -311,6 +394,321 @@ impl HabitatAuthority {
         &self.transfers
     }
 
+    pub fn tags(&self) -> &[HabitatTagRecord] {
+        &self.tags
+    }
+
+    pub fn cognition_policy(
+        &self,
+        habitat_id: HabitatId,
+    ) -> Result<PolicyBackend, HabitatAuthorityError> {
+        self.habitat(habitat_id)
+            .ok_or(HabitatAuthorityError::UnknownHabitat(habitat_id))?;
+        Ok(PolicyBackend::NeuralClosedLoopGpu)
+    }
+
+    pub fn tag_creature(
+        &mut self,
+        reserve_id: HabitatId,
+        organism_id: OrganismId,
+        tick: Tick,
+        actor: HabitatActor,
+    ) -> Result<HabitatTagRecord, HabitatAuthorityError> {
+        let reserve = self
+            .habitat(reserve_id)
+            .ok_or(HabitatAuthorityError::UnknownHabitat(reserve_id))?;
+        if reserve.mode != HabitatMode::Reserve {
+            return Err(HabitatAuthorityError::IllegalModeOperation {
+                mode: reserve.mode,
+                operation: HabitatOperation::Tag,
+            });
+        }
+        let membership = self
+            .membership(organism_id)
+            .ok_or(HabitatAuthorityError::UnknownCreature(organism_id))?;
+        if tick.raw() < membership.origin_tick.raw() {
+            return Err(HabitatAuthorityError::StaleTag {
+                sequence: self.next_tag_sequence,
+                organism_id,
+            });
+        }
+        self.validate_actor_known(actor)?;
+        if !matches!(actor, HabitatActor::Player | HabitatActor::WorldAuthority) {
+            return Err(HabitatAuthorityError::InvalidActor {
+                actor,
+                context: "reserve tag",
+            });
+        }
+        if self.is_tagged(reserve_id, organism_id) {
+            return Err(HabitatAuthorityError::DuplicateTag {
+                organism_id,
+                reserve_id,
+            });
+        }
+        let sequence = self.next_tag_sequence;
+        self.next_tag_sequence =
+            sequence
+                .checked_add(1)
+                .ok_or(HabitatAuthorityError::MalformedTag(
+                    "tag sequence exhausted",
+                ))?;
+        let record = HabitatTagRecord {
+            sequence,
+            reserve_id,
+            organism_id,
+            tick,
+            actor,
+        };
+        self.tags.push(record.clone());
+        Ok(record)
+    }
+
+    pub fn authorize_operation(
+        &self,
+        request: HabitatOperationRequest,
+    ) -> Result<HabitatPermissionReceipt, HabitatAuthorityError> {
+        let habitat = self
+            .habitat(request.habitat_id)
+            .ok_or(HabitatAuthorityError::UnknownHabitat(request.habitat_id))?;
+        let membership = self
+            .membership(request.organism_id)
+            .ok_or(HabitatAuthorityError::UnknownCreature(request.organism_id))?;
+        self.validate_actor_known(request.actor)?;
+        if request.tick.raw() < membership.entered_tick.raw() {
+            return Err(HabitatAuthorityError::MalformedOperation(
+                "operation tick precedes current membership",
+            ));
+        }
+        if matches!(
+            request.operation,
+            HabitatOperation::Test | HabitatOperation::StructuredEducation
+        ) {
+            if let Some(until) = membership.quarantine_until {
+                if request.tick.raw() < until.raw() {
+                    return Err(HabitatAuthorityError::QuarantinedUntil {
+                        organism_id: request.organism_id,
+                        until,
+                    });
+                }
+            }
+        }
+
+        let actor_allowed = match habitat.mode {
+            HabitatMode::Wild => false,
+            HabitatMode::Reserve => {
+                matches!(
+                    request.actor,
+                    HabitatActor::Player | HabitatActor::WorldAuthority
+                )
+            }
+            HabitatMode::Managed => match request.operation {
+                HabitatOperation::StructuredEducation => matches!(
+                    request.actor,
+                    HabitatActor::Player | HabitatActor::Teacher | HabitatActor::WorldAuthority
+                ),
+                _ => matches!(
+                    request.actor,
+                    HabitatActor::Player | HabitatActor::WorldAuthority
+                ),
+            },
+            HabitatMode::School => matches!(
+                request.actor,
+                HabitatActor::Player | HabitatActor::Teacher | HabitatActor::WorldAuthority
+            ),
+        };
+        if !actor_allowed {
+            let context = match habitat.mode {
+                HabitatMode::Wild => "wild operation",
+                HabitatMode::Reserve => "reserve operation",
+                HabitatMode::Managed => "managed operation",
+                HabitatMode::School => "school operation",
+            };
+            return Err(HabitatAuthorityError::InvalidActor {
+                actor: request.actor,
+                context,
+            });
+        }
+
+        let allowed = match habitat.mode {
+            HabitatMode::Wild => false,
+            HabitatMode::Reserve => matches!(
+                request.operation,
+                HabitatOperation::Capture | HabitatOperation::Test | HabitatOperation::Reintroduce
+            ),
+            HabitatMode::Managed => matches!(
+                request.operation,
+                HabitatOperation::Test
+                    | HabitatOperation::MembershipControl
+                    | HabitatOperation::StructuredEducation
+            ),
+            HabitatMode::School => matches!(
+                request.operation,
+                HabitatOperation::MembershipControl | HabitatOperation::StructuredEducation
+            ),
+        };
+        if !allowed {
+            return Err(HabitatAuthorityError::IllegalModeOperation {
+                mode: habitat.mode,
+                operation: request.operation,
+            });
+        }
+        if habitat.mode == HabitatMode::Reserve {
+            if !self.is_tagged(request.habitat_id, request.organism_id) {
+                return Err(HabitatAuthorityError::CreatureNotTagged {
+                    organism_id: request.organism_id,
+                    reserve_id: request.habitat_id,
+                });
+            }
+            if request.operation != HabitatOperation::Capture
+                && membership.habitat_id != request.habitat_id
+            {
+                return Err(HabitatAuthorityError::IllegalModeOperation {
+                    mode: habitat.mode,
+                    operation: request.operation,
+                });
+            }
+        } else if request.operation != HabitatOperation::MembershipControl
+            && membership.habitat_id != request.habitat_id
+        {
+            return Err(HabitatAuthorityError::IllegalModeOperation {
+                mode: habitat.mode,
+                operation: request.operation,
+            });
+        }
+
+        Ok(HabitatPermissionReceipt {
+            habitat_id: request.habitat_id,
+            organism_id: request.organism_id,
+            mode: habitat.mode,
+            operation: request.operation,
+            actor: request.actor,
+            tick: request.tick,
+            cognition_policy: PolicyBackend::NeuralClosedLoopGpu,
+        })
+    }
+
+    pub fn authorize_breeding(
+        &self,
+        request: HabitatBreedingRequest,
+    ) -> Result<HabitatBreedingReceipt, HabitatAuthorityError> {
+        if request.first_parent == request.second_parent {
+            return Err(HabitatAuthorityError::MalformedOperation(
+                "breeding requires two distinct parents",
+            ));
+        }
+        let habitat = self
+            .habitat(request.habitat_id)
+            .ok_or(HabitatAuthorityError::UnknownHabitat(request.habitat_id))?;
+        let first = self
+            .membership(request.first_parent)
+            .ok_or(HabitatAuthorityError::UnknownCreature(request.first_parent))?;
+        let second = self.membership(request.second_parent).ok_or(
+            HabitatAuthorityError::UnknownCreature(request.second_parent),
+        )?;
+        self.validate_actor_known(request.actor)?;
+        if first.habitat_id != request.habitat_id
+            || second.habitat_id != request.habitat_id
+            || request.tick.raw() < first.entered_tick.raw()
+            || request.tick.raw() < second.entered_tick.raw()
+        {
+            return Err(HabitatAuthorityError::IllegalBreeding {
+                mode: habitat.mode,
+                kind: request.kind,
+            });
+        }
+        for membership in [first, second] {
+            if let Some(until) = membership.quarantine_until {
+                if request.tick.raw() < until.raw() {
+                    return Err(HabitatAuthorityError::QuarantinedUntil {
+                        organism_id: membership.organism_id,
+                        until,
+                    });
+                }
+            }
+        }
+
+        let allowed = match (habitat.mode, request.kind) {
+            (HabitatMode::Wild, HabitatBreedingKind::CreatureChosen)
+            | (HabitatMode::Reserve, HabitatBreedingKind::CreatureChosen) => {
+                matches!(
+                    request.actor,
+                    HabitatActor::Organism(id)
+                        if id == request.first_parent || id == request.second_parent
+                )
+            }
+            (HabitatMode::Reserve, HabitatBreedingKind::Explicit) => {
+                matches!(
+                    request.actor,
+                    HabitatActor::Player | HabitatActor::WorldAuthority
+                ) && self.is_tagged(request.habitat_id, request.first_parent)
+                    && self.is_tagged(request.habitat_id, request.second_parent)
+            }
+            (HabitatMode::Managed, HabitatBreedingKind::Explicit) => {
+                matches!(
+                    request.actor,
+                    HabitatActor::Player | HabitatActor::WorldAuthority
+                )
+            }
+            _ => false,
+        };
+        if !allowed {
+            if matches!(
+                (habitat.mode, request.kind),
+                (HabitatMode::Wild, HabitatBreedingKind::CreatureChosen)
+                    | (HabitatMode::Reserve, HabitatBreedingKind::CreatureChosen)
+                    | (HabitatMode::Reserve, HabitatBreedingKind::Explicit)
+                    | (HabitatMode::Managed, HabitatBreedingKind::Explicit)
+            ) {
+                if habitat.mode == HabitatMode::Reserve
+                    && request.kind == HabitatBreedingKind::Explicit
+                {
+                    for organism_id in [request.first_parent, request.second_parent] {
+                        if !self.is_tagged(request.habitat_id, organism_id) {
+                            return Err(HabitatAuthorityError::CreatureNotTagged {
+                                organism_id,
+                                reserve_id: request.habitat_id,
+                            });
+                        }
+                    }
+                }
+                return Err(HabitatAuthorityError::InvalidActor {
+                    actor: request.actor,
+                    context: "breeding permission",
+                });
+            }
+            return Err(HabitatAuthorityError::IllegalBreeding {
+                mode: habitat.mode,
+                kind: request.kind,
+            });
+        }
+
+        Ok(HabitatBreedingReceipt {
+            habitat_id: request.habitat_id,
+            first_parent: request.first_parent,
+            second_parent: request.second_parent,
+            mode: habitat.mode,
+            kind: request.kind,
+            actor: request.actor,
+            tick: request.tick,
+            cognition_policy: PolicyBackend::NeuralClosedLoopGpu,
+        })
+    }
+
+    fn is_tagged(&self, reserve_id: HabitatId, organism_id: OrganismId) -> bool {
+        self.tags
+            .iter()
+            .any(|tag| tag.reserve_id == reserve_id && tag.organism_id == organism_id)
+    }
+
+    fn validate_actor_known(&self, actor: HabitatActor) -> Result<(), HabitatAuthorityError> {
+        if let HabitatActor::Organism(organism_id) = actor {
+            if self.membership(organism_id).is_none() {
+                return Err(HabitatAuthorityError::UnknownCreature(organism_id));
+            }
+        }
+        Ok(())
+    }
+
     pub fn register_creature(
         &mut self,
         organism_id: OrganismId,
@@ -339,6 +737,7 @@ impl HabitatAuthority {
                         origin_habitat_id: habitat_id,
                         origin_tick: tick,
                         last_transfer_sequence: None,
+                        quarantine_until: None,
                     },
                 );
                 Ok(())
@@ -371,20 +770,27 @@ impl HabitatAuthority {
                 membership.organism_id.raw()
             })
             .map_err(|_| HabitatAuthorityError::UnknownCreature(request.organism_id))?;
-        let membership = &self.memberships[membership_index];
-        if membership.habitat_id != request.expected_prior_habitat_id {
+        let current_habitat_id = self.memberships[membership_index].habitat_id;
+        let entered_tick = self.memberships[membership_index].entered_tick;
+        if current_habitat_id != request.expected_prior_habitat_id {
             return Err(HabitatAuthorityError::StalePriorHabitat {
                 organism_id: request.organism_id,
                 expected: request.expected_prior_habitat_id,
-                actual: membership.habitat_id,
+                actual: current_habitat_id,
             });
         }
-        if request.tick.raw() < membership.entered_tick.raw() {
+        if request.tick.raw() < entered_tick.raw() {
             return Err(HabitatAuthorityError::StaleTransfer {
                 sequence: self.next_transfer_sequence,
                 organism_id: request.organism_id,
             });
         }
+        self.validate_transfer_authority(
+            request.organism_id,
+            request.expected_prior_habitat_id,
+            request.new_habitat_id,
+            &request.provenance,
+        )?;
         let sequence = self.next_transfer_sequence;
         let next_sequence =
             sequence
@@ -406,7 +812,107 @@ impl HabitatAuthority {
         membership.habitat_id = record.new_habitat_id;
         membership.entered_tick = record.tick;
         membership.last_transfer_sequence = Some(record.sequence);
+        membership.quarantine_until = record.provenance.quarantine_until();
         Ok(record)
+    }
+
+    fn validate_transfer_authority(
+        &self,
+        organism_id: OrganismId,
+        prior_habitat_id: HabitatId,
+        new_habitat_id: HabitatId,
+        provenance: &HabitatTransferProvenance,
+    ) -> Result<(), HabitatAuthorityError> {
+        let prior_mode = self
+            .habitat(prior_habitat_id)
+            .ok_or(HabitatAuthorityError::UnknownHabitat(prior_habitat_id))?
+            .mode;
+        let new_mode = self
+            .habitat(new_habitat_id)
+            .ok_or(HabitatAuthorityError::UnknownHabitat(new_habitat_id))?
+            .mode;
+        let actor = provenance
+            .actor
+            .ok_or(HabitatAuthorityError::MissingProvenance("actor"))?;
+        let authority = provenance
+            .authority
+            .ok_or(HabitatAuthorityError::MissingProvenance("authority"))?;
+        self.validate_actor_known(actor)?;
+
+        let invalid_authority = || HabitatAuthorityError::IllegalTransferAuthority {
+            prior_mode,
+            new_mode,
+            authority,
+        };
+        match authority {
+            HabitatAuthorityKind::CreatureChoice => {
+                if prior_mode != HabitatMode::Wild || new_mode != HabitatMode::Wild {
+                    return Err(invalid_authority());
+                }
+                if actor != HabitatActor::Organism(organism_id) {
+                    return Err(HabitatAuthorityError::InvalidActor {
+                        actor,
+                        context: "wild transfer",
+                    });
+                }
+            }
+            HabitatAuthorityKind::ReserveKeeper => {
+                if prior_mode != HabitatMode::Reserve && new_mode != HabitatMode::Reserve {
+                    return Err(invalid_authority());
+                }
+                if !matches!(actor, HabitatActor::Player | HabitatActor::WorldAuthority) {
+                    return Err(HabitatAuthorityError::InvalidActor {
+                        actor,
+                        context: "reserve transfer",
+                    });
+                }
+                let reserve_id = if new_mode == HabitatMode::Reserve {
+                    new_habitat_id
+                } else {
+                    prior_habitat_id
+                };
+                if !self.is_tagged(reserve_id, organism_id) {
+                    return Err(HabitatAuthorityError::CreatureNotTagged {
+                        organism_id,
+                        reserve_id,
+                    });
+                }
+            }
+            HabitatAuthorityKind::ManagedController => {
+                if prior_mode != HabitatMode::Managed && new_mode != HabitatMode::Managed {
+                    return Err(invalid_authority());
+                }
+                if !matches!(actor, HabitatActor::Player | HabitatActor::WorldAuthority) {
+                    return Err(HabitatAuthorityError::InvalidActor {
+                        actor,
+                        context: "managed transfer",
+                    });
+                }
+            }
+            HabitatAuthorityKind::SchoolAdministrator => {
+                if prior_mode != HabitatMode::School && new_mode != HabitatMode::School {
+                    return Err(invalid_authority());
+                }
+                if !matches!(
+                    actor,
+                    HabitatActor::Player | HabitatActor::Teacher | HabitatActor::WorldAuthority
+                ) {
+                    return Err(HabitatAuthorityError::InvalidActor {
+                        actor,
+                        context: "school transfer",
+                    });
+                }
+            }
+            HabitatAuthorityKind::WorldSystem => {
+                if actor != HabitatActor::WorldAuthority {
+                    return Err(HabitatAuthorityError::InvalidActor {
+                        actor,
+                        context: "world transfer",
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn validate(&self, known_creatures: &[OrganismId]) -> Result<(), HabitatAuthorityError> {
@@ -455,12 +961,77 @@ impl HabitatAuthority {
             }
         }
 
+        if self.next_tag_sequence == 0 {
+            return Err(HabitatAuthorityError::MalformedTag(
+                "next tag sequence must be nonzero",
+            ));
+        }
+        let mut tagged_creatures = BTreeSet::new();
+        for (index, tag) in self.tags.iter().enumerate() {
+            let expected_sequence = u64::try_from(index)
+                .ok()
+                .and_then(|value| value.checked_add(1))
+                .ok_or(HabitatAuthorityError::MalformedTag(
+                    "tag sequence exhausted",
+                ))?;
+            if tag.sequence != expected_sequence {
+                return Err(HabitatAuthorityError::MalformedTag(
+                    "tag sequences must be contiguous",
+                ));
+            }
+            let reserve = self
+                .habitat(tag.reserve_id)
+                .ok_or(HabitatAuthorityError::UnknownHabitat(tag.reserve_id))?;
+            if reserve.mode != HabitatMode::Reserve {
+                return Err(HabitatAuthorityError::IllegalModeOperation {
+                    mode: reserve.mode,
+                    operation: HabitatOperation::Tag,
+                });
+            }
+            let membership = self
+                .membership(tag.organism_id)
+                .ok_or(HabitatAuthorityError::UnknownCreature(tag.organism_id))?;
+            self.validate_actor_known(tag.actor)?;
+            if !matches!(
+                tag.actor,
+                HabitatActor::Player | HabitatActor::WorldAuthority
+            ) {
+                return Err(HabitatAuthorityError::InvalidActor {
+                    actor: tag.actor,
+                    context: "reserve tag",
+                });
+            }
+            if tag.tick.raw() < membership.origin_tick.raw() {
+                return Err(HabitatAuthorityError::StaleTag {
+                    sequence: tag.sequence,
+                    organism_id: tag.organism_id,
+                });
+            }
+            if !tagged_creatures.insert((tag.reserve_id.raw(), tag.organism_id.raw())) {
+                return Err(HabitatAuthorityError::DuplicateTag {
+                    organism_id: tag.organism_id,
+                    reserve_id: tag.reserve_id,
+                });
+            }
+        }
+        let expected_next_tag = u64::try_from(self.tags.len())
+            .ok()
+            .and_then(|value| value.checked_add(1))
+            .ok_or(HabitatAuthorityError::MalformedTag(
+                "tag sequence exhausted",
+            ))?;
+        if self.next_tag_sequence != expected_next_tag {
+            return Err(HabitatAuthorityError::MalformedTag(
+                "next tag sequence does not follow the ledger",
+            ));
+        }
+
         if self.next_transfer_sequence == 0 {
             return Err(HabitatAuthorityError::MalformedTransfer(
                 "next transfer sequence must be nonzero",
             ));
         }
-        let mut chains: BTreeMap<u64, (HabitatId, Tick, u64)> = BTreeMap::new();
+        let mut chains: BTreeMap<u64, (HabitatId, Tick, u64, Option<Tick>)> = BTreeMap::new();
         for (index, transfer) in self.transfers.iter().enumerate() {
             let expected_sequence = u64::try_from(index)
                 .ok()
@@ -484,13 +1055,24 @@ impl HabitatAuthority {
                 }
             }
             transfer.provenance.validate(transfer.tick)?;
+            if let Some(HabitatActor::Organism(actor_id)) = transfer.provenance.actor {
+                if !known.contains(&actor_id.raw()) {
+                    return Err(HabitatAuthorityError::UnknownCreature(actor_id));
+                }
+            }
+            self.validate_transfer_authority(
+                transfer.organism_id,
+                transfer.prior_habitat_id,
+                transfer.new_habitat_id,
+                &transfer.provenance,
+            )?;
 
             let membership = self
                 .membership(transfer.organism_id)
                 .ok_or(HabitatAuthorityError::UnknownCreature(transfer.organism_id))?;
             let (expected_prior, earliest_tick) = chains
                 .get(&transfer.organism_id.raw())
-                .map(|(habitat_id, tick, _)| (*habitat_id, *tick))
+                .map(|(habitat_id, tick, _, _)| (*habitat_id, *tick))
                 .unwrap_or((membership.origin_habitat_id, membership.origin_tick));
             if transfer.prior_habitat_id != expected_prior
                 || transfer.tick.raw() < earliest_tick.raw()
@@ -502,7 +1084,12 @@ impl HabitatAuthority {
             }
             chains.insert(
                 transfer.organism_id.raw(),
-                (transfer.new_habitat_id, transfer.tick, transfer.sequence),
+                (
+                    transfer.new_habitat_id,
+                    transfer.tick,
+                    transfer.sequence,
+                    transfer.provenance.quarantine_until(),
+                ),
             );
         }
         let expected_next = u64::try_from(self.transfers.len())
@@ -518,10 +1105,11 @@ impl HabitatAuthority {
         }
         for membership in &self.memberships {
             match chains.get(&membership.organism_id.raw()) {
-                Some((habitat_id, tick, sequence)) => {
+                Some((habitat_id, tick, sequence, quarantine_until)) => {
                     if membership.habitat_id != *habitat_id
                         || membership.entered_tick != *tick
                         || membership.last_transfer_sequence != Some(*sequence)
+                        || membership.quarantine_until != *quarantine_until
                     {
                         return Err(HabitatAuthorityError::StaleTransfer {
                             sequence: *sequence,
@@ -533,6 +1121,7 @@ impl HabitatAuthority {
                     if membership.habitat_id != membership.origin_habitat_id
                         || membership.entered_tick != membership.origin_tick
                         || membership.last_transfer_sequence.is_some()
+                        || membership.quarantine_until.is_some()
                     {
                         return Err(HabitatAuthorityError::MalformedTransfer(
                             "untransferred membership must match its origin",
@@ -555,6 +1144,11 @@ pub enum HabitatAuthorityError {
     DuplicateHabitat(HabitatId),
     #[error("duplicate membership for {0:?}")]
     DuplicateMembership(OrganismId),
+    #[error("duplicate reserve tag for {organism_id:?} in {reserve_id:?}")]
+    DuplicateTag {
+        organism_id: OrganismId,
+        reserve_id: HabitatId,
+    },
     #[error("missing membership for {0:?}")]
     MissingMembership(OrganismId),
     #[error("unknown habitat {0:?}")]
@@ -572,10 +1166,50 @@ pub enum HabitatAuthorityError {
         sequence: u64,
         organism_id: OrganismId,
     },
+    #[error("stale reserve tag {sequence} for {organism_id:?}")]
+    StaleTag {
+        sequence: u64,
+        organism_id: OrganismId,
+    },
     #[error("malformed transfer: {0}")]
     MalformedTransfer(&'static str),
     #[error("missing transfer provenance: {0}")]
     MissingProvenance(&'static str),
     #[error("malformed transfer provenance: {0}")]
     MalformedProvenance(&'static str),
+    #[error("malformed reserve tag: {0}")]
+    MalformedTag(&'static str),
+    #[error("malformed habitat operation: {0}")]
+    MalformedOperation(&'static str),
+    #[error("{operation:?} is illegal in {mode:?} mode")]
+    IllegalModeOperation {
+        mode: HabitatMode,
+        operation: HabitatOperation,
+    },
+    #[error("{kind:?} breeding is illegal in {mode:?} mode")]
+    IllegalBreeding {
+        mode: HabitatMode,
+        kind: HabitatBreedingKind,
+    },
+    #[error("{organism_id:?} is not tagged by reserve {reserve_id:?}")]
+    CreatureNotTagged {
+        organism_id: OrganismId,
+        reserve_id: HabitatId,
+    },
+    #[error("{organism_id:?} is quarantined until {until:?}")]
+    QuarantinedUntil {
+        organism_id: OrganismId,
+        until: Tick,
+    },
+    #[error("invalid actor {actor:?} for {context}")]
+    InvalidActor {
+        actor: HabitatActor,
+        context: &'static str,
+    },
+    #[error("{authority:?} cannot transfer between {prior_mode:?} and {new_mode:?} habitats")]
+    IllegalTransferAuthority {
+        prior_mode: HabitatMode,
+        new_mode: HabitatMode,
+        authority: HabitatAuthorityKind,
+    },
 }
