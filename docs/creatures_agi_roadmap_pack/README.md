@@ -1,5 +1,11 @@
 # A-Life Creatures-to-AGI Roadmap Pack v1
 
+> **Current authority:** This pack began from an older CPU-shadow baseline.
+> `docs/master_spec.md` and ADR-024 through ADR-030 now control production
+> cognition. The approved post-foundation direction is recorded in
+> `EVOLUTIONARY_INTELLIGENCE_ROADMAP.md`. Conflicting CPU-shadow and fallback
+> requirements below are historical only.
+
 Purpose: continue from the current GPU-backed graphical alpha into a playable **Creatures-inspired but smarter** artificial-life game, then into a bounded AGI research roadmap.
 
 This pack is intended to be imported into the repository under:

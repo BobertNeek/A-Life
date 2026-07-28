@@ -1,5 +1,17 @@
 # Roadmap Overview
 
+## Current post-foundation direction
+
+The original CA00-CA59 plan remains historical context. The completed
+GPU-authoritative foundation and the approved post-foundation evolutionary
+program are governed by:
+
+- `docs/master_spec.md` and ADR-024 through ADR-030;
+- `docs/superpowers/specs/2026-07-28-evolutionary-intelligence-selection-design.md`;
+- `docs/creatures_agi_roadmap_pack/EVOLUTIONARY_INTELLIGENCE_ROADMAP.md`.
+
+Where older CA plans require CPU shadow authority or fallback, ADR-024 controls.
+
 
 ## Phase A: GPU-first visible playable loop
 
