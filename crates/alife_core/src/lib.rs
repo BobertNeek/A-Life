@@ -9,6 +9,7 @@ pub mod canonical_digest;
 pub mod chemistry;
 pub mod diagnostics;
 pub mod error;
+pub mod evolutionary_genetics;
 pub mod experience;
 pub mod foundation;
 pub mod genome;
@@ -56,6 +57,13 @@ pub use chemistry::{
 };
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use error::ScaffoldContractError;
+pub use evolutionary_genetics::{
+    AlleleDominance, BodyChromosome, BodyFrame, BrainChromosome, ChemistryChromosome,
+    ContinuousLocus, CreatureGenome, DevelopmentChromosome, DiscreteAllele, DiscreteExpression,
+    DiscreteLocus, FoundationGeneticIdentity, MatePreference, PredispositionChromosome,
+    ReproductionChromosome, StarterVocabularyProfile, CREATURE_GENOME_SCHEMA_VERSION,
+    MAX_CROSSOVER_SEGMENTS, MAX_MUTATION_DELTA,
+};
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
     ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,

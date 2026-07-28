@@ -34,6 +34,12 @@ pub enum ScaffoldContractError {
     DenseAlphaRequiresOptIn,
     #[error("lifetime weight inheritance requires explicit Lamarckian opt-in")]
     LamarckianInheritanceRequiresOptIn,
+    #[error("diploid locus bounds or blend weights are invalid")]
+    InvalidGeneticBounds,
+    #[error("parental foundation families or brain classes are incompatible")]
+    IncompatibleGeneticClass,
+    #[error("mutation exceeds the bounded EI0 mutation envelope")]
+    MutationOverflow,
     #[error("tick value moved backward")]
     NonMonotonicTick,
     #[error("axis-aligned bounds are invalid")]
