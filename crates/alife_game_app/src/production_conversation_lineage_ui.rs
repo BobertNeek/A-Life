@@ -6,7 +6,7 @@ use alife_archive::{LineageLibrary, LineageLibraryConfig};
 use alife_core::{
     ArchiveCheckpointDisposition, ArchiveCheckpointRetention, Blake3Digest, BrainClassId,
     FounderMode, FounderSelection, GenomeId, LanguageCodebookV1, LineageId, MetricReading,
-    OrganismId, PassiveLifeStatistics, PassiveMetricKind, SpeechTranslationInput,
+    OrganismId, PassiveLifeStatistics, PassiveMetricKind, PolicyBackend, SpeechTranslationInput,
     SpeechTranslationReceipt, SpeechTranslationRequest, SurfaceTokenBinding, Tick, UtteranceId,
     UtteranceSourceKind, Validate, Vec3f,
 };
@@ -14,7 +14,15 @@ use alife_semantic::{
     BoundedSpeechTranslator, LlamaCppSpeechTranslationConfig, LlamaCppSpeechTranslator,
     TranslationAssistance,
 };
-use alife_world::{persistence::PortableSaveFile, StableVoxelRefKind, WorldObjectKind};
+use alife_world::{
+    persistence::PortableSaveFile, AssistanceProvenance, FoundationProvenance, Habitat,
+    HabitatActor, HabitatAuthorityError, HabitatAuthorityKind, HabitatBreedingKind,
+    HabitatBreedingReceipt, HabitatBreedingRequest, HabitatCreaturePresentation, HabitatId,
+    HabitatMembership, HabitatMode, HabitatOperation, HabitatOperationRequest,
+    HabitatPermissionReceipt, HabitatTagRecord, HabitatTransferProvenance, HabitatTransferRecord,
+    HabitatTransferRequest, HeadlessWorld, PossessionProvenance, PresentationEvidence,
+    QuarantineProvenance, SelectionExposureProvenance, StableVoxelRefKind, WorldObjectKind,
+};
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::{
@@ -158,6 +166,299 @@ struct LineageUiRow {
     death_tick: Option<Tick>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct HabitatLabView {
+    focus: Habitat,
+    membership: HabitatMembership,
+    policy: PolicyBackend,
+    presentation: HabitatCreaturePresentation,
+    tagged_for_focus: bool,
+    last_transfer: Option<HabitatTransferRecord>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HabitatLabCommand {
+    Tag,
+    Capture,
+    Test,
+    Reintroduce,
+    MembershipControl,
+    StructuredEducation,
+    ExplicitBreed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum HabitatLabOutcome {
+    Tagged(HabitatTagRecord),
+    Authorized(HabitatPermissionReceipt),
+    Transferred(HabitatTransferRecord),
+    Breeding(HabitatBreedingReceipt),
+}
+
+fn habitat_lab_view(
+    world: &HeadlessWorld,
+    organism_id: OrganismId,
+    focus_id: Option<HabitatId>,
+) -> Result<HabitatLabView, String> {
+    let authority = world.habitat_authority();
+    let membership = authority.membership(organism_id).cloned().ok_or_else(|| {
+        format!(
+            "missing habitat membership for creature {}",
+            organism_id.raw()
+        )
+    })?;
+    let focus_id = focus_id.unwrap_or(membership.habitat_id);
+    let focus = authority
+        .habitat(focus_id)
+        .cloned()
+        .ok_or_else(|| format!("unknown habitat {}", focus_id.raw()))?;
+    let presentation = world
+        .habitat_presentation_projection()
+        .map_err(|error| error.to_string())?
+        .creatures
+        .into_iter()
+        .find(|creature| creature.organism_id == organism_id)
+        .ok_or_else(|| {
+            format!(
+                "missing habitat presentation for creature {}",
+                organism_id.raw()
+            )
+        })?;
+    let tagged_for_focus = authority
+        .tags()
+        .iter()
+        .any(|tag| tag.reserve_id == focus_id && tag.organism_id == organism_id);
+    let last_transfer = authority
+        .transfers()
+        .iter()
+        .rev()
+        .find(|transfer| transfer.organism_id == organism_id)
+        .cloned();
+
+    Ok(HabitatLabView {
+        focus,
+        membership,
+        policy: authority
+            .cognition_policy(focus_id)
+            .map_err(|error| error.to_string())?,
+        presentation,
+        tagged_for_focus,
+        last_transfer,
+    })
+}
+
+fn habitat_transfer_provenance(
+    authority: HabitatAuthorityKind,
+    assistance: AssistanceProvenance,
+) -> HabitatTransferProvenance {
+    HabitatTransferProvenance {
+        actor: Some(HabitatActor::Player),
+        authority: Some(authority),
+        quarantine: Some(QuarantineProvenance::NotRequired),
+        assistance: Some(assistance),
+        foundation: Some(FoundationProvenance::Unknown),
+        possession: Some(PossessionProvenance::NotPossessed),
+        selection_exposure: Some(SelectionExposureProvenance::Unknown),
+    }
+}
+
+fn transfer_with_authority(
+    authority: &mut alife_world::HabitatAuthority,
+    organism_id: OrganismId,
+    target_id: HabitatId,
+    tick: Tick,
+    authority_kind: HabitatAuthorityKind,
+    assistance: AssistanceProvenance,
+) -> Result<HabitatTransferRecord, HabitatAuthorityError> {
+    let prior_id = authority
+        .membership(organism_id)
+        .ok_or(HabitatAuthorityError::UnknownCreature(organism_id))?
+        .habitat_id;
+    authority.transfer(HabitatTransferRequest {
+        organism_id,
+        expected_prior_habitat_id: prior_id,
+        new_habitat_id: target_id,
+        tick,
+        provenance: habitat_transfer_provenance(authority_kind, assistance),
+    })
+}
+
+fn habitat_mode_authority(mode: HabitatMode) -> Option<HabitatAuthorityKind> {
+    match mode {
+        HabitatMode::Wild => None,
+        HabitatMode::Reserve => Some(HabitatAuthorityKind::ReserveKeeper),
+        HabitatMode::Managed => Some(HabitatAuthorityKind::ManagedController),
+        HabitatMode::School => Some(HabitatAuthorityKind::SchoolAdministrator),
+    }
+}
+
+fn apply_habitat_lab_command(
+    world: &mut HeadlessWorld,
+    organism_id: OrganismId,
+    focus_id: HabitatId,
+    partner_id: Option<OrganismId>,
+    command: HabitatLabCommand,
+) -> Result<HabitatLabOutcome, HabitatAuthorityError> {
+    let tick = world.tick();
+    let mut authority = world.habitat_authority().clone();
+    let focus = authority
+        .habitat(focus_id)
+        .cloned()
+        .ok_or(HabitatAuthorityError::UnknownHabitat(focus_id))?;
+    let actor = HabitatActor::Player;
+
+    let outcome = match command {
+        HabitatLabCommand::Tag => {
+            HabitatLabOutcome::Tagged(authority.tag_creature(focus_id, organism_id, tick, actor)?)
+        }
+        HabitatLabCommand::ExplicitBreed => {
+            let partner_id = partner_id.ok_or(HabitatAuthorityError::MalformedOperation(
+                "explicit breeding requires a selected partner",
+            ))?;
+            HabitatLabOutcome::Breeding(authority.authorize_breeding(HabitatBreedingRequest {
+                habitat_id: focus_id,
+                first_parent: organism_id,
+                second_parent: partner_id,
+                kind: HabitatBreedingKind::Explicit,
+                actor,
+                tick,
+            })?)
+        }
+        operation => {
+            let operation = match operation {
+                HabitatLabCommand::Capture => HabitatOperation::Capture,
+                HabitatLabCommand::Test => HabitatOperation::Test,
+                HabitatLabCommand::Reintroduce => HabitatOperation::Reintroduce,
+                HabitatLabCommand::MembershipControl => HabitatOperation::MembershipControl,
+                HabitatLabCommand::StructuredEducation => HabitatOperation::StructuredEducation,
+                HabitatLabCommand::Tag | HabitatLabCommand::ExplicitBreed => unreachable!(),
+            };
+            let receipt = authority.authorize_operation(HabitatOperationRequest {
+                habitat_id: focus_id,
+                organism_id,
+                operation,
+                actor,
+                tick,
+            })?;
+            match command {
+                HabitatLabCommand::Capture => {
+                    let current_id = authority
+                        .membership(organism_id)
+                        .ok_or(HabitatAuthorityError::UnknownCreature(organism_id))?
+                        .habitat_id;
+                    if current_id == focus_id {
+                        HabitatLabOutcome::Authorized(receipt)
+                    } else {
+                        HabitatLabOutcome::Transferred(transfer_with_authority(
+                            &mut authority,
+                            organism_id,
+                            focus_id,
+                            tick,
+                            HabitatAuthorityKind::ReserveKeeper,
+                            AssistanceProvenance::CaptureTransport,
+                        )?)
+                    }
+                }
+                HabitatLabCommand::Reintroduce => {
+                    let membership = authority
+                        .membership(organism_id)
+                        .cloned()
+                        .ok_or(HabitatAuthorityError::UnknownCreature(organism_id))?;
+                    let target_id = authority
+                        .habitat(membership.origin_habitat_id)
+                        .filter(|habitat| habitat.mode == HabitatMode::Wild)
+                        .map(|habitat| habitat.id)
+                        .or_else(|| {
+                            authority
+                                .habitats()
+                                .iter()
+                                .find(|habitat| habitat.mode == HabitatMode::Wild)
+                                .map(|habitat| habitat.id)
+                        })
+                        .ok_or(HabitatAuthorityError::MalformedOperation(
+                            "reintroduction requires a wild habitat",
+                        ))?;
+                    HabitatLabOutcome::Transferred(transfer_with_authority(
+                        &mut authority,
+                        organism_id,
+                        target_id,
+                        tick,
+                        HabitatAuthorityKind::ReserveKeeper,
+                        AssistanceProvenance::Unassisted,
+                    )?)
+                }
+                HabitatLabCommand::MembershipControl => {
+                    let current_id = authority
+                        .membership(organism_id)
+                        .ok_or(HabitatAuthorityError::UnknownCreature(organism_id))?
+                        .habitat_id;
+                    let target_id = if current_id == focus_id {
+                        authority
+                            .habitats()
+                            .iter()
+                            .find(|habitat| habitat.mode == HabitatMode::Wild)
+                            .map(|habitat| habitat.id)
+                            .ok_or(HabitatAuthorityError::MalformedOperation(
+                                "membership release requires a wild habitat",
+                            ))?
+                    } else {
+                        focus_id
+                    };
+                    HabitatLabOutcome::Transferred(transfer_with_authority(
+                        &mut authority,
+                        organism_id,
+                        target_id,
+                        tick,
+                        habitat_mode_authority(focus.mode).ok_or(
+                            HabitatAuthorityError::IllegalModeOperation {
+                                mode: focus.mode,
+                                operation: HabitatOperation::MembershipControl,
+                            },
+                        )?,
+                        AssistanceProvenance::Unassisted,
+                    )?)
+                }
+                HabitatLabCommand::Test | HabitatLabCommand::StructuredEducation => {
+                    HabitatLabOutcome::Authorized(receipt)
+                }
+                HabitatLabCommand::Tag | HabitatLabCommand::ExplicitBreed => unreachable!(),
+            }
+        }
+    };
+
+    world.replace_habitat_authority(authority)?;
+    Ok(outcome)
+}
+
+fn habitat_operation_status(result: &Result<HabitatLabOutcome, HabitatAuthorityError>) -> String {
+    match result {
+        Ok(HabitatLabOutcome::Tagged(record)) => format!(
+            "Reserve tag recorded for creature {} (tag {})",
+            record.organism_id.raw(),
+            record.sequence
+        ),
+        Ok(HabitatLabOutcome::Authorized(receipt)) => format!(
+            "Authorized {:?} for creature {} in {:?}",
+            receipt.operation,
+            receipt.organism_id.raw(),
+            receipt.mode
+        ),
+        Ok(HabitatLabOutcome::Transferred(record)) => format!(
+            "Transferred creature {} from habitat {} to {}",
+            record.organism_id.raw(),
+            record.prior_habitat_id.raw(),
+            record.new_habitat_id.raw()
+        ),
+        Ok(HabitatLabOutcome::Breeding(receipt)) => format!(
+            "Authorized explicit breeding for creatures {} and {} in {:?}",
+            receipt.first_parent.raw(),
+            receipt.second_parent.raw(),
+            receipt.mode
+        ),
+        Err(error) => format!("Rejected: {error}"),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct LineageLabRect {
     left: f32,
@@ -188,6 +489,7 @@ enum LineageLabSectionKind {
     Filters,
     List,
     Details,
+    Habitat,
     Founder,
     Cohort,
 }
@@ -199,6 +501,7 @@ struct LineageLabLayout {
     filters: LineageLabRect,
     list: LineageLabRect,
     details: LineageLabRect,
+    habitat: LineageLabRect,
     founder: LineageLabRect,
     cohort: LineageLabRect,
 }
@@ -225,13 +528,19 @@ impl LineageLabLayout {
                 left: 71.0,
                 top: 9.0,
                 width: 28.0,
-                height: 41.0,
+                height: 21.0,
+            },
+            habitat: LineageLabRect {
+                left: 71.0,
+                top: 31.0,
+                width: 28.0,
+                height: 25.0,
             },
             founder: LineageLabRect {
                 left: 71.0,
-                top: 51.0,
+                top: 57.0,
                 width: 28.0,
-                height: 21.0,
+                height: 15.0,
             },
             cohort: LineageLabRect {
                 left: 1.0,
@@ -247,16 +556,18 @@ impl LineageLabLayout {
             LineageLabSectionKind::Filters => self.filters,
             LineageLabSectionKind::List => self.list,
             LineageLabSectionKind::Details => self.details,
+            LineageLabSectionKind::Habitat => self.habitat,
             LineageLabSectionKind::Founder => self.founder,
             LineageLabSectionKind::Cohort => self.cohort,
         }
     }
 
-    const fn primary_sections(self) -> [LineageLabRect; 5] {
+    const fn primary_sections(self) -> [LineageLabRect; 6] {
         [
             self.filters,
             self.list,
             self.details,
+            self.habitat,
             self.founder,
             self.cohort,
         ]
@@ -334,6 +645,8 @@ pub struct ProductionConversationLineageUiState {
     lineage_cursor: usize,
     pending_founder_mode: FounderMode,
     cohort: Vec<FounderSelection>,
+    habitat_focus_id: Option<HabitatId>,
+    habitat_partner_id: Option<OrganismId>,
 }
 
 impl ProductionConversationLineageUiState {
@@ -371,6 +684,8 @@ impl ProductionConversationLineageUiState {
             lineage_cursor: 0,
             pending_founder_mode: FounderMode::GeneticFounder,
             cohort: Vec::new(),
+            habitat_focus_id: None,
+            habitat_partner_id: None,
         }
     }
 
@@ -520,6 +835,12 @@ enum LineageLabTextRole {
     DetailIdentity,
     DetailProvenance,
     DetailMetrics,
+    HabitatTitle,
+    HabitatMembership,
+    HabitatProvenance,
+    HabitatRelationships,
+    HabitatSpeech,
+    HabitatControls,
     FounderTitle,
     FounderGenetic,
     FounderMind,
@@ -721,6 +1042,40 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
         );
     }
 
+    let habitat = spawn_lab_section(app, root, layout, LineageLabSectionKind::Habitat);
+    for (role, text) in [
+        (LineageLabTextRole::HabitatTitle, "HABITAT LABORATORY"),
+        (
+            LineageLabTextRole::HabitatMembership,
+            "Selected world creature: None",
+        ),
+        (
+            LineageLabTextRole::HabitatProvenance,
+            "Transfer provenance: Unknown",
+        ),
+        (
+            LineageLabTextRole::HabitatRelationships,
+            "Relationships: Unknown",
+        ),
+        (
+            LineageLabTextRole::HabitatSpeech,
+            "Grounded utterance: Unknown",
+        ),
+        (
+            LineageLabTextRole::HabitatControls,
+            "No habitat operations available",
+        ),
+    ] {
+        spawn_lab_text(
+            app,
+            habitat,
+            role,
+            text,
+            layout.critical_font_size - 1.0,
+            lab_flow_text_node(),
+        );
+    }
+
     let founder = spawn_lab_section(app, root, layout, LineageLabSectionKind::Founder);
     for (role, text) in [
         (LineageLabTextRole::FounderTitle, "FOUNDER MODE  [F cycle]"),
@@ -771,7 +1126,7 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
         app,
         root,
         LineageLabTextRole::Footer,
-        "S source  D/Tab data  O sort  Up/Down select  F founder mode  A add  X remove  R refresh  Y/Esc close",
+        "S source  D/Tab data  O sort  Up/Down archive  F founder  A add  X remove  H habitat  P partner  1-4 operate  Y/Esc close",
         layout.critical_font_size,
         Node {
             position_type: PositionType::Absolute,
@@ -864,7 +1219,14 @@ fn handle_production_conversation_lineage_input(
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
     if state.lineage_open {
-        handle_lineage_input(&keyboard, &ux, &mut state);
+        handle_lineage_input(
+            &keyboard,
+            &selection,
+            &creatures,
+            &ux,
+            &mut runtime.runtime,
+            &mut state,
+        );
         return;
     }
     if !state.input_open {
@@ -1091,7 +1453,10 @@ fn translate_speech(
 
 fn handle_lineage_input(
     keyboard: &ButtonInput<KeyCode>,
+    selection: &Fvr03ProductionVoxelSelectionResource,
+    creatures: &Fvr04ProductionCreatureSceneResource,
     ux: &Fvr05ProductionUxStateResource,
+    runtime: &mut crate::GpuLiveBrainRuntime,
     state: &mut ProductionConversationLineageUiState,
 ) {
     if keyboard.just_pressed(KeyCode::Escape) || keyboard.just_pressed(KeyCode::KeyY) {
@@ -1099,6 +1464,7 @@ fn handle_lineage_input(
         state.status = "Lineage Library closed".to_string();
         return;
     }
+    handle_habitat_lab_input(keyboard, selection, creatures, runtime, state);
     if keyboard.just_pressed(KeyCode::KeyS) {
         state.cycle_source_filter();
     }
@@ -1183,6 +1549,171 @@ fn handle_lineage_input(
             );
         }
     }
+}
+
+fn handle_habitat_lab_input(
+    keyboard: &ButtonInput<KeyCode>,
+    selection: &Fvr03ProductionVoxelSelectionResource,
+    creatures: &Fvr04ProductionCreatureSceneResource,
+    runtime: &mut crate::GpuLiveBrainRuntime,
+    state: &mut ProductionConversationLineageUiState,
+) {
+    let Some(organism_id) = selected_organism(selection, creatures) else {
+        if keyboard.just_pressed(KeyCode::KeyH)
+            || keyboard.just_pressed(KeyCode::KeyP)
+            || habitat_number_pressed(keyboard)
+        {
+            state.status =
+                "Rejected: select a live world creature for habitat operations".to_string();
+        }
+        return;
+    };
+    let snapshot = runtime.world_snapshot();
+    let authority = snapshot.habitat_authority();
+    let Some(membership) = authority.membership(organism_id) else {
+        state.habitat_focus_id = None;
+        if habitat_number_pressed(keyboard) {
+            state.status = format!(
+                "Rejected: missing habitat membership for creature {}",
+                organism_id.raw()
+            );
+        }
+        return;
+    };
+    if state
+        .habitat_focus_id
+        .is_none_or(|focus_id| authority.habitat(focus_id).is_none())
+    {
+        state.habitat_focus_id = Some(membership.habitat_id);
+        state.habitat_partner_id = None;
+    }
+
+    if keyboard.just_pressed(KeyCode::KeyH) {
+        let habitats = authority.habitats();
+        let current = state.habitat_focus_id.unwrap_or(membership.habitat_id);
+        let next_index = habitats
+            .iter()
+            .position(|habitat| habitat.id == current)
+            .map_or(0, |index| (index + 1) % habitats.len());
+        state.habitat_focus_id = habitats.get(next_index).map(|habitat| habitat.id);
+        state.habitat_partner_id = None;
+        if let Some(focus) = habitats.get(next_index) {
+            state.status = format!("Habitat focus: {} / {:?}", focus.label, focus.mode);
+        }
+    }
+
+    let focus_id = state.habitat_focus_id.unwrap_or(membership.habitat_id);
+    if keyboard.just_pressed(KeyCode::KeyP) {
+        let candidates = authority
+            .memberships()
+            .iter()
+            .filter(|candidate| {
+                candidate.habitat_id == focus_id && candidate.organism_id != organism_id
+            })
+            .map(|candidate| candidate.organism_id)
+            .collect::<Vec<_>>();
+        state.habitat_partner_id = if candidates.is_empty() {
+            None
+        } else {
+            let next_index = state
+                .habitat_partner_id
+                .and_then(|current| {
+                    candidates
+                        .iter()
+                        .position(|candidate| *candidate == current)
+                })
+                .map_or(0, |index| (index + 1) % candidates.len());
+            candidates.get(next_index).copied()
+        };
+        state.status = state.habitat_partner_id.map_or_else(
+            || "No eligible breeding partner in the focused habitat".to_string(),
+            |partner| format!("Breeding partner: creature {}", partner.raw()),
+        );
+    }
+
+    let Some(focus) = authority.habitat(focus_id) else {
+        return;
+    };
+    let command = match habitat_command_for_input(keyboard, focus.mode) {
+        Ok(Some(command)) => command,
+        Ok(None) => return,
+        Err(error) => {
+            state.status = format!("Rejected: {error}");
+            return;
+        }
+    };
+
+    let mut working = snapshot;
+    let result = apply_habitat_lab_command(
+        &mut working,
+        organism_id,
+        focus_id,
+        state.habitat_partner_id,
+        command,
+    );
+    state.status = habitat_operation_status(&result);
+    if result.is_ok() {
+        if let Err(error) = runtime.replace_habitat_authority(working.habitat_authority().clone()) {
+            state.status = format!("Rejected: {error}");
+        }
+    }
+}
+
+fn habitat_number_pressed(keyboard: &ButtonInput<KeyCode>) -> bool {
+    [
+        KeyCode::Digit1,
+        KeyCode::Digit2,
+        KeyCode::Digit3,
+        KeyCode::Digit4,
+    ]
+    .into_iter()
+    .any(|key| keyboard.just_pressed(key))
+}
+
+fn habitat_command_for_input(
+    keyboard: &ButtonInput<KeyCode>,
+    mode: HabitatMode,
+) -> Result<Option<HabitatLabCommand>, HabitatAuthorityError> {
+    let command = match mode {
+        HabitatMode::Wild if habitat_number_pressed(keyboard) => {
+            return Err(HabitatAuthorityError::MalformedOperation(
+                "player habitat operations are unavailable in Wild mode",
+            ));
+        }
+        HabitatMode::Wild => None,
+        HabitatMode::Reserve if keyboard.just_pressed(KeyCode::Digit1) => {
+            Some(HabitatLabCommand::Tag)
+        }
+        HabitatMode::Reserve if keyboard.just_pressed(KeyCode::Digit2) => {
+            Some(HabitatLabCommand::Capture)
+        }
+        HabitatMode::Reserve if keyboard.just_pressed(KeyCode::Digit3) => {
+            Some(HabitatLabCommand::Test)
+        }
+        HabitatMode::Reserve if keyboard.just_pressed(KeyCode::Digit4) => {
+            Some(HabitatLabCommand::Reintroduce)
+        }
+        HabitatMode::Managed if keyboard.just_pressed(KeyCode::Digit1) => {
+            Some(HabitatLabCommand::MembershipControl)
+        }
+        HabitatMode::Managed if keyboard.just_pressed(KeyCode::Digit2) => {
+            Some(HabitatLabCommand::Test)
+        }
+        HabitatMode::Managed if keyboard.just_pressed(KeyCode::Digit3) => {
+            Some(HabitatLabCommand::StructuredEducation)
+        }
+        HabitatMode::Managed if keyboard.just_pressed(KeyCode::Digit4) => {
+            Some(HabitatLabCommand::ExplicitBreed)
+        }
+        HabitatMode::School if keyboard.just_pressed(KeyCode::Digit1) => {
+            Some(HabitatLabCommand::MembershipControl)
+        }
+        HabitatMode::School if keyboard.just_pressed(KeyCode::Digit2) => {
+            Some(HabitatLabCommand::StructuredEducation)
+        }
+        _ => None,
+    };
+    Ok(command)
 }
 
 fn create_founder_world(
@@ -1353,6 +1884,9 @@ fn sync_production_conversation_lineage_ui(
 fn sync_production_lineage_laboratory_ui(
     state: Res<ProductionConversationLineageUiState>,
     layout: Res<LineageLabLayout>,
+    selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    creatures: Res<Fvr04ProductionCreatureSceneResource>,
+    runtime: NonSend<ProductionGpuBrainRuntimeResource>,
     mut roots: bevy::prelude::Query<
         &mut Visibility,
         (
@@ -1378,6 +1912,10 @@ fn sync_production_lineage_laboratory_ui(
         0
     };
     let selected = state.current_row();
+    let world = runtime.runtime.world_snapshot();
+    let live_selected = selected_organism(&selection, &creatures);
+    let habitat_view = live_selected
+        .map(|organism_id| habitat_lab_view(&world, organism_id, state.habitat_focus_id));
 
     for (role, mut text, mut visibility) in &mut texts {
         *visibility = Visibility::Inherited;
@@ -1452,6 +1990,51 @@ fn sync_production_lineage_laboratory_ui(
                     )
                 },
             ),
+            LineageLabTextRole::HabitatTitle => habitat_view.as_ref().map_or_else(
+                || "HABITAT LABORATORY  /  SELECT A WORLD CREATURE".to_string(),
+                |result| match result {
+                    Ok(view) => format!(
+                        "HABITAT LABORATORY  /  {}  /  {:?}",
+                        view.focus.label, view.focus.mode
+                    ),
+                    Err(_) => "HABITAT LABORATORY  /  DATA UNAVAILABLE".to_string(),
+                },
+            ),
+            LineageLabTextRole::HabitatMembership => habitat_view.as_ref().map_or_else(
+                || "Selected world creature: None".to_string(),
+                |result| match result {
+                    Ok(view) => habitat_membership_text(view, &world),
+                    Err(error) => format!("Selected world creature: {error}"),
+                },
+            ),
+            LineageLabTextRole::HabitatProvenance => habitat_view.as_ref().map_or_else(
+                || "Transfer provenance: Unknown".to_string(),
+                |result| match result {
+                    Ok(view) => habitat_provenance_text(view),
+                    Err(_) => "Transfer provenance: Unknown".to_string(),
+                },
+            ),
+            LineageLabTextRole::HabitatRelationships => habitat_view.as_ref().map_or_else(
+                || "Relationships: Unknown".to_string(),
+                |result| match result {
+                    Ok(view) => habitat_relationships_text(view),
+                    Err(_) => "Relationships: Unknown".to_string(),
+                },
+            ),
+            LineageLabTextRole::HabitatSpeech => habitat_view.as_ref().map_or_else(
+                || "Grounded utterance: Unknown".to_string(),
+                |result| match result {
+                    Ok(view) => habitat_speech_text(view),
+                    Err(_) => "Grounded utterance: Unknown".to_string(),
+                },
+            ),
+            LineageLabTextRole::HabitatControls => habitat_view.as_ref().map_or_else(
+                || "No habitat operations available".to_string(),
+                |result| match result {
+                    Ok(view) => habitat_controls_text(view.focus.mode, state.habitat_partner_id),
+                    Err(_) => "No habitat operations available".to_string(),
+                },
+            ),
             LineageLabTextRole::FounderTitle => "FOUNDER MODE  [F cycle]".to_string(),
             LineageLabTextRole::FounderGenetic => founder_mode_card(
                 "Genetic Founder",
@@ -1495,10 +2078,139 @@ fn sync_production_lineage_laboratory_ui(
                 },
             ),
             LineageLabTextRole::Footer => format!(
-                "S source  D/Tab data  O sort  Up/Down select  F mode  A add  X remove  R refresh  Y/Esc close\n{}",
+                "S source  D/Tab data  O sort  Up/Down archive  F founder  A add  X remove  H habitat  P partner  1-4 operate  Y/Esc close\n{}",
                 state.status
             ),
         };
+    }
+}
+
+fn habitat_membership_text(view: &HabitatLabView, world: &HeadlessWorld) -> String {
+    let current = world
+        .habitat_authority()
+        .habitat(view.membership.habitat_id)
+        .map(|habitat| format!("{} / {:?}", habitat.label, habitat.mode))
+        .unwrap_or_else(|| "Unknown".to_string());
+    let stable = view
+        .presentation
+        .stable_world_entity_id
+        .map(|id| id.raw().to_string())
+        .unwrap_or_else(|| "Unknown".to_string());
+    let quarantine = view
+        .membership
+        .quarantine_until
+        .map(|tick| format!("until {}", tick.raw()))
+        .unwrap_or_else(|| "None".to_string());
+    format!(
+        "Creature {} / world {} / member {}\nQuarantine {} / tagged here {} / policy {:?}",
+        view.membership.organism_id.raw(),
+        stable,
+        current,
+        quarantine,
+        view.tagged_for_focus,
+        view.policy
+    )
+}
+
+fn habitat_provenance_text(view: &HabitatLabView) -> String {
+    let Some(transfer) = &view.last_transfer else {
+        return format!(
+            "Transfer provenance: Unknown / origin habitat {} at tick {}",
+            view.membership.origin_habitat_id.raw(),
+            view.membership.origin_tick.raw()
+        );
+    };
+    format!(
+        "Transfer {}: {} -> {} / actor {} / authority {} / quarantine {} / assistance {}",
+        transfer.sequence,
+        transfer.prior_habitat_id.raw(),
+        transfer.new_habitat_id.raw(),
+        provenance_value(transfer.provenance.actor.as_ref()),
+        provenance_value(transfer.provenance.authority.as_ref()),
+        provenance_value(transfer.provenance.quarantine.as_ref()),
+        provenance_value(transfer.provenance.assistance.as_ref()),
+    )
+}
+
+fn provenance_value<T: std::fmt::Debug>(value: Option<&T>) -> String {
+    value
+        .map(|value| format!("{value:?}"))
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn habitat_relationships_text(view: &HabitatLabView) -> String {
+    if view.presentation.relationships.is_empty() {
+        return "Relationships: Unknown".to_string();
+    }
+    view.presentation
+        .relationships
+        .iter()
+        .map(|edge| {
+            let stable = edge
+                .target_stable_world_entity_id
+                .map(|id| id.raw().to_string())
+                .unwrap_or_else(|| "Unknown".to_string());
+            format!(
+                "Creature {} / world {}: affinity {} / trust {} / fear {}",
+                edge.target_organism_id.raw(),
+                stable,
+                signed_evidence(&edge.affinity),
+                signed_evidence(&edge.trust),
+                normalized_evidence(&edge.fear),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+fn signed_evidence(evidence: &PresentationEvidence<alife_core::SignedValence>) -> String {
+    match evidence {
+        PresentationEvidence::Observed { value, tick } => {
+            format!("{:.2} @{}", value.raw(), tick.raw())
+        }
+        PresentationEvidence::Unknown => "Unknown".to_string(),
+    }
+}
+
+fn normalized_evidence(evidence: &PresentationEvidence<alife_core::NormalizedScalar>) -> String {
+    match evidence {
+        PresentationEvidence::Observed { value, tick } => {
+            format!("{:.2} @{}", value.raw(), tick.raw())
+        }
+        PresentationEvidence::Unknown => "Unknown".to_string(),
+    }
+}
+
+fn habitat_speech_text(view: &HabitatLabView) -> String {
+    match &view.presentation.latest_grounded_utterance {
+        PresentationEvidence::Observed { value, tick } => format!(
+            "Grounded utterance @{}: [{}]",
+            tick.raw(),
+            value
+                .iter()
+                .map(|token| token.raw().to_string())
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+        PresentationEvidence::Unknown => "Grounded utterance: Unknown".to_string(),
+    }
+}
+
+fn habitat_controls_text(mode: HabitatMode, partner: Option<OrganismId>) -> String {
+    let partner = partner
+        .map(|id| format!("Creature {}", id.raw()))
+        .unwrap_or_else(|| "None".to_string());
+    match mode {
+        HabitatMode::Wild => {
+            "Wild: creature-chosen breeding only / player operations unavailable".to_string()
+        }
+        HabitatMode::Reserve => "Reserve: [1] tag [2] capture [3] test [4] reintroduce".to_string(),
+        HabitatMode::Managed => {
+            format!("Managed: [1] membership [2] test [3] education [4] breed / partner {partner}")
+        }
+        HabitatMode::School => {
+            "School: [1] membership [2] structured education / breeding unavailable".to_string()
+        }
     }
 }
 
@@ -1705,7 +2417,11 @@ mod tests {
     use alife_archive::GeneticArchiveInput;
     use alife_core::{
         BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
-        SensorProfile,
+        PolicyBackend, SensorProfile, Vec3f,
+    };
+    use alife_world::{
+        Habitat, HabitatAuthority, HabitatAuthorityError, HabitatId, HabitatMode,
+        HeadlessScenarioBuilder, PresentationEvidence,
     };
     use bevy::prelude::{Children, Entity};
 
@@ -1757,6 +2473,35 @@ mod tests {
             birth_tick: None,
             death_tick: None,
         }
+    }
+
+    fn habitat(raw: u64) -> HabitatId {
+        HabitatId::new(raw).unwrap()
+    }
+
+    fn habitat_world() -> alife_world::HeadlessWorld {
+        let first = OrganismId::new(1).unwrap();
+        let second = OrganismId::new(2).unwrap();
+        let mut world = HeadlessScenarioBuilder::new(913_001)
+            .agent("first", first, Vec3f::ZERO)
+            .social_agent("second", second, Vec3f::new(2.0, 0.0, 0.0), 0.75)
+            .build()
+            .unwrap();
+        let mut authority = HabitatAuthority::new(vec![
+            Habitat::new(habitat(1), "Wild North", HabitatMode::Wild).unwrap(),
+            Habitat::new(habitat(2), "Oak Reserve", HabitatMode::Reserve).unwrap(),
+            Habitat::new(habitat(3), "Managed Meadow", HabitatMode::Managed).unwrap(),
+            Habitat::new(habitat(4), "Nursery School", HabitatMode::School).unwrap(),
+        ])
+        .unwrap();
+        authority
+            .register_creature(first, habitat(1), Tick::ZERO)
+            .unwrap();
+        authority
+            .register_creature(second, habitat(1), Tick::ZERO)
+            .unwrap();
+        world.replace_habitat_authority(authority).unwrap();
+        world
     }
 
     #[test]
@@ -1821,6 +2566,236 @@ mod tests {
         assert_eq!(row.overall_q16, None);
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn habitat_view_uses_projection_and_keeps_unobserved_evidence_unknown() {
+        let world = habitat_world();
+        let view = habitat_lab_view(&world, OrganismId::new(1).unwrap(), Some(habitat(2))).unwrap();
+
+        for focus_id in [habitat(1), habitat(2), habitat(3), habitat(4)] {
+            assert_eq!(
+                habitat_lab_view(&world, OrganismId::new(1).unwrap(), Some(focus_id))
+                    .unwrap()
+                    .policy,
+                PolicyBackend::NeuralClosedLoopGpu
+            );
+        }
+
+        assert_eq!(view.focus.id, habitat(2));
+        assert_eq!(view.focus.mode, HabitatMode::Reserve);
+        assert_eq!(view.membership.habitat_id, habitat(1));
+        assert_eq!(view.membership.quarantine_until, None);
+        assert_eq!(view.policy, PolicyBackend::NeuralClosedLoopGpu);
+        assert!(view.presentation.stable_world_entity_id.is_some());
+        assert_eq!(
+            view.presentation.latest_grounded_utterance,
+            PresentationEvidence::Unknown
+        );
+        assert!(!view.tagged_for_focus);
+        let relationship = view
+            .presentation
+            .relationships
+            .iter()
+            .find(|edge| edge.target_organism_id == OrganismId::new(2).unwrap())
+            .unwrap();
+        assert!(matches!(
+            relationship.affinity,
+            PresentationEvidence::Observed { .. }
+        ));
+        assert_eq!(relationship.trust, PresentationEvidence::Unknown);
+        assert_eq!(relationship.fear, PresentationEvidence::Unknown);
+    }
+
+    #[test]
+    fn reserve_commands_route_through_authority_and_rejections_are_explicit() {
+        let selected = OrganismId::new(1).unwrap();
+        let mut world = habitat_world();
+
+        let rejected = apply_habitat_lab_command(
+            &mut world,
+            selected,
+            habitat(2),
+            None,
+            HabitatLabCommand::Capture,
+        );
+        assert_eq!(
+            rejected,
+            Err(HabitatAuthorityError::CreatureNotTagged {
+                organism_id: selected,
+                reserve_id: habitat(2),
+            })
+        );
+        assert!(habitat_operation_status(&rejected).starts_with("Rejected:"));
+
+        apply_habitat_lab_command(
+            &mut world,
+            selected,
+            habitat(2),
+            None,
+            HabitatLabCommand::Tag,
+        )
+        .unwrap();
+        apply_habitat_lab_command(
+            &mut world,
+            selected,
+            habitat(2),
+            None,
+            HabitatLabCommand::Capture,
+        )
+        .unwrap();
+        assert_eq!(
+            world
+                .habitat_authority()
+                .membership(selected)
+                .unwrap()
+                .habitat_id,
+            habitat(2)
+        );
+        apply_habitat_lab_command(
+            &mut world,
+            selected,
+            habitat(2),
+            None,
+            HabitatLabCommand::Reintroduce,
+        )
+        .unwrap();
+        assert_eq!(
+            world
+                .habitat_authority()
+                .membership(selected)
+                .unwrap()
+                .habitat_id,
+            habitat(1)
+        );
+    }
+
+    #[test]
+    fn managed_school_and_wild_commands_preserve_mode_authority() {
+        let first = OrganismId::new(1).unwrap();
+        let second = OrganismId::new(2).unwrap();
+        let mut world = habitat_world();
+
+        for organism in [first, second] {
+            apply_habitat_lab_command(
+                &mut world,
+                organism,
+                habitat(3),
+                None,
+                HabitatLabCommand::MembershipControl,
+            )
+            .unwrap();
+        }
+        apply_habitat_lab_command(&mut world, first, habitat(3), None, HabitatLabCommand::Test)
+            .unwrap();
+        apply_habitat_lab_command(
+            &mut world,
+            first,
+            habitat(3),
+            None,
+            HabitatLabCommand::StructuredEducation,
+        )
+        .unwrap();
+        let breeding = apply_habitat_lab_command(
+            &mut world,
+            first,
+            habitat(3),
+            Some(second),
+            HabitatLabCommand::ExplicitBreed,
+        )
+        .unwrap();
+        assert!(matches!(breeding, HabitatLabOutcome::Breeding(_)));
+
+        apply_habitat_lab_command(
+            &mut world,
+            first,
+            habitat(4),
+            None,
+            HabitatLabCommand::MembershipControl,
+        )
+        .unwrap();
+        apply_habitat_lab_command(
+            &mut world,
+            first,
+            habitat(4),
+            None,
+            HabitatLabCommand::StructuredEducation,
+        )
+        .unwrap();
+        assert_eq!(
+            apply_habitat_lab_command(
+                &mut world,
+                first,
+                habitat(4),
+                None,
+                HabitatLabCommand::Capture,
+            ),
+            Err(HabitatAuthorityError::IllegalModeOperation {
+                mode: HabitatMode::School,
+                operation: alife_world::HabitatOperation::Capture,
+            })
+        );
+
+        apply_habitat_lab_command(
+            &mut world,
+            first,
+            habitat(4),
+            None,
+            HabitatLabCommand::MembershipControl,
+        )
+        .unwrap();
+        apply_habitat_lab_command(
+            &mut world,
+            second,
+            habitat(3),
+            None,
+            HabitatLabCommand::MembershipControl,
+        )
+        .unwrap();
+        let transfers_before = world.habitat_authority().transfers().len();
+        assert_eq!(
+            apply_habitat_lab_command(
+                &mut world,
+                first,
+                habitat(1),
+                Some(second),
+                HabitatLabCommand::ExplicitBreed,
+            ),
+            Err(HabitatAuthorityError::IllegalBreeding {
+                mode: HabitatMode::Wild,
+                kind: alife_world::HabitatBreedingKind::Explicit,
+            })
+        );
+        assert_eq!(
+            world.habitat_authority().transfers().len(),
+            transfers_before,
+            "player breeding in Wild must not change authority state"
+        );
+    }
+
+    #[test]
+    fn wild_number_inputs_reject_without_mutating_authority() {
+        let world = habitat_world();
+        let authority_before = world.habitat_authority().clone();
+
+        for key in [
+            KeyCode::Digit1,
+            KeyCode::Digit2,
+            KeyCode::Digit3,
+            KeyCode::Digit4,
+        ] {
+            let mut keyboard = ButtonInput::default();
+            keyboard.press(key);
+            let rejection = habitat_command_for_input(&keyboard, HabitatMode::Wild).unwrap_err();
+            assert_eq!(
+                rejection,
+                HabitatAuthorityError::MalformedOperation(
+                    "player habitat operations are unavailable in Wild mode"
+                )
+            );
+            assert!(format!("Rejected: {rejection}").starts_with("Rejected:"));
+            assert_eq!(world.habitat_authority(), &authority_before);
+        }
     }
 
     #[test]
@@ -1952,7 +2927,7 @@ mod tests {
                     (entity, marker.0, node.clone(), text.is_some())
                 })
                 .collect::<Vec<_>>();
-            assert_eq!(sections.len(), 5);
+            assert_eq!(sections.len(), 6);
             for (entity, kind, node, has_text) in sections {
                 assert!(root_children.contains(&entity));
                 assert!(!has_text, "{kind:?} container must not be a Text blob");
