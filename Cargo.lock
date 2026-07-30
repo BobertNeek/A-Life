@@ -184,6 +184,7 @@ name = "alife_gpu_backend"
 version = "0.1.0"
 dependencies = [
  "alife_core",
+ "blake3",
  "bytemuck",
  "naga 29.0.3",
  "pollster",
@@ -233,6 +234,7 @@ dependencies = [
  "alife_semantic",
  "alife_training",
  "alife_world",
+ "blake3",
  "flate2",
  "image",
  "serde",

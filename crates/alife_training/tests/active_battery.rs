@@ -1,12 +1,14 @@
 #[cfg(feature = "gpu-tests")]
 use alife_core::{
     ActionKind, BrainCapacityClass, CandidateActionFamily, CreatureGenome,
-    FoundationGeneticIdentity, GenomeId, OrganismId, Validate,
+    FoundationGeneticIdentity, GenomeId, OrganismId, Validate, Vec3f,
 };
 use alife_core::{ActiveChallengeKind, ACTIVE_CHALLENGE_COUNT};
 use alife_training::ActiveBatteryChallengeSpec;
 #[cfg(feature = "gpu-tests")]
 use alife_training::N2048ActiveBatteryRunner;
+#[cfg(feature = "gpu-tests")]
+use alife_world::HeadlessScenarioBuilder;
 
 #[test]
 fn every_active_challenge_has_a_bounded_production_world_spec() {
@@ -138,4 +140,84 @@ fn real_gpu_reproduction_intent_rejects_a_mismatched_foundation_identity() {
     let result = runner.run_reproduction_intent(OrganismId(93), &initiator, OrganismId(94), 8);
 
     assert!(result.is_err());
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+fn real_gpu_reproduction_intent_executes_in_the_supplied_runtime_world() {
+    let foundation = FoundationGeneticIdentity::new(
+        0x4E32_3034_385F_5631,
+        1,
+        0x4E32_3034_385F_FA11,
+        BrainCapacityClass::N2048_ID,
+    )
+    .unwrap();
+    let initiator = CreatureGenome::early_mammal_founder(0xE10_903, foundation).unwrap();
+    let mut world = HeadlessScenarioBuilder::new(99_003)
+        .agent("initiator", OrganismId(95), Vec3f::ZERO)
+        .social_agent("mate", OrganismId(96), Vec3f::new(0.5, 0.0, 0.0), 1.0)
+        .build()
+        .unwrap();
+    for _ in 0..128 {
+        world.advance_tick();
+    }
+    let mate_entity = world.entity_id("mate").unwrap();
+    let mut runner = N2048ActiveBatteryRunner::new_required().unwrap();
+
+    let receipt = runner
+        .run_reproduction_intent_in_world(
+            OrganismId(95),
+            &initiator,
+            OrganismId(96),
+            &mut world,
+            256,
+        )
+        .unwrap();
+
+    assert_eq!(
+        receipt.patch.header().world_tick.raw(),
+        127 + u64::from(receipt.observed_ticks)
+    );
+    assert_eq!(receipt.mate_entity_id, mate_entity);
+    assert_eq!(
+        world.entity(mate_entity).unwrap().carried_by,
+        Some(OrganismId(95))
+    );
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+fn real_gpu_creature_chosen_intent_reports_the_mate_selected_by_the_network() {
+    let foundation = FoundationGeneticIdentity::new(
+        0x4E32_3034_385F_5631,
+        1,
+        0x4E32_3034_385F_FA11,
+        BrainCapacityClass::N2048_ID,
+    )
+    .unwrap();
+    let initiator = CreatureGenome::early_mammal_founder(0xE10_904, foundation).unwrap();
+    let mut world = HeadlessScenarioBuilder::new(99_004)
+        .agent("initiator", OrganismId(97), Vec3f::ZERO)
+        .social_agent(
+            "only-visible-mate",
+            OrganismId(98),
+            Vec3f::new(0.5, 0.0, 0.0),
+            1.0,
+        )
+        .build()
+        .unwrap();
+    let mate_entity = world.entity_id("only-visible-mate").unwrap();
+    let mut runner = N2048ActiveBatteryRunner::new_required().unwrap();
+
+    let receipt = runner
+        .run_creature_chosen_reproduction_intent_in_world(
+            OrganismId(97),
+            &initiator,
+            &mut world,
+            256,
+        )
+        .unwrap();
+
+    assert_eq!(receipt.mate_organism_id, OrganismId(98));
+    assert_eq!(receipt.mate_entity_id, mate_entity);
 }

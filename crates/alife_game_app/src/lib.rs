@@ -60,6 +60,9 @@ pub use schema::*;
 mod app_shell;
 pub use app_shell::*;
 
+mod composite_population_runtime;
+pub use composite_population_runtime::*;
+
 mod brain_policy;
 pub use brain_policy::*;
 

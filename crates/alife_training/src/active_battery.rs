@@ -173,10 +173,74 @@ impl N2048ActiveBatteryRunner {
         mate_organism_id: OrganismId,
         max_ticks: u32,
     ) -> Result<GpuReproductionIntentReceipt, TrainingError> {
+        let mut world = HeadlessScenarioBuilder::new(creature_genome.conception_seed)
+            .agent("reproduction-initiator", initiator_organism_id, Vec3f::ZERO)
+            .social_agent(
+                "reproduction-mate",
+                mate_organism_id,
+                Vec3f::new(0.5, 0.0, 0.0),
+                1.0,
+            )
+            .build()?;
+        self.run_reproduction_intent_in_world(
+            initiator_organism_id,
+            creature_genome,
+            mate_organism_id,
+            &mut world,
+            max_ticks,
+        )
+    }
+
+    /// Runs reproduction intent against a caller-owned production world. The
+    /// selected action mutates that world before its sealed outcome is returned
+    /// to the GPU, allowing an authoritative runtime to commit both together.
+    pub fn run_reproduction_intent_in_world(
+        &mut self,
+        initiator_organism_id: OrganismId,
+        creature_genome: &CreatureGenome,
+        mate_organism_id: OrganismId,
+        world: &mut HeadlessWorld,
+        max_ticks: u32,
+    ) -> Result<GpuReproductionIntentReceipt, TrainingError> {
+        self.run_reproduction_intent_in_world_internal(
+            initiator_organism_id,
+            creature_genome,
+            Some(mate_organism_id),
+            world,
+            max_ticks,
+        )
+    }
+
+    /// Lets the GPU network choose both the Contact action and its mate target
+    /// from the caller-owned world. No parent pair is selected by the tool.
+    pub fn run_creature_chosen_reproduction_intent_in_world(
+        &mut self,
+        initiator_organism_id: OrganismId,
+        creature_genome: &CreatureGenome,
+        world: &mut HeadlessWorld,
+        max_ticks: u32,
+    ) -> Result<GpuReproductionIntentReceipt, TrainingError> {
+        self.run_reproduction_intent_in_world_internal(
+            initiator_organism_id,
+            creature_genome,
+            None,
+            world,
+            max_ticks,
+        )
+    }
+
+    fn run_reproduction_intent_in_world_internal(
+        &mut self,
+        initiator_organism_id: OrganismId,
+        creature_genome: &CreatureGenome,
+        expected_mate_organism_id: Option<OrganismId>,
+        world: &mut HeadlessWorld,
+        max_ticks: u32,
+    ) -> Result<GpuReproductionIntentReceipt, TrainingError> {
         if initiator_organism_id.raw() == 0
-            || mate_organism_id.raw() == 0
-            || initiator_organism_id == mate_organism_id
             || max_ticks == 0
+            || expected_mate_organism_id
+                .is_some_and(|mate| mate.raw() == 0 || mate == initiator_organism_id)
         {
             return Err(ScaffoldContractError::InvalidId.into());
         }
@@ -193,18 +257,21 @@ impl N2048ActiveBatteryRunner {
             .insert_brain(initiator_organism_id, phenotype)?;
 
         let attempt = (|| {
-            let mut world = HeadlessScenarioBuilder::new(creature_genome.conception_seed)
-                .agent("reproduction-initiator", initiator_organism_id, Vec3f::ZERO)
-                .social_agent(
-                    "reproduction-mate",
-                    mate_organism_id,
-                    Vec3f::new(0.5, 0.0, 0.0),
-                    1.0,
-                )
-                .build()?;
-            let mate_entity_id = world
-                .entity_id("reproduction-mate")
-                .ok_or(ScaffoldContractError::InvalidId)?;
+            let initiator_exists = world
+                .organism_entity_ids()
+                .into_iter()
+                .any(|(organism, _)| organism == initiator_organism_id);
+            if !initiator_exists {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+            if expected_mate_organism_id.is_some_and(|mate| {
+                !world
+                    .organism_entity_ids()
+                    .into_iter()
+                    .any(|(organism, _)| organism == mate)
+            }) {
+                return Err(ScaffoldContractError::InvalidId);
+            }
             let mature_age = development.age_ticks.raw();
             let mut homeostasis = HomeostaticSnapshot::baseline(world.tick());
             homeostasis.drives.loneliness = 1.0;
@@ -282,20 +349,46 @@ impl N2048ActiveBatteryRunner {
                 self.session
                     .apply_sealed_outcome_batch(&[(handle, &patch)])?;
 
-                let receipt = GpuReproductionIntentReceipt {
-                    initiator_organism_id,
-                    mate_organism_id,
-                    mate_entity_id,
-                    observed_ticks: step + 1,
-                    patch,
-                };
-                if receipt.validate_contract().is_ok() {
-                    return Ok(receipt);
+                let selected_mate =
+                    patch
+                        .decision()
+                        .selected_action
+                        .target_entity
+                        .and_then(|entity_id| {
+                            world.entity(entity_id).and_then(|entity| {
+                                (entity.kind == WorldObjectKind::Agent)
+                                    .then_some(entity.organism_id)
+                                    .flatten()
+                                    .map(|organism_id| (organism_id, entity_id))
+                            })
+                        });
+                if let Some((mate_organism_id, mate_entity_id)) = selected_mate {
+                    let matches_expected = expected_mate_organism_id
+                        .map_or(true, |expected| expected == mate_organism_id);
+                    let is_causal_contact = mate_organism_id != initiator_organism_id
+                        && matches_expected
+                        && patch.decision().selected_action.kind == ActionKind::Interact
+                        && patch.decision().neural_evidence()?.action_family
+                            == CandidateActionFamily::Contact
+                        && patch.outcome().success
+                        && patch.outcome().physical.contact == PhysicalContactKind::Touch
+                        && patch.outcome().physical.target_entity == Some(mate_entity_id);
+                    if is_causal_contact {
+                        let receipt = GpuReproductionIntentReceipt {
+                            initiator_organism_id,
+                            mate_organism_id,
+                            mate_entity_id,
+                            observed_ticks: step + 1,
+                            patch,
+                        };
+                        receipt.validate_contract()?;
+                        return Ok(receipt);
+                    }
                 }
 
                 homeostasis = homeostasis.advance(
                     outcome_tick,
-                    receipt.patch.outcome().homeostatic_delta,
+                    patch.outcome().homeostatic_delta,
                     HomeostaticParameters::reference(),
                 )?;
                 world.advance_tick();

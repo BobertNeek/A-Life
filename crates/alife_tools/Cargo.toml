@@ -14,6 +14,7 @@ alife_school = { path = "../alife_school" }
 alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider"], optional = true }
 alife_training = { path = "../alife_training" }
 alife_world = { path = "../alife_world" }
+blake3.workspace = true
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 flate2 = "=1.1.9"
 serde.workspace = true
