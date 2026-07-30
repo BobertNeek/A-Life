@@ -8,9 +8,9 @@ use alife_core::{
     ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
 };
 use alife_world::{
-    CreatureLifetimeStateAsset, HabitatActor, HabitatAuthorityError, HabitatBreedingKind,
-    HabitatBreedingReceipt, HabitatBreedingRequest, HabitatId, HeadlessWorld, PersistenceError,
-    PortableAssetDigest, PortableSaveFile,
+    CreatureLifetimeStateAsset, EcologyMetrics, HabitatActor, HabitatAuthorityError,
+    HabitatBreedingKind, HabitatBreedingReceipt, HabitatBreedingRequest, HabitatId, HeadlessWorld,
+    HeadlessWorldSignatureDigest, PersistenceError, PortableAssetDigest, PortableSaveFile,
 };
 
 pub const MINIMUM_POST_RESTORE_TICKS: u32 = 128;
@@ -27,10 +27,18 @@ pub enum CompositePopulationRuntimeError {
     MissingResident(OrganismId),
     #[error("organism {0:?} is already present")]
     DuplicateOrganism(OrganismId),
+    #[error("restored population contains duplicate genome {0:?}")]
+    DuplicateGenome(GenomeId),
+    #[error("restored offspring references absent parent genome {0:?}")]
+    MissingGenerationParent(GenomeId),
+    #[error("restored population contains a generation cycle at {0:?}")]
+    CyclicGenerationAncestry(GenomeId),
     #[error("restored population must advance 128 ticks before reproduction")]
     InsufficientPostRestoreTicks,
     #[error("GPU reproduction intent is not causally bound to the restored world")]
     InvalidGpuReproductionIntent,
+    #[error("Managed breeding receipt was not produced by the current player command")]
+    InvalidManagedBreedingReceipt,
     #[error("GPU reproduction intent was already consumed")]
     ReplayedGpuReproductionIntent,
     #[error("restored population contains no creatures")]
@@ -68,6 +76,19 @@ pub struct CompositePopulationBirthReceipt {
     pub child_lifetime: LifetimeInheritanceEvidence,
     pub child_phenotype_hash: PhenotypeHash,
     pub post_restore_ticks: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PopulationStabilityReceipt {
+    pub start_tick: Tick,
+    pub end_tick: Tick,
+    pub elapsed_ticks: u32,
+    pub start_world_digest: HeadlessWorldSignatureDigest,
+    pub end_world_digest: HeadlessWorldSignatureDigest,
+    pub start_ecology_metrics: EcologyMetrics,
+    pub end_ecology_metrics: EcologyMetrics,
+    pub start_residents: Vec<OrganismId>,
+    pub end_residents: Vec<OrganismId>,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +152,7 @@ impl CompositePopulationRuntime {
         if residents.is_empty() {
             return Err(CompositePopulationRuntimeError::EmptyPopulation);
         }
+        restore_resident_generations(&mut residents)?;
         let restored_tick = world.tick();
         Ok(Self {
             world,
@@ -166,23 +188,63 @@ impl CompositePopulationRuntime {
         }
     }
 
-    pub fn apply_player_breed_command(
+    pub fn advance_ticks_with_receipt(
         &mut self,
-        habitat_id: HabitatId,
-        first_parent: OrganismId,
-        second_parent: OrganismId,
+        ticks: u32,
+    ) -> Result<PopulationStabilityReceipt, CompositePopulationRuntimeError> {
+        let start_tick = self.world.tick();
+        let start_world_digest = self.world.canonical_signature_digest()?;
+        let start_ecology_metrics = self.world.ecology_metrics();
+        let start_residents = self
+            .residents()
+            .map(|resident| resident.organism_id)
+            .collect::<Vec<_>>();
+        self.advance_ticks(ticks);
+        let end_residents = self
+            .residents()
+            .map(|resident| resident.organism_id)
+            .collect::<Vec<_>>();
+        Ok(PopulationStabilityReceipt {
+            start_tick,
+            end_tick: self.world.tick(),
+            elapsed_ticks: ticks,
+            start_world_digest,
+            end_world_digest: self.world.canonical_signature_digest()?,
+            start_ecology_metrics,
+            end_ecology_metrics: self.world.ecology_metrics(),
+            start_residents,
+            end_residents,
+        })
+    }
+
+    pub fn apply_managed_breed_receipt(
+        &mut self,
+        receipt: HabitatBreedingReceipt,
         child_organism_id: OrganismId,
         conception_seed: u64,
     ) -> Result<CompositePopulationBirthReceipt, CompositePopulationRuntimeError> {
-        self.apply_birth(
-            HabitatBreedingRequest {
-                habitat_id,
-                first_parent,
-                second_parent,
-                kind: HabitatBreedingKind::Explicit,
-                actor: HabitatActor::Player,
-                tick: self.world.tick(),
-            },
+        let expected =
+            self.world
+                .habitat_authority()
+                .authorize_breeding(HabitatBreedingRequest {
+                    habitat_id: receipt.habitat_id,
+                    first_parent: receipt.first_parent,
+                    second_parent: receipt.second_parent,
+                    kind: receipt.kind,
+                    actor: receipt.actor,
+                    tick: receipt.tick,
+                })?;
+        if receipt != expected
+            || receipt.mode != alife_world::HabitatMode::Managed
+            || receipt.kind != HabitatBreedingKind::Explicit
+            || receipt.actor != HabitatActor::Player
+            || receipt.tick != self.world.tick()
+            || receipt.cognition_policy != PolicyBackend::NeuralClosedLoopGpu
+        {
+            return Err(CompositePopulationRuntimeError::InvalidManagedBreedingReceipt);
+        }
+        self.apply_authorized_birth(
+            receipt,
             child_organism_id,
             conception_seed,
             self.world.clone(),
@@ -195,6 +257,7 @@ impl CompositePopulationRuntime {
     pub fn apply_gpu_reproduction_intent(
         &mut self,
         habitat_id: HabitatId,
+        pre_action_world_digest: HeadlessWorldSignatureDigest,
         observed_world: HeadlessWorld,
         patch: &ExperiencePatch,
         child_organism_id: OrganismId,
@@ -222,11 +285,15 @@ impl CompositePopulationRuntime {
         let initiator_resident = self
             .resident(initiator)
             .ok_or(CompositePopulationRuntimeError::MissingResident(initiator))?;
-        if observed_world.seed() != self.world.seed()
-            || observed_world.tick().raw() < self.world.tick().raw()
-            || patch.header().world_tick != observed_world.tick()
+        let expected_world_digest = self.world.canonical_signature_digest()?;
+        if pre_action_world_digest != expected_world_digest
+            || observed_world.seed() != self.world.seed()
+            || observed_world.tick() != self.world.tick()
+            || patch.header().world_tick != self.world.tick()
             || patch.pre_action().genome_id != initiator_resident.genome.id
             || patch.decision().policy_backend() != PolicyBackend::NeuralClosedLoopGpu
+            || patch.decision().neural_evidence()?.phenotype_hash
+                != initiator_resident.phenotype_hash
             || patch.decision().selected_action.kind != ActionKind::Interact
             || patch.decision().neural_evidence()?.action_family != CandidateActionFamily::Contact
             || !patch.outcome().success
@@ -237,15 +304,19 @@ impl CompositePopulationRuntime {
         {
             return Err(CompositePopulationRuntimeError::InvalidGpuReproductionIntent);
         }
-        let receipt = self.apply_birth(
-            HabitatBreedingRequest {
-                habitat_id,
-                first_parent: initiator,
-                second_parent: mate,
-                kind: HabitatBreedingKind::CreatureChosen,
-                actor: HabitatActor::Organism(initiator),
-                tick: self.world.tick(),
-            },
+        let breeding =
+            self.world
+                .habitat_authority()
+                .authorize_breeding(HabitatBreedingRequest {
+                    habitat_id,
+                    first_parent: initiator,
+                    second_parent: mate,
+                    kind: HabitatBreedingKind::CreatureChosen,
+                    actor: HabitatActor::Organism(initiator),
+                    tick: self.world.tick(),
+                })?;
+        let receipt = self.apply_authorized_birth(
+            breeding,
             child_organism_id,
             conception_seed,
             observed_world,
@@ -254,9 +325,9 @@ impl CompositePopulationRuntime {
         Ok(receipt)
     }
 
-    fn apply_birth(
+    fn apply_authorized_birth(
         &mut self,
-        request: HabitatBreedingRequest,
+        breeding: HabitatBreedingReceipt,
         child_organism_id: OrganismId,
         conception_seed: u64,
         mut next_world: HeadlessWorld,
@@ -270,19 +341,15 @@ impl CompositePopulationRuntime {
                 child_organism_id,
             ));
         }
-        let first = self.resident(request.first_parent).ok_or(
-            CompositePopulationRuntimeError::MissingResident(request.first_parent),
+        let first = self.resident(breeding.first_parent).ok_or(
+            CompositePopulationRuntimeError::MissingResident(breeding.first_parent),
         )?;
-        let second = self.resident(request.second_parent).ok_or(
-            CompositePopulationRuntimeError::MissingResident(request.second_parent),
+        let second = self.resident(breeding.second_parent).ok_or(
+            CompositePopulationRuntimeError::MissingResident(breeding.second_parent),
         )?;
         if first.foundation.digest() != second.foundation.digest() {
             return Err(ScaffoldContractError::IncompatibleGeneticClass.into());
         }
-        let breeding = self
-            .world
-            .habitat_authority()
-            .authorize_breeding(request.clone())?;
         let child_genome =
             CreatureGenome::reproduce(&first.genome, &second.genome, conception_seed)?;
         let expressed = child_genome.express()?;
@@ -314,7 +381,7 @@ impl CompositePopulationRuntime {
             .organism_entity_ids()
             .into_iter()
             .find_map(|(organism, entity)| {
-                (organism == request.first_parent)
+                (organism == breeding.first_parent)
                     .then(|| self.world.entity(entity).map(|object| object.position))
                     .flatten()
             })
@@ -326,7 +393,7 @@ impl CompositePopulationRuntime {
             0.5,
         )?;
         let mut authority = next_world.habitat_authority().clone();
-        authority.register_creature(child_organism_id, request.habitat_id, request.tick)?;
+        authority.register_creature(child_organism_id, breeding.habitat_id, breeding.tick)?;
         next_world.replace_habitat_authority(authority)?;
 
         let child_phenotype_hash = phenotype.phenotype_hash();
@@ -336,7 +403,7 @@ impl CompositePopulationRuntime {
             foundation: first.foundation.clone(),
             phenotype_hash: child_phenotype_hash,
             lifetime_state: child_lifetime_state,
-            habitat_id: request.habitat_id,
+            habitat_id: breeding.habitat_id,
             generation: child_generation,
             restored_from_save: false,
         };
@@ -356,6 +423,87 @@ impl CompositePopulationRuntime {
             post_restore_ticks: self.post_restore_ticks(),
         })
     }
+}
+
+fn restore_resident_generations(
+    residents: &mut BTreeMap<u64, CompositePopulationResident>,
+) -> Result<(), CompositePopulationRuntimeError> {
+    let mut organism_by_genome = BTreeMap::new();
+    let mut parents_by_genome = BTreeMap::new();
+    for resident in residents.values() {
+        if organism_by_genome
+            .insert(resident.genome.id.0, resident.organism_id.raw())
+            .is_some()
+        {
+            return Err(CompositePopulationRuntimeError::DuplicateGenome(
+                resident.genome.id,
+            ));
+        }
+        parents_by_genome.insert(
+            resident.genome.id.0,
+            resident.genome.parent_genome_ids.clone(),
+        );
+    }
+
+    let mut generations = BTreeMap::new();
+    let mut visiting = BTreeSet::new();
+    for genome_raw in parents_by_genome.keys().copied().collect::<Vec<_>>() {
+        derive_generation(
+            GenomeId(genome_raw),
+            &parents_by_genome,
+            &mut generations,
+            &mut visiting,
+        )?;
+    }
+    for (genome_raw, generation) in generations {
+        let organism_raw = organism_by_genome[&genome_raw];
+        residents
+            .get_mut(&organism_raw)
+            .expect("generation index was built from residents")
+            .generation = generation;
+    }
+    Ok(())
+}
+
+fn derive_generation(
+    genome_id: GenomeId,
+    parents_by_genome: &BTreeMap<u64, Vec<GenomeId>>,
+    generations: &mut BTreeMap<u64, u32>,
+    visiting: &mut BTreeSet<u64>,
+) -> Result<u32, CompositePopulationRuntimeError> {
+    if let Some(generation) = generations.get(&genome_id.0) {
+        return Ok(*generation);
+    }
+    if !visiting.insert(genome_id.0) {
+        return Err(CompositePopulationRuntimeError::CyclicGenerationAncestry(
+            genome_id,
+        ));
+    }
+    let parents = parents_by_genome.get(&genome_id.0).ok_or(
+        CompositePopulationRuntimeError::MissingGenerationParent(genome_id),
+    )?;
+    let generation = if parents.is_empty() {
+        0
+    } else {
+        let mut parent_generation = 0;
+        for parent in parents {
+            if !parents_by_genome.contains_key(&parent.0) {
+                return Err(CompositePopulationRuntimeError::MissingGenerationParent(
+                    *parent,
+                ));
+            }
+            parent_generation = parent_generation.max(derive_generation(
+                *parent,
+                parents_by_genome,
+                generations,
+                visiting,
+            )?);
+        }
+        parent_generation.saturating_add(1)
+    };
+    visiting.remove(&genome_id.0);
+    generations.insert(genome_id.0, generation);
+    Ok(generation)
 }
 
 fn lifetime_evidence(

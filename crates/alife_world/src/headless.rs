@@ -12,10 +12,10 @@ use std::{
 
 use alife_core::{
     ActionCommand, ActionId, ActionKind, AffordanceBits, BodySnapshot, BrainTickInput,
-    BrainTickOutput, Confidence, ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch,
-    HeardToken, HomeostaticDelta, HomeostaticSnapshot, Intensity, LanguageContextSnapshot,
-    NormalizedScalar, OrganismId, PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft,
-    PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
+    BrainTickOutput, CanonicalDigestBuilder, Confidence, ContextStreams, DriveDelta,
+    EndocrineDelta, ExperiencePatch, HeardToken, HomeostaticDelta, HomeostaticSnapshot, Intensity,
+    LanguageContextSnapshot, NormalizedScalar, OrganismId, PerceptionContextBlock, PerceptionFrame,
+    PerceptionFrameDraft, PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
     ReferenceActionExecution, ReferenceActionExecutor, ReferenceActionFailure,
     ReferenceOutcomeObservation, ReferenceOutcomeObserver, ReferenceOutcomeRequest,
     ReferenceSensoryAdapter, ReferenceSensoryRequest, ScaffoldContractError, SensorProfile,
@@ -57,6 +57,13 @@ const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HeadlessWorldSignatureDigest {
+    pub schema_version: u16,
+    pub words: [u64; 4],
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeadlessActionIds;
@@ -516,6 +523,61 @@ impl HeadlessWorld {
 
     pub fn object_count(&self) -> usize {
         self.objects.len()
+    }
+
+    /// Canonical identity of the complete caller-visible world state before an
+    /// action. It binds ticks as well as object, ecology, habitat, speech, and
+    /// per-organism tracked-object state, so a same-seed later world is not the
+    /// same causal input.
+    pub fn canonical_signature_digest(
+        &self,
+    ) -> Result<HeadlessWorldSignatureDigest, ScaffoldContractError> {
+        let mut digest = CanonicalDigestBuilder::new(HEADLESS_WORLD_SIGNATURE_DOMAIN);
+        digest.write_u16(1);
+        digest.write_u64(self.seed);
+        digest.write_u64(self.tick.raw());
+        digest.write_u64(self.next_entity_id);
+        digest.write_u64(self.next_spawn_sequence);
+        digest.write_u64(self.next_utterance_id);
+
+        let signatures = self.stable_signature();
+        digest.write_sequence_len(signatures.len());
+        for signature in signatures {
+            digest.write_utf8(&signature);
+        }
+        digest.write_bytes(
+            &serde_json::to_vec(&self.ecology).map_err(|_| ScaffoldContractError::InvalidId)?,
+        );
+        digest.write_bytes(
+            &serde_json::to_vec(&self.habitats).map_err(|_| ScaffoldContractError::InvalidId)?,
+        );
+        digest.write_bytes(
+            &serde_json::to_vec(&self.speech.snapshot())
+                .map_err(|_| ScaffoldContractError::InvalidId)?,
+        );
+
+        digest.write_sequence_len(self.last_touched_entities.len());
+        for entity_id in &self.last_touched_entities {
+            digest.write_u64(entity_id.raw());
+        }
+        digest.write_sequence_len(self.last_creature_utterance_ticks.len());
+        for (organism_id, tick) in &self.last_creature_utterance_ticks {
+            digest.write_u64(*organism_id);
+            digest.write_u64(tick.raw());
+        }
+
+        let organisms = self.organism_entity_ids();
+        digest.write_sequence_len(organisms.len());
+        for (organism_id, _) in organisms {
+            let tracked = self.tracked_objects.save_state(organism_id)?;
+            digest.write_bytes(
+                &serde_json::to_vec(&tracked).map_err(|_| ScaffoldContractError::InvalidId)?,
+            );
+        }
+        Ok(HeadlessWorldSignatureDigest {
+            schema_version: 1,
+            words: digest.finish256(),
+        })
     }
 
     pub fn stable_signature(&self) -> Vec<String> {

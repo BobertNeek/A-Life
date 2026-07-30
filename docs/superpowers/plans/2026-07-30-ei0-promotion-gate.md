@@ -96,47 +96,72 @@ the composite genetic state used after restore.
 
 ### Task 4: Production causal reproduction authority
 
-- [ ] Add red tests proving a Managed birth can only follow the production
-  player command/runtime entrypoint and preserves that command receipt.
-- [ ] Add red GPU tests proving a Wild birth requires an actual neural decision,
-  legal mate target, world outcome, and sealed causal patch from the selected
-  parent. A forged `HabitatActor::Organism` is rejected.
-- [ ] Implement one production composite-population runtime that owns both
-  entrypoints and calls `CreatureGenome::reproduce` only after their causal
-  receipts validate.
-- [ ] Verify wrong actor, wrong target, replayed decision, and mismatched parent
-  identities are rejected.
+**Files:**
+
+- Modify: `crates/alife_game_app/src/production_conversation_lineage_ui.rs`
+- Modify: `crates/alife_game_app/src/composite_population_runtime.rs`
+- Modify: `crates/alife_training/src/active_battery.rs`
+- Test: `crates/alife_game_app/tests/composite_population_runtime.rs`
+- Test: `crates/alife_training/tests/active_battery.rs`
+
+- [ ] Add RED tests requiring Managed births to consume the exact
+  `HabitatBreedingReceipt` produced by the production habitat-lab
+  `ExplicitBreed` command. Mutated actor, parent, habitat, or tick receipts must
+  fail before `CreatureGenome::reproduce` runs.
+- [ ] Add a versioned canonical `HeadlessWorld` pre-action signature digest to
+  `GpuReproductionIntentReceipt`. Add RED tests rejecting same-seed worlds with
+  changed objects or later ticks.
+- [ ] Replace `apply_player_breed_command` with receipt consumption. Export one
+  production `produce_habitat_lab_explicit_breed_receipt` function and call it
+  from both real app input and the Era 0 gate.
+- [ ] Require exact runtime/pre-action world digest equality for Wild births,
+  retain the sealed GPU patch, and verify wrong target, replay, and phenotype
+  identity failures.
 
 ### Task 5: Authoritative save, restore, and nonvacuous inheritance
 
-- [ ] Add red persistence tests requiring each creature save to reference a
-  content-addressed composite `CreatureGenome` and shipped foundation asset.
-- [ ] Seed every founder with distinctive nonzero lifetime memory and lifetime
-  weight assets, save them, discard the pre-save population, and restore the
-  authoritative runtime population from validated assets.
-- [ ] Advance the restored population through a bounded 128-tick lifecycle
-  interval before any birth or test.
-- [ ] Breed only restored parents. Prove each child starts with zero inherited
-  lifetime memory/weights while both parents had nonzero distinct state.
+**Files:**
+
+- Modify: `crates/alife_game_app/src/composite_population_runtime.rs`
+- Modify: `crates/alife_tools/src/ei0_exit_gate.rs`
+- Test: `crates/alife_game_app/tests/composite_population_runtime.rs`
+- Test: `crates/alife_tools/tests/ei0_exit_gate.rs`
+
+- [ ] Add RED offspring-restore coverage. Restore founders plus ordinary
+  offspring from composite assets and require generations `0, 0, 1`, derived
+  from persisted parent genome IDs. Missing parents and ancestry cycles fail.
+- [ ] Add a bounded stability receipt recording exact start/end world digests,
+  ecology metrics, resident IDs, and 128 elapsed ticks. Use only
+  `HeadlessWorld::advance_tick`, which already advances ecology.
+- [ ] Configure the gate world with a real bounded ecology spawn policy. Require
+  world/ecology evolution, unchanged restored residents, and equality between
+  the stability end digest and the first subsequent GPU pre-action digest.
+- [ ] Keep child lifetime memory and weights empty while retaining distinct,
+  nonzero restored parent lifetime receipts.
 
 ### Task 6: Full archive and evidence-digest binding
 
-- [ ] Add a content-addressed composite-genome asset to genetic birth archives,
-  load it back, and verify complete conception/recombination/mutation,
-  parent/lineage, and foundation provenance.
-- [ ] Bind the final report to canonical source-genome, foundation payload,
-  closed-loop WGSL bundle, portable-save, archive manifest, and archive
-  composite-asset digests.
-- [ ] Independently compile each expected phenotype and add negative tests for
-  phenotype-hash and foundation mismatch.
+- [ ] Add RED hostile coverage with a valid preexisting manifest from another
+  run. Count and validate only the 14 manifest digests emitted for
+  `ei0-exit-gate-v2`; never use the shared library total.
+- [ ] Independently compile every final `CreatureGenome` with the shipped N2048
+  foundation and compare its expected `PhenotypeHash` to the exact GPU battery
+  receipt. Add a mutated receipt negative.
+- [ ] Preserve complete archive composite genome, conception, recombination,
+  mutation, lineage, parent, and foundation validation for the 14 current-run
+  receipts.
 
 ### Task 7: Honest operational and artifact contract
 
-- [ ] Replace boolean-only clauses with `Pass`, `Fail`, `Unknown`, or
-  `Unavailable` evidence statuses.
-- [ ] Make the CLI write a schema-valid partial report before returning nonzero
-  for GPU, save, archive, or other operational failure.
-- [ ] Validate the committed artifact against exact source/foundation/shader,
-  save, archive, adapter, and causal birth receipts.
-- [ ] Regenerate the report, run each focused gate once with serialized GPU/Cargo
-  execution, commit coherent fixes, and keep Era 1 out of scope.
+- [ ] Add RED artifact validation for a producing Git commit/tree, a BLAKE3
+  digest over the exact relevant source paths, exact adapter/API, and digests of
+  the complete causal birth and GPU receipts.
+- [ ] Make `validate_committed_ei0_exit_gate_report` recompute source, genome,
+  foundation, shader, causal receipt, clause, and final phenotype evidence.
+  Reject any relevant source diff from the producing commit. Exclude only the
+  generated report to avoid a self-hash cycle.
+- [ ] Commit the focused RED/GREEN implementation checkpoint. Regenerate the
+  report from that clean source commit with one serialized GPU run.
+- [ ] Re-run the committed-artifact validator, focused lifecycle/GPU gates,
+  formatting, boundary/docs checks, and diff checks. Only then mark Tasks 4-7
+  complete and commit the report lock. Do not push, merge, or start Era 1.

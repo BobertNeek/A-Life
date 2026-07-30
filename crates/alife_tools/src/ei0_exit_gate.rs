@@ -1,6 +1,10 @@
 //! Reproducible Era 0 lifecycle and promotion-gate evidence.
 
-use std::{collections::BTreeMap, path::Path, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use alife_archive::{CompositeGeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
@@ -11,30 +15,47 @@ use alife_core::{
     ACTIVE_CHALLENGE_COUNT,
 };
 use alife_game_app::{
-    CompositePopulationBirthReceipt, CompositePopulationRuntime, CompositePopulationRuntimeError,
-    LifetimeInheritanceEvidence, MINIMUM_POST_RESTORE_TICKS,
+    produce_habitat_lab_explicit_breed_receipt, CompositePopulationBirthReceipt,
+    CompositePopulationRuntime, CompositePopulationRuntimeError, LifetimeInheritanceEvidence,
+    PopulationStabilityReceipt, MINIMUM_POST_RESTORE_TICKS,
 };
 use alife_gpu_backend::closed_loop_shader_bundle_digest;
-use alife_training::{ActiveBatteryEvidence, N2048ActiveBatteryRunner};
+use alife_training::{
+    expected_n2048_creature_phenotype_hash, verify_n2048_creature_evidence_phenotype,
+    ActiveBatteryEvidence, N2048ActiveBatteryRunner,
+};
 use alife_world::{
     persist_composite_genetic_birth_assets, persist_creature_lifetime_state_asset, AssetManifest,
     AssetManifestEntry, CompositeGeneticSaveRef, CreatureAppearanceGenome,
     CreatureLifetimeMemoryRecord, CreatureLifetimeStateAsset, CreatureLifetimeStateSaveRef,
-    CreatureLifetimeWeightValue, CreatureMindSaveSummary, CreatureSaveState, Habitat, HabitatActor,
-    HabitatAuthority, HabitatAuthorityError, HabitatBreedingKind, HabitatBreedingRequest,
-    HabitatId, HabitatMode, HeadlessScenarioBuilder, LearningTraceSaveSummary, PersistenceError,
-    PortableSaveFile, RuntimeConfig, WeightLayerSaveSummary, P34_ASSET_MANIFEST_SCHEMA,
+    CreatureLifetimeWeightValue, CreatureMindSaveSummary, CreatureSaveState, EcologyZoneId,
+    Habitat, HabitatActor, HabitatAuthority, HabitatAuthorityError, HabitatBreedingKind,
+    HabitatBreedingReceipt, HabitatBreedingRequest, HabitatId, HabitatMode,
+    HeadlessScenarioBuilder, HeadlessWorldSignatureDigest, LearningTraceSaveSummary,
+    PersistenceError, PortableSaveFile, ResourceSpawnPolicy, RuntimeConfig, TerrainZone,
+    TerrainZoneKind, WeightLayerSaveSummary, P34_ASSET_MANIFEST_SCHEMA,
     P34_ASSET_MANIFEST_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
-pub const EI0_EXIT_GATE_SCHEMA_VERSION: u16 = 2;
+pub const EI0_EXIT_GATE_SCHEMA_VERSION: u16 = 3;
 const WORLD_SEED: u64 = 0xE10_0A11;
 const WILD_HABITAT_RAW: u64 = 11;
 const MANAGED_HABITAT_RAW: u64 = 12;
 const FOUNDATION_ID_RAW: u64 = 0x4E32_3034_385F_5631;
 const FOUNDATION_FAMILY_RAW: u64 = 0x4E32_3034_385F_FA11;
-const SOURCE_RUN_ID: &str = "ei0-exit-gate-v2";
+const SOURCE_RUN_ID: &str = "ei0-exit-gate-v3";
+const SOURCE_CONTRACT_PATHS: &[&str] = &[
+    "Cargo.lock",
+    "Cargo.toml",
+    "crates/alife_world/src/headless.rs",
+    "crates/alife_game_app/src/habitat_lab_commands.rs",
+    "crates/alife_game_app/src/composite_population_runtime.rs",
+    "crates/alife_game_app/src/production_conversation_lineage_ui.rs",
+    "crates/alife_training/src/active_battery.rs",
+    "crates/alife_tools/src/ei0_exit_gate.rs",
+    "crates/alife_tools/src/bin/ei0_exit_gate.rs",
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum Ei0ExitGateError {
@@ -58,6 +79,8 @@ pub enum Ei0ExitGateError {
     Evidence(&'static str),
     #[error("gate execution failed after writing partial evidence: {0}")]
     Operational(String),
+    #[error("gate source binding failed: {0}")]
+    Source(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,7 +115,9 @@ pub struct Ei0BirthReceipt {
     pub compatibility_family_id: u64,
     pub breeding_kind: HabitatBreedingKind,
     pub actor: HabitatActor,
+    pub breeding_receipt: HabitatBreedingReceipt,
     pub cognition_policy: PolicyBackend,
+    pub child_phenotype_hash: PhenotypeHash,
     pub post_restore_ticks: u32,
     pub first_parent_lifetime: Ei0LifetimeEvidence,
     pub second_parent_lifetime: Ei0LifetimeEvidence,
@@ -100,6 +125,9 @@ pub struct Ei0BirthReceipt {
     pub gpu_intent_sequence_id: Option<u64>,
     pub gpu_intent_world_tick: Option<Tick>,
     pub gpu_selected_mate: Option<OrganismId>,
+    pub gpu_pre_action_world_digest: Option<HeadlessWorldSignatureDigest>,
+    pub gpu_same_seed_wrong_world_rejected: Option<bool>,
+    pub gpu_later_world_rejected: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -119,6 +147,15 @@ pub struct Ei0EvidenceDigests {
     pub archive_composite_assets: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ei0ResidentIdentityReceipt {
+    pub organism_id: OrganismId,
+    pub genome_id: GenomeId,
+    pub generation: u32,
+    pub phenotype_hash: PhenotypeHash,
+    pub restored_from_save: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ei0LifecycleGateReport {
     pub schema_version: u16,
@@ -131,6 +168,9 @@ pub struct Ei0LifecycleGateReport {
     pub tampered_provenance_rejected: bool,
     pub restored_population_count: usize,
     pub post_restore_ticks: u32,
+    pub stability: PopulationStabilityReceipt,
+    pub same_seed_wrong_world_rejected: bool,
+    pub later_world_rejected: bool,
     pub archive_birth_manifest_count: u64,
     pub lineage_compare_passed: bool,
     pub no_lifetime_state_inherited: bool,
@@ -138,6 +178,7 @@ pub struct Ei0LifecycleGateReport {
     pub creature_directed_managed_breeding_rejected: bool,
     pub lanes: Vec<Ei0LaneReceipt>,
     pub population_genomes: Vec<CreatureGenome>,
+    pub population_residents: Vec<Ei0ResidentIdentityReceipt>,
     pub evidence_digests: Ei0EvidenceDigests,
 }
 
@@ -264,6 +305,18 @@ pub struct Ei0ExitVerdict {
     pub era1_status: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ei0ArtifactBinding {
+    pub producing_source_commit: String,
+    pub producing_source_tree: String,
+    pub source_contract_paths: Vec<String>,
+    pub source_contract_digest: String,
+    pub adapter_name: String,
+    pub backend_api: String,
+    pub causal_birth_receipts_digest: String,
+    pub gpu_receipts_digest: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ei0ExitGateReport {
     pub schema_version: u16,
@@ -273,6 +326,7 @@ pub struct Ei0ExitGateReport {
     pub gpu_tests: Vec<Ei0GpuBatteryReceipt>,
     pub heuristic_baseline: Option<Ei0HeuristicBaselineBoundary>,
     pub evidence_digests: Ei0EvidenceDigests,
+    pub artifact_binding: Option<Ei0ArtifactBinding>,
     pub operational_error: Option<String>,
 }
 
@@ -341,17 +395,15 @@ pub fn run_ei0_lifecycle_gate(
         CompositePopulationRuntime::restore_from_file(&founder_save.save_path, evidence_root)?;
     let restored_population_count = population.residents().count();
     let run_observed = observe_restored_population(&population)?;
-    population.advance_ticks(MINIMUM_POST_RESTORE_TICKS);
+    let stability = population.advance_ticks_with_receipt(MINIMUM_POST_RESTORE_TICKS)?;
 
-    let player_directed_wild_breeding_rejected = population
-        .apply_player_breed_command(
-            founder_save.wild_id,
-            founder_save.wild_founders[0],
-            founder_save.wild_founders[1],
-            OrganismId(8_001),
-            0xE10_8001,
-        )
-        .is_err();
+    let player_directed_wild_breeding_rejected = produce_habitat_lab_explicit_breed_receipt(
+        &population.world_snapshot(),
+        founder_save.wild_founders[0],
+        founder_save.wild_id,
+        founder_save.wild_founders[1],
+    )
+    .is_err();
     let creature_directed_managed_breeding_rejected = population
         .world_snapshot()
         .habitat_authority()
@@ -428,6 +480,14 @@ pub fn run_ei0_lifecycle_gate(
             births: vec![managed_first, managed_second, managed_final],
         },
     ];
+    let same_seed_wrong_world_rejected = lanes[0]
+        .births
+        .iter()
+        .all(|birth| birth.gpu_same_seed_wrong_world_rejected == Some(true));
+    let later_world_rejected = lanes[0]
+        .births
+        .iter()
+        .all(|birth| birth.gpu_later_world_rejected == Some(true));
     let final_generation_genomes = [OrganismId(3_003), OrganismId(4_003)]
         .map(|organism_id| {
             population
@@ -484,6 +544,13 @@ pub fn run_ei0_lifecycle_gate(
             phenotype: &phenotype,
             foundation_asset_bytes: &foundation_bytes,
         })?;
+        if library.latest_manifest_for(SOURCE_RUN_ID, resident.organism_id)?
+            != Some(manifest_digest)
+        {
+            return Err(Ei0ExitGateError::Evidence(
+                "current-run archive receipt was contaminated by another manifest",
+            ));
+        }
         let manifest = library.load_manifest(manifest_digest)?;
         let archived = library.load_creature_genome(&manifest)?;
         lineage_compare_passed &= archived == resident.genome;
@@ -504,11 +571,21 @@ pub fn run_ei0_lifecycle_gate(
             format_blake3(composite.digest),
         );
     }
-    let archive_birth_manifest_count = library.manifest_count()?;
+    let archive_birth_manifest_count = archive_manifests.len() as u64;
     let live_population_count = population.residents().count();
     let population_genomes = population
         .residents()
         .map(|resident| resident.genome.clone())
+        .collect::<Vec<_>>();
+    let population_residents = population
+        .residents()
+        .map(|resident| Ei0ResidentIdentityReceipt {
+            organism_id: resident.organism_id,
+            genome_id: resident.genome.id,
+            generation: resident.generation,
+            phenotype_hash: resident.phenotype_hash,
+            restored_from_save: resident.restored_from_save,
+        })
         .collect::<Vec<_>>();
     let no_lifetime_state_inherited = lanes.iter().all(lane_proves_noninheritance)
         && population
@@ -542,6 +619,9 @@ pub fn run_ei0_lifecycle_gate(
         tampered_provenance_rejected,
         restored_population_count,
         post_restore_ticks: population.post_restore_ticks(),
+        stability,
+        same_seed_wrong_world_rejected,
+        later_world_rejected,
         archive_birth_manifest_count,
         lineage_compare_passed,
         no_lifetime_state_inherited,
@@ -549,6 +629,7 @@ pub fn run_ei0_lifecycle_gate(
         creature_directed_managed_breeding_rejected,
         lanes,
         population_genomes,
+        population_residents,
         evidence_digests,
     };
     Ok(Ei0LifecycleEvidence {
@@ -620,6 +701,24 @@ fn write_founder_population_save(
         .food("era0-food", Vec3f::new(100.0, 100.0, 0.0), 0.8)
         .hazard("era0-hazard", Vec3f::new(-100.0, -100.0, 0.0), 0.4)
         .build()?;
+    world.add_terrain_zone(TerrainZone::new(
+        EcologyZoneId(1),
+        "era0-cycle-zone",
+        TerrainZoneKind::Meadow,
+        Vec3f::new(100.0, 100.0, 0.0),
+        8.0,
+        1.0,
+        0.0,
+    )?)?;
+    world.add_resource_spawn_policy(ResourceSpawnPolicy {
+        label_prefix: "era0-cycle".to_string(),
+        zone_id: EcologyZoneId(1),
+        interval_ticks: 8,
+        max_active: 2,
+        nutrition: 0.5,
+        next_spawn_tick: Tick::new(1),
+        spawned_count: 0,
+    })?;
     world.replace_habitat_authority(authority)?;
 
     let foundation = FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
@@ -818,14 +917,50 @@ fn execute_wild_birth(
         &mut observed_world,
         256,
     )?;
+    let mut same_seed_wrong_world = population.world_snapshot();
+    same_seed_wrong_world.advance_tick();
+    let wrong_digest = same_seed_wrong_world.canonical_signature_digest()?;
+    let gpu_same_seed_wrong_world_rejected = matches!(
+        population.apply_gpu_reproduction_intent(
+            habitat_id,
+            wrong_digest,
+            observed_world.clone(),
+            &intent.patch,
+            OrganismId(child.raw().saturating_add(50_000)),
+            conception_seed.wrapping_add(50_000),
+        ),
+        Err(CompositePopulationRuntimeError::InvalidGpuReproductionIntent)
+    );
+    let mut later_world = observed_world.clone();
+    later_world.advance_tick();
+    let gpu_later_world_rejected = matches!(
+        population.apply_gpu_reproduction_intent(
+            habitat_id,
+            intent.pre_action_world_digest,
+            later_world,
+            &intent.patch,
+            OrganismId(child.raw().saturating_add(60_000)),
+            conception_seed.wrapping_add(60_000),
+        ),
+        Err(CompositePopulationRuntimeError::InvalidGpuReproductionIntent)
+    );
     let birth = population.apply_gpu_reproduction_intent(
         habitat_id,
+        intent.pre_action_world_digest,
         observed_world,
         &intent.patch,
         child,
         conception_seed,
     )?;
-    birth_receipt(population, birth, Some(&intent))
+    birth_receipt(
+        population,
+        birth,
+        Some((
+            &intent,
+            gpu_same_seed_wrong_world_rejected,
+            gpu_later_world_rejected,
+        )),
+    )
 }
 
 fn execute_managed_birth(
@@ -836,20 +971,20 @@ fn execute_managed_birth(
     child: OrganismId,
     conception_seed: u64,
 ) -> Result<Ei0BirthReceipt, Ei0ExitGateError> {
-    let birth = population.apply_player_breed_command(
-        habitat_id,
+    let command_receipt = produce_habitat_lab_explicit_breed_receipt(
+        &population.world_snapshot(),
         first_parent,
+        habitat_id,
         second_parent,
-        child,
-        conception_seed,
     )?;
+    let birth = population.apply_managed_breed_receipt(command_receipt, child, conception_seed)?;
     birth_receipt(population, birth, None)
 }
 
 fn birth_receipt(
     population: &CompositePopulationRuntime,
     birth: CompositePopulationBirthReceipt,
-    intent: Option<&alife_training::GpuReproductionIntentReceipt>,
+    intent: Option<(&alife_training::GpuReproductionIntentReceipt, bool, bool)>,
 ) -> Result<Ei0BirthReceipt, Ei0ExitGateError> {
     let genome = &population
         .resident(birth.child_organism_id)
@@ -869,14 +1004,19 @@ fn birth_receipt(
         compatibility_family_id: genome.foundation.compatibility_family_id,
         breeding_kind: birth.breeding.kind,
         actor: birth.breeding.actor,
+        breeding_receipt: birth.breeding.clone(),
         cognition_policy: birth.breeding.cognition_policy,
+        child_phenotype_hash: birth.child_phenotype_hash,
         post_restore_ticks: birth.post_restore_ticks,
         first_parent_lifetime: (&birth.first_parent_lifetime).into(),
         second_parent_lifetime: (&birth.second_parent_lifetime).into(),
         child_lifetime: (&birth.child_lifetime).into(),
-        gpu_intent_sequence_id: intent.map(|receipt| receipt.patch.header().sequence_id.0),
-        gpu_intent_world_tick: intent.map(|receipt| receipt.patch.header().world_tick),
-        gpu_selected_mate: intent.map(|receipt| receipt.mate_organism_id),
+        gpu_intent_sequence_id: intent.map(|(receipt, _, _)| receipt.patch.header().sequence_id.0),
+        gpu_intent_world_tick: intent.map(|(receipt, _, _)| receipt.patch.header().world_tick),
+        gpu_selected_mate: intent.map(|(receipt, _, _)| receipt.mate_organism_id),
+        gpu_pre_action_world_digest: intent.map(|(receipt, _, _)| receipt.pre_action_world_digest),
+        gpu_same_seed_wrong_world_rejected: intent.map(|(_, rejected, _)| rejected),
+        gpu_later_world_rejected: intent.map(|(_, _, rejected)| rejected),
     })
 }
 
@@ -916,9 +1056,9 @@ pub fn run_ei0_exit_gate(
                 "lane final birth does not match the GPU test genome",
             ));
         }
-        gpu_tests.push(gpu_receipt(
-            runner.run_creature_genome(final_birth.organism_id, genome)?,
-        )?);
+        let evidence = runner.run_creature_genome(final_birth.organism_id, genome)?;
+        verify_n2048_creature_evidence_phenotype(genome, &evidence)?;
+        gpu_tests.push(gpu_receipt(evidence)?);
     }
     let heuristic_baseline = load_heuristic_baseline_boundary()?;
     let lifecycle = lifecycle_evidence.report;
@@ -929,6 +1069,7 @@ pub fn run_ei0_exit_gate(
         era1_promotion_evaluated: false,
         era1_status: "OUT_OF_SCOPE".to_string(),
     };
+    let artifact_binding = build_artifact_binding(&lifecycle, &gpu_tests)?;
     Ok(Ei0ExitGateReport {
         schema_version: EI0_EXIT_GATE_SCHEMA_VERSION,
         verdict,
@@ -937,6 +1078,7 @@ pub fn run_ei0_exit_gate(
         gpu_tests,
         heuristic_baseline: Some(heuristic_baseline),
         evidence_digests,
+        artifact_binding: Some(artifact_binding),
         operational_error: None,
     })
 }
@@ -987,6 +1129,7 @@ fn partial_report(error: &str) -> Ei0ExitGateReport {
         gpu_tests: Vec::new(),
         heuristic_baseline: None,
         evidence_digests: Ei0EvidenceDigests::default(),
+        artifact_binding: None,
         operational_error: Some(error.to_string()),
     }
 }
@@ -1092,9 +1235,14 @@ fn evaluate_clauses(
                 && lane.births.iter().all(|birth| {
                     birth.breeding_kind == HabitatBreedingKind::CreatureChosen
                         && matches!(birth.actor, HabitatActor::Organism(_))
+                        && birth.breeding_receipt.kind == birth.breeding_kind
+                        && birth.breeding_receipt.actor == birth.actor
                         && birth.cognition_policy == PolicyBackend::NeuralClosedLoopGpu
                         && birth.gpu_intent_sequence_id.is_some()
                         && birth.gpu_selected_mate.is_some()
+                        && birth.gpu_pre_action_world_digest.is_some()
+                        && birth.gpu_same_seed_wrong_world_rejected == Some(true)
+                        && birth.gpu_later_world_rejected == Some(true)
                 })
         });
     let managed_breed = lifecycle.creature_directed_managed_breeding_rejected
@@ -1103,6 +1251,8 @@ fn evaluate_clauses(
                 && lane.births.iter().all(|birth| {
                     birth.breeding_kind == HabitatBreedingKind::Explicit
                         && birth.actor == HabitatActor::Player
+                        && birth.breeding_receipt.kind == birth.breeding_kind
+                        && birth.breeding_receipt.actor == birth.actor
                         && birth.cognition_policy == PolicyBackend::NeuralClosedLoopGpu
                         && birth.gpu_intent_sequence_id.is_none()
                 })
@@ -1129,6 +1279,7 @@ fn evaluate_clauses(
                     && gpu.foundation_id == birth.foundation_id
                     && gpu.foundation_version == u32::from(birth.foundation_version)
                     && gpu.compatibility_family_id == birth.compatibility_family_id
+                    && gpu.phenotype_hash == birth.child_phenotype_hash
                     && gpu.policy_backend == PolicyBackend::NeuralClosedLoopGpu
             })
         });
@@ -1178,8 +1329,24 @@ fn evaluate_clauses(
         stable_multi_generation_population: clause(
             lifecycle.live_population_count == 14
                 && lifecycle.no_lifetime_state_inherited
-                && lifecycle.population_genomes.len() == 14,
-            "runtime births retain genetics and reset nonzero parental lifetime state",
+                && lifecycle.population_genomes.len() == 14
+                && lifecycle.stability.elapsed_ticks == MINIMUM_POST_RESTORE_TICKS
+                && lifecycle.stability.end_tick.raw()
+                    .saturating_sub(lifecycle.stability.start_tick.raw())
+                    == u64::from(MINIMUM_POST_RESTORE_TICKS)
+                && lifecycle.stability.start_world_digest
+                    != lifecycle.stability.end_world_digest
+                && lifecycle.stability.start_ecology_metrics
+                    != lifecycle.stability.end_ecology_metrics
+                && lifecycle.stability.end_ecology_metrics.resources_spawned > 0
+                && lifecycle.stability.start_residents == lifecycle.stability.end_residents
+                && lifecycle.same_seed_wrong_world_rejected
+                && lifecycle.later_world_rejected
+                && wild_lane
+                    .and_then(|lane| lane.births.first())
+                    .and_then(|birth| birth.gpu_pre_action_world_digest)
+                    == Some(lifecycle.stability.end_world_digest),
+            "128 advance_tick calls evolved ecology, retained residents, and bound the next GPU action",
         ),
         gpu_policy_identity: clause(
             gpu_policy_identity,
@@ -1190,6 +1357,292 @@ fn evaluate_clauses(
             "HeuristicBaseline remains non-promotional with zero hidden trials and UNKNOWN data",
         ),
     }
+}
+
+fn build_artifact_binding(
+    lifecycle: &Ei0LifecycleGateReport,
+    gpu_tests: &[Ei0GpuBatteryReceipt],
+) -> Result<Ei0ArtifactBinding, Ei0ExitGateError> {
+    let root = workspace_root();
+    let producing_source_commit = git_output(&root, &["rev-parse", "HEAD"])?;
+    let producing_source_tree = git_output(&root, &["rev-parse", "HEAD^{tree}"])?;
+    let adapter_name = gpu_tests
+        .first()
+        .map(|receipt| receipt.adapter_name.clone())
+        .ok_or(Ei0ExitGateError::Evidence(
+            "artifact binding requires a GPU receipt",
+        ))?;
+    let backend_api = gpu_tests
+        .first()
+        .map(|receipt| receipt.backend_api.clone())
+        .ok_or(Ei0ExitGateError::Evidence(
+            "artifact binding requires a GPU receipt",
+        ))?;
+    if gpu_tests
+        .iter()
+        .any(|receipt| receipt.adapter_name != adapter_name || receipt.backend_api != backend_api)
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "GPU receipts do not share one adapter/API identity",
+        ));
+    }
+    Ok(Ei0ArtifactBinding {
+        producing_source_commit,
+        producing_source_tree,
+        source_contract_paths: SOURCE_CONTRACT_PATHS
+            .iter()
+            .map(|path| (*path).to_string())
+            .collect(),
+        source_contract_digest: source_contract_digest(&root, SOURCE_CONTRACT_PATHS)?,
+        adapter_name,
+        backend_api,
+        causal_birth_receipts_digest: digest_bytes(&serde_json::to_vec(&lifecycle.lanes)?),
+        gpu_receipts_digest: digest_bytes(&serde_json::to_vec(gpu_tests)?),
+    })
+}
+
+pub fn validate_committed_ei0_exit_gate_report(
+    report: &Ei0ExitGateReport,
+) -> Result<(), Ei0ExitGateError> {
+    if report.schema_version != EI0_EXIT_GATE_SCHEMA_VERSION
+        || !report.verdict.era0_exit_gate_passed
+        || report.verdict.era1_promotion_evaluated
+        || !report.clauses.all_passed()
+        || report.operational_error.is_some()
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "committed report verdict is not a passing Era 0-only receipt",
+        ));
+    }
+    let lifecycle = report.lifecycle.as_ref().ok_or(Ei0ExitGateError::Evidence(
+        "committed report is missing lifecycle evidence",
+    ))?;
+    let baseline = report
+        .heuristic_baseline
+        .as_ref()
+        .ok_or(Ei0ExitGateError::Evidence(
+            "committed report is missing the heuristic boundary",
+        ))?;
+    let binding = report
+        .artifact_binding
+        .as_ref()
+        .ok_or(Ei0ExitGateError::Evidence(
+            "committed report is missing its source binding",
+        ))?;
+
+    let expected_paths = SOURCE_CONTRACT_PATHS
+        .iter()
+        .map(|path| (*path).to_string())
+        .collect::<Vec<_>>();
+    if binding.source_contract_paths != expected_paths {
+        return Err(Ei0ExitGateError::Evidence(
+            "artifact source-contract path set changed",
+        ));
+    }
+    let root = workspace_root();
+    if source_contract_digest(&root, SOURCE_CONTRACT_PATHS)? != binding.source_contract_digest {
+        return Err(Ei0ExitGateError::Evidence(
+            "current source files do not match the report binding",
+        ));
+    }
+    let bound_tree = git_output(
+        &root,
+        &[
+            "rev-parse",
+            &format!("{}^{{tree}}", binding.producing_source_commit),
+        ],
+    )?;
+    if bound_tree != binding.producing_source_tree {
+        return Err(Ei0ExitGateError::Evidence(
+            "producing source commit does not resolve to the recorded tree",
+        ));
+    }
+    let mut source_diff = Command::new("git");
+    source_diff
+        .current_dir(&root)
+        .args(["diff", "--quiet", &binding.producing_source_commit, "--"])
+        .args(SOURCE_CONTRACT_PATHS);
+    if !source_diff
+        .status()
+        .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?
+        .success()
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "relevant source differs from the producing commit",
+        ));
+    }
+
+    let current_foundation =
+        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
+    if report.evidence_digests != lifecycle.evidence_digests
+        || report.evidence_digests.foundation_weights.as_deref()
+            != Some(format_blake3(current_foundation.digest()).as_str())
+        || report.evidence_digests.shader_bundle.as_deref()
+            != Some(format_blake3(closed_loop_shader_bundle_digest()).as_str())
+        || report.evidence_digests.source_genomes.len() != 14
+        || report.evidence_digests.archive_manifests.len() != 14
+        || report.evidence_digests.archive_composite_assets
+            != report.evidence_digests.source_genomes
+        || report
+            .evidence_digests
+            .portable_save
+            .as_deref()
+            .is_none_or(|digest| !valid_blake3_text(digest))
+        || report
+            .evidence_digests
+            .archive_manifests
+            .values()
+            .any(|digest| !valid_blake3_text(digest))
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "committed report asset digests do not recompute",
+        ));
+    }
+    let reported_source_digests = report
+        .evidence_digests
+        .source_genomes
+        .values()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let recomputed_source_digests = lifecycle
+        .population_genomes
+        .iter()
+        .map(|genome| serde_json::to_vec(genome).map(|bytes| digest_bytes(&bytes)))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    if reported_source_digests != recomputed_source_digests {
+        return Err(Ei0ExitGateError::Evidence(
+            "population genomes do not match the source digest set",
+        ));
+    }
+
+    if binding.causal_birth_receipts_digest != digest_bytes(&serde_json::to_vec(&lifecycle.lanes)?)
+        || binding.gpu_receipts_digest != digest_bytes(&serde_json::to_vec(&report.gpu_tests)?)
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "causal or GPU receipt digest changed",
+        ));
+    }
+    let genomes = lifecycle
+        .population_genomes
+        .iter()
+        .map(|genome| (genome.id.0, genome))
+        .collect::<BTreeMap<_, _>>();
+    let residents = lifecycle
+        .population_residents
+        .iter()
+        .map(|resident| (resident.organism_id.raw(), resident))
+        .collect::<BTreeMap<_, _>>();
+    if genomes.len() != 14 || residents.len() != 14 {
+        return Err(Ei0ExitGateError::Evidence(
+            "resident identity receipt is incomplete",
+        ));
+    }
+    for lane in &lifecycle.lanes {
+        for birth in &lane.births {
+            let genome = genomes
+                .get(&birth.genome_id.0)
+                .ok_or(Ei0ExitGateError::Evidence("birth receipt genome is absent"))?;
+            let resident =
+                residents
+                    .get(&birth.organism_id.raw())
+                    .ok_or(Ei0ExitGateError::Evidence(
+                        "birth receipt resident is absent",
+                    ))?;
+            let breeding = &birth.breeding_receipt;
+            if genome.parent_genome_ids != birth.parent_genome_ids
+                || genome.lineage_id != birth.lineage_id
+                || genome.conception_seed != birth.conception_seed
+                || resident.genome_id != birth.genome_id
+                || resident.generation != birth.generation
+                || resident.phenotype_hash != birth.child_phenotype_hash
+                || breeding.habitat_id != lane.habitat_id
+                || breeding.kind != birth.breeding_kind
+                || breeding.actor != birth.actor
+                || breeding.cognition_policy != birth.cognition_policy
+                || breeding.first_parent == breeding.second_parent
+                || expected_n2048_creature_phenotype_hash(genome)? != birth.child_phenotype_hash
+            {
+                return Err(Ei0ExitGateError::Evidence(
+                    "causal birth receipt does not match its resident genome",
+                ));
+            }
+        }
+    }
+    if report.gpu_tests.len() != 2
+        || report.gpu_tests.iter().any(|gpu| {
+            gpu.adapter_name != binding.adapter_name || gpu.backend_api != binding.backend_api
+        })
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "GPU receipts do not match the locked adapter/API",
+        ));
+    }
+    for gpu in &report.gpu_tests {
+        let genome =
+            genomes
+                .get(&gpu.source_creature_genome_id.0)
+                .ok_or(Ei0ExitGateError::Evidence(
+                    "GPU source genome is absent from the population",
+                ))?;
+        if expected_n2048_creature_phenotype_hash(genome)? != gpu.phenotype_hash {
+            return Err(Ei0ExitGateError::Evidence(
+                "GPU phenotype does not match independent compilation",
+            ));
+        }
+    }
+    if evaluate_clauses(lifecycle, &report.gpu_tests, baseline) != report.clauses
+        || !report.clauses.all_passed()
+        || baseline.source_backend != "HeuristicBaseline"
+        || baseline.promotion_eligible
+        || baseline.hidden_promotion_trials != 0
+        || !baseline.unknown_measures_preserved
+        || baseline.unknown_measures.len() != 9
+    {
+        return Err(Ei0ExitGateError::Evidence(
+            "committed clauses or heuristic boundary do not recompute",
+        ));
+    }
+    Ok(())
+}
+
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("alife_tools lives under <workspace>/crates")
+        .to_path_buf()
+}
+
+fn git_output(root: &Path, args: &[&str]) -> Result<String, Ei0ExitGateError> {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(args)
+        .output()
+        .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?;
+    if !output.status.success() {
+        return Err(Ei0ExitGateError::Source(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn source_contract_digest(root: &Path, paths: &[&str]) -> Result<String, Ei0ExitGateError> {
+    let mut hasher = blake3::Hasher::new();
+    for path in paths {
+        let bytes = std::fs::read(root.join(path))?;
+        hasher.update(&(path.len() as u64).to_le_bytes());
+        hasher.update(path.as_bytes());
+        hasher.update(&(bytes.len() as u64).to_le_bytes());
+        hasher.update(&bytes);
+    }
+    Ok(format!("blake3-256:{}", hasher.finalize().to_hex()))
+}
+
+fn valid_blake3_text(value: &str) -> bool {
+    value
+        .strip_prefix("blake3-256:")
+        .is_some_and(|hex| hex.len() == 64 && hex.chars().all(|ch| ch.is_ascii_hexdigit()))
 }
 
 fn digest_bytes(bytes: &[u8]) -> String {

@@ -6,7 +6,7 @@ use alife_core::{
 use alife_core::{ActiveChallengeKind, ACTIVE_CHALLENGE_COUNT};
 use alife_training::ActiveBatteryChallengeSpec;
 #[cfg(feature = "gpu-tests")]
-use alife_training::N2048ActiveBatteryRunner;
+use alife_training::{verify_n2048_creature_evidence_phenotype, N2048ActiveBatteryRunner};
 #[cfg(feature = "gpu-tests")]
 use alife_world::HeadlessScenarioBuilder;
 
@@ -59,6 +59,7 @@ fn real_gpu_battery_binds_the_exact_second_generation_creature_genome() {
 
     let mut runner = N2048ActiveBatteryRunner::new_required().unwrap();
     let evidence = runner.run_creature_genome(OrganismId(17), &child).unwrap();
+    let expected_phenotype = verify_n2048_creature_evidence_phenotype(&child, &evidence).unwrap();
 
     assert_eq!(evidence.source_creature_genome_id, Some(child.id));
     assert_eq!(evidence.brain_genome_id, expressed.brain_genome.id);
@@ -74,9 +75,14 @@ fn real_gpu_battery_binds_the_exact_second_generation_creature_genome() {
         child.foundation.compatibility_family_id
     );
     assert_ne!(evidence.brain_genome_id, GenomeId(0));
+    assert_eq!(evidence.phenotype_hash, expected_phenotype);
     assert_eq!(evidence.receipt.completed_count(), ACTIVE_CHALLENGE_COUNT);
     assert_eq!(evidence.gpu_dispatches, evidence.sealed_outcomes);
     assert!(evidence.sleep_consolidations >= 1);
+
+    let mut mismatched = evidence.clone();
+    mismatched.phenotype_hash.0[0] ^= 1;
+    assert!(verify_n2048_creature_evidence_phenotype(&child, &mismatched).is_err());
 }
 
 #[cfg(feature = "gpu-tests")]
@@ -161,6 +167,7 @@ fn real_gpu_reproduction_intent_executes_in_the_supplied_runtime_world() {
     for _ in 0..128 {
         world.advance_tick();
     }
+    let pre_action_world_digest = world.canonical_signature_digest().unwrap();
     let mate_entity = world.entity_id("mate").unwrap();
     let mut runner = N2048ActiveBatteryRunner::new_required().unwrap();
 
@@ -179,6 +186,7 @@ fn real_gpu_reproduction_intent_executes_in_the_supplied_runtime_world() {
         127 + u64::from(receipt.observed_ticks)
     );
     assert_eq!(receipt.mate_entity_id, mate_entity);
+    assert_eq!(receipt.pre_action_world_digest, pre_action_world_digest);
     assert_eq!(
         world.entity(mate_entity).unwrap().carried_by,
         Some(OrganismId(95))

@@ -12,7 +12,9 @@ use alife_core::{
 };
 use alife_gpu_backend::{GpuBrainHandle, GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
-use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, WorldObjectKind};
+use alife_world::{
+    HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldSignatureDigest, WorldObjectKind,
+};
 
 use crate::TrainingError;
 
@@ -72,6 +74,7 @@ pub struct GpuReproductionIntentReceipt {
     pub mate_organism_id: OrganismId,
     pub mate_entity_id: WorldEntityId,
     pub observed_ticks: u32,
+    pub pre_action_world_digest: HeadlessWorldSignatureDigest,
     pub patch: ExperiencePatch,
 }
 
@@ -83,6 +86,8 @@ impl Validate for GpuReproductionIntentReceipt {
         self.patch.validate_contract()?;
         if self.initiator_organism_id == self.mate_organism_id
             || self.observed_ticks == 0
+            || self.pre_action_world_digest.schema_version != 1
+            || self.pre_action_world_digest.words == [0; 4]
             || self.patch.pre_action().organism_id != self.initiator_organism_id
             || self.patch.decision().policy_backend() != PolicyBackend::NeuralClosedLoopGpu
             || self.patch.decision().selected_action.kind != ActionKind::Interact
@@ -281,6 +286,7 @@ impl N2048ActiveBatteryRunner {
                 HomeostaticSnapshot::new(world.tick(), homeostasis.drives, homeostasis.hormones)?;
 
             for step in 0..max_ticks {
+                let pre_action_world_digest = world.canonical_signature_digest()?;
                 development.age_ticks = Tick::new(mature_age.saturating_add(u64::from(step)));
                 let frame = world.perception_frame(
                     initiator_organism_id,
@@ -379,6 +385,7 @@ impl N2048ActiveBatteryRunner {
                             mate_organism_id,
                             mate_entity_id,
                             observed_ticks: step + 1,
+                            pre_action_world_digest,
                             patch,
                         };
                         receipt.validate_contract()?;
@@ -493,6 +500,50 @@ impl N2048ActiveBatteryRunner {
             backend_api: self.backend_api.clone(),
         })
     }
+}
+
+/// Independently recompiles the supplied creature against the shipped N2048
+/// foundation and verifies that the GPU battery evidence names that phenotype.
+pub fn verify_n2048_creature_evidence_phenotype(
+    creature_genome: &CreatureGenome,
+    evidence: &ActiveBatteryEvidence,
+) -> Result<PhenotypeHash, TrainingError> {
+    let expected = expected_n2048_creature_phenotype_hash(creature_genome)?;
+    creature_genome.validate_contract()?;
+    let foundation = FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
+    let manifest = foundation.manifest();
+    let expressed = creature_genome.express()?;
+    if evidence.source_creature_genome_id != Some(creature_genome.id)
+        || evidence.brain_genome_id != expressed.brain_genome.id
+        || evidence.parent_genome_ids != creature_genome.parent_genome_ids
+        || evidence.lineage_id != Some(creature_genome.lineage_id)
+        || evidence.foundation_id != manifest.foundation_id().raw()
+        || evidence.foundation_version != manifest.foundation_version().raw()
+        || evidence.compatibility_family_id != manifest.compatibility_family_id().raw()
+        || evidence.phenotype_hash != expected
+    {
+        return Err(ScaffoldContractError::PhenotypeCompile.into());
+    }
+    Ok(expected)
+}
+
+pub fn expected_n2048_creature_phenotype_hash(
+    creature_genome: &CreatureGenome,
+) -> Result<PhenotypeHash, TrainingError> {
+    creature_genome.validate_contract()?;
+    let foundation = FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)?;
+    let expressed = creature_genome.express()?;
+    let development = expressed.development_state_at(Tick::new(u64::from(
+        expressed.development.maturation_duration_ticks,
+    )))?;
+    Ok(PhenotypeCompiler::compile_from_foundation_asset(
+        &expressed.brain_genome,
+        &BrainCapacityClass::n2048(),
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &foundation,
+    )?
+    .phenotype_hash())
 }
 
 #[derive(Default)]
