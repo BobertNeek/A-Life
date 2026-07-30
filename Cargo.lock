@@ -231,6 +231,7 @@ dependencies = [
  "alife_gpu_backend",
  "alife_school",
  "alife_semantic",
+ "alife_training",
  "alife_world",
  "flate2",
  "image",

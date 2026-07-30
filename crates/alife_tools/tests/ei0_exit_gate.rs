@@ -2,6 +2,10 @@ use std::path::PathBuf;
 
 use alife_core::PolicyBackend;
 use alife_tools::ei0_exit_gate::run_ei0_lifecycle_gate;
+#[cfg(feature = "gpu-tests")]
+use alife_tools::ei0_exit_gate::{
+    run_ei0_exit_gate, write_ei0_exit_gate_report, Ei0ExitGateReport,
+};
 
 fn temp_root(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -58,6 +62,52 @@ fn lifecycle_receipt_proves_two_lane_multi_generation_population() {
             && genome.provenance.ordinary_birth
             && genome.provenance.conception_seed == genome.conception_seed
     }));
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+fn full_report_proves_the_exit_gate_without_promoting_the_heuristic_baseline() {
+    let root = temp_root("full-report");
+    let path = root.join("ei0_exit_gate_report.json");
+    let report = run_ei0_exit_gate(&root).unwrap();
+    write_ei0_exit_gate_report(&path, &report).unwrap();
+    let restored: Ei0ExitGateReport =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+
+    assert!(restored.verdict.era0_exit_gate_passed);
+    assert!(!restored.verdict.era1_promotion_evaluated);
+    assert!(restored.clauses.run);
+    assert!(restored.clauses.observe);
+    assert!(restored.clauses.save_load);
+    assert!(restored.clauses.wild_breed);
+    assert!(restored.clauses.managed_breed);
+    assert!(restored.clauses.test);
+    assert!(restored.clauses.archive);
+    assert!(restored.clauses.compare);
+    assert!(restored.clauses.stable_multi_generation_population);
+    assert!(restored.clauses.gpu_policy_identity);
+    assert!(restored.clauses.no_hidden_policy_control);
+
+    assert_eq!(restored.gpu_tests.len(), 2);
+    for (lane, gpu) in restored.lifecycle.lanes.iter().zip(&restored.gpu_tests) {
+        assert_eq!(gpu.source_creature_genome_id, lane.births[2].genome_id);
+        assert_eq!(gpu.parent_genome_ids, lane.births[2].parent_genome_ids);
+        assert_eq!(gpu.completed_challenges, 15);
+        assert_eq!(gpu.gpu_dispatches, gpu.sealed_outcomes);
+        assert!(gpu.sleep_consolidations >= 1);
+        assert_eq!(gpu.policy_backend, PolicyBackend::NeuralClosedLoopGpu);
+    }
+
+    assert_eq!(
+        restored.heuristic_baseline.source_backend,
+        "HeuristicBaseline"
+    );
+    assert!(!restored.heuristic_baseline.promotion_eligible);
+    assert_eq!(restored.heuristic_baseline.hidden_promotion_trials, 0);
+    assert!(restored.heuristic_baseline.unknown_measures_preserved);
+    assert_eq!(restored.heuristic_baseline.unknown_measures.len(), 9);
 
     std::fs::remove_dir_all(root).unwrap();
 }

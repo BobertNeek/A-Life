@@ -12,6 +12,7 @@ alife_game_app = { path = "../alife_game_app", default-features = false, feature
 alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_school = { path = "../alife_school" }
 alife_semantic = { path = "../alife_semantic", features = ["fake-semantic-provider"], optional = true }
+alife_training = { path = "../alife_training" }
 alife_world = { path = "../alife_world" }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 flate2 = "=1.1.9"
@@ -21,6 +22,7 @@ thiserror.workspace = true
 
 [features]
 default = []
+gpu-tests = ["alife_gpu_backend/gpu-tests", "alife_training/gpu-tests"]
 semantic-demo = ["dep:alife_semantic"]
 
 [dev-dependencies]

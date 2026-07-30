@@ -1,0 +1,6498 @@
+{
+  "schema_version": 1,
+  "verdict": {
+    "era0_exit_gate_passed": true,
+    "era1_promotion_evaluated": false,
+    "era1_status": "OUT_OF_SCOPE"
+  },
+  "clauses": {
+    "run": true,
+    "observe": true,
+    "save_load": true,
+    "wild_breed": true,
+    "managed_breed": true,
+    "test": true,
+    "archive": true,
+    "compare": true,
+    "stable_multi_generation_population": true,
+    "gpu_policy_identity": true,
+    "no_hidden_policy_control": true
+  },
+  "lifecycle": {
+    "schema_version": 1,
+    "founder_count": 8,
+    "live_population_count": 14,
+    "generation_count": 3,
+    "run_observed": true,
+    "portable_save_round_trip": true,
+    "tampered_save_rejected": true,
+    "tampered_provenance_rejected": true,
+    "restored_population_count": 14,
+    "archive_birth_manifest_count": 14,
+    "lineage_compare_passed": true,
+    "no_lifetime_state_inherited": true,
+    "player_directed_wild_breeding_rejected": true,
+    "creature_directed_managed_breeding_rejected": true,
+    "lanes": [
+      {
+        "mode": "Wild",
+        "habitat_id": 11,
+        "births": [
+          {
+            "organism_id": 3001,
+            "genome_id": 9780432642253059406,
+            "lineage_id": 7934439780358375543,
+            "parent_genome_ids": [
+              8466215757053538557,
+              18115203022276046077
+            ],
+            "generation": 1,
+            "conception_seed": 235936697,
+            "ordinary_birth": true,
+            "provenance": {
+              "conception_seed": 235936697,
+              "ordinary_birth": true,
+              "recombination": [
+                {
+                  "chromosome": "Body",
+                  "maternal_segments": 1,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Brain",
+                  "maternal_segments": 1,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Chemistry",
+                  "maternal_segments": 2,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Development",
+                  "maternal_segments": 2,
+                  "paternal_segments": 3
+                },
+                {
+                  "chromosome": "Reproduction",
+                  "maternal_segments": 3,
+                  "paternal_segments": 4
+                },
+                {
+                  "chromosome": "Predisposition",
+                  "maternal_segments": 4,
+                  "paternal_segments": 2
+                }
+              ],
+              "mutations": []
+            },
+            "foundation_id": 5634619084636116529,
+            "foundation_version": 1,
+            "compatibility_family_id": 5634619084636158481,
+            "breeding_kind": "CreatureChosen",
+            "actor": {
+              "Organism": 1001
+            },
+            "cognition_policy": "NeuralClosedLoopGpu"
+          },
+          {
+            "organism_id": 3002,
+            "genome_id": 11966191132421135267,
+            "lineage_id": 17156949386896943059,
+            "parent_genome_ids": [
+              7508253683955070311,
+              1394215059793105920
+            ],
+            "generation": 1,
+            "conception_seed": 235936698,
+            "ordinary_birth": true,
+            "provenance": {
+              "conception_seed": 235936698,
+              "ordinary_birth": true,
+              "recombination": [
+                {
+                  "chromosome": "Body",
+                  "maternal_segments": 1,
+                  "paternal_segments": 3
+                },
+                {
+                  "chromosome": "Brain",
+                  "maternal_segments": 3,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Chemistry",
+                  "maternal_segments": 4,
+                  "paternal_segments": 1
+                },
+                {
+                  "chromosome": "Development",
+                  "maternal_segments": 2,
+                  "paternal_segments": 4
+                },
+                {
+                  "chromosome": "Reproduction",
+                  "maternal_segments": 2,
+                  "paternal_segments": 1
+                },
+                {
+                  "chromosome": "Predisposition",
+                  "maternal_segments": 3,
+                  "paternal_segments": 3
+                }
+              ],
+              "mutations": []
+            },
+            "foundation_id": 5634619084636116529,
+            "foundation_version": 1,
+            "compatibility_family_id": 5634619084636158481,
+            "breeding_kind": "CreatureChosen",
+            "actor": {
+              "Organism": 1003
+            },
+            "cognition_policy": "NeuralClosedLoopGpu"
+          },
+          {
+            "organism_id": 3003,
+            "genome_id": 12762827965998763147,
+            "lineage_id": 3851024349223386854,
+            "parent_genome_ids": [
+              9780432642253059406,
+              11966191132421135267
+            ],
+            "generation": 2,
+            "conception_seed": 235936699,
+            "ordinary_birth": true,
+            "provenance": {
+              "conception_seed": 235936699,
+              "ordinary_birth": true,
+              "recombination": [
+                {
+                  "chromosome": "Body",
+                  "maternal_segments": 2,
+                  "paternal_segments": 1
+                },
+                {
+                  "chromosome": "Brain",
+                  "maternal_segments": 1,
+                  "paternal_segments": 3
+                },
+                {
+                  "chromosome": "Chemistry",
+                  "maternal_segments": 3,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Development",
+                  "maternal_segments": 1,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Reproduction",
+                  "maternal_segments": 2,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Predisposition",
+                  "maternal_segments": 2,
+                  "paternal_segments": 2
+                }
+              ],
+              "mutations": [
+                {
+                  "Continuous": {
+                    "chromosome": "Brain",
+                    "locus_index": 6,
+                    "allele": "Paternal",
+                    "before": 0.5,
+                    "after": 0.55774325,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                },
+                {
+                  "Continuous": {
+                    "chromosome": "Chemistry",
+                    "locus_index": 0,
+                    "allele": "Maternal",
+                    "before": 0.24,
+                    "after": 0.22184256,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                },
+                {
+                  "Continuous": {
+                    "chromosome": "Development",
+                    "locus_index": 4,
+                    "allele": "Maternal",
+                    "before": 0.08,
+                    "after": 0.04077544,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                }
+              ]
+            },
+            "foundation_id": 5634619084636116529,
+            "foundation_version": 1,
+            "compatibility_family_id": 5634619084636158481,
+            "breeding_kind": "CreatureChosen",
+            "actor": {
+              "Organism": 3001
+            },
+            "cognition_policy": "NeuralClosedLoopGpu"
+          }
+        ]
+      },
+      {
+        "mode": "Managed",
+        "habitat_id": 12,
+        "births": [
+          {
+            "organism_id": 3004,
+            "genome_id": 7192810895741276800,
+            "lineage_id": 12712774667510394019,
+            "parent_genome_ids": [
+              62101712922070041,
+              3351423969779779581
+            ],
+            "generation": 1,
+            "conception_seed": 235936700,
+            "ordinary_birth": true,
+            "provenance": {
+              "conception_seed": 235936700,
+              "ordinary_birth": true,
+              "recombination": [
+                {
+                  "chromosome": "Body",
+                  "maternal_segments": 2,
+                  "paternal_segments": 1
+                },
+                {
+                  "chromosome": "Brain",
+                  "maternal_segments": 3,
+                  "paternal_segments": 3
+                },
+                {
+                  "chromosome": "Chemistry",
+                  "maternal_segments": 2,
+                  "paternal_segments": 3
+                },
+                {
+                  "chromosome": "Development",
+                  "maternal_segments": 1,
+                  "paternal_segments": 4
+                },
+                {
+                  "chromosome": "Reproduction",
+                  "maternal_segments": 2,
+                  "paternal_segments": 4
+                },
+                {
+                  "chromosome": "Predisposition",
+                  "maternal_segments": 3,
+                  "paternal_segments": 4
+                }
+              ],
+              "mutations": [
+                {
+                  "Continuous": {
+                    "chromosome": "Body",
+                    "locus_index": 7,
+                    "allele": "Paternal",
+                    "before": 0.36,
+                    "after": 0.29604065,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                },
+                {
+                  "Continuous": {
+                    "chromosome": "Chemistry",
+                    "locus_index": 9,
+                    "allele": "Maternal",
+                    "before": 0.6,
+                    "after": 0.5244454,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                },
+                {
+                  "Continuous": {
+                    "chromosome": "Reproduction",
+                    "locus_index": 6,
+                    "allele": "Maternal",
+                    "before": 0.48,
+                    "after": 0.57616025,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                }
+              ]
+            },
+            "foundation_id": 5634619084636116529,
+            "foundation_version": 1,
+            "compatibility_family_id": 5634619084636158481,
+            "breeding_kind": "Explicit",
+            "actor": "Player",
+            "cognition_policy": "NeuralClosedLoopGpu"
+          },
+          {
+            "organism_id": 3005,
+            "genome_id": 18308372370491214226,
+            "lineage_id": 15104875335716633813,
+            "parent_genome_ids": [
+              13169366579720792020,
+              17022771601808246094
+            ],
+            "generation": 1,
+            "conception_seed": 235936701,
+            "ordinary_birth": true,
+            "provenance": {
+              "conception_seed": 235936701,
+              "ordinary_birth": true,
+              "recombination": [
+                {
+                  "chromosome": "Body",
+                  "maternal_segments": 4,
+                  "paternal_segments": 3
+                },
+                {
+                  "chromosome": "Brain",
+                  "maternal_segments": 2,
+                  "paternal_segments": 1
+                },
+                {
+                  "chromosome": "Chemistry",
+                  "maternal_segments": 2,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Development",
+                  "maternal_segments": 2,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Reproduction",
+                  "maternal_segments": 3,
+                  "paternal_segments": 3
+                },
+                {
+                  "chromosome": "Predisposition",
+                  "maternal_segments": 2,
+                  "paternal_segments": 2
+                }
+              ],
+              "mutations": [
+                {
+                  "Continuous": {
+                    "chromosome": "Body",
+                    "locus_index": 2,
+                    "allele": "Paternal",
+                    "before": 0.48,
+                    "after": 0.46058857,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                },
+                {
+                  "Continuous": {
+                    "chromosome": "Brain",
+                    "locus_index": 4,
+                    "allele": "Maternal",
+                    "before": 0.52,
+                    "after": 0.53115004,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                },
+                {
+                  "Continuous": {
+                    "chromosome": "Predisposition",
+                    "locus_index": 5,
+                    "allele": "Paternal",
+                    "before": 0.53,
+                    "after": 0.5858974,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                }
+              ]
+            },
+            "foundation_id": 5634619084636116529,
+            "foundation_version": 1,
+            "compatibility_family_id": 5634619084636158481,
+            "breeding_kind": "Explicit",
+            "actor": "Player",
+            "cognition_policy": "NeuralClosedLoopGpu"
+          },
+          {
+            "organism_id": 3006,
+            "genome_id": 12828030708413454008,
+            "lineage_id": 4428297042899893904,
+            "parent_genome_ids": [
+              7192810895741276800,
+              18308372370491214226
+            ],
+            "generation": 2,
+            "conception_seed": 235936702,
+            "ordinary_birth": true,
+            "provenance": {
+              "conception_seed": 235936702,
+              "ordinary_birth": true,
+              "recombination": [
+                {
+                  "chromosome": "Body",
+                  "maternal_segments": 3,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Brain",
+                  "maternal_segments": 3,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Chemistry",
+                  "maternal_segments": 3,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Development",
+                  "maternal_segments": 2,
+                  "paternal_segments": 1
+                },
+                {
+                  "chromosome": "Reproduction",
+                  "maternal_segments": 1,
+                  "paternal_segments": 2
+                },
+                {
+                  "chromosome": "Predisposition",
+                  "maternal_segments": 1,
+                  "paternal_segments": 2
+                }
+              ],
+              "mutations": [
+                {
+                  "Continuous": {
+                    "chromosome": "Brain",
+                    "locus_index": 6,
+                    "allele": "Maternal",
+                    "before": 0.58,
+                    "after": 0.5853172,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                },
+                {
+                  "Continuous": {
+                    "chromosome": "Chemistry",
+                    "locus_index": 4,
+                    "allele": "Paternal",
+                    "before": 0.5,
+                    "after": 0.557123,
+                    "lower": 0.0,
+                    "upper": 1.0
+                  }
+                }
+              ]
+            },
+            "foundation_id": 5634619084636116529,
+            "foundation_version": 1,
+            "compatibility_family_id": 5634619084636158481,
+            "breeding_kind": "Explicit",
+            "actor": "Player",
+            "cognition_policy": "NeuralClosedLoopGpu"
+          }
+        ]
+      }
+    ],
+    "population_genomes": [
+      {
+        "schema_version": 1,
+        "id": 8466215757053538557,
+        "parent_genome_ids": [],
+        "lineage_id": 8877669982689525751,
+        "conception_seed": 235932178,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235932178,
+          "ordinary_birth": false,
+          "recombination": [],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.1,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.82,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.45,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 18115203022276046077,
+        "parent_genome_ids": [],
+        "lineage_id": 8175059092385604464,
+        "conception_seed": 235932179,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235932179,
+          "ordinary_birth": false,
+          "recombination": [],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.1,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.82,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.45,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 7508253683955070311,
+        "parent_genome_ids": [],
+        "lineage_id": 15516502424008919472,
+        "conception_seed": 235932180,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235932180,
+          "ordinary_birth": false,
+          "recombination": [],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.1,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.82,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.45,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 1394215059793105920,
+        "parent_genome_ids": [],
+        "lineage_id": 2868596582537259592,
+        "conception_seed": 235932181,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235932181,
+          "ordinary_birth": false,
+          "recombination": [],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.1,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.82,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.45,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 62101712922070041,
+        "parent_genome_ids": [],
+        "lineage_id": 3594755254698030525,
+        "conception_seed": 235932278,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235932278,
+          "ordinary_birth": false,
+          "recombination": [],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.1,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.82,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.45,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 3351423969779779581,
+        "parent_genome_ids": [],
+        "lineage_id": 2484363408690775641,
+        "conception_seed": 235932279,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235932279,
+          "ordinary_birth": false,
+          "recombination": [],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.1,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.82,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.45,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 13169366579720792020,
+        "parent_genome_ids": [],
+        "lineage_id": 3571740357793877255,
+        "conception_seed": 235932280,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235932280,
+          "ordinary_birth": false,
+          "recombination": [],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.1,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.82,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.45,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 17022771601808246094,
+        "parent_genome_ids": [],
+        "lineage_id": 2693973812668950811,
+        "conception_seed": 235932281,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235932281,
+          "ordinary_birth": false,
+          "recombination": [],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.1,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.82,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.45,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 9780432642253059406,
+        "parent_genome_ids": [
+          8466215757053538557,
+          18115203022276046077
+        ],
+        "lineage_id": 7934439780358375543,
+        "conception_seed": 235936697,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235936697,
+          "ordinary_birth": true,
+          "recombination": [
+            {
+              "chromosome": "Body",
+              "maternal_segments": 1,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Brain",
+              "maternal_segments": 1,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Chemistry",
+              "maternal_segments": 2,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Development",
+              "maternal_segments": 2,
+              "paternal_segments": 3
+            },
+            {
+              "chromosome": "Reproduction",
+              "maternal_segments": 3,
+              "paternal_segments": 4
+            },
+            {
+              "chromosome": "Predisposition",
+              "maternal_segments": 4,
+              "paternal_segments": 2
+            }
+          ],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.48,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.61,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.55,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.57,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.51,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.46,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.54,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.36,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            },
+            "paternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.23,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.3,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.13,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.52,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.56,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.58,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.53,
+            "paternal": 0.47,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.38,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.69,
+            "paternal": 0.62,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.6,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.64,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.18,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.28,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.12,
+            "paternal": 0.08,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.74,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.9,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.025,
+            "paternal": 0.025,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.006,
+            "paternal": 0.002,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.52,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.42,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.53,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 11966191132421135267,
+        "parent_genome_ids": [
+          7508253683955070311,
+          1394215059793105920
+        ],
+        "lineage_id": 17156949386896943059,
+        "conception_seed": 235936698,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235936698,
+          "ordinary_birth": true,
+          "recombination": [
+            {
+              "chromosome": "Body",
+              "maternal_segments": 1,
+              "paternal_segments": 3
+            },
+            {
+              "chromosome": "Brain",
+              "maternal_segments": 3,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Chemistry",
+              "maternal_segments": 4,
+              "paternal_segments": 1
+            },
+            {
+              "chromosome": "Development",
+              "maternal_segments": 2,
+              "paternal_segments": 4
+            },
+            {
+              "chromosome": "Reproduction",
+              "maternal_segments": 2,
+              "paternal_segments": 1
+            },
+            {
+              "chromosome": "Predisposition",
+              "maternal_segments": 3,
+              "paternal_segments": 3
+            }
+          ],
+          "mutations": []
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.56,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.48,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.44,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.38,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.47,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.36,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.13,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.48,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.24,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.54,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.22,
+            "paternal": 0.22,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.12,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.74,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.9,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.58,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.24,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.45,
+            "paternal": 0.35,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.015,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.002,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.08,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.52,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.53,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 12762827965998763147,
+        "parent_genome_ids": [
+          9780432642253059406,
+          11966191132421135267
+        ],
+        "lineage_id": 3851024349223386854,
+        "conception_seed": 235936699,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235936699,
+          "ordinary_birth": true,
+          "recombination": [
+            {
+              "chromosome": "Body",
+              "maternal_segments": 2,
+              "paternal_segments": 1
+            },
+            {
+              "chromosome": "Brain",
+              "maternal_segments": 1,
+              "paternal_segments": 3
+            },
+            {
+              "chromosome": "Chemistry",
+              "maternal_segments": 3,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Development",
+              "maternal_segments": 1,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Reproduction",
+              "maternal_segments": 2,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Predisposition",
+              "maternal_segments": 2,
+              "paternal_segments": 2
+            }
+          ],
+          "mutations": [
+            {
+              "Continuous": {
+                "chromosome": "Brain",
+                "locus_index": 6,
+                "allele": "Paternal",
+                "before": 0.5,
+                "after": 0.55774325,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            },
+            {
+              "Continuous": {
+                "chromosome": "Chemistry",
+                "locus_index": 0,
+                "allele": "Maternal",
+                "before": 0.24,
+                "after": 0.22184256,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            },
+            {
+              "Continuous": {
+                "chromosome": "Development",
+                "locus_index": 4,
+                "allele": "Maternal",
+                "before": 0.08,
+                "after": 0.04077544,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            }
+          ]
+        },
+        "body": {
+          "size": {
+            "maternal": 0.48,
+            "paternal": 0.42,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.61,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.55,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.57,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.51,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.46,
+            "paternal": 0.38,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.54,
+            "paternal": 0.47,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.23,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.3,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.13,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.52,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.56,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.58,
+            "paternal": 0.55774325,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.53,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.22184256,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.58,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.38,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.62,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.52,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.52,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.64,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.18,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.28,
+            "paternal": 0.22,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.04077544,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.66,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.9,
+            "paternal": 0.9,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.35,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.025,
+            "paternal": 0.015,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.006,
+            "paternal": 0.002,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.08,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.56,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Novelty",
+              "dominance": "Recessive"
+            },
+            "paternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.52,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.42,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.53,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 7192810895741276800,
+        "parent_genome_ids": [
+          62101712922070041,
+          3351423969779779581
+        ],
+        "lineage_id": 12712774667510394019,
+        "conception_seed": 235936700,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235936700,
+          "ordinary_birth": true,
+          "recombination": [
+            {
+              "chromosome": "Body",
+              "maternal_segments": 2,
+              "paternal_segments": 1
+            },
+            {
+              "chromosome": "Brain",
+              "maternal_segments": 3,
+              "paternal_segments": 3
+            },
+            {
+              "chromosome": "Chemistry",
+              "maternal_segments": 2,
+              "paternal_segments": 3
+            },
+            {
+              "chromosome": "Development",
+              "maternal_segments": 1,
+              "paternal_segments": 4
+            },
+            {
+              "chromosome": "Reproduction",
+              "maternal_segments": 2,
+              "paternal_segments": 4
+            },
+            {
+              "chromosome": "Predisposition",
+              "maternal_segments": 3,
+              "paternal_segments": 4
+            }
+          ],
+          "mutations": [
+            {
+              "Continuous": {
+                "chromosome": "Body",
+                "locus_index": 7,
+                "allele": "Paternal",
+                "before": 0.36,
+                "after": 0.29604065,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            },
+            {
+              "Continuous": {
+                "chromosome": "Chemistry",
+                "locus_index": 9,
+                "allele": "Maternal",
+                "before": 0.6,
+                "after": 0.5244454,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            },
+            {
+              "Continuous": {
+                "chromosome": "Reproduction",
+                "locus_index": 6,
+                "allele": "Maternal",
+                "before": 0.48,
+                "after": 0.57616025,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            }
+          ]
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.61,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.55,
+            "paternal": 0.55,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.57,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.51,
+            "paternal": 0.51,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.46,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.54,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.36,
+            "paternal": 0.29604065,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.2,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.26,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.13,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.52,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.56,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.58,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.24,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.52,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.57,
+            "paternal": 0.57,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.44,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.72,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.8,
+            "paternal": 0.8,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.69,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.5244454,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.52,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.64,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.18,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.28,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.12,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.74,
+            "paternal": 0.74,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.9,
+            "paternal": 0.82,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.58,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.24,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.45,
+            "paternal": 0.35,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.015,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.002,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.08,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.57616025,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.62,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.66,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.53,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 18308372370491214226,
+        "parent_genome_ids": [
+          13169366579720792020,
+          17022771601808246094
+        ],
+        "lineage_id": 15104875335716633813,
+        "conception_seed": 235936701,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235936701,
+          "ordinary_birth": true,
+          "recombination": [
+            {
+              "chromosome": "Body",
+              "maternal_segments": 4,
+              "paternal_segments": 3
+            },
+            {
+              "chromosome": "Brain",
+              "maternal_segments": 2,
+              "paternal_segments": 1
+            },
+            {
+              "chromosome": "Chemistry",
+              "maternal_segments": 2,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Development",
+              "maternal_segments": 2,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Reproduction",
+              "maternal_segments": 3,
+              "paternal_segments": 3
+            },
+            {
+              "chromosome": "Predisposition",
+              "maternal_segments": 2,
+              "paternal_segments": 2
+            }
+          ],
+          "mutations": [
+            {
+              "Continuous": {
+                "chromosome": "Body",
+                "locus_index": 2,
+                "allele": "Paternal",
+                "before": 0.48,
+                "after": 0.46058857,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            },
+            {
+              "Continuous": {
+                "chromosome": "Brain",
+                "locus_index": 4,
+                "allele": "Maternal",
+                "before": 0.52,
+                "after": 0.53115004,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            },
+            {
+              "Continuous": {
+                "chromosome": "Predisposition",
+                "locus_index": 5,
+                "allele": "Paternal",
+                "before": 0.53,
+                "after": 0.5858974,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            }
+          ]
+        },
+        "body": {
+          "size": {
+            "maternal": 0.48,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.61,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.55,
+            "paternal": 0.46058857,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.51,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.46,
+            "paternal": 0.38,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.54,
+            "paternal": 0.47,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.28,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Recessive"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.23,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.3,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.13,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.53115004,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.56,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.58,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.53,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.18,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.46,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.45,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.38,
+            "paternal": 0.38,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.8,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.69,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.6,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.44,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.58,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.28,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.12,
+            "paternal": 0.08,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.74,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.9,
+            "paternal": 0.82,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.5,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.35,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.015,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.12,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.48,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.54,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.58,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.42,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.53,
+            "paternal": 0.5858974,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      },
+      {
+        "schema_version": 1,
+        "id": 12828030708413454008,
+        "parent_genome_ids": [
+          7192810895741276800,
+          18308372370491214226
+        ],
+        "lineage_id": 4428297042899893904,
+        "conception_seed": 235936702,
+        "foundation": {
+          "foundation_id": 5634619084636116529,
+          "version": 1,
+          "compatibility_family_id": 5634619084636158481,
+          "brain_class_id": 3
+        },
+        "provenance": {
+          "conception_seed": 235936702,
+          "ordinary_birth": true,
+          "recombination": [
+            {
+              "chromosome": "Body",
+              "maternal_segments": 3,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Brain",
+              "maternal_segments": 3,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Chemistry",
+              "maternal_segments": 3,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Development",
+              "maternal_segments": 2,
+              "paternal_segments": 1
+            },
+            {
+              "chromosome": "Reproduction",
+              "maternal_segments": 1,
+              "paternal_segments": 2
+            },
+            {
+              "chromosome": "Predisposition",
+              "maternal_segments": 1,
+              "paternal_segments": 2
+            }
+          ],
+          "mutations": [
+            {
+              "Continuous": {
+                "chromosome": "Brain",
+                "locus_index": 6,
+                "allele": "Maternal",
+                "before": 0.58,
+                "after": 0.5853172,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            },
+            {
+              "Continuous": {
+                "chromosome": "Chemistry",
+                "locus_index": 4,
+                "allele": "Paternal",
+                "before": 0.5,
+                "after": 0.557123,
+                "lower": 0.0,
+                "upper": 1.0
+              }
+            }
+          ]
+        },
+        "body": {
+          "size": {
+            "maternal": 0.42,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "metabolic_efficiency": {
+            "maternal": 0.61,
+            "paternal": 0.61,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensory_acuity": {
+            "maternal": 0.55,
+            "paternal": 0.46058857,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "movement_efficiency": {
+            "maternal": 0.57,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lifespan": {
+            "maternal": 0.51,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "injury_resistance": {
+            "maternal": 0.46,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "temperature_tolerance": {
+            "maternal": 0.54,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "appearance_hue": {
+            "maternal": 0.36,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "frame": {
+            "maternal": {
+              "value": "Sturdy",
+              "dominance": "Recessive"
+            },
+            "paternal": {
+              "value": "Balanced",
+              "dominance": "Dominant"
+            }
+          }
+        },
+        "brain": {
+          "brain_class": {
+            "maternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            },
+            "paternal": {
+              "value": 3,
+              "dominance": "Dominant"
+            }
+          },
+          "sensory_lobe_ratio": {
+            "maternal": 0.2,
+            "paternal": 0.2,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "association_lobe_ratio": {
+            "maternal": 0.26,
+            "paternal": 0.3,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "working_memory_ratio": {
+            "maternal": 0.13,
+            "paternal": 0.13,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "connectivity_density": {
+            "maternal": 0.52,
+            "paternal": 0.53115004,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "plasticity": {
+            "maternal": 0.56,
+            "paternal": 0.56,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "receptor_sensitivity": {
+            "maternal": 0.5853172,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "genetic_weight_bias": {
+            "maternal": 0.47,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "chemistry": {
+          "stress_baseline": {
+            "maternal": 0.24,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reward_sensitivity": {
+            "maternal": 0.58,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "bonding_sensitivity": {
+            "maternal": 0.54,
+            "paternal": 0.46,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_production": {
+            "maternal": 0.52,
+            "paternal": 0.45,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hormone_decay": {
+            "maternal": 0.57,
+            "paternal": 0.557123,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hunger_threshold": {
+            "maternal": 0.44,
+            "paternal": 0.38,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "fatigue_threshold": {
+            "maternal": 0.66,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sleep_threshold": {
+            "maternal": 0.8,
+            "paternal": 0.72,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "reproductive_threshold": {
+            "maternal": 0.69,
+            "paternal": 0.69,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "brain_atp_efficiency": {
+            "maternal": 0.6,
+            "paternal": 0.6,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "development": {
+          "maturation_rate": {
+            "maternal": 0.52,
+            "paternal": 0.52,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "puberty_onset": {
+            "maternal": 0.64,
+            "paternal": 0.64,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "sensor_activation": {
+            "maternal": 0.12,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "lobe_activation": {
+            "maternal": 0.28,
+            "paternal": 0.28,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_open": {
+            "maternal": 0.12,
+            "paternal": 0.08,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "critical_period_close": {
+            "maternal": 0.74,
+            "paternal": 0.66,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "migration_checkpoint": {
+            "maternal": 0.9,
+            "paternal": 0.82,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        },
+        "reproduction": {
+          "fertility": {
+            "maternal": 0.58,
+            "paternal": 0.5,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "crossover_probability": {
+            "maternal": 0.18,
+            "paternal": 0.18,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_crossover_segments": {
+            "maternal": 0.35,
+            "paternal": 0.35,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mutation_rate": {
+            "maternal": 0.015,
+            "paternal": 0.015,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "discrete_mutation_rate": {
+            "maternal": 0.002,
+            "paternal": 0.006,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "max_mutation_delta": {
+            "maternal": 0.12,
+            "paternal": 0.12,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "parental_investment": {
+            "maternal": 0.56,
+            "paternal": 0.48,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "mate_preference": {
+            "maternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Health",
+              "dominance": "Codominant"
+            }
+          }
+        },
+        "predisposition": {
+          "starter_vocabulary": {
+            "maternal": {
+              "value": "Social",
+              "dominance": "Codominant"
+            },
+            "paternal": {
+              "value": "Foraging",
+              "dominance": "Codominant"
+            }
+          },
+          "reflex_strength": {
+            "maternal": 0.44,
+            "paternal": 0.44,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "food_attraction": {
+            "maternal": 0.62,
+            "paternal": 0.54,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "hazard_aversion": {
+            "maternal": 0.66,
+            "paternal": 0.58,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "social_attention": {
+            "maternal": 0.5,
+            "paternal": 0.42,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          },
+          "novelty_bias": {
+            "maternal": 0.53,
+            "paternal": 0.53,
+            "lower": 0.0,
+            "upper": 1.0,
+            "maternal_weight": 0.5
+          }
+        }
+      }
+    ]
+  },
+  "gpu_tests": [
+    {
+      "organism_id": 3003,
+      "source_creature_genome_id": 12762827965998763147,
+      "brain_genome_id": 12762827965998763147,
+      "parent_genome_ids": [
+        9780432642253059406,
+        11966191132421135267
+      ],
+      "lineage_id": 3851024349223386854,
+      "phenotype_hash": [
+        3579140670280827380,
+        14102732263142626656,
+        3919234666706824115,
+        11967847186873816161
+      ],
+      "foundation_id": 5634619084636116529,
+      "foundation_version": 1,
+      "compatibility_family_id": 5634619084636158481,
+      "policy_backend": "NeuralClosedLoopGpu",
+      "completed_challenges": 15,
+      "challenge_results": [
+        {
+          "challenge": "VisibleRewardNavigation",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "BlockedRouteDetour",
+          "score": {
+            "Measured": {
+              "value_q16": 0,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "DangerousShortVsSafeLong",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "RewardHazardReversal",
+          "score": {
+            "Measured": {
+              "value_q16": 32768,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "DelayedChoice",
+          "score": {
+            "Measured": {
+              "value_q16": 54613,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "UnfamiliarEdibility",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "PostSleepRetention",
+          "score": {
+            "Measured": {
+              "value_q16": 32768,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "LayoutAppearanceGeneralization",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "InjuryFatigueRecovery",
+          "score": {
+            "Measured": {
+              "value_q16": 0,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "NameAddressedInstruction",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "WordObjectGrounding",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "ActionWordGrounding",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "WhatWhyNarration",
+          "score": {
+            "Measured": {
+              "value_q16": 0,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "PeerTaughtAlias",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "SlmDisabledDialectTransfer",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        }
+      ],
+      "challenge_worlds": 15,
+      "gpu_dispatches": 92,
+      "sealed_outcomes": 92,
+      "sleep_consolidations": 1,
+      "slm_enabled": false,
+      "adapter_name": "NVIDIA GeForce RTX 3050",
+      "backend_api": "vulkan"
+    },
+    {
+      "organism_id": 3006,
+      "source_creature_genome_id": 12828030708413454008,
+      "brain_genome_id": 12828030708413454008,
+      "parent_genome_ids": [
+        7192810895741276800,
+        18308372370491214226
+      ],
+      "lineage_id": 4428297042899893904,
+      "phenotype_hash": [
+        293357769062250671,
+        7870182179652404330,
+        14173598178931410291,
+        15191076987402171791
+      ],
+      "foundation_id": 5634619084636116529,
+      "foundation_version": 1,
+      "compatibility_family_id": 5634619084636158481,
+      "policy_backend": "NeuralClosedLoopGpu",
+      "completed_challenges": 15,
+      "challenge_results": [
+        {
+          "challenge": "VisibleRewardNavigation",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "BlockedRouteDetour",
+          "score": {
+            "Measured": {
+              "value_q16": 0,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "DangerousShortVsSafeLong",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "RewardHazardReversal",
+          "score": {
+            "Measured": {
+              "value_q16": 32768,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "DelayedChoice",
+          "score": {
+            "Measured": {
+              "value_q16": 54613,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "UnfamiliarEdibility",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "PostSleepRetention",
+          "score": {
+            "Measured": {
+              "value_q16": 32768,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "LayoutAppearanceGeneralization",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "InjuryFatigueRecovery",
+          "score": {
+            "Measured": {
+              "value_q16": 0,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "NameAddressedInstruction",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "WordObjectGrounding",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "ActionWordGrounding",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "WhatWhyNarration",
+          "score": {
+            "Measured": {
+              "value_q16": 0,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "PeerTaughtAlias",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        },
+        {
+          "challenge": "SlmDisabledDialectTransfer",
+          "score": {
+            "Measured": {
+              "value_q16": 65535,
+              "exposures": 1
+            }
+          }
+        }
+      ],
+      "challenge_worlds": 15,
+      "gpu_dispatches": 92,
+      "sealed_outcomes": 92,
+      "sleep_consolidations": 1,
+      "slm_enabled": false,
+      "adapter_name": "NVIDIA GeForce RTX 3050",
+      "backend_api": "vulkan"
+    }
+  ],
+  "heuristic_baseline": {
+    "source_backend": "HeuristicBaseline",
+    "promotion_eligible": false,
+    "hidden_promotion_trials": 0,
+    "unknown_measures": [
+      "learning",
+      "transfer",
+      "reversal",
+      "delayed_memory",
+      "abstraction",
+      "social_contribution",
+      "cognitive_objective",
+      "social_objective",
+      "group_objective"
+    ],
+    "unknown_measures_preserved": true
+  }
+}

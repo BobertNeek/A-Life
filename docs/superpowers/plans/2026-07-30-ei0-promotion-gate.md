@@ -33,11 +33,11 @@
 - Produces: `Ei0ExitGateReport`, typed clause receipts, and `run_ei0_lifecycle_gate`.
 - Consumes: `CreatureGenome::{early_mammal_founder,reproduce,express}`, `HabitatAuthority`, the portable world save codec, and `LineageLibrary`.
 
-- [ ] **Step 1: Write a failing integrated test.** Require eight founders, two independent Generation 1 births and one Generation 2 birth in each of Wild and Managed lanes. Assert Wild requests use `CreatureChosen` with an organism actor, Managed requests use `Explicit` with the player actor, and every receipt reports `NeuralClosedLoopGpu`.
-- [ ] **Step 2: Verify RED.** Run `cargo test -p alife_tools --test ei0_exit_gate lifecycle_receipt --no-fail-fast -j 1`; expect failure because the gate API does not exist.
-- [ ] **Step 3: Implement the minimal lifecycle path.** Register all births in habitat authority, preserve full `GeneticLineageProvenance`, serialize and restore the real portable population save, archive each expressed genetic birth before comparison, and compare Generation 2 parent/ancestor/foundation identities from restored content.
-- [ ] **Step 4: Verify GREEN and negative boundaries.** Prove player-directed Wild breeding is rejected, creature-directed Managed breeding is rejected, tampered save/provenance is rejected, and no offspring contains inherited lifetime state.
-- [ ] **Step 5: Commit the coherent non-GPU slice.**
+- [x] **Step 1: Write a failing integrated test.** Require eight founders, two independent Generation 1 births and one Generation 2 birth in each of Wild and Managed lanes. Assert Wild requests use `CreatureChosen` with an organism actor, Managed requests use `Explicit` with the player actor, and every receipt reports `NeuralClosedLoopGpu`.
+- [x] **Step 2: Verify RED.** Run `cargo test -p alife_tools --test ei0_exit_gate lifecycle_receipt --no-fail-fast -j 1`; expect failure because the gate API does not exist.
+- [x] **Step 3: Implement the minimal lifecycle path.** Register all births in habitat authority, preserve full `GeneticLineageProvenance`, serialize and restore the real portable population save, archive each expressed genetic birth before comparison, and compare Generation 2 parent/ancestor/foundation identities from restored content.
+- [x] **Step 4: Verify GREEN and negative boundaries.** Prove player-directed Wild breeding is rejected, creature-directed Managed breeding is rejected, tampered save/provenance is rejected, and no offspring contains inherited lifetime state.
+- [x] **Step 5: Commit the coherent non-GPU slice.**
 
 ### Task 2: Exact offspring GPU test execution
 
@@ -53,11 +53,11 @@
 - Produces: `N2048ActiveBatteryRunner::run_creature_genome` and per-offspring GPU battery receipts.
 - Consumes: the Generation 2 `CreatureGenome`, its expressed `BrainGenome`, the built-in N2048 foundation, `GpuAuthoritativeSession`, grounded challenge worlds, world legality/outcomes, sealed patches, and WGSL sleep consolidation.
 
-- [ ] **Step 1: Write a failing exact-identity GPU test.** Require the runner to preserve source genome ID, parent IDs, lineage ID, phenotype hash, N2048 class, adapter/API, 15 completed challenges, matching GPU dispatch/sealed-outcome counts, and at least one committed sleep consolidation.
-- [ ] **Step 2: Verify RED.** Run the focused `alife_training` GPU test serially; expect failure because only seed-built genetic founders are accepted.
-- [ ] **Step 3: Implement minimal exact-genome execution.** Compile the supplied offspring’s expressed `BrainGenome` against the shipped foundation and execute the existing battery unchanged. Do not create a CPU scorer or alternate policy.
-- [ ] **Step 4: Verify GREEN.** Run both final-generation lane offspring through the real GPU battery and retain the adapter, backend, phenotype, dispatch, outcome, sleep, and challenge receipts.
-- [ ] **Step 5: Commit the GPU-bound slice.**
+- [x] **Step 1: Write a failing exact-identity GPU test.** Require the runner to preserve source genome ID, parent IDs, lineage ID, phenotype hash, N2048 class, adapter/API, 15 completed challenges, matching GPU dispatch/sealed-outcome counts, and at least one committed sleep consolidation.
+- [x] **Step 2: Verify RED.** Run the focused `alife_training` GPU test serially; expect failure because only seed-built genetic founders are accepted.
+- [x] **Step 3: Implement minimal exact-genome execution.** Compile the supplied offspring’s expressed `BrainGenome` against the shipped foundation and execute the existing battery unchanged. Do not create a CPU scorer or alternate policy.
+- [x] **Step 4: Verify GREEN.** Run both final-generation lane offspring through the real GPU battery and retain the adapter, backend, phenotype, dispatch, outcome, sleep, and challenge receipts.
+- [x] **Step 5: Commit the GPU-bound slice.**
 
 ### Task 3: Reproducible gate artifact and truthful verdict
 
@@ -72,10 +72,10 @@
 - Produces: `cargo run -p alife_tools --bin ei0_exit_gate -- --out <path>` and a schema-versioned report mapping every Era 0 exit clause to evidence.
 - Keeps the separate heuristic fixture report non-promotional and preserves all `UNKNOWN` measures.
 
-- [ ] **Step 1: Write a failing CLI integration test.** Parse the emitted report and require PASS for run, observe, save/load, Wild breed, Managed breed, archive, compare, stability, real test execution, and GPU policy identity. Require the heuristic baseline classification and all unsupported measures to remain `UNKNOWN`.
-- [ ] **Step 2: Implement the CLI and deterministic JSON artifact.** A failed clause makes the command nonzero and remains explicit in the report.
-- [ ] **Step 3: Run serialized verification.** Run focused crate tests, the real GPU gate, `cargo fmt --all -- --check`, `scripts/check_core_boundaries.ps1`, `scripts/docs_check.ps1`, `git diff --check`, and inspect the final report and Git status.
-- [ ] **Step 4: Commit docs and the gate artifact.** Report exact PASS/FAIL/UNKNOWN receipts. Declare Era 0 passed only if every lifecycle clause passes; never infer Era 1 eligibility.
+- [x] **Step 1: Write a failing CLI integration test.** Parse the emitted report and require PASS for run, observe, save/load, Wild breed, Managed breed, archive, compare, stability, real test execution, and GPU policy identity. Require the heuristic baseline classification and all unsupported measures to remain `UNKNOWN`.
+- [x] **Step 2: Implement the CLI and deterministic JSON artifact.** A failed clause makes the command nonzero and remains explicit in the report.
+- [x] **Step 3: Run serialized verification.** Run focused crate tests, the real GPU gate, `cargo fmt --all -- --check`, `scripts/check_core_boundaries.ps1`, `scripts/docs_check.ps1`, `git diff --check`, and inspect the final report and Git status.
+- [x] **Step 4: Commit docs and the gate artifact.** Report exact PASS/FAIL/UNKNOWN receipts. Declare Era 0 passed only if every lifecycle clause passes; never infer Era 1 eligibility.
 
 ## Plan Self-Review
 

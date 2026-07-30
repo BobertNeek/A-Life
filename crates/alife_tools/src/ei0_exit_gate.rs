@@ -3,14 +3,19 @@
 //! This module composes existing production authorities. It does not score
 //! brains, choose neural actions, or redefine any simulation contract.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use alife_archive::{GeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
-    BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationGeneticIdentity,
-    FoundationWeightAsset, GeneticLineageProvenance, GenomeId, HomeostaticSnapshot, OrganismId,
-    PhenotypeCompiler, PolicyBackend, ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
+    ActiveChallengeResult, BrainCapacityClass, BrainScaleTier, CreatureGenome,
+    FoundationGeneticIdentity, FoundationWeightAsset, GeneticLineageProvenance, GenomeId,
+    HomeostaticSnapshot, LineageId, OrganismId, PhenotypeCompiler, PhenotypeHash, PolicyBackend,
+    ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f, ACTIVE_CHALLENGE_COUNT,
 };
+use alife_training::{ActiveBatteryEvidence, N2048ActiveBatteryRunner};
 use alife_world::{
     persistence::{
         AssetManifest, CreatureMindSaveSummary, CreatureSaveState, LearningTraceSaveSummary,
@@ -38,6 +43,12 @@ pub enum Ei0ExitGateError {
     Persistence(#[from] alife_world::persistence::PersistenceError),
     #[error("lineage archive failed: {0}")]
     Archive(#[from] alife_archive::ArchiveError),
+    #[error("GPU active battery failed: {0}")]
+    Training(#[from] alife_training::TrainingError),
+    #[error("gate report I/O failed: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("gate report JSON failed: {0}")]
+    Json(#[from] serde_json::Error),
     #[error("gate evidence is inconsistent: {0}")]
     Evidence(&'static str),
 }
@@ -46,6 +57,7 @@ pub enum Ei0ExitGateError {
 pub struct Ei0BirthReceipt {
     pub organism_id: OrganismId,
     pub genome_id: GenomeId,
+    pub lineage_id: LineageId,
     pub parent_genome_ids: Vec<GenomeId>,
     pub generation: u32,
     pub conception_seed: u64,
@@ -90,6 +102,113 @@ pub struct Ei0LifecycleGateReport {
 pub struct Ei0LifecycleEvidence {
     pub report: Ei0LifecycleGateReport,
     pub final_generation_genomes: Vec<CreatureGenome>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Ei0GpuBatteryReceipt {
+    pub organism_id: OrganismId,
+    pub source_creature_genome_id: GenomeId,
+    pub brain_genome_id: GenomeId,
+    pub parent_genome_ids: Vec<GenomeId>,
+    pub lineage_id: LineageId,
+    pub phenotype_hash: PhenotypeHash,
+    pub foundation_id: u64,
+    pub foundation_version: u32,
+    pub compatibility_family_id: u64,
+    pub policy_backend: PolicyBackend,
+    pub completed_challenges: usize,
+    pub challenge_results: Vec<ActiveChallengeResult>,
+    pub challenge_worlds: u32,
+    pub gpu_dispatches: u64,
+    pub sealed_outcomes: u64,
+    pub sleep_consolidations: u32,
+    pub slm_enabled: bool,
+    pub adapter_name: String,
+    pub backend_api: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ei0HeuristicBaselineBoundary {
+    pub source_backend: String,
+    pub promotion_eligible: bool,
+    pub hidden_promotion_trials: u64,
+    pub unknown_measures: Vec<String>,
+    pub unknown_measures_preserved: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ei0ExitClauses {
+    pub run: bool,
+    pub observe: bool,
+    pub save_load: bool,
+    pub wild_breed: bool,
+    pub managed_breed: bool,
+    pub test: bool,
+    pub archive: bool,
+    pub compare: bool,
+    pub stable_multi_generation_population: bool,
+    pub gpu_policy_identity: bool,
+    pub no_hidden_policy_control: bool,
+}
+
+impl Ei0ExitClauses {
+    pub const fn all_passed(self) -> bool {
+        self.run
+            && self.observe
+            && self.save_load
+            && self.wild_breed
+            && self.managed_breed
+            && self.test
+            && self.archive
+            && self.compare
+            && self.stable_multi_generation_population
+            && self.gpu_policy_identity
+            && self.no_hidden_policy_control
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ei0ExitVerdict {
+    pub era0_exit_gate_passed: bool,
+    pub era1_promotion_evaluated: bool,
+    pub era1_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Ei0ExitGateReport {
+    pub schema_version: u16,
+    pub verdict: Ei0ExitVerdict,
+    pub clauses: Ei0ExitClauses,
+    pub lifecycle: Ei0LifecycleGateReport,
+    pub gpu_tests: Vec<Ei0GpuBatteryReceipt>,
+    pub heuristic_baseline: Ei0HeuristicBaselineBoundary,
+}
+
+#[derive(Debug, Deserialize)]
+struct BaselineFixture {
+    source_backends: Vec<String>,
+    layer_counts: BaselineLayerCounts,
+    evidence_scope: BaselineEvidenceScope,
+    measures: BTreeMap<String, BaselineReading>,
+    objectives: BTreeMap<String, BaselineReading>,
+    promotion_eligible: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct BaselineLayerCounts {
+    hidden_promotion: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct BaselineEvidenceScope {
+    promotion_backend_eligible: bool,
+    unsupported_measures: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BaselineReading {
+    value: Option<f64>,
+    samples: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -396,6 +515,7 @@ fn breed_member(
     let receipt = Ei0BirthReceipt {
         organism_id,
         genome_id: genome.id,
+        lineage_id: genome.lineage_id,
         parent_genome_ids: genome.parent_genome_ids.clone(),
         generation,
         conception_seed: genome.conception_seed,
@@ -471,6 +591,200 @@ fn creature_save(member: &PopulationMember, tick: Tick) -> CreatureSaveState {
             last_consolidated_tick: None,
         },
         gpu_brain: None,
+    }
+}
+
+pub fn run_ei0_exit_gate(
+    evidence_root: impl AsRef<Path>,
+) -> Result<Ei0ExitGateReport, Ei0ExitGateError> {
+    let evidence_root = evidence_root.as_ref();
+    let lifecycle_evidence = run_ei0_lifecycle_gate(evidence_root.join("lifecycle"))?;
+    let mut runner = N2048ActiveBatteryRunner::new_required()?;
+    let mut gpu_tests = Vec::with_capacity(lifecycle_evidence.final_generation_genomes.len());
+    for (lane, genome) in lifecycle_evidence
+        .report
+        .lanes
+        .iter()
+        .zip(&lifecycle_evidence.final_generation_genomes)
+    {
+        let final_birth = lane.births.last().ok_or(Ei0ExitGateError::Evidence(
+            "lane is missing its final birth",
+        ))?;
+        if final_birth.genome_id != genome.id {
+            return Err(Ei0ExitGateError::Evidence(
+                "lane final birth does not match the GPU test genome",
+            ));
+        }
+        let evidence = runner.run_creature_genome(final_birth.organism_id, genome)?;
+        gpu_tests.push(gpu_receipt(evidence)?);
+    }
+
+    let heuristic_baseline = load_heuristic_baseline_boundary()?;
+    let lifecycle = lifecycle_evidence.report;
+    let clauses = evaluate_clauses(&lifecycle, &gpu_tests, &heuristic_baseline);
+    let verdict = Ei0ExitVerdict {
+        era0_exit_gate_passed: clauses.all_passed(),
+        era1_promotion_evaluated: false,
+        era1_status: "OUT_OF_SCOPE".to_string(),
+    };
+    Ok(Ei0ExitGateReport {
+        schema_version: EI0_EXIT_GATE_SCHEMA_VERSION,
+        verdict,
+        clauses,
+        lifecycle,
+        gpu_tests,
+        heuristic_baseline,
+    })
+}
+
+pub fn write_ei0_exit_gate_report(
+    path: impl AsRef<Path>,
+    report: &Ei0ExitGateReport,
+) -> Result<(), Ei0ExitGateError> {
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(report)?)?;
+    Ok(())
+}
+
+fn gpu_receipt(evidence: ActiveBatteryEvidence) -> Result<Ei0GpuBatteryReceipt, Ei0ExitGateError> {
+    let source_creature_genome_id =
+        evidence
+            .source_creature_genome_id
+            .ok_or(Ei0ExitGateError::Evidence(
+                "GPU receipt is missing the source creature genome",
+            ))?;
+    let lineage_id = evidence.lineage_id.ok_or(Ei0ExitGateError::Evidence(
+        "GPU receipt is missing lineage identity",
+    ))?;
+    Ok(Ei0GpuBatteryReceipt {
+        organism_id: evidence.receipt.organism_id,
+        source_creature_genome_id,
+        brain_genome_id: evidence.brain_genome_id,
+        parent_genome_ids: evidence.parent_genome_ids,
+        lineage_id,
+        phenotype_hash: evidence.phenotype_hash,
+        foundation_id: evidence.foundation_id,
+        foundation_version: evidence.foundation_version,
+        compatibility_family_id: evidence.compatibility_family_id,
+        policy_backend: PolicyBackend::NeuralClosedLoopGpu,
+        completed_challenges: evidence.receipt.completed_count(),
+        challenge_results: evidence.receipt.results,
+        challenge_worlds: evidence.challenge_worlds,
+        gpu_dispatches: evidence.gpu_dispatches,
+        sealed_outcomes: evidence.sealed_outcomes,
+        sleep_consolidations: evidence.sleep_consolidations,
+        slm_enabled: evidence.slm_enabled,
+        adapter_name: evidence.adapter_name,
+        backend_api: evidence.backend_api,
+    })
+}
+
+fn load_heuristic_baseline_boundary() -> Result<Ei0HeuristicBaselineBoundary, Ei0ExitGateError> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("reports")
+        .join("ei0_real_fixture_report.json");
+    let fixture: BaselineFixture = serde_json::from_str(&std::fs::read_to_string(path)?)?;
+    let unknown_measures = fixture.evidence_scope.unsupported_measures.clone();
+    let unknown_measures_preserved = unknown_measures.len() == 9
+        && unknown_measures.iter().all(|name| {
+            let reading = match name.as_str() {
+                "cognitive_objective" => fixture.objectives.get("cognitive"),
+                "social_objective" => fixture.objectives.get("social"),
+                "group_objective" => fixture.objectives.get("group"),
+                other => fixture.measures.get(other),
+            };
+            reading.is_some_and(|reading| reading.value.is_none() && reading.samples == 0)
+        });
+    Ok(Ei0HeuristicBaselineBoundary {
+        source_backend: fixture.source_backends.join(","),
+        promotion_eligible: fixture.promotion_eligible,
+        hidden_promotion_trials: fixture.layer_counts.hidden_promotion,
+        unknown_measures,
+        unknown_measures_preserved: unknown_measures_preserved
+            && !fixture.evidence_scope.promotion_backend_eligible,
+    })
+}
+
+fn evaluate_clauses(
+    lifecycle: &Ei0LifecycleGateReport,
+    gpu_tests: &[Ei0GpuBatteryReceipt],
+    baseline: &Ei0HeuristicBaselineBoundary,
+) -> Ei0ExitClauses {
+    let wild_lane = lifecycle
+        .lanes
+        .iter()
+        .find(|lane| lane.mode == HabitatMode::Wild);
+    let managed_lane = lifecycle
+        .lanes
+        .iter()
+        .find(|lane| lane.mode == HabitatMode::Managed);
+    let wild_breed = lifecycle.player_directed_wild_breeding_rejected
+        && wild_lane.is_some_and(|lane| {
+            lane.births.len() == 3
+                && lane.births.iter().all(|birth| {
+                    birth.breeding_kind == HabitatBreedingKind::CreatureChosen
+                        && matches!(birth.actor, HabitatActor::Organism(_))
+                        && birth.cognition_policy == PolicyBackend::NeuralClosedLoopGpu
+                })
+        });
+    let managed_breed = lifecycle.creature_directed_managed_breeding_rejected
+        && managed_lane.is_some_and(|lane| {
+            lane.births.len() == 3
+                && lane.births.iter().all(|birth| {
+                    birth.breeding_kind == HabitatBreedingKind::Explicit
+                        && birth.actor == HabitatActor::Player
+                        && birth.cognition_policy == PolicyBackend::NeuralClosedLoopGpu
+                })
+        });
+    let test = gpu_tests.len() == 2
+        && gpu_tests.iter().all(|receipt| {
+            receipt.completed_challenges == ACTIVE_CHALLENGE_COUNT
+                && receipt.challenge_worlds == ACTIVE_CHALLENGE_COUNT as u32
+                && receipt.gpu_dispatches == receipt.sealed_outcomes
+                && receipt.gpu_dispatches >= ACTIVE_CHALLENGE_COUNT as u64
+                && receipt.sleep_consolidations >= 1
+                && !receipt.slm_enabled
+                && !receipt.adapter_name.trim().is_empty()
+                && !receipt.backend_api.trim().is_empty()
+        });
+    let gpu_policy_identity = test
+        && lifecycle.lanes.iter().zip(gpu_tests).all(|(lane, gpu)| {
+            lane.births.last().is_some_and(|birth| {
+                gpu.organism_id == birth.organism_id
+                    && gpu.source_creature_genome_id == birth.genome_id
+                    && gpu.brain_genome_id == birth.genome_id
+                    && gpu.parent_genome_ids == birth.parent_genome_ids
+                    && gpu.lineage_id == birth.lineage_id
+                    && gpu.foundation_id == birth.foundation_id
+                    && gpu.foundation_version == u32::from(birth.foundation_version)
+                    && gpu.compatibility_family_id == birth.compatibility_family_id
+                    && gpu.policy_backend == PolicyBackend::NeuralClosedLoopGpu
+            })
+        });
+    let no_hidden_policy_control = gpu_policy_identity
+        && baseline.source_backend == "HeuristicBaseline"
+        && !baseline.promotion_eligible
+        && baseline.hidden_promotion_trials == 0
+        && baseline.unknown_measures_preserved;
+    Ei0ExitClauses {
+        run: lifecycle.founder_count == 8
+            && lifecycle.live_population_count == 14
+            && lifecycle.generation_count == 3,
+        observe: lifecycle.run_observed,
+        save_load: lifecycle.portable_save_round_trip && lifecycle.tampered_save_rejected,
+        wild_breed,
+        managed_breed,
+        test,
+        archive: lifecycle.archive_birth_manifest_count == 14,
+        compare: lifecycle.lineage_compare_passed && lifecycle.tampered_provenance_rejected,
+        stable_multi_generation_population: lifecycle.restored_population_count == 14
+            && lifecycle.no_lifetime_state_inherited
+            && lifecycle.population_genomes.len() == 14,
+        gpu_policy_identity,
+        no_hidden_policy_control,
     }
 }
 
