@@ -1,6 +1,8 @@
-#[cfg(feature = "gpu-tests")]
-use alife_core::OrganismId;
 use alife_core::{ActiveChallengeKind, ACTIVE_CHALLENGE_COUNT};
+#[cfg(feature = "gpu-tests")]
+use alife_core::{
+    BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, GenomeId, OrganismId,
+};
 use alife_training::ActiveBatteryChallengeSpec;
 #[cfg(feature = "gpu-tests")]
 use alife_training::N2048ActiveBatteryRunner;
@@ -33,4 +35,43 @@ fn real_gpu_active_battery_measures_all_fifteen_challenges() {
     assert!(!evidence.slm_enabled);
     assert!(!evidence.adapter_name.trim().is_empty());
     assert!(!evidence.backend_api.trim().is_empty());
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+fn real_gpu_battery_binds_the_exact_second_generation_creature_genome() {
+    let foundation = FoundationGeneticIdentity::new(
+        0x4E32_3034_385F_5631,
+        1,
+        0x4E32_3034_385F_FA11,
+        BrainCapacityClass::N2048_ID,
+    )
+    .unwrap();
+    let founders = [11_u64, 12, 13, 14]
+        .map(|seed| CreatureGenome::early_mammal_founder(seed, foundation).unwrap());
+    let first = CreatureGenome::reproduce(&founders[0], &founders[1], 101).unwrap();
+    let second = CreatureGenome::reproduce(&founders[2], &founders[3], 102).unwrap();
+    let child = CreatureGenome::reproduce(&first, &second, 201).unwrap();
+    let expressed = child.express().unwrap();
+
+    let mut runner = N2048ActiveBatteryRunner::new_required().unwrap();
+    let evidence = runner.run_creature_genome(OrganismId(17), &child).unwrap();
+
+    assert_eq!(evidence.source_creature_genome_id, Some(child.id));
+    assert_eq!(evidence.brain_genome_id, expressed.brain_genome.id);
+    assert_eq!(evidence.parent_genome_ids, child.parent_genome_ids);
+    assert_eq!(evidence.lineage_id, Some(child.lineage_id));
+    assert_eq!(evidence.foundation_id, child.foundation.foundation_id);
+    assert_eq!(
+        evidence.foundation_version,
+        u32::from(child.foundation.version)
+    );
+    assert_eq!(
+        evidence.compatibility_family_id,
+        child.foundation.compatibility_family_id
+    );
+    assert_ne!(evidence.brain_genome_id, GenomeId(0));
+    assert_eq!(evidence.receipt.completed_count(), ACTIVE_CHALLENGE_COUNT);
+    assert_eq!(evidence.gpu_dispatches, evidence.sealed_outcomes);
+    assert!(evidence.sleep_consolidations >= 1);
 }

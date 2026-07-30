@@ -2,11 +2,12 @@
 
 use alife_core::{
     ActiveBatteryReceipt, ActiveChallengeKind, BrainCapacityClass, BrainGenome,
-    ConsolidationIntent, DecisionSnapshot, DevelopmentState, ExperiencePatchBuilder,
-    ExperienceSequenceId, FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot,
-    LanguageTokenId, NeuralActionSelection, NormalizedScalar, OrganismId, PhenotypeCompiler,
-    PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile, SpeechActKind,
-    SpeechMotorPayload, TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Vec3f,
+    ConsolidationIntent, CreatureGenome, DecisionSnapshot, DevelopmentState,
+    ExperiencePatchBuilder, ExperienceSequenceId, FoundationWeightAsset, GenomeId,
+    HomeostaticParameters, HomeostaticSnapshot, LanguageTokenId, LineageId, NeuralActionSelection,
+    NormalizedScalar, OrganismId, PhenotypeCompiler, PhenotypeHash, PostActionOutcome,
+    PreActionSnapshot, ScaffoldContractError, SensorProfile, SpeechActKind, SpeechMotorPayload,
+    TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f,
 };
 use alife_gpu_backend::{GpuBrainHandle, GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
@@ -47,6 +48,14 @@ impl ActiveBatteryChallengeSpec {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveBatteryEvidence {
     pub receipt: ActiveBatteryReceipt,
+    pub source_creature_genome_id: Option<GenomeId>,
+    pub brain_genome_id: GenomeId,
+    pub parent_genome_ids: Vec<GenomeId>,
+    pub lineage_id: Option<LineageId>,
+    pub phenotype_hash: PhenotypeHash,
+    pub foundation_id: u64,
+    pub foundation_version: u32,
+    pub compatibility_family_id: u64,
     pub challenge_worlds: u32,
     pub gpu_dispatches: u64,
     pub sealed_outcomes: u64,
@@ -90,14 +99,62 @@ impl N2048ActiveBatteryRunner {
             return Err(ScaffoldContractError::InvalidId.into());
         }
         let genome = BrainGenome::scaffold(genome_seed, BrainCapacityClass::N2048_ID);
+        self.run_brain_genome(
+            organism_id,
+            genome_seed,
+            None,
+            genome.clone(),
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0)?),
+        )
+    }
+
+    /// Runs the exact expressed genetic brain from a validated creature genome
+    /// through the production N2048 GPU challenge battery.
+    pub fn run_creature_genome(
+        &mut self,
+        organism_id: OrganismId,
+        creature_genome: &CreatureGenome,
+    ) -> Result<ActiveBatteryEvidence, TrainingError> {
+        if organism_id.raw() == 0 {
+            return Err(ScaffoldContractError::InvalidId.into());
+        }
+        creature_genome.validate_contract()?;
+        let manifest = self.foundation.manifest();
+        if creature_genome.foundation.brain_class_id != self.capacity.id()
+            || creature_genome.foundation.foundation_id != manifest.foundation_id().raw()
+            || u32::from(creature_genome.foundation.version) != manifest.foundation_version().raw()
+            || creature_genome.foundation.compatibility_family_id
+                != manifest.compatibility_family_id().raw()
+        {
+            return Err(ScaffoldContractError::IncompatibleGeneticClass.into());
+        }
+        let expressed = creature_genome.express()?;
+        let mature_tick = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
+        let development = expressed.development_state_at(mature_tick)?;
+        self.run_brain_genome(
+            organism_id,
+            creature_genome.conception_seed,
+            Some(creature_genome.id),
+            expressed.brain_genome,
+            development,
+        )
+    }
+
+    fn run_brain_genome(
+        &mut self,
+        organism_id: OrganismId,
+        challenge_base_seed: u64,
+        source_creature_genome_id: Option<GenomeId>,
+        genome: BrainGenome,
+        development: DevelopmentState,
+    ) -> Result<ActiveBatteryEvidence, TrainingError> {
         let mut receipt = ActiveBatteryReceipt::empty(organism_id);
         let mut gpu_dispatches = 0_u64;
         let mut sealed_outcomes = 0_u64;
         let mut sleep_consolidations = 0_u32;
+        let mut phenotype_hash = None;
 
         for (challenge_index, spec) in ActiveBatteryChallengeSpec::all().into_iter().enumerate() {
-            let development =
-                DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0)?);
             let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
                 &genome,
                 &self.capacity,
@@ -105,16 +162,22 @@ impl N2048ActiveBatteryRunner {
                 SensorProfile::GroundedObjectSlotsV1,
                 &self.foundation,
             )?;
+            let compiled_hash = phenotype.phenotype_hash();
+            match phenotype_hash {
+                None => phenotype_hash = Some(compiled_hash),
+                Some(expected) if expected == compiled_hash => {}
+                Some(_) => return Err(ScaffoldContractError::PhenotypeCompile.into()),
+            }
             let handle = self.session.insert_brain(organism_id, phenotype)?;
-            let challenge_seed =
-                genome_seed.wrapping_add((challenge_index as u64 + 1).wrapping_mul(0x9E37_79B9));
+            let challenge_seed = challenge_base_seed
+                .wrapping_add((challenge_index as u64 + 1).wrapping_mul(0x9E37_79B9));
             let mut world = build_challenge_world(spec.kind, challenge_seed, organism_id)?;
             prime_challenge_language(spec.kind, &mut world, organism_id)?;
             let score = run_challenge(
                 &mut self.session,
                 handle,
                 &genome,
-                development,
+                development.clone(),
                 &mut world,
                 spec,
                 &mut gpu_dispatches,
@@ -125,9 +188,20 @@ impl N2048ActiveBatteryRunner {
             receipt.record(spec.kind, score)?;
         }
         receipt.validate_contract()?;
+        let phenotype_hash =
+            phenotype_hash.ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        let foundation_manifest = self.foundation.manifest();
 
         Ok(ActiveBatteryEvidence {
             receipt,
+            source_creature_genome_id,
+            brain_genome_id: genome.id,
+            parent_genome_ids: genome.parent_genome_ids,
+            lineage_id: genome.lineage_id,
+            phenotype_hash,
+            foundation_id: foundation_manifest.foundation_id().raw(),
+            foundation_version: foundation_manifest.foundation_version().raw(),
+            compatibility_family_id: foundation_manifest.compatibility_family_id().raw(),
             challenge_worlds: ActiveChallengeKind::ALL.len() as u32,
             gpu_dispatches,
             sealed_outcomes,
