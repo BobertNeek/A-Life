@@ -325,6 +325,43 @@ impl LineageLibrary {
         Ok(statistics)
     }
 
+    /// Loads and validates the immutable genetic payload used by lineage
+    /// comparison and genetic-founder restoration.
+    pub fn load_brain_genome(
+        &self,
+        manifest: &CreatureArchiveManifest,
+    ) -> Result<BrainGenome, ArchiveError> {
+        manifest.validate_contract()?;
+        let reference = &manifest.genetic.genome_asset;
+        if reference.kind != ArchiveAssetKind::Genome {
+            return Err(ArchiveError::Integrity(
+                "genetic manifest references the wrong asset kind".to_string(),
+            ));
+        }
+        let path = self
+            .config
+            .root
+            .join("assets")
+            .join(digest_hex(reference.digest))
+            .join("payload.bin");
+        let bytes = fs::read(path)?;
+        if bytes.len() as u64 != reference.size_bytes || digest_bytes(&bytes) != reference.digest {
+            return Err(ArchiveError::Integrity(
+                "genome asset digest mismatch".to_string(),
+            ));
+        }
+        let genome = serde_json::from_slice::<BrainGenome>(&bytes)?;
+        genome.validate_contract()?;
+        if genome.id != manifest.genetic.genome_id
+            || genome.lineage_id != manifest.genetic.lineage_id
+        {
+            return Err(ArchiveError::Integrity(
+                "genome asset identity does not match manifest".to_string(),
+            ));
+        }
+        Ok(genome)
+    }
+
     pub fn life_manifest_digests(&self) -> Result<Vec<Blake3Digest>, ArchiveError> {
         let mut statement = self.connection.prepare(
             "SELECT digest FROM manifests WHERE is_life=1 \

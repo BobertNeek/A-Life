@@ -55,6 +55,8 @@ fn genetic_birth_life_checkpoint_and_rebuilt_index_are_durable() {
             foundation_asset_bytes: None,
         })
         .unwrap();
+    let birth_manifest = library.load_manifest(birth).unwrap();
+    assert_eq!(library.load_brain_genome(&birth_manifest).unwrap(), genome);
     assert_eq!(library.latest_manifest_digests().unwrap(), vec![birth]);
     let checkpoint_bytes = (0..(ARCHIVE_PAGE_BYTES * 2 + 137))
         .map(|index| (index % 251) as u8)

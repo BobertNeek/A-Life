@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+alife_archive = { path = "../alife_archive" }
 alife_core.workspace = true
 alife_game_app = { path = "../alife_game_app", default-features = false, features = ["gpu-runtime"] }
 alife_gpu_backend = { path = "../alife_gpu_backend" }

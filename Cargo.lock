@@ -225,6 +225,7 @@ dependencies = [
 name = "alife_tools"
 version = "0.1.0"
 dependencies = [
+ "alife_archive",
  "alife_core",
  "alife_game_app",
  "alife_gpu_backend",
