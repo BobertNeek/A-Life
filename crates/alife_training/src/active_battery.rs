@@ -1,13 +1,14 @@
 //! Production GPU active-battery runner over grounded headless challenge worlds.
 
 use alife_core::{
-    ActiveBatteryReceipt, ActiveChallengeKind, BrainCapacityClass, BrainGenome,
-    ConsolidationIntent, CreatureGenome, DecisionSnapshot, DevelopmentState,
-    ExperiencePatchBuilder, ExperienceSequenceId, FoundationWeightAsset, GenomeId,
+    ActionKind, ActiveBatteryReceipt, ActiveChallengeKind, BrainCapacityClass, BrainGenome,
+    CandidateActionFamily, ConsolidationIntent, CreatureGenome, DecisionSnapshot, DevelopmentState,
+    ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId, FoundationWeightAsset, GenomeId,
     HomeostaticParameters, HomeostaticSnapshot, LanguageTokenId, LineageId, NeuralActionSelection,
-    NormalizedScalar, OrganismId, PhenotypeCompiler, PhenotypeHash, PostActionOutcome,
-    PreActionSnapshot, ScaffoldContractError, SensorProfile, SpeechActKind, SpeechMotorPayload,
-    TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f,
+    NormalizedScalar, OrganismId, PhenotypeCompiler, PhenotypeHash, PhysicalContactKind,
+    PolicyBackend, PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile,
+    SpeechActKind, SpeechMotorPayload, TeacherPerceptionChannel, Tick, UtteranceId,
+    UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
 };
 use alife_gpu_backend::{GpuBrainHandle, GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
@@ -65,6 +66,39 @@ pub struct ActiveBatteryEvidence {
     pub backend_api: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpuReproductionIntentReceipt {
+    pub initiator_organism_id: OrganismId,
+    pub mate_organism_id: OrganismId,
+    pub mate_entity_id: WorldEntityId,
+    pub observed_ticks: u32,
+    pub patch: ExperiencePatch,
+}
+
+impl Validate for GpuReproductionIntentReceipt {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.initiator_organism_id.validate()?;
+        self.mate_organism_id.validate()?;
+        self.mate_entity_id.validate()?;
+        self.patch.validate_contract()?;
+        if self.initiator_organism_id == self.mate_organism_id
+            || self.observed_ticks == 0
+            || self.patch.pre_action().organism_id != self.initiator_organism_id
+            || self.patch.decision().policy_backend() != PolicyBackend::NeuralClosedLoopGpu
+            || self.patch.decision().selected_action.kind != ActionKind::Interact
+            || self.patch.decision().selected_action.target_entity != Some(self.mate_entity_id)
+            || self.patch.decision().neural_evidence()?.action_family
+                != CandidateActionFamily::Contact
+            || !self.patch.outcome().success
+            || self.patch.outcome().physical.contact != PhysicalContactKind::Touch
+            || self.patch.outcome().physical.target_entity != Some(self.mate_entity_id)
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
+}
+
 pub struct N2048ActiveBatteryRunner {
     session: GpuAuthoritativeSession,
     foundation: FoundationWeightAsset,
@@ -118,6 +152,167 @@ impl N2048ActiveBatteryRunner {
         if organism_id.raw() == 0 {
             return Err(ScaffoldContractError::InvalidId.into());
         }
+        let (brain_genome, development) = self.express_compatible_creature(creature_genome)?;
+        self.run_brain_genome(
+            organism_id,
+            creature_genome.conception_seed,
+            Some(creature_genome.id),
+            brain_genome,
+            development,
+        )
+    }
+
+    /// Observes the exact creature brain until its GPU policy selects a legal
+    /// contact with the only available mate. Every observed decision is
+    /// executed in the production headless world and returned to the GPU as a
+    /// sealed causal outcome before the next tick.
+    pub fn run_reproduction_intent(
+        &mut self,
+        initiator_organism_id: OrganismId,
+        creature_genome: &CreatureGenome,
+        mate_organism_id: OrganismId,
+        max_ticks: u32,
+    ) -> Result<GpuReproductionIntentReceipt, TrainingError> {
+        if initiator_organism_id.raw() == 0
+            || mate_organism_id.raw() == 0
+            || initiator_organism_id == mate_organism_id
+            || max_ticks == 0
+        {
+            return Err(ScaffoldContractError::InvalidId.into());
+        }
+        let (genome, mut development) = self.express_compatible_creature(creature_genome)?;
+        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+            &genome,
+            &self.capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+            &self.foundation,
+        )?;
+        let handle = self
+            .session
+            .insert_brain(initiator_organism_id, phenotype)?;
+
+        let attempt = (|| {
+            let mut world = HeadlessScenarioBuilder::new(creature_genome.conception_seed)
+                .agent("reproduction-initiator", initiator_organism_id, Vec3f::ZERO)
+                .social_agent(
+                    "reproduction-mate",
+                    mate_organism_id,
+                    Vec3f::new(0.5, 0.0, 0.0),
+                    1.0,
+                )
+                .build()?;
+            let mate_entity_id = world
+                .entity_id("reproduction-mate")
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            let mature_age = development.age_ticks.raw();
+            let mut homeostasis = HomeostaticSnapshot::baseline(world.tick());
+            homeostasis.drives.loneliness = 1.0;
+            homeostasis.drives.curiosity = 0.8;
+            homeostasis.drives.reproductive_drive = 1.0;
+            homeostasis =
+                HomeostaticSnapshot::new(world.tick(), homeostasis.drives, homeostasis.hormones)?;
+
+            for step in 0..max_ticks {
+                development.age_ticks = Tick::new(mature_age.saturating_add(u64::from(step)));
+                let frame = world.perception_frame(
+                    initiator_organism_id,
+                    world.tick(),
+                    SensorProfile::GroundedObjectSlotsV1,
+                    homeostasis,
+                )?;
+                let mut ticks = self.session.tick_batch(&[(handle, frame.clone())])?;
+                let gpu_tick = ticks
+                    .pop()
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                let selection = NeuralActionSelection {
+                    candidate_index: gpu_tick.selection.candidate_index,
+                    logit: gpu_tick.selection.logit,
+                    confidence: gpu_tick.selection.confidence,
+                    active_tiles: gpu_tick.selection.active_tiles,
+                    active_synapses: gpu_tick.selection.active_synapses,
+                };
+                let candidate = *frame
+                    .candidates()
+                    .get(usize::from(selection.candidate_index))
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                let command = candidate.to_command(initiator_organism_id, selection.confidence)?;
+                let sequence_id = ExperienceSequenceId(u64::from(step) + 1);
+                let pre_action = PreActionSnapshot::from_neural_frame(
+                    sequence_id,
+                    handle.class_id(),
+                    handle.phenotype_hash(),
+                    genome.id,
+                    genome.schema_version,
+                    development.clone(),
+                    frame.clone(),
+                )?;
+                let decision = DecisionSnapshot::from_neural_selection(
+                    sequence_id,
+                    handle.phenotype_hash(),
+                    gpu_tick.dispatch_generation,
+                    gpu_tick.active_activation_side,
+                    &frame,
+                    selection,
+                    command,
+                )?;
+                let action_result =
+                    world.apply_neural_command(&command, gpu_tick.speech_payload, false)?;
+                let outcome_tick = Tick::new(frame.tick().raw().saturating_add(1));
+                let mut outcome = PostActionOutcome::new(
+                    initiator_organism_id,
+                    sequence_id,
+                    outcome_tick,
+                    action_result.observation.success && action_result.execution.succeeded,
+                    action_result.execution.physical,
+                    action_result.observation.homeostatic_delta,
+                    action_result.observation.reward_valence,
+                    action_result.observation.frustration_delta,
+                    action_result.observation.pain_delta,
+                    action_result.observation.energy_delta,
+                    action_result.observation.prediction_error,
+                )?;
+                outcome.contradiction_observed = action_result.observation.contradiction_observed
+                    || !action_result.execution.succeeded;
+                let patch = ExperiencePatchBuilder::new(sequence_id)
+                    .record_pre_action(pre_action)?
+                    .record_decision(decision)?
+                    .record_outcome(outcome)?
+                    .seal()?;
+                self.session
+                    .apply_sealed_outcome_batch(&[(handle, &patch)])?;
+
+                let receipt = GpuReproductionIntentReceipt {
+                    initiator_organism_id,
+                    mate_organism_id,
+                    mate_entity_id,
+                    observed_ticks: step + 1,
+                    patch,
+                };
+                if receipt.validate_contract().is_ok() {
+                    return Ok(receipt);
+                }
+
+                homeostasis = homeostasis.advance(
+                    outcome_tick,
+                    receipt.patch.outcome().homeostatic_delta,
+                    HomeostaticParameters::reference(),
+                )?;
+                world.advance_tick();
+            }
+            Err(ScaffoldContractError::InvalidDecisionEvidence)
+        })();
+        let removal = self.session.remove_brain(handle);
+        match (attempt, removal) {
+            (Ok(receipt), Ok(())) => Ok(receipt),
+            (Err(error), _) | (_, Err(error)) => Err(error.into()),
+        }
+    }
+
+    fn express_compatible_creature(
+        &self,
+        creature_genome: &CreatureGenome,
+    ) -> Result<(BrainGenome, DevelopmentState), TrainingError> {
         creature_genome.validate_contract()?;
         let manifest = self.foundation.manifest();
         if creature_genome.foundation.brain_class_id != self.capacity.id()
@@ -131,13 +326,7 @@ impl N2048ActiveBatteryRunner {
         let expressed = creature_genome.express()?;
         let mature_tick = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
         let development = expressed.development_state_at(mature_tick)?;
-        self.run_brain_genome(
-            organism_id,
-            creature_genome.conception_seed,
-            Some(creature_genome.id),
-            expressed.brain_genome,
-            development,
-        )
+        Ok((expressed.brain_genome, development))
     }
 
     fn run_brain_genome(
