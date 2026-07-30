@@ -27,10 +27,10 @@
 - Consumes: `LineageLibrary::latest_manifest_digests`, `load_manifest`, and `load_life_statistics`.
 - Produces: source/data filters, stable sorting, archive details, founder modes, and bounded cohort state rendered as separate Bevy UI sections.
 
-- [ ] Add unit tests for real row mapping, `Unknown`, filter/sort behavior, 4-16 cohort validation, closed visibility, and 1920x1080/1366x768 layout bounds.
-- [ ] Run `cargo test -p alife_game_app --features production-voxel-frontend production_conversation_lineage_ui --lib -- --nocapture` and confirm the new tests fail for missing behavior.
-- [ ] Implement the minimal structured nodes, row/view mapping, input, and responsive layout needed to pass.
-- [ ] Re-run the focused test and commit the coherent UI slice.
+- [x] Add unit tests for real row mapping, `Unknown`, filter/sort behavior, 4-16 cohort validation, closed visibility, and 1920x1080/1366x768 layout bounds.
+- [x] Run the focused lineage test and confirm the missing structured hierarchy/view-model behavior.
+- [x] Implement the minimal structured nodes, row/view mapping, input, and responsive layout needed to pass.
+- [x] Re-run the focused test and commit the coherent UI slice.
 
 ### Task 2: Habitat Evidence and Controls
 
@@ -42,9 +42,9 @@
 - Consumes: `HeadlessWorld::habitat_presentation_projection` and `HabitatAuthority::{tag_creature,authorize_operation,authorize_breeding,transfer}`.
 - Produces: active-creature habitat details, real affinity/typed trust-fear/speech evidence, and player operation receipts or explicit rejections.
 
-- [ ] Add failing tests for projection mapping, ungrounded speech remaining `Unknown`, mode-specific routing, rejection text, and untouched Wild breeding.
-- [ ] Implement runtime-local routing through cloned/replaced `HabitatAuthority` state and structured habitat UI controls.
-- [ ] Run the focused tests and commit the habitat slice.
+- [x] Add failing tests for projection mapping, ungrounded speech remaining `Unknown`, mode-specific routing, rejection text, and untouched Wild breeding.
+- [x] Implement runtime-local routing through cloned/replaced `HabitatAuthority` state and structured habitat UI controls.
+- [x] Run the focused tests and commit the habitat slice.
 
 ### Task 3: Production Evidence
 
@@ -57,7 +57,17 @@
 - Consumes: the production `alife_game_app` Vulkan launch path and real Y-key laboratory input.
 - Produces: two committed runtime screenshots plus exact GPU and test receipts.
 
-- [ ] Run the focused library and habitat tests, then one `alife_game_app` production-frontend boundary gate.
-- [ ] Launch the production Vulkan app serially, open the lab with Y, and capture both target resolutions.
-- [ ] Compare both screenshots with the committed blueprint, fix the largest visible discrepancy, and repeat only affected checks.
-- [ ] Commit final evidence, verify a clean branch, and report commits, tests, adapter/runtime evidence, and screenshot paths.
+- [x] Run the focused library and habitat tests, then one `alife_game_app` production-frontend boundary gate.
+- [x] Launch the production Vulkan app serially, open the lab with Y, and capture both target resolutions.
+- [x] Compare both screenshots with the committed blueprint, fix the largest visible discrepancy, and repeat only affected checks.
+- [x] Commit final evidence, verify a clean branch, and report commits, tests, adapter/runtime evidence, and screenshot paths.
+
+## Verification Evidence
+
+- Focused UI gate: `cargo test -p alife_game_app --features bevy-app,gpu-runtime production_conversation_lineage_ui --lib -- --nocapture` — 13 passed, 0 failed.
+- Production-frontend boundary gate: `cargo test -p alife_game_app --features bevy-app,gpu-runtime production_voxel_frontend::tests --lib` — 11 passed, 0 failed.
+- Production build: `cargo build -p alife_game_app --features "bevy-app gpu-runtime voxel-backend production-assets vfx-hanabi" --bin alife_game_app` — exit 0.
+- Real runtime receipt: `GpuAuthoritative` on `NVIDIA GeForce RTX 3050`, Vulkan, discrete GPU, NVIDIA driver `581.80`; authoritative execution true, failure stops learned actions true, finite rejections 0.
+- Real Y-key open-state captures: `docs/superpowers/assets/era0-selection-lab-1920x1080.png` and `docs/superpowers/assets/era0-selection-lab-1366x768.png`. The window decorations make the PNG canvases 1936x1119 and 1382x807 while the requested render clients remain 1920x1080 and 1366x768.
+- Blueprint comparison fix: the open laboratory now uses an opaque surface inset one percent from each edge. Normal HUD text does not bleed through the laboratory, and the evidence column has more room. The hidden closed state is unchanged.
+- Diagnostic full-library run: 210 passed and 5 tests failed outside the lab and production-frontend acceptance surface (`paired_memory_probe_is_valid_for_every_promoted_class_and_profile`, `checked_in_n2048_assets_decode_for_every_production_sensor_profile`, and three `ca11_player_sandbox_editor_*` tests). The branch does not alter those failing assertions, evidence assets, or fixtures.

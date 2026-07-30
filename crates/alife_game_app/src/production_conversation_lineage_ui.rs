@@ -950,14 +950,14 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
             Name::new("A-Life Lineage Library"),
             Node {
                 position_type: PositionType::Absolute,
-                top: Val::Percent(5.0),
-                left: Val::Percent(7.0),
-                right: Val::Percent(7.0),
-                bottom: Val::Percent(7.0),
+                top: Val::Percent(1.0),
+                left: Val::Percent(1.0),
+                right: Val::Percent(1.0),
+                bottom: Val::Percent(1.0),
                 padding: bevy::ui::UiRect::all(Val::Px(18.0)),
                 ..Default::default()
             },
-            BackgroundColor(Color::srgba(0.014, 0.028, 0.020, 0.97)),
+            BackgroundColor(Color::srgba(0.014, 0.028, 0.020, 1.0)),
             GlobalZIndex(100),
             Visibility::Hidden,
             ProductionLineageLibraryPanel,
@@ -2918,6 +2918,15 @@ mod tests {
                 .unwrap();
             assert_eq!(world.get::<Visibility>(root), Some(&Visibility::Hidden));
             assert!(world.get::<Text>(root).is_none());
+            let root_node = world.get::<Node>(root).unwrap();
+            assert_eq!(root_node.top, Val::Percent(1.0));
+            assert_eq!(root_node.left, Val::Percent(1.0));
+            assert_eq!(root_node.right, Val::Percent(1.0));
+            assert_eq!(root_node.bottom, Val::Percent(1.0));
+            assert_eq!(
+                world.get::<BackgroundColor>(root),
+                Some(&BackgroundColor(Color::srgba(0.014, 0.028, 0.020, 1.0)))
+            );
             let root_children = world.get::<Children>(root).unwrap().to_vec();
 
             let sections = world
