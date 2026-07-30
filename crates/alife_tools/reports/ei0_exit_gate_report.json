@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "verdict": {
     "era0_exit_gate_passed": true,
     "era1_promotion_evaluated": false,
@@ -40,7 +40,7 @@
     },
     "stable_multi_generation_population": {
       "status": "Pass",
-      "detail": "runtime births retain genetics and reset nonzero parental lifetime state"
+      "detail": "128 advance_tick calls evolved ecology, retained residents, and bound the next GPU action"
     },
     "gpu_policy_identity": {
       "status": "Pass",
@@ -52,7 +52,7 @@
     }
   },
   "lifecycle": {
-    "schema_version": 2,
+    "schema_version": 3,
     "founder_count": 8,
     "live_population_count": 14,
     "generation_count": 3,
@@ -62,6 +62,73 @@
     "tampered_provenance_rejected": true,
     "restored_population_count": 8,
     "post_restore_ticks": 128,
+    "stability": {
+      "start_tick": 0,
+      "end_tick": 128,
+      "elapsed_ticks": 128,
+      "start_world_digest": {
+        "schema_version": 1,
+        "words": [
+          10772940915757931214,
+          10034646117539614340,
+          3274866209180824729,
+          16792976306668132265
+        ]
+      },
+      "end_world_digest": {
+        "schema_version": 1,
+        "words": [
+          5004633513597468563,
+          1852656032508514805,
+          4035626318368117774,
+          13347140108999388798
+        ]
+      },
+      "start_ecology_metrics": {
+        "active_resources": 1,
+        "consumed_resources": 0,
+        "active_hazards": 1,
+        "zones": 1,
+        "resources_regrown": 0,
+        "resources_spawned": 0,
+        "resources_decayed": 0,
+        "cleanup_marked": 0,
+        "cap_rejections": 0
+      },
+      "end_ecology_metrics": {
+        "active_resources": 3,
+        "consumed_resources": 0,
+        "active_hazards": 1,
+        "zones": 1,
+        "resources_regrown": 0,
+        "resources_spawned": 2,
+        "resources_decayed": 0,
+        "cleanup_marked": 200,
+        "cap_rejections": 112
+      },
+      "start_residents": [
+        1001,
+        1002,
+        1003,
+        1004,
+        2001,
+        2002,
+        2003,
+        2004
+      ],
+      "end_residents": [
+        1001,
+        1002,
+        1003,
+        1004,
+        2001,
+        2002,
+        2003,
+        2004
+      ]
+    },
+    "same_seed_wrong_world_rejected": true,
+    "later_world_rejected": true,
     "archive_birth_manifest_count": 14,
     "lineage_compare_passed": true,
     "no_lifetime_state_inherited": true,
@@ -150,7 +217,25 @@
             "actor": {
               "Organism": 1001
             },
+            "breeding_receipt": {
+              "habitat_id": 11,
+              "first_parent": 1001,
+              "second_parent": 1002,
+              "mode": "Wild",
+              "kind": "CreatureChosen",
+              "actor": {
+                "Organism": 1001
+              },
+              "tick": 128,
+              "cognition_policy": "NeuralClosedLoopGpu"
+            },
             "cognition_policy": "NeuralClosedLoopGpu",
+            "child_phenotype_hash": [
+              6840417418181682249,
+              4897543962633965710,
+              9709769508627245447,
+              6687982969062680981
+            ],
             "post_restore_ticks": 128,
             "first_parent_lifetime": {
               "memory_records": 1,
@@ -169,7 +254,18 @@
             },
             "gpu_intent_sequence_id": 1,
             "gpu_intent_world_tick": 128,
-            "gpu_selected_mate": 1002
+            "gpu_selected_mate": 1002,
+            "gpu_pre_action_world_digest": {
+              "schema_version": 1,
+              "words": [
+                5004633513597468563,
+                1852656032508514805,
+                4035626318368117774,
+                13347140108999388798
+              ]
+            },
+            "gpu_same_seed_wrong_world_rejected": true,
+            "gpu_later_world_rejected": true
           },
           {
             "organism_id": 3002,
@@ -238,7 +334,25 @@
             "actor": {
               "Organism": 1003
             },
+            "breeding_receipt": {
+              "habitat_id": 11,
+              "first_parent": 1003,
+              "second_parent": 1004,
+              "mode": "Wild",
+              "kind": "CreatureChosen",
+              "actor": {
+                "Organism": 1003
+              },
+              "tick": 128,
+              "cognition_policy": "NeuralClosedLoopGpu"
+            },
             "cognition_policy": "NeuralClosedLoopGpu",
+            "child_phenotype_hash": [
+              687906670208656848,
+              14445164854266884709,
+              17491111253350416407,
+              14833479799085276314
+            ],
             "post_restore_ticks": 128,
             "first_parent_lifetime": {
               "memory_records": 1,
@@ -257,7 +371,18 @@
             },
             "gpu_intent_sequence_id": 1,
             "gpu_intent_world_tick": 128,
-            "gpu_selected_mate": 1004
+            "gpu_selected_mate": 1004,
+            "gpu_pre_action_world_digest": {
+              "schema_version": 1,
+              "words": [
+                7001353274074126565,
+                13615748055298192426,
+                16135536946229517974,
+                16444007348468569175
+              ]
+            },
+            "gpu_same_seed_wrong_world_rejected": true,
+            "gpu_later_world_rejected": true
           },
           {
             "organism_id": 3003,
@@ -314,7 +439,25 @@
             "actor": {
               "Organism": 3001
             },
+            "breeding_receipt": {
+              "habitat_id": 11,
+              "first_parent": 3001,
+              "second_parent": 1002,
+              "mode": "Wild",
+              "kind": "CreatureChosen",
+              "actor": {
+                "Organism": 3001
+              },
+              "tick": 128,
+              "cognition_policy": "NeuralClosedLoopGpu"
+            },
             "cognition_policy": "NeuralClosedLoopGpu",
+            "child_phenotype_hash": [
+              3201908009815599985,
+              1728606741134952816,
+              2262725504214238735,
+              16561323910347635853
+            ],
             "post_restore_ticks": 128,
             "first_parent_lifetime": {
               "memory_records": 0,
@@ -333,7 +476,18 @@
             },
             "gpu_intent_sequence_id": 1,
             "gpu_intent_world_tick": 128,
-            "gpu_selected_mate": 1002
+            "gpu_selected_mate": 1002,
+            "gpu_pre_action_world_digest": {
+              "schema_version": 1,
+              "words": [
+                494196839893422375,
+                18241957037686829054,
+                6965194995966721331,
+                3206591195616370155
+              ]
+            },
+            "gpu_same_seed_wrong_world_rejected": true,
+            "gpu_later_world_rejected": true
           }
         ]
       },
@@ -428,7 +582,23 @@
             "compatibility_family_id": 5634619084636158481,
             "breeding_kind": "Explicit",
             "actor": "Player",
+            "breeding_receipt": {
+              "habitat_id": 12,
+              "first_parent": 2001,
+              "second_parent": 2002,
+              "mode": "Managed",
+              "kind": "Explicit",
+              "actor": "Player",
+              "tick": 128,
+              "cognition_policy": "NeuralClosedLoopGpu"
+            },
             "cognition_policy": "NeuralClosedLoopGpu",
+            "child_phenotype_hash": [
+              9140494441387613747,
+              1589335044527331419,
+              17960879179892059112,
+              12759600029093859746
+            ],
             "post_restore_ticks": 128,
             "first_parent_lifetime": {
               "memory_records": 1,
@@ -447,7 +617,10 @@
             },
             "gpu_intent_sequence_id": null,
             "gpu_intent_world_tick": null,
-            "gpu_selected_mate": null
+            "gpu_selected_mate": null,
+            "gpu_pre_action_world_digest": null,
+            "gpu_same_seed_wrong_world_rejected": null,
+            "gpu_later_world_rejected": null
           },
           {
             "organism_id": 4002,
@@ -556,7 +729,23 @@
             "compatibility_family_id": 5634619084636158481,
             "breeding_kind": "Explicit",
             "actor": "Player",
+            "breeding_receipt": {
+              "habitat_id": 12,
+              "first_parent": 2003,
+              "second_parent": 2004,
+              "mode": "Managed",
+              "kind": "Explicit",
+              "actor": "Player",
+              "tick": 128,
+              "cognition_policy": "NeuralClosedLoopGpu"
+            },
             "cognition_policy": "NeuralClosedLoopGpu",
+            "child_phenotype_hash": [
+              13669975652424132081,
+              262177904829933270,
+              13606430389824208201,
+              10261420470490759979
+            ],
             "post_restore_ticks": 128,
             "first_parent_lifetime": {
               "memory_records": 1,
@@ -575,7 +764,10 @@
             },
             "gpu_intent_sequence_id": null,
             "gpu_intent_world_tick": null,
-            "gpu_selected_mate": null
+            "gpu_selected_mate": null,
+            "gpu_pre_action_world_digest": null,
+            "gpu_same_seed_wrong_world_rejected": null,
+            "gpu_later_world_rejected": null
           },
           {
             "organism_id": 4003,
@@ -653,7 +845,23 @@
             "compatibility_family_id": 5634619084636158481,
             "breeding_kind": "Explicit",
             "actor": "Player",
+            "breeding_receipt": {
+              "habitat_id": 12,
+              "first_parent": 4001,
+              "second_parent": 4002,
+              "mode": "Managed",
+              "kind": "Explicit",
+              "actor": "Player",
+              "tick": 128,
+              "cognition_policy": "NeuralClosedLoopGpu"
+            },
             "cognition_policy": "NeuralClosedLoopGpu",
+            "child_phenotype_hash": [
+              10802759462314983605,
+              16774208200534660593,
+              8870478609265063878,
+              13572933541028645879
+            ],
             "post_restore_ticks": 128,
             "first_parent_lifetime": {
               "memory_records": 0,
@@ -672,7 +880,10 @@
             },
             "gpu_intent_sequence_id": null,
             "gpu_intent_world_tick": null,
-            "gpu_selected_mate": null
+            "gpu_selected_mate": null,
+            "gpu_pre_action_world_digest": null,
+            "gpu_same_seed_wrong_world_rejected": null,
+            "gpu_later_world_rejected": null
           }
         ]
       }
@@ -6335,6 +6546,176 @@
         }
       }
     ],
+    "population_residents": [
+      {
+        "organism_id": 1001,
+        "genome_id": 8466215757053538557,
+        "generation": 0,
+        "phenotype_hash": [
+          12815567700693325326,
+          12129368986270558562,
+          12080935824682376895,
+          1736204417492091528
+        ],
+        "restored_from_save": true
+      },
+      {
+        "organism_id": 1002,
+        "genome_id": 18115203022276046077,
+        "generation": 0,
+        "phenotype_hash": [
+          12047043385954801531,
+          8299756827242809309,
+          6177525634474425404,
+          13299952924303747368
+        ],
+        "restored_from_save": true
+      },
+      {
+        "organism_id": 1003,
+        "genome_id": 7508253683955070311,
+        "generation": 0,
+        "phenotype_hash": [
+          13888227389655969350,
+          853726963903298361,
+          8665164290585607165,
+          2363168696920683068
+        ],
+        "restored_from_save": true
+      },
+      {
+        "organism_id": 1004,
+        "genome_id": 1394215059793105920,
+        "generation": 0,
+        "phenotype_hash": [
+          6601324430075190394,
+          13922598575111963376,
+          5703367434966630844,
+          15141116963124716035
+        ],
+        "restored_from_save": true
+      },
+      {
+        "organism_id": 2001,
+        "genome_id": 2868596582537259592,
+        "generation": 0,
+        "phenotype_hash": [
+          12986997578312895271,
+          8450843627027027006,
+          11245524378428035587,
+          842132136681527870
+        ],
+        "restored_from_save": true
+      },
+      {
+        "organism_id": 2002,
+        "genome_id": 15516502424008919472,
+        "generation": 0,
+        "phenotype_hash": [
+          18202215378238480934,
+          5988137847718505970,
+          4320229035620730205,
+          11535559354370896003
+        ],
+        "restored_from_save": true
+      },
+      {
+        "organism_id": 2003,
+        "genome_id": 16044076252409195468,
+        "generation": 0,
+        "phenotype_hash": [
+          13860520467621423410,
+          16104440715614224512,
+          14606737846441352380,
+          7840822754824227277
+        ],
+        "restored_from_save": true
+      },
+      {
+        "organism_id": 2004,
+        "genome_id": 17618586533621052011,
+        "generation": 0,
+        "phenotype_hash": [
+          10646925552179276930,
+          2022497859443509763,
+          4259926977861435683,
+          13315887642470566638
+        ],
+        "restored_from_save": true
+      },
+      {
+        "organism_id": 3001,
+        "genome_id": 9738250486129255656,
+        "generation": 1,
+        "phenotype_hash": [
+          6840417418181682249,
+          4897543962633965710,
+          9709769508627245447,
+          6687982969062680981
+        ],
+        "restored_from_save": false
+      },
+      {
+        "organism_id": 3002,
+        "genome_id": 13777011332239761579,
+        "generation": 1,
+        "phenotype_hash": [
+          687906670208656848,
+          14445164854266884709,
+          17491111253350416407,
+          14833479799085276314
+        ],
+        "restored_from_save": false
+      },
+      {
+        "organism_id": 3003,
+        "genome_id": 6125729716641750608,
+        "generation": 2,
+        "phenotype_hash": [
+          3201908009815599985,
+          1728606741134952816,
+          2262725504214238735,
+          16561323910347635853
+        ],
+        "restored_from_save": false
+      },
+      {
+        "organism_id": 4001,
+        "genome_id": 8212586849265481717,
+        "generation": 1,
+        "phenotype_hash": [
+          9140494441387613747,
+          1589335044527331419,
+          17960879179892059112,
+          12759600029093859746
+        ],
+        "restored_from_save": false
+      },
+      {
+        "organism_id": 4002,
+        "genome_id": 9635341815571570758,
+        "generation": 1,
+        "phenotype_hash": [
+          13669975652424132081,
+          262177904829933270,
+          13606430389824208201,
+          10261420470490759979
+        ],
+        "restored_from_save": false
+      },
+      {
+        "organism_id": 4003,
+        "genome_id": 7952772576707360312,
+        "generation": 2,
+        "phenotype_hash": [
+          10802759462314983605,
+          16774208200534660593,
+          8870478609265063878,
+          13572933541028645879
+        ],
+        "restored_from_save": false
+      }
+    ],
     "evidence_digests": {
       "source_genomes": {
         "1001": "blake3-256:22502f1e0e54a13c8916a7ce7b2aeae7203a3e9ce2cc471cebb94a70ea6b6145",
@@ -6354,22 +6735,22 @@
       },
       "foundation_weights": "blake3-256:d5c69f365b83f46abbe6004326042b7805cf000d0e7d0a63f919d6284dc66e11",
       "shader_bundle": "blake3-256:551303b3b5b48e671f7c98b19900567b36ee1d524ff66a6933794427377b5a1b",
-      "portable_save": "blake3-256:4eba996d9de78c85b4b7149ae03735808c9172bab292a2165d85d4834ed1bf81",
+      "portable_save": "blake3-256:0d24f238049bbe05547803d44fb6bd8673210a50588afc41570999a74be88d32",
       "archive_manifests": {
-        "1001": "blake3-256:940394f8b4398ea9da025effafb115ca0f73b33fd08a78851fa2b2f6af389edf",
-        "1002": "blake3-256:d81ada36ce604c01a79a27400c31a4808546708f660c33b7bb27d5a48a3d3b9c",
-        "1003": "blake3-256:501909a94f249e73c311915f9fd662d3bff047884d5608f41cdfe6a02448092a",
-        "1004": "blake3-256:59d55964959c619ac60be9c98e265bc35e367cb68c5a0c38e5cb8c01988cece7",
-        "2001": "blake3-256:c56f702d7ee68da5febf2d89d4727dce180bdf79ccac3a0be95c8b6904550062",
-        "2002": "blake3-256:ed9478ea429ffd16a2d21f009809c1f976e8ac31a9021200b944813c62c584b0",
-        "2003": "blake3-256:d8fc40da333f118e197ccb17f9693d402b392a20aff937b71d237ea85fbb1ad1",
-        "2004": "blake3-256:dbd235d8ecbabae47cb7942a7058ed744d00384845a94358a60388aab37e0b34",
-        "3001": "blake3-256:d3254998ab819f50e98e0e5c830c73a9646b9cbe0d021be85b72b03361967c81",
-        "3002": "blake3-256:ca0e111df670686ae22c18e4bfb8106428f5f3864e3ce57aea1b19b6a8c0e382",
-        "3003": "blake3-256:f2d4e4e42ec0d295d3ef62eff9bb8e4ea12d4127f1c4b8af2049f0b750cd52dc",
-        "4001": "blake3-256:ea5954441fe958db5eb6d46a11ad9b19a9ab9ffd189ab1c72fbbe1d8102f76eb",
-        "4002": "blake3-256:89bfa61a5f48d47d274e176dc36a2cee68144ddae4d63ff482d45bbf2c886829",
-        "4003": "blake3-256:1bac9ccabf5eef792f9f40817bacace1e44dcc2ac584622befdece5e5d4c3bc6"
+        "1001": "blake3-256:bbeb4d77117379bd177473371800454452290729b3be8533adc49a5675b01d2e",
+        "1002": "blake3-256:9faf2cd0609ff1a5ecab5ac85c24165054d1f591cf33cf9731d1d1cc590aba14",
+        "1003": "blake3-256:d41d6abe646d10885b309d093de0c491aabac29490e3d53894a7ec55146f2b52",
+        "1004": "blake3-256:73e6aadfa74d303cb43903105ff839f63474b9ac163caa4437285a0d33744643",
+        "2001": "blake3-256:05c38ec4c816e648dd3ddf0cc8ce95071803e33eb820bfc7a75a1906df3220ff",
+        "2002": "blake3-256:664601fa98c8c3f3063cefd570b2e7b05481b667bf951806f1b4be415011e498",
+        "2003": "blake3-256:376bd897754deca83904b370b2c9f07c7e030f4f29d520cb11a4a71ae6947b63",
+        "2004": "blake3-256:9349e2af469bbfc8b825447a8ddd2b319e305325cf03ab84f66a49bb94e22e09",
+        "3001": "blake3-256:8196287452f8cb167627632d4a1c5d794e5972325debf2424d34b9ce72d9a0aa",
+        "3002": "blake3-256:b26b9956eee364d332129279caf83b2b35388bb02ea65992c5e520fef7eab963",
+        "3003": "blake3-256:c6977b476bc64b0899a603903ca6d9ad9782c2b026d2cd3cfc5692e3f7801730",
+        "4001": "blake3-256:e71fde714ee0344830a38001ec09a57ac55d78814e7202c052761beff5559e00",
+        "4002": "blake3-256:4cb6ffb29cb2a418917b145021b9b372da1252c6e2a90b770160ca86e6083290",
+        "4003": "blake3-256:eb325b1813f0036ff737c9b93b7ddb9bd01bc9a4933b9ebbde718391bc3670cc"
       },
       "archive_composite_assets": {
         "1001": "blake3-256:22502f1e0e54a13c8916a7ce7b2aeae7203a3e9ce2cc471cebb94a70ea6b6145",
@@ -6757,22 +7138,22 @@
     },
     "foundation_weights": "blake3-256:d5c69f365b83f46abbe6004326042b7805cf000d0e7d0a63f919d6284dc66e11",
     "shader_bundle": "blake3-256:551303b3b5b48e671f7c98b19900567b36ee1d524ff66a6933794427377b5a1b",
-    "portable_save": "blake3-256:4eba996d9de78c85b4b7149ae03735808c9172bab292a2165d85d4834ed1bf81",
+    "portable_save": "blake3-256:0d24f238049bbe05547803d44fb6bd8673210a50588afc41570999a74be88d32",
     "archive_manifests": {
-      "1001": "blake3-256:940394f8b4398ea9da025effafb115ca0f73b33fd08a78851fa2b2f6af389edf",
-      "1002": "blake3-256:d81ada36ce604c01a79a27400c31a4808546708f660c33b7bb27d5a48a3d3b9c",
-      "1003": "blake3-256:501909a94f249e73c311915f9fd662d3bff047884d5608f41cdfe6a02448092a",
-      "1004": "blake3-256:59d55964959c619ac60be9c98e265bc35e367cb68c5a0c38e5cb8c01988cece7",
-      "2001": "blake3-256:c56f702d7ee68da5febf2d89d4727dce180bdf79ccac3a0be95c8b6904550062",
-      "2002": "blake3-256:ed9478ea429ffd16a2d21f009809c1f976e8ac31a9021200b944813c62c584b0",
-      "2003": "blake3-256:d8fc40da333f118e197ccb17f9693d402b392a20aff937b71d237ea85fbb1ad1",
-      "2004": "blake3-256:dbd235d8ecbabae47cb7942a7058ed744d00384845a94358a60388aab37e0b34",
-      "3001": "blake3-256:d3254998ab819f50e98e0e5c830c73a9646b9cbe0d021be85b72b03361967c81",
-      "3002": "blake3-256:ca0e111df670686ae22c18e4bfb8106428f5f3864e3ce57aea1b19b6a8c0e382",
-      "3003": "blake3-256:f2d4e4e42ec0d295d3ef62eff9bb8e4ea12d4127f1c4b8af2049f0b750cd52dc",
-      "4001": "blake3-256:ea5954441fe958db5eb6d46a11ad9b19a9ab9ffd189ab1c72fbbe1d8102f76eb",
-      "4002": "blake3-256:89bfa61a5f48d47d274e176dc36a2cee68144ddae4d63ff482d45bbf2c886829",
-      "4003": "blake3-256:1bac9ccabf5eef792f9f40817bacace1e44dcc2ac584622befdece5e5d4c3bc6"
+      "1001": "blake3-256:bbeb4d77117379bd177473371800454452290729b3be8533adc49a5675b01d2e",
+      "1002": "blake3-256:9faf2cd0609ff1a5ecab5ac85c24165054d1f591cf33cf9731d1d1cc590aba14",
+      "1003": "blake3-256:d41d6abe646d10885b309d093de0c491aabac29490e3d53894a7ec55146f2b52",
+      "1004": "blake3-256:73e6aadfa74d303cb43903105ff839f63474b9ac163caa4437285a0d33744643",
+      "2001": "blake3-256:05c38ec4c816e648dd3ddf0cc8ce95071803e33eb820bfc7a75a1906df3220ff",
+      "2002": "blake3-256:664601fa98c8c3f3063cefd570b2e7b05481b667bf951806f1b4be415011e498",
+      "2003": "blake3-256:376bd897754deca83904b370b2c9f07c7e030f4f29d520cb11a4a71ae6947b63",
+      "2004": "blake3-256:9349e2af469bbfc8b825447a8ddd2b319e305325cf03ab84f66a49bb94e22e09",
+      "3001": "blake3-256:8196287452f8cb167627632d4a1c5d794e5972325debf2424d34b9ce72d9a0aa",
+      "3002": "blake3-256:b26b9956eee364d332129279caf83b2b35388bb02ea65992c5e520fef7eab963",
+      "3003": "blake3-256:c6977b476bc64b0899a603903ca6d9ad9782c2b026d2cd3cfc5692e3f7801730",
+      "4001": "blake3-256:e71fde714ee0344830a38001ec09a57ac55d78814e7202c052761beff5559e00",
+      "4002": "blake3-256:4cb6ffb29cb2a418917b145021b9b372da1252c6e2a90b770160ca86e6083290",
+      "4003": "blake3-256:eb325b1813f0036ff737c9b93b7ddb9bd01bc9a4933b9ebbde718391bc3670cc"
     },
     "archive_composite_assets": {
       "1001": "blake3-256:22502f1e0e54a13c8916a7ce7b2aeae7203a3e9ce2cc471cebb94a70ea6b6145",
@@ -6790,6 +7171,26 @@
       "4002": "blake3-256:fcd7aee4a4c51aa4d7a0b13f2c41f7c4d8890a22cfe6e5eb066ab9fca45cc748",
       "4003": "blake3-256:d7eb83586e2ca77c67ac25b26972c2e3c9b04901843ae690abf6e15e3817a33d"
     }
+  },
+  "artifact_binding": {
+    "producing_source_commit": "e8164cab0e128654f56d717860eded43d8aba121",
+    "producing_source_tree": "69517f876d6976b3c185929d172edff9be105b02",
+    "source_contract_paths": [
+      "Cargo.lock",
+      "Cargo.toml",
+      "crates/alife_world/src/headless.rs",
+      "crates/alife_game_app/src/habitat_lab_commands.rs",
+      "crates/alife_game_app/src/composite_population_runtime.rs",
+      "crates/alife_game_app/src/production_conversation_lineage_ui.rs",
+      "crates/alife_training/src/active_battery.rs",
+      "crates/alife_tools/src/ei0_exit_gate.rs",
+      "crates/alife_tools/src/bin/ei0_exit_gate.rs"
+    ],
+    "source_contract_digest": "blake3-256:f13ea3594eec7798594b7d79f1fde5613cbb0437ae8b0c974f94402dcca052f2",
+    "adapter_name": "NVIDIA GeForce RTX 3050",
+    "backend_api": "vulkan",
+    "causal_birth_receipts_digest": "blake3-256:95aae900df236ebdc9f1e5ac7260e83db40edf5670ac7082d23e5a59e6896bf6",
+    "gpu_receipts_digest": "blake3-256:f05b6db619bfc61b9a255727f7ce84a083ce1e8f5fd45913704e421b656f718c"
   },
   "operational_error": null
 }
