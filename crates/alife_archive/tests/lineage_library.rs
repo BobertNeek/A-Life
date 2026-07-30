@@ -1,12 +1,14 @@
 use std::{fs, path::PathBuf, time::SystemTime};
 
 use alife_archive::{
-    GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig, ARCHIVE_PAGE_BYTES,
+    CompositeGeneticArchiveInput, GeneticArchiveInput, LifeArchiveInput, LineageLibrary,
+    LineageLibraryConfig, ARCHIVE_PAGE_BYTES,
 };
 use alife_core::{
     ArchiveCheckpointDisposition, ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy,
-    BrainCapacityClass, BrainGenome, DevelopmentState, FoundationWeightAsset, NormalizedScalar,
-    OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PhenotypeCompiler, SensorProfile, Tick,
+    BrainCapacityClass, BrainGenome, CreatureGenome, DevelopmentState, FoundationGeneticIdentity,
+    FoundationWeightAsset, NormalizedScalar, OrganismId, PassiveLifeEvent, PassiveLifeStatistics,
+    PhenotypeCompiler, SensorProfile, Tick,
 };
 
 fn temp_root(label: &str) -> PathBuf {
@@ -260,6 +262,107 @@ fn n2048_birth_copies_the_exact_shipped_foundation_asset() {
         foundation_bytes.len() as u64
     );
     assert_eq!(fs::read_dir(root.join("assets")).unwrap().count(), 2);
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_round_trips_complete_creature_genome_provenance() {
+    let root = temp_root("composite-genome");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let foundation_identity = FoundationGeneticIdentity::new(
+        0x4E32_3034_385F_5631,
+        1,
+        0x4E32_3034_385F_FA11,
+        BrainCapacityClass::N2048_ID,
+    )
+    .unwrap();
+    let maternal = CreatureGenome::early_mammal_founder(701, foundation_identity).unwrap();
+    let paternal = CreatureGenome::early_mammal_founder(702, foundation_identity).unwrap();
+    let child = CreatureGenome::reproduce(&maternal, &paternal, 703).unwrap();
+    let expressed = child.express().unwrap();
+    let development = expressed
+        .development_state_at(Tick::new(u64::from(
+            expressed.development.maturation_duration_ticks,
+        )))
+        .unwrap();
+    let foundation =
+        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+        &expressed.brain_genome,
+        &BrainCapacityClass::n2048(),
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &foundation,
+    )
+    .unwrap();
+    let manifest_digest = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "ei0-composite-roundtrip",
+            organism_id: OrganismId(703),
+            birth_tick: Tick::new(9),
+            creature_genome: &child,
+            phenotype: &phenotype,
+            foundation_asset_bytes: &foundation.encode_canonical().unwrap(),
+        })
+        .unwrap();
+    let manifest = library.load_manifest(manifest_digest).unwrap();
+    let restored = library.load_creature_genome(&manifest).unwrap();
+
+    assert_eq!(restored, child);
+    assert_eq!(restored.parent_genome_ids, vec![maternal.id, paternal.id]);
+    assert_eq!(restored.lineage_id, child.lineage_id);
+    assert_eq!(restored.provenance, child.provenance);
+    assert_eq!(restored.foundation, foundation_identity);
+    assert!(manifest.genetic.composite_genome_asset.is_some());
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_rejects_a_phenotype_compiled_from_another_genome() {
+    let root = temp_root("composite-mismatch");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let foundation_identity = FoundationGeneticIdentity::new(
+        0x4E32_3034_385F_5631,
+        1,
+        0x4E32_3034_385F_FA11,
+        BrainCapacityClass::N2048_ID,
+    )
+    .unwrap();
+    let archived = CreatureGenome::early_mammal_founder(801, foundation_identity).unwrap();
+    let wrong = CreatureGenome::early_mammal_founder(802, foundation_identity).unwrap();
+    let wrong_expressed = wrong.express().unwrap();
+    let wrong_development = wrong_expressed
+        .development_state_at(Tick::new(u64::from(
+            wrong_expressed.development.maturation_duration_ticks,
+        )))
+        .unwrap();
+    let foundation =
+        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let wrong_phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+        &wrong_expressed.brain_genome,
+        &BrainCapacityClass::n2048(),
+        &wrong_development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &foundation,
+    )
+    .unwrap();
+    let foundation_bytes = foundation.encode_canonical().unwrap();
+
+    let error = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "ei0-composite-mismatch",
+            organism_id: OrganismId(801),
+            birth_tick: Tick::new(1),
+            creature_genome: &archived,
+            phenotype: &wrong_phenotype,
+            foundation_asset_bytes: &foundation_bytes,
+        })
+        .unwrap_err();
+
+    assert!(matches!(error, alife_archive::ArchiveError::Integrity(_)));
     drop(library);
     fs::remove_dir_all(root).unwrap();
 }

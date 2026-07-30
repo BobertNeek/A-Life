@@ -15,6 +15,7 @@ pub const FOUNDER_COHORT_SCHEMA_VERSION: u16 = 1;
 #[serde(rename_all = "kebab-case")]
 pub enum ArchiveAssetKind {
     Genome,
+    CompositeGenome,
     Foundation,
     LifeStatistics,
 }
@@ -165,6 +166,8 @@ pub struct GeneticArchiveRecord {
     pub language_codebook_id: LanguageCodebookId,
     pub language_codebook_digest: Blake3Digest,
     pub genome_asset: ArchiveAssetRef,
+    #[serde(default)]
+    pub composite_genome_asset: Option<ArchiveAssetRef>,
     pub foundation_asset: Option<ArchiveAssetRef>,
 }
 
@@ -193,6 +196,12 @@ impl Validate for GeneticArchiveRecord {
                 .all(|byte| *byte == 0)
         {
             return Err(ScaffoldContractError::InvalidId);
+        }
+        if let Some(asset) = &self.composite_genome_asset {
+            asset.validate_contract()?;
+            if asset.kind != ArchiveAssetKind::CompositeGenome {
+                return Err(ScaffoldContractError::InvalidId);
+            }
         }
         let foundation_identity = (
             self.foundation_id,

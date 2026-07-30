@@ -17,9 +17,10 @@ use std::{
 use alife_core::{
     ArchiveAssetKind, ArchiveAssetRef, ArchiveCheckpointDisposition, ArchiveCheckpointRef,
     ArchiveCheckpointRetention, ArchivePageRef, ArchiveRetirementReceipt, Blake3Digest,
-    BrainGenome, BrainPhenotype, CreatureArchiveManifest, CreatureLifeArchiveRecord,
-    ExperienceSequenceId, GeneticArchiveRecord, OrganismId, PassiveLifeStatistics,
-    ScaffoldContractError, Tick, Validate, CREATURE_ARCHIVE_SCHEMA_VERSION,
+    BrainCapacityClass, BrainGenome, BrainPhenotype, CreatureArchiveManifest, CreatureGenome,
+    CreatureLifeArchiveRecord, ExperienceSequenceId, FoundationWeightAsset, GeneticArchiveRecord,
+    OrganismId, PassiveLifeStatistics, PhenotypeCompiler, ScaffoldContractError, SensorProfile,
+    Tick, Validate, CREATURE_ARCHIVE_SCHEMA_VERSION,
 };
 use rusqlite::{params, Connection};
 
@@ -85,6 +86,15 @@ pub struct GeneticArchiveInput<'a> {
     pub foundation_asset_bytes: Option<&'a [u8]>,
 }
 
+pub struct CompositeGeneticArchiveInput<'a> {
+    pub source_run_id: &'a str,
+    pub organism_id: OrganismId,
+    pub birth_tick: Tick,
+    pub creature_genome: &'a CreatureGenome,
+    pub phenotype: &'a BrainPhenotype,
+    pub foundation_asset_bytes: &'a [u8],
+}
+
 pub struct LifeArchiveInput<'a> {
     pub birth_manifest_digest: Blake3Digest,
     pub death_tick: Tick,
@@ -134,11 +144,63 @@ impl LineageLibrary {
         &mut self,
         input: GeneticArchiveInput<'_>,
     ) -> Result<Blake3Digest, ArchiveError> {
+        self.archive_birth_internal(input, None)
+    }
+
+    pub fn archive_composite_birth(
+        &mut self,
+        input: CompositeGeneticArchiveInput<'_>,
+    ) -> Result<Blake3Digest, ArchiveError> {
+        input.creature_genome.validate_contract()?;
+        let expressed = input.creature_genome.express()?;
+        let foundation = FoundationWeightAsset::decode_canonical(input.foundation_asset_bytes)?;
+        let development = expressed.development_state_at(Tick::new(u64::from(
+            expressed.development.maturation_duration_ticks,
+        )))?;
+        let expected = PhenotypeCompiler::compile_from_foundation_asset(
+            &expressed.brain_genome,
+            &BrainCapacityClass::production_for_id(
+                input.creature_genome.foundation.brain_class_id,
+            )?,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+            &foundation,
+        )?;
+        if expected.phenotype_hash() != input.phenotype.phenotype_hash()
+            || expected.foundation_abi() != input.phenotype.foundation_abi()
+        {
+            return Err(ArchiveError::Integrity(
+                "composite genome phenotype does not match independent compilation".to_string(),
+            ));
+        }
+        self.archive_birth_internal(
+            GeneticArchiveInput {
+                source_run_id: input.source_run_id,
+                organism_id: input.organism_id,
+                birth_tick: input.birth_tick,
+                genome: &expressed.brain_genome,
+                phenotype: input.phenotype,
+                foundation_asset_bytes: Some(input.foundation_asset_bytes),
+            },
+            Some(input.creature_genome),
+        )
+    }
+
+    fn archive_birth_internal(
+        &mut self,
+        input: GeneticArchiveInput<'_>,
+        composite_genome: Option<&CreatureGenome>,
+    ) -> Result<Blake3Digest, ArchiveError> {
         validate_run_id(input.source_run_id)?;
         input.organism_id.validate()?;
         input.genome.validate_contract()?;
         let genome_bytes = serde_json::to_vec(input.genome)?;
         let genome_asset = self.write_asset(ArchiveAssetKind::Genome, &genome_bytes)?;
+        let composite_genome_asset = composite_genome
+            .map(|genome| serde_json::to_vec(genome))
+            .transpose()?
+            .map(|bytes| self.write_asset(ArchiveAssetKind::CompositeGenome, &bytes))
+            .transpose()?;
         let foundation_asset = input
             .foundation_asset_bytes
             .map(|bytes| self.write_asset(ArchiveAssetKind::Foundation, bytes))
@@ -164,6 +226,7 @@ impl LineageLibrary {
                 language_codebook_id: language.id(),
                 language_codebook_digest: language.canonical_digest(),
                 genome_asset,
+                composite_genome_asset,
                 foundation_asset,
             },
             previous_manifest_digest: None,
@@ -357,6 +420,64 @@ impl LineageLibrary {
         {
             return Err(ArchiveError::Integrity(
                 "genome asset identity does not match manifest".to_string(),
+            ));
+        }
+        Ok(genome)
+    }
+
+    pub fn load_creature_genome(
+        &self,
+        manifest: &CreatureArchiveManifest,
+    ) -> Result<CreatureGenome, ArchiveError> {
+        manifest.validate_contract()?;
+        let reference = manifest
+            .genetic
+            .composite_genome_asset
+            .as_ref()
+            .ok_or_else(|| {
+                ArchiveError::Integrity(
+                    "genetic manifest has no composite creature genome".to_string(),
+                )
+            })?;
+        if reference.kind != ArchiveAssetKind::CompositeGenome {
+            return Err(ArchiveError::Integrity(
+                "composite genetic manifest references the wrong asset kind".to_string(),
+            ));
+        }
+        let path = self
+            .config
+            .root
+            .join("assets")
+            .join(digest_hex(reference.digest))
+            .join("payload.bin");
+        let bytes = fs::read(path)?;
+        if bytes.len() as u64 != reference.size_bytes || digest_bytes(&bytes) != reference.digest {
+            return Err(ArchiveError::Integrity(
+                "composite genome asset digest mismatch".to_string(),
+            ));
+        }
+        let genome = serde_json::from_slice::<CreatureGenome>(&bytes)?;
+        genome.validate_contract()?;
+        if genome.id != manifest.genetic.genome_id
+            || Some(genome.lineage_id) != manifest.genetic.lineage_id
+            || genome.foundation.foundation_id
+                != manifest
+                    .genetic
+                    .foundation_id
+                    .map_or(0, alife_core::FoundationId::raw)
+            || u32::from(genome.foundation.version)
+                != manifest
+                    .genetic
+                    .foundation_version
+                    .map_or(0, alife_core::FoundationVersion::raw)
+            || genome.foundation.compatibility_family_id
+                != manifest
+                    .genetic
+                    .compatibility_family_id
+                    .map_or(0, alife_core::FoundationCompatibilityFamilyId::raw)
+        {
+            return Err(ArchiveError::Integrity(
+                "composite genome identity does not match manifest".to_string(),
             ));
         }
         Ok(genome)
