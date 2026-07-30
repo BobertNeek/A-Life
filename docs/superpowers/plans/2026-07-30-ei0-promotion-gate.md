@@ -84,3 +84,59 @@
 - Authority boundary: only existing world, genome, archive, save, and shared GPU-session owners mutate state; `alife_tools` only orchestrates evidence.
 - Placeholder scan: no deferred steps, fabricated scores, copied fixtures, lowered thresholds, or unlabeled fallback paths.
 - Scope: no Era 1 targets, hidden promotion trials, foundation promotion, or brain-class scaling are included.
+
+---
+
+## Review Remediation Wave
+
+The first receipt is withdrawn as promotion evidence until every item below is
+implemented and reverified. Review found that habitat permission labels were
+being treated as causal reproduction receipts, and that save/load did not own
+the composite genetic state used after restore.
+
+### Task 4: Production causal reproduction authority
+
+- [ ] Add red tests proving a Managed birth can only follow the production
+  player command/runtime entrypoint and preserves that command receipt.
+- [ ] Add red GPU tests proving a Wild birth requires an actual neural decision,
+  legal mate target, world outcome, and sealed causal patch from the selected
+  parent. A forged `HabitatActor::Organism` is rejected.
+- [ ] Implement one production composite-population runtime that owns both
+  entrypoints and calls `CreatureGenome::reproduce` only after their causal
+  receipts validate.
+- [ ] Verify wrong actor, wrong target, replayed decision, and mismatched parent
+  identities are rejected.
+
+### Task 5: Authoritative save, restore, and nonvacuous inheritance
+
+- [ ] Add red persistence tests requiring each creature save to reference a
+  content-addressed composite `CreatureGenome` and shipped foundation asset.
+- [ ] Seed every founder with distinctive nonzero lifetime memory and lifetime
+  weight assets, save them, discard the pre-save population, and restore the
+  authoritative runtime population from validated assets.
+- [ ] Advance the restored population through a bounded 128-tick lifecycle
+  interval before any birth or test.
+- [ ] Breed only restored parents. Prove each child starts with zero inherited
+  lifetime memory/weights while both parents had nonzero distinct state.
+
+### Task 6: Full archive and evidence-digest binding
+
+- [ ] Add a content-addressed composite-genome asset to genetic birth archives,
+  load it back, and verify complete conception/recombination/mutation,
+  parent/lineage, and foundation provenance.
+- [ ] Bind the final report to canonical source-genome, foundation payload,
+  closed-loop WGSL bundle, portable-save, archive manifest, and archive
+  composite-asset digests.
+- [ ] Independently compile each expected phenotype and add negative tests for
+  phenotype-hash and foundation mismatch.
+
+### Task 7: Honest operational and artifact contract
+
+- [ ] Replace boolean-only clauses with `Pass`, `Fail`, `Unknown`, or
+  `Unavailable` evidence statuses.
+- [ ] Make the CLI write a schema-valid partial report before returning nonzero
+  for GPU, save, archive, or other operational failure.
+- [ ] Validate the committed artifact against exact source/foundation/shader,
+  save, archive, adapter, and causal birth receipts.
+- [ ] Regenerate the report, run each focused gate once with serialized GPU/Cargo
+  execution, commit coherent fixes, and keep Era 1 out of scope.
