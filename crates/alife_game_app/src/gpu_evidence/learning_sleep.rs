@@ -1789,6 +1789,8 @@ fn build_checkpoint_save(
             lamarckian_mode_enabled: false,
             last_consolidated_tick: None,
         },
+        composite_genetics: None,
+        lifetime_state_asset: None,
         gpu_brain: Some(checkpoint),
     };
     let mut config = RuntimeConfig::deterministic_default(options.deterministic_seed, tier);

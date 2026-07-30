@@ -590,6 +590,8 @@ fn creature_save(member: &PopulationMember, tick: Tick) -> CreatureSaveState {
             lamarckian_mode_enabled: false,
             last_consolidated_tick: None,
         },
+        composite_genetics: None,
+        lifetime_state_asset: None,
         gpu_brain: None,
     }
 }
