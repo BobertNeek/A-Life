@@ -12,6 +12,7 @@ use alife_core::{DriveSnapshot, EndocrineSnapshot};
 use alife_world::persistence::{
     CreatureMindSaveSummary, CreatureSaveState, LearningTraceSaveSummary, WeightLayerSaveSummary,
 };
+use alife_world::{HabitatAuthority, HabitatAuthoritySnapshot, HabitatMembership, HabitatMode};
 
 pub const PRODUCTION_VOXEL_COMMAND: &str = "production-voxel";
 pub const PRODUCTION_VOXEL_WINDOW_TITLE: &str = "A-Life Voxel Frontend";
@@ -1339,11 +1340,96 @@ pub(crate) fn production_voxel_save_with_population(
     save.validate_with_asset_root(asset_root)?;
     let mut production_save = save.clone();
     apply_production_population_target(&mut production_save, usize::from(target_population))?;
+    reconcile_production_population_habitats(&mut production_save)?;
     production_save.world.voxel_backend = None;
     let production_save =
         production_save.with_migrated_voxel_backend(persistent_profile_id(profile_id))?;
     production_save.validate_with_asset_root(asset_root)?;
     Ok(production_save)
+}
+
+fn reconcile_production_population_habitats(
+    save: &mut PortableSaveFile,
+) -> Result<(), GameAppShellError> {
+    let known_creatures = save
+        .creatures
+        .iter()
+        .map(|creature| creature.organism_id)
+        .collect::<Vec<_>>();
+    let known = known_creatures
+        .iter()
+        .map(|organism_id| organism_id.raw())
+        .collect::<std::collections::BTreeSet<_>>();
+    let authority = &save.world.habitats;
+    let removed = authority
+        .memberships()
+        .iter()
+        .filter(|membership| !known.contains(&membership.organism_id.raw()))
+        .map(|membership| membership.organism_id.raw())
+        .collect::<std::collections::BTreeSet<_>>();
+    if authority
+        .tags()
+        .iter()
+        .any(|tag| removed.contains(&tag.organism_id.raw()))
+        || authority
+            .transfers()
+            .iter()
+            .any(|transfer| removed.contains(&transfer.organism_id.raw()))
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message:
+                "cannot remove a creature with habitat provenance from a scaled production view"
+                    .to_string(),
+        });
+    }
+
+    let initial_habitat_id = authority
+        .habitats()
+        .iter()
+        .find(|habitat| habitat.mode == HabitatMode::Wild)
+        .map(|habitat| habitat.id)
+        .or_else(|| authority.habitats().first().map(|habitat| habitat.id))
+        .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+            message: "production population requires at least one habitat".to_string(),
+        })?;
+    let mut memberships = authority
+        .memberships()
+        .iter()
+        .filter(|membership| known.contains(&membership.organism_id.raw()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let assigned = memberships
+        .iter()
+        .map(|membership| membership.organism_id.raw())
+        .collect::<std::collections::BTreeSet<_>>();
+    for organism_id in &known_creatures {
+        if !assigned.contains(&organism_id.raw()) {
+            memberships.push(HabitatMembership {
+                organism_id: *organism_id,
+                habitat_id: initial_habitat_id,
+                entered_tick: save.world.tick,
+                origin_habitat_id: initial_habitat_id,
+                origin_tick: save.world.tick,
+                last_transfer_sequence: None,
+                quarantine_until: None,
+            });
+        }
+    }
+
+    let reconciled = HabitatAuthority::restore(
+        HabitatAuthoritySnapshot {
+            next_transfer_sequence: authority.transfers().len() as u64 + 1,
+            next_tag_sequence: authority.tags().len() as u64 + 1,
+            habitats: authority.habitats().to_vec(),
+            memberships,
+            tags: authority.tags().to_vec(),
+            transfers: authority.transfers().to_vec(),
+        },
+        &known_creatures,
+    )
+    .map_err(PersistenceError::Habitat)?;
+    save.world.habitats = reconciled;
+    Ok(())
 }
 
 fn apply_production_population_target(
@@ -2138,6 +2224,12 @@ mod tests {
 
         assert_eq!(visible.kind_count(WorldObjectKind::Agent), 30);
         assert_eq!(production.creatures.len(), 30);
+        assert_eq!(production.world.habitats.memberships().len(), 30);
+        assert!(production.creatures.iter().all(|creature| production
+            .world
+            .habitats
+            .membership(creature.organism_id)
+            .is_some()));
         assert_eq!(backend.creature_anchors.len(), 30);
         let generated_agents = production
             .world
@@ -2216,6 +2308,7 @@ mod tests {
             1
         );
         assert_eq!(one.creatures.len(), 1);
+        assert_eq!(one.world.habitats.memberships().len(), 1);
         assert_eq!(
             one.require_voxel_backend().unwrap().creature_anchors.len(),
             1
@@ -2237,6 +2330,7 @@ mod tests {
             500
         );
         assert_eq!(scale_up.creatures.len(), 500);
+        assert_eq!(scale_up.world.habitats.memberships().len(), 500);
         assert_eq!(backend.creature_anchors.len(), 500);
         assert!(!backend_json.contains("bevy"));
         assert!(!backend_json.contains("wgpu"));

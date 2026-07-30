@@ -1941,6 +1941,13 @@ impl GpuLiveBrainRuntime {
         self.world.clone()
     }
 
+    pub(crate) fn replace_habitat_authority(
+        &mut self,
+        authority: alife_world::HabitatAuthority,
+    ) -> Result<(), alife_world::HabitatAuthorityError> {
+        self.world.replace_habitat_authority(authority)
+    }
+
     pub fn emit_player_tokens(
         &mut self,
         addressee: Option<OrganismId>,
