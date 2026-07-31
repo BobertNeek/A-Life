@@ -12,6 +12,7 @@ pub mod canonical_digest;
 pub mod checkpoint;
 pub mod chemistry;
 pub mod diagnostics;
+pub mod era1_evaluation;
 pub mod error;
 pub mod evaluation;
 pub mod evidence_digest;
@@ -82,6 +83,11 @@ pub use chemistry::{
     DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
 };
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
+pub use era1_evaluation::{
+    Era1Ability, Era1AssistanceKind, Era1Control, Era1EvidencePartition, Era1MatchedComparison,
+    Era1PlateauWindow, Era1TrialIdentity, Era1TrialReceipt, ERA1_ABILITY_COUNT, ERA1_CONTROL_COUNT,
+    ERA1_EVALUATION_SCHEMA_VERSION,
+};
 pub use error::ScaffoldContractError;
 pub use evaluation::{
     ActiveBatteryReceipt, ActiveChallengeKind, ActiveChallengeResult, EnvironmentalRegime,
