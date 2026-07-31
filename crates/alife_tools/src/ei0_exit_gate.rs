@@ -1412,6 +1412,8 @@ fn build_artifact_binding(
             "GPU receipts were not produced on the committed adapter/API",
         ));
     }
+    let source_contract_digest =
+        source_contract_digest_at_revision(&root, &producing_source_commit, SOURCE_CONTRACT_PATHS)?;
     Ok(Ei0ArtifactBinding {
         producing_source_commit,
         producing_source_tree,
@@ -1419,7 +1421,7 @@ fn build_artifact_binding(
             .iter()
             .map(|path| (*path).to_string())
             .collect(),
-        source_contract_digest: source_contract_digest(&root, SOURCE_CONTRACT_PATHS)?,
+        source_contract_digest,
         adapter_name,
         backend_api,
         causal_birth_receipts_digest: digest_bytes(&serde_json::to_vec(&lifecycle.lanes)?),
@@ -1466,7 +1468,12 @@ pub fn validate_committed_ei0_exit_gate_report(
         ));
     }
     let root = workspace_root();
-    if source_contract_digest(&root, SOURCE_CONTRACT_PATHS)? != binding.source_contract_digest {
+    if source_contract_digest_at_revision(
+        &root,
+        &binding.producing_source_commit,
+        SOURCE_CONTRACT_PATHS,
+    )? != binding.source_contract_digest
+    {
         return Err(Ei0ExitGateError::Evidence(
             "current source files do not match the report binding",
         ));
@@ -1673,16 +1680,37 @@ fn git_output(root: &Path, args: &[&str]) -> Result<String, Ei0ExitGateError> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn source_contract_digest(root: &Path, paths: &[&str]) -> Result<String, Ei0ExitGateError> {
+fn source_contract_digest_at_revision(
+    root: &Path,
+    revision: &str,
+    paths: &[&str],
+) -> Result<String, Ei0ExitGateError> {
     let mut hasher = blake3::Hasher::new();
     for path in paths {
-        let bytes = std::fs::read(root.join(path))?;
+        let object = format!("{revision}:{path}");
+        let output = Command::new("git")
+            .current_dir(root)
+            .args(["show", "--no-ext-diff", "--no-textconv", &object])
+            .output()
+            .map_err(|error| Ei0ExitGateError::Source(error.to_string()))?;
+        if !output.status.success() {
+            return Err(Ei0ExitGateError::Source(
+                String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            ));
+        }
+        let bytes = output.stdout;
         hasher.update(&(path.len() as u64).to_le_bytes());
         hasher.update(path.as_bytes());
         hasher.update(&(bytes.len() as u64).to_le_bytes());
         hasher.update(&bytes);
     }
     Ok(format!("blake3-256:{}", hasher.finalize().to_hex()))
+}
+
+#[cfg(test)]
+fn source_contract_digest(root: &Path, paths: &[&str]) -> Result<String, Ei0ExitGateError> {
+    let revision = git_output(root, &["rev-parse", "HEAD"])?;
+    source_contract_digest_at_revision(root, &revision, paths)
 }
 
 fn valid_blake3_text(value: &str) -> bool {
@@ -1706,4 +1734,56 @@ fn format_blake3(digest: Blake3Digest) -> String {
 
 pub fn default_report_path(root: impl AsRef<Path>) -> PathBuf {
     root.as_ref().join("ei0_exit_gate_report.json")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, time::SystemTime};
+
+    fn run_git(root: &Path, args: &[&str]) {
+        let status = Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} failed");
+    }
+
+    #[test]
+    fn source_contract_digest_uses_exact_git_blob_bytes_across_checkout_line_endings() {
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alife-ei0-source-contract-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        run_git(&root, &["init", "--quiet"]);
+        run_git(&root, &["config", "user.name", "EI0 Test"]);
+        run_git(&root, &["config", "user.email", "ei0-test@example.invalid"]);
+
+        let path = "contract.txt";
+        let blob = b"alpha\nomega\n";
+        fs::write(root.join(path), blob).unwrap();
+        run_git(&root, &["add", "--", path]);
+        run_git(&root, &["commit", "--quiet", "-m", "fixture"]);
+
+        let mut expected_hasher = blake3::Hasher::new();
+        expected_hasher.update(&(path.len() as u64).to_le_bytes());
+        expected_hasher.update(path.as_bytes());
+        expected_hasher.update(&(blob.len() as u64).to_le_bytes());
+        expected_hasher.update(blob);
+        let expected = format!("blake3-256:{}", expected_hasher.finalize().to_hex());
+        let committed = source_contract_digest(&root, &[path]).unwrap();
+
+        fs::write(root.join(path), b"alpha\r\nomega\r\n").unwrap();
+        let crlf_checkout = source_contract_digest(&root, &[path]).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+
+        assert_eq!(committed, expected);
+        assert_eq!(crlf_checkout, expected);
+    }
 }
