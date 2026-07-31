@@ -1,4 +1,6 @@
-use std::{collections::BTreeSet, fs, path::PathBuf};
+#[cfg(feature = "gpu-tests")]
+use std::collections::BTreeSet;
+use std::{fs, path::PathBuf};
 
 #[cfg(feature = "gpu-tests")]
 use alife_archive::{CompositeGeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
