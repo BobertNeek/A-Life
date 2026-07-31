@@ -1,11 +1,12 @@
-use std::{fs, path::PathBuf};
+use std::{collections::BTreeSet, fs, path::PathBuf};
 
 #[cfg(feature = "gpu-tests")]
 use alife_archive::{CompositeGeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
+use alife_core::Tick;
 #[cfg(feature = "gpu-tests")]
 use alife_core::{
     BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, FoundationWeightAsset,
-    OrganismId, PhenotypeCompiler, PolicyBackend, SensorProfile, Tick,
+    OrganismId, PhenotypeCompiler, PolicyBackend, SensorProfile,
 };
 #[cfg(feature = "gpu-tests")]
 use alife_tools::ei0_exit_gate::{
@@ -15,6 +16,7 @@ use alife_tools::ei0_exit_gate::{
     run_ei0_exit_gate_and_write, validate_committed_ei0_exit_gate_report, Ei0EvidenceStatus,
     Ei0ExitGateReport,
 };
+use alife_world::{HabitatActor, HabitatMode};
 
 fn temp_root(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -25,6 +27,19 @@ fn temp_root(label: &str) -> PathBuf {
             .unwrap()
             .as_nanos()
     ))
+}
+
+fn refresh_binding_digests(report: &mut Ei0ExitGateReport) {
+    let lifecycle = report.lifecycle.as_ref().unwrap();
+    let binding = report.artifact_binding.as_mut().unwrap();
+    binding.causal_birth_receipts_digest = format!(
+        "blake3-256:{}",
+        blake3::hash(&serde_json::to_vec(&lifecycle.lanes).unwrap()).to_hex()
+    );
+    binding.gpu_receipts_digest = format!(
+        "blake3-256:{}",
+        blake3::hash(&serde_json::to_vec(&report.gpu_tests).unwrap()).to_hex()
+    );
 }
 
 #[cfg(feature = "gpu-tests")]
@@ -135,11 +150,33 @@ fn lifecycle_receipt_proves_restored_two_lane_multi_generation_population() {
             );
         }
     }
-    let wild = &report.lanes[0];
+    let wild = report
+        .lanes
+        .iter()
+        .find(|lane| lane.mode == HabitatMode::Wild)
+        .unwrap();
+    let wild_sequences = wild
+        .births
+        .iter()
+        .map(|birth| {
+            (
+                birth.breeding_receipt.first_parent.raw(),
+                birth.gpu_intent_sequence_id.unwrap(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(wild_sequences.len(), wild.births.len());
     assert!(wild.births.iter().all(|birth| {
-        birth.gpu_intent_sequence_id.is_some()
-            && birth.gpu_selected_mate.is_some()
-            && birth.gpu_pre_action_world_digest.is_some()
+        let breeding = &birth.breeding_receipt;
+        birth
+            .gpu_intent_sequence_id
+            .is_some_and(|sequence| sequence > 0)
+            && birth.gpu_intent_world_tick == Some(breeding.tick)
+            && birth.gpu_selected_mate == Some(breeding.second_parent)
+            && birth.actor == HabitatActor::Organism(breeding.first_parent)
+            && birth
+                .gpu_pre_action_world_digest
+                .is_some_and(|digest| digest.schema_version == 2 && digest.words != [0; 4])
             && birth.gpu_same_seed_wrong_world_rejected == Some(true)
             && birth.gpu_later_world_rejected == Some(true)
     }));
@@ -147,7 +184,11 @@ fn lifecycle_receipt_proves_restored_two_lane_multi_generation_population() {
         wild.births[0].gpu_pre_action_world_digest,
         Some(report.stability.end_world_digest)
     );
-    let managed = &report.lanes[1];
+    let managed = report
+        .lanes
+        .iter()
+        .find(|lane| lane.mode == HabitatMode::Managed)
+        .unwrap();
     assert!(managed
         .births
         .iter()
@@ -199,6 +240,92 @@ fn committed_report_recomputes_current_source_and_causal_evidence() {
         serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
 
     validate_committed_ei0_exit_gate_report(&report).unwrap();
+    let binding = report.artifact_binding.as_ref().unwrap();
+    assert_eq!(binding.adapter_name, "NVIDIA GeForce RTX 3050");
+    assert_eq!(binding.backend_api, "vulkan");
+
+    let mut wrong_hardware = report.clone();
+    wrong_hardware
+        .artifact_binding
+        .as_mut()
+        .unwrap()
+        .adapter_name = "NVIDIA GeForce RTX 4090".to_string();
+    for gpu in &mut wrong_hardware.gpu_tests {
+        gpu.adapter_name = "NVIDIA GeForce RTX 4090".to_string();
+    }
+    refresh_binding_digests(&mut wrong_hardware);
+    assert!(validate_committed_ei0_exit_gate_report(&wrong_hardware).is_err());
+
+    let mut wrong_mate = report.clone();
+    let birth = wrong_mate
+        .lifecycle
+        .as_mut()
+        .unwrap()
+        .lanes
+        .iter_mut()
+        .find(|lane| lane.mode == HabitatMode::Wild)
+        .unwrap()
+        .births
+        .first_mut()
+        .unwrap();
+    birth.gpu_selected_mate = Some(birth.breeding_receipt.first_parent);
+    refresh_binding_digests(&mut wrong_mate);
+    assert!(validate_committed_ei0_exit_gate_report(&wrong_mate).is_err());
+
+    let mut wrong_tick = report.clone();
+    let birth = wrong_tick
+        .lifecycle
+        .as_mut()
+        .unwrap()
+        .lanes
+        .iter_mut()
+        .find(|lane| lane.mode == HabitatMode::Wild)
+        .unwrap()
+        .births
+        .first_mut()
+        .unwrap();
+    birth.gpu_intent_world_tick = Some(Tick::new(birth.breeding_receipt.tick.raw() + 1));
+    refresh_binding_digests(&mut wrong_tick);
+    assert!(validate_committed_ei0_exit_gate_report(&wrong_tick).is_err());
+
+    let mut wrong_actor = report.clone();
+    let birth = wrong_actor
+        .lifecycle
+        .as_mut()
+        .unwrap()
+        .lanes
+        .iter_mut()
+        .find(|lane| lane.mode == HabitatMode::Wild)
+        .unwrap()
+        .births
+        .first_mut()
+        .unwrap();
+    let wrong_organism = birth.breeding_receipt.second_parent;
+    birth.actor = HabitatActor::Organism(wrong_organism);
+    birth.breeding_receipt.actor = birth.actor;
+    refresh_binding_digests(&mut wrong_actor);
+    assert!(validate_committed_ei0_exit_gate_report(&wrong_actor).is_err());
+
+    let mut missing_sequence = report.clone();
+    let birth = missing_sequence
+        .lifecycle
+        .as_mut()
+        .unwrap()
+        .lanes
+        .iter_mut()
+        .find(|lane| lane.mode == HabitatMode::Wild)
+        .unwrap()
+        .births
+        .first_mut()
+        .unwrap();
+    birth.gpu_intent_sequence_id = Some(0);
+    birth
+        .gpu_pre_action_world_digest
+        .as_mut()
+        .unwrap()
+        .schema_version = 0;
+    refresh_binding_digests(&mut missing_sequence);
+    assert!(validate_committed_ei0_exit_gate_report(&missing_sequence).is_err());
 }
 
 #[cfg(feature = "gpu-tests")]

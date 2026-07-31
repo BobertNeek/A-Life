@@ -36,6 +36,9 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_Threading",
 ] }
 
+[dev-dependencies]
+alife_training = { path = "../alife_training", features = ["gpu-tests"] }
+
 [features]
 default = []
 bevy-app = [

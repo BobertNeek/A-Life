@@ -162,6 +162,7 @@ dependencies = [
  "alife_runtime",
  "alife_school",
  "alife_semantic",
+ "alife_training",
  "alife_world",
  "bevy",
  "bevy-inspector-egui",

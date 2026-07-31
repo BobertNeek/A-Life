@@ -45,6 +45,8 @@ const MANAGED_HABITAT_RAW: u64 = 12;
 const FOUNDATION_ID_RAW: u64 = 0x4E32_3034_385F_5631;
 const FOUNDATION_FAMILY_RAW: u64 = 0x4E32_3034_385F_FA11;
 const SOURCE_RUN_ID: &str = "ei0-exit-gate-v3";
+const REQUIRED_GPU_ADAPTER: &str = "NVIDIA GeForce RTX 3050";
+const REQUIRED_GPU_BACKEND_API: &str = "vulkan";
 const SOURCE_CONTRACT_PATHS: &[&str] = &[
     "Cargo.lock",
     "Cargo.toml",
@@ -1216,6 +1218,26 @@ fn clause(passed: bool, detail: impl Into<String>) -> Ei0ClauseEvidence {
     }
 }
 
+fn wild_birth_semantics_are_exact(birth: &Ei0BirthReceipt) -> bool {
+    let breeding = &birth.breeding_receipt;
+    birth.breeding_kind == HabitatBreedingKind::CreatureChosen
+        && breeding.kind == birth.breeding_kind
+        && birth.actor == HabitatActor::Organism(breeding.first_parent)
+        && breeding.actor == birth.actor
+        && birth.cognition_policy == PolicyBackend::NeuralClosedLoopGpu
+        && breeding.cognition_policy == birth.cognition_policy
+        && birth
+            .gpu_intent_sequence_id
+            .is_some_and(|sequence| sequence > 0)
+        && birth.gpu_intent_world_tick == Some(breeding.tick)
+        && birth.gpu_selected_mate == Some(breeding.second_parent)
+        && birth.gpu_pre_action_world_digest.is_some_and(|digest| {
+            digest.schema_version == 2 && digest.words.iter().any(|word| *word != 0)
+        })
+        && birth.gpu_same_seed_wrong_world_rejected == Some(true)
+        && birth.gpu_later_world_rejected == Some(true)
+}
+
 fn evaluate_clauses(
     lifecycle: &Ei0LifecycleGateReport,
     gpu_tests: &[Ei0GpuBatteryReceipt],
@@ -1231,19 +1253,18 @@ fn evaluate_clauses(
         .find(|lane| lane.mode == HabitatMode::Managed);
     let wild_breed = lifecycle.player_directed_wild_breeding_rejected
         && wild_lane.is_some_and(|lane| {
-            lane.births.len() == 3
-                && lane.births.iter().all(|birth| {
-                    birth.breeding_kind == HabitatBreedingKind::CreatureChosen
-                        && matches!(birth.actor, HabitatActor::Organism(_))
-                        && birth.breeding_receipt.kind == birth.breeding_kind
-                        && birth.breeding_receipt.actor == birth.actor
-                        && birth.cognition_policy == PolicyBackend::NeuralClosedLoopGpu
-                        && birth.gpu_intent_sequence_id.is_some()
-                        && birth.gpu_selected_mate.is_some()
-                        && birth.gpu_pre_action_world_digest.is_some()
-                        && birth.gpu_same_seed_wrong_world_rejected == Some(true)
-                        && birth.gpu_later_world_rejected == Some(true)
+            let sequences = lane
+                .births
+                .iter()
+                .filter_map(|birth| {
+                    birth
+                        .gpu_intent_sequence_id
+                        .map(|sequence| (birth.breeding_receipt.first_parent.raw(), sequence))
                 })
+                .collect::<BTreeSet<_>>();
+            lane.births.len() == 3
+                && sequences.len() == lane.births.len()
+                && lane.births.iter().all(wild_birth_semantics_are_exact)
         });
     let managed_breed = lifecycle.creature_directed_managed_breeding_rejected
         && managed_lane.is_some_and(|lane| {
@@ -1265,8 +1286,8 @@ fn evaluate_clauses(
                 && receipt.gpu_dispatches >= ACTIVE_CHALLENGE_COUNT as u64
                 && receipt.sleep_consolidations >= 1
                 && !receipt.slm_enabled
-                && !receipt.adapter_name.trim().is_empty()
-                && !receipt.backend_api.trim().is_empty()
+                && receipt.adapter_name == REQUIRED_GPU_ADAPTER
+                && receipt.backend_api == REQUIRED_GPU_BACKEND_API
         });
     let gpu_policy_identity = tested
         && lifecycle.lanes.iter().zip(gpu_tests).all(|(lane, gpu)| {
@@ -1384,6 +1405,11 @@ fn build_artifact_binding(
     {
         return Err(Ei0ExitGateError::Evidence(
             "GPU receipts do not share one adapter/API identity",
+        ));
+    }
+    if adapter_name != REQUIRED_GPU_ADAPTER || backend_api != REQUIRED_GPU_BACKEND_API {
+        return Err(Ei0ExitGateError::Evidence(
+            "GPU receipts were not produced on the committed adapter/API",
         ));
     }
     Ok(Ei0ArtifactBinding {
@@ -1560,6 +1586,7 @@ pub fn validate_committed_ei0_exit_gate_report(
                 || breeding.actor != birth.actor
                 || breeding.cognition_policy != birth.cognition_policy
                 || breeding.first_parent == breeding.second_parent
+                || (lane.mode == HabitatMode::Wild && !wild_birth_semantics_are_exact(birth))
                 || expected_n2048_creature_phenotype_hash(genome)? != birth.child_phenotype_hash
             {
                 return Err(Ei0ExitGateError::Evidence(
@@ -1568,9 +1595,14 @@ pub fn validate_committed_ei0_exit_gate_report(
             }
         }
     }
-    if report.gpu_tests.len() != 2
+    if binding.adapter_name != REQUIRED_GPU_ADAPTER
+        || binding.backend_api != REQUIRED_GPU_BACKEND_API
+        || report.gpu_tests.len() != 2
         || report.gpu_tests.iter().any(|gpu| {
-            gpu.adapter_name != binding.adapter_name || gpu.backend_api != binding.backend_api
+            gpu.adapter_name != REQUIRED_GPU_ADAPTER
+                || gpu.backend_api != REQUIRED_GPU_BACKEND_API
+                || gpu.adapter_name != binding.adapter_name
+                || gpu.backend_api != binding.backend_api
         })
     {
         return Err(Ei0ExitGateError::Evidence(

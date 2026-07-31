@@ -143,7 +143,7 @@ the composite genetic state used after restore.
 
 - [x] Add RED hostile coverage with a valid preexisting manifest from another
   run. Count and validate only the 14 manifest digests emitted for
-  `ei0-exit-gate-v2`; never use the shared library total.
+  `ei0-exit-gate-v3`; never use the shared library total.
 - [x] Independently compile every final `CreatureGenome` with the shipped N2048
   foundation and compare its expected `PhenotypeHash` to the exact GPU battery
   receipt. Add a mutated receipt negative.

@@ -1,14 +1,18 @@
 use std::{fs, path::Path, path::PathBuf};
 
+#[cfg(feature = "gpu-tests")]
+use alife_core::ExperiencePatch;
 use alife_core::{
     BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationGeneticIdentity,
-    FoundationWeightAsset, HomeostaticSnapshot, MemoryId, OrganismId, PhenotypeCompiler,
+    FoundationWeightAsset, GenomeId, HomeostaticSnapshot, MemoryId, OrganismId, PhenotypeCompiler,
     SensorProfile, Tick, Vec3f,
 };
 use alife_game_app::{
     produce_habitat_lab_explicit_breed_receipt, CompositePopulationRuntime,
     CompositePopulationRuntimeError, MINIMUM_POST_RESTORE_TICKS,
 };
+#[cfg(feature = "gpu-tests")]
+use alife_training::N2048ActiveBatteryRunner;
 use alife_world::{
     persist_composite_genetic_birth_assets, persist_creature_lifetime_state_asset, AssetManifest,
     CreatureAppearanceGenome, CreatureLifetimeMemoryRecord, CreatureLifetimeStateAsset,
@@ -34,8 +38,29 @@ fn habitat(raw: u64) -> HabitatId {
 }
 
 fn write_managed_population(root: &Path) -> (PathBuf, [alife_core::GenomeId; 2]) {
+    write_population(
+        root,
+        [OrganismId(11), OrganismId(12)],
+        habitat(3),
+        "managed",
+    )
+}
+
+#[cfg(feature = "gpu-tests")]
+fn write_wild_population(
+    root: &Path,
+    organisms: [OrganismId; 2],
+) -> (PathBuf, [alife_core::GenomeId; 2]) {
+    write_population(root, organisms, HabitatId::DEFAULT_WILD, "wild")
+}
+
+fn write_population(
+    root: &Path,
+    organisms: [OrganismId; 2],
+    resident_habitat: HabitatId,
+    save_label: &str,
+) -> (PathBuf, [alife_core::GenomeId; 2]) {
     let seed = 90_001;
-    let organisms = [OrganismId(11), OrganismId(12)];
     let foundation_identity = FoundationGeneticIdentity::new(
         0x4E32_3034_385F_5631,
         1,
@@ -143,7 +168,7 @@ fn write_managed_population(root: &Path) -> (PathBuf, [alife_core::GenomeId; 2])
     .unwrap();
     for organism_id in organisms {
         authority
-            .register_creature(organism_id, managed, Tick::ZERO)
+            .register_creature(organism_id, resident_habitat, Tick::ZERO)
             .unwrap();
     }
     let mut world = HeadlessScenarioBuilder::new(seed)
@@ -179,7 +204,7 @@ fn write_managed_population(root: &Path) -> (PathBuf, [alife_core::GenomeId; 2])
         .unwrap();
     world.replace_habitat_authority(authority).unwrap();
     let save = PortableSaveFile::from_headless_world(
-        "managed-restored-population",
+        format!("{save_label}-restored-population"),
         &world,
         RuntimeConfig::deterministic_default(seed, BrainScaleTier::Standard2048),
         AssetManifest {
@@ -190,9 +215,114 @@ fn write_managed_population(root: &Path) -> (PathBuf, [alife_core::GenomeId; 2])
         creatures,
     )
     .unwrap();
-    let path = root.join("managed.alife.json");
+    let path = root.join(format!("{save_label}.alife.json"));
     save.to_json_file(&path).unwrap();
     (path, [genomes[0].id, genomes[1].id])
+}
+
+fn write_population_with_offspring(
+    root: &Path,
+    offspring: Vec<(OrganismId, CreatureGenome)>,
+) -> PathBuf {
+    let (founder_path, _) = write_managed_population(root);
+    let mut save = PortableSaveFile::from_json_file(&founder_path).unwrap();
+    let foundation = save
+        .load_composite_genetic_birth(OrganismId(11), root)
+        .unwrap()
+        .foundation;
+    let mut world = save.restore_headless_world().unwrap();
+    let mut authority = world.habitat_authority().clone();
+
+    for (index, (organism_id, genome)) in offspring.into_iter().enumerate() {
+        let expressed = genome.express().unwrap();
+        let development = expressed
+            .development_state_at(Tick::new(u64::from(
+                expressed.development.maturation_duration_ticks,
+            )))
+            .unwrap();
+        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+            &expressed.brain_genome,
+            &BrainCapacityClass::n2048(),
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+            &foundation,
+        )
+        .unwrap();
+        let (composite, composite_entries) = persist_composite_genetic_birth_assets(
+            root,
+            &genome,
+            &foundation,
+            phenotype.phenotype_hash(),
+        )
+        .unwrap();
+        for entry in composite_entries {
+            if !save
+                .assets
+                .entries
+                .iter()
+                .any(|present| present.asset_id == entry.asset_id)
+            {
+                save.assets.entries.push(entry);
+            }
+        }
+        let lifetime = CreatureLifetimeStateAsset {
+            schema_version: 1,
+            organism_id,
+            memory_records: Vec::new(),
+            lifetime_weight_values: Vec::new(),
+        };
+        let (lifetime_ref, lifetime_entry) =
+            persist_creature_lifetime_state_asset(root, &lifetime).unwrap();
+        save.assets.entries.push(lifetime_entry);
+        let mut creature = save.creatures[0].clone();
+        creature.organism_id = organism_id;
+        creature.genome_id = genome.id;
+        creature.composite_genetics = Some(composite);
+        creature.lifetime_state_asset = Some(lifetime_ref);
+        creature.mind.memory_record_count = 0;
+        creature.mind.memory_source_ids.clear();
+        creature.weights.lifetime_consolidated_entries = 0;
+        save.creatures.push(creature);
+        world
+            .spawn_social_agent(
+                &format!("restored-hostile-{index}"),
+                organism_id,
+                Vec3f::new(1.0 + index as f32, 0.0, 0.0),
+                0.8,
+            )
+            .unwrap();
+        authority
+            .register_creature(organism_id, habitat(3), world.tick())
+            .unwrap();
+    }
+    world.replace_habitat_authority(authority).unwrap();
+    let hostile_save = PortableSaveFile::from_headless_world(
+        "managed-hostile-generation",
+        &world,
+        save.config,
+        save.assets,
+        save.creatures,
+    )
+    .unwrap();
+    let path = root.join("hostile-generation.alife.json");
+    hostile_save.to_json_file(&path).unwrap();
+    path
+}
+
+#[cfg(feature = "gpu-tests")]
+fn patch_with_mismatched_phenotype(patch: &ExperiencePatch) -> ExperiencePatch {
+    let mut value = serde_json::to_value(patch).unwrap();
+    for pointer in [
+        "/pre_action/brain_evidence/NeuralClosedLoopGpu/phenotype_hash/0",
+        "/decision/evidence/NeuralClosedLoopGpu/phenotype_hash/0",
+    ] {
+        let word = value
+            .pointer(pointer)
+            .and_then(serde_json::Value::as_u64)
+            .expect("current neural patch exposes its phenotype hash word");
+        *value.pointer_mut(pointer).unwrap() = serde_json::json!(word ^ 1);
+    }
+    serde_json::from_value(value).unwrap()
 }
 
 #[test]
@@ -358,6 +488,65 @@ fn restored_offspring_retains_its_actual_generation() {
 }
 
 #[test]
+fn restore_rejects_offspring_with_a_missing_generation_parent() {
+    let root = temp_root("missing-generation-parent");
+    let (founder_path, _) = write_managed_population(&root);
+    let save = PortableSaveFile::from_json_file(&founder_path).unwrap();
+    let first = save
+        .load_composite_genetic_birth(OrganismId(11), &root)
+        .unwrap();
+    let second = save
+        .load_composite_genetic_birth(OrganismId(12), &root)
+        .unwrap();
+    let mut child =
+        CreatureGenome::reproduce(&first.creature_genome, &second.creature_genome, 0xE10_631)
+            .unwrap();
+    let missing_parent = GenomeId(0xE10_FFFF);
+    child.parent_genome_ids[1] = missing_parent;
+    let hostile_path = write_population_with_offspring(&root, vec![(OrganismId(21), child)]);
+
+    assert!(matches!(
+        CompositePopulationRuntime::restore_from_file(&hostile_path, &root),
+        Err(CompositePopulationRuntimeError::MissingGenerationParent(parent))
+            if parent == missing_parent
+    ));
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn restore_rejects_a_cycle_in_offspring_generation_ancestry() {
+    let root = temp_root("generation-cycle");
+    let (founder_path, _) = write_managed_population(&root);
+    let save = PortableSaveFile::from_json_file(&founder_path).unwrap();
+    let first = save
+        .load_composite_genetic_birth(OrganismId(11), &root)
+        .unwrap();
+    let second = save
+        .load_composite_genetic_birth(OrganismId(12), &root)
+        .unwrap();
+    let mut child_a =
+        CreatureGenome::reproduce(&first.creature_genome, &second.creature_genome, 0xE10_641)
+            .unwrap();
+    let mut child_b =
+        CreatureGenome::reproduce(&first.creature_genome, &second.creature_genome, 0xE10_642)
+            .unwrap();
+    child_a.parent_genome_ids = vec![child_b.id, first.creature_genome.id];
+    child_b.parent_genome_ids = vec![child_a.id, second.creature_genome.id];
+    let hostile_path = write_population_with_offspring(
+        &root,
+        vec![(OrganismId(21), child_a), (OrganismId(22), child_b)],
+    );
+
+    assert!(matches!(
+        CompositePopulationRuntime::restore_from_file(&hostile_path, &root),
+        Err(CompositePopulationRuntimeError::CyclicGenerationAncestry(_))
+    ));
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn bounded_stability_receipt_proves_ecology_evolution_and_resident_survival() {
     let root = temp_root("bounded-stability");
     let (save_path, _) = write_managed_population(&root);
@@ -380,6 +569,143 @@ fn bounded_stability_receipt_proves_ecology_evolution_and_resident_survival() {
         vec![OrganismId(11), OrganismId(12)]
     );
     assert_eq!(receipt.end_residents, receipt.start_residents);
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+fn gpu_runtime_rejects_same_tick_mutation_wrong_target_phenotype_mismatch_and_replay() {
+    let root = temp_root("gpu-hostile-inputs");
+    let (save_path, _) = write_wild_population(&root, [OrganismId(11), OrganismId(12)]);
+    let mut runtime = CompositePopulationRuntime::restore_from_file(&save_path, &root).unwrap();
+    runtime.advance_ticks(MINIMUM_POST_RESTORE_TICKS);
+
+    let initiator_genome = runtime.resident(OrganismId(11)).unwrap().genome.clone();
+    let mut observed_world = runtime.world_snapshot();
+    let mut runner = N2048ActiveBatteryRunner::new_required().unwrap();
+    let intent = runner
+        .run_creature_chosen_reproduction_intent_in_world(
+            OrganismId(11),
+            &initiator_genome,
+            &mut observed_world,
+            256,
+        )
+        .unwrap();
+
+    let mut mutated_save = PortableSaveFile::from_json_file(&save_path).unwrap();
+    let mutated_parent = mutated_save
+        .world
+        .objects
+        .iter_mut()
+        .find(|object| object.label == "parent-b")
+        .unwrap();
+    mutated_parent.position.x = f32::from_bits(mutated_parent.position.x.to_bits() + 1);
+    let mut same_tick_mutated_world = mutated_save.restore_headless_world().unwrap();
+    for _ in 0..MINIMUM_POST_RESTORE_TICKS {
+        same_tick_mutated_world.advance_tick();
+    }
+    assert_eq!(
+        same_tick_mutated_world.seed(),
+        runtime.world_snapshot().seed()
+    );
+    assert_eq!(
+        same_tick_mutated_world.tick(),
+        runtime.world_snapshot().tick()
+    );
+    let same_tick_mutated_digest = same_tick_mutated_world
+        .canonical_signature_digest()
+        .unwrap();
+    let mut same_tick_runtime = runtime.clone();
+    assert!(matches!(
+        same_tick_runtime.apply_gpu_reproduction_intent(
+            HabitatId::DEFAULT_WILD,
+            same_tick_mutated_digest,
+            observed_world.clone(),
+            &intent.patch,
+            OrganismId(21),
+            0xE10_651,
+        ),
+        Err(CompositePopulationRuntimeError::InvalidGpuReproductionIntent)
+    ));
+
+    let wrong_target_root = root.join("wrong-target");
+    fs::create_dir_all(&wrong_target_root).unwrap();
+    let (wrong_target_save, _) =
+        write_wild_population(&wrong_target_root, [OrganismId(11), OrganismId(13)]);
+    let mut wrong_target_runtime =
+        CompositePopulationRuntime::restore_from_file(&wrong_target_save, &wrong_target_root)
+            .unwrap();
+    wrong_target_runtime.advance_ticks(MINIMUM_POST_RESTORE_TICKS);
+    let target_entity = intent
+        .patch
+        .decision()
+        .selected_action
+        .target_entity
+        .unwrap();
+    assert_eq!(
+        observed_world.entity(target_entity).unwrap().organism_id,
+        Some(OrganismId(12))
+    );
+    assert_eq!(
+        wrong_target_runtime
+            .world_snapshot()
+            .entity(target_entity)
+            .unwrap()
+            .organism_id,
+        Some(OrganismId(13))
+    );
+    assert!(matches!(
+        wrong_target_runtime.apply_gpu_reproduction_intent(
+            HabitatId::DEFAULT_WILD,
+            wrong_target_runtime
+                .world_snapshot()
+                .canonical_signature_digest()
+                .unwrap(),
+            observed_world.clone(),
+            &intent.patch,
+            OrganismId(22),
+            0xE10_652,
+        ),
+        Err(CompositePopulationRuntimeError::InvalidGpuReproductionIntent)
+    ));
+
+    let mismatched_phenotype = patch_with_mismatched_phenotype(&intent.patch);
+    let mut phenotype_runtime = runtime.clone();
+    assert!(matches!(
+        phenotype_runtime.apply_gpu_reproduction_intent(
+            HabitatId::DEFAULT_WILD,
+            intent.pre_action_world_digest,
+            observed_world.clone(),
+            &mismatched_phenotype,
+            OrganismId(23),
+            0xE10_653,
+        ),
+        Err(CompositePopulationRuntimeError::InvalidGpuReproductionIntent)
+    ));
+
+    let mut replay_runtime = runtime.clone();
+    replay_runtime
+        .apply_gpu_reproduction_intent(
+            HabitatId::DEFAULT_WILD,
+            intent.pre_action_world_digest,
+            observed_world.clone(),
+            &intent.patch,
+            OrganismId(24),
+            0xE10_654,
+        )
+        .unwrap();
+    assert!(matches!(
+        replay_runtime.apply_gpu_reproduction_intent(
+            HabitatId::DEFAULT_WILD,
+            intent.pre_action_world_digest,
+            observed_world,
+            &intent.patch,
+            OrganismId(25),
+            0xE10_655,
+        ),
+        Err(CompositePopulationRuntimeError::ReplayedGpuReproductionIntent)
+    ));
 
     fs::remove_dir_all(root).unwrap();
 }

@@ -57,7 +57,8 @@ const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
-const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v1";
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v2";
+const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HeadlessWorldSignatureDigest {
@@ -533,17 +534,16 @@ impl HeadlessWorld {
         &self,
     ) -> Result<HeadlessWorldSignatureDigest, ScaffoldContractError> {
         let mut digest = CanonicalDigestBuilder::new(HEADLESS_WORLD_SIGNATURE_DOMAIN);
-        digest.write_u16(1);
+        digest.write_u16(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION);
         digest.write_u64(self.seed);
         digest.write_u64(self.tick.raw());
         digest.write_u64(self.next_entity_id);
         digest.write_u64(self.next_spawn_sequence);
         digest.write_u64(self.next_utterance_id);
 
-        let signatures = self.stable_signature();
-        digest.write_sequence_len(signatures.len());
-        for signature in signatures {
-            digest.write_utf8(&signature);
+        digest.write_sequence_len(self.objects.len());
+        for object in self.objects.values() {
+            write_world_object_signature(&mut digest, object)?;
         }
         digest.write_bytes(
             &serde_json::to_vec(&self.ecology).map_err(|_| ScaffoldContractError::InvalidId)?,
@@ -575,7 +575,7 @@ impl HeadlessWorld {
             );
         }
         Ok(HeadlessWorldSignatureDigest {
-            schema_version: 1,
+            schema_version: HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
             words: digest.finish256(),
         })
     }
@@ -2121,6 +2121,95 @@ impl HeadlessWorld {
         } else {
             0.35
         }
+    }
+}
+
+fn write_world_object_signature(
+    digest: &mut CanonicalDigestBuilder,
+    object: &WorldObject,
+) -> Result<(), ScaffoldContractError> {
+    validate_persisted_object(object)?;
+    digest.write_u64(object.id.raw());
+    digest.write_utf8(&object.label);
+    digest.write_u8(match object.kind {
+        WorldObjectKind::Agent => 0,
+        WorldObjectKind::Food => 1,
+        WorldObjectKind::Hazard => 2,
+        WorldObjectKind::Obstacle => 3,
+        WorldObjectKind::Token => 4,
+    });
+    write_optional_u64(digest, object.organism_id.map(OrganismId::raw));
+    write_vec3_bits(digest, object.position);
+    write_f32_bits(digest, object.radius);
+    write_f32_bits(digest, object.nutrition);
+    write_f32_bits(digest, object.hazard_pain);
+    write_optional_u32(digest, object.token_id);
+    write_f32_bits(digest, object.social_affinity);
+    match object.teacher_channel {
+        Some(channel) => {
+            digest.write_some();
+            digest.write_u8(channel.raw());
+        }
+        None => digest.write_none(),
+    }
+    digest.write_bool(object.consumed);
+    write_optional_u64(digest, object.carried_by.map(OrganismId::raw));
+
+    let physical = object.grounded_physical;
+    write_vec3_bits(digest, physical.velocity);
+    for value in physical
+        .color
+        .into_iter()
+        .chain(physical.material)
+        .chain(physical.shape)
+        .chain(physical.chemical)
+    {
+        write_f32_bits(digest, value);
+    }
+    write_f32_bits(digest, physical.surface_temperature);
+    for value in physical.terrain {
+        write_f32_bits(digest, value);
+    }
+
+    let tracking = object.tracking_provenance;
+    digest.write_u16(tracking.schema_version);
+    digest.write_u64(tracking.world_seed);
+    digest.write_u32(tracking.zone_id);
+    digest.write_u64(tracking.spawn_sequence);
+    digest.write_u64(tracking.lineage_key);
+    for word in object.tracking_key.0 {
+        digest.write_u64(word);
+    }
+    Ok(())
+}
+
+fn write_f32_bits(digest: &mut CanonicalDigestBuilder, value: f32) {
+    digest.write_u32(value.to_bits());
+}
+
+fn write_vec3_bits(digest: &mut CanonicalDigestBuilder, value: Vec3f) {
+    write_f32_bits(digest, value.x);
+    write_f32_bits(digest, value.y);
+    write_f32_bits(digest, value.z);
+}
+
+fn write_optional_u32(digest: &mut CanonicalDigestBuilder, value: Option<u32>) {
+    match value {
+        Some(value) => {
+            digest.write_some();
+            digest.write_u32(value);
+        }
+        None => digest.write_none(),
+    }
+}
+
+fn write_optional_u64(digest: &mut CanonicalDigestBuilder, value: Option<u64>) {
+    match value {
+        Some(value) => {
+            digest.write_some();
+            digest.write_u64(value);
+        }
+        None => digest.write_none(),
     }
 }
 
