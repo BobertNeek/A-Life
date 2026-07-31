@@ -67,21 +67,21 @@
       "end_tick": 128,
       "elapsed_ticks": 128,
       "start_world_digest": {
-        "schema_version": 1,
+        "schema_version": 2,
         "words": [
-          10772940915757931214,
-          10034646117539614340,
-          3274866209180824729,
-          16792976306668132265
+          9421501793425240209,
+          6800717863198317128,
+          14589928837424464876,
+          7229724457326966975
         ]
       },
       "end_world_digest": {
-        "schema_version": 1,
+        "schema_version": 2,
         "words": [
-          5004633513597468563,
-          1852656032508514805,
-          4035626318368117774,
-          13347140108999388798
+          7603369431408066533,
+          13749053077703672964,
+          14232687643635911677,
+          195536007469683103
         ]
       },
       "start_ecology_metrics": {
@@ -256,12 +256,12 @@
             "gpu_intent_world_tick": 128,
             "gpu_selected_mate": 1002,
             "gpu_pre_action_world_digest": {
-              "schema_version": 1,
+              "schema_version": 2,
               "words": [
-                5004633513597468563,
-                1852656032508514805,
-                4035626318368117774,
-                13347140108999388798
+                7603369431408066533,
+                13749053077703672964,
+                14232687643635911677,
+                195536007469683103
               ]
             },
             "gpu_same_seed_wrong_world_rejected": true,
@@ -373,12 +373,12 @@
             "gpu_intent_world_tick": 128,
             "gpu_selected_mate": 1004,
             "gpu_pre_action_world_digest": {
-              "schema_version": 1,
+              "schema_version": 2,
               "words": [
-                7001353274074126565,
-                13615748055298192426,
-                16135536946229517974,
-                16444007348468569175
+                10385546055070798225,
+                8108361624199731240,
+                4899268996009670170,
+                9418169363657428312
               ]
             },
             "gpu_same_seed_wrong_world_rejected": true,
@@ -478,12 +478,12 @@
             "gpu_intent_world_tick": 128,
             "gpu_selected_mate": 1002,
             "gpu_pre_action_world_digest": {
-              "schema_version": 1,
+              "schema_version": 2,
               "words": [
-                494196839893422375,
-                18241957037686829054,
-                6965194995966721331,
-                3206591195616370155
+                17798844911755130105,
+                9452665775069745974,
+                6761940666845560016,
+                2781355683335291205
               ]
             },
             "gpu_same_seed_wrong_world_rejected": true,
@@ -7173,8 +7173,8 @@
     }
   },
   "artifact_binding": {
-    "producing_source_commit": "e8164cab0e128654f56d717860eded43d8aba121",
-    "producing_source_tree": "69517f876d6976b3c185929d172edff9be105b02",
+    "producing_source_commit": "5639bb568f12aa93604638bb1e15ca655eb1c054",
+    "producing_source_tree": "a7ffd34f69168cd0cf52dbda06b9efc7be5ea4ea",
     "source_contract_paths": [
       "Cargo.lock",
       "Cargo.toml",
@@ -7186,10 +7186,10 @@
       "crates/alife_tools/src/ei0_exit_gate.rs",
       "crates/alife_tools/src/bin/ei0_exit_gate.rs"
     ],
-    "source_contract_digest": "blake3-256:f13ea3594eec7798594b7d79f1fde5613cbb0437ae8b0c974f94402dcca052f2",
+    "source_contract_digest": "blake3-256:5fd82d26cd17e7917c1bcfa905e3e48955e05aa38570885f103b31c28764598b",
     "adapter_name": "NVIDIA GeForce RTX 3050",
     "backend_api": "vulkan",
-    "causal_birth_receipts_digest": "blake3-256:95aae900df236ebdc9f1e5ac7260e83db40edf5670ac7082d23e5a59e6896bf6",
+    "causal_birth_receipts_digest": "blake3-256:d80b8f1a5f012466f9aab258537ef802947a3942123ea228a56c4235e08613d5",
     "gpu_receipts_digest": "blake3-256:f05b6db619bfc61b9a255727f7ce84a083ce1e8f5fd45913704e421b656f718c"
   },
   "operational_error": null
