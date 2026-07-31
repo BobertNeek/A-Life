@@ -2,6 +2,7 @@
 
 mod active_battery;
 mod curriculum;
+mod era1_trials;
 mod evolution;
 mod program;
 mod ranking;
@@ -10,6 +11,7 @@ mod types;
 
 pub use active_battery::*;
 pub use curriculum::*;
+pub use era1_trials::*;
 pub use evolution::*;
 pub use program::*;
 pub use ranking::*;

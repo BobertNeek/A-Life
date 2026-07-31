@@ -292,7 +292,7 @@ pub fn apply_era1_world_transition(
         }
         (Era1WorldFamily::PeerDemonstration, Era1TrialPhase::Delay)
         | (Era1WorldFamily::GroundedVocabulary, Era1TrialPhase::Delay) => {
-            remove_label(world, FAMILIAR_LABEL)?;
+            remove_label_if_present(world, FAMILIAR_LABEL)?;
             if manifest.family == Era1WorldFamily::GroundedVocabulary {
                 remove_label(world, CUE_LABEL)?;
             }
@@ -327,6 +327,17 @@ fn remove_label(world: &mut HeadlessWorld, label: &str) -> Result<(), ScaffoldCo
     let id = world
         .entity_id(label)
         .ok_or(ScaffoldContractError::InvalidId)?;
+    world.editor_remove_object(id)?;
+    Ok(())
+}
+
+fn remove_label_if_present(
+    world: &mut HeadlessWorld,
+    label: &str,
+) -> Result<(), ScaffoldContractError> {
+    let Some(id) = world.entity_id(label) else {
+        return Ok(());
+    };
     world.editor_remove_object(id)?;
     Ok(())
 }
