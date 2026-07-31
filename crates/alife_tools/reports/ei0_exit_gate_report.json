@@ -7173,8 +7173,8 @@
     }
   },
   "artifact_binding": {
-    "producing_source_commit": "5639bb568f12aa93604638bb1e15ca655eb1c054",
-    "producing_source_tree": "a7ffd34f69168cd0cf52dbda06b9efc7be5ea4ea",
+    "producing_source_commit": "ebdd3a8f26657da2bc7617eec36ea2f7c1b4a722",
+    "producing_source_tree": "c2763664d9ed9d6b53c26e036dd193a35e3e41f2",
     "source_contract_paths": [
       "Cargo.lock",
       "Cargo.toml",
@@ -7186,7 +7186,7 @@
       "crates/alife_tools/src/ei0_exit_gate.rs",
       "crates/alife_tools/src/bin/ei0_exit_gate.rs"
     ],
-    "source_contract_digest": "blake3-256:5fd82d26cd17e7917c1bcfa905e3e48955e05aa38570885f103b31c28764598b",
+    "source_contract_digest": "blake3-256:7314aea7e12f23f147ca94a5a4da073ce77e0f417af19c5a382db8279ec5c803",
     "adapter_name": "NVIDIA GeForce RTX 3050",
     "backend_api": "vulkan",
     "causal_birth_receipts_digest": "blake3-256:d80b8f1a5f012466f9aab258537ef802947a3942123ea228a56c4235e08613d5",
