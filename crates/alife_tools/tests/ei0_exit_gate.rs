@@ -2,12 +2,12 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 
 #[cfg(feature = "gpu-tests")]
 use alife_archive::{CompositeGeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
-use alife_core::Tick;
 #[cfg(feature = "gpu-tests")]
 use alife_core::{
     BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, FoundationWeightAsset,
-    OrganismId, PhenotypeCompiler, PolicyBackend, SensorProfile,
+    PhenotypeCompiler, PolicyBackend, SensorProfile,
 };
+use alife_core::{OrganismId, Tick};
 #[cfg(feature = "gpu-tests")]
 use alife_tools::ei0_exit_gate::{
     run_ei0_exit_gate, run_ei0_lifecycle_gate, write_ei0_exit_gate_report,
@@ -326,6 +326,52 @@ fn committed_report_recomputes_current_source_and_causal_evidence() {
         .schema_version = 0;
     refresh_binding_digests(&mut missing_sequence);
     assert!(validate_committed_ei0_exit_gate_report(&missing_sequence).is_err());
+}
+
+#[test]
+fn committed_validator_rejects_self_consistent_parent_organism_rewrite() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("reports")
+        .join("ei0_exit_gate_report.json");
+    let mut report: Ei0ExitGateReport =
+        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+
+    validate_committed_ei0_exit_gate_report(&report).unwrap();
+    let alternate_parents = [OrganismId(2001), OrganismId(2002)];
+    let alternate_parent_genomes = alternate_parents
+        .map(|organism_id| {
+            report
+                .lifecycle
+                .as_ref()
+                .unwrap()
+                .population_residents
+                .iter()
+                .find(|resident| resident.organism_id == organism_id)
+                .unwrap()
+                .genome_id
+        })
+        .to_vec();
+    let birth = report
+        .lifecycle
+        .as_mut()
+        .unwrap()
+        .lanes
+        .iter_mut()
+        .find(|lane| lane.mode == HabitatMode::Wild)
+        .unwrap()
+        .births
+        .first_mut()
+        .unwrap();
+    assert_ne!(birth.parent_genome_ids, alternate_parent_genomes);
+
+    birth.breeding_receipt.first_parent = alternate_parents[0];
+    birth.breeding_receipt.second_parent = alternate_parents[1];
+    birth.actor = HabitatActor::Organism(alternate_parents[0]);
+    birth.breeding_receipt.actor = birth.actor;
+    birth.gpu_selected_mate = Some(alternate_parents[1]);
+    refresh_binding_digests(&mut report);
+
+    assert!(validate_committed_ei0_exit_gate_report(&report).is_err());
 }
 
 #[cfg(feature = "gpu-tests")]

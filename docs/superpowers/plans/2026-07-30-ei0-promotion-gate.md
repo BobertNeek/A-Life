@@ -158,6 +158,8 @@ the composite genetic state used after restore.
   the complete causal birth and GPU receipts.
 - [x] Make `validate_committed_ei0_exit_gate_report` recompute source, genome,
   foundation, shader, causal receipt, clause, and final phenotype evidence.
+  Lock parent-organism-to-genome binding with
+  `committed_validator_rejects_self_consistent_parent_organism_rewrite`.
   Reject any relevant source diff from the producing commit. Exclude only the
   generated report to avoid a self-hash cycle.
 - [x] Commit the focused RED/GREEN implementation checkpoint. Regenerate the

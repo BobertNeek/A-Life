@@ -1575,7 +1575,21 @@ pub fn validate_committed_ei0_exit_gate_report(
                         "birth receipt resident is absent",
                     ))?;
             let breeding = &birth.breeding_receipt;
+            let first_parent =
+                residents
+                    .get(&breeding.first_parent.raw())
+                    .ok_or(Ei0ExitGateError::Evidence(
+                        "birth receipt first parent is absent",
+                    ))?;
+            let second_parent =
+                residents
+                    .get(&breeding.second_parent.raw())
+                    .ok_or(Ei0ExitGateError::Evidence(
+                        "birth receipt second parent is absent",
+                    ))?;
             if genome.parent_genome_ids != birth.parent_genome_ids
+                || birth.parent_genome_ids.as_slice()
+                    != [first_parent.genome_id, second_parent.genome_id]
                 || genome.lineage_id != birth.lineage_id
                 || genome.conception_seed != birth.conception_seed
                 || resident.genome_id != birth.genome_id
