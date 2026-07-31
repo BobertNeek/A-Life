@@ -54,6 +54,8 @@ fn fixture_creature() -> CreatureSaveState {
             lamarckian_mode_enabled: false,
             last_consolidated_tick: Some(Tick::new(2)),
         },
+        composite_genetics: None,
+        lifetime_state_asset: None,
         gpu_brain: None,
     }
 }

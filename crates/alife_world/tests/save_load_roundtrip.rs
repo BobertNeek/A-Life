@@ -1,21 +1,23 @@
 use std::{fs, path::PathBuf};
 
 use alife_core::{
-    BrainScaleTier, FoundationId, GenomeId, HomeostaticSnapshot, OrganismId, PolicyBackend, Tick,
-    Vec3f, WorldEntityId,
+    BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationGeneticIdentity, FoundationId,
+    FoundationWeightAsset, GenomeId, HomeostaticSnapshot, MemoryId, OrganismId, PhenotypeCompiler,
+    PolicyBackend, SensorProfile, Tick, Vec3f, WorldEntityId,
 };
 use alife_world::{
     persistence::{
+        persist_composite_genetic_birth_assets, persist_creature_lifetime_state_asset,
         AdapterRemapEntry, AdapterRemapTable, AssetKind, AssetManifest, AssetManifestEntry,
-        AssetPresence, BrainPolicyConfig, CreatureMindSaveSummary, CreatureSaveState,
-        FeatureFlagConfig, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
-        GpuRuntimeAuthorityState, GpuRuntimeClassBucketAllocation, GpuRuntimeResidencySlots,
-        GpuRuntimeSafeCheckpoint, GpuRuntimeSaveState, GpuRuntimeShaderAbiVersions,
-        LearningTraceSaveSummary, MigrationHook, PersistenceError, PortableAssetDigest,
-        PortableSaveFile, RuntimeConfig, SchoolConfig, WeightLayerSaveSummary,
-        FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
-        P34_ASSET_MANIFEST_SCHEMA, P34_ASSET_MANIFEST_SCHEMA_VERSION, P34_SAVE_FILE_SCHEMA,
-        P34_SAVE_FILE_SCHEMA_VERSION,
+        AssetPresence, BrainPolicyConfig, CreatureLifetimeMemoryRecord, CreatureLifetimeStateAsset,
+        CreatureLifetimeWeightValue, CreatureMindSaveSummary, CreatureSaveState, FeatureFlagConfig,
+        GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity, GpuRuntimeAuthorityState,
+        GpuRuntimeClassBucketAllocation, GpuRuntimeResidencySlots, GpuRuntimeSafeCheckpoint,
+        GpuRuntimeSaveState, GpuRuntimeShaderAbiVersions, LearningTraceSaveSummary, MigrationHook,
+        PersistenceError, PortableAssetDigest, PortableSaveFile, RuntimeConfig, SchoolConfig,
+        WeightLayerSaveSummary, FVR06_GPU_RUNTIME_STATE_SCHEMA,
+        FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION, P34_ASSET_MANIFEST_SCHEMA,
+        P34_ASSET_MANIFEST_SCHEMA_VERSION, P34_SAVE_FILE_SCHEMA, P34_SAVE_FILE_SCHEMA_VERSION,
     },
     AssistanceProvenance, FoundationProvenance, Habitat, HabitatActor, HabitatAuthority,
     HabitatAuthorityKind, HabitatId, HabitatMode, HabitatTransferProvenance,
@@ -65,6 +67,8 @@ fn fixture_creature() -> CreatureSaveState {
             lamarckian_mode_enabled: false,
             last_consolidated_tick: Some(Tick::new(2)),
         },
+        composite_genetics: None,
+        lifetime_state_asset: None,
         gpu_brain: None,
     }
 }
@@ -95,6 +99,104 @@ fn temp_root(test_name: &str) -> PathBuf {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("create temp root");
     root
+}
+
+#[test]
+fn composite_genome_foundation_and_nonzero_lifetime_state_survive_portable_restore() {
+    let root = temp_root("composite-genetic-restore");
+    let foundation_identity = FoundationGeneticIdentity::new(
+        0x4E32_3034_385F_5631,
+        1,
+        0x4E32_3034_385F_FA11,
+        BrainCapacityClass::N2048_ID,
+    )
+    .unwrap();
+    let genome = CreatureGenome::early_mammal_founder(0xE10_501, foundation_identity).unwrap();
+    let expressed = genome.express().unwrap();
+    let development = expressed
+        .development_state_at(Tick::new(u64::from(
+            expressed.development.maturation_duration_ticks,
+        )))
+        .unwrap();
+    let foundation =
+        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let expected = PhenotypeCompiler::compile_from_foundation_asset(
+        &expressed.brain_genome,
+        &BrainCapacityClass::n2048(),
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+        &foundation,
+    )
+    .unwrap();
+    let (composite_ref, mut entries) = persist_composite_genetic_birth_assets(
+        &root,
+        &genome,
+        &foundation,
+        expected.phenotype_hash(),
+    )
+    .unwrap();
+    let lifetime_state = CreatureLifetimeStateAsset {
+        schema_version: 1,
+        organism_id: OrganismId(1),
+        memory_records: vec![CreatureLifetimeMemoryRecord {
+            memory_id: MemoryId(41),
+            source_organism_id: OrganismId(1),
+            value_q16: 41_001,
+        }],
+        lifetime_weight_values: vec![
+            CreatureLifetimeWeightValue {
+                synapse_index: 17,
+                value: 0.125,
+            },
+            CreatureLifetimeWeightValue {
+                synapse_index: 29,
+                value: -0.25,
+            },
+        ],
+    };
+    let (lifetime_ref, lifetime_entry) =
+        persist_creature_lifetime_state_asset(&root, &lifetime_state).unwrap();
+    entries.push(lifetime_entry);
+    let mut creature = fixture_creature();
+    creature.genome_id = genome.id;
+    creature.brain_class = BrainScaleTier::Standard2048;
+    creature.composite_genetics = Some(composite_ref);
+    creature.lifetime_state_asset = Some(lifetime_ref);
+    creature.mind.memory_record_count = 1;
+    creature.mind.memory_source_ids = vec![MemoryId(41)];
+    creature.weights.lifetime_consolidated_entries = 2;
+    creature.weights.generated_weight_asset_id = None;
+    let save = PortableSaveFile::from_headless_world(
+        "composite-genetic-restore",
+        &fixture_world(),
+        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Standard2048),
+        AssetManifest {
+            schema: P34_ASSET_MANIFEST_SCHEMA.to_string(),
+            schema_version: P34_ASSET_MANIFEST_SCHEMA_VERSION,
+            entries,
+        },
+        vec![creature],
+    )
+    .unwrap();
+    let path = root.join("population.alife.json");
+    save.to_json_file(&path).unwrap();
+    let restored = PortableSaveFile::from_json_file(&path).unwrap();
+    restored.validate_with_asset_root(&root).unwrap();
+    let genetic_birth = restored
+        .load_composite_genetic_birth(OrganismId(1), &root)
+        .unwrap();
+    let restored_lifetime = restored
+        .load_creature_lifetime_state(OrganismId(1), &root)
+        .unwrap();
+
+    assert_eq!(genetic_birth.creature_genome, genome);
+    assert_eq!(genetic_birth.phenotype_hash, expected.phenotype_hash());
+    assert_eq!(genetic_birth.foundation.digest(), foundation.digest());
+    assert_eq!(restored_lifetime, lifetime_state);
+    assert!(!restored_lifetime.memory_records.is_empty());
+    assert!(!restored_lifetime.lifetime_weight_values.is_empty());
+
+    fs::remove_dir_all(root).unwrap();
 }
 
 fn assert_no_runtime_fallback_keys(value: &serde_json::Value) {

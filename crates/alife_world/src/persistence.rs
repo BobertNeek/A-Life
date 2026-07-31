@@ -10,8 +10,9 @@ use std::{
 };
 
 use alife_core::{
-    require_version, BrainScaleTier, GenomeId, HomeostaticSnapshot, OrganismId,
-    PackedExperienceFrame, PolicyBackend, ScaffoldContractError, SchemaKind, SchemaVersions,
+    require_version, BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationWeightAsset,
+    GenomeId, HomeostaticSnapshot, MemoryId, OrganismId, PackedExperienceFrame, PhenotypeCompiler,
+    PhenotypeHash, PolicyBackend, ScaffoldContractError, SchemaKind, SchemaVersions, SensorProfile,
     TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
 };
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
@@ -174,6 +175,9 @@ fn canonicalize_text_line_endings(bytes: &[u8]) -> Vec<u8> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AssetKind {
     GeneratedWeights,
+    CompositeGenome,
+    FoundationWeights,
+    LifetimeState,
     EtfPrototypes,
     ScenarioConfig,
     ExampleWorld,
@@ -251,6 +255,15 @@ impl AssetManifest {
     pub fn contains_asset(&self, asset_id: &str) -> bool {
         self.entries.iter().any(|entry| entry.asset_id == asset_id)
     }
+
+    fn entry(&self, asset_id: &str) -> Result<&AssetManifestEntry, PersistenceError> {
+        self.entries
+            .iter()
+            .find(|entry| entry.asset_id == asset_id)
+            .ok_or_else(|| PersistenceError::MissingAssetReference {
+                asset_id: asset_id.to_string(),
+            })
+    }
 }
 
 impl AssetManifestEntry {
@@ -293,6 +306,120 @@ impl AssetManifestEntry {
         }
         Ok(())
     }
+}
+
+pub fn persist_composite_genetic_birth_assets(
+    root: impl AsRef<Path>,
+    creature_genome: &CreatureGenome,
+    foundation: &FoundationWeightAsset,
+    phenotype_hash: PhenotypeHash,
+) -> Result<(CompositeGeneticSaveRef, Vec<AssetManifestEntry>), PersistenceError> {
+    creature_genome.validate_contract()?;
+    if phenotype_hash.0 == [0; 4] {
+        return Err(PersistenceError::InvalidConfig {
+            field: "composite_genetics.phenotype_hash",
+            message: "phenotype hash must be nonzero",
+        });
+    }
+    let genome_bytes = serde_json::to_vec_pretty(creature_genome)?;
+    let foundation_bytes = foundation.encode_canonical()?;
+    let genome_entry = persist_content_addressed_asset(
+        root.as_ref(),
+        AssetKind::CompositeGenome,
+        "composite-genomes",
+        "json",
+        &genome_bytes,
+        "authoritative composite CreatureGenome",
+    )?;
+    let foundation_entry = persist_content_addressed_asset(
+        root.as_ref(),
+        AssetKind::FoundationWeights,
+        "foundations",
+        "alife-foundation",
+        &foundation_bytes,
+        "required immutable neural foundation",
+    )?;
+    let reference = CompositeGeneticSaveRef {
+        schema_version: 1,
+        creature_genome_asset_id: genome_entry.asset_id.clone(),
+        foundation_asset_id: foundation_entry.asset_id.clone(),
+        phenotype_hash,
+    };
+    Ok((reference, vec![genome_entry, foundation_entry]))
+}
+
+pub fn persist_creature_lifetime_state_asset(
+    root: impl AsRef<Path>,
+    state: &CreatureLifetimeStateAsset,
+) -> Result<(CreatureLifetimeStateSaveRef, AssetManifestEntry), PersistenceError> {
+    state.validate()?;
+    let bytes = serde_json::to_vec_pretty(state)?;
+    let entry = persist_content_addressed_asset(
+        root.as_ref(),
+        AssetKind::LifetimeState,
+        "lifetime-state",
+        "json",
+        &bytes,
+        "non-genetic creature lifetime memory and weights",
+    )?;
+    Ok((
+        CreatureLifetimeStateSaveRef {
+            schema_version: 1,
+            asset_id: entry.asset_id.clone(),
+        },
+        entry,
+    ))
+}
+
+fn persist_content_addressed_asset(
+    root: &Path,
+    kind: AssetKind,
+    directory: &str,
+    extension: &str,
+    bytes: &[u8],
+    provenance: &str,
+) -> Result<AssetManifestEntry, PersistenceError> {
+    if bytes.is_empty() {
+        return Err(PersistenceError::InvalidAssetManifest {
+            asset_id: directory.to_string(),
+            message: "content-addressed asset cannot be empty",
+        });
+    }
+    let digest = PortableAssetDigest::for_bytes(bytes);
+    let digest_suffix =
+        digest
+            .0
+            .strip_prefix("fnv1a64:")
+            .ok_or(PersistenceError::InvalidAssetManifest {
+                asset_id: directory.to_string(),
+                message: "content-addressed asset digest is malformed",
+            })?;
+    let relative_path = format!("assets/{directory}/{digest_suffix}.{extension}");
+    let path = root.join(&relative_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    if path.exists() {
+        if fs::read(&path)? != bytes {
+            return Err(PersistenceError::DigestMismatch {
+                asset_id: format!("{directory}-{digest_suffix}"),
+                expected: digest.0.clone(),
+                actual: PortableAssetDigest::for_file(&path)?.0,
+            });
+        }
+    } else {
+        fs::write(&path, bytes)?;
+    }
+    Ok(AssetManifestEntry {
+        asset_id: format!("{directory}-{digest_suffix}"),
+        kind,
+        relative_path,
+        digest,
+        presence: AssetPresence::Required,
+        schema_version: 1,
+        size_bytes: Some(bytes.len() as u64),
+        provenance: Some(provenance.to_string()),
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -842,7 +969,53 @@ pub struct CreatureSaveState {
     pub weights: WeightLayerSaveSummary,
     pub learning: LearningTraceSaveSummary,
     #[serde(default)]
+    pub composite_genetics: Option<CompositeGeneticSaveRef>,
+    #[serde(default)]
+    pub lifetime_state_asset: Option<CreatureLifetimeStateSaveRef>,
+    #[serde(default)]
     pub gpu_brain: Option<GpuBrainSaveState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompositeGeneticSaveRef {
+    pub schema_version: u16,
+    pub creature_genome_asset_id: String,
+    pub foundation_asset_id: String,
+    pub phenotype_hash: PhenotypeHash,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreatureLifetimeStateSaveRef {
+    pub schema_version: u16,
+    pub asset_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreatureLifetimeMemoryRecord {
+    pub memory_id: MemoryId,
+    pub source_organism_id: OrganismId,
+    pub value_q16: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreatureLifetimeWeightValue {
+    pub synapse_index: u32,
+    pub value: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreatureLifetimeStateAsset {
+    pub schema_version: u16,
+    pub organism_id: OrganismId,
+    pub memory_records: Vec<CreatureLifetimeMemoryRecord>,
+    pub lifetime_weight_values: Vec<CreatureLifetimeWeightValue>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoadedCompositeGeneticBirth {
+    pub creature_genome: CreatureGenome,
+    pub foundation: FoundationWeightAsset,
+    pub phenotype_hash: PhenotypeHash,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1244,7 +1417,7 @@ impl PortableSaveFile {
                 });
             }
         }
-        self.assets.validate_with_root(root)?;
+        self.assets.validate_with_root(root.as_ref())?;
         self.world.validate()?;
         self.adapter_remap.validate()?;
         self.school.validate()?;
@@ -1255,6 +1428,12 @@ impl PortableSaveFile {
         )?;
         for creature in &self.creatures {
             creature.validate(&self.assets, self.world.seed)?;
+            if creature.composite_genetics.is_some() {
+                self.load_composite_genetic_birth(creature.organism_id, root.as_ref())?;
+            }
+            if creature.lifetime_state_asset.is_some() {
+                self.load_creature_lifetime_state(creature.organism_id, root.as_ref())?;
+            }
         }
         self.world
             .habitats
@@ -1267,6 +1446,130 @@ impl PortableSaveFile {
             require_asset_reference(&self.assets, asset_id)?;
         }
         Ok(())
+    }
+
+    pub fn load_composite_genetic_birth(
+        &self,
+        organism_id: OrganismId,
+        root: impl AsRef<Path>,
+    ) -> Result<LoadedCompositeGeneticBirth, PersistenceError> {
+        let creature = self.creature(organism_id)?;
+        let reference =
+            creature
+                .composite_genetics
+                .as_ref()
+                .ok_or(PersistenceError::InvalidConfig {
+                    field: "creature.composite_genetics",
+                    message: "creature has no composite genetic asset reference",
+                })?;
+        reference.validate(&self.assets)?;
+        let genome_entry = self.assets.entry(&reference.creature_genome_asset_id)?;
+        let foundation_entry = self.assets.entry(&reference.foundation_asset_id)?;
+        if genome_entry.kind != AssetKind::CompositeGenome
+            || foundation_entry.kind != AssetKind::FoundationWeights
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.composite_genetics",
+                message: "composite genome and foundation asset kinds must match",
+            });
+        }
+        let creature_genome = serde_json::from_slice::<CreatureGenome>(&fs::read(
+            root.as_ref().join(&genome_entry.relative_path),
+        )?)?;
+        creature_genome.validate_contract()?;
+        let foundation = FoundationWeightAsset::decode_canonical(&fs::read(
+            root.as_ref().join(&foundation_entry.relative_path),
+        )?)?;
+        let manifest = foundation.manifest();
+        if creature_genome.id != creature.genome_id
+            || creature_genome.foundation.foundation_id != manifest.foundation_id().raw()
+            || u32::from(creature_genome.foundation.version) != manifest.foundation_version().raw()
+            || creature_genome.foundation.compatibility_family_id
+                != manifest.compatibility_family_id().raw()
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.composite_genetics",
+                message: "composite genome identity does not match creature or foundation",
+            });
+        }
+        let expressed = creature_genome.express()?;
+        let development = expressed.development_state_at(Tick::new(u64::from(
+            expressed.development.maturation_duration_ticks,
+        )))?;
+        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+            &expressed.brain_genome,
+            &BrainCapacityClass::production_for_id(creature_genome.foundation.brain_class_id)?,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+            &foundation,
+        )?;
+        if phenotype.phenotype_hash() != reference.phenotype_hash {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.composite_genetics.phenotype_hash",
+                message: "restored composite genome phenotype hash does not match save",
+            });
+        }
+        Ok(LoadedCompositeGeneticBirth {
+            creature_genome,
+            foundation,
+            phenotype_hash: phenotype.phenotype_hash(),
+        })
+    }
+
+    pub fn load_creature_lifetime_state(
+        &self,
+        organism_id: OrganismId,
+        root: impl AsRef<Path>,
+    ) -> Result<CreatureLifetimeStateAsset, PersistenceError> {
+        let creature = self.creature(organism_id)?;
+        let reference =
+            creature
+                .lifetime_state_asset
+                .as_ref()
+                .ok_or(PersistenceError::InvalidConfig {
+                    field: "creature.lifetime_state_asset",
+                    message: "creature has no lifetime-state asset reference",
+                })?;
+        reference.validate(&self.assets)?;
+        let entry = self.assets.entry(&reference.asset_id)?;
+        if entry.kind != AssetKind::LifetimeState {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.lifetime_state_asset",
+                message: "lifetime-state reference has the wrong asset kind",
+            });
+        }
+        let state = serde_json::from_slice::<CreatureLifetimeStateAsset>(&fs::read(
+            root.as_ref().join(&entry.relative_path),
+        )?)?;
+        state.validate()?;
+        let memory_ids = state
+            .memory_records
+            .iter()
+            .map(|record| record.memory_id)
+            .collect::<Vec<_>>();
+        if state.organism_id != organism_id
+            || usize::try_from(creature.mind.memory_record_count).ok()
+                != Some(state.memory_records.len())
+            || creature.mind.memory_source_ids != memory_ids
+            || usize::try_from(creature.weights.lifetime_consolidated_entries).ok()
+                != Some(state.lifetime_weight_values.len())
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.lifetime_state_asset",
+                message: "lifetime-state payload does not match creature summary",
+            });
+        }
+        Ok(state)
+    }
+
+    fn creature(&self, organism_id: OrganismId) -> Result<&CreatureSaveState, PersistenceError> {
+        self.creatures
+            .iter()
+            .find(|creature| creature.organism_id == organism_id)
+            .ok_or(PersistenceError::InvalidConfig {
+                field: "creature.organism_id",
+                message: "save has no creature with the requested organism id",
+            })
     }
 
     pub fn restore_headless_world(&self) -> Result<HeadlessWorld, PersistenceError> {
@@ -1387,6 +1690,12 @@ impl CreatureSaveState {
         self.appearance.validate()?;
         self.mind.validate()?;
         self.weights.validate(assets)?;
+        if let Some(reference) = &self.composite_genetics {
+            reference.validate(assets)?;
+        }
+        if let Some(reference) = &self.lifetime_state_asset {
+            reference.validate(assets)?;
+        }
         if self.learning.lamarckian_mode_enabled {
             return Err(PersistenceError::InvalidConfig {
                 field: "learning.lamarckian_mode_enabled",
@@ -1414,6 +1723,75 @@ impl CreatureSaveState {
                 return Err(PersistenceError::InvalidConfig {
                     field: "creature.gpu_brain",
                     message: "GPU checkpoint identity must match its creature record",
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+impl CompositeGeneticSaveRef {
+    fn validate(&self, assets: &AssetManifest) -> Result<(), PersistenceError> {
+        if self.schema_version != 1
+            || self.creature_genome_asset_id.is_empty()
+            || self.foundation_asset_id.is_empty()
+            || self.creature_genome_asset_id == self.foundation_asset_id
+            || self.phenotype_hash.0 == [0; 4]
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.composite_genetics",
+                message: "composite genetic asset reference is invalid",
+            });
+        }
+        require_asset_reference(assets, &self.creature_genome_asset_id)?;
+        require_asset_reference(assets, &self.foundation_asset_id)
+    }
+}
+
+impl CreatureLifetimeStateSaveRef {
+    fn validate(&self, assets: &AssetManifest) -> Result<(), PersistenceError> {
+        if self.schema_version != 1 || self.asset_id.is_empty() {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.lifetime_state_asset",
+                message: "lifetime-state asset reference is invalid",
+            });
+        }
+        require_asset_reference(assets, &self.asset_id)
+    }
+}
+
+impl CreatureLifetimeStateAsset {
+    fn validate(&self) -> Result<(), PersistenceError> {
+        self.organism_id.validate()?;
+        if self.schema_version != 1
+            || self.memory_records.len() > 65_536
+            || self.lifetime_weight_values.len() > 1_048_576
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "creature.lifetime_state",
+                message: "lifetime-state asset schema or bounds are invalid",
+            });
+        }
+        let mut memory_ids = BTreeSet::new();
+        for record in &self.memory_records {
+            record.memory_id.validate()?;
+            record.source_organism_id.validate()?;
+            if record.value_q16 > 65_535 || !memory_ids.insert(record.memory_id.0) {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.lifetime_state.memory_records",
+                    message: "lifetime memory identity or value is invalid",
+                });
+            }
+        }
+        let mut synapse_indices = BTreeSet::new();
+        for weight in &self.lifetime_weight_values {
+            if !weight.value.is_finite()
+                || weight.value == 0.0
+                || !synapse_indices.insert(weight.synapse_index)
+            {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.lifetime_state.lifetime_weight_values",
+                    message: "lifetime weight identity or value is invalid",
                 });
             }
         }

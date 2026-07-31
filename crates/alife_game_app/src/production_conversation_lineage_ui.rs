@@ -315,14 +315,12 @@ fn apply_habitat_lab_command(
             let partner_id = partner_id.ok_or(HabitatAuthorityError::MalformedOperation(
                 "explicit breeding requires a selected partner",
             ))?;
-            HabitatLabOutcome::Breeding(authority.authorize_breeding(HabitatBreedingRequest {
-                habitat_id: focus_id,
-                first_parent: organism_id,
-                second_parent: partner_id,
-                kind: HabitatBreedingKind::Explicit,
-                actor,
-                tick,
-            })?)
+            HabitatLabOutcome::Breeding(crate::produce_habitat_lab_explicit_breed_receipt(
+                world,
+                organism_id,
+                focus_id,
+                partner_id,
+            )?)
         }
         operation => {
             let operation = match operation {

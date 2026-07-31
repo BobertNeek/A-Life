@@ -162,6 +162,7 @@ dependencies = [
  "alife_runtime",
  "alife_school",
  "alife_semantic",
+ "alife_training",
  "alife_world",
  "bevy",
  "bevy-inspector-egui",
@@ -184,6 +185,7 @@ name = "alife_gpu_backend"
 version = "0.1.0"
 dependencies = [
  "alife_core",
+ "blake3",
  "bytemuck",
  "naga 29.0.3",
  "pollster",
@@ -225,12 +227,15 @@ dependencies = [
 name = "alife_tools"
 version = "0.1.0"
 dependencies = [
+ "alife_archive",
  "alife_core",
  "alife_game_app",
  "alife_gpu_backend",
  "alife_school",
  "alife_semantic",
+ "alife_training",
  "alife_world",
+ "blake3",
  "flate2",
  "image",
  "serde",

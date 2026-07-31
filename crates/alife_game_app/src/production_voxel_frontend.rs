@@ -1683,6 +1683,8 @@ fn production_creature_save_for_slot(
             lamarckian_mode_enabled: false,
             last_consolidated_tick: template.learning.last_consolidated_tick,
         },
+        composite_genetics: None,
+        lifetime_state_asset: None,
         gpu_brain: None,
     })
 }

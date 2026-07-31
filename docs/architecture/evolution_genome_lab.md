@@ -55,6 +55,35 @@ transfer, reversal, delayed recall, group removal, and replacement variants.
 Learning, transfer, reversal, delayed memory, abstraction, social contribution,
 and dependent cognitive/social/group objectives remain `UNKNOWN`.
 
+## Era 0 lifecycle exit receipt
+
+The separate Era 0 lifecycle gate composes production genome, habitat, save,
+archive, and GPU authorities. Run it with:
+
+```powershell
+cargo run -p alife_tools --bin ei0_exit_gate -- `
+  --out crates/alife_tools/reports/ei0_exit_gate_report.json
+```
+
+The committed receipt proves eight founders and six ordinary births across
+Wild and Managed lanes. Each lane contains two Generation 1 offspring and one
+Generation 2 offspring. Wild births use creature-chosen authority. Managed
+births use explicit player authority. The 14-creature population is observed,
+saved, restored, archived, and compared with full genome, parent, lineage,
+foundation, and conception provenance. Tampered save and provenance checks are
+rejected, and no lifetime state enters an offspring genetic baseline.
+
+Both final Generation 2 genomes run through the production 15-challenge N2048
+active battery. Their receipts bind the exact source genome, parents, lineage,
+phenotype hash, foundation, GPU adapter/API, dispatches, sealed outcomes, and
+sleep consolidation. The runner uses `GpuAuthoritativeSession` and the shipped
+WGSL foundation path. It has no CPU neural shadow, fallback, or scripted policy.
+
+Era 0 passes only when every lifecycle clause passes. This verdict does not
+evaluate or authorize Era 1. The heuristic fixture above remains a separate
+`HeuristicBaseline` tooling report with zero hidden trials, false promotion
+eligibility, and all unsupported measures explicitly `UNKNOWN`.
+
 ## Managed composite-genome selection
 
 `run_managed_selection` receives evaluation metadata beside the authoritative
