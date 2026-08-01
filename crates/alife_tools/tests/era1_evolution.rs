@@ -191,7 +191,11 @@ fn complete_candidate_receipt(
                         },
                         ability,
                         control,
-                        partition: Era1EvidencePartition::HeldOutTransfer,
+                        partition: if generation == 0 {
+                            Era1EvidencePartition::HeldOutTransfer
+                        } else {
+                            Era1EvidencePartition::ReproducedOffspring
+                        },
                         score: MetricReading::Measured {
                             value_q16: 45_875 + u32::from(ability as u8) * 256,
                             exposures: 1,
@@ -587,6 +591,26 @@ fn selection_profiles_are_derived_from_complete_receipts_and_unknown_ecology_blo
         ),
         Err(Era1EvolutionError::UnknownSelectionObjective(id)) if id == genome.id
     ));
+}
+
+#[test]
+fn descendant_selection_rejects_founder_only_evidence_partition() {
+    let maternal = founder(56_002);
+    let paternal = founder(56_003);
+    let genome = CreatureGenome::reproduce(&maternal, &paternal, 0xE1_5007).unwrap();
+    let config = Era1EvolutionConfig::bounded_default(0xE1_5007).unwrap();
+    let organism_id = OrganismId(20_002);
+    let mut evidence = complete_candidate_receipt(&config, &genome, organism_id, 1);
+    evidence.trial_receipts[0].partition = Era1EvidencePartition::HeldOutTransfer;
+
+    let result = recompute_era1_selection_profile_from_receipt(&config, &genome, &evidence, 4, &[]);
+    let expected = matches!(
+        &result,
+        Err(Era1EvolutionError::InvalidEvidence(
+            "selection trial receipt has mismatched or incomplete provenance"
+        ))
+    );
+    assert!(expected, "{result:?}");
 }
 
 #[test]

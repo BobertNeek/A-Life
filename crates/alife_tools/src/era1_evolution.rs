@@ -536,6 +536,11 @@ pub fn recompute_era1_selection_profile_from_receipt(
     }
     let mut trial_keys = BTreeSet::new();
     let mut source_binding: Option<(&str, &str)> = None;
+    let expected_partition = if evidence.identity.generation == 0 {
+        Era1EvidencePartition::HeldOutTransfer
+    } else {
+        Era1EvidencePartition::ReproducedOffspring
+    };
     for receipt in &evidence.trial_receipts {
         receipt.validate_contract()?;
         let identity = &receipt.identity;
@@ -548,7 +553,7 @@ pub fn recompute_era1_selection_profile_from_receipt(
             || receipt.foundation_id != genome.foundation.foundation_id
             || receipt.foundation_version != u32::from(genome.foundation.version)
             || !config.controls.contains(&receipt.control)
-            || receipt.partition != Era1EvidencePartition::HeldOutTransfer
+            || receipt.partition != expected_partition
             || !receipt.assistance.is_empty()
             || identity.world_family_id != canonical_world_family_id(receipt.ability)
             || !config.evaluation_seeds.contains(&identity.seed)

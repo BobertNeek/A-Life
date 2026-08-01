@@ -207,7 +207,11 @@ fn selection_receipt(
                         },
                         ability,
                         control,
-                        partition: Era1EvidencePartition::HeldOutTransfer,
+                        partition: if parent.generation == 0 {
+                            Era1EvidencePartition::HeldOutTransfer
+                        } else {
+                            Era1EvidencePartition::ReproducedOffspring
+                        },
                         score: MetricReading::Measured {
                             value_q16: 49_151,
                             exposures: 4,

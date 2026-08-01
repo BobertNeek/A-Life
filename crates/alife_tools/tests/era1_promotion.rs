@@ -362,11 +362,14 @@ fn committed_report_recomputes_source_receipts_and_unknown_gate_outcome() {
     );
     assert_eq!(report.artifact_binding.adapter_name, ADAPTER);
     assert_eq!(report.artifact_binding.backend_api, "vulkan");
+    assert_eq!(report.trial_receipts.len(), 2_640);
     assert_eq!(report.matrix_coverage.len(), 55);
     assert!(report
         .matrix_coverage
         .iter()
-        .all(|cell| cell.status == Era1EvidenceStatus::Unknown));
+        .all(|cell| cell.required_receipts == 48
+            && cell.observed_receipts == 48
+            && cell.status == Era1EvidenceStatus::Measured));
     assert_eq!(report.promotion.verdict, Era1PromotionVerdict::Blocked);
     assert_eq!(report.promotion.plateau.status, Era1PlateauStatus::Unknown);
     assert!(!report.boundaries.assistance_present);
@@ -379,8 +382,8 @@ fn committed_report_recomputes_source_receipts_and_unknown_gate_outcome() {
     assert!(validate_committed_era1_promotion_report(&tampered).is_err());
 
     let mut hand_authored = report.clone();
-    hand_authored.trial_evidence[0].steps[0].world_after_action_digest[0] ^= 1;
-    hand_authored.trial_receipts[0] = hand_authored.trial_evidence[0].receipt.clone();
+    hand_authored.causal_evidence_bundle.uncompressed_digest =
+        "blake3-256:0000000000000000000000000000000000000000000000000000000000000000".to_string();
     assert!(validate_committed_era1_promotion_report(&hand_authored).is_err());
 
     let mut wrong_source = report;
