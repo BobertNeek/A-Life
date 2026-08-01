@@ -1,12 +1,14 @@
 //! Perception-only language nursery using the production world speech and sensing paths.
 
 use alife_core::{
-    Confidence, HomeostaticSnapshot, LanguageTokenId, OrganismId, PerceptionFrameDraft,
-    ScaffoldContractError, SensorProfile, SpeechActKind, SpeechMotorPayload,
-    TeacherPerceptionChannel, Vec3f, WorldEntityId,
+    ActionCommand, ActionKind, ActionTarget, Confidence, DurationTicks, HomeostaticSnapshot,
+    Intensity, LanguageTokenId, OrganismId, PerceptionFrameDraft, ScaffoldContractError,
+    SensorProfile, SpeechActKind, SpeechMotorPayload, TeacherPerceptionChannel, Vec3f,
+    WorldEntityId,
 };
 use alife_world::{
-    AudibleUtterance, HeadlessScenarioBuilder, HeadlessWorld, WorldEditorSpawnSpec, WorldObjectKind,
+    AudibleUtterance, HeadlessActionResult, HeadlessScenarioBuilder, HeadlessWorld,
+    HeadlessWorldCommand, WorldEditorSpawnSpec, WorldObjectKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +77,7 @@ pub struct LanguageNurseryExposure {
     pub utterance: AudibleUtterance,
     pub perception: PerceptionFrameDraft,
     pub demonstration: NurseryDemonstration,
+    pub demonstration_actions: Vec<HeadlessActionResult>,
     pub can_issue_actions: bool,
     pub can_write_rewards: bool,
     pub can_inject_hidden_concepts: bool,
@@ -184,15 +187,94 @@ impl LanguageNursery {
             SensorProfile::GroundedObjectSlotsV1,
             HomeostaticSnapshot::baseline(tick),
         )?;
+        let demonstration_actions = match speaker {
+            NurserySpeaker::Peer {
+                organism_id,
+                source_position,
+            } => self.execute_peer_demonstration(
+                organism_id,
+                source_position,
+                target_entity,
+                lesson,
+            )?,
+            NurserySpeaker::Player { .. } | NurserySpeaker::Teacher { .. } => Vec::new(),
+        };
         Ok(LanguageNurseryExposure {
             subject: self.subject,
             target_entity,
             utterance,
             perception,
             demonstration: lesson.demonstration,
+            demonstration_actions,
             can_issue_actions: false,
             can_write_rewards: false,
             can_inject_hidden_concepts: false,
         })
+    }
+
+    fn execute_peer_demonstration(
+        &mut self,
+        peer: OrganismId,
+        peer_position: Vec3f,
+        target: WorldEntityId,
+        lesson: &LanguageNurseryLesson,
+    ) -> Result<Vec<HeadlessActionResult>, ScaffoldContractError> {
+        let mut actions = Vec::new();
+        match lesson.demonstration {
+            NurseryDemonstration::Approach => {
+                actions.push(
+                    self.world
+                        .apply_command(&HeadlessWorldCommand::approach(peer, target)?)?,
+                );
+            }
+            NurseryDemonstration::Eat => {
+                actions.push(
+                    self.world
+                        .apply_command(&HeadlessWorldCommand::approach(peer, target)?)?,
+                );
+                actions.push(
+                    self.world
+                        .apply_command(&HeadlessWorldCommand::eat(peer, target)?)?,
+                );
+            }
+            NurseryDemonstration::Avoid => {
+                let away = Vec3f::new(
+                    peer_position.x + (peer_position.x - lesson.object_position.x),
+                    peer_position.y + (peer_position.y - lesson.object_position.y),
+                    peer_position.z,
+                );
+                let command = ActionCommand::structured(
+                    peer,
+                    ActionKind::Move.canonical_id(),
+                    ActionKind::Move,
+                    ActionTarget::new(None, Some(away)),
+                    Intensity::new(1.0)?,
+                    DurationTicks::new(1),
+                    Confidence::new(1.0)?,
+                    0,
+                    None,
+                    None,
+                    None,
+                )?;
+                actions.push(self.world.apply_command(&command)?);
+            }
+            NurseryDemonstration::Rest => {
+                actions.push(
+                    self.world
+                        .apply_command(&HeadlessWorldCommand::rest(peer)?)?,
+                );
+            }
+            NurseryDemonstration::Inspect => {
+                actions.push(self.world.apply_command(&ActionCommand::new(
+                    peer,
+                    ActionKind::Inspect,
+                    Some(target),
+                    Confidence::new(1.0)?,
+                    DurationTicks::new(1),
+                )?)?);
+            }
+            NurseryDemonstration::Vocalize => {}
+        }
+        Ok(actions)
     }
 }

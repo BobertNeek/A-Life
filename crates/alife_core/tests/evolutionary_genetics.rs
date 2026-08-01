@@ -21,6 +21,20 @@ fn early_mammal(seed: u64) -> CreatureGenome {
 }
 
 #[test]
+fn inherited_starter_vocabulary_is_bounded_and_never_contains_silence() {
+    for seed in 1..=16 {
+        let vocabulary = early_mammal(seed)
+            .express()
+            .unwrap()
+            .predisposition
+            .starter_tokens;
+        assert!(!vocabulary.is_empty());
+        assert!(vocabulary.len() <= 6);
+        assert!(vocabulary.iter().all(|token| token.raw() != 0));
+    }
+}
+
+#[test]
 fn continuous_loci_blend_both_alleles() {
     let mean = ContinuousLocus::mean(0.2, 0.8).unwrap();
     assert_eq!(mean.expressed().unwrap(), 0.5);

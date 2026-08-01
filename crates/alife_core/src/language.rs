@@ -7,8 +7,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::blake3_digest::{domain_hasher, Blake3Write};
 use crate::{
-    ActionKind, Blake3Digest, Confidence, ExperiencePatch, OrganismId, ScaffoldContractError,
-    Validate, Vec3f,
+    ActionId, ActionKind, Blake3Digest, CandidateObservationRef, Confidence, ExperiencePatch,
+    ExperienceSequenceId, OrganismId, PerceptionFrameDigest, ScaffoldContractError,
+    TrackedObjectId, Validate, Vec3f, WorldEntityId,
 };
 
 const CODEBOOK_DOMAIN: &[u8] = b"alife.language-codebook.v1";
@@ -277,6 +278,130 @@ pub struct SpeechMotorPayload {
 }
 
 pub const LANGUAGE_GROUNDING_LEDGER_CAPACITY: usize = 64;
+pub const UTTERANCE_GROUNDING_RECEIPT_V2_SCHEMA_VERSION: u16 = 2;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UtteranceGroundingReceiptV2 {
+    pub schema_version: u16,
+    pub organism_id: OrganismId,
+    pub sequence_id: ExperienceSequenceId,
+    pub utterance_id: UtteranceId,
+    pub sequence_position: u8,
+    pub source_kind: UtteranceSourceKind,
+    pub speaker_id: Option<OrganismId>,
+    pub source_entity: Option<WorldEntityId>,
+    pub token: LanguageTokenId,
+    pub target_entity: WorldEntityId,
+    pub tracked_target: TrackedObjectId,
+    pub selected_action_id: ActionId,
+    pub selected_action: ActionKind,
+    pub exposure_tick: crate::Tick,
+    pub outcome_tick: crate::Tick,
+    pub frame_digest: PerceptionFrameDigest,
+}
+
+impl UtteranceGroundingReceiptV2 {
+    pub fn try_from_sealed(
+        patch: &ExperiencePatch,
+        utterance_id: UtteranceId,
+        sequence_position: u8,
+        target_entity: WorldEntityId,
+    ) -> Result<Self, ScaffoldContractError> {
+        patch.validate_contract()?;
+        if !patch.outcome().success
+            || patch.outcome().physical.target_entity != Some(target_entity)
+            || patch.decision().selected_action.target_entity != Some(target_entity)
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let neural = patch.decision().neural_evidence()?;
+        let frame = patch.pre_action().perception();
+        let selected = frame
+            .candidates()
+            .get(usize::from(neural.candidate_index))
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        if selected.action_id != patch.decision().selected_action.action_id
+            || selected.target.entity != Some(target_entity)
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let CandidateObservationRef::ObjectSlot(slot_index) = selected.observation else {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        };
+        let slot = frame
+            .grounded_object_slots()
+            .get(usize::from(slot_index))
+            .filter(|slot| slot.slot_index == slot_index)
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        let mut matches = frame
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .flatten()
+            .filter(|heard| {
+                heard.utterance_id == utterance_id && heard.sequence_position == sequence_position
+            });
+        let heard = matches
+            .next()
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        if matches.next().is_some()
+            || heard.source_kind == UtteranceSourceKind::Player
+            || heard.addressee != Some(patch.header().organism_id)
+            || heard.token_id == 0
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let token = LanguageTokenId::new(
+            u16::try_from(heard.token_id)
+                .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+        )?;
+        let receipt = Self {
+            schema_version: UTTERANCE_GROUNDING_RECEIPT_V2_SCHEMA_VERSION,
+            organism_id: patch.header().organism_id,
+            sequence_id: patch.header().sequence_id,
+            utterance_id,
+            sequence_position,
+            source_kind: heard.source_kind,
+            speaker_id: heard.speaker_id,
+            source_entity: heard.source_entity,
+            token,
+            target_entity,
+            tracked_target: slot.tracked_object_id,
+            selected_action_id: selected.action_id,
+            selected_action: selected.kind,
+            exposure_tick: patch.pre_action().tick,
+            outcome_tick: patch.outcome().outcome_tick,
+            frame_digest: neural.frame_digest,
+        };
+        receipt.validate_contract()?;
+        Ok(receipt)
+    }
+
+    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.organism_id.validate()?;
+        self.sequence_id.validate()?;
+        self.target_entity.validate()?;
+        self.tracked_target.validate()?;
+        self.selected_action_id.validate()?;
+        if let Some(speaker) = self.speaker_id {
+            speaker.validate()?;
+        }
+        if let Some(source) = self.source_entity {
+            source.validate()?;
+        }
+        if self.schema_version != UTTERANCE_GROUNDING_RECEIPT_V2_SCHEMA_VERSION
+            || self.source_kind == UtteranceSourceKind::Player
+            || (self.source_kind == UtteranceSourceKind::Creature && self.speaker_id.is_none())
+            || self.token.raw() == 0
+            || self.frame_digest.0 == [0; 4]
+            || self.outcome_tick < self.exposure_tick
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LanguageGroundingEntry {
@@ -292,6 +417,10 @@ pub struct LanguageGroundingEntry {
 pub struct LanguageGroundingLedger {
     last_sequence_id: u64,
     entries: Vec<LanguageGroundingEntry>,
+    #[serde(default)]
+    last_grounding_v2_sequence_id: u64,
+    #[serde(default)]
+    utterance_receipts_v2: Vec<UtteranceGroundingReceiptV2>,
 }
 
 impl LanguageGroundingLedger {
@@ -303,9 +432,15 @@ impl LanguageGroundingLedger {
         self.last_sequence_id
     }
 
+    pub fn utterance_receipts_v2(&self) -> &[UtteranceGroundingReceiptV2] {
+        &self.utterance_receipts_v2
+    }
+
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.entries.len() > LANGUAGE_GROUNDING_LEDGER_CAPACITY
+            || self.utterance_receipts_v2.len() > LANGUAGE_GROUNDING_LEDGER_CAPACITY
             || (!self.entries.is_empty() && self.last_sequence_id == 0)
+            || (!self.utterance_receipts_v2.is_empty() && self.last_grounding_v2_sequence_id == 0)
             || self.entries.iter().any(|entry| {
                 entry.token.raw() == 0
                     || entry.exposures == 0
@@ -315,10 +450,34 @@ impl LanguageGroundingLedger {
                 (pair[0].token.raw(), pair[0].action.raw())
                     >= (pair[1].token.raw(), pair[1].action.raw())
             })
+            || self
+                .utterance_receipts_v2
+                .iter()
+                .any(|receipt| receipt.validate_contract().is_err())
+            || self
+                .utterance_receipts_v2
+                .windows(2)
+                .any(|pair| pair[0].sequence_id.raw() >= pair[1].sequence_id.raw())
         {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
         }
         Ok(())
+    }
+
+    pub fn observe_grounding_v2(
+        &mut self,
+        receipt: UtteranceGroundingReceiptV2,
+    ) -> Result<(), ScaffoldContractError> {
+        receipt.validate_contract()?;
+        let sequence = receipt.sequence_id.raw();
+        if sequence <= self.last_grounding_v2_sequence_id
+            || self.utterance_receipts_v2.len() == LANGUAGE_GROUNDING_LEDGER_CAPACITY
+        {
+            return Err(ScaffoldContractError::LearningReplayRejected);
+        }
+        self.last_grounding_v2_sequence_id = sequence;
+        self.utterance_receipts_v2.push(receipt);
+        self.validate_contract()
     }
 
     pub fn observe_sealed(&mut self, patch: &ExperiencePatch) -> Result<(), ScaffoldContractError> {

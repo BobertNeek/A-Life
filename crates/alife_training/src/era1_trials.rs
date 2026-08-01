@@ -1,14 +1,15 @@
 //! GPU-authoritative causal trial loop for the Era 1 Norn-plus battery.
 
 use alife_core::{
-    BrainCapacityClass, BrainGenome, CanonicalDigestBuilder, Confidence, ConsolidationIntent,
-    CreatureGenome, DecisionSnapshot, DevelopmentState, Era1Ability, Era1Control,
-    Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt, ExperiencePatchBuilder,
-    ExperienceSequenceId, FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot,
-    MemoryBankConfig, MemorySidecarState, MetricReading, NeuralActionSelection, OrganismId,
-    PerceptionFrameDigest, PhenotypeCompiler, PhenotypeHash, PolicyBackend, PostActionOutcome,
-    PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, Tick, UtteranceSourceKind, Validate,
+    ActionKind, BrainCapacityClass, BrainGenome, CandidateActionFamily, CanonicalDigestBuilder,
+    Confidence, ConsolidationIntent, CreatureGenome, DecisionSnapshot, DevelopmentState,
+    Era1Ability, Era1Control, Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt,
+    ExperiencePatchBuilder, ExperienceSequenceId, FoundationWeightAsset, HomeostaticParameters,
+    HomeostaticSnapshot, MemoryBankConfig, MemorySidecarState, MetricReading,
+    NeuralActionSelection, OrganismId, PerceptionFrameDigest, PhenotypeCompiler, PhenotypeHash,
+    PolicyBackend, PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile,
+    SensorProfileIdentity, SensoryAbiVersion, Tick, UtteranceGroundingReceiptV2,
+    UtteranceSourceKind, Validate,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -16,8 +17,9 @@ use alife_gpu_backend::{
 };
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
-    apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1WorldFamily,
-    HeadlessWorld, ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK,
+    apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1TrialPhase,
+    Era1WorldFamily, HeadlessWorld, WorldObjectKind, ERA1_ACQUISITION_END_TICK,
+    ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK,
 };
 
 use crate::TrainingError;
@@ -54,6 +56,23 @@ pub struct Era1CausalStepReceipt {
     pub memory_observed: bool,
     pub peer_visible: bool,
     pub outcome_success: bool,
+    pub phase: Era1TrialPhase,
+    pub selected_action: ActionKind,
+    pub selected_family: CandidateActionFamily,
+    pub target_kind: Option<WorldObjectKind>,
+    pub behavior_success: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Era1LearningAssessment {
+    pub early_acquisition: MetricReading,
+    pub late_acquisition: MetricReading,
+    pub delay: MetricReading,
+    pub probe: MetricReading,
+    pub acquisition_improvement_q16: i32,
+    pub probe_change_from_early_q16: i32,
+    pub demonstrated: bool,
+    pub grounding_receipts: Vec<UtteranceGroundingReceiptV2>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +90,7 @@ pub struct Era1TrialRunEvidence {
     pub social_context_present: bool,
     pub adapter_name: String,
     pub backend_api: String,
+    pub learning_assessment: Era1LearningAssessment,
 }
 
 impl Era1TrialRunEvidence {
@@ -92,6 +112,18 @@ impl Era1TrialRunEvidence {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
 
+        let expected_assessment = assess_learning(
+            self.receipt.ability,
+            &self.steps,
+            self.learning_assessment.grounding_receipts.clone(),
+        )?;
+        if self.learning_assessment != expected_assessment
+            || self.receipt.score
+                != score_for_partition(self.receipt.partition, &expected_assessment)
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+
         for (index, step) in self.steps.iter().enumerate() {
             let sequence = u64::try_from(index)
                 .ok()
@@ -109,6 +141,7 @@ impl Era1TrialRunEvidence {
                 || step.frame_digest != step.memory_context_final_digest
                 || step.memory_bank_digest == [0; 4]
                 || step.pending_receipt_digest == [0; 4]
+                || step.phase != phase_for_tick(step.tick)
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
@@ -314,7 +347,7 @@ impl Era1TrialRunner {
         let mut eligibility_discards = 0_u64;
         let mut memory_updates = 0_u64;
         let mut sleep_commits = 0_u32;
-        let mut successes = 0_u32;
+        let mut grounding_receipts = Vec::new();
 
         while world.tick().raw() < ERA1_TRIAL_END_TICK {
             if let Some(transition) = request
@@ -391,6 +424,12 @@ impl Era1TrialRunner {
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
+            let target_kind = selected
+                .target
+                .entity
+                .and_then(|entity| world.entity(entity))
+                .map(|entity| entity.kind);
+            let phase = request.manifest.phase_at(frame.tick())?;
 
             let sequence_id = ExperienceSequenceId(
                 u64::try_from(steps.len())
@@ -464,6 +503,38 @@ impl Era1TrialRunner {
                 .seal()?;
             let world_after_action = world.canonical_signature_digest()?.words;
 
+            let grounding_before = grounding_receipts.len();
+            if request.ability == Era1Ability::GroundedLanguage && patch.outcome().success {
+                if let Some(target) = patch.decision().selected_action.target_entity {
+                    for heard in patch
+                        .pre_action()
+                        .perception()
+                        .sensory()
+                        .language_context
+                        .heard_tokens
+                        .iter()
+                        .flatten()
+                    {
+                        if let Ok(receipt) = UtteranceGroundingReceiptV2::try_from_sealed(
+                            &patch,
+                            heard.utterance_id,
+                            heard.sequence_position,
+                            target,
+                        ) {
+                            grounding_receipts.push(receipt);
+                            break;
+                        }
+                    }
+                }
+            }
+            let behavior_success = behavior_succeeds(
+                request.ability,
+                selected.family,
+                target_kind,
+                patch.outcome().success,
+                grounding_receipts.len() > grounding_before,
+            );
+
             let learning = if request.control == Era1Control::PlasticityDisabled {
                 self.session
                     .discard_pending_eligibility(handle, pending_identity)?;
@@ -479,7 +550,6 @@ impl Era1TrialRunner {
                 memory.observe_sealed_patch(&patch)?;
                 memory_updates = memory_updates.saturating_add(1);
             }
-            successes = successes.saturating_add(u32::from(patch.outcome().success));
             steps.push(Era1CausalStepReceipt {
                 organism_id: request.organism_id,
                 phenotype_hash: handle.phenotype_hash(),
@@ -497,6 +567,11 @@ impl Era1TrialRunner {
                 memory_observed,
                 peer_visible,
                 outcome_success: patch.outcome().success,
+                phase,
+                selected_action: selected.kind,
+                selected_family: selected.family,
+                target_kind,
+                behavior_success,
             });
             homeostasis = homeostasis.advance(
                 outcome_tick,
@@ -506,6 +581,7 @@ impl Era1TrialRunner {
             world.advance_tick();
         }
 
+        let learning_assessment = assess_learning(request.ability, &steps, grounding_receipts)?;
         let foundation = request.genome.foundation;
         let receipt = Era1TrialReceipt {
             schema_version: alife_core::ERA1_EVALUATION_SCHEMA_VERSION,
@@ -528,10 +604,7 @@ impl Era1TrialRunner {
             ability: request.ability,
             control: request.control,
             partition: request.partition,
-            score: MetricReading::Measured {
-                value_q16: ratio_q16(successes, steps.len() as u32),
-                exposures: steps.len() as u64,
-            },
+            score: score_for_partition(request.partition, &learning_assessment),
             phenotype_hash: handle.phenotype_hash(),
             foundation_id: foundation.foundation_id,
             foundation_version: u32::from(foundation.version),
@@ -560,6 +633,7 @@ impl Era1TrialRunner {
             social_context_present: steps.iter().any(|step| step.peer_visible),
             adapter_name: self.adapter_name.clone(),
             backend_api: self.backend_api.clone(),
+            learning_assessment,
             steps,
         };
         evidence.validate_contract()?;
@@ -583,6 +657,154 @@ impl Era1TrialRunner {
         let mature_tick = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
         let development = expressed.development_state_at(mature_tick)?;
         Ok((expressed.brain_genome, development))
+    }
+}
+
+fn phase_for_tick(tick: Tick) -> Era1TrialPhase {
+    if tick.raw() < ERA1_ACQUISITION_END_TICK {
+        Era1TrialPhase::Acquisition
+    } else if tick.raw() < ERA1_PROBE_START_TICK {
+        Era1TrialPhase::Delay
+    } else {
+        Era1TrialPhase::Probe
+    }
+}
+
+fn behavior_succeeds(
+    ability: Era1Ability,
+    family: CandidateActionFamily,
+    target_kind: Option<WorldObjectKind>,
+    outcome_success: bool,
+    grounded_utterance: bool,
+) -> bool {
+    if !outcome_success {
+        return false;
+    }
+    match ability {
+        Era1Ability::FlexibleForaging
+        | Era1Ability::SpatialMemory
+        | Era1Ability::DelayedChoice
+        | Era1Ability::RewardReversal
+        | Era1Ability::ObjectTransfer
+        | Era1Ability::PostSleepRetention => {
+            family == CandidateActionFamily::Ingest && target_kind == Some(WorldObjectKind::Food)
+        }
+        Era1Ability::HazardAvoidance => {
+            family == CandidateActionFamily::Avoid && target_kind == Some(WorldObjectKind::Hazard)
+        }
+        Era1Ability::MultiStepProblem => {
+            matches!(
+                family,
+                CandidateActionFamily::Approach
+                    | CandidateActionFamily::Contact
+                    | CandidateActionFamily::Ingest
+            ) && matches!(
+                target_kind,
+                Some(WorldObjectKind::Obstacle | WorldObjectKind::Food | WorldObjectKind::Token)
+            )
+        }
+        Era1Ability::IndividualRecognition => {
+            matches!(
+                family,
+                CandidateActionFamily::Inspect
+                    | CandidateActionFamily::Approach
+                    | CandidateActionFamily::Contact
+            ) && target_kind == Some(WorldObjectKind::Agent)
+        }
+        Era1Ability::Imitation => {
+            matches!(
+                family,
+                CandidateActionFamily::Approach | CandidateActionFamily::Ingest
+            ) && target_kind == Some(WorldObjectKind::Food)
+        }
+        Era1Ability::GroundedLanguage => grounded_utterance,
+    }
+}
+
+fn assess_learning(
+    ability: Era1Ability,
+    steps: &[Era1CausalStepReceipt],
+    grounding_receipts: Vec<UtteranceGroundingReceiptV2>,
+) -> Result<Era1LearningAssessment, ScaffoldContractError> {
+    let midpoint = ERA1_ACQUISITION_END_TICK / 2;
+    let early = reading_for(steps.iter().filter(|step| step.tick.raw() < midpoint))?;
+    let late = reading_for(steps.iter().filter(|step| {
+        step.tick.raw() >= midpoint && step.tick.raw() < ERA1_ACQUISITION_END_TICK
+    }))?;
+    let delay = reading_for(
+        steps
+            .iter()
+            .filter(|step| step.phase == Era1TrialPhase::Delay),
+    )?;
+    let probe = reading_for(
+        steps
+            .iter()
+            .filter(|step| step.phase == Era1TrialPhase::Probe),
+    )?;
+    let early_q16 = measured_q16(early)?;
+    let late_q16 = measured_q16(late)?;
+    let probe_q16 = measured_q16(probe)?;
+    let acquisition_improvement_q16 = late_q16 as i32 - early_q16 as i32;
+    let probe_change_from_early_q16 = probe_q16 as i32 - early_q16 as i32;
+    let demonstrated = match ability {
+        Era1Ability::FlexibleForaging | Era1Ability::HazardAvoidance => {
+            acquisition_improvement_q16 > 0
+        }
+        Era1Ability::GroundedLanguage => {
+            probe_change_from_early_q16 > 0 && !grounding_receipts.is_empty()
+        }
+        _ => probe_change_from_early_q16 > 0,
+    };
+    Ok(Era1LearningAssessment {
+        early_acquisition: early,
+        late_acquisition: late,
+        delay,
+        probe,
+        acquisition_improvement_q16,
+        probe_change_from_early_q16,
+        demonstrated,
+        grounding_receipts,
+    })
+}
+
+fn reading_for<'a>(
+    steps: impl Iterator<Item = &'a Era1CausalStepReceipt>,
+) -> Result<MetricReading, ScaffoldContractError> {
+    let mut exposures = 0_u64;
+    let mut successes = 0_u32;
+    for step in steps {
+        exposures = exposures
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        successes = successes.saturating_add(u32::from(step.behavior_success));
+    }
+    let denominator =
+        u32::try_from(exposures).map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+    Ok(MetricReading::Measured {
+        value_q16: ratio_q16(successes, denominator),
+        exposures,
+    })
+}
+
+fn measured_q16(reading: MetricReading) -> Result<u32, ScaffoldContractError> {
+    match reading {
+        MetricReading::Measured { value_q16, .. } => Ok(value_q16),
+        MetricReading::Unknown => Err(ScaffoldContractError::InvalidDecisionEvidence),
+    }
+}
+
+fn score_for_partition(
+    partition: Era1EvidencePartition,
+    assessment: &Era1LearningAssessment,
+) -> MetricReading {
+    match partition {
+        Era1EvidencePartition::Acquisition => assessment.late_acquisition,
+        Era1EvidencePartition::DelayedProbe
+        | Era1EvidencePartition::ReversalProbe
+        | Era1EvidencePartition::HeldOutTransfer
+        | Era1EvidencePartition::PostSleepProbe
+        | Era1EvidencePartition::SocialTransfer
+        | Era1EvidencePartition::ReproducedOffspring => assessment.probe,
     }
 }
 

@@ -1307,9 +1307,9 @@ fn append_starter_tokens(
     profile: StarterVocabularyProfile,
 ) -> Result<(), ScaffoldContractError> {
     let raw_tokens: &[u16] = match profile {
-        StarterVocabularyProfile::Minimal => &[0, 1],
-        StarterVocabularyProfile::Foraging => &[0, 1, 2, 3],
-        StarterVocabularyProfile::Social => &[0, 4, 5, 6],
+        StarterVocabularyProfile::Minimal => &[1, 2],
+        StarterVocabularyProfile::Foraging => &[1, 2, 3, 4],
+        StarterVocabularyProfile::Social => &[1, 2, 5, 6],
     };
     for raw in raw_tokens {
         output.push(LanguageTokenId::new(*raw)?);

@@ -92,3 +92,52 @@ fn player_teacher_and_peer_use_the_same_nursery_perception_path() {
         assert!(!exposure.perception.grounded_object_slots().is_empty());
     }
 }
+
+#[test]
+fn peer_demonstration_executes_real_world_actions_without_controlling_the_subject() {
+    let subject = OrganismId(7);
+    let peer = OrganismId(8);
+    let mut nursery = LanguageNursery::new(4406, subject).unwrap();
+    let lesson = LanguageNurseryLesson::try_new(
+        LanguageTokenId::new(43).unwrap(),
+        "demonstrated-fruit",
+        WorldObjectKind::Food,
+        Vec3f::new(1.0, 0.0, 0.0),
+        NurseryDemonstration::Eat,
+    )
+    .unwrap();
+
+    let exposure = nursery
+        .present(
+            NurserySpeaker::Peer {
+                organism_id: peer,
+                source_position: Vec3f::new(0.25, 0.0, 0.0),
+            },
+            &lesson,
+        )
+        .unwrap();
+
+    assert!(!exposure.demonstration_actions.is_empty());
+    assert!(exposure
+        .demonstration_actions
+        .iter()
+        .all(|result| result.command.organism_id == peer));
+    assert!(exposure
+        .demonstration_actions
+        .iter()
+        .any(|result| result.command.target_entity == Some(exposure.target_entity)));
+    assert!(
+        exposure
+            .demonstration_actions
+            .last()
+            .unwrap()
+            .observation
+            .success
+    );
+    assert!(!exposure.can_issue_actions);
+    assert!(nursery
+        .world()
+        .entity(exposure.target_entity)
+        .unwrap()
+        .is_consumed());
+}

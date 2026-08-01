@@ -151,9 +151,9 @@ pub use language::{
     LanguageCodebookId, LanguageCodebookV1, LanguageGroundingEntry, LanguageGroundingLedger,
     LanguageTokenClass, LanguageTokenId, NovelLanguageToken, PlayerUtterance, SpeechActKind,
     SpeechDecoderLayoutV1, SpeechMotorPayload, SpeechTranslationInput, SpeechTranslationReceipt,
-    SpeechTranslationRequest, SurfaceTokenBinding, UtteranceId, UtteranceSourceKind,
-    LANGUAGE_GROUNDING_LEDGER_CAPACITY, SPEECH_TRANSLATION_MAX_BINDINGS,
-    SPEECH_TRANSLATION_MAX_SURFACE_CHARS,
+    SpeechTranslationRequest, SurfaceTokenBinding, UtteranceGroundingReceiptV2, UtteranceId,
+    UtteranceSourceKind, LANGUAGE_GROUNDING_LEDGER_CAPACITY, SPEECH_TRANSLATION_MAX_BINDINGS,
+    SPEECH_TRANSLATION_MAX_SURFACE_CHARS, UTTERANCE_GROUNDING_RECEIPT_V2_SCHEMA_VERSION,
 };
 pub use learning::{
     validate_outcome_credit_schema, FastWeightSemantics, LearningCommitToken,
