@@ -297,15 +297,13 @@ fn full_selection_matrix_receipts_preserve_manifest_world_identity() {
                 .unwrap();
             evidence.validate_contract().unwrap();
 
-            cached_equivalent_world_ids.extend(
-                std::iter::repeat_n(
-                    (
-                        evidence.manifest.world_variant_id,
-                        evidence.receipt.identity.world_variant_id,
-                    ),
-                    Era1Ability::ALL.len() * Era1Control::ALL.len(),
+            cached_equivalent_world_ids.extend(std::iter::repeat_n(
+                (
+                    evidence.manifest.world_variant_id,
+                    evidence.receipt.identity.world_variant_id,
                 ),
-            );
+                Era1Ability::ALL.len() * Era1Control::ALL.len(),
+            ));
         }
     }
 

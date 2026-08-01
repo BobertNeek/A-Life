@@ -649,7 +649,12 @@ pub fn recompute_era1_selection_profile_from_receipt(
 
     let objectives = ObjectiveVector {
         ecological: average_estimates(&[
-            ecology_score(PassiveMetricKind::SurvivalTicks),
+            aggregate_survival_readings(
+                evidence
+                    .ecology_receipts
+                    .iter()
+                    .map(|receipt| receipt.statistics.metric(PassiveMetricKind::SurvivalTicks)),
+            ),
             ecology_score(PassiveMetricKind::FoodSuccess),
             ecology_score(PassiveMetricKind::PoisonAvoidance),
             ecology_score(PassiveMetricKind::HazardAvoidance),
@@ -757,6 +762,34 @@ fn aggregate_readings(readings: impl Iterator<Item = MetricReading>) -> ScoreEst
     let mean_q16 = (value_sum + u128::from(reading_count / 2)) / u128::from(reading_count);
     ScoreEstimate::known(
         mean_q16 as f32 / 65_535.0,
+        u32::try_from(samples).unwrap_or(u32::MAX),
+    )
+}
+
+fn aggregate_survival_readings(readings: impl Iterator<Item = MetricReading>) -> ScoreEstimate {
+    const COMPLETE_WINDOW_TICKS: u32 =
+        Era1Ability::ALL.len() as u32 * alife_world::ERA1_TRIAL_END_TICK as u32;
+    let mut normalized_sum = 0.0_f64;
+    let mut reading_count = 0_u64;
+    let mut samples = 0_u64;
+    for reading in readings {
+        let MetricReading::Measured {
+            value_q16: survival_ticks,
+            exposures,
+        } = reading
+        else {
+            return ScoreEstimate::UNKNOWN;
+        };
+        normalized_sum +=
+            f64::from(survival_ticks.min(COMPLETE_WINDOW_TICKS)) / f64::from(COMPLETE_WINDOW_TICKS);
+        reading_count = reading_count.saturating_add(1);
+        samples = samples.saturating_add(exposures);
+    }
+    if reading_count == 0 {
+        return ScoreEstimate::UNKNOWN;
+    }
+    ScoreEstimate::known(
+        (normalized_sum / reading_count as f64) as f32,
         u32::try_from(samples).unwrap_or(u32::MAX),
     )
 }
@@ -1381,7 +1414,7 @@ fn selection_config(config: &Era1EvolutionConfig, generation: u32) -> ManagedSel
     ManagedSelectionConfig {
         selection_seed: derived_seed(config.evolution_seed, 0xE1A1_5000, u64::from(generation)),
         max_pairings: config.lineage_count,
-        minority_lineage_share_max: 0.20,
+        minority_lineage_share_max: 0.25,
         fragile_ecology_max: 0.30,
         high_cognition_min: 0.75,
         robust_ecology_min: 0.65,
@@ -1787,5 +1820,56 @@ fn derived_seed(root: u64, domain: u64, index: u64) -> u64 {
         1
     } else {
         value
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounded_selection_keeps_enough_distinct_parents_for_two_pairs() {
+        let foundation = alife_core::FoundationGeneticIdentity::new(
+            0x4E32_3034_385F_5631,
+            1,
+            0x4E32_3034_385F_FA11,
+            BrainCapacityClass::N2048_ID,
+        )
+        .unwrap();
+        let candidates = [71_001, 71_002, 71_003, 71_004]
+            .into_iter()
+            .enumerate()
+            .map(|(index, seed)| {
+                let ecological = if index == 1 { 0.424 } else { 0.419 };
+                let stability = if index == 1 { 0.109 } else { 0.103 };
+                SelectionCandidate {
+                    genome: CreatureGenome::early_mammal_founder(seed, foundation).unwrap(),
+                    objectives: ObjectiveVector {
+                        ecological: ScoreEstimate::known(ecological, 6),
+                        cognitive: ScoreEstimate::known(0.0, 6),
+                        social: ScoreEstimate::known(0.0, 6),
+                        group: ScoreEstimate::known(0.0, 6),
+                        stability: ScoreEstimate::known(stability, 6),
+                        efficiency: ScoreEstimate::known(0.20, 6),
+                        diversity: ScoreEstimate::known(0.0, 6),
+                    },
+                    known_ancestor_genome_ids: Vec::new(),
+                    population_share: 0.25,
+                    lane: PopulationLane::Managed,
+                    specialist_roles: Vec::new(),
+                }
+            })
+            .collect::<Vec<_>>();
+        let config = Era1EvolutionConfig::bounded_default(0xE1_6001).unwrap();
+
+        let plan = run_managed_selection(&candidates, &selection_config(&config, 1)).unwrap();
+
+        assert_eq!(plan.pairings.len(), 2);
+        let parent_ids = plan
+            .pairings
+            .iter()
+            .flat_map(|pairing| [pairing.maternal_genome_id.0, pairing.paternal_genome_id.0])
+            .collect::<BTreeSet<_>>();
+        assert_eq!(parent_ids.len(), 4);
     }
 }

@@ -444,7 +444,7 @@ fn selection_config(config: &Era1EvolutionConfig, generation: u32) -> ManagedSel
     ManagedSelectionConfig {
         selection_seed: derived_seed(config.evolution_seed, 0xE1A1_5000, u64::from(generation)),
         max_pairings: config.lineage_count,
-        minority_lineage_share_max: 0.20,
+        minority_lineage_share_max: 0.25,
         fragile_ecology_max: 0.30,
         high_cognition_min: 0.75,
         robust_ecology_min: 0.65,

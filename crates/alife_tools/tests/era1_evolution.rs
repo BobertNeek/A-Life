@@ -107,6 +107,61 @@ fn life_statistics(
     statistics
 }
 
+fn bounded_window_life_statistics(organism_id: OrganismId) -> PassiveLifeStatistics {
+    let regimes = [
+        EnvironmentalRegime::Temperate,
+        EnvironmentalRegime::Scarcity,
+        EnvironmentalRegime::Abundance,
+        EnvironmentalRegime::Hazardous,
+        EnvironmentalRegime::Social,
+        EnvironmentalRegime::Novel,
+    ];
+    let mut statistics = PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap();
+    for tick in 1..=220_u64 {
+        statistics
+            .observe(PassiveLifeEvent::SurvivalTick {
+                tick: Tick::new(tick),
+                regime: regimes[(tick as usize - 1) % regimes.len()],
+                energy_q16: 33_801,
+                movement_distance_q16: 0,
+                gpu_dispatched: true,
+                gpu_throttled: false,
+            })
+            .unwrap();
+    }
+    for event in [
+        PassiveLifeEvent::FoodOutcome { beneficial: false },
+        PassiveLifeEvent::PoisonEncounter { avoided: false },
+        PassiveLifeEvent::HazardEncounter { avoided: false },
+        PassiveLifeEvent::Reproduction { successful: true },
+        PassiveLifeEvent::SleepRetention { retained: false },
+        PassiveLifeEvent::LearningProbe { improvement_q16: 0 },
+        PassiveLifeEvent::ReversalRecovery {
+            ticks_to_recover: u32::MAX,
+        },
+        PassiveLifeEvent::VocabularyGrounding { correct: false },
+        PassiveLifeEvent::Comprehension {
+            assisted: false,
+            correct: false,
+        },
+        PassiveLifeEvent::Comprehension {
+            assisted: true,
+            correct: false,
+        },
+        PassiveLifeEvent::NarrationUtterance,
+        PassiveLifeEvent::Narration { faithful: false },
+        PassiveLifeEvent::PeerCommunication { successful: false },
+        PassiveLifeEvent::DialectTransfer { successful: false },
+        PassiveLifeEvent::DialectDivergence { distance_q16: 0 },
+    ] {
+        statistics.observe(event).unwrap();
+    }
+    statistics
+        .finalize(Tick::new(221), "completed bounded Era 1 window")
+        .unwrap();
+    statistics
+}
+
 fn complete_candidate_receipt(
     config: &Era1EvolutionConfig,
     genome: &CreatureGenome,
@@ -532,4 +587,21 @@ fn selection_profiles_are_derived_from_complete_receipts_and_unknown_ecology_blo
         ),
         Err(Era1EvolutionError::UnknownSelectionObjective(id)) if id == genome.id
     ));
+}
+
+#[test]
+fn complete_bounded_survival_window_is_scored_as_full_survival() {
+    let config = Era1EvolutionConfig::bounded_default(0xE1_5006).unwrap();
+    let genome = founder(56_001);
+    let organism_id = OrganismId(56_001);
+    let mut evidence = complete_candidate_receipt(&config, &genome, organism_id, 0);
+    for ecology in &mut evidence.ecology_receipts {
+        ecology.statistics = bounded_window_life_statistics(organism_id);
+    }
+
+    let profile =
+        recompute_era1_selection_profile_from_receipt(&config, &genome, &evidence, 4, &[]).unwrap();
+    let ecological = profile.objectives.ecological.value.unwrap();
+
+    assert!((0.419..0.420).contains(&ecological), "{ecological}");
 }
