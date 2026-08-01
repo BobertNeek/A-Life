@@ -147,6 +147,7 @@ impl Era1TrialRunEvidence {
             || self.receipt.identity.seed != self.manifest.seed
             || self.receipt.identity.organism_id != self.manifest.subject
             || self.receipt.identity.world_family_id != self.manifest.family as u64
+            || self.receipt.identity.world_variant_id != self.manifest.world_variant_id
             || expected_family(self.receipt.ability) != self.manifest.family
             || self.gpu_dispatches != step_count
             || self.gpu_dispatches != self.sealed_outcomes
@@ -759,12 +760,7 @@ impl Era1TrialRunner {
                 generation: request.generation,
                 brain_class_id: foundation.brain_class_id,
                 world_family_id: request.manifest.family as u64,
-                world_variant_id: request.manifest.world_variant_id
-                    | (if request.manifest.held_out_transform {
-                        1_u64 << 63
-                    } else {
-                        0
-                    }),
+                world_variant_id: request.manifest.world_variant_id,
             },
             ability: request.ability,
             control: request.control,

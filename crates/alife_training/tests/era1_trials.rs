@@ -264,6 +264,62 @@ fn social_disabled_individual_recognition_runs_without_peer_context() {
 }
 
 #[test]
+fn full_selection_matrix_receipts_preserve_manifest_world_identity() {
+    let genome = founder();
+    let mut runner = Era1TrialRunner::new_required().unwrap();
+    let mut cached_equivalent_world_ids = Vec::new();
+
+    for seed in [
+        10_088_248_881_632_464_300,
+        10_815_990_307_424_911_636,
+        13_102_473_484_765_781_889,
+    ] {
+        for world_variant_id in [10_281_973_548_057_731_878, 4_681_288_406_960_049_024] {
+            let manifest = Era1TrialManifest::new(
+                seed,
+                Era1WorldFamily::ForagingHazardMaze,
+                SUBJECT,
+                FAMILIAR,
+                NOVEL,
+                world_variant_id,
+                true,
+                41,
+            )
+            .unwrap();
+            let evidence = runner
+                .run(request(
+                    &genome,
+                    &manifest,
+                    Era1Ability::FlexibleForaging,
+                    Era1Control::Intact,
+                    Era1EvidencePartition::HeldOutTransfer,
+                ))
+                .unwrap();
+            evidence.validate_contract().unwrap();
+
+            cached_equivalent_world_ids.extend(
+                std::iter::repeat_n(
+                    (
+                        evidence.manifest.world_variant_id,
+                        evidence.receipt.identity.world_variant_id,
+                    ),
+                    Era1Ability::ALL.len() * Era1Control::ALL.len(),
+                ),
+            );
+        }
+    }
+
+    assert_eq!(cached_equivalent_world_ids.len(), 330);
+    assert_eq!(
+        cached_equivalent_world_ids
+            .iter()
+            .filter(|(manifest, receipt)| manifest != receipt)
+            .count(),
+        0
+    );
+}
+
+#[test]
 fn causal_request_rejects_mismatched_subject_generation_and_world_family() {
     let founder = founder();
     let manifest = manifest(Era1WorldFamily::ForagingHazardMaze);
