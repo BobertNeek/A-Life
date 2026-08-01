@@ -28,6 +28,7 @@ semantic-demo = ["dep:alife_semantic"]
 
 [dev-dependencies]
 alife_gpu_backend = { path = "../alife_gpu_backend", features = ["gpu-tests"] }
+tempfile = "3.23.0"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }

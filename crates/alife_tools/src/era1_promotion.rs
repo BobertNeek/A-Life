@@ -14,7 +14,7 @@ use alife_core::{
     MetricReading, OrganismId, PhenotypeHash, PolicyBackend, SensorProfile, Validate,
 };
 use alife_gpu_backend::closed_loop_shader_bundle_digest;
-use alife_training::{Era1TrialRunRequest, Era1TrialRunner};
+use alife_training::{Era1TrialRunEvidence, Era1TrialRunRequest, Era1TrialRunner};
 use alife_world::{Era1TrialManifest, Era1WorldFamily};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -23,7 +23,11 @@ use crate::{
     ei0_exit_gate::{
         run_ei0_exit_gate, validate_committed_ei0_exit_gate_report, Ei0ExitGateReport,
     },
-    era1_evolution::{run_era1_evolution, Era1EvolutionConfig, Era1EvolutionReceipt},
+    era1_evolution::{
+        run_era1_evolution, Era1EvolutionConfig, Era1EvolutionReceipt, Era1SelectionProfile,
+    },
+    p33_evaluation::{ObjectiveVector, ScoreEstimate},
+    p33_selection::SpecialistRole,
 };
 
 pub const ERA1_PROMOTION_SCHEMA_VERSION: u16 = 1;
@@ -224,6 +228,11 @@ pub fn derive_era1_promotion(
         {
             return Err(Era1PromotionError::InvalidEvidence(
                 "trial assistance, partition, source, or hardware identity changed",
+            ));
+        }
+        if trial.identity.world_family_id != canonical_world_family_id(trial.ability) {
+            return Err(Era1PromotionError::InvalidEvidence(
+                "ability is paired with the wrong canonical world family",
             ));
         }
         let Some((generation, lineage_slot, birth)) =
@@ -458,6 +467,23 @@ pub fn derive_era1_promotion(
     })
 }
 
+pub const fn canonical_world_family_id(ability: Era1Ability) -> u64 {
+    match ability {
+        Era1Ability::FlexibleForaging | Era1Ability::HazardAvoidance => {
+            Era1WorldFamily::ForagingHazardMaze as u64
+        }
+        Era1Ability::SpatialMemory
+        | Era1Ability::DelayedChoice
+        | Era1Ability::PostSleepRetention => Era1WorldFamily::DelayedLocation as u64,
+        Era1Ability::RewardReversal => Era1WorldFamily::RewardReversal as u64,
+        Era1Ability::ObjectTransfer => Era1WorldFamily::TransformedObjectsLayout as u64,
+        Era1Ability::MultiStepProblem => Era1WorldFamily::TwoStepAccessProblem as u64,
+        Era1Ability::IndividualRecognition => Era1WorldFamily::FamiliarNovelIndividual as u64,
+        Era1Ability::Imitation => Era1WorldFamily::PeerDemonstration as u64,
+        Era1Ability::GroundedLanguage => Era1WorldFamily::GroundedVocabulary as u64,
+    }
+}
+
 pub fn assess_era1_plateau(
     windows: &[Era1PlateauWindow],
 ) -> Result<Era1PlateauAssessment, Era1PromotionError> {
@@ -555,6 +581,7 @@ pub struct Era1EvidenceDigests {
     pub portable_save: String,
     pub archive_receipts: String,
     pub trial_receipts: String,
+    pub causal_trial_evidence: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -571,6 +598,8 @@ pub struct Era1CommittedPromotionReport {
     pub artifact_binding: Era1ArtifactBinding,
     pub baseline_save_archive_receipt: Ei0ExitGateReport,
     pub evolution: Era1EvolutionReceipt,
+    #[serde(default)]
+    pub trial_evidence: Vec<Era1TrialRunEvidence>,
     pub trial_receipts: Vec<Era1TrialReceipt>,
     pub matrix_coverage: Vec<Era1MatrixCoverage>,
     pub promotion: Era1PromotionReport,
@@ -607,11 +636,10 @@ pub fn run_era1_promotion_report() -> Result<Era1CommittedPromotionReport, Era1C
     ));
     fs::create_dir_all(&temp)?;
     let baseline_result = run_ei0_exit_gate(temp.join("ei0"));
-    let _ = fs::remove_dir_all(&temp);
     let baseline =
         baseline_result.map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
 
-    let evolution = bounded_evolution()?;
+    let evolution = bounded_evolution(&temp.join("era1"))?;
     let birth = evolution
         .generations
         .get(1)
@@ -656,7 +684,11 @@ pub fn run_era1_promotion_report() -> Result<Era1CommittedPromotionReport, Era1C
         .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
     let elapsed_ns = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
     let after_vram = observed_rtx_vram_bytes()?;
-    let trial_receipts = vec![evidence.receipt];
+    let trial_evidence = vec![evidence.clone()];
+    let trial_receipts = trial_evidence
+        .iter()
+        .map(|evidence| evidence.receipt.clone())
+        .collect::<Vec<_>>();
     let hardware = Era1HardwareCost {
         adapter_name: evidence.adapter_name,
         backend_api: evidence.backend_api,
@@ -681,12 +713,14 @@ pub fn run_era1_promotion_report() -> Result<Era1CommittedPromotionReport, Era1C
         adapter_name: REQUIRED_GPU_ADAPTER.to_string(),
         backend_api: REQUIRED_GPU_BACKEND_API.to_string(),
     };
-    let evidence_digests = derive_evidence_digests(&baseline, &evolution, &trial_receipts)?;
+    let evidence_digests =
+        derive_evidence_digests(&baseline, &evolution, &trial_receipts, &trial_evidence)?;
     let report = Era1CommittedPromotionReport {
         schema_version: ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION,
         artifact_binding,
         baseline_save_archive_receipt: baseline,
         evolution,
+        trial_evidence,
         trial_receipts,
         matrix_coverage,
         promotion,
@@ -699,6 +733,7 @@ pub fn run_era1_promotion_report() -> Result<Era1CommittedPromotionReport, Era1C
         },
     };
     validate_committed_era1_promotion_report(&report)?;
+    let _ = fs::remove_dir_all(&temp);
     Ok(report)
 }
 
@@ -733,7 +768,18 @@ pub fn validate_committed_era1_promotion_report(
         .evolution
         .validate_contract()
         .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
-    if report.trial_receipts.is_empty()
+    if report.trial_evidence.is_empty()
+        || report
+            .trial_evidence
+            .iter()
+            .any(|evidence| evidence.validate_contract().is_err())
+        || report.trial_receipts
+            != report
+                .trial_evidence
+                .iter()
+                .map(|evidence| evidence.receipt.clone())
+                .collect::<Vec<_>>()
+        || report.trial_receipts.is_empty()
         || report.trial_receipts.iter().any(|trial| {
             trial.validate_contract().is_err()
                 || !trial.assistance.is_empty()
@@ -799,6 +845,7 @@ pub fn validate_committed_era1_promotion_report(
         &report.baseline_save_archive_receipt,
         &report.evolution,
         &report.trial_receipts,
+        &report.trial_evidence,
     )? != report.evidence_digests
     {
         return Err(Era1CommittedReportError::Evidence(
@@ -808,7 +855,9 @@ pub fn validate_committed_era1_promotion_report(
     Ok(())
 }
 
-fn bounded_evolution() -> Result<Era1EvolutionReceipt, Era1CommittedReportError> {
+fn bounded_evolution(
+    artifact_root: &Path,
+) -> Result<Era1EvolutionReceipt, Era1CommittedReportError> {
     let foundation = FoundationGeneticIdentity::new(
         0x4E32_3034_385F_5631,
         1,
@@ -821,10 +870,36 @@ fn bounded_evolution() -> Result<Era1EvolutionReceipt, Era1CommittedReportError>
         .map(|seed| CreatureGenome::early_mammal_founder(seed, foundation))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
+    let profiles = founders
+        .iter()
+        .enumerate()
+        .map(|(index, founder)| Era1SelectionProfile {
+            founder_genome_id: founder.id,
+            objectives: ObjectiveVector {
+                ecological: ScoreEstimate::known(0.80 - index as f32 * 0.03, 12),
+                cognitive: ScoreEstimate::known(0.62 + index as f32 * 0.04, 12),
+                social: ScoreEstimate::known(0.60 + index as f32 * 0.03, 12),
+                group: ScoreEstimate::known(0.64 - index as f32 * 0.02, 12),
+                stability: ScoreEstimate::known(0.82 - index as f32 * 0.02, 12),
+                efficiency: ScoreEstimate::known(0.70 + index as f32 * 0.02, 12),
+                diversity: ScoreEstimate::known(0.55 + index as f32 * 0.05, 12),
+            },
+            known_ancestor_genome_ids: Vec::new(),
+            population_share: 0.25,
+            specialist_roles: match index {
+                0 => vec![SpecialistRole::EcologicalSurvivor],
+                1 => vec![SpecialistRole::Teacher],
+                2 => vec![SpecialistRole::Coordinator],
+                _ => vec![SpecialistRole::TransferSpecialist],
+            },
+        })
+        .collect::<Vec<_>>();
     run_era1_evolution(
         &Era1EvolutionConfig::bounded_default(0xE1_6001)
             .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?,
         &founders,
+        &profiles,
+        artifact_root,
     )
     .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))
 }
@@ -849,7 +924,7 @@ fn derive_matrix_coverage(
                 .collect::<Vec<_>>();
             let observed_receipts = u16::try_from(matching.len())
                 .map_err(|_| Era1CommittedReportError::Evidence("matrix count overflow"))?;
-            let status = if observed_receipts > 0
+            let status = if observed_receipts == required_receipts
                 && matching
                     .iter()
                     .all(|trial| matches!(trial.score, MetricReading::Measured { .. }))
@@ -874,6 +949,7 @@ fn derive_evidence_digests(
     baseline: &Ei0ExitGateReport,
     evolution: &Era1EvolutionReceipt,
     trials: &[Era1TrialReceipt],
+    trial_evidence: &[Era1TrialRunEvidence],
 ) -> Result<Era1EvidenceDigests, Era1CommittedReportError> {
     let foundation = FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1)
         .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
@@ -900,6 +976,7 @@ fn derive_evidence_digests(
             &baseline.evidence_digests.archive_composite_assets,
         ))?,
         trial_receipts: digest_json(trials)?,
+        causal_trial_evidence: digest_json(trial_evidence)?,
     })
 }
 

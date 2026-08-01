@@ -9,8 +9,8 @@ use alife_core::{
     MemoryBankConfig, MemorySidecarState, MetricReading, NeuralActionSelection, OrganismId,
     PerceptionFrameDigest, PhenotypeCompiler, PhenotypeHash, PolicyBackend, PostActionOutcome,
     PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, Tick, TrackedObjectId, UtteranceGroundingReceiptV2, UtteranceSourceKind,
-    Validate, WorldEntityId,
+    SensoryAbiVersion, SpeechMotorPayload, Tick, TrackedObjectId, UtteranceGroundingReceiptV2,
+    UtteranceSourceKind, Validate, WorldEntityId,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -69,6 +69,7 @@ pub struct Era1CausalStepReceipt {
     pub familiar_tracked_id: Option<TrackedObjectId>,
     pub novel_tracked_id: Option<TrackedObjectId>,
     pub behavior_success: bool,
+    pub speech_payload: Option<SpeechMotorPayload>,
     pub sealed_patch: ExperiencePatch,
 }
 
@@ -171,6 +172,7 @@ impl Era1TrialRunEvidence {
             self.peer_demonstration.as_ref(),
             &self.steps,
         )?;
+        validate_world_replay(self)?;
         if self.language_grounding.utterance_receipts_v2()
             != self.learning_assessment.grounding_receipts
         {
@@ -208,6 +210,7 @@ impl Era1TrialRunEvidence {
 
         for (index, step) in self.steps.iter().enumerate() {
             step.sealed_patch.validate_contract()?;
+            let neural_evidence = step.sealed_patch.decision().neural_evidence()?;
             let sequence = u64::try_from(index)
                 .ok()
                 .and_then(|value| value.checked_add(1))
@@ -231,6 +234,7 @@ impl Era1TrialRunEvidence {
                 || step.sealed_patch.pre_action().perception().frame_digest() != step.frame_digest
                 || step.sealed_patch.decision().selected_action.kind != step.selected_action
                 || step.sealed_patch.decision().selected_action.target_entity != step.target_entity
+                || neural_evidence.action_family != step.selected_family
                 || step.sealed_patch.outcome().success != step.outcome_success
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
@@ -618,9 +622,10 @@ impl Era1TrialRunner {
                 .iter()
                 .flatten()
                 .any(|token| token.source_kind == UtteranceSourceKind::Player);
+            let speech_payload = gpu_tick.speech_payload.clone();
             let action_result = world.apply_neural_command(
                 &decision.selected_action,
-                gpu_tick.speech_payload,
+                speech_payload.clone(),
                 speech_prompted,
             )?;
             let outcome_tick = Tick::new(world.tick().raw().saturating_add(1));
@@ -717,6 +722,7 @@ impl Era1TrialRunner {
                 familiar_tracked_id,
                 novel_tracked_id,
                 behavior_success: false,
+                speech_payload,
                 sealed_patch: patch.clone(),
             });
             homeostasis = homeostasis.advance(
@@ -1202,6 +1208,89 @@ fn validate_transition_receipts(
     Ok(())
 }
 
+fn validate_world_replay(evidence: &Era1TrialRunEvidence) -> Result<(), ScaffoldContractError> {
+    let mut world = build_era1_trial_world(&evidence.manifest)?;
+    if evidence.receipt.control == Era1Control::SocialDisabled {
+        remove_peer_agents(&mut world, evidence.receipt.identity.organism_id)?;
+    }
+    if world.canonical_signature_digest()?.words != evidence.initial_world_digest {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    if let Some(expected) = evidence.peer_demonstration.as_ref() {
+        let replayed = run_peer_demonstration(&evidence.manifest, &mut world)?;
+        if &replayed != expected {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+    }
+    let mut homeostasis = HomeostaticSnapshot::baseline(world.tick());
+    for step in &evidence.steps {
+        if let Some(transition) = evidence
+            .manifest
+            .transitions()
+            .into_iter()
+            .find(|transition| transition.at_tick == world.tick())
+        {
+            let expected = evidence
+                .transition_receipts
+                .iter()
+                .find(|receipt| receipt.transition == transition)
+                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+            let before = world.canonical_signature_digest()?.words;
+            apply_era1_world_transition(&evidence.manifest, transition, &mut world)?;
+            let after = world.canonical_signature_digest()?.words;
+            if expected.world_before_digest != before || expected.world_after_digest != after {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+        if evidence.receipt.control == Era1Control::SocialDisabled {
+            remove_peer_agents(&mut world, evidence.receipt.identity.organism_id)?;
+        }
+        if world.tick() != step.tick
+            || world.canonical_signature_digest()?.words != step.world_before_digest
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let _draft = world.perception_frame_draft(
+            evidence.receipt.identity.organism_id,
+            world.tick(),
+            SensorProfile::GroundedObjectSlotsV1,
+            homeostasis,
+        )?;
+        let prompted = step
+            .sealed_patch
+            .pre_action()
+            .perception()
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .flatten()
+            .any(|token| token.source_kind == UtteranceSourceKind::Player);
+        let replayed = world.apply_neural_command(
+            &step.sealed_patch.decision().selected_action,
+            step.speech_payload.clone(),
+            prompted,
+        )?;
+        if (replayed.execution.succeeded && replayed.observation.success)
+            != step.sealed_patch.outcome().success
+            || replayed.execution.physical != step.sealed_patch.outcome().physical
+            || world.canonical_signature_digest()?.words != step.world_after_action_digest
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        homeostasis = homeostasis.advance(
+            step.sealed_patch.outcome().outcome_tick,
+            step.sealed_patch.outcome().homeostatic_delta,
+            HomeostaticParameters::reference(),
+        )?;
+        world.advance_tick();
+    }
+    if world.tick().raw() != ERA1_TRIAL_END_TICK {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    Ok(())
+}
+
 fn validate_peer_demonstration(
     manifest: &Era1TrialManifest,
     control: Era1Control,
@@ -1288,6 +1377,18 @@ fn aggregate_sealed(steps: &[Era1CausalStepReceipt]) -> [u64; 4] {
         );
         write_optional_u64(&mut digest, step.novel_tracked_id.map(TrackedObjectId::raw));
         digest.write_bool(step.behavior_success);
+        match &step.speech_payload {
+            Some(payload) => {
+                digest.write_bool(true);
+                digest.write_u8(payload.speech_act as u8);
+                digest.write_sequence_len(payload.tokens.len());
+                for token in &payload.tokens {
+                    digest.write_u16(token.raw());
+                }
+                digest.write_u32(payload.confidence.raw().to_bits());
+            }
+            None => digest.write_bool(false),
+        }
     }
     digest.finish256()
 }

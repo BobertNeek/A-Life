@@ -4,12 +4,17 @@ use alife_core::{
     FoundationGeneticIdentity, MetricReading, OrganismId, PhenotypeHash, PolicyBackend,
     SensorProfile, ERA1_EVALUATION_SCHEMA_VERSION,
 };
-use alife_tools::era1_evolution::{run_era1_evolution, Era1EvolutionConfig, Era1EvolutionReceipt};
-use alife_tools::era1_promotion::{
-    assess_era1_plateau, derive_era1_promotion, validate_committed_era1_promotion_report,
-    Era1CommittedPromotionReport, Era1ComparisonStatus, Era1EvidenceStatus, Era1HardwareCost,
-    Era1PlateauStatus, Era1PromotionVerdict, ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION,
+use alife_tools::era1_evolution::{
+    run_era1_evolution, Era1EvolutionConfig, Era1EvolutionReceipt, Era1SelectionProfile,
 };
+use alife_tools::era1_promotion::{
+    assess_era1_plateau, canonical_world_family_id, derive_era1_promotion,
+    validate_committed_era1_promotion_report, Era1CommittedPromotionReport, Era1ComparisonStatus,
+    Era1EvidenceStatus, Era1HardwareCost, Era1PlateauStatus, Era1PromotionVerdict,
+    ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION,
+};
+use alife_tools::p33_evaluation::{ObjectiveVector, ScoreEstimate};
+use alife_tools::p33_selection::SpecialistRole;
 use std::{fs, path::PathBuf};
 
 const SOURCE_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -34,9 +39,31 @@ fn evolution() -> Era1EvolutionReceipt {
         founder(61_003),
         founder(61_004),
     ];
+    let profiles = founders
+        .iter()
+        .enumerate()
+        .map(|(index, founder)| Era1SelectionProfile {
+            founder_genome_id: founder.id,
+            objectives: ObjectiveVector {
+                ecological: ScoreEstimate::known(0.82 - index as f32 * 0.03, 12),
+                cognitive: ScoreEstimate::known(0.62 + index as f32 * 0.04, 12),
+                social: ScoreEstimate::known(0.60 + index as f32 * 0.02, 12),
+                group: ScoreEstimate::known(0.68 - index as f32 * 0.01, 12),
+                stability: ScoreEstimate::known(0.78 - index as f32 * 0.01, 12),
+                efficiency: ScoreEstimate::known(0.66 + index as f32 * 0.02, 12),
+                diversity: ScoreEstimate::known(0.55 + index as f32 * 0.05, 12),
+            },
+            known_ancestor_genome_ids: Vec::new(),
+            population_share: 0.25,
+            specialist_roles: vec![SpecialistRole::EcologicalSurvivor],
+        })
+        .collect::<Vec<_>>();
+    let root = tempfile::tempdir().unwrap();
     run_era1_evolution(
         &Era1EvolutionConfig::bounded_default(0xE1_6001).unwrap(),
         &founders,
+        &profiles,
+        root.path(),
     )
     .unwrap()
 }
@@ -67,7 +94,7 @@ fn complete_trials(evolution: &Era1EvolutionReceipt) -> Vec<Era1TrialReceipt> {
                                     lineage_id: birth.genome.lineage_id,
                                     generation: generation.generation,
                                     brain_class_id: BrainCapacityClass::N2048_ID,
-                                    world_family_id: ability as u64,
+                                    world_family_id: canonical_world_family_id(ability),
                                     world_variant_id,
                                 },
                                 ability,
@@ -300,6 +327,33 @@ fn assistance_source_mismatch_and_fabricated_provenance_are_rejected() {
 }
 
 #[test]
+fn every_ability_rejects_a_structurally_consistent_wrong_world_label() {
+    let evolution = evolution();
+    let trials = complete_trials(&evolution);
+    for ability in Era1Ability::ALL {
+        let mut relabelled = trials.clone();
+        let wrong = if canonical_world_family_id(ability) == 1 {
+            2
+        } else {
+            1
+        };
+        for trial in relabelled
+            .iter_mut()
+            .filter(|trial| trial.ability == ability)
+        {
+            trial.identity.world_family_id = wrong;
+        }
+        assert!(derive_era1_promotion(
+            &evolution,
+            &relabelled,
+            hardware(relabelled.len()),
+            &plateau_windows(),
+        )
+        .is_err());
+    }
+}
+
+#[test]
 fn plateau_needs_three_consecutive_low_gain_nonregressing_windows() {
     let measured = assess_era1_plateau(&plateau_windows()).unwrap();
     assert_eq!(measured.status, Era1PlateauStatus::Measured);
@@ -351,11 +405,7 @@ fn committed_report_recomputes_source_receipts_and_unknown_gate_outcome() {
     assert!(report
         .matrix_coverage
         .iter()
-        .any(|cell| cell.status == Era1EvidenceStatus::Measured));
-    assert!(report
-        .matrix_coverage
-        .iter()
-        .any(|cell| cell.status == Era1EvidenceStatus::Unknown));
+        .all(|cell| cell.status == Era1EvidenceStatus::Unknown));
     assert_eq!(report.promotion.verdict, Era1PromotionVerdict::Blocked);
     assert_eq!(report.promotion.plateau.status, Era1PlateauStatus::Unknown);
     assert!(!report.boundaries.assistance_present);
@@ -366,6 +416,11 @@ fn committed_report_recomputes_source_receipts_and_unknown_gate_outcome() {
     let mut tampered = report.clone();
     tampered.trial_receipts[0].world_digest[0] ^= 1;
     assert!(validate_committed_era1_promotion_report(&tampered).is_err());
+
+    let mut hand_authored = report.clone();
+    hand_authored.trial_evidence[0].steps[0].world_after_action_digest[0] ^= 1;
+    hand_authored.trial_receipts[0] = hand_authored.trial_evidence[0].receipt.clone();
+    assert!(validate_committed_era1_promotion_report(&hand_authored).is_err());
 
     let mut wrong_source = report;
     wrong_source.artifact_binding.source_contract_digest =
