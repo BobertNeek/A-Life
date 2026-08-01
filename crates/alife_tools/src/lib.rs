@@ -4,6 +4,7 @@ pub mod benchmark;
 pub mod creature_part_builder;
 pub mod ei0_exit_gate;
 pub mod era1_evolution;
+pub mod era1_promotion;
 pub mod g16_content_authoring;
 pub mod p30_bundle;
 pub mod p30_cluster;
