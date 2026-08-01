@@ -243,6 +243,27 @@ fn causal_controls_change_only_the_named_mechanism() {
 }
 
 #[test]
+fn social_disabled_individual_recognition_runs_without_peer_context() {
+    let genome = founder();
+    let recognition = manifest(Era1WorldFamily::FamiliarNovelIndividual);
+    let mut runner = Era1TrialRunner::new_required().unwrap();
+
+    let evidence = runner
+        .run(request(
+            &genome,
+            &recognition,
+            Era1Ability::IndividualRecognition,
+            Era1Control::SocialDisabled,
+            Era1EvidencePartition::HeldOutTransfer,
+        ))
+        .unwrap();
+
+    evidence.validate_contract().unwrap();
+    assert!(!evidence.social_context_present);
+    assert!(evidence.steps.iter().all(|step| !step.peer_visible));
+}
+
+#[test]
 fn causal_request_rejects_mismatched_subject_generation_and_world_family() {
     let founder = founder();
     let manifest = manifest(Era1WorldFamily::ForagingHazardMaze);

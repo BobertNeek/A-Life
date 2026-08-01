@@ -305,7 +305,9 @@ pub fn apply_era1_world_transition(
             move_label(world, OBJECT_B_LABEL, position(manifest, 2.0, -2.0))?;
         }
         (Era1WorldFamily::FamiliarNovelIndividual, Era1TrialPhase::Probe) => {
-            move_label(world, FAMILIAR_LABEL, position(manifest, -2.0, 0.0))?;
+            if world.entity_id(FAMILIAR_LABEL).is_some() {
+                move_label(world, FAMILIAR_LABEL, position(manifest, -2.0, 0.0))?;
+            }
             let novel = world.editor_spawn_object(WorldEditorSpawnSpec {
                 label: NOVEL_LABEL.to_string(),
                 kind: WorldObjectKind::Agent,
