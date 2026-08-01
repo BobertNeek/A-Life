@@ -5,10 +5,13 @@ use std::path::Path;
 
 use alife_archive::{CompositeGeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
-    BrainCapacityClass, BrainScaleTier, CreatureGenome, Era1Control, FoundationWeightAsset,
-    GenomeId, HomeostaticSnapshot, LanguageTokenId, OrganismId, PhenotypeCompiler, PolicyBackend,
+    BrainCapacityClass, BrainScaleTier, CreatureGenome, EnvironmentalRegime, Era1Ability,
+    Era1Control, Era1EvidencePartition, Era1TrialReceipt, FoundationWeightAsset, GenomeId,
+    HomeostaticSnapshot, LanguageTokenId, LineageId, MetricReading, OrganismId, PassiveLifeEvent,
+    PassiveLifeStatistics, PassiveMetricKind, PhenotypeCompiler, PolicyBackend,
     ScaffoldContractError, SensorProfile, Tick, Validate,
 };
+use alife_training::Era1TrialRunEvidence;
 use alife_world::{
     persist_composite_genetic_birth_assets, AssetManifest, CreatureAppearanceGenome,
     CreatureMindSaveSummary, CreatureSaveState, Habitat, HabitatActor, HabitatAuthority,
@@ -24,8 +27,14 @@ use crate::p33_selection::{
     run_managed_selection, ManagedBreedingPlan, ManagedSelectionConfig, PopulationLane,
     SelectionCandidate, SpecialistRole,
 };
+use crate::{
+    ei0_exit_gate::{validate_committed_ei0_exit_gate_report, Ei0ExitGateReport},
+    era1_promotion::canonical_world_family_id,
+};
 
-pub const ERA1_EVOLUTION_SCHEMA_VERSION: u16 = 1;
+pub const ERA1_EVOLUTION_SCHEMA_VERSION: u16 = 2;
+pub const ERA1_SELECTION_EVIDENCE_SCHEMA_VERSION: u16 = 1;
+pub const ERA1_ECOLOGY_RECEIPT_SCHEMA_VERSION: u16 = 1;
 const BOUNDED_LINEAGES: usize = 4;
 const BOUNDED_EVALUATION_SEEDS: usize = 3;
 const BOUNDED_HELD_OUT_TRANSFORMS: usize = 2;
@@ -102,28 +111,677 @@ impl Era1AcquiredStateEvidence {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Era1SelectionCandidateIdentity {
+    pub organism_id: OrganismId,
+    pub genome_id: GenomeId,
+    pub parent_genome_ids: Vec<GenomeId>,
+    pub lineage_id: LineageId,
+    pub generation: u32,
+}
+
+impl Era1SelectionCandidateIdentity {
+    fn validate_contract(&self) -> Result<(), Era1EvolutionError> {
+        self.organism_id.validate()?;
+        self.genome_id.validate()?;
+        self.lineage_id.validate()?;
+        match self.generation {
+            0 if self.parent_genome_ids.is_empty() => Ok(()),
+            0 => Err(Era1EvolutionError::InvalidEvidence(
+                "founder selection identity has parents",
+            )),
+            _ if self.parent_genome_ids.len() == 2
+                && self.parent_genome_ids[0] != self.parent_genome_ids[1] =>
+            {
+                self.parent_genome_ids[0].validate()?;
+                self.parent_genome_ids[1].validate()?;
+                Ok(())
+            }
+            _ => Err(Era1EvolutionError::InvalidEvidence(
+                "offspring selection identity has invalid parents",
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Era1EcologyReceipt {
+    pub schema_version: u16,
+    pub identity: Era1SelectionCandidateIdentity,
+    pub evaluation_seed: u64,
+    pub world_variant_id: u64,
+    pub statistics: PassiveLifeStatistics,
+    pub trial_evidence_digest: String,
+    pub reproduction_partner: CreatureGenome,
+    pub reproduction_seed: u64,
+    pub reproduction_offspring_genome_id: GenomeId,
+    pub source_commit: String,
+    pub source_tree: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Era1CandidateSelectionEvidence {
+    pub schema_version: u16,
+    pub identity: Era1SelectionCandidateIdentity,
+    pub trial_evidence: Vec<Era1TrialRunEvidence>,
+    pub ecology_receipts: Vec<Era1EcologyReceipt>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Era1CandidateSelectionReceipt {
+    pub schema_version: u16,
+    pub identity: Era1SelectionCandidateIdentity,
+    pub trial_receipts: Vec<Era1TrialReceipt>,
+    pub ecology_receipts: Vec<Era1EcologyReceipt>,
+}
+
+pub fn derive_era1_ecology_receipt(
+    identity: &Era1SelectionCandidateIdentity,
+    candidate: &CreatureGenome,
+    reproduction_partner: &CreatureGenome,
+    reproduction_seed: u64,
+    evaluation_seed: u64,
+    world_variant_id: u64,
+    trial_evidence: &[Era1TrialRunEvidence],
+) -> Result<Era1EcologyReceipt, Era1EvolutionError> {
+    identity.validate_contract()?;
+    candidate.validate_contract()?;
+    reproduction_partner.validate_contract()?;
+    if identity.genome_id != candidate.id
+        || identity.parent_genome_ids != candidate.parent_genome_ids
+        || identity.lineage_id != candidate.lineage_id
+        || reproduction_partner.id == candidate.id
+        || reproduction_seed == 0
+    {
+        return Err(Era1EvolutionError::InvalidEvidence(
+            "ecology reproduction assay identity is invalid",
+        ));
+    }
+
+    let mut intact = trial_evidence
+        .iter()
+        .filter(|trial| {
+            trial.receipt.identity.seed == evaluation_seed
+                && trial.receipt.identity.world_variant_id == world_variant_id
+                && trial.receipt.control == Era1Control::Intact
+        })
+        .collect::<Vec<_>>();
+    intact.sort_by_key(|trial| trial.receipt.ability);
+    if intact.len() != Era1Ability::ALL.len()
+        || intact
+            .iter()
+            .zip(Era1Ability::ALL)
+            .any(|(trial, ability)| trial.receipt.ability != ability)
+    {
+        return Err(Era1EvolutionError::InvalidEvidence(
+            "ecology collector is missing intact ability evidence",
+        ));
+    }
+
+    let mut source_binding: Option<(&str, &str)> = None;
+    let mut statistics = PassiveLifeStatistics::new(identity.organism_id, Tick::ZERO)?;
+    let mut ecology_tick = 0_u64;
+    let mut imitation_score = None;
+    let mut recognition_score = None;
+    for trial in &intact {
+        trial.validate_contract()?;
+        if trial.receipt.identity.organism_id != identity.organism_id
+            || trial.receipt.identity.genome_id != identity.genome_id
+            || trial.receipt.identity.parent_genome_ids != identity.parent_genome_ids
+            || trial.receipt.identity.lineage_id != identity.lineage_id
+            || trial.receipt.identity.generation != identity.generation
+        {
+            return Err(Era1EvolutionError::InvalidEvidence(
+                "ecology trial identity does not match candidate",
+            ));
+        }
+        match source_binding {
+            None => {
+                source_binding = Some((&trial.receipt.source_commit, &trial.receipt.source_tree))
+            }
+            Some((commit, tree))
+                if commit == trial.receipt.source_commit && tree == trial.receipt.source_tree => {}
+            Some(_) => {
+                return Err(Era1EvolutionError::InvalidEvidence(
+                    "ecology trial source binding changed",
+                ))
+            }
+        }
+
+        for step in &trial.steps {
+            statistics.observe_sealed_patch(&step.sealed_patch)?;
+            ecology_tick = ecology_tick.saturating_add(1);
+            let homeostasis = step.sealed_patch.pre_action().homeostasis();
+            let displacement = step.sealed_patch.outcome().physical.displacement;
+            let movement = (displacement.x * displacement.x
+                + displacement.y * displacement.y
+                + displacement.z * displacement.z)
+                .sqrt()
+                .clamp(0.0, 1.0);
+            statistics.observe(PassiveLifeEvent::SurvivalTick {
+                tick: Tick::new(ecology_tick),
+                regime: ecology_regime(trial.receipt.ability),
+                energy_q16: unit_f32_to_q16(homeostasis.drives.brain_atp),
+                movement_distance_q16: unit_f32_to_q16(movement),
+                gpu_dispatched: true,
+                gpu_throttled: false,
+            })?;
+        }
+
+        let demonstrated = trial.learning_assessment.demonstrated;
+        statistics.observe(PassiveLifeEvent::LearningProbe {
+            improvement_q16: u32::try_from(
+                trial.learning_assessment.acquisition_improvement_q16.max(0),
+            )
+            .unwrap_or(u32::MAX)
+            .min(65_535),
+        })?;
+        match trial.receipt.ability {
+            Era1Ability::FlexibleForaging => {
+                statistics.observe(PassiveLifeEvent::FoodOutcome {
+                    beneficial: demonstrated,
+                })?;
+            }
+            Era1Ability::HazardAvoidance => {
+                statistics.observe(PassiveLifeEvent::PoisonEncounter {
+                    avoided: demonstrated,
+                })?;
+                statistics.observe(PassiveLifeEvent::HazardEncounter {
+                    avoided: demonstrated,
+                })?;
+            }
+            Era1Ability::RewardReversal => {
+                let ticks_to_recover = trial
+                    .learning_assessment
+                    .causal_proof
+                    .successful_behavior_ticks
+                    .first()
+                    .map(|tick| u32::try_from(tick.raw()).unwrap_or(u32::MAX))
+                    .unwrap_or(u32::MAX);
+                statistics.observe(PassiveLifeEvent::ReversalRecovery { ticks_to_recover })?;
+            }
+            Era1Ability::IndividualRecognition => {
+                recognition_score = trial.receipt.score.value_q16();
+                statistics.observe(PassiveLifeEvent::PeerCommunication {
+                    successful: demonstrated,
+                })?;
+            }
+            Era1Ability::Imitation => {
+                imitation_score = trial.receipt.score.value_q16();
+                statistics.observe(PassiveLifeEvent::DialectTransfer {
+                    successful: demonstrated,
+                })?;
+            }
+            Era1Ability::GroundedLanguage => {
+                let grounding_proven =
+                    demonstrated && !trial.learning_assessment.grounding_receipts.is_empty();
+                statistics.observe(PassiveLifeEvent::VocabularyGrounding {
+                    correct: grounding_proven,
+                })?;
+                statistics.observe(PassiveLifeEvent::Comprehension {
+                    assisted: false,
+                    correct: grounding_proven,
+                })?;
+            }
+            Era1Ability::PostSleepRetention => {
+                statistics.observe(PassiveLifeEvent::SleepRetention {
+                    retained: demonstrated,
+                })?;
+            }
+            Era1Ability::SpatialMemory
+            | Era1Ability::DelayedChoice
+            | Era1Ability::ObjectTransfer
+            | Era1Ability::MultiStepProblem => {}
+        }
+    }
+
+    let offspring = CreatureGenome::reproduce(candidate, reproduction_partner, reproduction_seed)?;
+    offspring.validate_contract()?;
+    statistics.observe(PassiveLifeEvent::Reproduction { successful: true })?;
+    let dialect_distance = imitation_score
+        .zip(recognition_score)
+        .map(|(imitation, recognition)| imitation.abs_diff(recognition))
+        .ok_or(Era1EvolutionError::UnknownSelectionObjective(candidate.id))?;
+    statistics.observe(PassiveLifeEvent::DialectDivergence {
+        distance_q16: dialect_distance,
+    })?;
+    statistics.finalize(
+        Tick::new(ecology_tick.saturating_add(1)),
+        "completed authoritative Era 1 ecology evaluation",
+    )?;
+    let (source_commit, source_tree) = source_binding.ok_or(
+        Era1EvolutionError::InvalidEvidence("ecology evidence has no source binding"),
+    )?;
+    Ok(Era1EcologyReceipt {
+        schema_version: ERA1_ECOLOGY_RECEIPT_SCHEMA_VERSION,
+        identity: identity.clone(),
+        evaluation_seed,
+        world_variant_id,
+        statistics,
+        trial_evidence_digest: digest_bytes(&serde_json::to_vec(&intact)?),
+        reproduction_partner: reproduction_partner.clone(),
+        reproduction_seed,
+        reproduction_offspring_genome_id: offspring.id,
+        source_commit: source_commit.to_string(),
+        source_tree: source_tree.to_string(),
+    })
+}
+
+fn ecology_regime(ability: Era1Ability) -> EnvironmentalRegime {
+    match ability {
+        Era1Ability::FlexibleForaging => EnvironmentalRegime::Scarcity,
+        Era1Ability::HazardAvoidance | Era1Ability::RewardReversal => {
+            EnvironmentalRegime::Hazardous
+        }
+        Era1Ability::IndividualRecognition
+        | Era1Ability::Imitation
+        | Era1Ability::GroundedLanguage => EnvironmentalRegime::Social,
+        Era1Ability::ObjectTransfer | Era1Ability::MultiStepProblem => EnvironmentalRegime::Novel,
+        Era1Ability::SpatialMemory | Era1Ability::DelayedChoice => EnvironmentalRegime::Temperate,
+        Era1Ability::PostSleepRetention => EnvironmentalRegime::Abundance,
+    }
+}
+
+fn unit_f32_to_q16(value: f32) -> u32 {
+    (value.clamp(0.0, 1.0) * 65_535.0).round() as u32
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Era1SelectionProfile {
-    pub founder_genome_id: GenomeId,
+    pub identity: Era1SelectionCandidateIdentity,
     pub objectives: ObjectiveVector,
     pub known_ancestor_genome_ids: Vec<GenomeId>,
     pub population_share: f32,
     pub specialist_roles: Vec<SpecialistRole>,
+    pub evidence_digest: String,
+    pub source_commit: String,
+    pub source_tree: String,
 }
 
 impl Era1SelectionProfile {
     pub fn validate_contract(&self) -> Result<(), Era1EvolutionError> {
-        self.founder_genome_id.validate()?;
+        self.identity.validate_contract()?;
         if !self.objectives.all_known()
             || !self.population_share.is_finite()
             || !(0.0..=1.0).contains(&self.population_share)
+            || !valid_digest_text(&self.evidence_digest)
+            || !valid_git_object_id(&self.source_commit)
+            || !valid_git_object_id(&self.source_tree)
         {
             return Err(Era1EvolutionError::UnknownSelectionObjective(
-                self.founder_genome_id,
+                self.identity.genome_id,
             ));
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Era1SelectionRoundReceipt {
+    pub parent_generation: u32,
+    pub evidence: Vec<Era1CandidateSelectionReceipt>,
+    pub derived_profiles: Vec<Era1SelectionProfile>,
+}
+
+pub fn derive_era1_selection_profile(
+    config: &Era1EvolutionConfig,
+    genome: &CreatureGenome,
+    evidence: &Era1CandidateSelectionEvidence,
+    population_size: usize,
+    known_ancestor_genome_ids: &[GenomeId],
+) -> Result<Era1SelectionProfile, Era1EvolutionError> {
+    let receipt = validate_completed_selection_evidence(config, genome, evidence)?;
+    recompute_era1_selection_profile_from_receipt(
+        config,
+        genome,
+        &receipt,
+        population_size,
+        known_ancestor_genome_ids,
+    )
+}
+
+fn validate_completed_selection_evidence(
+    config: &Era1EvolutionConfig,
+    genome: &CreatureGenome,
+    evidence: &Era1CandidateSelectionEvidence,
+) -> Result<Era1CandidateSelectionReceipt, Era1EvolutionError> {
+    config.validate_contract()?;
+    genome.validate_contract()?;
+    if evidence.schema_version != ERA1_SELECTION_EVIDENCE_SCHEMA_VERSION
+        || evidence.identity.genome_id != genome.id
+        || evidence.identity.parent_genome_ids != genome.parent_genome_ids
+        || evidence.identity.lineage_id != genome.lineage_id
+    {
+        return Err(Era1EvolutionError::InvalidEvidence(
+            "completed selection evidence identity is invalid",
+        ));
+    }
+    let mut trial_receipts = Vec::with_capacity(evidence.trial_evidence.len());
+    for trial in &evidence.trial_evidence {
+        trial.validate_contract()?;
+        trial_receipts.push(trial.receipt.clone());
+    }
+    let expected_trial_count = config
+        .evaluation_seeds
+        .len()
+        .checked_mul(config.held_out_world_transforms.len())
+        .and_then(|count| count.checked_mul(Era1Ability::ALL.len()))
+        .and_then(|count| count.checked_mul(config.controls.len()))
+        .ok_or(Era1EvolutionError::InvalidEvidence(
+            "selection trial coverage overflow",
+        ))?;
+    if trial_receipts.len() != expected_trial_count {
+        return Err(Era1EvolutionError::InvalidEvidence(
+            "selection trial coverage is incomplete",
+        ));
+    }
+    for ecology in &evidence.ecology_receipts {
+        let expected = derive_era1_ecology_receipt(
+            &evidence.identity,
+            genome,
+            &ecology.reproduction_partner,
+            ecology.reproduction_seed,
+            ecology.evaluation_seed,
+            ecology.world_variant_id,
+            &evidence.trial_evidence,
+        )?;
+        if ecology != &expected {
+            return Err(Era1EvolutionError::InvalidEvidence(
+                "ecology receipt does not recompute from causal runtime evidence",
+            ));
+        }
+    }
+    Ok(Era1CandidateSelectionReceipt {
+        schema_version: evidence.schema_version,
+        identity: evidence.identity.clone(),
+        trial_receipts,
+        ecology_receipts: evidence.ecology_receipts.clone(),
+    })
+}
+
+pub fn recompute_era1_selection_profile_from_receipt(
+    config: &Era1EvolutionConfig,
+    genome: &CreatureGenome,
+    evidence: &Era1CandidateSelectionReceipt,
+    population_size: usize,
+    known_ancestor_genome_ids: &[GenomeId],
+) -> Result<Era1SelectionProfile, Era1EvolutionError> {
+    config.validate_contract()?;
+    genome.validate_contract()?;
+    evidence.identity.validate_contract()?;
+    if evidence.schema_version != ERA1_SELECTION_EVIDENCE_SCHEMA_VERSION
+        || population_size == 0
+        || evidence.identity.genome_id != genome.id
+        || evidence.identity.parent_genome_ids != genome.parent_genome_ids
+        || evidence.identity.lineage_id != genome.lineage_id
+    {
+        return Err(Era1EvolutionError::InvalidEvidence(
+            "selection evidence identity does not match candidate genome",
+        ));
+    }
+
+    let expected_trial_count = config
+        .evaluation_seeds
+        .len()
+        .checked_mul(config.held_out_world_transforms.len())
+        .and_then(|count| count.checked_mul(Era1Ability::ALL.len()))
+        .and_then(|count| count.checked_mul(config.controls.len()))
+        .ok_or(Era1EvolutionError::InvalidEvidence(
+            "selection trial coverage overflow",
+        ))?;
+    if evidence.trial_receipts.len() != expected_trial_count {
+        return Err(Era1EvolutionError::InvalidEvidence(
+            "selection trial coverage is incomplete",
+        ));
+    }
+    let mut trial_keys = BTreeSet::new();
+    let mut source_binding: Option<(&str, &str)> = None;
+    for receipt in &evidence.trial_receipts {
+        receipt.validate_contract()?;
+        let identity = &receipt.identity;
+        if identity.organism_id != evidence.identity.organism_id
+            || identity.genome_id != evidence.identity.genome_id
+            || identity.parent_genome_ids != evidence.identity.parent_genome_ids
+            || identity.lineage_id != evidence.identity.lineage_id
+            || identity.generation != evidence.identity.generation
+            || identity.brain_class_id != genome.foundation.brain_class_id
+            || receipt.foundation_id != genome.foundation.foundation_id
+            || receipt.foundation_version != u32::from(genome.foundation.version)
+            || !config.controls.contains(&receipt.control)
+            || receipt.partition != Era1EvidencePartition::HeldOutTransfer
+            || !receipt.assistance.is_empty()
+            || identity.world_family_id != canonical_world_family_id(receipt.ability)
+            || !config.evaluation_seeds.contains(&identity.seed)
+            || !config
+                .held_out_world_transforms
+                .contains(&identity.world_variant_id)
+            || !matches!(receipt.score, MetricReading::Measured { .. })
+        {
+            return Err(Era1EvolutionError::InvalidEvidence(
+                "selection trial receipt has mismatched or incomplete provenance",
+            ));
+        }
+        if !trial_keys.insert((
+            identity.seed,
+            identity.world_variant_id,
+            receipt.ability,
+            receipt.control,
+        )) {
+            return Err(Era1EvolutionError::InvalidEvidence(
+                "selection trial coverage contains duplicates",
+            ));
+        }
+        match source_binding {
+            None => source_binding = Some((&receipt.source_commit, &receipt.source_tree)),
+            Some((commit, tree))
+                if commit == receipt.source_commit && tree == receipt.source_tree => {}
+            Some(_) => {
+                return Err(Era1EvolutionError::InvalidEvidence(
+                    "selection trial source binding changed",
+                ))
+            }
+        }
+    }
+
+    let expected_ecology_count = config
+        .evaluation_seeds
+        .len()
+        .checked_mul(config.held_out_world_transforms.len())
+        .ok_or(Era1EvolutionError::InvalidEvidence(
+            "ecology coverage overflow",
+        ))?;
+    if evidence.ecology_receipts.len() != expected_ecology_count {
+        return Err(Era1EvolutionError::InvalidEvidence(
+            "ecology coverage is incomplete",
+        ));
+    }
+    let mut ecology_keys = BTreeSet::new();
+    for receipt in &evidence.ecology_receipts {
+        receipt.identity.validate_contract()?;
+        receipt.statistics.validate_contract()?;
+        receipt.reproduction_partner.validate_contract()?;
+        let expected_offspring = CreatureGenome::reproduce(
+            genome,
+            &receipt.reproduction_partner,
+            receipt.reproduction_seed,
+        )?;
+        let Some((commit, tree)) = source_binding else {
+            return Err(Era1EvolutionError::InvalidEvidence(
+                "selection evidence has no source binding",
+            ));
+        };
+        if receipt.schema_version != ERA1_ECOLOGY_RECEIPT_SCHEMA_VERSION
+            || receipt.identity != evidence.identity
+            || receipt.statistics.organism_id() != evidence.identity.organism_id
+            || receipt.statistics.death_tick().is_none()
+            || !valid_digest_text(&receipt.trial_evidence_digest)
+            || receipt.reproduction_seed == 0
+            || receipt.reproduction_partner.id == genome.id
+            || receipt.reproduction_offspring_genome_id != expected_offspring.id
+            || !config.evaluation_seeds.contains(&receipt.evaluation_seed)
+            || !config
+                .held_out_world_transforms
+                .contains(&receipt.world_variant_id)
+            || receipt.source_commit != commit
+            || receipt.source_tree != tree
+            || !ecology_keys.insert((receipt.evaluation_seed, receipt.world_variant_id))
+        {
+            return Err(Era1EvolutionError::InvalidEvidence(
+                "ecology receipt has mismatched or incomplete provenance",
+            ));
+        }
+    }
+
+    let trial_score = |ability| {
+        aggregate_readings(evidence.trial_receipts.iter().filter_map(|receipt| {
+            (receipt.ability == ability && receipt.control == Era1Control::Intact)
+                .then_some(receipt.score)
+        }))
+    };
+    let ecology_score = |kind| {
+        aggregate_readings(
+            evidence
+                .ecology_receipts
+                .iter()
+                .map(|receipt| receipt.statistics.metric(kind)),
+        )
+    };
+
+    let objectives = ObjectiveVector {
+        ecological: average_estimates(&[
+            ecology_score(PassiveMetricKind::SurvivalTicks),
+            ecology_score(PassiveMetricKind::FoodSuccess),
+            ecology_score(PassiveMetricKind::PoisonAvoidance),
+            ecology_score(PassiveMetricKind::HazardAvoidance),
+            ecology_score(PassiveMetricKind::EnergyStability),
+            ecology_score(PassiveMetricKind::Reproduction),
+        ]),
+        cognitive: average_estimates(&[
+            trial_score(Era1Ability::FlexibleForaging),
+            trial_score(Era1Ability::HazardAvoidance),
+            trial_score(Era1Ability::SpatialMemory),
+            trial_score(Era1Ability::DelayedChoice),
+            trial_score(Era1Ability::RewardReversal),
+            trial_score(Era1Ability::ObjectTransfer),
+            trial_score(Era1Ability::MultiStepProblem),
+            trial_score(Era1Ability::PostSleepRetention),
+            ecology_score(PassiveMetricKind::LearningSlope),
+        ]),
+        social: average_estimates(&[
+            trial_score(Era1Ability::IndividualRecognition),
+            trial_score(Era1Ability::Imitation),
+            trial_score(Era1Ability::GroundedLanguage),
+            ecology_score(PassiveMetricKind::VocabularyGrounding),
+            ecology_score(PassiveMetricKind::UnaidedComprehension),
+            ecology_score(PassiveMetricKind::PeerCommunication),
+        ]),
+        group: average_estimates(&[
+            trial_score(Era1Ability::Imitation),
+            trial_score(Era1Ability::IndividualRecognition),
+            ecology_score(PassiveMetricKind::PeerCommunication),
+            ecology_score(PassiveMetricKind::DialectTransfer),
+        ]),
+        stability: average_estimates(&[
+            trial_score(Era1Ability::RewardReversal),
+            trial_score(Era1Ability::PostSleepRetention),
+            ecology_score(PassiveMetricKind::EnergyStability),
+            ecology_score(PassiveMetricKind::SleepRetention),
+            ecology_score(PassiveMetricKind::ReversalRecovery),
+        ]),
+        efficiency: average_estimates(&[
+            trial_score(Era1Ability::FlexibleForaging),
+            trial_score(Era1Ability::MultiStepProblem),
+            ecology_score(PassiveMetricKind::FoodSuccess),
+            ecology_score(PassiveMetricKind::Movement),
+            ecology_score(PassiveMetricKind::GpuThrottleAvoidance),
+        ]),
+        diversity: average_estimates(&[
+            trial_score(Era1Ability::ObjectTransfer),
+            ecology_score(PassiveMetricKind::DialectTransfer),
+            ecology_score(PassiveMetricKind::DialectDivergence),
+        ]),
+    };
+
+    let mut ancestors = known_ancestor_genome_ids.to_vec();
+    ancestors.sort_by_key(|id| id.0);
+    ancestors.dedup();
+    let mut specialist_roles = Vec::new();
+    if estimate_at_least(objectives.ecological, 0.75) {
+        specialist_roles.push(SpecialistRole::EcologicalSurvivor);
+    }
+    if estimate_at_least(objectives.cognitive, 0.75) {
+        specialist_roles.push(SpecialistRole::TransferSpecialist);
+    }
+    if estimate_at_least(objectives.social, 0.75) {
+        specialist_roles.push(SpecialistRole::Teacher);
+    }
+    if estimate_at_least(objectives.group, 0.75) {
+        specialist_roles.push(SpecialistRole::Coordinator);
+    }
+    let (source_commit, source_tree) = source_binding.ok_or(
+        Era1EvolutionError::InvalidEvidence("selection evidence has no source binding"),
+    )?;
+    let profile = Era1SelectionProfile {
+        identity: evidence.identity.clone(),
+        objectives,
+        known_ancestor_genome_ids: ancestors,
+        population_share: 1.0 / population_size as f32,
+        specialist_roles,
+        evidence_digest: digest_bytes(&serde_json::to_vec(evidence)?),
+        source_commit: source_commit.to_string(),
+        source_tree: source_tree.to_string(),
+    };
+    profile.validate_contract()?;
+    Ok(profile)
+}
+
+fn aggregate_readings(readings: impl Iterator<Item = MetricReading>) -> ScoreEstimate {
+    let mut value_sum = 0_u128;
+    let mut reading_count = 0_u64;
+    let mut samples = 0_u64;
+    for reading in readings {
+        let MetricReading::Measured {
+            value_q16,
+            exposures,
+        } = reading
+        else {
+            return ScoreEstimate::UNKNOWN;
+        };
+        value_sum = value_sum.saturating_add(u128::from(value_q16));
+        reading_count = reading_count.saturating_add(1);
+        samples = samples.saturating_add(exposures);
+    }
+    if reading_count == 0 {
+        return ScoreEstimate::UNKNOWN;
+    }
+    let mean_q16 = (value_sum + u128::from(reading_count / 2)) / u128::from(reading_count);
+    ScoreEstimate::known(
+        mean_q16 as f32 / 65_535.0,
+        u32::try_from(samples).unwrap_or(u32::MAX),
+    )
+}
+
+fn average_estimates(estimates: &[ScoreEstimate]) -> ScoreEstimate {
+    let Some(values) = estimates
+        .iter()
+        .map(|estimate| estimate.value)
+        .collect::<Option<Vec<_>>>()
+    else {
+        return ScoreEstimate::UNKNOWN;
+    };
+    if values.is_empty() {
+        return ScoreEstimate::UNKNOWN;
+    }
+    ScoreEstimate::known(
+        values.iter().copied().sum::<f32>() / values.len() as f32,
+        estimates
+            .iter()
+            .fold(0_u32, |sum, estimate| sum.saturating_add(estimate.samples)),
+    )
+}
+
+fn estimate_at_least(estimate: ScoreEstimate, threshold: f32) -> bool {
+    estimate.value.is_some_and(|value| value >= threshold)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,8 +833,9 @@ pub struct Era1LineageReceipt {
 pub struct Era1EvolutionReceipt {
     pub schema_version: u16,
     pub config: Era1EvolutionConfig,
+    pub baseline_ei0_exit_gate: Ei0ExitGateReport,
     pub wild_reservoir: Vec<CreatureGenome>,
-    pub selection_profiles: Vec<Era1SelectionProfile>,
+    pub selection_rounds: Vec<Era1SelectionRoundReceipt>,
     pub generations: Vec<Era1GenerationReceipt>,
     pub lineages: Vec<Era1LineageReceipt>,
 }
@@ -184,9 +843,13 @@ pub struct Era1EvolutionReceipt {
 impl Era1EvolutionReceipt {
     pub fn validate_contract(&self) -> Result<(), Era1EvolutionError> {
         self.config.validate_contract()?;
+        validate_committed_ei0_exit_gate_report(&self.baseline_ei0_exit_gate)
+            .map_err(|error| Era1EvolutionError::Ei0Gate(error.to_string()))?;
         if self.schema_version != ERA1_EVOLUTION_SCHEMA_VERSION
             || self.wild_reservoir.len() != self.config.lineage_count
-            || self.selection_profiles.len() != self.config.lineage_count
+            || self.selection_rounds.len()
+                != usize::try_from(self.config.ordinary_birth_generations)
+                    .map_err(|_| Era1EvolutionError::InvalidEvidence("generation overflow"))?
             || self.generations.len()
                 != usize::try_from(self.config.ordinary_birth_generations + 1)
                     .map_err(|_| Era1EvolutionError::InvalidEvidence("generation overflow"))?
@@ -198,19 +861,12 @@ impl Era1EvolutionReceipt {
         }
 
         validate_founders(&self.wild_reservoir)?;
-        for (founder, profile) in self.wild_reservoir.iter().zip(&self.selection_profiles) {
-            profile.validate_contract()?;
-            if profile.founder_genome_id != founder.id {
-                return Err(Era1EvolutionError::InvalidEvidence(
-                    "selection profile does not match wild founder",
-                ));
-            }
-        }
         let wild_ids = self
             .wild_reservoir
             .iter()
             .map(|genome| genome.id)
             .collect::<Vec<_>>();
+        let mut selection_source: Option<(String, String)> = None;
 
         for (generation_index, generation) in self.generations.iter().enumerate() {
             let expected_generation = u32::try_from(generation_index)
@@ -302,11 +958,42 @@ impl Era1EvolutionReceipt {
                 }
             }
             if generation_index > 0 {
-                let expected_candidates = selection_candidates(
-                    &self.wild_reservoir,
-                    &self.generations[generation_index - 1].births,
-                    &self.selection_profiles,
+                let parent_generation = u32::try_from(generation_index - 1)
+                    .map_err(|_| Era1EvolutionError::InvalidEvidence("generation overflow"))?;
+                let round = &self.selection_rounds[generation_index - 1];
+                let parents = &self.generations[generation_index - 1].births;
+                let expected_profiles = derive_selection_round_profiles_from_receipts(
+                    &self.config,
+                    parent_generation,
+                    parents,
+                    &round.evidence,
+                    &self.generations[..generation_index],
                 )?;
+                if round.parent_generation != parent_generation
+                    || round.derived_profiles != expected_profiles
+                {
+                    return Err(Era1EvolutionError::InvalidEvidence(
+                        "selection profiles do not recompute from included receipts",
+                    ));
+                }
+                for profile in &expected_profiles {
+                    match selection_source.as_ref() {
+                        None => {
+                            selection_source =
+                                Some((profile.source_commit.clone(), profile.source_tree.clone()))
+                        }
+                        Some((commit, tree))
+                            if commit == &profile.source_commit && tree == &profile.source_tree => {
+                        }
+                        Some(_) => {
+                            return Err(Era1EvolutionError::InvalidEvidence(
+                                "selection source binding changed between generations",
+                            ))
+                        }
+                    }
+                }
+                let expected_candidates =
+                    selection_candidates(&self.wild_reservoir, parents, &expected_profiles)?;
                 let expected_plan = run_managed_selection(
                     &expected_candidates,
                     &selection_config(&self.config, expected_generation),
@@ -354,6 +1041,10 @@ pub enum Era1EvolutionError {
     InvalidEvidence(&'static str),
     #[error("selection objectives for {0:?} contain UNKNOWN evidence")]
     UnknownSelectionObjective(GenomeId),
+    #[error("committed EI0 exit gate precondition failed: {0}")]
+    Ei0Gate(String),
+    #[error("authoritative Era 1 trial evidence failed: {0}")]
+    TrialEvidence(String),
     #[error("authoritative genome operation failed: {0}")]
     Genome(#[from] ScaffoldContractError),
     #[error("managed selection failed: {0}")]
@@ -370,30 +1061,95 @@ pub enum Era1EvolutionError {
     Json(#[from] serde_json::Error),
 }
 
-pub fn run_era1_evolution(
+fn derive_selection_round_profiles_from_receipts(
     config: &Era1EvolutionConfig,
-    founders: &[CreatureGenome],
-    selection_profiles: &[Era1SelectionProfile],
-    artifact_root: impl AsRef<Path>,
-) -> Result<Era1EvolutionReceipt, Era1EvolutionError> {
-    config.validate_contract()?;
-    validate_founders(founders)?;
-    if founders.len() != config.lineage_count || selection_profiles.len() != founders.len() {
+    parent_generation: u32,
+    parents: &[Era1BirthReceipt],
+    evidence: &[Era1CandidateSelectionReceipt],
+    prior_generations: &[Era1GenerationReceipt],
+) -> Result<Vec<Era1SelectionProfile>, Era1EvolutionError> {
+    if parents.len() != config.lineage_count || evidence.len() != parents.len() {
         return Err(Era1EvolutionError::InvalidEvidence(
-            "founder/profile count does not match bounded lineages",
+            "selection evidence candidate count changed",
         ));
     }
-    for (founder, profile) in founders.iter().zip(selection_profiles) {
-        profile.validate_contract()?;
-        if profile.founder_genome_id != founder.id {
-            return Err(Era1EvolutionError::InvalidEvidence(
-                "selection profile does not match founder",
-            ));
+    parents
+        .iter()
+        .zip(evidence)
+        .map(|(birth, evidence)| {
+            let expected_identity = Era1SelectionCandidateIdentity {
+                organism_id: birth.organism_id,
+                genome_id: birth.genome.id,
+                parent_genome_ids: birth.genome.parent_genome_ids.clone(),
+                lineage_id: birth.genome.lineage_id,
+                generation: parent_generation,
+            };
+            if birth.generation != parent_generation || evidence.identity != expected_identity {
+                return Err(Era1EvolutionError::InvalidEvidence(
+                    "selection evidence does not match the stable parent identity",
+                ));
+            }
+            let ancestors = known_ancestors(&birth.genome, prior_generations);
+            recompute_era1_selection_profile_from_receipt(
+                config,
+                &birth.genome,
+                evidence,
+                parents.len(),
+                &ancestors,
+            )
+        })
+        .collect()
+}
+
+fn known_ancestors(
+    genome: &CreatureGenome,
+    generations: &[Era1GenerationReceipt],
+) -> Vec<GenomeId> {
+    let by_id = generations
+        .iter()
+        .flat_map(|generation| &generation.births)
+        .map(|birth| (birth.genome.id.0, &birth.genome))
+        .collect::<BTreeMap<_, _>>();
+    let mut pending = genome.parent_genome_ids.clone();
+    let mut ancestors = BTreeSet::new();
+    while let Some(parent_id) = pending.pop() {
+        if ancestors.insert(parent_id.0) {
+            if let Some(parent) = by_id.get(&parent_id.0) {
+                pending.extend(parent.parent_genome_ids.iter().copied());
+            }
         }
+    }
+    ancestors.into_iter().map(GenomeId).collect()
+}
+
+pub fn run_era1_evolution<F>(
+    config: &Era1EvolutionConfig,
+    committed_ei0_exit_gate: Option<&Ei0ExitGateReport>,
+    founders: &[CreatureGenome],
+    artifact_root: impl AsRef<Path>,
+    mut evidence_provider: F,
+) -> Result<Era1EvolutionReceipt, Era1EvolutionError>
+where
+    F: FnMut(
+        u32,
+        usize,
+        &[Era1BirthReceipt],
+    ) -> Result<Era1CandidateSelectionEvidence, Era1EvolutionError>,
+{
+    let committed_ei0_exit_gate = committed_ei0_exit_gate.ok_or_else(|| {
+        Era1EvolutionError::Ei0Gate("committed EI0 exit gate is missing".to_string())
+    })?;
+    validate_committed_ei0_exit_gate_report(committed_ei0_exit_gate)
+        .map_err(|error| Era1EvolutionError::Ei0Gate(error.to_string()))?;
+    config.validate_contract()?;
+    validate_founders(founders)?;
+    if founders.len() != config.lineage_count {
+        return Err(Era1EvolutionError::InvalidEvidence(
+            "founder count does not match bounded lineages",
+        ));
     }
 
     let artifact_root = artifact_root.as_ref();
-    std::fs::create_dir_all(artifact_root)?;
     let wild_reservoir = founders.to_vec();
     let wild_ids = founders.iter().map(|genome| genome.id).collect::<Vec<_>>();
     let founder_births = founders
@@ -410,34 +1166,54 @@ pub fn run_era1_evolution(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let habitats = evolution_habitat_authority(founders.len(), &founder_births)?;
-    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(
-        artifact_root.join("lineage-library"),
-    ))?;
-    let founder_archives = archive_births(&mut library, 0, &founder_births)?;
-    let founder_save = persist_generation_save(
-        artifact_root,
-        config.evolution_seed,
-        0,
-        &founder_births,
-        &habitats,
-    )?;
     let mut generations = vec![Era1GenerationReceipt {
         generation: 0,
         births: founder_births,
         preserved_wild_genome_ids: wild_ids.clone(),
         selection_plan: None,
         habitat_breeding: Vec::new(),
-        archives: founder_archives,
-        portable_save: founder_save,
+        archives: Vec::new(),
+        portable_save: pending_portable_save(0),
     }];
     let mut habitats = habitats;
+    let mut selection_rounds = Vec::with_capacity(config.ordinary_birth_generations as usize);
 
     for generation in 1..=config.ordinary_birth_generations {
         let parents = &generations
             .last()
             .expect("founder generation is always present")
             .births;
-        let candidates = selection_candidates(&wild_reservoir, parents, selection_profiles)?;
+        let parent_generation = generation - 1;
+        let mut evidence_receipts = Vec::with_capacity(parents.len());
+        for candidate_index in 0..parents.len() {
+            let evidence = evidence_provider(parent_generation, candidate_index, parents)?;
+            let parent = &parents[candidate_index];
+            let expected_identity = Era1SelectionCandidateIdentity {
+                organism_id: parent.organism_id,
+                genome_id: parent.genome.id,
+                parent_genome_ids: parent.genome.parent_genome_ids.clone(),
+                lineage_id: parent.genome.lineage_id,
+                generation: parent_generation,
+            };
+            if evidence.identity != expected_identity {
+                return Err(Era1EvolutionError::InvalidEvidence(
+                    "selection evidence does not match the stable parent identity",
+                ));
+            }
+            evidence_receipts.push(validate_completed_selection_evidence(
+                config,
+                &parent.genome,
+                &evidence,
+            )?);
+        }
+        let profiles = derive_selection_round_profiles_from_receipts(
+            config,
+            parent_generation,
+            parents,
+            &evidence_receipts,
+            &generations,
+        )?;
+        let candidates = selection_candidates(&wild_reservoir, parents, &profiles)?;
         let selection_config = selection_config(config, generation);
         let selection_plan = run_managed_selection(&candidates, &selection_config)?;
         let (mut births, habitat_breeding) =
@@ -449,14 +1225,6 @@ pub fn run_era1_evolution(
                 Tick::new(u64::from(generation)),
             )?;
         }
-        let archives = archive_births(&mut library, generation, &births)?;
-        let portable_save = persist_generation_save(
-            artifact_root,
-            config.evolution_seed,
-            generation,
-            &births,
-            &habitats,
-        )?;
         births.sort_by_key(|birth| birth.lineage_slot);
         generations.push(Era1GenerationReceipt {
             generation,
@@ -464,9 +1232,32 @@ pub fn run_era1_evolution(
             preserved_wild_genome_ids: wild_ids.clone(),
             selection_plan: Some(selection_plan),
             habitat_breeding,
-            archives,
-            portable_save,
+            archives: Vec::new(),
+            portable_save: pending_portable_save(generation),
         });
+        selection_rounds.push(Era1SelectionRoundReceipt {
+            parent_generation,
+            evidence: evidence_receipts,
+            derived_profiles: profiles,
+        });
+    }
+
+    // Evidence for every selection round is complete before the first archive or save write.
+    // A missing, invalid, or UNKNOWN receipt therefore cannot leave evolution artifacts behind.
+    std::fs::create_dir_all(artifact_root)?;
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(
+        artifact_root.join("lineage-library"),
+    ))?;
+    for generation in &mut generations {
+        generation.archives =
+            archive_births(&mut library, generation.generation, &generation.births)?;
+        generation.portable_save = persist_generation_save(
+            artifact_root,
+            config.evolution_seed,
+            generation.generation,
+            &generation.births,
+            &habitats,
+        )?;
     }
 
     let lineages = (0..config.lineage_count)
@@ -482,8 +1273,9 @@ pub fn run_era1_evolution(
     let receipt = Era1EvolutionReceipt {
         schema_version: ERA1_EVOLUTION_SCHEMA_VERSION,
         config: config.clone(),
+        baseline_ei0_exit_gate: committed_ei0_exit_gate.clone(),
         wild_reservoir,
-        selection_profiles: selection_profiles.to_vec(),
+        selection_rounds,
         generations,
         lineages,
     };
@@ -508,6 +1300,16 @@ fn birth_receipt(
     };
     validate_birth(&receipt, generation, lineage_slot)?;
     Ok(receipt)
+}
+
+fn pending_portable_save(generation: u32) -> Era1PortableSaveReceipt {
+    Era1PortableSaveReceipt {
+        generation,
+        relative_path: String::new(),
+        digest_hex: String::new(),
+        organism_ids: Vec::new(),
+        genome_ids: Vec::new(),
+    }
 }
 
 fn validate_birth(
@@ -611,6 +1413,16 @@ fn selection_candidates(
         .collect::<Vec<_>>();
     for (birth, profile) in managed_births.iter().zip(profiles) {
         profile.validate_contract()?;
+        if profile.identity.organism_id != birth.organism_id
+            || profile.identity.genome_id != birth.genome.id
+            || profile.identity.parent_genome_ids != birth.genome.parent_genome_ids
+            || profile.identity.lineage_id != birth.genome.lineage_id
+            || profile.identity.generation != birth.generation
+        {
+            return Err(Era1EvolutionError::InvalidEvidence(
+                "derived selection profile does not match managed birth",
+            ));
+        }
         let mut ancestors = profile.known_ancestor_genome_ids.clone();
         ancestors.extend(birth.genome.parent_genome_ids.iter().copied());
         ancestors.sort_by_key(|id| id.0);
@@ -916,6 +1728,13 @@ fn valid_digest_text(value: &str) -> bool {
     value
         .strip_prefix("blake3-256:")
         .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
+}
+
+fn valid_git_object_id(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn digest_bytes(bytes: &[u8]) -> String {

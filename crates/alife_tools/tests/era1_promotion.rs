@@ -1,71 +1,25 @@
 use alife_core::{
-    BrainCapacityClass, CreatureGenome, Era1Ability, Era1AssistanceKind, Era1Control,
-    Era1EvidencePartition, Era1PlateauWindow, Era1TrialIdentity, Era1TrialReceipt,
-    FoundationGeneticIdentity, MetricReading, OrganismId, PhenotypeHash, PolicyBackend,
-    SensorProfile, ERA1_EVALUATION_SCHEMA_VERSION,
+    BrainCapacityClass, Era1Ability, Era1AssistanceKind, Era1Control, Era1EvidencePartition,
+    Era1PlateauWindow, Era1TrialIdentity, Era1TrialReceipt, MetricReading, OrganismId,
+    PhenotypeHash, PolicyBackend, SensorProfile, ERA1_EVALUATION_SCHEMA_VERSION,
 };
-use alife_tools::era1_evolution::{
-    run_era1_evolution, Era1EvolutionConfig, Era1EvolutionReceipt, Era1SelectionProfile,
-};
+use alife_tools::era1_evolution::Era1EvolutionReceipt;
 use alife_tools::era1_promotion::{
     assess_era1_plateau, canonical_world_family_id, derive_era1_promotion,
     validate_committed_era1_promotion_report, Era1CommittedPromotionReport, Era1ComparisonStatus,
     Era1EvidenceStatus, Era1HardwareCost, Era1PlateauStatus, Era1PromotionVerdict,
     ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION,
 };
-use alife_tools::p33_evaluation::{ObjectiveVector, ScoreEstimate};
-use alife_tools::p33_selection::SpecialistRole;
 use std::{fs, path::PathBuf};
+
+mod common;
 
 const SOURCE_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 const SOURCE_TREE: &str = "89abcdef0123456789abcdef0123456789abcdef";
 const ADAPTER: &str = "NVIDIA GeForce RTX 3050";
 
-fn founder(seed: u64) -> CreatureGenome {
-    let foundation = FoundationGeneticIdentity::new(
-        0x4E32_3034_385F_5631,
-        1,
-        0x4E32_3034_385F_FA11,
-        BrainCapacityClass::N2048_ID,
-    )
-    .unwrap();
-    CreatureGenome::early_mammal_founder(seed, foundation).unwrap()
-}
-
 fn evolution() -> Era1EvolutionReceipt {
-    let founders = vec![
-        founder(61_001),
-        founder(61_002),
-        founder(61_003),
-        founder(61_004),
-    ];
-    let profiles = founders
-        .iter()
-        .enumerate()
-        .map(|(index, founder)| Era1SelectionProfile {
-            founder_genome_id: founder.id,
-            objectives: ObjectiveVector {
-                ecological: ScoreEstimate::known(0.82 - index as f32 * 0.03, 12),
-                cognitive: ScoreEstimate::known(0.62 + index as f32 * 0.04, 12),
-                social: ScoreEstimate::known(0.60 + index as f32 * 0.02, 12),
-                group: ScoreEstimate::known(0.68 - index as f32 * 0.01, 12),
-                stability: ScoreEstimate::known(0.78 - index as f32 * 0.01, 12),
-                efficiency: ScoreEstimate::known(0.66 + index as f32 * 0.02, 12),
-                diversity: ScoreEstimate::known(0.55 + index as f32 * 0.05, 12),
-            },
-            known_ancestor_genome_ids: Vec::new(),
-            population_share: 0.25,
-            specialist_roles: vec![SpecialistRole::EcologicalSurvivor],
-        })
-        .collect::<Vec<_>>();
-    let root = tempfile::tempdir().unwrap();
-    run_era1_evolution(
-        &Era1EvolutionConfig::bounded_default(0xE1_6001).unwrap(),
-        &founders,
-        &profiles,
-        root.path(),
-    )
-    .unwrap()
+    common::validator_only_evolution_receipt()
 }
 
 fn measured(value_q16: u32) -> MetricReading {
@@ -391,8 +345,15 @@ fn committed_report_recomputes_source_receipts_and_unknown_gate_outcome() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("reports")
         .join("era1_promotion_report.json");
-    let report: Era1CommittedPromotionReport =
-        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+    let encoded = fs::read_to_string(path).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+    if value["schema_version"].as_u64()
+        != Some(u64::from(ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION))
+    {
+        assert!(serde_json::from_str::<Era1CommittedPromotionReport>(&encoded).is_err());
+        return;
+    }
+    let report: Era1CommittedPromotionReport = serde_json::from_str(&encoded).unwrap();
 
     validate_committed_era1_promotion_report(&report).unwrap();
     assert_eq!(

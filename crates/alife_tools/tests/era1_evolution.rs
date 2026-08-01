@@ -1,13 +1,217 @@
 use alife_core::{
-    BrainCapacityClass, CreatureGenome, Era1Control, FoundationGeneticIdentity, LanguageTokenId,
+    BrainCapacityClass, CreatureGenome, EnvironmentalRegime, Era1Ability, Era1Control,
+    Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt, FoundationGeneticIdentity,
+    LanguageTokenId, MetricReading, OrganismId, PassiveLifeEvent, PassiveLifeStatistics,
+    PhenotypeHash, PolicyBackend, SensorProfile, Tick,
 };
 use alife_tools::{
+    ei0_exit_gate::Ei0ExitGateReport,
     era1_evolution::{
-        run_era1_evolution, Era1EvolutionConfig, Era1EvolutionError, Era1SelectionProfile,
+        recompute_era1_selection_profile_from_receipt, run_era1_evolution, Era1BirthReceipt,
+        Era1CandidateSelectionEvidence, Era1CandidateSelectionReceipt, Era1EcologyReceipt,
+        Era1EvolutionConfig, Era1EvolutionError, Era1SelectionCandidateIdentity,
     },
-    p33_evaluation::{ObjectiveVector, ScoreEstimate},
-    p33_selection::{PairingLane, SpecialistRole},
 };
+
+mod common;
+
+const SOURCE_COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const SOURCE_TREE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+fn candidate_identity(
+    genome: &CreatureGenome,
+    organism_id: OrganismId,
+    generation: u32,
+) -> Era1SelectionCandidateIdentity {
+    Era1SelectionCandidateIdentity {
+        organism_id,
+        genome_id: genome.id,
+        parent_genome_ids: genome.parent_genome_ids.clone(),
+        lineage_id: genome.lineage_id,
+        generation,
+    }
+}
+
+fn complete_life_statistics(organism_id: OrganismId) -> PassiveLifeStatistics {
+    life_statistics(organism_id, true, 49_151)
+}
+
+fn life_statistics(
+    organism_id: OrganismId,
+    successful: bool,
+    energy_q16: u32,
+) -> PassiveLifeStatistics {
+    let mut statistics = PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap();
+    for (index, regime) in [
+        EnvironmentalRegime::Temperate,
+        EnvironmentalRegime::Scarcity,
+        EnvironmentalRegime::Abundance,
+        EnvironmentalRegime::Hazardous,
+        EnvironmentalRegime::Social,
+        EnvironmentalRegime::Novel,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        statistics
+            .observe(PassiveLifeEvent::SurvivalTick {
+                tick: Tick::new(index as u64 + 1),
+                regime,
+                energy_q16,
+                movement_distance_q16: 32_768,
+                gpu_dispatched: true,
+                gpu_throttled: false,
+            })
+            .unwrap();
+    }
+    for event in [
+        PassiveLifeEvent::FoodOutcome {
+            beneficial: successful,
+        },
+        PassiveLifeEvent::PoisonEncounter {
+            avoided: successful,
+        },
+        PassiveLifeEvent::HazardEncounter {
+            avoided: successful,
+        },
+        PassiveLifeEvent::Reproduction { successful },
+        PassiveLifeEvent::SleepRetention { retained: true },
+        PassiveLifeEvent::LearningProbe {
+            improvement_q16: 45_875,
+        },
+        PassiveLifeEvent::ReversalRecovery {
+            ticks_to_recover: 1,
+        },
+        PassiveLifeEvent::VocabularyGrounding { correct: true },
+        PassiveLifeEvent::Comprehension {
+            assisted: false,
+            correct: true,
+        },
+        PassiveLifeEvent::Comprehension {
+            assisted: true,
+            correct: true,
+        },
+        PassiveLifeEvent::NarrationUtterance,
+        PassiveLifeEvent::Narration { faithful: true },
+        PassiveLifeEvent::PeerCommunication { successful: true },
+        PassiveLifeEvent::DialectTransfer { successful: true },
+        PassiveLifeEvent::DialectDivergence {
+            distance_q16: 26_214,
+        },
+    ] {
+        statistics.observe(event).unwrap();
+    }
+    statistics
+        .finalize(Tick::new(7), "completed evaluation")
+        .unwrap();
+    statistics
+}
+
+fn complete_candidate_receipt(
+    config: &Era1EvolutionConfig,
+    genome: &CreatureGenome,
+    organism_id: OrganismId,
+    generation: u32,
+) -> Era1CandidateSelectionReceipt {
+    let identity = candidate_identity(genome, organism_id, generation);
+    let mut trial_receipts = Vec::new();
+    for &seed in &config.evaluation_seeds {
+        for &world in &config.held_out_world_transforms {
+            for ability in Era1Ability::ALL {
+                for &control in &config.controls {
+                    trial_receipts.push(Era1TrialReceipt {
+                        schema_version: alife_core::ERA1_EVALUATION_SCHEMA_VERSION,
+                        identity: Era1TrialIdentity {
+                            seed,
+                            organism_id,
+                            genome_id: genome.id,
+                            parent_genome_ids: genome.parent_genome_ids.clone(),
+                            lineage_id: genome.lineage_id,
+                            generation,
+                            brain_class_id: BrainCapacityClass::N2048_ID,
+                            world_family_id: alife_tools::era1_promotion::canonical_world_family_id(
+                                ability,
+                            ),
+                            world_variant_id: world,
+                        },
+                        ability,
+                        control,
+                        partition: Era1EvidencePartition::HeldOutTransfer,
+                        score: MetricReading::Measured {
+                            value_q16: 45_875 + u32::from(ability as u8) * 256,
+                            exposures: 1,
+                        },
+                        phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
+                        foundation_id: genome.foundation.foundation_id,
+                        foundation_version: u32::from(genome.foundation.version),
+                        sensor_profile: SensorProfile::GroundedObjectSlotsV1,
+                        policy_backend: PolicyBackend::NeuralClosedLoopGpu,
+                        world_digest: [11, 12, 13, 14],
+                        perception_digest: [21, 22, 23, 24],
+                        sealed_evidence_digest: [31, 32, 33, 34],
+                        assistance: Vec::new(),
+                        adapter_name: "NVIDIA GeForce RTX 3050".to_string(),
+                        backend_api: "vulkan".to_string(),
+                        source_commit: SOURCE_COMMIT.to_string(),
+                        source_tree: SOURCE_TREE.to_string(),
+                    });
+                }
+            }
+        }
+    }
+    let reproduction_partner = founder(genome.id.0 ^ 0xE101_0C01);
+    let ecology_receipts = config
+        .evaluation_seeds
+        .iter()
+        .flat_map(|seed| {
+            let identity = identity.clone();
+            config.held_out_world_transforms.iter().map({
+                let reproduction_partner = reproduction_partner.clone();
+                move |world| {
+                    let reproduction_seed = *seed ^ *world ^ 0xE101_0C02;
+                    let offspring =
+                        CreatureGenome::reproduce(genome, &reproduction_partner, reproduction_seed)
+                            .unwrap();
+                    Era1EcologyReceipt {
+                        schema_version:
+                            alife_tools::era1_evolution::ERA1_ECOLOGY_RECEIPT_SCHEMA_VERSION,
+                        identity: identity.clone(),
+                        evaluation_seed: *seed,
+                        world_variant_id: *world,
+                        statistics: complete_life_statistics(organism_id),
+                        trial_evidence_digest: format!("blake3-256:{}", "1".repeat(64)),
+                        reproduction_partner: reproduction_partner.clone(),
+                        reproduction_seed,
+                        reproduction_offspring_genome_id: offspring.id,
+                        source_commit: SOURCE_COMMIT.to_string(),
+                        source_tree: SOURCE_TREE.to_string(),
+                    }
+                }
+            })
+        })
+        .collect();
+    Era1CandidateSelectionReceipt {
+        schema_version: alife_tools::era1_evolution::ERA1_SELECTION_EVIDENCE_SCHEMA_VERSION,
+        identity,
+        trial_receipts,
+        ecology_receipts,
+    }
+}
+
+fn incomplete_candidate_evidence(
+    config: &Era1EvolutionConfig,
+    genome: &CreatureGenome,
+    organism_id: OrganismId,
+    generation: u32,
+) -> Era1CandidateSelectionEvidence {
+    let receipt = complete_candidate_receipt(config, genome, organism_id, generation);
+    Era1CandidateSelectionEvidence {
+        schema_version: receipt.schema_version,
+        identity: receipt.identity,
+        trial_evidence: Vec::new(),
+        ecology_receipts: receipt.ecology_receipts,
+    }
+}
 
 fn founder(seed: u64) -> CreatureGenome {
     let foundation = FoundationGeneticIdentity::new(
@@ -20,55 +224,28 @@ fn founder(seed: u64) -> CreatureGenome {
     CreatureGenome::early_mammal_founder(seed, foundation).unwrap()
 }
 
-fn objectives(ecological: f32, cognitive: f32, index: usize) -> ObjectiveVector {
-    ObjectiveVector {
-        ecological: ScoreEstimate::known(ecological, 12),
-        cognitive: ScoreEstimate::known(cognitive, 12),
-        social: ScoreEstimate::known(0.60 + index as f32 * 0.02, 12),
-        group: ScoreEstimate::known(0.68 - index as f32 * 0.01, 12),
-        stability: ScoreEstimate::known(0.78 - index as f32 * 0.01, 12),
-        efficiency: ScoreEstimate::known(0.66 + index as f32 * 0.02, 12),
-        diversity: ScoreEstimate::known(0.55 + index as f32 * 0.05, 12),
-    }
+fn committed_ei0_exit_gate() -> Ei0ExitGateReport {
+    let report: serde_json::Value =
+        serde_json::from_str(include_str!("../reports/era1_promotion_report.json")).unwrap();
+    serde_json::from_value(report["baseline_save_archive_receipt"].clone()).unwrap()
 }
 
-fn profiles(founders: &[CreatureGenome]) -> Vec<Era1SelectionProfile> {
-    founders
-        .iter()
-        .enumerate()
-        .map(|(index, founder)| Era1SelectionProfile {
-            founder_genome_id: founder.id,
-            objectives: objectives(
-                0.82 - index as f32 * 0.03,
-                0.62 + index as f32 * 0.04,
-                index,
-            ),
-            known_ancestor_genome_ids: Vec::new(),
-            population_share: 0.25,
-            specialist_roles: vec![match index {
-                0 => SpecialistRole::EcologicalSurvivor,
-                1 => SpecialistRole::Teacher,
-                2 => SpecialistRole::Coordinator,
-                _ => SpecialistRole::TransferSpecialist,
-            }],
-        })
-        .collect()
+fn evidence_for_candidate(
+    config: &Era1EvolutionConfig,
+    generation: u32,
+    candidate_index: usize,
+    births: &[Era1BirthReceipt],
+) -> Era1CandidateSelectionEvidence {
+    let birth = &births[candidate_index];
+    incomplete_candidate_evidence(config, &birth.genome, birth.organism_id, generation)
 }
 
 #[test]
 fn bounded_default_runs_exact_seeded_two_generation_reproduction() {
-    let founders = vec![
-        founder(51_001),
-        founder(51_002),
-        founder(51_003),
-        founder(51_004),
-    ];
-    let config = Era1EvolutionConfig::bounded_default(0xE1_5001).unwrap();
-
-    let profiles = profiles(&founders);
-    let root = tempfile::tempdir().unwrap();
-    let run = run_era1_evolution(&config, &founders, &profiles, root.path()).unwrap();
-    let repeated = run_era1_evolution(&config, &founders, &profiles, root.path()).unwrap();
+    let run = common::validator_only_evolution_receipt();
+    let repeated = common::validator_only_evolution_receipt();
+    let founders = run.wild_reservoir.clone();
+    let config = run.config.clone();
 
     assert_eq!(run, repeated);
     assert_eq!(run.wild_reservoir, founders);
@@ -119,15 +296,7 @@ fn bounded_default_runs_exact_seeded_two_generation_reproduction() {
 
 #[test]
 fn ordinary_children_inherit_only_dna_starter_words_and_empty_lifetime_state() {
-    let founders = vec![
-        founder(52_001),
-        founder(52_002),
-        founder(52_003),
-        founder(52_004),
-    ];
-    let config = Era1EvolutionConfig::bounded_default(0xE1_5002).unwrap();
-    let root = tempfile::tempdir().unwrap();
-    let run = run_era1_evolution(&config, &founders, &profiles(&founders), root.path()).unwrap();
+    let run = common::validator_only_evolution_receipt();
 
     for birth in run
         .generations
@@ -151,16 +320,15 @@ fn ordinary_children_inherit_only_dna_starter_words_and_empty_lifetime_state() {
 
 #[test]
 fn copied_learning_or_fabricated_inheritance_invalidates_evolution_receipts() {
-    let founders = vec![
-        founder(53_001),
-        founder(53_002),
-        founder(53_003),
-        founder(53_004),
-    ];
-    let config = Era1EvolutionConfig::bounded_default(0xE1_5003).unwrap();
-    let root = tempfile::tempdir().unwrap();
-    let run = run_era1_evolution(&config, &founders, &profiles(&founders), root.path()).unwrap();
+    let run = common::validator_only_evolution_receipt();
     run.validate_contract().unwrap();
+
+    let mut forged_profile = run.clone();
+    forged_profile.selection_rounds[0].derived_profiles[0]
+        .objectives
+        .cognitive
+        .value = Some(0.0);
+    assert!(forged_profile.validate_contract().is_err());
 
     let mut copied_learning = run.clone();
     copied_learning.generations[1].births[0]
@@ -183,7 +351,7 @@ fn copied_learning_or_fabricated_inheritance_invalidates_evolution_receipts() {
 }
 
 #[test]
-fn unknown_objectives_and_related_pairings_are_rejected() {
+fn incomplete_trial_coverage_mismatched_identity_and_unknown_ecology_are_rejected() {
     let founders = vec![
         founder(54_001),
         founder(54_002),
@@ -191,52 +359,177 @@ fn unknown_objectives_and_related_pairings_are_rejected() {
         founder(54_004),
     ];
     let config = Era1EvolutionConfig::bounded_default(0xE1_5004).unwrap();
+    let gate = committed_ei0_exit_gate();
     let root = tempfile::tempdir().unwrap();
 
-    let mut unknown = profiles(&founders);
-    unknown[0].objectives.cognitive = ScoreEstimate::UNKNOWN;
-    assert!(matches!(
-        run_era1_evolution(&config, &founders, &unknown, root.path()),
-        Err(Era1EvolutionError::UnknownSelectionObjective(id)) if id == founders[0].id
-    ));
+    let incomplete = run_era1_evolution(
+        &config,
+        Some(&gate),
+        &founders,
+        root.path().join("incomplete"),
+        |generation, candidate_index, births| {
+            Ok(evidence_for_candidate(
+                &config,
+                generation,
+                candidate_index,
+                births,
+            ))
+        },
+    );
+    assert!(
+        matches!(
+            &incomplete,
+            Err(Era1EvolutionError::InvalidEvidence(
+                "selection trial coverage is incomplete"
+            ))
+        ),
+        "{incomplete:?}"
+    );
 
-    let mut related = profiles(&founders);
-    for (index, profile) in related.iter_mut().enumerate() {
-        profile.known_ancestor_genome_ids = founders
-            .iter()
-            .enumerate()
-            .filter_map(|(other, genome)| (other != index).then_some(genome.id))
-            .collect();
-    }
-    assert!(run_era1_evolution(&config, &founders, &related, root.path()).is_err());
+    let mismatched = run_era1_evolution(
+        &config,
+        Some(&gate),
+        &founders,
+        root.path().join("mismatched"),
+        |generation, candidate_index, births| {
+            let mut evidence = evidence_for_candidate(&config, generation, candidate_index, births);
+            evidence.identity.generation = generation + 1;
+            Ok(evidence)
+        },
+    );
+    assert!(
+        matches!(
+            &mismatched,
+            Err(Era1EvolutionError::InvalidEvidence(
+                "selection evidence does not match the stable parent identity"
+            ))
+        ),
+        "{mismatched:?}"
+    );
 }
 
 #[test]
-fn fragile_high_cognition_lineage_uses_managed_introgression_probation() {
+fn validator_only_receipt_recomputes_managed_plans_and_probation_contracts() {
+    let run = common::validator_only_evolution_receipt();
+    run.validate_contract().unwrap();
+    for generation in run.generations.iter().skip(1) {
+        let plan = generation.selection_plan.as_ref().unwrap();
+        assert!(!plan.pairings.is_empty());
+        assert!(plan
+            .offspring
+            .iter()
+            .filter(|offspring| offspring.probation.is_some())
+            .all(|offspring| offspring
+                .probation
+                .as_ref()
+                .is_some_and(|probation| !probation.sibling_controls.is_empty()
+                    && !probation.population_controls.is_empty())));
+    }
+}
+
+#[test]
+fn missing_or_tampered_ei0_gate_prevents_all_evolution_artifacts() {
     let founders = vec![
-        founder(55_001),
-        founder(55_002),
-        founder(55_003),
-        founder(55_004),
+        founder(57_001),
+        founder(57_002),
+        founder(57_003),
+        founder(57_004),
     ];
-    let mut profiles = profiles(&founders);
-    profiles[0].objectives = objectives(0.20, 0.95, 0);
-    profiles[1].objectives = objectives(0.90, 0.55, 1);
-    let config = Era1EvolutionConfig::bounded_default(0xE1_5005).unwrap();
+    let config = Era1EvolutionConfig::bounded_default(0xE1_5007).unwrap();
     let root = tempfile::tempdir().unwrap();
-    let run = run_era1_evolution(&config, &founders, &profiles, root.path()).unwrap();
-    let plan = run.generations[1].selection_plan.as_ref().unwrap();
-    assert!(plan
-        .pairings
-        .iter()
-        .any(|pairing| pairing.lane == PairingLane::CognitiveIntrogression));
-    assert!(plan
-        .offspring
-        .iter()
-        .filter(|offspring| offspring.probation.is_some())
-        .all(|offspring| offspring
-            .probation
-            .as_ref()
-            .is_some_and(|probation| !probation.sibling_controls.is_empty()
-                && !probation.population_controls.is_empty())));
+    let missing_root = root.path().join("missing");
+    let missing = run_era1_evolution(
+        &config,
+        None,
+        &founders,
+        &missing_root,
+        |generation, candidate_index, births| {
+            Ok(evidence_for_candidate(
+                &config,
+                generation,
+                candidate_index,
+                births,
+            ))
+        },
+    );
+    assert!(matches!(missing, Err(Era1EvolutionError::Ei0Gate(_))));
+    assert!(!missing_root.exists());
+
+    let mut tampered_gate = committed_ei0_exit_gate();
+    tampered_gate.verdict.era0_exit_gate_passed = false;
+    let tampered_root = root.path().join("tampered");
+    let tampered = run_era1_evolution(
+        &config,
+        Some(&tampered_gate),
+        &founders,
+        &tampered_root,
+        |generation, candidate_index, births| {
+            Ok(evidence_for_candidate(
+                &config,
+                generation,
+                candidate_index,
+                births,
+            ))
+        },
+    );
+    assert!(matches!(tampered, Err(Era1EvolutionError::Ei0Gate(_))));
+    assert!(!tampered_root.exists());
+}
+
+#[test]
+fn selection_profiles_are_derived_from_complete_receipts_and_unknown_ecology_blocks() {
+    let genome = founder(56_001);
+    let config = Era1EvolutionConfig::bounded_default(0xE1_5006).unwrap();
+    let organism_id = OrganismId(20_001);
+    let evidence = complete_candidate_receipt(&config, &genome, organism_id, 0);
+
+    let derived =
+        recompute_era1_selection_profile_from_receipt(&config, &genome, &evidence, 4, &[]).unwrap();
+    assert_eq!(
+        derived.identity,
+        candidate_identity(&genome, organism_id, 0)
+    );
+    assert!(derived.objectives.all_known());
+
+    let mut duplicated_world_cell = evidence.clone();
+    duplicated_world_cell.trial_receipts[0].identity.seed = config.evaluation_seeds[1];
+    assert!(matches!(
+        recompute_era1_selection_profile_from_receipt(
+            &config,
+            &genome,
+            &duplicated_world_cell,
+            4,
+            &[]
+        ),
+        Err(Era1EvolutionError::InvalidEvidence(
+            "selection trial coverage contains duplicates"
+        ))
+    ));
+
+    let mut mismatched_source = evidence.clone();
+    mismatched_source.ecology_receipts[0].source_tree =
+        "cccccccccccccccccccccccccccccccccccccccc".to_string();
+    assert!(matches!(
+        recompute_era1_selection_profile_from_receipt(&config, &genome, &mismatched_source, 4, &[]),
+        Err(Era1EvolutionError::InvalidEvidence(
+            "ecology receipt has mismatched or incomplete provenance"
+        ))
+    ));
+
+    let mut unknown = evidence;
+    let mut incomplete = PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap();
+    incomplete
+        .finalize(Tick::ZERO, "completed without ecological exposure")
+        .unwrap();
+    unknown.ecology_receipts[0].statistics = incomplete;
+    assert!(matches!(
+        recompute_era1_selection_profile_from_receipt(
+            &config,
+            &genome,
+            &unknown,
+            4,
+            &[]
+        ),
+        Err(Era1EvolutionError::UnknownSelectionObjective(id)) if id == genome.id
+    ));
 }

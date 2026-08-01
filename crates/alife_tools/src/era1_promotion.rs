@@ -2,7 +2,8 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
+    fs::{self, File},
+    io::Write,
     path::{Path, PathBuf},
     process::Command,
     time::{Instant, SystemTime, UNIX_EPOCH},
@@ -16,25 +17,24 @@ use alife_core::{
 use alife_gpu_backend::closed_loop_shader_bundle_digest;
 use alife_training::{Era1TrialRunEvidence, Era1TrialRunRequest, Era1TrialRunner};
 use alife_world::{Era1TrialManifest, Era1WorldFamily};
+use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    ei0_exit_gate::{
-        run_ei0_exit_gate, validate_committed_ei0_exit_gate_report, Ei0ExitGateReport,
-    },
+    ei0_exit_gate::{validate_committed_ei0_exit_gate_report, Ei0ExitGateReport},
     era1_evolution::{
-        run_era1_evolution, Era1EvolutionConfig, Era1EvolutionReceipt, Era1SelectionProfile,
+        derive_era1_ecology_receipt, run_era1_evolution, Era1CandidateSelectionEvidence,
+        Era1EvolutionConfig, Era1EvolutionError, Era1EvolutionReceipt,
+        Era1SelectionCandidateIdentity, ERA1_SELECTION_EVIDENCE_SCHEMA_VERSION,
     },
-    p33_evaluation::{ObjectiveVector, ScoreEstimate},
-    p33_selection::SpecialistRole,
 };
 
 pub const ERA1_PROMOTION_SCHEMA_VERSION: u16 = 1;
 pub const ERA1_MINIMUM_MARGIN_Q16: i32 = 3_277;
 pub const ERA1_MINIMUM_MATCHED_CELLS: u16 = 12;
 pub const ERA1_PLATEAU_MAX_IMPROVEMENT_Q16: i32 = 655;
-pub const ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION: u16 = 1;
+pub const ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION: u16 = 2;
 
 const REQUIRED_GPU_ADAPTER: &str = "NVIDIA GeForce RTX 3050";
 const REQUIRED_GPU_BACKEND_API: &str = "vulkan";
@@ -635,11 +635,18 @@ pub fn run_era1_promotion_report() -> Result<Era1CommittedPromotionReport, Era1C
             .as_nanos()
     ));
     fs::create_dir_all(&temp)?;
-    let baseline_result = run_ei0_exit_gate(temp.join("ei0"));
-    let baseline =
-        baseline_result.map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
+    let baseline: Ei0ExitGateReport = serde_json::from_slice(&fs::read(
+        root.join("crates/alife_tools/reports/ei0_exit_gate_report.json"),
+    )?)?;
+    validate_committed_ei0_exit_gate_report(&baseline)
+        .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
 
-    let evolution = bounded_evolution(&temp.join("era1"))?;
+    let evolution = bounded_evolution(
+        &temp.join("era1"),
+        &baseline,
+        &producing_source_commit,
+        &producing_source_tree,
+    )?;
     let birth = evolution
         .generations
         .get(1)
@@ -768,7 +775,8 @@ pub fn validate_committed_era1_promotion_report(
         .evolution
         .validate_contract()
         .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
-    if report.trial_evidence.is_empty()
+    if report.evolution.baseline_ei0_exit_gate != report.baseline_save_archive_receipt
+        || report.trial_evidence.is_empty()
         || report
             .trial_evidence
             .iter()
@@ -823,6 +831,15 @@ pub fn validate_committed_era1_promotion_report(
         || binding.backend_api != REQUIRED_GPU_BACKEND_API
         || report.promotion.hardware.adapter_name != REQUIRED_GPU_ADAPTER
         || report.promotion.hardware.backend_api != REQUIRED_GPU_BACKEND_API
+        || report
+            .evolution
+            .selection_rounds
+            .iter()
+            .flat_map(|round| &round.derived_profiles)
+            .any(|profile| {
+                profile.source_commit != binding.producing_source_commit
+                    || profile.source_tree != binding.producing_source_tree
+            })
         || source_contract_digest_at_revision(
             &root,
             &binding.producing_source_commit,
@@ -857,6 +874,9 @@ pub fn validate_committed_era1_promotion_report(
 
 fn bounded_evolution(
     artifact_root: &Path,
+    baseline: &Ei0ExitGateReport,
+    source_commit: &str,
+    source_tree: &str,
 ) -> Result<Era1EvolutionReceipt, Era1CommittedReportError> {
     let foundation = FoundationGeneticIdentity::new(
         0x4E32_3034_385F_5631,
@@ -870,38 +890,284 @@ fn bounded_evolution(
         .map(|seed| CreatureGenome::early_mammal_founder(seed, foundation))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
-    let profiles = founders
-        .iter()
-        .enumerate()
-        .map(|(index, founder)| Era1SelectionProfile {
-            founder_genome_id: founder.id,
-            objectives: ObjectiveVector {
-                ecological: ScoreEstimate::known(0.80 - index as f32 * 0.03, 12),
-                cognitive: ScoreEstimate::known(0.62 + index as f32 * 0.04, 12),
-                social: ScoreEstimate::known(0.60 + index as f32 * 0.03, 12),
-                group: ScoreEstimate::known(0.64 - index as f32 * 0.02, 12),
-                stability: ScoreEstimate::known(0.82 - index as f32 * 0.02, 12),
-                efficiency: ScoreEstimate::known(0.70 + index as f32 * 0.02, 12),
-                diversity: ScoreEstimate::known(0.55 + index as f32 * 0.05, 12),
-            },
-            known_ancestor_genome_ids: Vec::new(),
-            population_share: 0.25,
-            specialist_roles: match index {
-                0 => vec![SpecialistRole::EcologicalSurvivor],
-                1 => vec![SpecialistRole::Teacher],
-                2 => vec![SpecialistRole::Coordinator],
-                _ => vec![SpecialistRole::TransferSpecialist],
-            },
-        })
-        .collect::<Vec<_>>();
+    let config = Era1EvolutionConfig::bounded_default(0xE1_6001)
+        .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
+    let mut runner = Era1TrialRunner::new_required()
+        .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?;
+    let cache_root = workspace_root()
+        .join("target")
+        .join("era1-trial-cache")
+        .join(source_commit);
     run_era1_evolution(
-        &Era1EvolutionConfig::bounded_default(0xE1_6001)
-            .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?,
+        &config,
+        Some(baseline),
         &founders,
-        &profiles,
         artifact_root,
+        |generation, candidate_index, births| {
+            bounded_selection_evidence(
+                &config,
+                generation,
+                candidate_index,
+                births,
+                source_commit,
+                source_tree,
+                &cache_root,
+                &mut runner,
+            )
+        },
     )
     .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bounded_selection_evidence(
+    config: &Era1EvolutionConfig,
+    generation: u32,
+    candidate_index: usize,
+    births: &[crate::era1_evolution::Era1BirthReceipt],
+    source_commit: &str,
+    source_tree: &str,
+    cache_root: &Path,
+    runner: &mut Era1TrialRunner,
+) -> Result<Era1CandidateSelectionEvidence, Era1EvolutionError> {
+    let birth = births
+        .get(candidate_index)
+        .ok_or(Era1EvolutionError::InvalidEvidence(
+            "selection candidate index is out of range",
+        ))?;
+    let partner = births.get((candidate_index + 1) % births.len()).ok_or(
+        Era1EvolutionError::InvalidEvidence("ecology reproduction partner is missing"),
+    )?;
+    let identity = Era1SelectionCandidateIdentity {
+        organism_id: birth.organism_id,
+        genome_id: birth.genome.id,
+        parent_genome_ids: birth.genome.parent_genome_ids.clone(),
+        lineage_id: birth.genome.lineage_id,
+        generation,
+    };
+    let mut trial_evidence = Vec::with_capacity(
+        config.evaluation_seeds.len()
+            * config.held_out_world_transforms.len()
+            * Era1Ability::ALL.len()
+            * config.controls.len(),
+    );
+    for &seed in &config.evaluation_seeds {
+        for &world in &config.held_out_world_transforms {
+            for ability in Era1Ability::ALL {
+                for &control in &config.controls {
+                    let subject = birth.organism_id;
+                    let manifest = Era1TrialManifest::new(
+                        seed,
+                        world_family(ability),
+                        subject,
+                        OrganismId(subject.raw().wrapping_add(10_000_001)),
+                        OrganismId(subject.raw().wrapping_add(10_000_002)),
+                        world,
+                        true,
+                        birth.inherited_starter_tokens[0].raw(),
+                    )
+                    .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+                    trial_evidence.push(load_or_run_trial_evidence(
+                        cache_root,
+                        runner,
+                        birth,
+                        &manifest,
+                        ability,
+                        control,
+                        source_commit,
+                        source_tree,
+                    )?);
+                }
+            }
+        }
+    }
+
+    let mut ecology_receipts =
+        Vec::with_capacity(config.evaluation_seeds.len() * config.held_out_world_transforms.len());
+    for (seed_index, &seed) in config.evaluation_seeds.iter().enumerate() {
+        for (world_index, &world) in config.held_out_world_transforms.iter().enumerate() {
+            let reproduction_seed = ecology_reproduction_seed(
+                config.evolution_seed,
+                generation,
+                candidate_index,
+                seed_index,
+                world_index,
+            );
+            ecology_receipts.push(derive_era1_ecology_receipt(
+                &identity,
+                &birth.genome,
+                &partner.genome,
+                reproduction_seed,
+                seed,
+                world,
+                &trial_evidence,
+            )?);
+        }
+    }
+    Ok(Era1CandidateSelectionEvidence {
+        schema_version: ERA1_SELECTION_EVIDENCE_SCHEMA_VERSION,
+        identity,
+        trial_evidence,
+        ecology_receipts,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_or_run_trial_evidence(
+    cache_root: &Path,
+    runner: &mut Era1TrialRunner,
+    birth: &crate::era1_evolution::Era1BirthReceipt,
+    manifest: &Era1TrialManifest,
+    ability: Era1Ability,
+    control: Era1Control,
+    source_commit: &str,
+    source_tree: &str,
+) -> Result<Era1TrialRunEvidence, Era1EvolutionError> {
+    let cache_input = serde_json::json!({
+        "schema": 1,
+        "organism_id": birth.organism_id,
+        "generation": birth.generation,
+        "genome": birth.genome,
+        "manifest": manifest,
+        "ability": ability,
+        "control": control,
+        "partition": Era1EvidencePartition::HeldOutTransfer,
+        "source_commit": source_commit,
+        "source_tree": source_tree,
+    });
+    let cache_bytes = serde_json::to_vec(&cache_input)
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    let cache_key = blake3::hash(&cache_bytes).to_hex().to_string();
+    let cache_path = cache_root.join(format!("{cache_key}.json.gz"));
+    if cache_path.is_file() {
+        let file = File::open(&cache_path)
+            .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+        let evidence: Era1TrialRunEvidence = serde_json::from_reader(GzDecoder::new(file))
+            .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+        validate_cached_trial(
+            &evidence,
+            birth,
+            manifest,
+            ability,
+            control,
+            source_commit,
+            source_tree,
+        )?;
+        return Ok(evidence);
+    }
+
+    fs::create_dir_all(cache_root)
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    let request = Era1TrialRunRequest::new(
+        birth.organism_id,
+        birth.generation,
+        &birth.genome,
+        manifest,
+        ability,
+        control,
+        Era1EvidencePartition::HeldOutTransfer,
+        source_commit,
+        source_tree,
+    )
+    .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    let evidence = runner
+        .run(request)
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    validate_cached_trial(
+        &evidence,
+        birth,
+        manifest,
+        ability,
+        control,
+        source_commit,
+        source_tree,
+    )?;
+
+    let temp_path = cache_root.join(format!(".{cache_key}-{}.tmp", std::process::id()));
+    let file = File::create(&temp_path)
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    let mut encoder = GzEncoder::new(file, Compression::fast());
+    serde_json::to_writer(&mut encoder, &evidence)
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    encoder
+        .flush()
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    encoder
+        .finish()
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    fs::rename(&temp_path, &cache_path)
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    Ok(evidence)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_cached_trial(
+    evidence: &Era1TrialRunEvidence,
+    birth: &crate::era1_evolution::Era1BirthReceipt,
+    manifest: &Era1TrialManifest,
+    ability: Era1Ability,
+    control: Era1Control,
+    source_commit: &str,
+    source_tree: &str,
+) -> Result<(), Era1EvolutionError> {
+    evidence
+        .validate_contract()
+        .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+    let receipt = &evidence.receipt;
+    if evidence.manifest != *manifest
+        || receipt.identity.organism_id != birth.organism_id
+        || receipt.identity.genome_id != birth.genome.id
+        || receipt.identity.parent_genome_ids != birth.genome.parent_genome_ids
+        || receipt.identity.lineage_id != birth.genome.lineage_id
+        || receipt.identity.generation != birth.generation
+        || receipt.ability != ability
+        || receipt.control != control
+        || receipt.partition != Era1EvidencePartition::HeldOutTransfer
+        || receipt.source_commit != source_commit
+        || receipt.source_tree != source_tree
+    {
+        return Err(Era1EvolutionError::TrialEvidence(
+            "cached trial does not match its immutable input digest".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn ecology_reproduction_seed(
+    evolution_seed: u64,
+    generation: u32,
+    candidate_index: usize,
+    seed_index: usize,
+    world_index: usize,
+) -> u64 {
+    let mut value = evolution_seed
+        ^ u64::from(generation).rotate_left(11)
+        ^ (candidate_index as u64).rotate_left(23)
+        ^ (seed_index as u64).rotate_left(37)
+        ^ (world_index as u64).rotate_left(47)
+        ^ 0xE1C0_10C0_11EC_7001;
+    value ^= value >> 30;
+    value = value.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    value ^= value >> 27;
+    value = value.wrapping_mul(0x94D0_49BB_1331_11EB);
+    (value ^ (value >> 31)).max(1)
+}
+
+const fn world_family(ability: Era1Ability) -> Era1WorldFamily {
+    match ability {
+        Era1Ability::FlexibleForaging | Era1Ability::HazardAvoidance => {
+            Era1WorldFamily::ForagingHazardMaze
+        }
+        Era1Ability::SpatialMemory
+        | Era1Ability::DelayedChoice
+        | Era1Ability::PostSleepRetention => Era1WorldFamily::DelayedLocation,
+        Era1Ability::RewardReversal => Era1WorldFamily::RewardReversal,
+        Era1Ability::ObjectTransfer => Era1WorldFamily::TransformedObjectsLayout,
+        Era1Ability::MultiStepProblem => Era1WorldFamily::TwoStepAccessProblem,
+        Era1Ability::IndividualRecognition => Era1WorldFamily::FamiliarNovelIndividual,
+        Era1Ability::Imitation => Era1WorldFamily::PeerDemonstration,
+        Era1Ability::GroundedLanguage => Era1WorldFamily::GroundedVocabulary,
+    }
 }
 
 fn derive_matrix_coverage(
@@ -1096,4 +1362,70 @@ fn format_blake3(digest: alife_core::Blake3Digest) -> String {
         let _ = write!(hex, "{byte:02x}");
     }
     format!("blake3-256:{hex}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::era1_evolution::{Era1AcquiredStateEvidence, Era1BirthReceipt};
+
+    #[test]
+    fn trial_cache_miss_then_digest_identical_hit_reuses_validated_evidence() {
+        let foundation = FoundationGeneticIdentity::new(
+            0x4E32_3034_385F_5631,
+            1,
+            0x4E32_3034_385F_FA11,
+            BrainCapacityClass::N2048_ID,
+        )
+        .unwrap();
+        let genome = CreatureGenome::early_mammal_founder(0xE1CA_C4E0, foundation).unwrap();
+        let inherited_starter_tokens = genome.express().unwrap().predisposition.starter_tokens;
+        let birth = Era1BirthReceipt {
+            generation: 0,
+            lineage_slot: 0,
+            organism_id: OrganismId(20_001),
+            genome,
+            inherited_starter_tokens,
+            acquired_state: Era1AcquiredStateEvidence::default(),
+        };
+        let manifest = Era1TrialManifest::new(
+            0xE1CA_5001,
+            Era1WorldFamily::ForagingHazardMaze,
+            birth.organism_id,
+            OrganismId(30_001),
+            OrganismId(30_002),
+            0xE1CA_6001,
+            true,
+            birth.inherited_starter_tokens[0].raw(),
+        )
+        .unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let mut runner = Era1TrialRunner::new_required().unwrap();
+        let first = load_or_run_trial_evidence(
+            cache.path(),
+            &mut runner,
+            &birth,
+            &manifest,
+            Era1Ability::FlexibleForaging,
+            Era1Control::Intact,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        )
+        .unwrap();
+        let cached_files = fs::read_dir(cache.path()).unwrap().count();
+        let second = load_or_run_trial_evidence(
+            cache.path(),
+            &mut runner,
+            &birth,
+            &manifest,
+            Era1Ability::FlexibleForaging,
+            Era1Control::Intact,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        )
+        .unwrap();
+        assert_eq!(first, second);
+        assert_eq!(cached_files, 1);
+        assert_eq!(fs::read_dir(cache.path()).unwrap().count(), 1);
+    }
 }
