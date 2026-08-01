@@ -19,6 +19,9 @@ The full program is defined in `EVOLUTIONARY_INTELLIGENCE_ROADMAP.md`.
 - Evolve flexible survival, spatial memory, reversal, transfer, imitation, and
   grounded starter speech.
 - Target lab-rat-level adaptive behavior in simplified worlds.
+- Keep N2048 GPU-authoritative. Source-bound RTX/Vulkan evidence reports `PASS`
+  or `BLOCKED`; missing cells and plateau evidence remain `UNKNOWN`.
+- Keep EI2 dormant. EI1 evidence never authorizes brain-class scaling.
 
 ## EI2: Social mammal and proto-pack
 

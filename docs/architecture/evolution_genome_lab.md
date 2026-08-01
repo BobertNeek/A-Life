@@ -1,4 +1,4 @@
-# P33 Evolution Genome Lab and EI0 Selection
+# Evolution Genome Lab and EI0/EI1 Selection
 
 Status: deterministic offline tooling foundation.
 
@@ -130,3 +130,17 @@ non-parent population controls.
 Persistent packs measure retained group coordination. Randomized teams measure
 transferable social contribution. Removal and replacement evidence remains
 required before group contribution is known; absent evidence stays unknown.
+
+## Era 1 bounded evolution and promotion
+
+Era 1 uses four lineages, three evaluation seeds, two held-out transforms, two
+ordinary-birth generations, eleven abilities, and five control states. The
+authoritative offspring path above remains unchanged. Starter token IDs may be
+inherited; lifetime weights, memories, learned vocabulary, pending eligibility,
+and transient state may not.
+
+The source-bound acceptance contract is documented in
+`docs/architecture/era1_norn_plus.md`. Promotion is literal across every matrix
+cell. Missing or unknown evidence blocks promotion and remains `UNKNOWN`.
+Plateau review needs three consecutive low-gain windows without ecology or
+diversity regression. It never authorizes brain-class scaling.

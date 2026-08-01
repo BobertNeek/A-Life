@@ -6,9 +6,11 @@ use alife_core::{
 };
 use alife_tools::era1_evolution::{run_era1_evolution, Era1EvolutionConfig, Era1EvolutionReceipt};
 use alife_tools::era1_promotion::{
-    assess_era1_plateau, derive_era1_promotion, Era1ComparisonStatus, Era1HardwareCost,
-    Era1PlateauStatus, Era1PromotionVerdict,
+    assess_era1_plateau, derive_era1_promotion, validate_committed_era1_promotion_report,
+    Era1CommittedPromotionReport, Era1ComparisonStatus, Era1EvidenceStatus, Era1HardwareCost,
+    Era1PlateauStatus, Era1PromotionVerdict, ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION,
 };
+use std::{fs, path::PathBuf};
 
 const SOURCE_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 const SOURCE_TREE: &str = "89abcdef0123456789abcdef0123456789abcdef";
@@ -328,4 +330,45 @@ fn plateau_needs_three_consecutive_low_gain_nonregressing_windows() {
             .unwrap()
             .review_eligible
     );
+}
+
+#[test]
+fn committed_report_recomputes_source_receipts_and_unknown_gate_outcome() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("reports")
+        .join("era1_promotion_report.json");
+    let report: Era1CommittedPromotionReport =
+        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+
+    validate_committed_era1_promotion_report(&report).unwrap();
+    assert_eq!(
+        report.schema_version,
+        ERA1_COMMITTED_PROMOTION_REPORT_SCHEMA_VERSION
+    );
+    assert_eq!(report.artifact_binding.adapter_name, ADAPTER);
+    assert_eq!(report.artifact_binding.backend_api, "vulkan");
+    assert_eq!(report.matrix_coverage.len(), 55);
+    assert!(report
+        .matrix_coverage
+        .iter()
+        .any(|cell| cell.status == Era1EvidenceStatus::Measured));
+    assert!(report
+        .matrix_coverage
+        .iter()
+        .any(|cell| cell.status == Era1EvidenceStatus::Unknown));
+    assert_eq!(report.promotion.verdict, Era1PromotionVerdict::Blocked);
+    assert_eq!(report.promotion.plateau.status, Era1PlateauStatus::Unknown);
+    assert!(!report.boundaries.assistance_present);
+    assert!(!report.boundaries.hidden_policy_present);
+    assert!(!report.boundaries.brain_class_scaling_performed);
+    assert_eq!(report.boundaries.era2_status, "OUT_OF_SCOPE");
+
+    let mut tampered = report.clone();
+    tampered.trial_receipts[0].world_digest[0] ^= 1;
+    assert!(validate_committed_era1_promotion_report(&tampered).is_err());
+
+    let mut wrong_source = report;
+    wrong_source.artifact_binding.source_contract_digest =
+        "blake3-256:0000000000000000000000000000000000000000000000000000000000000000".to_string();
+    assert!(validate_committed_era1_promotion_report(&wrong_source).is_err());
 }
