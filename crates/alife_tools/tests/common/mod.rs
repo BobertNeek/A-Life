@@ -146,9 +146,7 @@ pub fn validator_only_evolution_receipt() -> Era1EvolutionReceipt {
 }
 
 pub fn committed_ei0_exit_gate() -> Ei0ExitGateReport {
-    let report: serde_json::Value =
-        serde_json::from_str(include_str!("../../reports/era1_promotion_report.json")).unwrap();
-    serde_json::from_value(report["baseline_save_archive_receipt"].clone()).unwrap()
+    serde_json::from_str(include_str!("../../reports/ei0_exit_gate_report.json")).unwrap()
 }
 
 fn founder(seed: u64) -> CreatureGenome {
