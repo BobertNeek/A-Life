@@ -169,6 +169,54 @@ fn causal_controls_change_only_the_named_mechanism() {
     assert!(!social_disabled.social_context_present);
     assert!(social_disabled.steps.iter().all(|step| !step.peer_visible));
 
+    let intact_social = runner
+        .run(request(
+            &genome,
+            &peer,
+            Era1Ability::Imitation,
+            Era1Control::Intact,
+            Era1EvidencePartition::SocialTransfer,
+        ))
+        .unwrap();
+    intact_social.validate_contract().unwrap();
+    let demonstration = intact_social.peer_demonstration.as_ref().unwrap();
+    assert!(demonstration.succeeded);
+    assert_eq!(demonstration.actor, FAMILIAR);
+    assert!(intact_social.steps[0].peer_visible);
+    assert_eq!(
+        intact_social.steps[0].world_before_digest,
+        demonstration.world_after_digest
+    );
+
+    let recognition_manifest = manifest(Era1WorldFamily::FamiliarNovelIndividual);
+    let recognition = runner
+        .run(request(
+            &genome,
+            &recognition_manifest,
+            Era1Ability::IndividualRecognition,
+            Era1Control::Intact,
+            Era1EvidencePartition::SocialTransfer,
+        ))
+        .unwrap();
+    recognition.validate_contract().unwrap();
+    assert!(
+        recognition
+            .learning_assessment
+            .causal_proof
+            .required_context_proven
+    );
+    let acquired_familiar = recognition
+        .steps
+        .iter()
+        .find_map(|step| step.familiar_tracked_id)
+        .unwrap();
+    assert!(recognition.steps.iter().any(|step| {
+        step.phase == alife_world::Era1TrialPhase::Probe
+            && step.familiar_tracked_id == Some(acquired_familiar)
+            && step.novel_tracked_id.is_some()
+            && step.novel_tracked_id != step.familiar_tracked_id
+    }));
+
     let intact_sleep = runner
         .run(request(
             &genome,

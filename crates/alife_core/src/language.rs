@@ -439,7 +439,7 @@ impl LanguageGroundingLedger {
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.entries.len() > LANGUAGE_GROUNDING_LEDGER_CAPACITY
             || self.utterance_receipts_v2.len() > LANGUAGE_GROUNDING_LEDGER_CAPACITY
-            || (!self.entries.is_empty() && self.last_sequence_id == 0)
+            || (!self.entries.is_empty() && self.last_grounding_v2_sequence_id == 0)
             || (!self.utterance_receipts_v2.is_empty() && self.last_grounding_v2_sequence_id == 0)
             || self.entries.iter().any(|entry| {
                 entry.token.raw() == 0
@@ -476,45 +476,14 @@ impl LanguageGroundingLedger {
             return Err(ScaffoldContractError::LearningReplayRejected);
         }
         self.last_grounding_v2_sequence_id = sequence;
-        self.utterance_receipts_v2.push(receipt);
-        self.validate_contract()
-    }
-
-    pub fn observe_sealed(&mut self, patch: &ExperiencePatch) -> Result<(), ScaffoldContractError> {
-        patch.validate_contract()?;
-        let sequence = patch.header().sequence_id.raw();
-        if sequence <= self.last_sequence_id {
-            return Err(ScaffoldContractError::LearningReplayRejected);
-        }
-        self.last_sequence_id = sequence;
-        let action = patch.decision().selected_action.kind;
-        let succeeded = patch.outcome().success;
-        let mut tokens = patch
-            .pre_action()
-            .perception()
-            .sensory()
-            .language_context
-            .heard_tokens
-            .iter()
-            .flatten()
-            .filter_map(|heard| u16::try_from(heard.token_id).ok())
-            .filter_map(|raw| LanguageTokenId::new(raw).ok())
-            .filter(|token| token.raw() != 0)
-            .collect::<Vec<_>>();
-        tokens.sort_unstable();
-        tokens.dedup();
-        for token in tokens {
-            if let Some(entry) = self
-                .entries
-                .iter_mut()
-                .find(|entry| entry.token == token && entry.action == action)
-            {
-                entry.exposures = entry.exposures.saturating_add(1);
-                entry.successful_outcomes = entry
-                    .successful_outcomes
-                    .saturating_add(u32::from(succeeded));
-                continue;
-            }
+        if let Some(entry) = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.token == receipt.token && entry.action == receipt.selected_action)
+        {
+            entry.exposures = entry.exposures.saturating_add(1);
+            entry.successful_outcomes = entry.successful_outcomes.saturating_add(1);
+        } else {
             if self.entries.len() == LANGUAGE_GROUNDING_LEDGER_CAPACITY {
                 let eviction = self
                     .entries
@@ -528,14 +497,25 @@ impl LanguageGroundingLedger {
                 self.entries.remove(eviction);
             }
             self.entries.push(LanguageGroundingEntry {
-                token,
-                action,
+                token: receipt.token,
+                action: receipt.selected_action,
                 exposures: 1,
-                successful_outcomes: u32::from(succeeded),
+                successful_outcomes: 1,
             });
+            self.entries
+                .sort_by_key(|entry| (entry.token.raw(), entry.action.raw()));
         }
-        self.entries
-            .sort_by_key(|entry| (entry.token.raw(), entry.action.raw()));
+        self.utterance_receipts_v2.push(receipt);
+        self.validate_contract()
+    }
+
+    pub fn observe_sealed(&mut self, patch: &ExperiencePatch) -> Result<(), ScaffoldContractError> {
+        patch.validate_contract()?;
+        let sequence = patch.header().sequence_id.raw();
+        if sequence <= self.last_sequence_id {
+            return Err(ScaffoldContractError::LearningReplayRejected);
+        }
+        self.last_sequence_id = sequence;
         self.validate_contract()?;
         Ok(())
     }

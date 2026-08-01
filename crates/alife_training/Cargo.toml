@@ -11,11 +11,13 @@ alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_runtime = { path = "../alife_runtime" }
 alife_world = { path = "../alife_world" }
 bytemuck.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 wgpu.workspace = true
 
 [dev-dependencies]
 naga = { version = "29.0.3", features = ["wgsl-in"] }
+serde_json.workspace = true
 
 [features]
 default = []

@@ -151,8 +151,18 @@ fn exact_utterance_grounding_requires_matching_neural_target_and_sealed_success(
     .is_err());
 
     let mut ledger = LanguageGroundingLedger::default();
+    ledger.observe_sealed(&patch).unwrap();
+    assert!(
+        ledger.entries().is_empty(),
+        "heard-token co-occurrence is exposure, not grounding"
+    );
     ledger.observe_grounding_v2(receipt.clone()).unwrap();
     assert_eq!(ledger.utterance_receipts_v2(), &[receipt.clone()]);
+    assert_eq!(ledger.entries().len(), 1);
+    assert_eq!(ledger.entries()[0].token, receipt.token);
+    assert_eq!(ledger.entries()[0].action, receipt.selected_action);
+    assert_eq!(ledger.entries()[0].exposures, 1);
+    assert_eq!(ledger.entries()[0].successful_outcomes, 1);
     assert_eq!(
         ledger.observe_grounding_v2(receipt).unwrap_err(),
         ScaffoldContractError::LearningReplayRejected
@@ -227,6 +237,14 @@ fn gpu_episode_reports_honest_phase_learning_and_grounding_evidence() {
         .grounding_receipts
         .iter()
         .all(|receipt| receipt.source_kind != UtteranceSourceKind::Player));
+    assert_eq!(
+        evidence.language_grounding.utterance_receipts_v2(),
+        evidence.learning_assessment.grounding_receipts
+    );
+    assert_eq!(evidence.manifest, manifest);
+    let encoded = serde_json::to_vec(&evidence).unwrap();
+    let decoded: alife_training::Era1TrialRunEvidence = serde_json::from_slice(&encoded).unwrap();
+    decoded.validate_contract().unwrap();
     if evidence.learning_assessment.demonstrated {
         assert!(evidence.learning_assessment.probe_change_from_early_q16 > 0);
         assert!(!evidence.learning_assessment.grounding_receipts.is_empty());

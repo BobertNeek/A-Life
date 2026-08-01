@@ -1,15 +1,16 @@
 //! GPU-authoritative causal trial loop for the Era 1 Norn-plus battery.
 
 use alife_core::{
-    ActionKind, BrainCapacityClass, BrainGenome, CandidateActionFamily, CanonicalDigestBuilder,
-    Confidence, ConsolidationIntent, CreatureGenome, DecisionSnapshot, DevelopmentState,
-    Era1Ability, Era1Control, Era1EvidencePartition, Era1TrialIdentity, Era1TrialReceipt,
-    ExperiencePatchBuilder, ExperienceSequenceId, FoundationWeightAsset, HomeostaticParameters,
-    HomeostaticSnapshot, MemoryBankConfig, MemorySidecarState, MetricReading,
-    NeuralActionSelection, OrganismId, PerceptionFrameDigest, PhenotypeCompiler, PhenotypeHash,
-    PolicyBackend, PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile,
-    SensorProfileIdentity, SensoryAbiVersion, Tick, UtteranceGroundingReceiptV2,
-    UtteranceSourceKind, Validate,
+    ActionKind, BrainCapacityClass, BrainGenome, CandidateActionFamily, CandidateObservationRef,
+    CanonicalDigestBuilder, Confidence, ConsolidationIntent, CreatureGenome, DecisionSnapshot,
+    DevelopmentState, Era1Ability, Era1Control, Era1EvidencePartition, Era1TrialIdentity,
+    Era1TrialReceipt, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
+    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger,
+    MemoryBankConfig, MemorySidecarState, MetricReading, NeuralActionSelection, OrganismId,
+    PerceptionFrameDigest, PhenotypeCompiler, PhenotypeHash, PolicyBackend, PostActionOutcome,
+    PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
+    SensoryAbiVersion, Tick, TrackedObjectId, UtteranceGroundingReceiptV2, UtteranceSourceKind,
+    Validate, WorldEntityId,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -18,9 +19,10 @@ use alife_gpu_backend::{
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
     apply_era1_world_transition, build_era1_trial_world, Era1TrialManifest, Era1TrialPhase,
-    Era1WorldFamily, HeadlessWorld, WorldObjectKind, ERA1_ACQUISITION_END_TICK,
-    ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK,
+    Era1WorldFamily, Era1WorldTransition, HeadlessWorld, HeadlessWorldCommand, WorldObjectKind,
+    ERA1_ACQUISITION_END_TICK, ERA1_PROBE_START_TICK, ERA1_TRIAL_END_TICK,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::TrainingError;
 
@@ -32,13 +34,13 @@ const PERCEPTION_DIGEST_DOMAIN: &[u8] = b"alife.era1.perception-evidence.v1";
 const SEALED_DIGEST_DOMAIN: &[u8] = b"alife.era1.sealed-evidence.v1";
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Era1LearningDisposition {
     Applied = 1,
     Discarded = 2,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Era1CausalStepReceipt {
     pub organism_id: OrganismId,
     pub phenotype_hash: PhenotypeHash,
@@ -59,11 +61,45 @@ pub struct Era1CausalStepReceipt {
     pub phase: Era1TrialPhase,
     pub selected_action: ActionKind,
     pub selected_family: CandidateActionFamily,
+    pub target_entity: Option<WorldEntityId>,
     pub target_kind: Option<WorldObjectKind>,
+    pub target_organism: Option<OrganismId>,
+    pub tracked_target: Option<TrackedObjectId>,
+    pub cue_present: bool,
+    pub familiar_tracked_id: Option<TrackedObjectId>,
+    pub novel_tracked_id: Option<TrackedObjectId>,
     pub behavior_success: bool,
+    pub sealed_patch: ExperiencePatch,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Era1PeerDemonstrationReceipt {
+    pub tick: Tick,
+    pub actor: OrganismId,
+    pub target_entity: WorldEntityId,
+    pub action: ActionKind,
+    pub world_before_digest: [u64; 4],
+    pub world_after_digest: [u64; 4],
+    pub succeeded: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Era1TransitionReceipt {
+    pub transition: Era1WorldTransition,
+    pub world_before_digest: [u64; 4],
+    pub world_after_digest: [u64; 4],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Era1AbilityCausalProof {
+    pub ability: Era1Ability,
+    pub world_family: Era1WorldFamily,
+    pub phase_step_counts: [u32; 3],
+    pub required_context_proven: bool,
+    pub successful_behavior_ticks: Vec<Tick>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Era1LearningAssessment {
     pub early_acquisition: MetricReading,
     pub late_acquisition: MetricReading,
@@ -73,12 +109,16 @@ pub struct Era1LearningAssessment {
     pub probe_change_from_early_q16: i32,
     pub demonstrated: bool,
     pub grounding_receipts: Vec<UtteranceGroundingReceiptV2>,
+    pub causal_proof: Era1AbilityCausalProof,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Era1TrialRunEvidence {
     pub receipt: Era1TrialReceipt,
+    pub manifest: Era1TrialManifest,
     pub initial_world_digest: [u64; 4],
+    pub transition_receipts: Vec<Era1TransitionReceipt>,
+    pub peer_demonstration: Option<Era1PeerDemonstrationReceipt>,
     pub steps: Vec<Era1CausalStepReceipt>,
     pub gpu_dispatches: u64,
     pub sealed_outcomes: u64,
@@ -90,16 +130,23 @@ pub struct Era1TrialRunEvidence {
     pub social_context_present: bool,
     pub adapter_name: String,
     pub backend_api: String,
+    pub language_grounding: LanguageGroundingLedger,
     pub learning_assessment: Era1LearningAssessment,
 }
 
 impl Era1TrialRunEvidence {
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.receipt.validate_contract()?;
+        self.manifest.validate_contract()?;
+        self.language_grounding.validate_contract()?;
         let step_count = u64::try_from(self.steps.len())
             .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
         if self.initial_world_digest == [0; 4]
             || self.receipt.world_digest != self.initial_world_digest
+            || self.receipt.identity.seed != self.manifest.seed
+            || self.receipt.identity.organism_id != self.manifest.subject
+            || self.receipt.identity.world_family_id != self.manifest.family as u64
+            || expected_family(self.receipt.ability) != self.manifest.family
             || self.gpu_dispatches != step_count
             || self.gpu_dispatches != self.sealed_outcomes
             || self.gpu_dispatches != self.memory_context_dispatches
@@ -112,10 +159,45 @@ impl Era1TrialRunEvidence {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
 
+        validate_transition_receipts(
+            &self.manifest,
+            self.receipt.control,
+            &self.transition_receipts,
+        )?;
+        validate_peer_demonstration(
+            &self.manifest,
+            self.receipt.control,
+            self.initial_world_digest,
+            self.peer_demonstration.as_ref(),
+            &self.steps,
+        )?;
+        if self.language_grounding.utterance_receipts_v2()
+            != self.learning_assessment.grounding_receipts
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let (expected_behavior, causal_proof) = derive_causal_behavior(
+            self.receipt.ability,
+            &self.manifest,
+            &self.transition_receipts,
+            self.peer_demonstration.as_ref(),
+            &self.steps,
+            &self.language_grounding,
+            self.sleep_commits,
+        )?;
+        if self
+            .steps
+            .iter()
+            .zip(expected_behavior)
+            .any(|(step, expected)| step.behavior_success != expected)
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         let expected_assessment = assess_learning(
             self.receipt.ability,
             &self.steps,
             self.learning_assessment.grounding_receipts.clone(),
+            causal_proof,
         )?;
         if self.learning_assessment != expected_assessment
             || self.receipt.score
@@ -125,6 +207,7 @@ impl Era1TrialRunEvidence {
         }
 
         for (index, step) in self.steps.iter().enumerate() {
+            step.sealed_patch.validate_contract()?;
             let sequence = u64::try_from(index)
                 .ok()
                 .and_then(|value| value.checked_add(1))
@@ -142,6 +225,13 @@ impl Era1TrialRunEvidence {
                 || step.memory_bank_digest == [0; 4]
                 || step.pending_receipt_digest == [0; 4]
                 || step.phase != phase_for_tick(step.tick)
+                || step.sealed_patch.header().organism_id != step.organism_id
+                || step.sealed_patch.header().sequence_id != step.sequence_id
+                || step.sealed_patch.header().world_tick != step.tick
+                || step.sealed_patch.pre_action().perception().frame_digest() != step.frame_digest
+                || step.sealed_patch.decision().selected_action.kind != step.selected_action
+                || step.sealed_patch.decision().selected_action.target_entity != step.target_entity
+                || step.sealed_patch.outcome().success != step.outcome_success
             {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
@@ -325,6 +415,13 @@ impl Era1TrialRunner {
             remove_peer_agents(&mut world, request.organism_id)?;
         }
         let initial_world_digest = world.canonical_signature_digest()?.words;
+        let peer_demonstration = if request.ability == Era1Ability::Imitation
+            && request.control != Era1Control::SocialDisabled
+        {
+            Some(run_peer_demonstration(request.manifest, &mut world)?)
+        } else {
+            None
+        };
         let mut memory = MemorySidecarState::new_profiled(
             request.organism_id,
             SensorProfileIdentity {
@@ -348,6 +445,8 @@ impl Era1TrialRunner {
         let mut memory_updates = 0_u64;
         let mut sleep_commits = 0_u32;
         let mut grounding_receipts = Vec::new();
+        let mut language_grounding = LanguageGroundingLedger::default();
+        let mut transition_receipts = Vec::new();
 
         while world.tick().raw() < ERA1_TRIAL_END_TICK {
             if let Some(transition) = request
@@ -356,7 +455,13 @@ impl Era1TrialRunner {
                 .into_iter()
                 .find(|transition| transition.at_tick == world.tick())
             {
+                let world_before_digest = world.canonical_signature_digest()?.words;
                 apply_era1_world_transition(request.manifest, transition, &mut world)?;
+                transition_receipts.push(Era1TransitionReceipt {
+                    transition,
+                    world_before_digest,
+                    world_after_digest: world.canonical_signature_digest()?.words,
+                });
             }
             if request.control == Era1Control::SocialDisabled {
                 remove_peer_agents(&mut world, request.organism_id)?;
@@ -384,7 +489,19 @@ impl Era1TrialRunner {
             }
 
             let world_before = world.canonical_signature_digest()?.words;
-            let peer_visible = peer_is_visible(&world, request.organism_id)?;
+            let visibility =
+                world.physical_observation_snapshot(request.organism_id, world.tick())?;
+            let visible_entities = visibility
+                .visible
+                .iter()
+                .map(|visible| visible.transport_entity)
+                .collect::<Vec<_>>();
+            let peer_visible = visible_entities.iter().any(|entity| {
+                world
+                    .entity(*entity)
+                    .and_then(|object| object.organism_id)
+                    .is_some_and(|organism| organism != request.organism_id)
+            });
             development.age_ticks = Tick::new(mature_age.saturating_add(world.tick().raw()));
             let draft = world.perception_frame_draft(
                 request.organism_id,
@@ -429,6 +546,32 @@ impl Era1TrialRunner {
                 .entity
                 .and_then(|entity| world.entity(entity))
                 .map(|entity| entity.kind);
+            let target_organism = selected
+                .target
+                .entity
+                .and_then(|entity| world.entity(entity))
+                .and_then(|entity| entity.organism_id);
+            let tracked_target = match selected.observation {
+                CandidateObservationRef::ObjectSlot(slot_index) => frame
+                    .grounded_object_slots()
+                    .iter()
+                    .find(|slot| slot.slot_index == slot_index)
+                    .map(|slot| slot.tracked_object_id),
+                CandidateObservationRef::None => None,
+            };
+            let familiar_tracked_id = visible_tracked_organism(
+                &world,
+                request.organism_id,
+                request.manifest.familiar_peer,
+                &visible_entities,
+            );
+            let novel_tracked_id = visible_tracked_organism(
+                &world,
+                request.organism_id,
+                request.manifest.novel_peer,
+                &visible_entities,
+            );
+            let cue_present = world.entity_id("era1-cue").is_some();
             let phase = request.manifest.phase_at(frame.tick())?;
 
             let sequence_id = ExperienceSequenceId(
@@ -502,6 +645,7 @@ impl Era1TrialRunner {
                 .record_outcome(outcome)?
                 .seal()?;
             let world_after_action = world.canonical_signature_digest()?.words;
+            language_grounding.observe_sealed(&patch)?;
 
             let grounding_before = grounding_receipts.len();
             if request.ability == Era1Ability::GroundedLanguage && patch.outcome().success {
@@ -521,19 +665,14 @@ impl Era1TrialRunner {
                             heard.sequence_position,
                             target,
                         ) {
+                            language_grounding.observe_grounding_v2(receipt.clone())?;
                             grounding_receipts.push(receipt);
                             break;
                         }
                     }
                 }
             }
-            let behavior_success = behavior_succeeds(
-                request.ability,
-                selected.family,
-                target_kind,
-                patch.outcome().success,
-                grounding_receipts.len() > grounding_before,
-            );
+            let _grounded_utterance = grounding_receipts.len() > grounding_before;
 
             let learning = if request.control == Era1Control::PlasticityDisabled {
                 self.session
@@ -570,8 +709,15 @@ impl Era1TrialRunner {
                 phase,
                 selected_action: selected.kind,
                 selected_family: selected.family,
+                target_entity: selected.target.entity,
                 target_kind,
-                behavior_success,
+                target_organism,
+                tracked_target,
+                cue_present,
+                familiar_tracked_id,
+                novel_tracked_id,
+                behavior_success: false,
+                sealed_patch: patch.clone(),
             });
             homeostasis = homeostasis.advance(
                 outcome_tick,
@@ -581,7 +727,20 @@ impl Era1TrialRunner {
             world.advance_tick();
         }
 
-        let learning_assessment = assess_learning(request.ability, &steps, grounding_receipts)?;
+        let (behavior_success, causal_proof) = derive_causal_behavior(
+            request.ability,
+            request.manifest,
+            &transition_receipts,
+            peer_demonstration.as_ref(),
+            &steps,
+            &language_grounding,
+            sleep_commits,
+        )?;
+        for (step, success) in steps.iter_mut().zip(behavior_success) {
+            step.behavior_success = success;
+        }
+        let learning_assessment =
+            assess_learning(request.ability, &steps, grounding_receipts, causal_proof)?;
         let foundation = request.genome.foundation;
         let receipt = Era1TrialReceipt {
             schema_version: alife_core::ERA1_EVALUATION_SCHEMA_VERSION,
@@ -622,7 +781,10 @@ impl Era1TrialRunner {
         receipt.validate_contract()?;
         let evidence = Era1TrialRunEvidence {
             receipt,
+            manifest: request.manifest.clone(),
             initial_world_digest,
+            transition_receipts,
+            peer_demonstration,
             gpu_dispatches: steps.len() as u64,
             sealed_outcomes: steps.len() as u64,
             memory_context_dispatches: steps.len() as u64,
@@ -633,6 +795,7 @@ impl Era1TrialRunner {
             social_context_present: steps.iter().any(|step| step.peer_visible),
             adapter_name: self.adapter_name.clone(),
             backend_api: self.backend_api.clone(),
+            language_grounding,
             learning_assessment,
             steps,
         };
@@ -670,61 +833,179 @@ fn phase_for_tick(tick: Tick) -> Era1TrialPhase {
     }
 }
 
-fn behavior_succeeds(
+#[allow(clippy::too_many_arguments)]
+fn derive_causal_behavior(
     ability: Era1Ability,
-    family: CandidateActionFamily,
-    target_kind: Option<WorldObjectKind>,
-    outcome_success: bool,
-    grounded_utterance: bool,
-) -> bool {
-    if !outcome_success {
-        return false;
+    manifest: &Era1TrialManifest,
+    transitions: &[Era1TransitionReceipt],
+    peer_demonstration: Option<&Era1PeerDemonstrationReceipt>,
+    steps: &[Era1CausalStepReceipt],
+    language_grounding: &LanguageGroundingLedger,
+    sleep_commits: u32,
+) -> Result<(Vec<bool>, Era1AbilityCausalProof), ScaffoldContractError> {
+    let phase_step_counts = [
+        count_phase(steps, Era1TrialPhase::Acquisition)?,
+        count_phase(steps, Era1TrialPhase::Delay)?,
+        count_phase(steps, Era1TrialPhase::Probe)?,
+    ];
+    let complete_phases = phase_step_counts
+        == [
+            ERA1_ACQUISITION_END_TICK as u32,
+            (ERA1_PROBE_START_TICK - ERA1_ACQUISITION_END_TICK) as u32,
+            (ERA1_TRIAL_END_TICK - ERA1_PROBE_START_TICK) as u32,
+        ];
+    let cue_acquired = steps
+        .iter()
+        .any(|step| step.phase == Era1TrialPhase::Acquisition && step.cue_present);
+    let cue_withheld = steps
+        .iter()
+        .filter(|step| step.phase != Era1TrialPhase::Acquisition)
+        .all(|step| !step.cue_present);
+    let probe_transition_changed = transitions.iter().any(|receipt| {
+        receipt.transition.to == Era1TrialPhase::Probe
+            && receipt.world_before_digest != receipt.world_after_digest
+    });
+    let acquisition_familiar = steps
+        .iter()
+        .filter(|step| step.phase == Era1TrialPhase::Acquisition)
+        .filter_map(|step| step.familiar_tracked_id)
+        .next();
+    let probe_familiar = steps
+        .iter()
+        .filter(|step| step.phase == Era1TrialPhase::Probe)
+        .filter_map(|step| step.familiar_tracked_id)
+        .next();
+    let probe_novel = steps
+        .iter()
+        .filter(|step| step.phase == Era1TrialPhase::Probe)
+        .filter_map(|step| step.novel_tracked_id)
+        .next();
+    let stable_identity = acquisition_familiar.is_some()
+        && acquisition_familiar == probe_familiar
+        && probe_novel.is_some()
+        && probe_novel != probe_familiar;
+    let peer_demo_valid = peer_demonstration.is_some_and(|receipt| {
+        receipt.actor == manifest.familiar_peer
+            && receipt.tick.raw() < ERA1_ACQUISITION_END_TICK
+            && receipt.action == ActionKind::Move
+            && receipt.succeeded
+            && steps
+                .iter()
+                .any(|step| step.tick == receipt.tick && step.peer_visible)
+    });
+    let language_receipts = language_grounding.utterance_receipts_v2();
+    let required_context_proven = complete_phases
+        && expected_family(ability) == manifest.family
+        && match ability {
+            Era1Ability::FlexibleForaging | Era1Ability::HazardAvoidance => true,
+            Era1Ability::SpatialMemory | Era1Ability::DelayedChoice => cue_acquired && cue_withheld,
+            Era1Ability::RewardReversal => probe_transition_changed,
+            Era1Ability::ObjectTransfer => manifest.held_out_transform && probe_transition_changed,
+            Era1Ability::MultiStepProblem => cue_acquired && cue_withheld,
+            Era1Ability::IndividualRecognition => stable_identity,
+            Era1Ability::Imitation => peer_demo_valid,
+            Era1Ability::GroundedLanguage => !language_receipts.is_empty(),
+            Era1Ability::PostSleepRetention => cue_acquired && cue_withheld && sleep_commits == 1,
+        };
+
+    let mut successes = vec![false; steps.len()];
+    if required_context_proven {
+        for (index, step) in steps.iter().enumerate() {
+            if !step.outcome_success {
+                continue;
+            }
+            successes[index] = match ability {
+                Era1Ability::FlexibleForaging => {
+                    step.phase == Era1TrialPhase::Acquisition
+                        && step.selected_family == CandidateActionFamily::Ingest
+                        && step.target_kind == Some(WorldObjectKind::Food)
+                }
+                Era1Ability::HazardAvoidance => {
+                    step.phase == Era1TrialPhase::Acquisition
+                        && step.selected_family == CandidateActionFamily::Avoid
+                        && step.target_kind == Some(WorldObjectKind::Hazard)
+                }
+                Era1Ability::SpatialMemory | Era1Ability::DelayedChoice => {
+                    step.phase == Era1TrialPhase::Probe
+                        && !step.cue_present
+                        && step.memory_observed
+                        && matches!(
+                            step.selected_family,
+                            CandidateActionFamily::Approach | CandidateActionFamily::Ingest
+                        )
+                        && step.target_kind == Some(WorldObjectKind::Food)
+                }
+                Era1Ability::RewardReversal | Era1Ability::ObjectTransfer => {
+                    step.phase == Era1TrialPhase::Probe
+                        && ((step.selected_family == CandidateActionFamily::Ingest
+                            && step.target_kind == Some(WorldObjectKind::Food))
+                            || (step.selected_family == CandidateActionFamily::Avoid
+                                && step.target_kind == Some(WorldObjectKind::Hazard)))
+                }
+                Era1Ability::MultiStepProblem => {
+                    step.selected_family == CandidateActionFamily::Ingest
+                        && step.target_kind == Some(WorldObjectKind::Food)
+                        && steps[..index].iter().any(|prior| {
+                            prior.outcome_success
+                                && matches!(
+                                    prior.selected_family,
+                                    CandidateActionFamily::Approach
+                                        | CandidateActionFamily::Contact
+                                )
+                                && matches!(
+                                    prior.target_kind,
+                                    Some(WorldObjectKind::Obstacle | WorldObjectKind::Token)
+                                )
+                        })
+                }
+                Era1Ability::IndividualRecognition => {
+                    step.phase == Era1TrialPhase::Probe
+                        && step.target_organism == Some(manifest.familiar_peer)
+                        && step.tracked_target == probe_familiar
+                        && matches!(
+                            step.selected_family,
+                            CandidateActionFamily::Inspect
+                                | CandidateActionFamily::Approach
+                                | CandidateActionFamily::Contact
+                        )
+                }
+                Era1Ability::Imitation => peer_demonstration.is_some_and(|demo| {
+                    step.tick.raw() >= demo.tick.raw()
+                        && step.selected_family == CandidateActionFamily::Approach
+                        && step.target_entity == Some(demo.target_entity)
+                }),
+                Era1Ability::GroundedLanguage => language_receipts
+                    .iter()
+                    .any(|receipt| receipt.sequence_id == step.sequence_id),
+                Era1Ability::PostSleepRetention => {
+                    step.phase == Era1TrialPhase::Probe
+                        && step.memory_observed
+                        && step.selected_family == CandidateActionFamily::Ingest
+                        && step.target_kind == Some(WorldObjectKind::Food)
+                }
+            };
+        }
     }
-    match ability {
-        Era1Ability::FlexibleForaging
-        | Era1Ability::SpatialMemory
-        | Era1Ability::DelayedChoice
-        | Era1Ability::RewardReversal
-        | Era1Ability::ObjectTransfer
-        | Era1Ability::PostSleepRetention => {
-            family == CandidateActionFamily::Ingest && target_kind == Some(WorldObjectKind::Food)
-        }
-        Era1Ability::HazardAvoidance => {
-            family == CandidateActionFamily::Avoid && target_kind == Some(WorldObjectKind::Hazard)
-        }
-        Era1Ability::MultiStepProblem => {
-            matches!(
-                family,
-                CandidateActionFamily::Approach
-                    | CandidateActionFamily::Contact
-                    | CandidateActionFamily::Ingest
-            ) && matches!(
-                target_kind,
-                Some(WorldObjectKind::Obstacle | WorldObjectKind::Food | WorldObjectKind::Token)
-            )
-        }
-        Era1Ability::IndividualRecognition => {
-            matches!(
-                family,
-                CandidateActionFamily::Inspect
-                    | CandidateActionFamily::Approach
-                    | CandidateActionFamily::Contact
-            ) && target_kind == Some(WorldObjectKind::Agent)
-        }
-        Era1Ability::Imitation => {
-            matches!(
-                family,
-                CandidateActionFamily::Approach | CandidateActionFamily::Ingest
-            ) && target_kind == Some(WorldObjectKind::Food)
-        }
-        Era1Ability::GroundedLanguage => grounded_utterance,
-    }
+    let successful_behavior_ticks = steps
+        .iter()
+        .zip(&successes)
+        .filter_map(|(step, success)| success.then_some(step.tick))
+        .collect();
+    let proof = Era1AbilityCausalProof {
+        ability,
+        world_family: manifest.family,
+        phase_step_counts,
+        required_context_proven,
+        successful_behavior_ticks,
+    };
+    Ok((successes, proof))
 }
 
 fn assess_learning(
     ability: Era1Ability,
     steps: &[Era1CausalStepReceipt],
     grounding_receipts: Vec<UtteranceGroundingReceiptV2>,
+    causal_proof: Era1AbilityCausalProof,
 ) -> Result<Era1LearningAssessment, ScaffoldContractError> {
     let midpoint = ERA1_ACQUISITION_END_TICK / 2;
     let early = reading_for(steps.iter().filter(|step| step.tick.raw() < midpoint))?;
@@ -746,15 +1027,17 @@ fn assess_learning(
     let probe_q16 = measured_q16(probe)?;
     let acquisition_improvement_q16 = late_q16 as i32 - early_q16 as i32;
     let probe_change_from_early_q16 = probe_q16 as i32 - early_q16 as i32;
-    let demonstrated = match ability {
-        Era1Ability::FlexibleForaging | Era1Ability::HazardAvoidance => {
-            acquisition_improvement_q16 > 0
-        }
-        Era1Ability::GroundedLanguage => {
-            probe_change_from_early_q16 > 0 && !grounding_receipts.is_empty()
-        }
-        _ => probe_change_from_early_q16 > 0,
-    };
+    let demonstrated = causal_proof.required_context_proven
+        && !causal_proof.successful_behavior_ticks.is_empty()
+        && match ability {
+            Era1Ability::FlexibleForaging | Era1Ability::HazardAvoidance => {
+                acquisition_improvement_q16 > 0
+            }
+            Era1Ability::GroundedLanguage => {
+                probe_change_from_early_q16 > 0 && !grounding_receipts.is_empty()
+            }
+            _ => probe_change_from_early_q16 > 0,
+        };
     Ok(Era1LearningAssessment {
         early_acquisition: early,
         late_acquisition: late,
@@ -764,7 +1047,16 @@ fn assess_learning(
         probe_change_from_early_q16,
         demonstrated,
         grounding_receipts,
+        causal_proof,
     })
+}
+
+fn count_phase(
+    steps: &[Era1CausalStepReceipt],
+    phase: Era1TrialPhase,
+) -> Result<u32, ScaffoldContractError> {
+    u32::try_from(steps.iter().filter(|step| step.phase == phase).count())
+        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)
 }
 
 fn reading_for<'a>(
@@ -823,17 +1115,123 @@ fn remove_peer_agents(
     Ok(())
 }
 
-fn peer_is_visible(
+fn run_peer_demonstration(
+    manifest: &Era1TrialManifest,
+    world: &mut HeadlessWorld,
+) -> Result<Era1PeerDemonstrationReceipt, ScaffoldContractError> {
+    let target_entity = world
+        .entity_id("era1-object-a")
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    let tick = world.tick();
+    let world_before_digest = world.canonical_signature_digest()?.words;
+    let result = world.apply_command(&HeadlessWorldCommand::approach(
+        manifest.familiar_peer,
+        target_entity,
+    )?)?;
+    let receipt = Era1PeerDemonstrationReceipt {
+        tick,
+        actor: manifest.familiar_peer,
+        target_entity,
+        action: result.command.kind,
+        world_before_digest,
+        world_after_digest: world.canonical_signature_digest()?.words,
+        succeeded: result.execution.succeeded && result.observation.success,
+    };
+    Ok(receipt)
+}
+
+fn visible_tracked_organism(
     world: &HeadlessWorld,
-    subject: OrganismId,
-) -> Result<bool, ScaffoldContractError> {
-    let snapshot = world.physical_observation_snapshot(subject, world.tick())?;
-    Ok(snapshot.visible.iter().any(|visible| {
-        world
-            .entity(visible.transport_entity)
-            .and_then(|entity| entity.organism_id)
-            .is_some_and(|organism| organism != subject)
-    }))
+    observer: OrganismId,
+    organism: OrganismId,
+    visible_entities: &[WorldEntityId],
+) -> Option<TrackedObjectId> {
+    let entity_id = world
+        .organism_entity_ids()
+        .into_iter()
+        .find_map(|(candidate, entity)| (candidate == organism).then_some(entity))?;
+    if !visible_entities.contains(&entity_id) {
+        return None;
+    }
+    let tracking_key = world.entity(entity_id)?.tracking_key;
+    world
+        .tracked_objects()
+        .records_for(observer)?
+        .find(|record| record.tracking_key == tracking_key)
+        .map(|record| record.tracked_object_id)
+}
+
+fn validate_transition_receipts(
+    manifest: &Era1TrialManifest,
+    control: Era1Control,
+    receipts: &[Era1TransitionReceipt],
+) -> Result<(), ScaffoldContractError> {
+    let expected = manifest.transitions();
+    if receipts.len() != expected.len()
+        || receipts.iter().zip(expected).any(|(receipt, transition)| {
+            receipt.transition != transition
+                || receipt.world_before_digest == [0; 4]
+                || receipt.world_after_digest == [0; 4]
+        })
+    {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    let required_change = match manifest.family {
+        Era1WorldFamily::DelayedLocation | Era1WorldFamily::TwoStepAccessProblem => {
+            Some(Era1TrialPhase::Delay)
+        }
+        Era1WorldFamily::RewardReversal
+        | Era1WorldFamily::TransformedObjectsLayout
+        | Era1WorldFamily::FamiliarNovelIndividual => Some(Era1TrialPhase::Probe),
+        Era1WorldFamily::PeerDemonstration | Era1WorldFamily::GroundedVocabulary
+            if control != Era1Control::SocialDisabled =>
+        {
+            Some(Era1TrialPhase::Delay)
+        }
+        Era1WorldFamily::PeerDemonstration | Era1WorldFamily::GroundedVocabulary => None,
+        Era1WorldFamily::ForagingHazardMaze => None,
+    };
+    if required_change.is_some_and(|phase| {
+        !receipts.iter().any(|receipt| {
+            receipt.transition.to == phase
+                && receipt.world_before_digest != receipt.world_after_digest
+        })
+    }) {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    Ok(())
+}
+
+fn validate_peer_demonstration(
+    manifest: &Era1TrialManifest,
+    control: Era1Control,
+    initial_world_digest: [u64; 4],
+    receipt: Option<&Era1PeerDemonstrationReceipt>,
+    steps: &[Era1CausalStepReceipt],
+) -> Result<(), ScaffoldContractError> {
+    let required = manifest.family == Era1WorldFamily::PeerDemonstration
+        && control != Era1Control::SocialDisabled;
+    if !required {
+        return if receipt.is_none() {
+            Ok(())
+        } else {
+            Err(ScaffoldContractError::InvalidDecisionEvidence)
+        };
+    }
+    let receipt = receipt.ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+    if receipt.tick != Tick::new(0)
+        || receipt.actor != manifest.familiar_peer
+        || receipt.action != ActionKind::Move
+        || !receipt.succeeded
+        || receipt.world_before_digest != initial_world_digest
+        || receipt.world_after_digest == receipt.world_before_digest
+        || steps
+            .first()
+            .is_none_or(|step| step.world_before_digest != receipt.world_after_digest)
+    {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    Ok(())
 }
 
 fn expected_family(ability: Era1Ability) -> Era1WorldFamily {
@@ -877,8 +1275,31 @@ fn aggregate_sealed(steps: &[Era1CausalStepReceipt]) -> [u64; 4] {
         digest.write_bool(step.memory_observed);
         digest.write_bool(step.peer_visible);
         digest.write_bool(step.outcome_success);
+        digest.write_u8(step.selected_action.raw());
+        digest.write_u8(step.selected_family.raw());
+        write_optional_u64(&mut digest, step.target_entity.map(WorldEntityId::raw));
+        write_optional_u64(&mut digest, step.target_organism.map(OrganismId::raw));
+        write_optional_u64(&mut digest, step.tracked_target.map(TrackedObjectId::raw));
+        write_optional_u64(&mut digest, step.target_kind.map(|kind| kind as u64));
+        digest.write_bool(step.cue_present);
+        write_optional_u64(
+            &mut digest,
+            step.familiar_tracked_id.map(TrackedObjectId::raw),
+        );
+        write_optional_u64(&mut digest, step.novel_tracked_id.map(TrackedObjectId::raw));
+        digest.write_bool(step.behavior_success);
     }
     digest.finish256()
+}
+
+fn write_optional_u64(builder: &mut CanonicalDigestBuilder, value: Option<u64>) {
+    match value {
+        Some(value) => {
+            builder.write_bool(true);
+            builder.write_u64(value);
+        }
+        None => builder.write_bool(false),
+    }
 }
 
 fn write_digest(builder: &mut CanonicalDigestBuilder, words: [u64; 4]) {
