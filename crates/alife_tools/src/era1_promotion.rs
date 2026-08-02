@@ -1225,22 +1225,28 @@ fn load_or_run_trial_evidence(
         .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
     let cache_key = blake3::hash(&cache_bytes).to_hex().to_string();
     let cache_path = cache_root.join(format!("{cache_key}.json.gz"));
-    if cache_path.is_file() {
-        let file = File::open(&cache_path)
-            .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
-        let evidence: Era1TrialRunEvidence = serde_json::from_reader(GzDecoder::new(file))
-            .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
-        validate_cached_trial(
-            &evidence,
-            birth,
-            manifest,
-            ability,
-            control,
-            partition,
-            source_commit,
-            source_tree,
-        )?;
-        return Ok(evidence);
+    let cache_entry_exists = cache_path.is_file();
+    if cache_entry_exists {
+        let cached: Result<Era1TrialRunEvidence, Era1EvolutionError> = (|| {
+            let file = File::open(&cache_path)
+                .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+            let evidence: Era1TrialRunEvidence = serde_json::from_reader(GzDecoder::new(file))
+                .map_err(|error| Era1EvolutionError::TrialEvidence(error.to_string()))?;
+            validate_cached_trial(
+                &evidence,
+                birth,
+                manifest,
+                ability,
+                control,
+                partition,
+                source_commit,
+                source_tree,
+            )?;
+            Ok(evidence)
+        })();
+        if let Ok(evidence) = cached {
+            return Ok(evidence);
+        }
     }
 
     fs::create_dir_all(cache_root)
@@ -1270,6 +1276,10 @@ fn load_or_run_trial_evidence(
         source_commit,
         source_tree,
     )?;
+
+    if cache_entry_exists {
+        return Ok(evidence);
+    }
 
     let temp_path = cache_root.join(format!(".{cache_key}-{}.tmp", std::process::id()));
     let file = File::create(&temp_path)
@@ -1631,6 +1641,77 @@ mod tests {
         .unwrap();
         assert_eq!(first, second);
         assert_eq!(cached_files, 1);
+        assert_eq!(fs::read_dir(cache.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn unreadable_trial_cache_entry_is_a_miss_and_is_preserved() {
+        let foundation = FoundationGeneticIdentity::new(
+            0x4E32_3034_385F_5631,
+            1,
+            0x4E32_3034_385F_FA11,
+            BrainCapacityClass::N2048_ID,
+        )
+        .unwrap();
+        let genome = CreatureGenome::early_mammal_founder(0xE1CA_C4E0, foundation).unwrap();
+        let inherited_starter_tokens = genome.express().unwrap().predisposition.starter_tokens;
+        let birth = Era1BirthReceipt {
+            generation: 0,
+            lineage_slot: 0,
+            organism_id: OrganismId(20_001),
+            genome,
+            inherited_starter_tokens,
+            acquired_state: Era1AcquiredStateEvidence::default(),
+        };
+        let manifest = Era1TrialManifest::new(
+            0xE1CA_5001,
+            Era1WorldFamily::ForagingHazardMaze,
+            birth.organism_id,
+            OrganismId(30_001),
+            OrganismId(30_002),
+            0xE1CA_6001,
+            true,
+            birth.inherited_starter_tokens[0].raw(),
+        )
+        .unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let mut runner = Era1TrialRunner::new_required().unwrap();
+        load_or_run_trial_evidence(
+            cache.path(),
+            &mut runner,
+            &birth,
+            &manifest,
+            Era1Ability::FlexibleForaging,
+            Era1Control::Intact,
+            Era1EvidencePartition::HeldOutTransfer,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        )
+        .unwrap();
+        let cache_path = fs::read_dir(cache.path())
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let mut corrupt_bytes = vec![0_u8; 128];
+        corrupt_bytes[..10].copy_from_slice(&[0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0x04, 0xff]);
+        fs::write(&cache_path, &corrupt_bytes).unwrap();
+
+        load_or_run_trial_evidence(
+            cache.path(),
+            &mut runner,
+            &birth,
+            &manifest,
+            Era1Ability::FlexibleForaging,
+            Era1Control::Intact,
+            Era1EvidencePartition::HeldOutTransfer,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        )
+        .unwrap();
+
+        assert_eq!(fs::read(&cache_path).unwrap(), corrupt_bytes);
         assert_eq!(fs::read_dir(cache.path()).unwrap().count(), 1);
     }
 }
