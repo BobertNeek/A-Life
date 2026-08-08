@@ -123,6 +123,8 @@ The final documentation topology is:
 - `docs/EVIDENCE.md` — receipt rules, source binding, EI0 result, EI1 blocked result, and scale boundaries
 - `docs/REFERENCE.md` — stable ABI, brain tiers, teacher/SLM boundary, persistence, and archive rules
 
+`docs/AGENTS.md` remains as a subtree instruction file. It is operational agent guidance, not part of the user-facing documentation count, and is updated to name the new authorities.
+
 `docs/architecture_decisions.md` is rewritten as a concise current ADR register or replaced by an equivalent section in `docs/ARCHITECTURE.md`. Superseded ADR prose does not remain active without an explicit historical label.
 
 The reset removes:
