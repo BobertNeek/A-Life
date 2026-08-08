@@ -219,7 +219,7 @@ impl ProductQaSummary {
             || self.playground_smoke_command.is_empty()
             || !self.extended_balance_command.contains("--ignored")
             || !self.manual_gpu_command.contains("--gpu-runtime")
-            || !self.known_issues_doc.ends_with("known_issues.md")
+            || !self.known_issues_doc.ends_with("STATUS.md")
             || self.release_blocker_count != 0
             || self.known_limitation_count == 0
             || !self.p36_gates_preserved
@@ -344,10 +344,8 @@ pub fn run_product_qa_hardening_smoke() -> Result<ProductQaSummary, GameAppShell
         .filter(|finding| finding.severity == ProductQaStatus::KnownLimitation)
         .count();
 
-    let docs =
-        std::fs::read_to_string(root.join("docs/playable_sim_spec/product_qa_hardening.md"))?;
-    let known_issues =
-        std::fs::read_to_string(root.join("docs/playable_sim_spec/known_issues.md"))?;
+    let docs = std::fs::read_to_string(root.join("docs/DEVELOPMENT.md"))?;
+    let known_issues = std::fs::read_to_string(root.join("docs/STATUS.md"))?;
     if !docs.contains("cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke")
         || !docs.contains(&balance.manual_extended_command)
         || !docs.contains(&manual_gpu_command)
@@ -373,7 +371,7 @@ pub fn run_product_qa_hardening_smoke() -> Result<ProductQaSummary, GameAppShell
         playground_smoke_command: "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json".to_string(),
         extended_balance_command: balance.manual_extended_command.clone(),
         manual_gpu_command,
-        known_issues_doc: "docs/playable_sim_spec/known_issues.md".to_string(),
+        known_issues_doc: "docs/STATUS.md".to_string(),
         release_blocker_count,
         known_limitation_count,
         p36_gates_preserved: release_gate_docs_preserved(&root)?,
@@ -567,34 +565,20 @@ fn known_findings(
 }
 
 fn release_gate_docs_preserved(root: &Path) -> Result<bool, GameAppShellError> {
-    let release = std::fs::read_to_string(root.join("docs/release_checklist.md"))?;
-    let status = std::fs::read_to_string(root.join("docs/final_status_report.md"))?;
+    let release = std::fs::read_to_string(root.join("docs/DEVELOPMENT.md"))?;
+    let status = std::fs::read_to_string(root.join("docs/STATUS.md"))?;
     Ok(
         release.contains("cargo test --workspace --all-features --all-targets")
             && release
                 .contains("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1")
-            && release.contains("Golden trace")
-            && status.contains("Product GPU performance is not claimed"),
+            && release.contains("source-bound physical-adapter evidence")
+            && status.contains("Not ready."),
     )
 }
 
 fn no_p37_plan_exists(root: &Path) -> Result<bool, GameAppShellError> {
-    for dir in [
-        root.join("docs/playable_sim_spec/plans"),
-        root.join("docs/playable_sim_spec/review_gates"),
-        root.join("docs/codex_plan_pack/plans"),
-    ] {
-        if !dir.exists() {
-            continue;
-        }
-        for entry in std::fs::read_dir(dir)? {
-            let name = entry?.file_name().to_string_lossy().to_string();
-            if name.contains("P37") || name.contains("G25") {
-                return Ok(false);
-            }
-        }
-    }
-    Ok(true)
+    let roadmap = std::fs::read_to_string(root.join("docs/ROADMAP.md"))?;
+    Ok(!roadmap.contains("P37") && !roadmap.contains("G25"))
 }
 
 fn tracked_generated_artifacts_present(root: &Path) -> Result<bool, GameAppShellError> {

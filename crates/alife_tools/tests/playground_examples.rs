@@ -84,7 +84,7 @@ fn playground_docs_manifest_references_existing_small_files_and_manual_optional_
     let root = workspace_root();
     let report =
         validate_playground_manifest(root.join("examples/p35/playground_manifest.json")).unwrap();
-    let docs = std::fs::read_to_string(root.join("docs/playground_examples.md")).unwrap();
+    let docs = std::fs::read_to_string(root.join("docs/DEVELOPMENT.md")).unwrap();
     let manifest =
         std::fs::read_to_string(root.join("examples/p35/playground_manifest.json")).unwrap();
 

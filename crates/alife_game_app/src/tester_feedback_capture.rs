@@ -368,9 +368,8 @@ pub fn run_tester_feedback_capture_smoke() -> Result<TesterFeedbackCaptureSummar
         std::fs::read_to_string(root.join("scripts/run_graphical_playground.ps1"))?;
     let package_script =
         std::fs::read_to_string(root.join("scripts/run_windows_alpha_package.ps1"))?;
-    let docs_template = std::fs::read_to_string(
-        root.join("docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md"),
-    )?;
+    let docs_template =
+        std::fs::read_to_string(root.join("examples/ca43/TESTER_FEEDBACK_TEMPLATE.md"))?;
     let summary = TesterFeedbackCaptureSummary {
         schema: CA43_TESTER_FEEDBACK_SCHEMA,
         schema_version: CA43_TESTER_FEEDBACK_SCHEMA_VERSION,

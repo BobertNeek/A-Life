@@ -316,7 +316,7 @@ pub fn run_content_authoring_smoke() -> Result<ContentTutorialAuthoringSummary, 
     let content = validate_s09_content_pack(&root, &s09_content_pack_manifest_path())?;
     let tutorial = load_s09_tutorial_scenario(&root)?;
     let onboarding = load_g20_tutorial_script()?;
-    let docs_path = root.join("docs/playable_sim_spec/content_authoring.md");
+    let docs_path = root.join("docs/DEVELOPMENT.md");
     let docs = std::fs::read_to_string(&docs_path)?;
 
     let summary = ContentTutorialAuthoringSummary {

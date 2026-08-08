@@ -59,7 +59,8 @@ fn formula_entries(formula: &str, class: BrainClass) -> u64 {
 
 #[test]
 fn performance_contract_ledger_totals_are_formula_derived() {
-    let path = workspace_root().join("docs/architecture/P04_5_performance_contract.md");
+    let path =
+        workspace_root().join("crates/alife_tools/tests/fixtures/P04_5_performance_contract.md");
     let markdown = fs::read_to_string(path).expect("performance contract should be readable");
 
     let mut classes = BTreeMap::new();

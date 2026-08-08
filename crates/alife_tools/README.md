@@ -218,5 +218,5 @@ cargo run -p alife_tools --bin p35_playground -- run-all \
   examples/p35/playground_manifest.json
 ```
 
-Optional graphics/GPU demos remain manual and documented in
-`docs/playground_examples.md`.
+Optional graphics and GPU demos remain manual. Current commands and evidence
+rules live in `docs/DEVELOPMENT.md` and `docs/EVIDENCE.md`.

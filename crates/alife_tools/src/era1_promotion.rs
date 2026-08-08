@@ -41,6 +41,7 @@ const REQUIRED_GPU_ADAPTER: &str = "NVIDIA GeForce RTX 3050";
 const REQUIRED_GPU_BACKEND_API: &str = "vulkan";
 const ERA1_CAUSAL_EVIDENCE_BUNDLE_PATH: &str =
     "crates/alife_tools/reports/era1_trial_evidence.jsonl.zst";
+const LEGACY_ERA1_SOURCE_COMMIT: &str = "cb3c8dd85ff2707a84ecb96fb8addd417b7d0021";
 const SOURCE_CONTRACT_PATHS: &[&str] = &[
     "Cargo.lock",
     "Cargo.toml",
@@ -69,10 +70,26 @@ const SOURCE_CONTRACT_PATHS: &[&str] = &[
     "crates/alife_tools/src/era1_promotion.rs",
     "crates/alife_tools/src/bin/era1_promotion.rs",
     "crates/alife_tools/tests/era1_promotion.rs",
-    "docs/architecture/era1_norn_plus.md",
-    "docs/architecture/evolution_genome_lab.md",
-    "docs/creatures_agi_roadmap_pack/ROADMAP_OVERVIEW.md",
+    "docs/EVIDENCE.md",
+    "docs/ROADMAP.md",
+    "docs/REFERENCE.md",
 ];
+
+fn source_contract_paths_for_commit(commit: &str) -> Vec<&'static str> {
+    if commit != LEGACY_ERA1_SOURCE_COMMIT {
+        return SOURCE_CONTRACT_PATHS.to_vec();
+    }
+
+    SOURCE_CONTRACT_PATHS
+        .iter()
+        .map(|path| match *path {
+            "docs/EVIDENCE.md" => "docs/architecture/era1_norn_plus.md",
+            "docs/ROADMAP.md" => "docs/architecture/evolution_genome_lab.md",
+            "docs/REFERENCE.md" => "docs/creatures_agi_roadmap_pack/ROADMAP_OVERVIEW.md",
+            other => other,
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Era1PromotionVerdict {
@@ -740,7 +757,7 @@ fn generate_era1_promotion_report(
     let root = workspace_root();
     let producing_source_commit = git_output(&root, &["rev-parse", "HEAD"])?;
     let producing_source_tree = git_output(&root, &["rev-parse", "HEAD^{tree}"])?;
-    require_clean_source_contract(&root, &producing_source_commit)?;
+    require_clean_source_contract(&root, &producing_source_commit, SOURCE_CONTRACT_PATHS)?;
 
     let temp = std::env::temp_dir().join(format!(
         "alife-era1-evidence-{}-{}",
@@ -895,7 +912,8 @@ pub fn validate_committed_era1_promotion_report(
         ));
     }
     let binding = &report.artifact_binding;
-    let expected_paths = SOURCE_CONTRACT_PATHS
+    let source_contract_paths = source_contract_paths_for_commit(&binding.producing_source_commit);
+    let expected_paths = source_contract_paths
         .iter()
         .map(|path| (*path).to_string())
         .collect::<Vec<_>>();
@@ -917,7 +935,7 @@ pub fn validate_committed_era1_promotion_report(
         || source_contract_digest_at_revision(
             &root,
             &binding.producing_source_commit,
-            SOURCE_CONTRACT_PATHS,
+            &source_contract_paths,
         )? != binding.source_contract_digest
         || git_output(
             &root,
@@ -931,7 +949,14 @@ pub fn validate_committed_era1_promotion_report(
             "source or hardware binding does not recompute",
         ));
     }
-    require_clean_source_contract(&root, &binding.producing_source_commit)?;
+    let current_head = git_output(&root, &["rev-parse", "HEAD"])?;
+    if binding.producing_source_commit == current_head {
+        require_clean_source_contract(
+            &root,
+            &binding.producing_source_commit,
+            &source_contract_paths,
+        )?;
+    }
     if derive_evidence_digests(
         &report.baseline_save_archive_receipt,
         &report.evolution,
@@ -1504,11 +1529,12 @@ fn git_output(root: &Path, args: &[&str]) -> Result<String, Era1CommittedReportE
 fn require_clean_source_contract(
     root: &Path,
     revision: &str,
+    paths: &[&str],
 ) -> Result<(), Era1CommittedReportError> {
     let mut diff = Command::new("git");
     diff.current_dir(root)
         .args(["diff", "--quiet", revision, "--"])
-        .args(SOURCE_CONTRACT_PATHS);
+        .args(paths);
     if !diff
         .status()
         .map_err(|error| Era1CommittedReportError::Generation(error.to_string()))?

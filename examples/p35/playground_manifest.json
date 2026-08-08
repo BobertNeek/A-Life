@@ -1,11 +1,11 @@
 {
   "schema": "alife.p35.playground_manifest.v1",
   "schema_version": 1,
-  "documentation_path": "docs/playground_examples.md",
+  "documentation_path": "docs/DEVELOPMENT.md",
   "paths": [
     {
       "label": "P35 playground docs",
-      "relative_path": "docs/playground_examples.md",
+      "relative_path": "docs/DEVELOPMENT.md",
       "required": true
     },
     {

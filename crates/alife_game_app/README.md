@@ -1,153 +1,65 @@
 # alife_game_app
 
-Playable-sim app shell crate.
+`alife_game_app` owns the application shell, launch policy, runtime scheduling,
+controls, diagnostics, and voxel presentation for A-Life.
 
-The player-facing desktop path is now the production voxel frontend:
+## Production path
+
+Launch the current player-facing frontend on Windows:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1
 ```
 
-The default profile is `MinSpecComfort1080p`; `MinimumSettings30x30` is the
-minimum fallback floor. The Windows production package is built with:
+Build its local package with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_production_voxel.ps1
 ```
 
-The default path is headless and validates P34 config/assets without requiring
-graphics, GPU, semantic providers, school UI, or Bevy runtime support. The
-optional `bevy-app` feature constructs a minimal Bevy app shell with the
-existing adapter plugin. G02 adds feature-gated visible placeholder entities
-from the P34 portable save, but it still does not run live creature cognition.
+The production shell requires GPU-authoritative neural execution. A missing or
+failed GPU neural path is reported as unavailable; it does not silently switch
+to CPU neural math.
 
-CI-safe smoke:
+The shell restores and ticks a real `GpuLiveBrainRuntime`. The active voxel
+renderer still builds creature records from the selected save and animates
+saved base positions. It does not yet project live runtime transforms, births,
+or deaths. See `docs/STATUS.md` and `docs/ROADMAP.md` for the exact boundary.
+
+## Headless and diagnostic commands
+
+The crate retains headless smokes for contracts and developer diagnosis. They
+are not production-authority evidence and do not make a CPU helper a product
+fallback.
 
 ```powershell
 cargo run -p alife_game_app --bin alife_game_app -- headless-smoke crates/alife_world/tests/fixtures/p34
-```
-
-Feature-gated Bevy construction smoke:
-
-```powershell
-cargo test -p alife_game_app --features bevy-app
-```
-
-G02 visible-world signature smoke, no graphics required:
-
-```powershell
 cargo run -p alife_game_app --bin alife_game_app -- visible-signature crates/alife_world/tests/fixtures/p34
-```
-
-G02 feature-gated visible Bevy scene construction:
-
-```powershell
-cargo run -p alife_game_app --features bevy-app --bin alife_game_app -- visible-world-smoke crates/alife_world/tests/fixtures/p34
-```
-
-The visible-world smoke constructs deterministic placeholder entities from the
-P34 portable save and binds Bevy entities to stable IDs through the adapter-local
-map.
-
-G03 live brain tick bridge, no graphics required:
-
-```powershell
 cargo run -p alife_game_app --bin alife_game_app -- live-brain-tick-smoke crates/alife_world/tests/fixtures/p34
-```
-
-G03 pause and fixed-step scheduler smokes:
-
-```powershell
-cargo run -p alife_game_app --bin alife_game_app -- live-brain-paused-smoke crates/alife_world/tests/fixtures/p34
-cargo run -p alife_game_app --bin alife_game_app -- live-brain-fixed-smoke crates/alife_world/tests/fixtures/p34 2
-```
-
-The G03 bridge runs the existing P15/P17 CPU reference path from gathered
-sensory through action arbitration, action execution, outcome measurement,
-sealed `ExperiencePatch`, and packed-log telemetry. It does not add G04
-rendering polish or G06 gameplay tuning.
-
-G04 creature visual state smoke, no graphics required:
-
-```powershell
-cargo run -p alife_game_app --bin alife_game_app -- creature-visual-smoke crates/alife_world/tests/fixtures/p34
-```
-
-The G04 visual state is a one-way presentation snapshot derived from P34
-visible objects, the G03 live tick summary, bounded drive/hormone values, and
-sleep phase. It maps the creature into placeholder animation, expression,
-intent color, and bounded cue bars without changing cognition or gameplay.
-
-G05 creature selection and inspector smoke, no graphics required:
-
-```powershell
 cargo run -p alife_game_app --bin alife_game_app -- creature-inspector-smoke crates/alife_world/tests/fixtures/p34
-```
-
-The G05 inspector uses stable `WorldEntityId`/`OrganismId` values for model data
-and remains read-only. Feature-gated Bevy helpers may keep a local Bevy entity
-mapping for picking, but that local engine ID is not written into saves or core
-contracts. The inspector reports camera focus/follow state, bounded drives and
-hormones, current action, last sealed patch summary, memory/topology update
-counts, and optional backend/provider troubleshooting messages. It does not
-implement any cognition editing.
-
-G06 playable survival-loop smoke, no graphics required:
-
-```powershell
-cargo run -p alife_game_app --bin alife_game_app -- playable-survival-loop-smoke
-```
-
-The G06 smoke runs a deterministic one-creature loop with visible food, a
-hazard, an obstacle, and a rest/sleep cue. Scripted fixture proposals still pass
-through structured action arbitration and the P15/P17 CPU reference path, then
-produce sealed patches, packed logs, memory/topology updates, bounded
-drive/hormone changes, and an app-level event feed. It is a first playable
-survival loop, not G07 ecology or balance tuning.
-
-G10 playable school/teacher smoke, no graphics required:
-
-```powershell
 cargo run -p alife_game_app --bin alife_game_app -- school-mode-smoke
-```
-
-The G10 smoke builds a teacher avatar, ordinary world cue token, highlighted
-object, lesson panel, verifier panel, and P34-compatible school save summary.
-Teacher cues enter through sensory perception only; low-scoring
-teacher-tagged action metadata cannot win arbitration by metadata alone.
-
-G11 semantic provider boundary smoke, no graphics or model required:
-
-```powershell
 cargo run -p alife_game_app --bin alife_game_app -- semantic-provider-smoke
-```
-
-The G11 smoke keeps the default semantic provider disabled and nonfatal, then
-uses a deterministic fake/local table provider to display bounded semantic and
-Gaussian context lines. The provider manifest is private-prior metadata only:
-it cannot issue actions, mutate weights, or become a required runtime model.
-
-G12 GPU product telemetry smoke, no GPU hardware required:
-
-```powershell
 cargo run -p alife_game_app --bin alife_game_app -- gpu-product-smoke
 ```
 
-The default command reports CPU fallback, no-readback guardrails, and the manual
-hardware report command. With the optional `gpu-runtime` feature, it bridges to
-the P29 GPU runtime contracts without making GPU hardware required:
+The school smoke proves only its bounded perception and arbitration contracts.
+The semantic smoke uses disabled or deterministic fake providers. Neither is a
+live GPU school or private-SLM cognition proof.
 
-```powershell
-cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-product-smoke
-```
+## Ownership
 
-G13 world editor/sandbox smoke, no graphics required:
+- `alife_world` owns perception facts, unscored candidates, legality, targets,
+  action execution, outcomes, and stable world identity.
+- `alife_runtime` and `alife_gpu_backend` own production neural state and GPU
+  execution.
+- This crate schedules those systems and translates read-only state for Bevy.
+- UI and render code must not become simulation authority.
 
-```powershell
-cargo run -p alife_game_app --bin alife_game_app -- world-editor-smoke
-```
+Current pause and load controls do not yet fully control or replace the live GPU
+runtime. Treat them as partial until the causal gates in `docs/ROADMAP.md` pass.
 
-The G13 smoke pauses simulation, applies bounded stable-ID world edits, saves
-and reloads through the P34 portable save contract, then resumes the normal
-CPU reference brain path and verifies that a sealed patch is produced. It is a
-small sandbox/editing proof path, not the G16 content-authoring pipeline.
+## Validation
+
+Use the repository's Windows wrappers and the smallest focused test that can
+falsify a change. Current commands and evidence rules are in
+`docs/DEVELOPMENT.md` and `docs/EVIDENCE.md`.

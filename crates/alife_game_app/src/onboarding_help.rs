@@ -151,7 +151,7 @@ pub fn load_g20_tutorial_script() -> Result<TutorialScript, GameAppShellError> {
 pub fn run_onboarding_help_smoke() -> Result<OnboardingHelpSummary, GameAppShellError> {
     let root = g20_workspace_root();
     let script = load_g20_tutorial_script()?;
-    let docs_path = root.join("docs/playable_sim_spec/onboarding_help.md");
+    let docs_path = root.join("docs/DEVELOPMENT.md");
     let docs = std::fs::read_to_string(&docs_path)?;
     let summary = OnboardingHelpSummary {
         schema: G20_ONBOARDING_HELP_SCHEMA,
@@ -163,7 +163,7 @@ pub fn run_onboarding_help_smoke() -> Result<OnboardingHelpSummary, GameAppShell
         tutorial_script_path: g20_tutorial_script_path(),
         tutorial_step_count: script.steps.len(),
         docs_path,
-        content_authoring_docs_path: root.join("docs/playable_sim_spec/content_authoring.md"),
+        content_authoring_docs_path: root.join("docs/DEVELOPMENT.md"),
         optional_systems_remain_optional: docs.contains("optional")
             && docs.contains("typed GPU unavailability")
             && docs.contains("manual"),

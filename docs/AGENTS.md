@@ -1,33 +1,29 @@
-# docs/ AGENTS.md
+# Documentation instructions
 
-This subtree controls the project specification, architecture decisions,
-handoff prompts, and future-compatibility notes.
+This subtree describes the current A-Life project. Keep it concise, source-backed, and explicit about evidence limits.
 
-Authoritative files:
+## Authorities
 
-- `master_spec.md` is the controlling engineering specification.
-- `architecture_decisions.md` records non-negotiable ADRs.
-- `schooling_and_teacher_architecture.md` controls teacher and schooling boundaries.
-- `future_research_compatibility.md` is non-requirements future scope.
-- `codex_handoff_prompt.md` is an operational prompt, not a replacement for the spec.
+- `../README.md` is the project entry point.
+- `VISION.md` defines the aspiration and non-goals.
+- `STATUS.md` records implemented, integrated, player-visible, and proven state.
+- `ARCHITECTURE.md` owns the current component and authority map.
+- `ROADMAP.md` orders the remaining work and acceptance gates.
+- `DEVELOPMENT.md` owns supported developer workflows.
+- `EVIDENCE.md` owns receipt rules and durable result interpretation.
+- `REFERENCE.md` owns stable ABI, tier, inheritance, teacher, SLM, persistence, and archive invariants.
 
-Rules:
+The Git history is the archive for superseded plans and specifications. Do not recreate a second active authority set.
 
-- Do not introduce Unity, C#, or HLSL production requirements.
-- Do not describe `Standard2048` as the global brain shape; it is only a reference tier.
-- Keep internal SLM and external teacher LLM boundaries separate.
-- Keep Graphify and DOX as developer tooling, not runtime dependencies.
-- Production neural execution is GPU-authoritative WGSL; do not add a live CPU
-  shadow, parity gate, or automatic CPU neural fallback.
-- Keep pure CPU neural helpers test-only or developer-only.
-- World code enumerates unscored candidates and remains authoritative for
-  legality and outcomes.
-- Promote only N512, N1024, and N2048 until larger tiers pass the documented
-  causal and performance gates.
-- ADR-024 through ADR-026 control GPU neural authority, grounded memory, and
-  evidence-gated scaling.
-- ADR-027 through ADR-030 control curated foundations, grounded language, persistent neural identity, and durable archives.
-- Limited language is a scalable ABI, not a neuron-address layout.
-- Keep genetic inheritance separate from lifetime weights, episodic/semantic
-  content, and learned language.
-- When docs change architecture, update `architecture_decisions.md` or explain why no ADR change is needed.
+## Rules
+
+- Keep production neural execution GPU-authoritative WGSL. Do not introduce a live CPU neural shadow, parity gate, or automatic CPU neural fallback.
+- Keep world enumeration score-free. The world remains authoritative for legality, targets, action execution, and outcomes.
+- Keep teacher input perception-only and keep the private local SLM outside action, reward, target, and weight authority.
+- Treat `Standard2048` as a reference profile, not a universal topology.
+- Promote only N512, N1024, and N2048. Keep N4096 and larger classes research-only until their own evidence gates pass.
+- Keep genetic inheritance separate from lifetime weights, memories, learned language, teacher-private state, and SLM-authored state.
+- Require archive-before-GPU-insertion and archive-before-retirement ordering.
+- Label missing or incomplete evidence `Unknown` or `Blocked`.
+- Do not infer causal gameplay from UI registration, screenshots, synthetic clicks, tables, or green unit tests alone.
+- When architecture changes, update `ARCHITECTURE.md`, `REFERENCE.md`, and the affected status or evidence statement in the same change.

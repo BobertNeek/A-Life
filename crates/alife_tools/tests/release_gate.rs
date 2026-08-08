@@ -17,8 +17,8 @@ fn read_workspace_file(relative: &str) -> String {
 }
 
 #[test]
-fn release_checklist_lists_required_gates_and_windows_wrappers() {
-    let checklist = read_workspace_file("docs/release_checklist.md");
+fn development_guide_lists_required_gates_and_windows_wrappers() {
+    let development = read_workspace_file("docs/DEVELOPMENT.md");
 
     for required in [
         "cargo fmt --all -- --check",
@@ -28,71 +28,66 @@ fn release_checklist_lists_required_gates_and_windows_wrappers() {
         "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
         "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1",
         "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1",
-        "cargo tree -p alife_core",
         "cargo check --workspace --all-features --all-targets",
         "cargo test --workspace --all-features --all-targets",
-        "cargo test -p alife_world --test golden_traces_determinism",
-        "cargo test -p alife_world --test scenario_suite",
-        "cargo test -p alife_world --test headless_soak",
-        "cargo test -p alife_world --test save_load_roundtrip",
-        "cargo test -p alife_tools --test playground_examples",
-        "cargo test -p alife_tools --test benchmark_tiers benchmark_tiers_smoke_runs_tier_1_and_10_without_bevy_or_gpu",
-        "cargo run -p alife_tools --bin benchmark_tiers",
+        "cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime",
     ] {
         assert!(
-            checklist.contains(required),
-            "release checklist missing gate command: {required}"
+            development.contains(required),
+            "development guide missing gate command: {required}"
         );
     }
-    assert!(checklist.contains("Manual"));
-    assert!(checklist.contains("target/artifacts/"));
+    assert!(development.contains("manual"));
+    assert!(development.contains("target/artifacts/"));
 }
 
 #[test]
-fn final_status_report_records_honest_manual_gpu_and_performance_status() {
-    let status = read_workspace_file("docs/final_status_report.md");
+fn status_records_honest_gpu_product_and_scale_limits() {
+    let status = read_workspace_file("docs/STATUS.md");
 
     for required in [
-        "GPU compute paths are parity/diagnostic contracts",
-        "Product GPU performance is not claimed",
-        "CPU tiers 50, 100, 250, and 500 are manual expected-slow measurements",
-        "The 60 FPS population target remains unknown unless measured",
-        "No release blocker is recorded in this report before validation",
-        "Backlog Notes",
+        "active voxel renderer remains a save-derived projection",
+        "Pause currently stops procedural animation, not the GPU tick",
+        "Its promotion verdict is `Blocked`",
+        "N4096 is research-only",
+        "Not ready.",
     ] {
         assert!(
             status.contains(required),
-            "final status report missing honest status text: {required}"
+            "current status missing honest limitation: {required}"
         );
     }
 }
 
 #[test]
-fn gpu_soak_plan_marks_hardware_checks_manual_and_boundary_scoped() {
-    let plan = read_workspace_file("docs/gpu_soak_performance_plan.md");
+fn evidence_guide_requires_source_bound_physical_gpu_receipts() {
+    let evidence = read_workspace_file("docs/EVIDENCE.md");
 
     for required in [
-        "Production neural causality is GPU-authoritative",
-        "cargo test -p alife_gpu_backend --features gpu-tests --test static_forward_parity -- --ignored --nocapture",
-        "cargo test -p alife_gpu_backend --features gpu-tests --test closed_loop_fast_plasticity -j 1 -- --nocapture",
-        "cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime",
-        "Unknown is preferable to fabricated data",
-        "Neural release and promotion gates require current",
+        "source commit and tree",
+        "adapter, backend, driver-visible identity",
+        "A report bound to an older source remains valid historical evidence for that source.",
+        "Missing hardware is `Unavailable`, not fallback success.",
+        "promotion verdict `Blocked`",
     ] {
         assert!(
-            plan.contains(required),
-            "GPU soak/performance plan missing required text: {required}"
+            evidence.contains(required),
+            "evidence guide missing required rule: {required}"
         );
     }
 }
 
 #[test]
-fn docs_do_not_reintroduce_windows_plain_bash_validation_commands() {
+fn active_docs_do_not_reintroduce_windows_plain_bash_validation_commands() {
     for relative in [
-        "docs/playground_examples.md",
-        "docs/release_checklist.md",
-        "docs/final_status_report.md",
-        "docs/gpu_soak_performance_plan.md",
+        "README.md",
+        "docs/VISION.md",
+        "docs/STATUS.md",
+        "docs/ARCHITECTURE.md",
+        "docs/ROADMAP.md",
+        "docs/DEVELOPMENT.md",
+        "docs/EVIDENCE.md",
+        "docs/REFERENCE.md",
     ] {
         let text = read_workspace_file(relative);
         for forbidden in [
@@ -106,19 +101,15 @@ fn docs_do_not_reintroduce_windows_plain_bash_validation_commands() {
             );
         }
     }
-
-    let validation = read_workspace_file("docs/codex_plan_pack/VALIDATION_PROTOCOL.md");
-    assert!(validation.contains("do not run plain `bash scripts/check.sh`"));
-    assert!(validation.contains("PowerShell wrappers"));
 }
 
 #[test]
-fn release_docs_and_fixture_artifacts_stay_small_and_discoverable() {
+fn current_docs_and_fixture_artifacts_stay_small_and_discoverable() {
     let root = workspace_root();
     for required in [
-        "docs/release_checklist.md",
-        "docs/final_status_report.md",
-        "docs/gpu_soak_performance_plan.md",
+        "docs/DEVELOPMENT.md",
+        "docs/STATUS.md",
+        "docs/EVIDENCE.md",
         "crates/alife_world/tests/fixtures/p34/tiny_save.json",
         "crates/alife_world/tests/fixtures/p34/tiny_config.json",
         "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",

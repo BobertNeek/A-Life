@@ -25,7 +25,7 @@
 - [ ] No Unity/C#/HLSL production files.
 - [ ] Runtime cognition and packed logging remain separate.
 - [ ] Teacher/semantic systems cannot bypass perception or action arbitration.
-- [ ] GPU work, if any, is gated by CPU parity.
+- [ ] GPU claims, if any, include source-bound physical-adapter evidence; CPU helpers remain reference or test tools.
 
 ## Deviations and Limitations
 

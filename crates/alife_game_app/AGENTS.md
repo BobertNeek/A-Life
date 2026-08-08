@@ -21,5 +21,5 @@ Rules:
   neither sidecar may abort or influence candidate arbitration.
 - Update one fixed-size passive-statistics record per resident tick and archive
   that typed record before GPU retirement; never scan unbounded life history.
-- Do not implement visible world content, creature rendering, gameplay loops, or
-  product release packaging before their assigned G-plans.
+- Use `docs/ROADMAP.md` for product sequencing and exit gates. Do not infer
+  integration or release readiness from a historical plan label.

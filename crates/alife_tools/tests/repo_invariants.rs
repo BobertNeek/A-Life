@@ -28,30 +28,36 @@ fn collect_files(root: &Path, files: &mut Vec<PathBuf>) {
 }
 
 #[test]
-fn plan_pack_and_progress_logs_are_discoverable() {
+fn current_documentation_authorities_are_discoverable() {
     let root = workspace_root();
     for required in [
-        "docs/codex_plan_pack/prompts/CODEX_MASTER_PROMPT.md",
-        "docs/codex_plan_pack/plan_manifest.json",
-        "docs/codex_progress/PLAN_PROGRESS.md",
-        "docs/codex_progress/DECISION_LOG.md",
-        "docs/codex_progress/SPEC_TRACEABILITY.md",
-        "docs/architecture/schema_versioning.md",
+        "README.md",
+        "docs/VISION.md",
+        "docs/STATUS.md",
+        "docs/ARCHITECTURE.md",
+        "docs/ROADMAP.md",
+        "docs/DEVELOPMENT.md",
+        "docs/EVIDENCE.md",
+        "docs/REFERENCE.md",
     ] {
         assert!(root.join(required).is_file(), "missing {required}");
     }
 }
 
 #[test]
-fn progress_log_records_serial_baseline_plans() {
+fn current_status_records_the_open_product_boundaries() {
     let root = workspace_root();
-    let progress = fs::read_to_string(root.join("docs/codex_progress/PLAN_PROGRESS.md"))
-        .expect("progress log should be readable");
+    let status =
+        fs::read_to_string(root.join("docs/STATUS.md")).expect("current status should be readable");
 
-    for plan in ["P00", "P01", "P02"] {
+    for required in [
+        "active voxel renderer remains a save-derived projection",
+        "Autonomous birth, ageing, reproduction, and death",
+        "Its promotion verdict is `Blocked`",
+    ] {
         assert!(
-            progress.contains(&format!("| {plan} |")) && progress.contains("| complete"),
-            "progress log should record {plan} as complete"
+            status.contains(required),
+            "current status should record: {required}"
         );
     }
 }

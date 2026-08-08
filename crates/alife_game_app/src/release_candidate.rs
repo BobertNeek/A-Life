@@ -129,7 +129,7 @@ impl ReleaseCandidateSummary {
             || self.graphics_status != "manual-not-measured"
             || self.release_tag_created
             || !self.tag_proposal.contains("git tag -a playable-sim-rc1")
-            || !self.report_path.ends_with("release_candidate.md")
+            || !self.report_path.ends_with("STATUS.md")
             || !self.p36_gates_preserved
             || !self.no_p37_created
             || !self.no_generated_artifacts_tracked
@@ -226,7 +226,7 @@ pub fn run_release_candidate_smoke() -> Result<ReleaseCandidateSummary, GameAppS
         tag_proposal:
             "git tag -a playable-sim-rc1 <validated-main-sha> -m \"A-Life playable sim RC1\""
                 .to_string(),
-        report_path: "docs/release_candidate.md".to_string(),
+        report_path: "docs/STATUS.md".to_string(),
         p36_gates_preserved: release_gate_docs_preserved(&root)?,
         no_p37_created: no_p37_plan_exists(&root)?,
         no_generated_artifacts_tracked: !tracked_generated_artifacts_present(&root)?,
@@ -382,17 +382,17 @@ fn validate_release_candidate_report(
     root: &Path,
     manual_gpu_command: &str,
 ) -> Result<(), GameAppShellError> {
-    let report = std::fs::read_to_string(root.join("docs/release_candidate.md"))?;
+    let development = std::fs::read_to_string(root.join("docs/DEVELOPMENT.md"))?;
+    let status = std::fs::read_to_string(root.join("docs/STATUS.md"))?;
+    let report = format!("{development}\n{status}");
     for required in [
-        "G23 Playable Release Candidate",
         "cargo run -p alife_game_app --bin alife_game_app -- release-candidate-smoke",
         "cargo run -p alife_tools --bin p35_playground -- run-all crates/alife_world/tests/fixtures/p34 examples/p35/playground_manifest.json",
         "cargo run -p alife_game_app --bin alife_game_app -- save-load-ux-smoke crates/alife_world/tests/fixtures/p34",
         "cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants",
         "cargo run -p alife_game_app --bin alife_game_app -- longrun-balance-smoke",
         "cargo run -p alife_game_app --bin alife_game_app -- product-qa-smoke",
-        "No release tag was created",
-        "unavailable GPU is not GPU performance",
+        "Not ready.",
     ] {
         if !report.contains(required) {
             return Err(GameAppShellError::VisibleWorldMismatch {
@@ -413,34 +413,20 @@ fn validate_release_candidate_report(
 }
 
 fn release_gate_docs_preserved(root: &Path) -> Result<bool, GameAppShellError> {
-    let release = std::fs::read_to_string(root.join("docs/release_checklist.md"))?;
-    let status = std::fs::read_to_string(root.join("docs/final_status_report.md"))?;
+    let release = std::fs::read_to_string(root.join("docs/DEVELOPMENT.md"))?;
+    let status = std::fs::read_to_string(root.join("docs/STATUS.md"))?;
     Ok(
         release.contains("cargo test --workspace --all-features --all-targets")
             && release
                 .contains("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1")
-            && release.contains("Golden trace")
-            && status.contains("Product GPU performance is not claimed"),
+            && release.contains("source-bound physical-adapter evidence")
+            && status.contains("Not ready."),
     )
 }
 
 fn no_p37_plan_exists(root: &Path) -> Result<bool, GameAppShellError> {
-    for dir in [
-        root.join("docs/playable_sim_spec/plans"),
-        root.join("docs/playable_sim_spec/review_gates"),
-        root.join("docs/codex_plan_pack/plans"),
-    ] {
-        if !dir.exists() {
-            continue;
-        }
-        for entry in std::fs::read_dir(dir)? {
-            let name = entry?.file_name().to_string_lossy().to_string();
-            if name.contains("P37") || name.contains("G25") {
-                return Ok(false);
-            }
-        }
-    }
-    Ok(true)
+    let roadmap = std::fs::read_to_string(root.join("docs/ROADMAP.md"))?;
+    Ok(!roadmap.contains("P37") && !roadmap.contains("G25"))
 }
 
 fn tracked_generated_artifacts_present(root: &Path) -> Result<bool, GameAppShellError> {

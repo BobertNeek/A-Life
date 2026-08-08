@@ -110,7 +110,7 @@ $CopyFiles = @(
     "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
     "crates/alife_world/tests/fixtures/p34/tiny_save.json",
     "crates/alife_world/tests/fixtures/p34/assets/tiny_generated_weights_ref.json",
-    "docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md",
+    "examples/ca43/TESTER_FEEDBACK_TEMPLATE.md",
     "examples/model_manifests/local_semantic_models.json"
 )
 
@@ -207,7 +207,7 @@ try {
             "crates/alife_game_app/assets/true_25d_alpha_v1",
             "crates/alife_world/tests/fixtures/gpu_alpha",
             "crates/alife_world/tests/fixtures/p34",
-            "docs/creatures_agi_roadmap_pack/templates/CA43_TESTER_FEEDBACK_TEMPLATE.md",
+            "examples/ca43/TESTER_FEEDBACK_TEMPLATE.md",
             "crates/alife_gpu_backend/shaders",
             "examples/model_manifests/local_semantic_models.json"
         )

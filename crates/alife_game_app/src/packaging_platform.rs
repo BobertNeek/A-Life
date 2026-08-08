@@ -249,7 +249,7 @@ pub fn run_platform_package_smoke() -> Result<PlatformPackageSummary, GameAppShe
     let root = g21_workspace_root();
     let manifest = load_g21_asset_bundle_manifest()?;
     let validation = manifest.validate_with_root(&root)?;
-    let docs = std::fs::read_to_string(root.join("docs/playable_sim_spec/platform_packaging.md"))?;
+    let docs = std::fs::read_to_string(root.join("docs/DEVELOPMENT.md"))?;
     if !docs.contains("scripts/run_headless_playground.ps1")
         || !docs.contains("scripts/run_production_voxel_frontend.ps1")
         || !docs.contains("scripts/package_windows_production_voxel.ps1")
