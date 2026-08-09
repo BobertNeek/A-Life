@@ -355,6 +355,10 @@ impl WorldOrganismRegistry {
             .and_then(|organism_id| self.get(*organism_id))
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = &WorldOrganismRecord> {
+        self.records_by_organism.values()
+    }
+
     pub fn with_biology_mut<R>(
         &mut self,
         organism_id: OrganismId,

@@ -37,6 +37,7 @@ use crate::ecology::{
     TerrainZone, TerrainZoneKind,
 };
 use crate::habitat::{HabitatAuthority, HabitatAuthorityError};
+use crate::organism::{OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry};
 use crate::presentation::{
     HabitatCreaturePresentation, HabitatPresentationProjection, PairwiseRelationshipProjection,
     PresentationEvidence,
@@ -59,6 +60,13 @@ const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
 const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v2";
 const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 2;
+
+fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContractError {
+    match error {
+        OrganismRegistryError::InvalidRecord(error) => error,
+        _ => ScaffoldContractError::InvalidId,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HeadlessWorldSignatureDigest {
@@ -217,6 +225,7 @@ pub struct HeadlessWorld {
     last_creature_utterance_ticks: BTreeMap<u64, Tick>,
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
+    organism_registry: WorldOrganismRegistry,
 }
 
 /// Opaque, immutable lookup built once for one same-snapshot perception batch.
@@ -267,6 +276,7 @@ impl HeadlessWorld {
             )
             .expect("the canonical tracked-object capacity is valid"),
             habitats: HabitatAuthority::default(),
+            organism_registry: WorldOrganismRegistry::default(),
         }
     }
 
@@ -677,6 +687,62 @@ impl HeadlessWorld {
             .collect()
     }
 
+    pub fn organism_registry(&self) -> &WorldOrganismRegistry {
+        &self.organism_registry
+    }
+
+    pub fn register_organism_record(
+        &mut self,
+        record: WorldOrganismRecord,
+    ) -> Result<(), ScaffoldContractError> {
+        record.validate_contract()?;
+        self.organism_registry
+            .validate_contract()
+            .map_err(map_organism_registry_error)?;
+        if self.organism_registry.get(record.organism_id()).is_some()
+            || self
+                .organism_registry
+                .get_by_world_entity_id(record.world_entity_id())
+                .is_some()
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let object = self
+            .objects
+            .get(&record.world_entity_id().raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.id != record.world_entity_id()
+            || object.kind != WorldObjectKind::Agent
+            || object.organism_id != Some(record.organism_id())
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        self.organism_registry
+            .insert(record)
+            .map_err(map_organism_registry_error)
+    }
+
+    /// Validates registered records only. Legacy unregistered Agent fixtures
+    /// remain valid until Task 3.2 seeds the production registry.
+    pub fn validate_organism_bindings(&self) -> Result<(), ScaffoldContractError> {
+        self.organism_registry
+            .validate_contract()
+            .map_err(map_organism_registry_error)?;
+        for record in self.organism_registry.iter() {
+            let object = self
+                .objects
+                .get(&record.world_entity_id().raw())
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if object.id != record.world_entity_id()
+                || object.kind != WorldObjectKind::Agent
+                || object.organism_id != Some(record.organism_id())
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        Ok(())
+    }
+
     pub fn remove_organism(
         &mut self,
         organism_id: OrganismId,
@@ -722,6 +788,9 @@ impl HeadlessWorld {
             .cloned()
             .ok_or(ScaffoldContractError::InvalidId)?;
         if object.kind != WorldObjectKind::Agent {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if self.organism_registry.get_by_world_entity_id(id).is_some() {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.objects.remove(&id.raw());
@@ -782,6 +851,12 @@ impl HeadlessWorld {
             .iter()
             .any(|resource| resource.object_id == id)
         {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if self.objects.get(&id.raw()).is_some_and(|object| {
+            object.kind == WorldObjectKind::Agent
+                && self.organism_registry.get_by_world_entity_id(id).is_some()
+        }) {
             return Err(ScaffoldContractError::InvalidId);
         }
         let object = self
@@ -927,6 +1002,7 @@ impl HeadlessWorld {
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )?,
             habitats: parts.habitats,
+            organism_registry: WorldOrganismRegistry::default(),
         })
     }
 
@@ -1422,6 +1498,15 @@ impl HeadlessWorld {
     ) -> Result<WorldEntityId, ScaffoldContractError> {
         spec.position.validate()?;
         if spec.label.is_empty() || self.labels.contains_key(spec.label) {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if matches!(spec.kind, WorldObjectKind::Agent)
+            && spec.organism_id.is_some_and(|organism_id| {
+                self.objects
+                    .values()
+                    .any(|object| object.organism_id == Some(organism_id))
+            })
+        {
             return Err(ScaffoldContractError::InvalidId);
         }
         let id = WorldEntityId(self.next_entity_id);
