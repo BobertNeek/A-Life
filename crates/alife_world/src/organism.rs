@@ -3,11 +3,13 @@
 use std::collections::HashMap;
 
 use alife_core::{
-    BiochemistryState, Blake3Digest, BodyEventDelta, CreatureGenome, CreaturePhenotype, OrganismId,
-    ScaffoldContractError, Tick, Validate, WorldEntityId,
+    BiochemistryState, Blake3Digest, BodyEventDelta, CanonicalDigestBuilder, CreatureGenome,
+    CreaturePhenotype, OrganismId, ScaffoldContractError, Tick, Validate, WorldEntityId,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+const ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrganismArchiveIdentity {
@@ -323,6 +325,18 @@ pub struct WorldOrganismRegistry {
 }
 
 impl WorldOrganismRegistry {
+    pub(crate) fn from_exact_records<I>(records: I) -> Result<Self, OrganismRegistryError>
+    where
+        I: IntoIterator<Item = WorldOrganismRecord>,
+    {
+        let mut registry = Self::default();
+        for record in records {
+            registry.insert(record)?;
+        }
+        registry.validate_contract()?;
+        Ok(registry)
+    }
+
     pub fn insert(&mut self, record: WorldOrganismRecord) -> Result<(), OrganismRegistryError> {
         record.validate_contract()?;
         let organism_id = record.organism_id;
@@ -457,6 +471,30 @@ impl WorldOrganismRegistry {
             .get_mut(&organism_id.raw())
             .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
             .link_life_manifest(digest)
+    }
+
+    pub(crate) fn write_canonical_signature(
+        &self,
+        digest: &mut CanonicalDigestBuilder,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract().map_err(|error| match error {
+            OrganismRegistryError::InvalidRecord(error) => error,
+            _ => ScaffoldContractError::InvalidId,
+        })?;
+
+        // The registry map is deliberately excluded from the payload. The
+        // record graph is composed of serde structs, enums, arrays, and
+        // sequences with no map fields, so serde_json preserves field order.
+        let mut records: Vec<_> = self.records_by_organism.values().collect();
+        records.sort_unstable_by_key(|record| record.organism_id().raw());
+        digest.write_u16(ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION);
+        digest.write_sequence_len(records.len());
+        for record in records {
+            let payload =
+                serde_json::to_vec(record).map_err(|_| ScaffoldContractError::InvalidId)?;
+            digest.write_bytes(&payload);
+        }
+        Ok(())
     }
 
     pub fn validate_contract(&self) -> Result<(), OrganismRegistryError> {

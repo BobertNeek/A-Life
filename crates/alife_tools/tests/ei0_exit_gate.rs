@@ -18,7 +18,7 @@ use alife_tools::ei0_exit_gate::{
     run_ei0_exit_gate_and_write, validate_committed_ei0_exit_gate_report, Ei0EvidenceStatus,
     Ei0ExitGateReport,
 };
-use alife_world::{HabitatActor, HabitatMode};
+use alife_world::{HabitatActor, HabitatMode, HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION};
 
 fn temp_root(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -176,9 +176,10 @@ fn lifecycle_receipt_proves_restored_two_lane_multi_generation_population() {
             && birth.gpu_intent_world_tick == Some(breeding.tick)
             && birth.gpu_selected_mate == Some(breeding.second_parent)
             && birth.actor == HabitatActor::Organism(breeding.first_parent)
-            && birth
-                .gpu_pre_action_world_digest
-                .is_some_and(|digest| digest.schema_version == 2 && digest.words != [0; 4])
+            && birth.gpu_pre_action_world_digest.is_some_and(|digest| {
+                digest.schema_version == HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+                    && digest.words != [0; 4]
+            })
             && birth.gpu_same_seed_wrong_world_rejected == Some(true)
             && birth.gpu_later_world_rejected == Some(true)
     }));

@@ -1,12 +1,24 @@
 use alife_core::{
-    BiochemistryState, BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, OrganismId,
-    Tick, Vec3f, WorldEntityId,
+    BiochemistryState, Blake3Digest, BodyEventDelta, BrainCapacityClass, CreatureGenome,
+    FoundationGeneticIdentity, OrganismId, Tick, Vec3f, WorldEntityId,
 };
 use alife_world::{
     persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
-    HeadlessScenarioBuilder, HeadlessWorld, WorldEditorSpawnSpec, WorldObjectKind,
-    WorldOrganismRecord,
+    HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec,
+    WorldObject, WorldObjectKind, WorldOrganismRecord,
 };
+
+#[derive(Debug, PartialEq)]
+struct WorldReceipt {
+    objects: Vec<WorldObject>,
+    registry: Vec<(
+        WorldOrganismRecord,
+        Option<WorldOrganismRecord>,
+        Option<WorldOrganismRecord>,
+    )>,
+    tick: Tick,
+    signature: HeadlessWorldSignatureDigest,
+}
 
 fn record(organism_id: u64, world_entity_id: u64) -> WorldOrganismRecord {
     let genome = CreatureGenome::early_mammal_founder(
@@ -44,6 +56,125 @@ fn world_with_agent_and_food() -> (HeadlessWorld, WorldEntityId, WorldEntityId) 
     (world, agent, food)
 }
 
+fn world_with_two_agents_and_food() -> (HeadlessWorld, WorldEntityId, WorldEntityId, WorldEntityId)
+{
+    let world = HeadlessScenarioBuilder::new(3_104)
+        .agent("agent-a", OrganismId(7), Vec3f::ZERO)
+        .agent("agent-b", OrganismId(8), Vec3f::new(4.0, 0.0, 0.0))
+        .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.5)
+        .build()
+        .unwrap();
+    let agent_a = world.entity_id("agent-a").unwrap();
+    let agent_b = world.entity_id("agent-b").unwrap();
+    let food = world.entity_id("food").unwrap();
+    (world, agent_a, agent_b, food)
+}
+
+fn registry_receipt(
+    world: &HeadlessWorld,
+) -> Vec<(
+    WorldOrganismRecord,
+    Option<WorldOrganismRecord>,
+    Option<WorldOrganismRecord>,
+)> {
+    let mut records: Vec<_> = world.organism_registry().iter().cloned().collect();
+    records.sort_by_key(|record| record.organism_id().raw());
+    records
+        .into_iter()
+        .map(|record| {
+            let by_organism = world.organism_registry().get(record.organism_id()).cloned();
+            let by_entity = world
+                .organism_registry()
+                .get_by_world_entity_id(record.world_entity_id())
+                .cloned();
+            (record, by_organism, by_entity)
+        })
+        .collect()
+}
+
+fn receipt(world: &HeadlessWorld) -> WorldReceipt {
+    WorldReceipt {
+        objects: world.object_snapshots(),
+        registry: registry_receipt(world),
+        tick: world.tick(),
+        signature: world.canonical_signature_digest().unwrap(),
+    }
+}
+
+fn assert_unchanged(world: &HeadlessWorld, before: &WorldReceipt) {
+    assert_eq!(
+        receipt(world),
+        *before,
+        "failed exact replacement must not publish partial state"
+    );
+}
+
+fn world_with_agent_without_organism_id() -> HeadlessWorld {
+    let (world, _, _) = world_with_agent_and_food();
+    let save = PortableSaveFile::from_headless_world(
+        "task-3-2b3b1-agent-none",
+        &world,
+        RuntimeConfig::deterministic_default(3_101, alife_core::BrainScaleTier::Nano512),
+        AssetManifest::empty(),
+        Vec::new(),
+    )
+    .unwrap();
+    let mut value = serde_json::to_value(save).unwrap();
+    let objects = value["world"]["objects"].as_array_mut().unwrap();
+    let agent = objects
+        .iter_mut()
+        .find(|object| object["label"] == "agent")
+        .unwrap();
+    agent["organism_id"] = serde_json::Value::Null;
+    let save = PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap()).unwrap();
+    save.restore_headless_world().unwrap()
+}
+
+fn world_with_non_agent_organism_id() -> (HeadlessWorld, WorldEntityId, WorldEntityId) {
+    let (world, _, _) = world_with_agent_and_food();
+    let save = PortableSaveFile::from_headless_world(
+        "task-3-2b3b1-food-id",
+        &world,
+        RuntimeConfig::deterministic_default(3_101, alife_core::BrainScaleTier::Nano512),
+        AssetManifest::empty(),
+        Vec::new(),
+    )
+    .unwrap();
+    let mut value = serde_json::to_value(save).unwrap();
+    let objects = value["world"]["objects"].as_array_mut().unwrap();
+    let food = objects
+        .iter_mut()
+        .find(|object| object["label"] == "food")
+        .unwrap();
+    food["organism_id"] = serde_json::json!(99);
+    let save = PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap()).unwrap();
+    let world = save.restore_headless_world().unwrap();
+    let agent = world.entity_id("agent").unwrap();
+    let food = world.entity_id("food").unwrap();
+    (world, agent, food)
+}
+
+fn world_with_duplicate_agent_organism_id() -> HeadlessWorld {
+    let (world, _, _, _) = world_with_two_agents_and_food();
+    let save = PortableSaveFile::from_headless_world(
+        "task-3-2b3b1-duplicate-agent-id",
+        &world,
+        RuntimeConfig::deterministic_default(3_104, alife_core::BrainScaleTier::Nano512),
+        AssetManifest::empty(),
+        Vec::new(),
+    )
+    .unwrap();
+    let mut value = serde_json::to_value(save).unwrap();
+    let objects = value["world"]["objects"].as_array_mut().unwrap();
+    let second_agent = objects
+        .iter_mut()
+        .find(|object| object["label"] == "agent-b")
+        .unwrap();
+    second_agent["organism_id"] = serde_json::json!(7);
+    let save = PortableSaveFile::from_json_str(&serde_json::to_string(&value).unwrap()).unwrap();
+    save.restore_headless_world().unwrap()
+}
+
 #[test]
 fn headless_world_registers_and_resolves_a_matching_record() {
     let (mut world, agent, _) = world_with_agent_and_food();
@@ -67,6 +198,184 @@ fn headless_world_registers_and_resolves_a_matching_record() {
         OrganismId(7)
     );
     world.validate_organism_bindings().unwrap();
+}
+
+#[test]
+fn replace_registry_accepts_the_exact_complete_agent_set() {
+    let (mut world, agent_a, agent_b, food) = world_with_two_agents_and_food();
+    let empty_signature = world.canonical_signature_digest().unwrap();
+
+    world
+        .replace_organism_registry_exact(
+            [record(7, agent_a.raw()), record(8, agent_b.raw())].into_iter(),
+        )
+        .unwrap();
+
+    assert_eq!(world.organism_registry().len(), 2);
+    assert_eq!(
+        world
+            .organism_registry()
+            .get(OrganismId(7))
+            .unwrap()
+            .world_entity_id(),
+        agent_a
+    );
+    assert_eq!(
+        world
+            .organism_registry()
+            .get_by_world_entity_id(agent_b)
+            .unwrap()
+            .organism_id(),
+        OrganismId(8)
+    );
+    assert_eq!(world.entity(food).unwrap().kind, WorldObjectKind::Food);
+    assert_ne!(world.canonical_signature_digest().unwrap(), empty_signature);
+}
+
+#[test]
+fn replace_registry_rejects_malformed_record_atomically() {
+    let (mut world, agent, _) = world_with_agent_and_food();
+    let before = receipt(&world);
+
+    assert!(world
+        .replace_organism_registry_exact([malformed_record(record(7, agent.raw()))].into_iter())
+        .is_err());
+    assert_unchanged(&world, &before);
+}
+
+#[test]
+fn replace_registry_rejects_duplicate_organism_atomically() {
+    let (mut world, agent_a, agent_b, _) = world_with_two_agents_and_food();
+    let before = receipt(&world);
+
+    assert!(world
+        .replace_organism_registry_exact(
+            [record(7, agent_a.raw()), record(7, agent_b.raw())].into_iter(),
+        )
+        .is_err());
+    assert_unchanged(&world, &before);
+}
+
+#[test]
+fn replace_registry_rejects_duplicate_world_entity_atomically() {
+    let (mut world, agent_a, _, _) = world_with_two_agents_and_food();
+    let before = receipt(&world);
+
+    assert!(world
+        .replace_organism_registry_exact(
+            [record(7, agent_a.raw()), record(8, agent_a.raw())].into_iter(),
+        )
+        .is_err());
+    assert_unchanged(&world, &before);
+}
+
+#[test]
+fn replace_registry_rejects_missing_agent_record_atomically() {
+    let (mut world, agent_a, _, _) = world_with_two_agents_and_food();
+    let before = receipt(&world);
+
+    assert!(world
+        .replace_organism_registry_exact([record(7, agent_a.raw())].into_iter())
+        .is_err());
+    assert_unchanged(&world, &before);
+}
+
+#[test]
+fn replace_registry_rejects_extra_record_atomically() {
+    let (mut world, agent, _) = world_with_agent_and_food();
+    let before = receipt(&world);
+
+    assert!(world
+        .replace_organism_registry_exact([record(7, agent.raw()), record(8, 999)].into_iter(),)
+        .is_err());
+    assert_unchanged(&world, &before);
+}
+
+#[test]
+fn replace_registry_rejects_missing_object_wrong_kind_and_wrong_binding_atomically() {
+    let (mut world, _, agent_b, food) = world_with_two_agents_and_food();
+    let before = receipt(&world);
+
+    for invalid in [
+        [record(7, 999)],
+        [record(7, food.raw())],
+        [record(7, agent_b.raw())],
+    ] {
+        assert!(world
+            .replace_organism_registry_exact(invalid.into_iter())
+            .is_err());
+        assert_unchanged(&world, &before);
+    }
+}
+
+#[test]
+fn replace_registry_rejects_agent_without_organism_id_atomically() {
+    let mut world = world_with_agent_without_organism_id();
+    let before = receipt(&world);
+
+    assert!(world
+        .replace_organism_registry_exact(std::iter::empty::<WorldOrganismRecord>())
+        .is_err());
+    assert_unchanged(&world, &before);
+}
+
+#[test]
+fn replace_registry_rejects_duplicate_agent_organism_identity_atomically() {
+    let mut world = world_with_duplicate_agent_organism_id();
+    let agent_a = world.entity_id("agent-a").unwrap();
+    let before = receipt(&world);
+
+    assert!(world
+        .replace_organism_registry_exact([record(7, agent_a.raw())].into_iter())
+        .is_err());
+    assert_unchanged(&world, &before);
+}
+
+#[test]
+fn replace_registry_excludes_non_agent_organism_ids_from_reverse_cohort() {
+    let (mut world, agent, food) = world_with_non_agent_organism_id();
+
+    world
+        .replace_organism_registry_exact([record(7, agent.raw())].into_iter())
+        .unwrap();
+
+    assert_eq!(
+        world.entity(food).unwrap().organism_id,
+        Some(OrganismId(99))
+    );
+    assert_eq!(world.organism_registry().len(), 1);
+    world.validate_organism_bindings().unwrap();
+}
+
+#[test]
+fn replace_registry_accepts_valid_biology_lifecycle_archive_state() {
+    let (mut world, agent, _) = world_with_agent_and_food();
+    let mut changed = record(7, agent.raw());
+    changed
+        .advance_biology(Tick(1), BodyEventDelta::zero())
+        .unwrap();
+    changed.mark_dead(Tick(1)).unwrap();
+    changed
+        .link_birth_manifest(Blake3Digest::from_bytes([1; 32]))
+        .unwrap();
+    changed
+        .link_life_manifest(Blake3Digest::from_bytes([2; 32]))
+        .unwrap();
+
+    world
+        .replace_organism_registry_exact([changed].into_iter())
+        .unwrap();
+    assert_eq!(world.organism_registry().len(), 1);
+    assert_eq!(
+        world
+            .organism_registry()
+            .get(OrganismId(7))
+            .unwrap()
+            .lifecycle(),
+        alife_world::OrganismLifecycle::Dead {
+            death_tick: Tick(1)
+        }
+    );
 }
 
 #[test]

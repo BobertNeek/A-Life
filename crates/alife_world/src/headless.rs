@@ -6,7 +6,7 @@
 
 use std::{
     cell::{Ref, RefCell},
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     rc::Rc,
 };
 
@@ -59,8 +59,9 @@ const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
-const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v2";
-const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 2;
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v3";
+/// Current schema required by every fresh headless-world signature receipt.
+pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 3;
 
 fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContractError {
     match error {
@@ -573,6 +574,8 @@ impl HeadlessWorld {
         for object in self.objects.values() {
             write_world_object_signature(&mut digest, object)?;
         }
+        self.organism_registry
+            .write_canonical_signature(&mut digest)?;
         digest.write_bytes(
             &serde_json::to_vec(&self.ecology).map_err(|_| ScaffoldContractError::InvalidId)?,
         );
@@ -738,6 +741,59 @@ impl HeadlessWorld {
         self.organism_registry
             .insert(record)
             .map_err(map_organism_registry_error)
+    }
+
+    pub fn replace_organism_registry_exact<I>(
+        &mut self,
+        records: I,
+    ) -> Result<(), ScaffoldContractError>
+    where
+        I: IntoIterator<Item = WorldOrganismRecord>,
+    {
+        let registry = WorldOrganismRegistry::from_exact_records(records)
+            .map_err(map_organism_registry_error)?;
+        let mut replacement = self.clone();
+        replacement.organism_registry = registry;
+        replacement.validate_complete_organism_bindings()?;
+        *self = replacement;
+        Ok(())
+    }
+
+    fn validate_complete_organism_bindings(&self) -> Result<(), ScaffoldContractError> {
+        self.validate_organism_bindings()?;
+
+        let mut agent_cohort = BTreeMap::new();
+        for object in self.objects.values() {
+            if object.kind != WorldObjectKind::Agent {
+                continue;
+            }
+            let organism_id = object.organism_id.ok_or(ScaffoldContractError::InvalidId)?;
+            organism_id.validate()?;
+            if agent_cohort.insert(organism_id.raw(), object.id).is_some() {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+
+        let registered_ids = self
+            .organism_registry
+            .iter()
+            .map(|record| record.organism_id().raw())
+            .collect::<BTreeSet<_>>();
+        let cohort_ids = agent_cohort.keys().copied().collect::<BTreeSet<_>>();
+        if registered_ids != cohort_ids {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+
+        for (organism_id, world_entity_id) in agent_cohort {
+            let record = self
+                .organism_registry
+                .get(OrganismId(organism_id))
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if record.world_entity_id() != world_entity_id {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        Ok(())
     }
 
     /// Validates registered records only. Legacy unregistered Agent fixtures

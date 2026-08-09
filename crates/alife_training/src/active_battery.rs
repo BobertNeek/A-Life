@@ -14,6 +14,7 @@ use alife_gpu_backend::{GpuBrainHandle, GpuClosedLoopBackend, GpuRuntimeProfile}
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use alife_world::{
     HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldSignatureDigest, WorldObjectKind,
+    HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
 };
 
 use crate::TrainingError;
@@ -86,7 +87,8 @@ impl Validate for GpuReproductionIntentReceipt {
         self.patch.validate_contract()?;
         if self.initiator_organism_id == self.mate_organism_id
             || self.observed_ticks == 0
-            || self.pre_action_world_digest.schema_version != 2
+            || self.pre_action_world_digest.schema_version
+                != HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
             || self.pre_action_world_digest.words == [0; 4]
             || self.patch.pre_action().organism_id != self.initiator_organism_id
             || self.patch.decision().policy_backend() != PolicyBackend::NeuralClosedLoopGpu

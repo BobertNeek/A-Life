@@ -33,8 +33,8 @@ use alife_world::{
     HabitatBreedingReceipt, HabitatBreedingRequest, HabitatId, HabitatMode,
     HeadlessScenarioBuilder, HeadlessWorldSignatureDigest, LearningTraceSaveSummary,
     PersistenceError, PortableSaveFile, ResourceSpawnPolicy, RuntimeConfig, TerrainZone,
-    TerrainZoneKind, WeightLayerSaveSummary, P34_ASSET_MANIFEST_SCHEMA,
-    P34_ASSET_MANIFEST_SCHEMA_VERSION,
+    TerrainZoneKind, WeightLayerSaveSummary, HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
+    P34_ASSET_MANIFEST_SCHEMA, P34_ASSET_MANIFEST_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -1232,7 +1232,8 @@ fn wild_birth_semantics_are_exact(birth: &Ei0BirthReceipt) -> bool {
         && birth.gpu_intent_world_tick == Some(breeding.tick)
         && birth.gpu_selected_mate == Some(breeding.second_parent)
         && birth.gpu_pre_action_world_digest.is_some_and(|digest| {
-            digest.schema_version == 2 && digest.words.iter().any(|word| *word != 0)
+            digest.schema_version == HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION
+                && digest.words.iter().any(|word| *word != 0)
         })
         && birth.gpu_same_seed_wrong_world_rejected == Some(true)
         && birth.gpu_later_world_rejected == Some(true)
