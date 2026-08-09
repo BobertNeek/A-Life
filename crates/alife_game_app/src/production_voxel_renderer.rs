@@ -33,7 +33,7 @@ use bevy::{
         Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, Meshable, MessageWriter,
         MouseButton, Name, Node, ParamSet, PositionType, Projection, Quat, Res, ResMut, Resource,
         Sphere, StandardMaterial, Text, Text2d, TextColor, TextFont, Time, Torus, Transform,
-        Update, Val, Vec3, Visibility, Window, With,
+        Update, Val, Vec3, Visibility, Window, With, Without,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -4204,6 +4204,7 @@ fn spawn_fvr03_selection_marker(
         Mesh3d(mesh),
         MeshMaterial3d(material),
         Transform::from_xyz(tile.x as f32 + 0.5, 1.45, tile.z as f32 + 0.5),
+        Visibility::Visible,
         Fvr03ProductionVoxelSelectionMarker,
     ));
 }
@@ -5074,21 +5075,35 @@ fn handle_fvr03_camera_mode_input(
 fn sync_fvr04_selection_marker(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
+    roots: bevy::prelude::Query<
+        (&ProductionCreatureAssemblyRoot, &Transform),
+        Without<Fvr03ProductionVoxelSelectionMarker>,
+    >,
     mut markers: bevy::prelude::Query<
         (&mut Transform, &mut Visibility),
         With<Fvr03ProductionVoxelSelectionMarker>,
     >,
 ) {
-    if !selection.is_changed() && !scene.is_changed() {
-        return;
-    }
     let Some(selected) = selection.selected else {
         for (_, mut visibility) in &mut markers {
             *visibility = Visibility::Hidden;
         }
         return;
     };
-    let Some(position) = scene.world_position_for_selection(selected) else {
+    let position = if selected.kind == StableVoxelRefKind::Creature {
+        selected.stable_id.and_then(|stable_id| {
+            roots
+                .iter()
+                .find(|(root, _)| root.stable_id == stable_id)
+                .map(|(_, transform)| transform.translation)
+        })
+    } else {
+        scene.world_position_for_selection(selected)
+    };
+    let Some(position) = position else {
+        for (_, mut visibility) in &mut markers {
+            *visibility = Visibility::Hidden;
+        }
         return;
     };
     for (mut transform, mut visibility) in &mut markers {
@@ -5122,11 +5137,14 @@ fn handle_fvr04_camera_follow_input(
 fn sync_fvr04_camera_follow(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
-    mut cameras: bevy::prelude::Query<(
-        &mut Transform,
-        &mut Projection,
-        &Fvr03ProductionVoxelCamera,
-    )>,
+    roots: bevy::prelude::Query<
+        (&ProductionCreatureAssemblyRoot, &Transform),
+        Without<Fvr03ProductionVoxelCamera>,
+    >,
+    mut cameras: bevy::prelude::Query<
+        (&mut Transform, &mut Projection, &Fvr03ProductionVoxelCamera),
+        Without<ProductionCreatureAssemblyRoot>,
+    >,
 ) {
     if !follow.enabled {
         return;
@@ -5134,7 +5152,11 @@ fn sync_fvr04_camera_follow(
     let Some(target) = follow.target_stable_id else {
         return;
     };
-    let Some(position) = scene.selection_positions_by_raw_id.get(&target.raw()) else {
+    let Some(position) = roots
+        .iter()
+        .find(|(root, _)| root.stable_id == target)
+        .map(|(_, transform)| transform.translation)
+    else {
         return;
     };
     let target = Vec3::new(position.x, 0.0, position.z);

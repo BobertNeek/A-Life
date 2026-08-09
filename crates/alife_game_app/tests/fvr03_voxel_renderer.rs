@@ -13,13 +13,13 @@ use alife_game_app::{
     default_environment_manifest_path, run_production_voxel_frontend_dry_run, CreaturePartSlot,
     Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk,
     Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
-    Fvr03ProductionVoxelSelectionResource, Fvr03ProductionVoxelTerrainBatch,
-    Fvr03ProductionVoxelTerrainTile, Fvr04ProductionCreatureFollowResource,
-    Fvr04ProductionCreatureVisualMarker, Fvr05ProductionUxStateResource,
-    Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVfxKind,
-    Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker,
-    Fvr09MesherMode, Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker,
-    Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
+    Fvr03ProductionVoxelSelectionMarker, Fvr03ProductionVoxelSelectionResource,
+    Fvr03ProductionVoxelTerrainBatch, Fvr03ProductionVoxelTerrainTile,
+    Fvr04ProductionCreatureFollowResource, Fvr04ProductionCreatureVisualMarker,
+    Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
+    Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
+    Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
+    Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
     Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
     Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, LiveBrainCausalStage,
     LiveBrainTickSummary, ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
@@ -28,14 +28,16 @@ use alife_game_app::{
     FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
-    persistence::PortableSaveFile, CreatureAppearanceGenome, HeadlessActionIds, StableVoxelRefKind,
-    WorldObjectKind, CREATURE_APPEARANCE_SPECIES_COUNT, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
+    persistence::PortableSaveFile, CreatureAppearanceGenome, HeadlessActionIds,
+    StableVoxelObjectRef, StableVoxelRefKind, WorldObjectKind, CREATURE_APPEARANCE_SPECIES_COUNT,
+    FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
     mesh::VertexAttributeValues,
     prelude::{
         AlphaMode, AmbientLight, Assets, ButtonInput, ChildOf, DirectionalLight, Entity, KeyCode,
-        Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Text, Transform, Visibility,
+        Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Text, Transform, Vec3,
+        Visibility,
     },
 };
 
@@ -852,6 +854,310 @@ fn fvr04_live_world_projection_ignores_unmatched_and_non_agent_objects() {
             .expect("non-agent collision must not remove the production creature root")
     };
     assert_eq!(after_non_agent, moved_translation);
+}
+
+#[test]
+fn fvr04_selection_marker_follows_the_moved_projected_creature_root() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, launch_summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let selected = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSelectionResource>()
+        .selected
+        .expect("production voxel scene should select a creature at boot");
+    assert_eq!(selected.kind, StableVoxelRefKind::Creature);
+    let stable_id = selected
+        .stable_id
+        .expect("boot creature selection must have a stable id");
+    let initial_translation = {
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        roots
+            .iter(app.world())
+            .find(|(root, _)| root.stable_id == stable_id)
+            .map(|(_, transform)| transform.translation)
+            .expect("selected creature must have a production assembly root")
+    };
+    let launch_scene_position = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSceneResource>()
+        .selection_position(stable_id)
+        .expect("scene must retain the launch-time creature position for static metadata");
+    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
+    let mut moved_object = save
+        .world
+        .objects
+        .iter()
+        .find(|object| object.id == stable_id)
+        .cloned()
+        .expect("selected creature must have a matching saved world object");
+    moved_object.position = alife_core::Vec3f::new(
+        moved_object.position.x + 2.0,
+        moved_object.position.y,
+        moved_object.position.z + 1.0,
+    );
+    let (expected_x, expected_z) = production_voxel_center(moved_object.position);
+    assert_ne!(
+        (expected_x, expected_z),
+        (launch_scene_position.x, launch_scene_position.z),
+        "the authoritative move must differ from the launch-time scene map"
+    );
+
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![moved_object.into()])
+            .unwrap(),
+    ));
+    app.update();
+
+    let marker_translation = {
+        let mut markers = app
+            .world_mut()
+            .query::<(&Fvr03ProductionVoxelSelectionMarker, &Transform)>();
+        markers
+            .iter(app.world())
+            .next()
+            .map(|(_, transform)| transform.translation)
+            .expect("production selection marker must exist")
+    };
+    assert_eq!(marker_translation.y, 1.45);
+    assert_eq!(
+        (marker_translation.x, marker_translation.z),
+        (expected_x, expected_z)
+    );
+    assert_ne!(
+        (marker_translation.x, marker_translation.z),
+        (launch_scene_position.x, launch_scene_position.z),
+        "selection marker must not keep the launch-time creature position"
+    );
+    assert_ne!(initial_translation.x, marker_translation.x);
+    assert_ne!(initial_translation.z, marker_translation.z);
+}
+
+#[test]
+fn fvr04_camera_follow_recomputes_from_the_moved_projected_creature_root() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, launch_summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let selected = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSelectionResource>()
+        .selected
+        .expect("production voxel scene should select a creature at boot");
+    assert_eq!(selected.kind, StableVoxelRefKind::Creature);
+    let stable_id = selected
+        .stable_id
+        .expect("boot creature selection must have a stable id");
+    let initial_translation = {
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        roots
+            .iter(app.world())
+            .find(|(root, _)| root.stable_id == stable_id)
+            .map(|(_, transform)| transform.translation)
+            .expect("selected creature must have a production assembly root")
+    };
+    app.world_mut()
+        .resource_mut::<Fvr04ProductionCreatureFollowResource>()
+        .enabled = true;
+    app.world_mut()
+        .resource_mut::<Fvr04ProductionCreatureFollowResource>()
+        .target_stable_id = Some(stable_id);
+    app.update();
+
+    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
+    let mut moved_object = save
+        .world
+        .objects
+        .iter()
+        .find(|object| object.id == stable_id)
+        .cloned()
+        .expect("selected creature must have a matching saved world object");
+    moved_object.position = alife_core::Vec3f::new(
+        moved_object.position.x + 2.0,
+        moved_object.position.y,
+        moved_object.position.z + 1.0,
+    );
+    let (expected_x, expected_z) = production_voxel_center(moved_object.position);
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![moved_object.into()])
+            .unwrap(),
+    ));
+    app.update();
+
+    let camera_transform = {
+        let mut cameras = app
+            .world_mut()
+            .query::<(&Fvr03ProductionVoxelCamera, &Transform)>();
+        cameras
+            .iter(app.world())
+            .next()
+            .map(|(_, transform)| *transform)
+            .expect("production terrain camera must exist")
+    };
+    let target = Vec3::new(expected_x, 0.0, expected_z);
+    let expected_transform =
+        Transform::from_translation(target + Vec3::new(17.2 * 0.56, 17.2 * 0.82, 17.2 * 0.58))
+            .looking_at(target, Vec3::Y);
+    assert!((camera_transform.translation - expected_transform.translation).length() < 1.0e-5);
+    assert!((camera_transform.rotation.x - expected_transform.rotation.x).abs() < 1.0e-5);
+    assert!((camera_transform.rotation.y - expected_transform.rotation.y).abs() < 1.0e-5);
+    assert!((camera_transform.rotation.z - expected_transform.rotation.z).abs() < 1.0e-5);
+    assert!((camera_transform.rotation.w - expected_transform.rotation.w).abs() < 1.0e-5);
+    assert_ne!(camera_transform.translation.x, initial_translation.x);
+    assert_ne!(camera_transform.translation.z, initial_translation.z);
+}
+
+#[test]
+fn fvr04_missing_selected_creature_root_hides_marker_without_stale_scene_coordinates() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let selected = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSelectionResource>()
+        .selected
+        .expect("production voxel scene should select a creature at boot");
+    assert_eq!(selected.kind, StableVoxelRefKind::Creature);
+    let stable_id = selected
+        .stable_id
+        .expect("boot creature selection must have a stable id");
+    let root_entity = {
+        let mut roots = app
+            .world_mut()
+            .query::<(Entity, &ProductionCreatureAssemblyRoot)>();
+        roots
+            .iter(app.world())
+            .find(|(_, root)| root.stable_id == stable_id)
+            .map(|(entity, _)| entity)
+            .expect("selected creature must have a production assembly root")
+    };
+    let stale_scene_position = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSceneResource>()
+        .selection_position(stable_id)
+        .expect("scene must retain the launch-time creature position for this safety check");
+    let sentinel = Vec3::new(-77.0, 1.45, 91.0);
+    {
+        let mut markers = app
+            .world_mut()
+            .query::<(&Fvr03ProductionVoxelSelectionMarker, &mut Transform)>();
+        for (_, mut transform) in markers.iter_mut(app.world_mut()) {
+            transform.translation = sentinel;
+        }
+    }
+    app.world_mut().despawn(root_entity);
+    app.world_mut()
+        .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
+        .selected = None;
+    app.update();
+    app.world_mut()
+        .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
+        .selected = Some(selected);
+    app.update();
+
+    let (marker_translation, marker_visibility) = {
+        let mut markers = app.world_mut().query::<(
+            &Fvr03ProductionVoxelSelectionMarker,
+            &Transform,
+            &Visibility,
+        )>();
+        markers
+            .iter(app.world())
+            .next()
+            .map(|(_, transform, visibility)| (transform.translation, *visibility))
+            .expect("selection marker must remain as a safe presentation entity")
+    };
+    assert_eq!(marker_visibility, Visibility::Hidden);
+    assert_eq!(marker_translation, sentinel);
+    assert_ne!(
+        (marker_translation.x, marker_translation.z),
+        (stale_scene_position.x, stale_scene_position.z),
+        "a missing root must not restore launch-time creature coordinates"
+    );
+}
+
+#[test]
+fn fvr04_non_creature_selection_keeps_the_static_scene_coordinate_path() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let mut static_selection: StableVoxelObjectRef = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSelectionResource>()
+        .selected
+        .expect("production voxel scene should select a tile-bearing object at boot");
+    static_selection.kind = StableVoxelRefKind::Tile;
+    static_selection.stable_id = None;
+    let tile = static_selection
+        .tile
+        .expect("the static selection fixture must retain a tile coordinate");
+    app.world_mut()
+        .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
+        .selected = Some(static_selection);
+    app.update();
+
+    let marker_translation = {
+        let mut markers = app
+            .world_mut()
+            .query::<(&Fvr03ProductionVoxelSelectionMarker, &Transform)>();
+        markers
+            .iter(app.world())
+            .next()
+            .map(|(_, transform)| transform.translation)
+            .expect("production selection marker must exist")
+    };
+    assert_eq!(
+        marker_translation,
+        Vec3::new(tile.x as f32 + 0.5, 1.45, tile.z as f32 + 0.5)
+    );
+}
+
+#[test]
+fn fvr04_selection_marker_has_explicit_visibility_for_root_readers() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    let marker_entity = {
+        let mut markers = app
+            .world_mut()
+            .query::<(Entity, &Fvr03ProductionVoxelSelectionMarker)>();
+        markers
+            .iter(app.world())
+            .next()
+            .map(|(entity, _)| entity)
+            .expect("production selection marker must exist")
+    };
+    assert_eq!(
+        app.world().get::<Visibility>(marker_entity),
+        Some(&Visibility::Visible)
+    );
 }
 
 #[test]
