@@ -524,14 +524,23 @@ fn duplicate_agent_spawns_reject_without_consuming_world_or_spawn_identity() {
 }
 
 #[test]
-fn legacy_persistence_restore_starts_with_an_empty_registry() {
+fn current_persistence_restore_retains_exact_registry_and_archive_state() {
     let (mut world, agent, _) = world_with_agent_and_food();
+    let mut expected_record = record(7, agent.raw());
+    expected_record.mark_dead(Tick::ZERO).unwrap();
+    expected_record
+        .link_birth_manifest(Blake3Digest::from_bytes([1; 32]))
+        .unwrap();
+    expected_record
+        .link_life_manifest(Blake3Digest::from_bytes([2; 32]))
+        .unwrap();
     world
-        .register_organism_record(record(7, agent.raw()))
+        .register_organism_record(expected_record.clone())
         .unwrap();
     let before_objects = world.object_snapshots();
+    let before_signature = world.canonical_signature_digest().unwrap();
     let save = PortableSaveFile::from_headless_world(
-        "task-3-1b-legacy",
+        "task-3-2b3c1-current",
         &world,
         RuntimeConfig::deterministic_default(3_101, alife_core::BrainScaleTier::Nano512),
         AssetManifest::empty(),
@@ -541,6 +550,13 @@ fn legacy_persistence_restore_starts_with_an_empty_registry() {
 
     let restored = save.restore_headless_world().unwrap();
     assert_eq!(restored.object_snapshots(), before_objects);
-    assert!(restored.organism_registry().is_empty());
+    assert_eq!(
+        restored.organism_registry().get(OrganismId(7)),
+        Some(&expected_record)
+    );
+    assert_eq!(
+        restored.canonical_signature_digest().unwrap(),
+        before_signature
+    );
     restored.validate_organism_bindings().unwrap();
 }

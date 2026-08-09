@@ -25,6 +25,7 @@ use crate::{
     habitat::{HabitatAuthority, HabitatAuthorityError, HabitatId},
     headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
     legacy_neural_policy_v1::LegacyBackendConfigV1,
+    organism::{OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry},
     persistent_voxel::{
         migrated_voxel_backend_for_world, PersistentVoxelProfileId, PersistentVoxelWorldSaveState,
     },
@@ -1083,6 +1084,8 @@ pub struct WorldSaveState {
     pub audible_utterances: Vec<AudibleUtterance>,
     #[serde(default)]
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organism_records: Option<Vec<WorldOrganismRecord>>,
     #[serde(default)]
     pub ecology: EcologyState,
     #[serde(default)]
@@ -1205,6 +1208,15 @@ impl<'de> Deserialize<'de> for WorldObjectSaveState {
     }
 }
 
+fn deserialize_present_organism_records<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<WorldOrganismRecord>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Vec::<WorldOrganismRecord>::deserialize(deserializer).map(Some)
+}
+
 impl<'de> Deserialize<'de> for WorldSaveState {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -1225,6 +1237,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             next_utterance_id: Option<u64>,
             #[serde(default)]
             last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
+            #[serde(default, deserialize_with = "deserialize_present_organism_records")]
+            organism_records: Option<Vec<WorldOrganismRecord>>,
             #[serde(default)]
             ecology: EcologyState,
             #[serde(default)]
@@ -1240,6 +1254,9 @@ impl<'de> Deserialize<'de> for WorldSaveState {
                 .cmp(&right.id.raw())
                 .then_with(|| left.label.cmp(&right.label))
         });
+        if let Some(records) = &mut wire.organism_records {
+            records.sort_unstable_by_key(|record| record.organism_id().raw());
+        }
         let mut objects = Vec::with_capacity(wire.objects.len());
         for (index, object) in wire.objects.into_iter().enumerate() {
             let spawn_sequence = u64::try_from(index)
@@ -1273,7 +1290,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             .next_utterance_id
             .unwrap_or_else(|| max_utterance_id.saturating_add(1));
         let habitat_authority_was_missing = wire.habitats.is_none();
-        Ok(Self {
+        let state = Self {
             seed: wire.seed,
             tick: wire.tick,
             next_entity_id: wire.next_entity_id,
@@ -1283,11 +1300,16 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             last_touched_entities: wire.last_touched_entities,
             audible_utterances: wire.audible_utterances,
             last_creature_utterance_ticks: wire.last_creature_utterance_ticks,
+            organism_records: wire.organism_records,
             ecology: wire.ecology,
             voxel_backend: wire.voxel_backend,
             habitats: wire.habitats.unwrap_or_default(),
             habitat_authority_was_missing,
-        })
+        };
+        state
+            .validate_organism_records()
+            .map_err(|error| D::Error::custom(error.to_string()))?;
+        Ok(state)
     }
 }
 
@@ -1596,10 +1618,11 @@ impl PortableSaveFile {
             });
         }
         let voxel_backend = self.world.voxel_backend.clone();
-        self.world = WorldSaveState::from_parts(world.persistence_parts());
-        self.world
-            .populate_default_habitat_memberships_if_unassigned(&self.creatures)?;
-        self.world.voxel_backend = voxel_backend;
+        let mut candidate = WorldSaveState::from_parts(world.persistence_parts());
+        candidate.voxel_backend = voxel_backend;
+        candidate.populate_default_habitat_memberships_if_unassigned(&self.creatures)?;
+        candidate.validate()?;
+        self.world = candidate;
         if let Some(gpu_runtime) = self.gpu_runtime.as_mut() {
             gpu_runtime.last_safe_checkpoint.world_tick = self.world.tick;
         }
@@ -1895,6 +1918,13 @@ fn creature_ids(creatures: &[CreatureSaveState]) -> Result<Vec<OrganismId>, Pers
     Ok(ids)
 }
 
+fn map_organism_registry_error(error: OrganismRegistryError) -> PersistenceError {
+    match error {
+        OrganismRegistryError::InvalidRecord(error) => PersistenceError::Contract(error),
+        _ => PersistenceError::Contract(ScaffoldContractError::InvalidId),
+    }
+}
+
 impl WorldSaveState {
     fn populate_default_habitat_memberships_if_unassigned(
         &mut self,
@@ -1927,6 +1957,10 @@ impl WorldSaveState {
     }
 
     fn from_parts(parts: HeadlessWorldPersistenceParts) -> Self {
+        let mut organism_records = parts.organism_records;
+        if let Some(records) = &mut organism_records {
+            records.sort_unstable_by_key(|record| record.organism_id().raw());
+        }
         Self {
             seed: parts.seed,
             tick: parts.tick,
@@ -1941,11 +1975,59 @@ impl WorldSaveState {
             last_touched_entities: parts.last_touched_entities,
             audible_utterances: parts.audible_utterances,
             last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
+            organism_records,
             ecology: parts.ecology,
             voxel_backend: None,
             habitats: parts.habitats,
             habitat_authority_was_missing: false,
         }
+    }
+
+    fn validate_organism_records(&self) -> Result<(), PersistenceError> {
+        let Some(records) = &self.organism_records else {
+            return Ok(());
+        };
+        let registry = WorldOrganismRegistry::from_exact_records(records.clone())
+            .map_err(map_organism_registry_error)?;
+        let mut objects_by_entity = BTreeMap::new();
+        let mut agent_bindings = BTreeMap::new();
+        for object in &self.objects {
+            if objects_by_entity.insert(object.id.raw(), object).is_some() {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+            if object.kind != WorldObjectKind::Agent {
+                continue;
+            }
+            let organism_id = object
+                .organism_id
+                .ok_or(PersistenceError::Contract(ScaffoldContractError::InvalidId))?;
+            organism_id.validate()?;
+            if agent_bindings
+                .insert(organism_id.raw(), object.id)
+                .is_some()
+            {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
+        let registered_ids = registry
+            .iter()
+            .map(|record| record.organism_id().raw())
+            .collect::<BTreeSet<_>>();
+        let agent_ids = agent_bindings.keys().copied().collect::<BTreeSet<_>>();
+        if registered_ids != agent_ids {
+            return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+        }
+        for record in registry.iter() {
+            let Some(object) = objects_by_entity.get(&record.world_entity_id().raw()) else {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            };
+            if object.kind != WorldObjectKind::Agent
+                || object.organism_id != Some(record.organism_id())
+            {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
+        Ok(())
     }
 
     fn validate(&self) -> Result<(), PersistenceError> {
@@ -2028,6 +2110,7 @@ impl WorldSaveState {
                 return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
             }
         }
+        self.validate_organism_records()?;
         let habitat_creatures = self
             .habitats
             .memberships()
@@ -2058,6 +2141,7 @@ impl WorldSaveState {
             audible_utterances: self.audible_utterances.clone(),
             last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
             habitats: self.habitats.clone(),
+            organism_records: self.organism_records.clone(),
         };
         Ok(HeadlessWorld::from_persistence_parts(parts)?)
     }

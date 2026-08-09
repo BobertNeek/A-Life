@@ -270,6 +270,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub audible_utterances: Vec<AudibleUtterance>,
     pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
     pub habitats: HabitatAuthority,
+    pub organism_records: Option<Vec<WorldOrganismRecord>>,
 }
 
 impl HeadlessWorld {
@@ -968,6 +969,17 @@ impl HeadlessWorld {
     }
 
     pub(crate) fn persistence_parts(&self) -> HeadlessWorldPersistenceParts {
+        let mut organism_records: Vec<_> = self.organism_registry.iter().cloned().collect();
+        organism_records.sort_unstable_by_key(|record| record.organism_id().raw());
+        let has_agent_objects = self
+            .objects
+            .values()
+            .any(|object| object.kind == WorldObjectKind::Agent);
+        let organism_records = if organism_records.is_empty() && has_agent_objects {
+            None
+        } else {
+            Some(organism_records)
+        };
         HeadlessWorldPersistenceParts {
             seed: self.seed,
             tick: self.tick,
@@ -984,12 +996,20 @@ impl HeadlessWorld {
                 .map(|(organism, tick)| (OrganismId(*organism), *tick))
                 .collect(),
             habitats: self.habitats.clone(),
+            organism_records,
         }
     }
 
     pub(crate) fn from_persistence_parts(
         parts: HeadlessWorldPersistenceParts,
     ) -> Result<Self, ScaffoldContractError> {
+        let organism_records = parts.organism_records;
+        let has_authoritative_organism_records = organism_records.is_some();
+        let organism_registry = match organism_records {
+            Some(records) => WorldOrganismRegistry::from_exact_records(records)
+                .map_err(map_organism_registry_error)?,
+            None => WorldOrganismRegistry::default(),
+        };
         let mut objects = BTreeMap::new();
         let mut labels = BTreeMap::new();
         let mut tracking_keys = std::collections::BTreeSet::new();
@@ -1054,7 +1074,7 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        Ok(Self {
+        let world = Self {
             seed: parts.seed,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
@@ -1076,10 +1096,14 @@ impl HeadlessWorld {
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )?,
             habitats: parts.habitats,
-            organism_registry: WorldOrganismRegistry::default(),
+            organism_registry,
             #[cfg(test)]
             injected_post_action_failure: false,
-        })
+        };
+        if has_authoritative_organism_records {
+            world.validate_complete_organism_bindings()?;
+        }
+        Ok(world)
     }
 
     pub fn perception_frame_draft(
