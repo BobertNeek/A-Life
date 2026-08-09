@@ -176,6 +176,8 @@ pub use production_voxel_frontend::*;
 mod curated_founder_reset;
 pub use curated_founder_reset::*;
 
+mod curated_founder_materializer;
+
 #[cfg(feature = "bevy-app")]
 mod production_terrain;
 #[cfg(feature = "bevy-app")]
