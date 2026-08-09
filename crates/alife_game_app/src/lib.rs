@@ -178,6 +178,9 @@ pub use curated_founder_reset::*;
 
 mod curated_founder_materializer;
 
+#[cfg(feature = "gpu-runtime")]
+mod curated_founder_staging;
+
 #[cfg(feature = "bevy-app")]
 mod production_terrain;
 #[cfg(feature = "bevy-app")]
