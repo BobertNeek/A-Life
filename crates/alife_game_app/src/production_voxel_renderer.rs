@@ -597,11 +597,11 @@ impl Fvr04ProductionCreatureSceneResource {
             return format!("Creature\nstable: {}\nstate: unavailable", stable_id.raw());
         };
         format!(
-            "Creature {}\norg: {} | {} / {}\nhunger {:.2} fatigue {:.2} fear {:.2}\ndopamine {:.2} cortisol {:.2} repro {:.2}\nsleep {:.2} social {:.2}",
+            "Creature {}\norg: {}\nPRESENTATION METADATA (launch/save)\nexpression/body: {} / {}\nhunger {:.2} fatigue {:.2} fear {:.2}\ndopamine {:.2} cortisol {:.2} repro {:.2}\nsleep {:.2} social {:.2}",
             sample.stable_id.raw(),
             sample.organism_id.raw(),
-            sample.animation.label(),
             sample.expression.label(),
+            sample.animation.label(),
             sample.hunger,
             sample.fatigue,
             sample.fear,
@@ -4183,6 +4183,49 @@ fn animate_fvr07_production_vfx(
     }
 }
 
+fn selected_live_creature_object(
+    selection: Option<StableVoxelObjectRef>,
+    frame: Option<&LiveBrainPresentationFrameResource>,
+) -> Option<(WorldEntityId, OrganismId, u64, Vec3f)> {
+    let stable_id = selection
+        .filter(|selection| selection.kind == StableVoxelRefKind::Creature)
+        .and_then(|selection| selection.stable_id)?;
+    let frame = frame?;
+    let object = frame.current.object(stable_id)?;
+    if object.kind != WorldObjectKind::Agent {
+        return None;
+    }
+    let organism_id = object.organism_id?;
+    Some((
+        stable_id,
+        organism_id,
+        frame.current.authoritative_world_tick.raw(),
+        Vec3f::new(object.position.x, object.position.y, object.position.z),
+    ))
+}
+
+fn fvr04_live_creature_inspector_text(
+    selection: Option<StableVoxelObjectRef>,
+    creatures: &Fvr04ProductionCreatureSceneResource,
+    live_state: Option<(u64, Vec3f)>,
+) -> String {
+    let live_text = selection
+        .filter(|selection| selection.kind == StableVoxelRefKind::Creature)
+        .and_then(|selection| selection.stable_id)
+        .map(|stable_id| match live_state {
+            Some((tick, position)) => format!(
+                "LIVE AUTHORITATIVE WORLD\nworld tick: {tick}\nworld position: x={:.2} y={:.2} z={:.2}",
+                position.x, position.y, position.z
+            ),
+            None => format!(
+                "LIVE AUTHORITATIVE WORLD\nlive state: unavailable for selected stable {}",
+                stable_id.raw()
+            ),
+        })
+        .unwrap_or_else(|| "LIVE AUTHORITATIVE WORLD\nstate: unavailable".to_string());
+    format!("{live_text}\n\n{}", creatures.panel_text(selection))
+}
+
 fn spawn_fvr03_selection_marker(
     app: &mut App,
     materials: &BTreeMap<Fvr03ProductionVoxelMaterialKind, Handle<StandardMaterial>>,
@@ -4943,19 +4986,14 @@ fn sync_fvr05_right_inspector_panel(
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    roots: bevy::prelude::Query<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr04ProductionCreatureVisualMarker,
+    )>,
     authority: Option<Res<crate::bevy_shell::ProductionGpuBrainAuthorityResource>>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr05ProductionRightInspectorPanel>>,
 ) {
-    if !ux.is_changed()
-        && !scene.is_changed()
-        && !selection.is_changed()
-        && !creatures.is_changed()
-        && authority
-            .as_ref()
-            .is_none_or(|authority| !authority.is_changed())
-    {
-        return;
-    }
     let tabs = Fvr05ProductionInspectorTab::all()
         .iter()
         .map(|tab| {
@@ -4967,10 +5005,23 @@ fn sync_fvr05_right_inspector_panel(
         })
         .collect::<Vec<_>>()
         .join(" | ");
+    let selected_live =
+        selected_live_creature_object(selection.selected, frame.as_ref().map(|frame| &**frame));
+    let live_state = selected_live.and_then(|(stable_id, organism_id, tick, position)| {
+        roots
+            .iter()
+            .any(|(root, visual)| {
+                root.stable_id == stable_id
+                    && visual.stable_id == stable_id
+                    && root.stable_id == visual.stable_id
+                    && visual.organism_id == organism_id
+            })
+            .then_some((tick, position))
+    });
     let body = match ux.settings.active_inspector_tab {
         Fvr05ProductionInspectorTab::Creature => format!(
             "{}\n\nDEBUG AUTHORITY\n{}",
-            creatures.panel_text(selection.selected),
+            fvr04_live_creature_inspector_text(selection.selected, &creatures, live_state),
             ux.authority.compact_line()
         ),
         Fvr05ProductionInspectorTab::Tile => {
@@ -5172,17 +5223,22 @@ fn sync_fvr04_camera_follow(
 }
 
 fn sync_fvr04_creature_label(
-    scene: Res<Fvr03ProductionVoxelSceneResource>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    roots: bevy::prelude::Query<
+        (
+            &ProductionCreatureAssemblyRoot,
+            &Fvr04ProductionCreatureVisualMarker,
+            &Transform,
+        ),
+        Without<Fvr04ProductionCreatureWorldLabel>,
+    >,
     mut labels: bevy::prelude::Query<
         (&mut Text2d, &mut Transform, &mut Visibility),
         With<Fvr04ProductionCreatureWorldLabel>,
     >,
 ) {
-    if !selection.is_changed() && !scene.is_changed() && !creatures.is_changed() {
-        return;
-    }
     let target = selection
         .hovered
         .filter(|hovered| hovered.kind == StableVoxelRefKind::Creature)
@@ -5198,12 +5254,33 @@ fn sync_fvr04_creature_label(
         return;
     };
     let Some(stable_id) = target.stable_id else {
+        for (_, _, mut visibility) in &mut labels {
+            *visibility = Visibility::Hidden;
+        }
         return;
     };
     let Some(sample) = creatures.sample_for_stable_id(stable_id) else {
+        for (_, _, mut visibility) in &mut labels {
+            *visibility = Visibility::Hidden;
+        }
         return;
     };
-    let Some(position) = scene.world_position_for_selection(target) else {
+    let Some((_, _, position)) = roots.iter().find(|(root, visual, _)| {
+        let Some(frame) = frame.as_ref().map(|frame| &**frame) else {
+            return false;
+        };
+        let Some(object) = frame.current.object(stable_id) else {
+            return false;
+        };
+        object.kind == WorldObjectKind::Agent
+            && object.organism_id == Some(visual.organism_id)
+            && root.stable_id == stable_id
+            && visual.stable_id == stable_id
+            && root.stable_id == visual.stable_id
+    }) else {
+        for (_, _, mut visibility) in &mut labels {
+            *visibility = Visibility::Hidden;
+        }
         return;
     };
     for (mut text, mut transform, mut visibility) in &mut labels {
@@ -5213,7 +5290,7 @@ fn sync_fvr04_creature_label(
             sample.animation.label(),
             sample.expression.label()
         );
-        transform.translation = Vec3::new(position.x, 2.35, position.z);
+        transform.translation = Vec3::new(position.translation.x, 2.35, position.translation.z);
         *visibility = Visibility::Visible;
     }
 }
@@ -5222,17 +5299,36 @@ fn sync_fvr04_creature_inspector_panel(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     follow: Res<Fvr04ProductionCreatureFollowResource>,
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    roots: bevy::prelude::Query<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr04ProductionCreatureVisualMarker,
+    )>,
     mut panels: bevy::prelude::Query<&mut Text, With<Fvr04ProductionCreatureInspectorPanel>>,
 ) {
-    if !selection.is_changed() && !creatures.is_changed() && !follow.is_changed() {
-        return;
-    }
+    let selected_live =
+        selected_live_creature_object(selection.selected, frame.as_ref().map(|frame| &**frame));
+    let live_state = selected_live.and_then(|(stable_id, organism_id, tick, position)| {
+        roots
+            .iter()
+            .any(|(root, visual)| {
+                root.stable_id == stable_id
+                    && visual.stable_id == stable_id
+                    && root.stable_id == visual.stable_id
+                    && visual.organism_id == organism_id
+            })
+            .then_some((tick, position))
+    });
     let suffix = if follow.enabled {
         "follow: on"
     } else {
         "follow: off"
     };
-    let text = format!("{}\n{}", creatures.panel_text(selection.selected), suffix);
+    let text = format!(
+        "{}\n{}",
+        fvr04_live_creature_inspector_text(selection.selected, &creatures, live_state),
+        suffix
+    );
     for mut panel in &mut panels {
         panel.0 = text.clone();
     }

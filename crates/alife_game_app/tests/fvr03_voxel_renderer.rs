@@ -15,7 +15,9 @@ use alife_game_app::{
     Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
     Fvr03ProductionVoxelSelectionMarker, Fvr03ProductionVoxelSelectionResource,
     Fvr03ProductionVoxelTerrainBatch, Fvr03ProductionVoxelTerrainTile,
-    Fvr04ProductionCreatureFollowResource, Fvr04ProductionCreatureVisualMarker,
+    Fvr04ProductionCreatureFollowResource, Fvr04ProductionCreatureInspectorPanel,
+    Fvr04ProductionCreatureVisualMarker, Fvr04ProductionCreatureWorldLabel,
+    Fvr05ProductionInspectorTab, Fvr05ProductionRightInspectorPanel,
     Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
     Fvr07ProductionVfxKind, Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker,
     Fvr09CuteBipedCreatureMarker, Fvr09MesherMode, Fvr10CreatureSpeciesMarker,
@@ -1095,6 +1097,317 @@ fn fvr04_missing_selected_creature_root_hides_marker_without_stale_scene_coordin
         (stale_scene_position.x, stale_scene_position.z),
         "a missing root must not restore launch-time creature coordinates"
     );
+}
+
+#[test]
+fn fvr04_live_world_label_tracks_projected_root_by_stable_id() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, launch_summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let selected = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSelectionResource>()
+        .selected
+        .expect("production voxel scene should select a creature at boot");
+    assert_eq!(selected.kind, StableVoxelRefKind::Creature);
+    let stable_id = selected
+        .stable_id
+        .expect("boot creature selection must have a stable id");
+    let initial_label_translation = {
+        let mut labels = app
+            .world_mut()
+            .query::<(&Fvr04ProductionCreatureWorldLabel, &Transform)>();
+        labels
+            .iter(app.world())
+            .next()
+            .map(|(_, transform)| transform.translation)
+            .expect("production creature world label must exist")
+    };
+
+    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
+    let mut moved_object = save
+        .world
+        .objects
+        .iter()
+        .find(|object| object.id == stable_id)
+        .cloned()
+        .expect("selected creature must have a matching saved world object");
+    moved_object.position = Vec3f::new(
+        moved_object.position.x + 2.0,
+        moved_object.position.y,
+        moved_object.position.z + 1.0,
+    );
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![moved_object.into()])
+            .unwrap(),
+    ));
+    app.update();
+
+    let root_translation = {
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        roots
+            .iter(app.world())
+            .find(|(root, _)| root.stable_id == stable_id)
+            .map(|(_, transform)| transform.translation)
+            .expect("selected creature must retain its production assembly root")
+    };
+    let label_translation = {
+        let mut labels =
+            app.world_mut()
+                .query::<(&Fvr04ProductionCreatureWorldLabel, &Transform, &Visibility)>();
+        labels
+            .iter(app.world())
+            .next()
+            .map(|(_, transform, visibility)| (transform.translation, *visibility))
+            .expect("production creature world label must remain present")
+    };
+
+    assert_eq!(label_translation.1, Visibility::Visible);
+    assert_eq!(
+        (label_translation.0.x, label_translation.0.z),
+        (root_translation.x, root_translation.z),
+        "the selected label must follow the projected root for stable creature {}",
+        stable_id.raw()
+    );
+    assert_eq!(label_translation.0.y, 2.35);
+    assert_ne!(
+        (label_translation.0.x, label_translation.0.z),
+        (initial_label_translation.x, initial_label_translation.z),
+        "the label must update when the live root moves without changing selection"
+    );
+}
+
+#[test]
+fn fvr04_live_world_label_hides_when_selected_creature_root_missing() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, _summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let selected = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSelectionResource>()
+        .selected
+        .expect("production voxel scene should select a creature at boot");
+    assert_eq!(selected.kind, StableVoxelRefKind::Creature);
+    let stable_id = selected
+        .stable_id
+        .expect("boot creature selection must have a stable id");
+    let root_entity = {
+        let mut roots = app
+            .world_mut()
+            .query::<(Entity, &ProductionCreatureAssemblyRoot)>();
+        roots
+            .iter(app.world())
+            .find(|(_, root)| root.stable_id == stable_id)
+            .map(|(entity, _)| entity)
+            .expect("selected creature must have a production assembly root")
+    };
+    let sentinel = Vec3::new(-77.0, 2.35, 91.0);
+    {
+        let mut labels = app.world_mut().query::<(
+            &Fvr04ProductionCreatureWorldLabel,
+            &mut Transform,
+            &mut Visibility,
+        )>();
+        for (_, mut transform, mut visibility) in labels.iter_mut(app.world_mut()) {
+            transform.translation = sentinel;
+            *visibility = Visibility::Visible;
+        }
+    }
+    app.world_mut().despawn(root_entity);
+    app.update();
+
+    let label_state = {
+        let mut labels =
+            app.world_mut()
+                .query::<(&Fvr04ProductionCreatureWorldLabel, &Transform, &Visibility)>();
+        labels
+            .iter(app.world())
+            .next()
+            .map(|(_, transform, visibility)| (transform.translation, *visibility))
+            .expect("production creature world label must remain present")
+    };
+    assert_eq!(label_state.1, Visibility::Hidden);
+    assert_eq!(label_state.0, sentinel);
+}
+
+#[test]
+fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, launch_summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    {
+        let mut ux = app
+            .world_mut()
+            .resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.settings.paused = true;
+        ux.settings.active_inspector_tab = Fvr05ProductionInspectorTab::Creature;
+    }
+    app.update();
+
+    let selected = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSelectionResource>()
+        .selected
+        .expect("production voxel scene should select a creature at boot");
+    let stable_id = selected
+        .stable_id
+        .expect("boot creature selection must have a stable id");
+    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
+    let mut moved_object = save
+        .world
+        .objects
+        .iter()
+        .find(|object| object.id == stable_id)
+        .cloned()
+        .expect("selected creature must have a matching saved world object");
+    moved_object.position = Vec3f::new(11.25, 4.5, -12.75);
+    let live_tick = Tick::new(42);
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        LiveBrainPresentationFrame::try_new(Vec::new(), live_tick, vec![moved_object.into()])
+            .unwrap(),
+    ));
+    app.update();
+
+    let fvr04_text = {
+        let mut panels = app
+            .world_mut()
+            .query::<(&Fvr04ProductionCreatureInspectorPanel, &Text)>();
+        panels
+            .iter(app.world())
+            .next()
+            .map(|(_, text)| text.0.clone())
+            .expect("FVR04 creature inspector panel must exist")
+    };
+    let fvr05_text = {
+        let mut panels = app
+            .world_mut()
+            .query::<(&Fvr05ProductionRightInspectorPanel, &Text)>();
+        panels
+            .iter(app.world())
+            .next()
+            .map(|(_, text)| text.0.clone())
+            .expect("FVR05 right inspector panel must exist")
+    };
+    let expected_position = format!(
+        "world position: x={:.2} y={:.2} z={:.2}",
+        11.25, 4.5, -12.75
+    );
+    for text in [&fvr04_text, &fvr05_text] {
+        assert!(
+            text.contains("world tick: 42"),
+            "missing live tick in: {text}"
+        );
+        assert!(
+            text.contains(&expected_position),
+            "missing current authoritative position in: {text}"
+        );
+        assert!(
+            text.contains("PRESENTATION METADATA (launch/save)"),
+            "static expression/body values must be labeled as metadata in: {text}"
+        );
+    }
+}
+
+#[test]
+fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, launch_summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    {
+        let mut ux = app
+            .world_mut()
+            .resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.settings.paused = true;
+        ux.settings.active_inspector_tab = Fvr05ProductionInspectorTab::Creature;
+    }
+    app.update();
+
+    let selected = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSelectionResource>()
+        .selected
+        .expect("production voxel scene should select a creature at boot");
+    let stable_id = selected
+        .stable_id
+        .expect("boot creature selection must have a stable id");
+    let root_entity = {
+        let mut roots = app
+            .world_mut()
+            .query::<(Entity, &ProductionCreatureAssemblyRoot)>();
+        roots
+            .iter(app.world())
+            .find(|(_, root)| root.stable_id == stable_id)
+            .map(|(entity, _)| entity)
+            .expect("selected creature must have a production assembly root")
+    };
+    let mismatched_root_id = WorldEntityId(stable_id.raw() + 50_000);
+    app.world_mut()
+        .get_mut::<ProductionCreatureAssemblyRoot>(root_entity)
+        .expect("selected creature root must remain mutable")
+        .stable_id = mismatched_root_id;
+
+    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
+    let mut moved_object = save
+        .world
+        .objects
+        .iter()
+        .find(|object| object.id == stable_id)
+        .cloned()
+        .expect("selected creature must have a matching saved world object");
+    moved_object.position = Vec3f::new(19.25, 5.5, -23.75);
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(77), vec![moved_object.into()])
+            .unwrap(),
+    ));
+    app.update();
+
+    let fvr04_text = {
+        let mut panels = app
+            .world_mut()
+            .query::<(&Fvr04ProductionCreatureInspectorPanel, &Text)>();
+        panels
+            .iter(app.world())
+            .next()
+            .map(|(_, text)| text.0.clone())
+            .expect("FVR04 creature inspector panel must exist")
+    };
+    let fvr05_text = {
+        let mut panels = app
+            .world_mut()
+            .query::<(&Fvr05ProductionRightInspectorPanel, &Text)>();
+        panels
+            .iter(app.world())
+            .next()
+            .map(|(_, text)| text.0.clone())
+            .expect("FVR05 right inspector panel must exist")
+    };
+    let expected_unavailable = format!(
+        "live state: unavailable for selected stable {}",
+        stable_id.raw()
+    );
+    let mismatched_position = "world position: x=19.25 y=5.50 z=-23.75";
+    for text in [&fvr04_text, &fvr05_text] {
+        assert!(
+            text.contains(&expected_unavailable),
+            "stable-ID mismatch must be explicit in: {text}"
+        );
+        assert!(!text.contains("world tick: 77"));
+        assert!(!text.contains(mismatched_position));
+    }
 }
 
 #[test]
