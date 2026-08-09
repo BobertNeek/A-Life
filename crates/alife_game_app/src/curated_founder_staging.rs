@@ -1,10 +1,12 @@
 use std::path::Path;
 
-use alife_archive::{ArchiveError, LineageLibrary};
+use alife_archive::{
+    ArchiveError, CommittedCompositeBirthBatch, CompositeGeneticArchiveBatchInput, LineageLibrary,
+};
 use alife_core::{
-    BiochemistryState, Blake3Digest, BrainPhenotype, FoundationGeneticIdentity, GenomeId,
-    LineageId, N512FounderProjectionReceipt, OrganismId, PhenotypeHash, ScaffoldContractError,
-    SensorProfile, Tick, Validate, WorldEntityId,
+    BiochemistryState, Blake3Digest, BrainCapacityClass, BrainPhenotype, FoundationGeneticIdentity,
+    FoundationWeightAsset, GenomeId, LineageId, N512FounderProjectionReceipt, OrganismId,
+    PhenotypeHash, ScaffoldContractError, SensorProfile, Tick, Validate, WorldEntityId,
 };
 use alife_world::persistence::{GpuRuntimeSafeCheckpoint, PersistenceError, PortableSaveFile};
 use alife_world::{HeadlessWorld, OrganismRegistryError, WorldObjectKind, WorldOrganismRecord};
@@ -54,6 +56,14 @@ pub(crate) struct CuratedFounderResetStage {
     pub(crate) target_agent_bindings: Vec<(WorldEntityId, OrganismId)>,
     pub(crate) expected_registry_identity: Vec<(OrganismId, WorldEntityId)>,
     pub(crate) save_replacement: CuratedFounderSaveReplacementMetadata,
+}
+
+#[derive(Debug, PartialEq)]
+struct CuratedFounderResetApplyResult {
+    committed_archive_batch: CommittedCompositeBirthBatch,
+    reset_receipt: CuratedFounderResetReceipt,
+    applied_registry_identity: Vec<(OrganismId, WorldEntityId)>,
+    applied_world_signature: alife_world::HeadlessWorldSignatureDigest,
 }
 
 #[derive(Debug, Error)]
@@ -272,6 +282,346 @@ pub(crate) fn stage_curated_founder_reset(
     })
 }
 
+fn apply_curated_founder_reset(
+    stage: &CuratedFounderResetStage,
+    bundle: &CuratedFounderBundle,
+    lineage_library: &mut LineageLibrary,
+    world: &mut HeadlessWorld,
+) -> Result<CuratedFounderResetApplyResult, CuratedFounderStagingError> {
+    validate_curated_founder_apply_inputs(stage, bundle, world)?;
+
+    let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(stage.receipt.sensor_profile)
+        .map_err(|source| CuratedFounderStagingError::Contract {
+            field: "checked Nano512 foundation asset",
+            source,
+        })?;
+    let expected_foundation = FoundationGeneticIdentity::new(
+        foundation_asset.manifest().foundation_id().raw(),
+        foundation_asset.manifest().foundation_version().raw() as u16,
+        foundation_asset.manifest().compatibility_family_id().raw(),
+        BrainCapacityClass::N512_ID,
+    )
+    .map_err(|source| CuratedFounderStagingError::Contract {
+        field: "checked Nano512 foundation identity",
+        source,
+    })?;
+    if stage.receipt.foundation != expected_foundation
+        || stage.receipt.foundation_content_digest != foundation_asset.digest()
+    {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "checked Nano512 foundation identity or digest",
+        });
+    }
+    let foundation_asset_bytes = foundation_asset.encode_canonical().map_err(|source| {
+        CuratedFounderStagingError::Contract {
+            field: "canonical Nano512 foundation bytes",
+            source,
+        }
+    })?;
+    let decoded_foundation = FoundationWeightAsset::decode_canonical(&foundation_asset_bytes)
+        .map_err(|source| CuratedFounderStagingError::Contract {
+            field: "canonical Nano512 foundation bytes",
+            source,
+        })?;
+    if decoded_foundation.manifest() != foundation_asset.manifest()
+        || decoded_foundation.digest() != foundation_asset.digest()
+    {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "canonical Nano512 foundation identity or digest",
+        });
+    }
+
+    let mut archive_inputs = Vec::with_capacity(stage.archive_birth_intents.len());
+    for (entry, intent) in bundle.entries.iter().zip(&stage.archive_birth_intents) {
+        archive_inputs.push(CompositeGeneticArchiveBatchInput {
+            source_run_id: &intent.source_run_id,
+            organism_id: intent.organism_id,
+            genome_id: intent.genome_id,
+            lineage_id: intent.lineage_id,
+            birth_tick: intent.birth_tick,
+            foundation: intent.foundation,
+            foundation_content_digest: intent.foundation_content_digest,
+            sensor_profile: intent.sensor_profile,
+            projection_receipt: Some(&intent.projection_receipt),
+            phenotype_hash: intent.phenotype_hash,
+            creature_genome: &entry.genome,
+            phenotype: &intent.compiled_phenotype,
+            foundation_asset_bytes: &foundation_asset_bytes,
+        });
+    }
+    let prepared = lineage_library.prepare_composite_birth_batch(&archive_inputs)?;
+
+    let mut linked_records = stage.record_candidates.clone();
+    for (slot, (record, digest)) in linked_records
+        .iter_mut()
+        .zip(prepared.manifest_digests())
+        .enumerate()
+    {
+        record.link_birth_manifest(digest).map_err(|source| {
+            CuratedFounderStagingError::Record {
+                slot: slot as u32,
+                source,
+            }
+        })?;
+    }
+    let applied_registry_identity = linked_records
+        .iter()
+        .map(|record| (record.organism_id(), record.world_entity_id()))
+        .collect();
+
+    let mut replacement_world = world.clone();
+    replacement_world.replace_organism_registry_exact(linked_records)?;
+    let applied_world_signature = replacement_world.canonical_signature_digest()?;
+
+    let committed_archive_batch = lineage_library.commit_composite_birth_batch(prepared)?;
+    *world = replacement_world;
+
+    Ok(CuratedFounderResetApplyResult {
+        committed_archive_batch,
+        reset_receipt: stage.receipt.clone(),
+        applied_registry_identity,
+        applied_world_signature,
+    })
+}
+
+fn validate_curated_founder_apply_inputs(
+    stage: &CuratedFounderResetStage,
+    bundle: &CuratedFounderBundle,
+    world: &HeadlessWorld,
+) -> Result<(), CuratedFounderStagingError> {
+    stage.receipt.validate()?;
+    if bundle.identity.plan_receipt != stage.receipt {
+        return Err(CuratedFounderStagingError::BundleMismatch {
+            slot: None,
+            field: "apply plan receipt",
+        });
+    }
+    if stage.source_save_id != stage.source_save_identity
+        || stage.source_save_identity != stage.receipt.source_save_identity
+        || stage.deterministic_seed != stage.receipt.source_save_seed
+        || stage.world_seed != stage.receipt.world_seed
+        || stage.restored_tick != stage.receipt.restored_tick
+        || stage.save_replacement.save_id != stage.source_save_id
+        || stage.save_replacement.deterministic_seed != stage.deterministic_seed
+        || stage.save_replacement.world_seed != stage.world_seed
+        || stage.save_replacement.world_tick != stage.restored_tick
+        || !stage.save_replacement.registry_persistence_deferred
+    {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "apply stage save and receipt identity",
+        });
+    }
+    let expected_count = stage.receipt.target_population as usize;
+    if bundle.entries.len() != expected_count
+        || stage.ordered_founder_ids.len() != expected_count
+        || stage.record_candidates.len() != expected_count
+        || stage.archive_birth_intents.len() != expected_count
+        || stage.target_agent_bindings.len() != expected_count
+        || stage.expected_registry_identity.len() != expected_count
+    {
+        return Err(CuratedFounderStagingError::BundleMismatch {
+            slot: None,
+            field: "apply entry count",
+        });
+    }
+    if world.seed() != stage.world_seed {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "apply world seed",
+        });
+    }
+    if world.tick() != stage.restored_tick {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "apply world tick",
+        });
+    }
+    world.validate_organism_bindings()?;
+    if !world.organism_registry().is_empty() {
+        return Err(CuratedFounderStagingError::ExistingRegistry {
+            records: world.organism_registry().len(),
+        });
+    }
+
+    let mut source_run_id = None;
+    for (index, (((entry, intent), record), (target_binding, registry_identity))) in bundle
+        .entries
+        .iter()
+        .zip(&stage.archive_birth_intents)
+        .zip(&stage.record_candidates)
+        .zip(
+            stage
+                .target_agent_bindings
+                .iter()
+                .zip(&stage.expected_registry_identity),
+        )
+        .enumerate()
+    {
+        let slot = index as u32;
+        validate_archive_run_id(&intent.source_run_id)?;
+        if source_run_id.is_some_and(|expected| expected != intent.source_run_id) {
+            return Err(CuratedFounderStagingError::BundleMismatch {
+                slot: Some(slot),
+                field: "source run order",
+            });
+        }
+        source_run_id = Some(intent.source_run_id.as_str());
+
+        entry.genome.validate_contract().map_err(|source| {
+            CuratedFounderStagingError::Contract {
+                field: "apply bundle genome",
+                source,
+            }
+        })?;
+        entry.biochemistry.validate_contract().map_err(|source| {
+            CuratedFounderStagingError::Contract {
+                field: "apply bundle biochemistry",
+                source,
+            }
+        })?;
+        entry
+            .projection
+            .validate()
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "apply bundle projection",
+                source,
+            })?;
+        entry
+            .projection
+            .receipt()
+            .validate_against_projection(&entry.projection)
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "apply bundle projection receipt",
+                source,
+            })?;
+        record
+            .validate_contract()
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "apply record candidate",
+                source,
+            })?;
+        intent.foundation.validate_contract().map_err(|source| {
+            CuratedFounderStagingError::Contract {
+                field: "apply intent foundation",
+                source,
+            }
+        })?;
+        intent
+            .projection_receipt
+            .validate_against_projection(&entry.projection)
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "apply intent projection receipt",
+                source,
+            })?;
+        intent
+            .organism_id
+            .validate()
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "apply intent organism",
+                source,
+            })?;
+        intent
+            .genome_id
+            .validate()
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "apply intent genome",
+                source,
+            })?;
+        intent
+            .lineage_id
+            .validate()
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "apply intent lineage",
+                source,
+            })?;
+
+        let receipt_identity = &stage.receipt.ordered_agent_identities[index];
+        if entry.plan_entry.final_population_slot != receipt_identity.final_population_slot
+            || entry.plan_entry.world_entity_id != receipt_identity.world_entity_id
+            || entry.plan_entry.organism_id != receipt_identity.organism_id
+            || stage.ordered_founder_ids[index] != entry.plan_entry.organism_id
+            || intent.organism_id != entry.plan_entry.organism_id
+            || record.organism_id() != entry.plan_entry.organism_id
+            || record.world_entity_id() != entry.plan_entry.world_entity_id
+            || *target_binding
+                != (
+                    entry.plan_entry.world_entity_id,
+                    entry.plan_entry.organism_id,
+                )
+            || *registry_identity
+                != (
+                    entry.plan_entry.organism_id,
+                    entry.plan_entry.world_entity_id,
+                )
+            || stage.receipt.derived_conception_seeds[index] != entry.plan_entry.conception_seed
+            || stage.receipt.derived_genome_ids[index] != intent.genome_id
+            || stage.receipt.derived_lineage_ids[index] != intent.lineage_id
+        {
+            return Err(CuratedFounderStagingError::BundleMismatch {
+                slot: Some(slot),
+                field: "apply ordered identity or target binding",
+            });
+        }
+        if intent.genome_id != entry.genome.id
+            || entry.plan_entry.genome_id != intent.genome_id
+            || intent.lineage_id != entry.genome.lineage_id
+            || entry.plan_entry.lineage_id != intent.lineage_id
+            || entry.genome.conception_seed != entry.plan_entry.conception_seed
+            || intent.foundation != entry.genome.foundation
+            || record.genome() != &entry.genome
+            || record.phenotype() != &entry.phenotype
+            || record.biochemistry() != &entry.biochemistry
+        {
+            return Err(CuratedFounderStagingError::BundleMismatch {
+                slot: Some(slot),
+                field: "apply genome, phenotype, or biology pairing",
+            });
+        }
+        if intent.birth_tick != stage.restored_tick
+            || record.birth_tick() != stage.restored_tick
+            || entry.biochemistry.tick != stage.restored_tick
+            || !record.lifecycle().is_alive()
+            || record.archive().birth_manifest_digest().is_some()
+            || record.archive().life_manifest_digest().is_some()
+        {
+            return Err(CuratedFounderStagingError::BundleMismatch {
+                slot: Some(slot),
+                field: "apply fresh birth state or tick",
+            });
+        }
+        if intent.foundation != stage.receipt.foundation
+            || intent.foundation_content_digest != stage.receipt.foundation_content_digest
+            || intent.sensor_profile != stage.receipt.sensor_profile
+            || &intent.projection_receipt != entry.projection.receipt()
+            || intent.phenotype_hash != intent.compiled_phenotype.phenotype_hash()
+            || intent.phenotype_hash != entry.projection.receipt().phenotype_hash()
+            || entry.projection.source_genome_id() != intent.genome_id
+            || entry.projection.lineage_id() != intent.lineage_id
+            || entry.projection.foundation() != &intent.foundation
+            || entry.projection.sensor_profile() != intent.sensor_profile
+            || entry.projection.foundation_asset_digest() != intent.foundation_content_digest
+            || entry.projection.compiled_phenotype() != &intent.compiled_phenotype
+        {
+            return Err(CuratedFounderStagingError::BundleMismatch {
+                slot: Some(slot),
+                field: "apply projection, phenotype, or foundation pairing",
+            });
+        }
+
+        let object = world.entity(entry.plan_entry.world_entity_id).ok_or(
+            CuratedFounderStagingError::Mismatch {
+                field: "apply target world entity",
+            },
+        )?;
+        if object.kind != WorldObjectKind::Agent
+            || object.organism_id != Some(entry.plan_entry.organism_id)
+        {
+            return Err(CuratedFounderStagingError::Mismatch {
+                field: "apply target world binding",
+            });
+        }
+    }
+    Ok(())
+}
+
 fn validate_archive_run_id(archive_run_id: &str) -> Result<(), CuratedFounderStagingError> {
     if archive_run_id.trim().is_empty()
         || archive_run_id.chars().count() > 96
@@ -410,6 +760,7 @@ mod tests {
         collections::BTreeMap,
         fs,
         path::{Path, PathBuf},
+        time::{Duration, Instant},
     };
 
     use alife_archive::{GeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
@@ -435,7 +786,9 @@ mod tests {
         CuratedFounderResetRequest, CURATED_FOUNDER_RESET_POLICY,
     };
 
-    use super::{stage_curated_founder_reset, CuratedFounderStagingError};
+    use super::{
+        apply_curated_founder_reset, stage_curated_founder_reset, CuratedFounderStagingError,
+    };
 
     const WORLD_SEED: u64 = 0x5555_6666_7777_8888;
     const WORLD_ENTITY_IDS: [u64; 3] = [1, 2, 3];
@@ -612,6 +965,67 @@ mod tests {
         assert_eq!(after.save, before.save);
         assert_eq!(after.archive_count, before.archive_count);
         assert_eq!(after.archive, before.archive);
+    }
+
+    fn wait_for_publication_lease_ready(lease: &Path) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if fs::read(lease).is_ok_and(|bytes| bytes == b"ready") {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::yield_now();
+        }
+    }
+
+    fn wait_for_staged_manifest_path(root: &Path) -> Option<PathBuf> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let mut pending = vec![root.join("staging")];
+            while let Some(current) = pending.pop() {
+                let Ok(entries) = fs::read_dir(&current) else {
+                    continue;
+                };
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        pending.push(path);
+                        continue;
+                    }
+                    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                        continue;
+                    };
+                    if !name.starts_with("payload-") {
+                        continue;
+                    }
+                    let Ok(bytes) = fs::read(&path) else {
+                        continue;
+                    };
+                    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+                        continue;
+                    };
+                    if value.get("schema_version").is_none()
+                        || value.get("genetic").is_none()
+                        || value.get("life").is_none()
+                    {
+                        continue;
+                    }
+                    let Some(digest) = name.rsplit('-').next() else {
+                        continue;
+                    };
+                    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                        continue;
+                    }
+                    return Some(root.join("manifests").join(format!("{digest}.json")));
+                }
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::yield_now();
+        }
     }
 
     fn gpu_runtime_fixture(save_id: &str, world_tick: Tick) -> GpuRuntimeSaveState {
@@ -1240,5 +1654,200 @@ mod tests {
         );
         assert_authority_unchanged(before, &fixture);
         assert!(fixture.restored_world.organism_registry().is_empty());
+    }
+
+    #[test]
+    fn curated_apply_commits_one_ordered_archive_batch_before_registry_publish() {
+        let mut fixture = stage_fixture("apply-order");
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library(),
+            Path::new("."),
+            "archive-run-3b3",
+        )
+        .unwrap();
+        let before_world_signature = fixture.restored_world.canonical_signature_digest().unwrap();
+        let before_registry = registry_snapshot(&fixture.restored_world);
+
+        let result = {
+            let lineage_library = fixture.lineage_library.as_mut().unwrap();
+            apply_curated_founder_reset(
+                &stage,
+                &fixture.bundle,
+                lineage_library,
+                &mut fixture.restored_world,
+            )
+        }
+        .unwrap();
+
+        assert_eq!(result.committed_archive_batch.len(), 3);
+        assert_eq!(
+            result.committed_archive_batch.manifest_digests(),
+            result
+                .committed_archive_batch
+                .entries()
+                .iter()
+                .map(|entry| entry.manifest_digest())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(result.reset_receipt, stage.receipt);
+        assert_eq!(
+            result.applied_registry_identity,
+            stage.expected_registry_identity
+        );
+        assert_eq!(
+            result.applied_world_signature,
+            fixture.restored_world.canonical_signature_digest().unwrap()
+        );
+        assert_ne!(
+            fixture.restored_world.canonical_signature_digest().unwrap(),
+            before_world_signature
+        );
+        assert_ne!(registry_snapshot(&fixture.restored_world), before_registry);
+        assert_eq!(fixture.lineage_library().manifest_count().unwrap(), 3);
+
+        for (index, intent) in stage.archive_birth_intents.iter().enumerate() {
+            let committed = &result.committed_archive_batch.entries()[index];
+            assert_eq!(committed.source_run_id(), intent.source_run_id);
+            assert_eq!(committed.organism_id(), intent.organism_id);
+            assert_eq!(committed.genome_id(), intent.genome_id);
+            assert_eq!(committed.lineage_id(), intent.lineage_id);
+            assert_eq!(committed.birth_tick(), intent.birth_tick);
+            assert_eq!(
+                fixture
+                    .lineage_library()
+                    .latest_manifest_for(&intent.source_run_id, intent.organism_id)
+                    .unwrap(),
+                Some(committed.manifest_digest())
+            );
+            assert_eq!(
+                fixture
+                    .restored_world
+                    .organism_registry()
+                    .get(intent.organism_id)
+                    .unwrap()
+                    .archive()
+                    .birth_manifest_digest(),
+                Some(committed.manifest_digest())
+            );
+        }
+    }
+
+    #[test]
+    fn curated_apply_rejects_world_candidate_before_archive_commit() {
+        let mut fixture = stage_fixture("apply-invalid-world-candidate");
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library(),
+            Path::new("."),
+            "archive-run-3b3",
+        )
+        .unwrap();
+        fixture
+            .restored_world
+            .spawn_social_agent(
+                "unexpected-agent",
+                OrganismId(404),
+                Vec3f::new(3.0, 0.0, 0.0),
+                0.0,
+            )
+            .unwrap();
+        let before = authority_snapshot(&fixture);
+
+        let error = {
+            let lineage_library = fixture.lineage_library.as_mut().unwrap();
+            apply_curated_founder_reset(
+                &stage,
+                &fixture.bundle,
+                lineage_library,
+                &mut fixture.restored_world,
+            )
+        }
+        .unwrap_err();
+
+        assert!(matches!(error, CuratedFounderStagingError::World(_)));
+        assert_authority_unchanged(before, &fixture);
+    }
+
+    #[test]
+    fn curated_apply_archive_commit_failure_leaves_world_unpublished() {
+        let mut fixture = stage_fixture("apply-archive-failure");
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library(),
+            Path::new("."),
+            "archive-run-3b3",
+        )
+        .unwrap();
+        let before_world_signature = fixture.restored_world.canonical_signature_digest().unwrap();
+        let before_registry = registry_snapshot(&fixture.restored_world);
+        let archive_root = fixture.archive_root.clone();
+        let before_archive_count = fixture.lineage_library().manifest_count().unwrap();
+        let publication_lease = archive_root
+            .join("staging")
+            .join(".composite-birth-publication-lease");
+        fs::write(&publication_lease, b"hold").unwrap();
+
+        let worker_stage = stage.clone();
+        let worker_bundle = fixture.bundle.clone();
+        let mut worker_world = fixture.restored_world.clone();
+        let mut worker_library = fixture.lineage_library.take().unwrap();
+        let worker = std::thread::spawn(move || {
+            let archive_error = matches!(
+                apply_curated_founder_reset(
+                    &worker_stage,
+                    &worker_bundle,
+                    &mut worker_library,
+                    &mut worker_world,
+                ),
+                Err(CuratedFounderStagingError::Archive(_))
+            );
+            (archive_error, worker_world, worker_library)
+        });
+
+        if !wait_for_publication_lease_ready(&publication_lease) {
+            let _ = fs::remove_file(&publication_lease);
+            let _ = worker.join();
+            panic!("archive publication lease was not reached");
+        }
+        let collision_path = match wait_for_staged_manifest_path(&archive_root) {
+            Some(path) => path,
+            None => {
+                let _ = fs::remove_file(&publication_lease);
+                let _ = worker.join();
+                panic!("staged archive manifest was not observed");
+            }
+        };
+        fs::create_dir(&collision_path).unwrap();
+        fs::remove_file(&publication_lease).unwrap();
+
+        let (archive_error, worker_world, worker_library) = worker.join().unwrap();
+        assert!(archive_error);
+        assert_eq!(
+            worker_world.canonical_signature_digest().unwrap(),
+            before_world_signature
+        );
+        assert_eq!(registry_snapshot(&worker_world), before_registry);
+        assert_eq!(
+            worker_library.manifest_count().unwrap(),
+            before_archive_count
+        );
+        assert_eq!(
+            fs::read_dir(archive_root.join("manifests"))
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .collect::<Vec<_>>(),
+            vec![collision_path]
+        );
+        drop(worker_library);
     }
 }
