@@ -11,19 +11,20 @@ use std::{
 };
 
 use alife_core::{
-    ActionCommand, ActionId, ActionKind, AffordanceBits, BodySnapshot, BrainTickInput,
-    BrainTickOutput, CanonicalDigestBuilder, Confidence, ContextStreams, DriveDelta,
-    EndocrineDelta, ExperiencePatch, HeardToken, HomeostaticDelta, HomeostaticSnapshot, Intensity,
-    LanguageContextSnapshot, NormalizedScalar, OrganismId, PerceptionContextBlock, PerceptionFrame,
-    PerceptionFrameDraft, PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
-    ReferenceActionExecution, ReferenceActionExecutor, ReferenceActionFailure,
-    ReferenceOutcomeObservation, ReferenceOutcomeObserver, ReferenceOutcomeRequest,
-    ReferenceSensoryAdapter, ReferenceSensoryRequest, ScaffoldContractError, SensorProfile,
-    SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
-    SleepConsolidationReport, SleepTransition, SocialAgentSnapshot, SocialProximityEntry,
-    SpeechMotorPayload, TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate,
-    Vec3f, Velocity, WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS,
-    SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+    ActionCommand, ActionId, ActionKind, AffordanceBits, BiochemistryState, BodyEventDelta,
+    BodySnapshot, BrainTickInput, BrainTickOutput, CanonicalDigestBuilder, Confidence,
+    ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch, HeardToken, HomeostaticDelta,
+    HomeostaticSnapshot, Intensity, LanguageContextSnapshot, NormalizedScalar, OrganismId,
+    PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PhysicalActionOutcome,
+    PhysicalContactKind, PlayerUtterance, Pose, Quatf, ReferenceActionExecution,
+    ReferenceActionExecutor, ReferenceActionFailure, ReferenceOutcomeObservation,
+    ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
+    ReferenceSensoryRequest, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
+    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, SleepConsolidationReport,
+    SleepTransition, SocialAgentSnapshot, SocialProximityEntry, SpeechMotorPayload,
+    TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f, Velocity,
+    WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
+    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
@@ -165,9 +166,22 @@ pub struct HeadlessSensoryReport {
 pub struct HeadlessActionResult {
     pub command: ActionCommand,
     pub execution: ReferenceActionExecution,
+    /// Learning observation only. Registered biology is advanced from
+    /// `body_event` through the world organism registry.
     pub observation: ReferenceOutcomeObservation,
+    pub body_event: BodyEventDelta,
     pub touched_entities: Vec<WorldEntityId>,
     pub emitted_utterance: Option<AudibleUtterance>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeadlessActionBiologyReceipt {
+    pub organism_id: OrganismId,
+    pub world_entity_id: WorldEntityId,
+    pub outcome_tick: Tick,
+    pub action_result: HeadlessActionResult,
+    pub biology_before: BiochemistryState,
+    pub biology_after: BiochemistryState,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -226,6 +240,8 @@ pub struct HeadlessWorld {
     tracked_objects: TrackedObjectRegistry,
     habitats: HabitatAuthority,
     organism_registry: WorldOrganismRegistry,
+    #[cfg(test)]
+    injected_post_action_failure: bool,
 }
 
 /// Opaque, immutable lookup built once for one same-snapshot perception batch.
@@ -277,6 +293,8 @@ impl HeadlessWorld {
             .expect("the canonical tracked-object capacity is valid"),
             habitats: HabitatAuthority::default(),
             organism_registry: WorldOrganismRegistry::default(),
+            #[cfg(test)]
+            injected_post_action_failure: false,
         }
     }
 
@@ -1003,6 +1021,8 @@ impl HeadlessWorld {
             )?,
             habitats: parts.habitats,
             organism_registry: WorldOrganismRegistry::default(),
+            #[cfg(test)]
+            injected_post_action_failure: false,
         })
     }
 
@@ -1418,6 +1438,151 @@ impl HeadlessWorld {
         Ok(result)
     }
 
+    pub fn apply_registered_command(
+        &mut self,
+        command: &ActionCommand,
+        world_entity_id: WorldEntityId,
+        outcome_tick: Tick,
+    ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
+        self.apply_registered_transaction(
+            command,
+            world_entity_id,
+            outcome_tick,
+            RegisteredCommandMode::Legacy,
+        )
+    }
+
+    pub fn apply_registered_neural_command(
+        &mut self,
+        command: &ActionCommand,
+        world_entity_id: WorldEntityId,
+        outcome_tick: Tick,
+        speech_payload: Option<SpeechMotorPayload>,
+        prompted: bool,
+    ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
+        self.apply_registered_transaction(
+            command,
+            world_entity_id,
+            outcome_tick,
+            RegisteredCommandMode::Neural {
+                speech_payload,
+                prompted,
+            },
+        )
+    }
+
+    fn apply_registered_transaction(
+        &mut self,
+        command: &ActionCommand,
+        world_entity_id: WorldEntityId,
+        outcome_tick: Tick,
+        mode: RegisteredCommandMode,
+    ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
+        let before = self.clone();
+        let result =
+            self.apply_registered_transaction_inner(command, world_entity_id, outcome_tick, mode);
+        if let Err(error) = result {
+            *self = before;
+            return Err(error);
+        }
+        result
+    }
+
+    fn apply_registered_transaction_inner(
+        &mut self,
+        command: &ActionCommand,
+        world_entity_id: WorldEntityId,
+        outcome_tick: Tick,
+        mode: RegisteredCommandMode,
+    ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
+        let biology_before =
+            self.validate_registered_action(command, world_entity_id, outcome_tick)?;
+        let action_result = match mode {
+            RegisteredCommandMode::Legacy => self.apply_command(command)?,
+            RegisteredCommandMode::Neural {
+                speech_payload,
+                prompted,
+            } => self.apply_neural_command(command, speech_payload, prompted)?,
+        };
+        self.organism_registry
+            .advance_biology(command.organism_id, outcome_tick, action_result.body_event)
+            .map_err(map_organism_registry_error)?;
+        self.validate_organism_bindings()?;
+        let biology_after = *self
+            .organism_registry
+            .get(command.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .biochemistry();
+        if biology_after.tick != outcome_tick || action_result.command != *command {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        #[cfg(test)]
+        if self.injected_post_action_failure {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(HeadlessActionBiologyReceipt {
+            organism_id: command.organism_id,
+            world_entity_id,
+            outcome_tick,
+            action_result,
+            biology_before,
+            biology_after,
+        })
+    }
+
+    fn validate_registered_action(
+        &self,
+        command: &ActionCommand,
+        world_entity_id: WorldEntityId,
+        outcome_tick: Tick,
+    ) -> Result<BiochemistryState, ScaffoldContractError> {
+        command.validate_contract()?;
+        world_entity_id.validate()?;
+        self.validate_organism_bindings()?;
+        let expected_tick = self
+            .tick
+            .raw()
+            .checked_add(1)
+            .map(Tick::new)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if outcome_tick != expected_tick {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        let record = self
+            .organism_registry
+            .get(command.organism_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if !record.lifecycle().is_alive()
+            || record.world_entity_id() != world_entity_id
+            || record.biochemistry().tick != self.tick
+        {
+            return Err(if record.biochemistry().tick != self.tick {
+                ScaffoldContractError::NonMonotonicTick
+            } else {
+                ScaffoldContractError::InvalidId
+            });
+        }
+        let object = self
+            .objects
+            .get(&world_entity_id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.kind != WorldObjectKind::Agent
+            || object.organism_id != Some(command.organism_id)
+            || self
+                .organism_registry
+                .get_by_world_entity_id(world_entity_id)
+                .is_none_or(|bound| bound.organism_id() != command.organism_id)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        Ok(*record.biochemistry())
+    }
+
+    #[cfg(test)]
+    fn inject_post_action_failure(&mut self) {
+        self.injected_post_action_failure = true;
+    }
+
     /// Executes a neural action while accepting speech content only from the
     /// GPU-authored payload receipt. A missing payload cannot fall through to
     /// the legacy deterministic token emitter.
@@ -1800,7 +1965,7 @@ impl HeadlessWorld {
                 .filter(|object| object.kind == WorldObjectKind::Agent)
                 .map(|object| (*id, object.social_affinity))
         });
-        let (profile, contact, target) = if let Some((hazard_id, pain)) = hazard {
+        let (mut profile, contact, target) = if let Some((hazard_id, pain)) = hazard {
             (
                 OutcomeProfile::hazard(pain),
                 PhysicalContactKind::Collision,
@@ -1826,9 +1991,9 @@ impl HeadlessWorld {
                     command.target_entity,
                 )
             }
-        } else if let Some((_agent_id, _affinity)) = agent_contact {
+        } else if let Some((_agent_id, affinity)) = agent_contact {
             (
-                OutcomeProfile::movement(),
+                OutcomeProfile::movement().with_social_contact(affinity),
                 PhysicalContactKind::Moved,
                 command.target_entity,
             )
@@ -1839,6 +2004,11 @@ impl HeadlessWorld {
                 command.target_entity,
             )
         };
+        if (hazard.is_some() || zone_hazard > 0.0) && agent_contact.is_some() {
+            if let Some((_, affinity)) = agent_contact {
+                profile = profile.with_social_contact(affinity);
+            }
+        }
         self.finish_action(
             command,
             true,
@@ -1880,6 +2050,7 @@ impl HeadlessWorld {
             command,
             execution,
             observation,
+            body_event: profile.body_event,
             touched_entities,
             emitted_utterance: None,
         })
@@ -2900,6 +3071,14 @@ enum HeadlessAction {
     Vocalize,
 }
 
+enum RegisteredCommandMode {
+    Legacy,
+    Neural {
+        speech_payload: Option<SpeechMotorPayload>,
+        prompted: bool,
+    },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MoveIntent {
     Absolute,
@@ -2973,6 +3152,7 @@ struct OutcomeProfile {
     energy: f32,
     prediction_error: f32,
     contradiction: bool,
+    body_event: BodyEventDelta,
 }
 
 impl OutcomeProfile {
@@ -3008,6 +3188,10 @@ impl OutcomeProfile {
             0.05,
             false,
         )
+        .with_body_event(BodyEventDelta {
+            sleep_recovery: 1.0,
+            ..BodyEventDelta::zero()
+        })
     }
 
     fn inspect() -> Self {
@@ -3030,6 +3214,8 @@ impl OutcomeProfile {
     fn food(nutrition: f32, pain: f32) -> Self {
         let nutrition = nutrition.clamp(0.0, 1.0);
         let pain = pain.clamp(0.0, 1.0);
+        let reward = (0.55 + nutrition * 0.4 - pain * 1.2).clamp(-1.0, 1.0);
+        let energy = (nutrition * 0.5 - pain * 0.25).clamp(-1.0, 1.0);
         Self::new(
             DriveDelta {
                 hunger: -nutrition,
@@ -3044,13 +3230,20 @@ impl OutcomeProfile {
                 serotonin: 0.05,
                 ..EndocrineDelta::zero()
             },
-            (0.55 + nutrition * 0.4 - pain * 1.2).clamp(-1.0, 1.0),
+            reward,
             0.0,
             pain,
-            (nutrition * 0.5 - pain * 0.25).clamp(-1.0, 1.0),
+            energy,
             (0.05 + pain * 0.75).clamp(0.0, 1.0),
             pain > 0.0,
         )
+        .with_body_event(BodyEventDelta {
+            energy,
+            nutrition,
+            damage: pain,
+            reward_outcome: reward,
+            ..BodyEventDelta::zero()
+        })
     }
 
     fn movement() -> Self {
@@ -3092,6 +3285,10 @@ impl OutcomeProfile {
             0.8,
             true,
         )
+        .with_body_event(BodyEventDelta {
+            damage: pain,
+            ..BodyEventDelta::zero()
+        })
     }
 
     fn blocked() -> Self {
@@ -3212,6 +3409,10 @@ impl OutcomeProfile {
                 0.15,
                 false,
             )
+            .with_body_event(BodyEventDelta {
+                social_contact: affinity.abs(),
+                ..BodyEventDelta::zero()
+            })
         } else {
             let fear = affinity.abs();
             Self::new(
@@ -3234,6 +3435,10 @@ impl OutcomeProfile {
                 0.35,
                 true,
             )
+            .with_body_event(BodyEventDelta {
+                social_contact: fear,
+                ..BodyEventDelta::zero()
+            })
         }
     }
 
@@ -3256,7 +3461,26 @@ impl OutcomeProfile {
             energy,
             prediction_error,
             contradiction,
+            body_event: BodyEventDelta {
+                energy,
+                reward_outcome: reward,
+                ..BodyEventDelta::zero()
+            },
         }
+    }
+
+    fn with_body_event(mut self, body_event: BodyEventDelta) -> Self {
+        self.body_event = BodyEventDelta {
+            energy: self.body_event.energy,
+            reward_outcome: self.body_event.reward_outcome,
+            ..body_event
+        };
+        self
+    }
+
+    fn with_social_contact(mut self, affinity: f32) -> Self {
+        self.body_event.social_contact = affinity.clamp(-1.0, 1.0).abs();
+        self
     }
 }
 
@@ -3358,5 +3582,175 @@ fn step_away(start: Vec3f, target: Vec3f, step: f32) -> Vec3f {
             start.y + delta.y / length * step,
             start.z + delta.z / length * step,
         )
+    }
+}
+
+#[cfg(test)]
+mod task_3_2a_tests {
+    use super::*;
+
+    const ORGANISM_ID: OrganismId = OrganismId(7);
+
+    fn record(world_entity_id: WorldEntityId) -> WorldOrganismRecord {
+        let genome = alife_core::CreatureGenome::early_mammal_founder(
+            0xE10_32A1,
+            alife_core::FoundationGeneticIdentity::new(
+                10,
+                1,
+                7,
+                alife_core::BrainCapacityClass::N512_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        WorldOrganismRecord::new(
+            ORGANISM_ID,
+            world_entity_id,
+            genome,
+            phenotype,
+            biochemistry,
+            Tick::ZERO,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn registered_transaction_rolls_back_late_failure_completely() {
+        let mut world = HeadlessScenarioBuilder::new(32_005)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        let food = world.entity_id("food").unwrap();
+        world.register_organism_record(record(agent)).unwrap();
+        world
+            .apply_command(&HeadlessWorldCommand::idle(ORGANISM_ID).unwrap())
+            .unwrap();
+        world
+            .emit_player_tokens(
+                None,
+                Vec3f::ZERO,
+                vec![alife_core::LanguageTokenId::new(7).unwrap()],
+            )
+            .unwrap();
+
+        let before_signature = world.canonical_signature_digest().unwrap();
+        let before_objects = world.object_snapshots();
+        let before_touched = world.last_touched_entities.clone();
+        let before_last_action = world.last_action_result.clone();
+        let before_speech = world.speech.snapshot();
+        let before_record = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
+        world.inject_post_action_failure();
+
+        let result = world.apply_registered_command(
+            &HeadlessWorldCommand::eat(ORGANISM_ID, food).unwrap(),
+            agent,
+            Tick(1),
+        );
+
+        assert_eq!(result, Err(ScaffoldContractError::InvalidDecisionEvidence));
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            before_signature
+        );
+        assert_eq!(world.object_snapshots(), before_objects);
+        assert_eq!(world.last_touched_entities, before_touched);
+        assert_eq!(world.last_action_result, before_last_action);
+        assert_eq!(world.speech.snapshot(), before_speech);
+        assert_eq!(
+            world.organism_registry().get(ORGANISM_ID),
+            Some(&before_record)
+        );
+    }
+
+    #[test]
+    fn registered_neural_vocalize_failure_rolls_back_speech_and_world_state() {
+        let mut world = HeadlessScenarioBuilder::new(32_014)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        world.register_organism_record(record(agent)).unwrap();
+        world
+            .apply_command(&HeadlessWorldCommand::idle(ORGANISM_ID).unwrap())
+            .unwrap();
+        world
+            .emit_player_tokens(
+                None,
+                Vec3f::ZERO,
+                vec![alife_core::LanguageTokenId::new(7).unwrap()],
+            )
+            .unwrap();
+        let command = HeadlessWorldCommand::vocalize(ORGANISM_ID).unwrap();
+        let payload = alife_core::SpeechMotorPayload::try_new(
+            alife_core::SpeechActKind::Declare,
+            vec![alife_core::LanguageTokenId::new(9).unwrap()],
+            alife_core::Confidence::new(0.9).unwrap(),
+        )
+        .unwrap();
+
+        let before_signature = world.canonical_signature_digest().unwrap();
+        let before_objects = world.object_snapshots();
+        let before_speech = world.audible_utterances();
+        let before_cooldown = world.last_creature_utterance_ticks.clone();
+        let before_next_utterance_id = world.next_utterance_id;
+        let before_touched = world.last_touched_entities.clone();
+        let before_last_action = world.last_action_result.clone();
+        let before_record = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
+        world.inject_post_action_failure();
+
+        let result = world.apply_registered_neural_command(
+            &command,
+            agent,
+            Tick(1),
+            Some(payload.clone()),
+            false,
+        );
+
+        assert_eq!(result, Err(ScaffoldContractError::InvalidDecisionEvidence));
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            before_signature
+        );
+        assert_eq!(world.object_snapshots(), before_objects);
+        assert_eq!(world.audible_utterances(), before_speech);
+        assert_eq!(world.last_creature_utterance_ticks, before_cooldown);
+        assert_eq!(world.next_utterance_id, before_next_utterance_id);
+        assert_eq!(world.last_touched_entities, before_touched);
+        assert_eq!(world.last_action_result, before_last_action);
+        assert_eq!(
+            world.organism_registry().get(ORGANISM_ID),
+            Some(&before_record)
+        );
+        assert!(world.entity_id("voice-token-7").is_none());
+        assert!(world
+            .audible_utterances()
+            .iter()
+            .flat_map(|utterance| utterance.tokens.iter())
+            .all(|token| token.raw() != 9));
+
+        world.injected_post_action_failure = false;
+        let retry = world
+            .apply_registered_neural_command(&command, agent, Tick(1), Some(payload), false)
+            .unwrap();
+        assert_eq!(
+            retry
+                .action_result
+                .emitted_utterance
+                .as_ref()
+                .unwrap()
+                .utterance_id,
+            UtteranceId::new(2).unwrap()
+        );
+        assert_eq!(world.next_utterance_id, 3);
+        assert_eq!(
+            world.last_creature_utterance_ticks.get(&ORGANISM_ID.raw()),
+            Some(&Tick::ZERO)
+        );
+        assert_eq!(retry.biology_after.tick, Tick(1));
     }
 }
