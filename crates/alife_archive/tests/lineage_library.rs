@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
-    time::SystemTime,
+    time::{Duration, Instant, SystemTime},
 };
 
 use alife_archive::{
@@ -13,10 +13,12 @@ use alife_archive::{
 use alife_core::{
     ArchiveCheckpointDisposition, ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy,
     Blake3Digest, BrainCapacityClass, BrainGenome, BrainPhenotype, CreatureGenome,
-    DevelopmentState, FoundationGeneticIdentity, FoundationWeightAsset, GenomeId, LineageId,
-    N512FounderFoundationProjection, N512FounderProjectionReceipt, NormalizedScalar, OrganismId,
-    PassiveLifeEvent, PassiveLifeStatistics, PhenotypeCompiler, SensorProfile, Tick,
+    DevelopmentState, FoundationGeneticIdentity, FoundationWeightAsset, FounderMode,
+    FounderSelection, GenomeId, LineageId, N512FounderFoundationProjection,
+    N512FounderProjectionReceipt, NormalizedScalar, OrganismId, PassiveLifeEvent,
+    PassiveLifeStatistics, PhenotypeCompiler, SensorProfile, Tick,
 };
+use alife_world::{persistence::PortableSaveFile, HabitatAuthority};
 use rusqlite::{params, Connection, OpenFlags};
 
 struct CompositeFixture {
@@ -249,6 +251,150 @@ fn temp_root(label: &str) -> PathBuf {
     ))
 }
 
+fn genome_asset_digest_for_test(fixture: &CompositeFixture) -> Blake3Digest {
+    let expressed = fixture.creature_genome.express().unwrap();
+    let genome_bytes = serde_json::to_vec(&expressed.brain_genome).unwrap();
+    Blake3Digest::from_bytes(*blake3::hash(&genome_bytes).as_bytes())
+}
+
+const TEST_COMPOSITE_BIRTH_STAGE_LEASE_FILE: &str = ".composite-birth-stage-lease";
+const TEST_COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE: &str = ".composite-birth-publication-lease";
+
+fn create_composite_birth_lease(root: &Path, file_name: &str) -> PathBuf {
+    let path = root.join("staging").join(file_name);
+    fs::write(&path, b"test-owned composite birth lease").unwrap();
+    path
+}
+
+fn release_composite_birth_lease(path: &Path) {
+    fs::remove_file(path).unwrap();
+}
+
+fn wait_for_composite_birth_lease_ready(path: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if fs::read(path)
+            .map(|contents| contents == b"ready")
+            .unwrap_or(false)
+        {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "composite birth publication lease was never handed off at {}",
+            path.display()
+        );
+        std::thread::yield_now();
+    }
+}
+
+fn wait_for_batch_staging_directory(root: &Path) -> PathBuf {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if let Ok(entries) = fs::read_dir(root.join("staging")) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("batch-"))
+                    && fs::symlink_metadata(&path)
+                        .map(|metadata| metadata.is_dir())
+                        .unwrap_or(false)
+                {
+                    return path;
+                }
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "composite batch staging directory was never created"
+        );
+        std::thread::yield_now();
+    }
+}
+
+fn wait_for_staged_payload(root: &Path, staged_index: usize, digest: Blake3Digest) -> PathBuf {
+    let expected_name = format!("payload-{staged_index:08}-{}", digest_hex_for_test(digest));
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if let Ok(entries) = fs::read_dir(root.join("staging")) {
+            for entry in entries.flatten() {
+                let batch = entry.path();
+                if !batch.is_dir() {
+                    continue;
+                }
+                let candidate = batch.join(&expected_name);
+                if fs::symlink_metadata(&candidate)
+                    .map(|metadata| metadata.is_file())
+                    .unwrap_or(false)
+                {
+                    return candidate;
+                }
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "staged payload {expected_name} was never created"
+        );
+        std::thread::yield_now();
+    }
+}
+
+#[cfg(windows)]
+fn wait_for_rename_blocking_handle(path: &Path) -> fs::File {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_SHARE_READ_WRITE: u32 = 0x0000_0003;
+    fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(FILE_SHARE_READ_WRITE)
+        .open(path)
+        .unwrap_or_else(|error| {
+            panic!(
+                "staged source barrier could not be acquired at {}: {error}",
+                path.display()
+            )
+        })
+}
+
+#[cfg(windows)]
+fn wait_for_post_rename_read_blocking_handle(path: &Path) -> fs::File {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_SHARE_DELETE: u32 = 0x0000_0004;
+    fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_DELETE)
+        .open(path)
+        .unwrap_or_else(|error| {
+            panic!(
+                "post-rename read barrier could not be acquired at {}: {error}",
+                path.display()
+            )
+        })
+}
+
+#[cfg(windows)]
+fn wait_for_post_rename_barrier_handles(path: &Path) -> (fs::File, fs::File) {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_SHARE_READ_WRITE: u32 = 0x0000_0003;
+    let rename_blocking_handle = fs::OpenOptions::new()
+        .access_mode(0)
+        .share_mode(FILE_SHARE_READ_WRITE)
+        .open(path)
+        .unwrap_or_else(|error| {
+            panic!(
+                "post-rename rename barrier could not be acquired at {}: {error}",
+                path.display()
+            )
+        });
+    let read_blocking_handle = wait_for_post_rename_read_blocking_handle(path);
+    (rename_blocking_handle, read_blocking_handle)
+}
+
 fn fixture(seed: u64, organism_raw: u64) -> (BrainGenome, alife_core::BrainPhenotype) {
     let capacity = BrainCapacityClass::production_for_id(BrainCapacityClass::N512_ID).unwrap();
     let genome = BrainGenome::scaffold(seed, capacity.id());
@@ -331,6 +477,73 @@ fn genetic_birth_life_checkpoint_and_rebuilt_index_are_durable() {
     );
     drop(rebuilt);
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn founder_save_uses_only_the_caller_provided_staging_root() {
+    let archive_root = temp_root("founder-save-archive");
+    let save_root = temp_root("founder-save-root");
+    copy_tree(Path::new("../alife_world/tests/fixtures/p34"), &save_root);
+    let _ = fs::remove_dir_all(save_root.join("staging"));
+    assert!(!save_root.join("staging").exists());
+
+    let mut library =
+        LineageLibrary::open(LineageLibraryConfig::profile_default(&archive_root)).unwrap();
+    let (genome, phenotype) = fixture(451, 451);
+    let manifest_digest = library
+        .archive_birth(GeneticArchiveInput {
+            source_run_id: "founder-save-source",
+            organism_id: OrganismId(451),
+            birth_tick: Tick::ZERO,
+            genome: &genome,
+            phenotype: &phenotype,
+            foundation_asset_bytes: None,
+        })
+        .unwrap();
+    let cohort = library
+        .resolve_founder_cohort(
+            "founder-save-world",
+            4242,
+            &[FounderSelection {
+                source_manifest_digest: manifest_digest,
+                mode: FounderMode::GeneticFounder,
+            }],
+        )
+        .unwrap();
+
+    let mut base = PortableSaveFile::from_json_file(save_root.join("tiny_save.json")).unwrap();
+    let mut world = base.restore_headless_world().unwrap();
+    world.remove_organism(OrganismId(1)).unwrap();
+    world
+        .replace_habitat_authority(HabitatAuthority::default())
+        .unwrap();
+    base.creatures.clear();
+    base.replace_headless_world_snapshot(&world).unwrap();
+    base.save_id = "founder-save-world".to_string();
+    base.gpu_runtime = None;
+
+    let save = library
+        .create_new_save_from_founders(base, &save_root, &cohort)
+        .unwrap();
+    let roundtrip =
+        PortableSaveFile::from_json_str(&save.to_json_string_pretty().unwrap()).unwrap();
+    roundtrip.validate_with_asset_root(&save_root).unwrap();
+    let cohort_entry = roundtrip
+        .assets
+        .entries
+        .iter()
+        .find(|entry| entry.asset_id == "founder.cohort")
+        .unwrap();
+    assert_eq!(
+        fs::read(save_root.join(&cohort_entry.relative_path)).unwrap(),
+        serde_json::to_vec_pretty(&cohort.manifest).unwrap()
+    );
+    assert!(!save_root.join("staging").exists());
+    assert!(!save_root.join(".founder-staging").exists());
+
+    drop(library);
+    let _ = fs::remove_dir_all(archive_root);
+    let _ = fs::remove_dir_all(save_root);
 }
 
 #[test]
@@ -1210,6 +1423,574 @@ fn composite_birth_batch_prepare_accepts_only_exact_existing_birth_idempotently(
         .unwrap();
     assert_eq!(prepared.manifest_digests(), vec![existing]);
     assert_eq!(snapshot_archive_state(&library, &root), before);
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_publishes_every_founder_in_input_order() {
+    let root = temp_root("batch-commit-order");
+    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let first = generic_composite_fixture(930, SensorProfile::GroundedObjectSlotsV1);
+    let second = generic_composite_fixture(931, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = library
+        .prepare_composite_birth_batch(&[
+            first.input("batch-commit-order", OrganismId(930), Tick::new(30)),
+            second.input("batch-commit-order", OrganismId(931), Tick::new(31)),
+        ])
+        .unwrap();
+    let expected = prepared.manifest_digests();
+
+    assert_eq!(library.manifest_count().unwrap(), 0);
+    assert!(root.join("manifests").read_dir().unwrap().next().is_none());
+
+    let committed = library.commit_composite_birth_batch(prepared).unwrap();
+    assert_eq!(committed.len(), 2);
+    assert_eq!(committed.manifest_digests(), expected);
+    assert_eq!(committed.entries()[0].organism_id(), OrganismId(930));
+    assert_eq!(committed.entries()[1].organism_id(), OrganismId(931));
+    assert_eq!(library.manifest_count().unwrap(), 2);
+    for digest in expected {
+        assert_eq!(library.load_manifest(digest).unwrap().life, None);
+    }
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_preserves_a_preexisting_staged_child_collision() {
+    let root = temp_root("batch-commit-staged-child-collision");
+    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let fixture = generic_composite_fixture(934, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = library
+        .prepare_composite_birth_batch(&[fixture.input(
+            "batch-commit-staged-child-collision",
+            OrganismId(934),
+            Tick::new(34),
+        )])
+        .unwrap();
+    let genome_digest = genome_asset_digest_for_test(&fixture);
+    let stage_lease = create_composite_birth_lease(&root, TEST_COMPOSITE_BIRTH_STAGE_LEASE_FILE);
+    let worker = std::thread::spawn(move || {
+        let result = library.commit_composite_birth_batch(prepared);
+        (library, result)
+    });
+    let batch_staging = wait_for_batch_staging_directory(&root);
+    let staged_path = batch_staging.join(format!(
+        "payload-00000000-{}",
+        digest_hex_for_test(genome_digest)
+    ));
+    let sentinel = b"pre-existing staged child bytes";
+    fs::write(&staged_path, sentinel).unwrap();
+    release_composite_birth_lease(&stage_lease);
+
+    let (library, result) = worker.join().unwrap();
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("batch cleanup failed"));
+    assert!(error
+        .to_string()
+        .contains(&staged_path.display().to_string()));
+    assert_eq!(library.manifest_count().unwrap(), 0);
+    assert!(snapshot_manifest_rows(&root).is_empty());
+    assert_eq!(fs::read(&staged_path).unwrap(), sentinel);
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_reuses_exact_shared_birth_and_asset_idempotently() {
+    let root = temp_root("batch-commit-idempotent");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let first = generic_composite_fixture(932, SensorProfile::GroundedObjectSlotsV1);
+    let second = generic_composite_fixture(933, SensorProfile::GroundedObjectSlotsV1);
+    let first_digest = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "batch-commit-idempotent",
+            organism_id: OrganismId(932),
+            birth_tick: Tick::new(32),
+            creature_genome: &first.creature_genome,
+            phenotype: &first.phenotype,
+            foundation_asset_bytes: &first.foundation_asset_bytes,
+        })
+        .unwrap();
+    let second_digest = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "batch-commit-idempotent",
+            organism_id: OrganismId(933),
+            birth_tick: Tick::new(33),
+            creature_genome: &second.creature_genome,
+            phenotype: &second.phenotype,
+            foundation_asset_bytes: &second.foundation_asset_bytes,
+        })
+        .unwrap();
+    let before = snapshot_archive_state(&library, &root);
+
+    let prepared = library
+        .prepare_composite_birth_batch(&[
+            first.input("batch-commit-idempotent", OrganismId(932), Tick::new(32)),
+            second.input("batch-commit-idempotent", OrganismId(933), Tick::new(33)),
+        ])
+        .unwrap();
+    assert_eq!(prepared.items()[0].manifest_digest(), first_digest);
+    assert_eq!(prepared.items()[1].manifest_digest(), second_digest);
+    let committed = library.commit_composite_birth_batch(prepared).unwrap();
+
+    assert_eq!(
+        committed.manifest_digests(),
+        vec![first_digest, second_digest]
+    );
+    assert_eq!(library.manifest_count().unwrap(), 2);
+    assert_eq!(snapshot_archive_state(&library, &root), before);
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_rejects_a_stale_target_before_publication() {
+    let root = temp_root("batch-commit-stale-target");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let first = generic_composite_fixture(934, SensorProfile::GroundedObjectSlotsV1);
+    let second = generic_composite_fixture(935, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = library
+        .prepare_composite_birth_batch(&[
+            first.input("batch-commit-stale-target", OrganismId(934), Tick::new(34)),
+            second.input("batch-commit-stale-target", OrganismId(935), Tick::new(35)),
+        ])
+        .unwrap();
+
+    let (conflicting_genome, conflicting_phenotype) = fixture(9_934, 934);
+    library
+        .archive_birth(GeneticArchiveInput {
+            source_run_id: "batch-commit-stale-target",
+            organism_id: OrganismId(934),
+            birth_tick: Tick::new(999),
+            genome: &conflicting_genome,
+            phenotype: &conflicting_phenotype,
+            foundation_asset_bytes: None,
+        })
+        .unwrap();
+    let before = snapshot_archive_state(&library, &root);
+
+    let error = library.commit_composite_birth_batch(prepared).unwrap_err();
+    assert!(error.to_string().contains("stale") || error.to_string().contains("conflict"));
+    assert_eq!(snapshot_archive_state(&library, &root), before);
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_rejects_a_destination_created_after_prepare() {
+    let root = temp_root("batch-commit-stale-created-destination");
+    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let fixture = generic_composite_fixture(940, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = library
+        .prepare_composite_birth_batch(&[fixture.input(
+            "batch-commit-stale-created-destination",
+            OrganismId(940),
+            Tick::new(40),
+        )])
+        .unwrap();
+    let genome_digest = genome_asset_digest_for_test(&fixture);
+    let genome_path = root
+        .join("assets")
+        .join(digest_hex_for_test(genome_digest))
+        .join("payload.bin");
+    fs::create_dir_all(genome_path.parent().unwrap()).unwrap();
+    fs::write(
+        &genome_path,
+        serde_json::to_vec(&fixture.creature_genome.express().unwrap().brain_genome).unwrap(),
+    )
+    .unwrap();
+    let before = snapshot_archive_state(&library, &root);
+
+    let error = library.commit_composite_birth_batch(prepared).unwrap_err();
+    assert!(!error.to_string().is_empty());
+    assert_eq!(snapshot_archive_state(&library, &root), before);
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_rejects_a_destination_removed_after_prepare() {
+    let root = temp_root("batch-commit-stale-removed-destination");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let fixture = generic_composite_fixture(941, SensorProfile::GroundedObjectSlotsV1);
+    let digest = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "batch-commit-stale-removed-destination",
+            organism_id: OrganismId(941),
+            birth_tick: Tick::new(41),
+            creature_genome: &fixture.creature_genome,
+            phenotype: &fixture.phenotype,
+            foundation_asset_bytes: &fixture.foundation_asset_bytes,
+        })
+        .unwrap();
+    let prepared = library
+        .prepare_composite_birth_batch(&[fixture.input(
+            "batch-commit-stale-removed-destination",
+            OrganismId(941),
+            Tick::new(41),
+        )])
+        .unwrap();
+    let manifest_path = root
+        .join("manifests")
+        .join(format!("{}.json", digest_hex_for_test(digest)));
+    fs::remove_file(&manifest_path).unwrap();
+    let before = snapshot_archive_state(&library, &root);
+
+    let error = library.commit_composite_birth_batch(prepared).unwrap_err();
+    assert!(!error.to_string().is_empty());
+    assert_eq!(snapshot_archive_state(&library, &root), before);
+    assert!(!manifest_path.exists());
+    assert_eq!(library.latest_manifest_digests().unwrap(), vec![digest]);
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_rejects_a_destination_changed_after_prepare() {
+    let root = temp_root("batch-commit-stale-changed-destination");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let fixture = generic_composite_fixture(942, SensorProfile::GroundedObjectSlotsV1);
+    let digest = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "batch-commit-stale-changed-destination",
+            organism_id: OrganismId(942),
+            birth_tick: Tick::new(42),
+            creature_genome: &fixture.creature_genome,
+            phenotype: &fixture.phenotype,
+            foundation_asset_bytes: &fixture.foundation_asset_bytes,
+        })
+        .unwrap();
+    let prepared = library
+        .prepare_composite_birth_batch(&[fixture.input(
+            "batch-commit-stale-changed-destination",
+            OrganismId(942),
+            Tick::new(42),
+        )])
+        .unwrap();
+    let manifest_path = root
+        .join("manifests")
+        .join(format!("{}.json", digest_hex_for_test(digest)));
+    fs::write(&manifest_path, b"changed sentinel bytes").unwrap();
+    let before = snapshot_archive_state(&library, &root);
+
+    let error = library.commit_composite_birth_batch(prepared).unwrap_err();
+    assert!(!error.to_string().is_empty());
+    assert_eq!(snapshot_archive_state(&library, &root), before);
+    assert_eq!(fs::read(manifest_path).unwrap(), b"changed sentinel bytes");
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_rejects_a_prepared_batch_from_another_root() {
+    let source_root = temp_root("batch-commit-root-a");
+    let target_root = temp_root("batch-commit-root-b");
+    let source_library =
+        LineageLibrary::open(LineageLibraryConfig::profile_default(&source_root)).unwrap();
+    let target_library =
+        LineageLibrary::open(LineageLibraryConfig::profile_default(&target_root)).unwrap();
+    let fixture = generic_composite_fixture(943, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = source_library
+        .prepare_composite_birth_batch(&[fixture.input(
+            "batch-commit-root-rejection",
+            OrganismId(943),
+            Tick::new(43),
+        )])
+        .unwrap();
+    let before = snapshot_archive_state(&target_library, &target_root);
+
+    let error = target_library
+        .commit_composite_birth_batch(prepared)
+        .unwrap_err();
+    assert!(error.to_string().contains("does not belong"));
+    assert_eq!(
+        snapshot_archive_state(&target_library, &target_root),
+        before
+    );
+
+    drop(source_library);
+    drop(target_library);
+    fs::remove_dir_all(source_root).unwrap();
+    fs::remove_dir_all(target_root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_rejects_a_parent_reparse_without_following_it() {
+    let root = temp_root("batch-commit-parent-reparse");
+    let outside = temp_root("batch-commit-parent-reparse-outside");
+    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let fixture = generic_composite_fixture(944, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = library
+        .prepare_composite_birth_batch(&[fixture.input(
+            "batch-commit-parent-reparse",
+            OrganismId(944),
+            Tick::new(44),
+        )])
+        .unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    let link = root
+        .join("assets")
+        .join(digest_hex_for_test(genome_asset_digest_for_test(&fixture)));
+
+    #[cfg(windows)]
+    let link_created = match std::os::windows::fs::symlink_dir(&outside, &link) {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("parent reparse cleanup test skipped: {error}");
+            false
+        }
+    };
+    #[cfg(unix)]
+    let link_created = match std::os::unix::fs::symlink(&outside, &link) {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("parent reparse cleanup test skipped: {error}");
+            false
+        }
+    };
+    #[cfg(not(any(windows, unix)))]
+    let link_created = false;
+
+    if link_created {
+        fs::write(outside.join("payload.bin"), &fixture.foundation_asset_bytes).unwrap();
+        let before = snapshot_archive_state(&library, &root);
+        let error = library.commit_composite_birth_batch(prepared).unwrap_err();
+        assert!(error.to_string().contains("symbolic") || error.to_string().contains("reparse"));
+        assert_eq!(snapshot_archive_state(&library, &root), before);
+        assert_eq!(
+            fs::read(outside.join("payload.bin")).unwrap(),
+            fixture.foundation_asset_bytes
+        );
+    }
+
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(outside).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn composite_birth_batch_commit_reports_an_owned_residual_after_post_rename_read_failure() {
+    let root = temp_root("batch-commit-post-rename-read-failure");
+    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let first = generic_composite_fixture(944, SensorProfile::GroundedObjectSlotsV1);
+    let second = generic_composite_fixture(945, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = library
+        .prepare_composite_birth_batch(&[
+            first.input(
+                "batch-commit-post-rename-read-failure",
+                OrganismId(944),
+                Tick::new(44),
+            ),
+            second.input(
+                "batch-commit-post-rename-read-failure",
+                OrganismId(945),
+                Tick::new(45),
+            ),
+        ])
+        .unwrap();
+    let genome_digest = genome_asset_digest_for_test(&second);
+    let final_path = root
+        .join("assets")
+        .join(digest_hex_for_test(genome_digest))
+        .join("payload.bin");
+    let expected_bytes =
+        serde_json::to_vec(&second.creature_genome.express().unwrap().brain_genome).unwrap();
+    let publication_lease =
+        create_composite_birth_lease(&root, TEST_COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE);
+    let worker_root = root.clone();
+    let worker = std::thread::spawn(move || {
+        let result = library.commit_composite_birth_batch(prepared);
+        (library, result, worker_root)
+    });
+    wait_for_composite_birth_lease_ready(&publication_lease);
+    let staged_source = wait_for_staged_payload(&root, 4, genome_digest);
+    let (rename_blocking_handle, read_blocking_handle) =
+        wait_for_post_rename_barrier_handles(&staged_source);
+    release_composite_birth_lease(&publication_lease);
+    drop(rename_blocking_handle);
+    let (library, result, worker_root) = worker.join().unwrap();
+    drop(read_blocking_handle);
+
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("batch cleanup failed"));
+    assert!(
+        error
+            .to_string()
+            .contains(&final_path.display().to_string()),
+        "unexpected post-rename cleanup error: {error}"
+    );
+    assert_eq!(library.manifest_count().unwrap(), 0);
+    assert!(snapshot_manifest_rows(&worker_root).is_empty());
+    assert_eq!(fs::read(&final_path).unwrap(), expected_bytes);
+    assert!(root.join("staging").read_dir().unwrap().next().is_none());
+
+    fs::remove_file(&final_path).unwrap();
+    fs::remove_dir(final_path.parent().unwrap()).unwrap();
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn composite_birth_batch_commit_preserves_a_real_late_manifest_collision() {
+    let root = temp_root("batch-commit-file-collision");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let shared = generic_composite_fixture(900, SensorProfile::GroundedObjectSlotsV1);
+    library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "batch-commit-file-collision-shared",
+            organism_id: OrganismId(900),
+            birth_tick: Tick::new(9),
+            creature_genome: &shared.creature_genome,
+            phenotype: &shared.phenotype,
+            foundation_asset_bytes: &shared.foundation_asset_bytes,
+        })
+        .unwrap();
+    let first = generic_composite_fixture(936, SensorProfile::GroundedObjectSlotsV1);
+    let second = generic_composite_fixture(937, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = library
+        .prepare_composite_birth_batch(&[
+            first.input(
+                "batch-commit-file-collision",
+                OrganismId(936),
+                Tick::new(36),
+            ),
+            second.input(
+                "batch-commit-file-collision",
+                OrganismId(937),
+                Tick::new(37),
+            ),
+        ])
+        .unwrap();
+    let before = snapshot_archive_state(&library, &root);
+    let first_manifest_path = root.join("manifests").join(format!(
+        "{}.json",
+        digest_hex_for_test(prepared.items()[0].manifest_digest())
+    ));
+    let second_manifest_path = root.join("manifests").join(format!(
+        "{}.json",
+        digest_hex_for_test(prepared.items()[1].manifest_digest())
+    ));
+    let second_manifest_digest = prepared.items()[1].manifest_digest();
+    let first_genome_digest = genome_asset_digest_for_test(&first);
+    let first_genome_directory = root
+        .join("assets")
+        .join(digest_hex_for_test(first_genome_digest));
+    let second_genome_digest = genome_asset_digest_for_test(&second);
+    let publication_lease =
+        create_composite_birth_lease(&root, TEST_COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE);
+    let worker_root = root.clone();
+    let worker = std::thread::spawn(move || {
+        let result = library.commit_composite_birth_batch(prepared);
+        let after = snapshot_archive_state(&library, &worker_root);
+        (result, after)
+    });
+    wait_for_composite_birth_lease_ready(&publication_lease);
+    let second_staged_source = wait_for_staged_payload(&root, 4, second_genome_digest);
+    let second_source_lock = wait_for_rename_blocking_handle(&second_staged_source);
+    release_composite_birth_lease(&publication_lease);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !first_manifest_path.is_file() {
+        assert!(
+            Instant::now() < deadline,
+            "first founder was never published after releasing the publication lease"
+        );
+        std::thread::yield_now();
+    }
+    let sentinel_path = first_genome_directory.join("changed-sentinel.txt");
+    fs::write(&sentinel_path, b"changed sentinel bytes").unwrap();
+    fs::create_dir(&second_manifest_path).unwrap();
+    drop(second_source_lock);
+
+    let (result, after) = worker.join().unwrap();
+    let error = result.unwrap_err();
+    assert!(
+        error.to_string().contains("collision") || error.to_string().contains("directory"),
+        "unexpected collision error: {error}"
+    );
+    assert!(error
+        .to_string()
+        .contains(&first_genome_directory.display().to_string()));
+    let mut expected = before.clone();
+    let first_genome_relative =
+        PathBuf::from("assets").join(digest_hex_for_test(first_genome_digest));
+    let sentinel_relative = first_genome_relative.join("changed-sentinel.txt");
+    let second_manifest_relative = PathBuf::from("manifests").join(format!(
+        "{}.json",
+        digest_hex_for_test(second_manifest_digest)
+    ));
+    expected
+        .topology
+        .insert(format!("D:{}", first_genome_relative.display()));
+    expected
+        .topology
+        .insert(format!("F:{}", sentinel_relative.display()));
+    expected.files.insert(
+        sentinel_relative.to_string_lossy().to_string(),
+        b"changed sentinel bytes".to_vec(),
+    );
+    expected
+        .topology
+        .insert(format!("D:{}", second_manifest_relative.display()));
+    assert_eq!(after, expected);
+    assert!(second_manifest_path.is_dir());
+    assert_eq!(fs::read(&sentinel_path).unwrap(), b"changed sentinel bytes");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn composite_birth_batch_commit_rolls_back_after_a_real_sqlite_trigger_failure() {
+    let root = temp_root("batch-commit-sql-trigger");
+    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let first = generic_composite_fixture(938, SensorProfile::GroundedObjectSlotsV1);
+    let second = generic_composite_fixture(939, SensorProfile::GroundedObjectSlotsV1);
+    let prepared = library
+        .prepare_composite_birth_batch(&[
+            first.input("batch-commit-sql-trigger", OrganismId(938), Tick::new(38)),
+            second.input("batch-commit-sql-trigger", OrganismId(939), Tick::new(39)),
+        ])
+        .unwrap();
+    let before = snapshot_archive_state(&library, &root);
+
+    let connection = Connection::open(root.join("lineage.db")).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TRIGGER reject_second_founder BEFORE INSERT ON manifests
+             WHEN NEW.organism_id = '939'
+             BEGIN
+               SELECT RAISE(ABORT, 'second-founder trigger');
+             END;",
+        )
+        .unwrap();
+
+    let error = library.commit_composite_birth_batch(prepared).unwrap_err();
+    assert!(error.to_string().contains("second-founder trigger"));
+    assert_eq!(snapshot_archive_state(&library, &root), before);
+    assert_eq!(library.manifest_count().unwrap(), 0);
+    let trigger_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name='reject_second_founder'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(trigger_count, 1);
+    let database_usable: i64 = connection
+        .query_row("SELECT COUNT(*) FROM manifests", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(database_usable, 0);
+    drop(connection);
 
     drop(library);
     fs::remove_dir_all(root).unwrap();

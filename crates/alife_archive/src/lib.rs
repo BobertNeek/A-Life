@@ -14,6 +14,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, Instant},
 };
 
 use alife_core::{
@@ -26,7 +27,7 @@ use alife_core::{
     PassiveLifeStatistics, PhenotypeCompiler, PhenotypeHash, ScaffoldContractError, SensorProfile,
     Tick, Validate, CREATURE_ARCHIVE_SCHEMA_VERSION,
 };
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, DropBehavior, Transaction, TransactionBehavior};
 
 pub const ARCHIVE_PAGE_BYTES: usize = 65_536;
 pub const DEFAULT_FULL_STATE_QUOTA_BYTES: u64 = 4 * 1024 * 1024 * 1024;
@@ -34,6 +35,9 @@ pub const DEFAULT_MAX_TEMPORARY_PER_RUN: u32 = 64;
 pub const DEFAULT_MAX_AUTOMATIC_PER_RUN: u32 = 24;
 pub const MAX_COMPOSITE_BIRTH_BATCH_ITEMS: usize = 256;
 pub const MAX_COMPOSITE_BIRTH_BATCH_BYTES: u64 = 32 * 1024 * 1024;
+
+const COMPOSITE_BIRTH_STAGE_LEASE_FILE: &str = ".composite-birth-stage-lease";
+const COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE: &str = ".composite-birth-publication-lease";
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -205,6 +209,73 @@ impl PreparedCompositeBirthBatch {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommittedCompositeBirth {
+    source_run_id: String,
+    organism_id: OrganismId,
+    genome_id: GenomeId,
+    lineage_id: LineageId,
+    birth_tick: Tick,
+    manifest_digest: Blake3Digest,
+    manifest: CreatureArchiveManifest,
+}
+
+impl CommittedCompositeBirth {
+    pub fn source_run_id(&self) -> &str {
+        &self.source_run_id
+    }
+
+    pub const fn organism_id(&self) -> OrganismId {
+        self.organism_id
+    }
+
+    pub const fn genome_id(&self) -> GenomeId {
+        self.genome_id
+    }
+
+    pub const fn lineage_id(&self) -> LineageId {
+        self.lineage_id
+    }
+
+    pub const fn birth_tick(&self) -> Tick {
+        self.birth_tick
+    }
+
+    pub const fn manifest_digest(&self) -> Blake3Digest {
+        self.manifest_digest
+    }
+
+    pub const fn manifest(&self) -> &CreatureArchiveManifest {
+        &self.manifest
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommittedCompositeBirthBatch {
+    entries: Vec<CommittedCompositeBirth>,
+}
+
+impl CommittedCompositeBirthBatch {
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn entries(&self) -> &[CommittedCompositeBirth] {
+        &self.entries
+    }
+
+    pub fn manifest_digests(&self) -> Vec<Blake3Digest> {
+        self.entries
+            .iter()
+            .map(CommittedCompositeBirth::manifest_digest)
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PreparedPayloadDestination {
     Asset(ArchiveAssetKind),
@@ -219,7 +290,7 @@ struct PreparedArchivePayload {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct PreparedManifestObservation {
     digest: Blake3Digest,
     manifest: CreatureArchiveManifest,
@@ -240,7 +311,7 @@ struct PreparedIndexedManifestRow {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct PreparedTargetObservation {
     source_run_id: String,
     organism_id: OrganismId,
@@ -249,7 +320,7 @@ struct PreparedTargetObservation {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct PreparedFinalFileObservation {
     destination: PreparedPayloadDestination,
     expected_digest: Blake3Digest,
@@ -261,9 +332,10 @@ struct PreparedFinalFileObservation {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct PreparedArchiveObservation {
     archive_root: PathBuf,
+    indexed_manifests: Vec<PreparedManifestObservation>,
     targets: Vec<PreparedTargetObservation>,
     final_files: Vec<PreparedFinalFileObservation>,
 }
@@ -294,11 +366,9 @@ impl LineageLibrary {
         fs::create_dir_all(config.root.join("manifests"))?;
         fs::create_dir_all(config.root.join("assets"))?;
         fs::create_dir_all(config.root.join("checkpoints"))?;
-        let staging = config.root.join("staging");
-        if staging.exists() {
-            fs::remove_dir_all(&staging)?;
-        }
-        fs::create_dir_all(&staging)?;
+        let archive_root = canonical_archive_root(&config.root)?;
+        clear_archive_staging_for_open(&archive_root)?;
+        fs::create_dir_all(archive_root.join("staging"))?;
 
         let database = config.root.join("lineage.db");
         let connection = match open_index(&database) {
@@ -330,39 +400,33 @@ impl LineageLibrary {
         &mut self,
         input: CompositeGeneticArchiveInput<'_>,
     ) -> Result<Blake3Digest, ArchiveError> {
-        input.creature_genome.validate_contract()?;
-        let expressed = input.creature_genome.express()?;
         let foundation = FoundationWeightAsset::decode_canonical(input.foundation_asset_bytes)?;
-        let development = expressed.development_state_at(Tick::new(u64::from(
-            expressed.development.maturation_duration_ticks,
-        )))?;
-        let expected = PhenotypeCompiler::compile_from_foundation_asset(
-            &expressed.brain_genome,
-            &BrainCapacityClass::production_for_id(
-                input.creature_genome.foundation.brain_class_id,
-            )?,
-            &development,
-            SensorProfile::GroundedObjectSlotsV1,
-            &foundation,
-        )?;
-        if expected.phenotype_hash() != input.phenotype.phenotype_hash()
-            || expected.foundation_abi() != input.phenotype.foundation_abi()
-        {
-            return Err(ArchiveError::Integrity(
-                "composite genome phenotype does not match independent compilation".to_string(),
-            ));
-        }
-        self.archive_birth_internal(
-            GeneticArchiveInput {
+        let prepared =
+            self.prepare_composite_birth_batch(&[CompositeGeneticArchiveBatchInput {
                 source_run_id: input.source_run_id,
                 organism_id: input.organism_id,
+                genome_id: input.creature_genome.id,
+                lineage_id: input.creature_genome.lineage_id,
                 birth_tick: input.birth_tick,
-                genome: &expressed.brain_genome,
+                foundation: input.creature_genome.foundation,
+                foundation_content_digest: foundation.digest(),
+                sensor_profile: input.phenotype.sensor_profile(),
+                projection_receipt: None,
+                phenotype_hash: input.phenotype.phenotype_hash(),
+                creature_genome: input.creature_genome,
                 phenotype: input.phenotype,
-                foundation_asset_bytes: Some(input.foundation_asset_bytes),
-            },
-            Some(input.creature_genome),
-        )
+                foundation_asset_bytes: input.foundation_asset_bytes,
+            }])?;
+        let committed = self.commit_composite_birth_batch(prepared)?;
+        committed
+            .entries()
+            .first()
+            .map(CommittedCompositeBirth::manifest_digest)
+            .ok_or_else(|| {
+                ArchiveError::Integrity(
+                    "one-item composite birth commit returned no committed entry".to_string(),
+                )
+            })
     }
 
     /// Reads and validates an ordered composite-birth batch without changing
@@ -419,57 +483,15 @@ impl LineageLibrary {
 
         let archive_root = canonical_archive_root(&self.config.root)?;
         let indexed_by_digest = self.observe_indexed_manifests(&archive_root)?;
-        let mut targets = inputs
+        let target_keys = inputs
             .iter()
-            .map(|input| PreparedTargetObservation {
-                source_run_id: input.source_run_id.to_string(),
-                organism_id: input.organism_id,
-                indexed_manifests: Vec::new(),
-                final_manifest_files: Vec::new(),
-            })
+            .map(|input| (input.source_run_id.to_string(), input.organism_id))
             .collect::<Vec<_>>();
-        let target_indexes = inputs
-            .iter()
-            .enumerate()
-            .map(|(index, input)| ((input.source_run_id.to_string(), input.organism_id), index))
-            .collect::<HashMap<_, _>>();
-
-        for (index, input) in inputs.iter().enumerate() {
-            targets[index].indexed_manifests = indexed_by_digest
-                .values()
-                .flatten()
-                .filter(|observation| {
-                    observation.manifest.genetic.source_run_id == input.source_run_id
-                        && observation.manifest.genetic.organism_id == input.organism_id
-                })
-                .cloned()
-                .collect();
-        }
-
-        for existing in self.scan_existing_manifest_files(&archive_root)? {
-            let key = (
-                existing.manifest.genetic.source_run_id.clone(),
-                existing.manifest.genetic.organism_id,
-            );
-            let Some(index) = target_indexes.get(&key).copied() else {
-                continue;
-            };
-            let indexed_rows = indexed_by_digest
-                .get(&existing.digest)
-                .into_iter()
-                .flatten()
-                .flat_map(|observation| observation.indexed_rows.iter().cloned())
-                .collect::<Vec<_>>();
-            targets[index]
-                .final_manifest_files
-                .push(PreparedManifestObservation {
-                    digest: existing.digest,
-                    manifest: existing.manifest,
-                    raw_bytes: existing.raw_bytes,
-                    indexed: !indexed_rows.is_empty(),
-                    indexed_rows,
-                });
-        }
+        let targets = collect_target_observations(
+            &target_keys,
+            &indexed_by_digest,
+            self.scan_existing_manifest_files(&archive_root)?,
+        );
 
         for (item, target) in items.iter().zip(&targets) {
             for observation in target
@@ -506,11 +528,286 @@ impl LineageLibrary {
             payloads,
             observations: PreparedArchiveObservation {
                 archive_root,
+                indexed_manifests: sorted_indexed_observations(&indexed_by_digest),
                 targets,
                 final_files,
             },
             aggregate_bytes,
         })
+    }
+
+    /// Publishes one prepared composite-birth batch as a single in-process
+    /// archive operation. The prepared value is consumed so a stale or partly
+    /// attempted batch cannot be reused accidentally.
+    pub fn commit_composite_birth_batch(
+        &self,
+        prepared: PreparedCompositeBirthBatch,
+    ) -> Result<CommittedCompositeBirthBatch, ArchiveError> {
+        let archive_root = canonical_archive_root(&self.config.root)?;
+        validate_prepared_batch_contents(&prepared, &archive_root)?;
+
+        let mut transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)?;
+        if let Err(error) = self.revalidate_prepared_batch(&prepared, &archive_root) {
+            return Err(self.fail_composite_batch(
+                transaction,
+                error,
+                &archive_root,
+                None,
+                &[],
+                &[],
+                &[],
+            ));
+        }
+
+        let batch_staging = match create_batch_staging_directory(&archive_root) {
+            Ok(path) => path,
+            Err(BatchStagingAllocationFailure {
+                operation,
+                owned_path,
+            }) => {
+                return Err(self.fail_composite_batch(
+                    transaction,
+                    operation,
+                    &archive_root,
+                    owned_path.as_deref(),
+                    &[],
+                    &[],
+                    &[],
+                ));
+            }
+        };
+        let mut staged_publications = Vec::new();
+        if let Err(error) = stage_composite_payloads(
+            &archive_root,
+            &batch_staging,
+            &prepared.payloads,
+            &mut staged_publications,
+        ) {
+            return Err(self.fail_composite_batch(
+                transaction,
+                error,
+                &archive_root,
+                Some(&batch_staging),
+                &staged_publications,
+                &[],
+                &[],
+            ));
+        }
+
+        if let Err(error) = wait_for_composite_birth_lease_release(
+            &archive_root,
+            COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE,
+        ) {
+            return Err(self.fail_composite_batch(
+                transaction,
+                error,
+                &archive_root,
+                Some(&batch_staging),
+                &staged_publications,
+                &[],
+                &[],
+            ));
+        }
+
+        let mut new_final_files = Vec::new();
+        let mut created_directories = Vec::new();
+        if let Err(error) = publish_composite_payloads(
+            &archive_root,
+            &staged_publications,
+            &mut new_final_files,
+            &mut created_directories,
+        ) {
+            return Err(self.fail_composite_batch(
+                transaction,
+                error,
+                &archive_root,
+                Some(&batch_staging),
+                &staged_publications,
+                &new_final_files,
+                &created_directories,
+            ));
+        }
+
+        for item in &prepared.items {
+            if let Err(error) = index_composite_manifest_transaction(
+                &transaction,
+                item.manifest_digest,
+                &item.manifest,
+            ) {
+                return Err(self.fail_composite_batch(
+                    transaction,
+                    error,
+                    &archive_root,
+                    Some(&batch_staging),
+                    &staged_publications,
+                    &new_final_files,
+                    &created_directories,
+                ));
+            }
+        }
+
+        if let Err(error) = transaction.execute_batch("COMMIT") {
+            let rollback_error = transaction.rollback().err();
+            let cleanup_error = cleanup_failed_composite_batch(
+                self,
+                &archive_root,
+                Some(&batch_staging),
+                &staged_publications,
+                &new_final_files,
+                &created_directories,
+            )
+            .err();
+            return Err(combine_composite_batch_failure(
+                error.into(),
+                rollback_error,
+                cleanup_error,
+            ));
+        }
+        transaction.set_drop_behavior(DropBehavior::Ignore);
+        drop(transaction);
+
+        // A post-commit staging cleanup failure is harmless debris. The next
+        // open removes only the shared staging contents, never committed files.
+        let _ =
+            cleanup_batch_staging_directory(&archive_root, &batch_staging, &staged_publications);
+
+        let entries = prepared
+            .items
+            .into_iter()
+            .map(|item| CommittedCompositeBirth {
+                source_run_id: item.source_run_id,
+                organism_id: item.organism_id,
+                genome_id: item.genome_id,
+                lineage_id: item.lineage_id,
+                birth_tick: item.birth_tick,
+                manifest_digest: item.manifest_digest,
+                manifest: item.manifest,
+            })
+            .collect();
+        Ok(CommittedCompositeBirthBatch { entries })
+    }
+
+    fn revalidate_prepared_batch(
+        &self,
+        prepared: &PreparedCompositeBirthBatch,
+        archive_root: &Path,
+    ) -> Result<(), ArchiveError> {
+        let indexed_by_digest = self.observe_indexed_manifests(archive_root)?;
+        if sorted_indexed_observations(&indexed_by_digest)
+            != prepared.observations.indexed_manifests
+        {
+            return Err(ArchiveError::Integrity(
+                "stale prepared composite birth batch: indexed manifest rows changed".to_string(),
+            ));
+        }
+
+        let target_keys = prepared
+            .observations
+            .targets
+            .iter()
+            .map(|target| (target.source_run_id.clone(), target.organism_id))
+            .collect::<Vec<_>>();
+        let current_targets = collect_target_observations(
+            &target_keys,
+            &indexed_by_digest,
+            self.scan_existing_manifest_files(archive_root)?,
+        );
+        if current_targets != prepared.observations.targets {
+            return Err(ArchiveError::Integrity(
+                "stale prepared composite birth batch: target manifest state changed".to_string(),
+            ));
+        }
+
+        for observation in &prepared.observations.final_files {
+            let payload = prepared
+                .payloads
+                .iter()
+                .find(|payload| {
+                    payload.digest == observation.expected_digest
+                        && payload.destinations.contains(&observation.destination)
+                })
+                .ok_or_else(|| {
+                    ArchiveError::Integrity(
+                        "prepared final-file observation has no owned payload".to_string(),
+                    )
+                })?;
+            let current = observe_prepared_final_file(
+                archive_root,
+                observation.destination,
+                payload.digest,
+                &payload.bytes,
+            )?;
+            if current != *observation {
+                return Err(ArchiveError::Integrity(format!(
+                    "stale prepared composite birth batch: final destination changed at {}",
+                    observation.canonical_path.display()
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn fail_composite_batch(
+        &self,
+        transaction: Transaction<'_>,
+        operation: ArchiveError,
+        archive_root: &Path,
+        batch_staging: Option<&Path>,
+        staged_publications: &[StagedCompositePublication],
+        new_final_files: &[NewCompositeFinalFile],
+        created_directories: &[PathBuf],
+    ) -> ArchiveError {
+        let rollback_error = transaction.rollback().err();
+        let cleanup_error = cleanup_failed_composite_batch(
+            self,
+            archive_root,
+            batch_staging,
+            staged_publications,
+            new_final_files,
+            created_directories,
+        )
+        .err();
+        combine_composite_batch_failure(operation, rollback_error, cleanup_error)
+    }
+
+    fn archive_digest_is_referenced(&self, digest: Blake3Digest) -> Result<bool, ArchiveError> {
+        let mut statement = self.connection.prepare("SELECT digest FROM manifests")?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        let manifest_digests = rows
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|text| parse_digest_hex(&text))
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(statement);
+        for manifest_digest in manifest_digests {
+            if manifest_digest == digest {
+                return Ok(true);
+            }
+            let manifest = self.load_manifest(manifest_digest)?;
+            let genetic = &manifest.genetic;
+            if genetic.genome_asset.digest == digest
+                || genetic
+                    .composite_genome_asset
+                    .as_ref()
+                    .is_some_and(|asset| asset.digest == digest)
+                || genetic
+                    .foundation_asset
+                    .as_ref()
+                    .is_some_and(|asset| asset.digest == digest)
+                || manifest.life.as_ref().is_some_and(|life| {
+                    life.statistics_asset.digest == digest
+                        || matches!(
+                            &life.checkpoint,
+                            ArchiveCheckpointDisposition::Stored(reference)
+                                if reference.digest == digest
+                        )
+                })
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn prepare_composite_birth_item(
@@ -814,6 +1111,13 @@ impl LineageLibrary {
                 ));
             }
             let checked_path = checked_archive_path(archive_root, &path)?;
+            let metadata = fs::symlink_metadata(&checked_path.canonical_path)?;
+            if archive_metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+                return Err(ArchiveError::Integrity(format!(
+                    "manifest path is not a regular file at {}",
+                    path.display()
+                )));
+            }
             let bytes = fs::read(&checked_path.canonical_path)?;
             if digest_bytes(&bytes) != digest {
                 return Err(ArchiveError::Integrity(format!(
@@ -1272,13 +1576,17 @@ impl LineageLibrary {
             ));
         }
         let digest = digest_bytes(bytes);
-        let destination = self
-            .config
-            .root
+        let archive_root = canonical_archive_root(&self.config.root)?;
+        let destination = archive_root
             .join("assets")
             .join(digest_hex(digest))
             .join("payload.bin");
-        write_content_addressed(&self.config.root.join("staging"), &destination, bytes)?;
+        write_archive_content_addressed(
+            &archive_root,
+            &archive_root.join("staging"),
+            &destination,
+            bytes,
+        )?;
         Ok(ArchiveAssetRef {
             kind,
             digest,
@@ -1292,12 +1600,16 @@ impl LineageLibrary {
     ) -> Result<Blake3Digest, ArchiveError> {
         let bytes = serde_json::to_vec(manifest)?;
         let digest = digest_bytes(&bytes);
-        let destination = self
-            .config
-            .root
+        let archive_root = canonical_archive_root(&self.config.root)?;
+        let destination = archive_root
             .join("manifests")
             .join(format!("{}.json", digest_hex(digest)));
-        write_content_addressed(&self.config.root.join("staging"), &destination, &bytes)?;
+        write_archive_content_addressed(
+            &archive_root,
+            &archive_root.join("staging"),
+            &destination,
+            &bytes,
+        )?;
         Ok(digest)
     }
 
@@ -1381,11 +1693,21 @@ impl LineageLibrary {
                 let path = staged.join(format!("{index:08}-{}.zst", digest_hex(reference.digest)));
                 fs::write(path, compressed)?;
             }
+            let cleanup_staged = || -> Result<(), ArchiveError> {
+                let archive_root = canonical_archive_root(&self.config.root)?;
+                let name = staged.file_name().ok_or_else(|| {
+                    ArchiveError::Integrity("checkpoint staging path has no file name".to_string())
+                })?;
+                remove_tree_without_following(
+                    &archive_root,
+                    &archive_root.join("staging").join(name),
+                )
+            };
             match fs::rename(&staged, &destination) {
                 Ok(()) => {}
-                Err(_) if destination.exists() => fs::remove_dir_all(staged)?,
+                Err(_) if destination.exists() => cleanup_staged()?,
                 Err(error) => {
-                    let _ = fs::remove_dir_all(staged);
+                    let _ = cleanup_staged();
                     return Err(error.into());
                 }
             }
@@ -1411,6 +1733,1152 @@ impl LineageLibrary {
         transaction.commit()?;
         Ok(())
     }
+}
+
+fn sorted_indexed_observations(
+    indexed_by_digest: &HashMap<Blake3Digest, Vec<PreparedManifestObservation>>,
+) -> Vec<PreparedManifestObservation> {
+    let mut observations = indexed_by_digest
+        .values()
+        .flatten()
+        .cloned()
+        .collect::<Vec<_>>();
+    observations.sort_by_key(|observation| {
+        let row = observation.indexed_rows.first();
+        (
+            observation.digest,
+            observation.manifest.genetic.source_run_id.clone(),
+            observation.manifest.genetic.organism_id.raw(),
+            observation.manifest.genetic.genome_id.raw(),
+            row.map(|row| {
+                (
+                    row.source_run_id.clone(),
+                    row.organism_id.raw(),
+                    row.genome_id.raw(),
+                    row.is_life,
+                    row.death_tick.map(Tick::raw),
+                )
+            }),
+        )
+    });
+    observations
+}
+
+fn collect_target_observations(
+    target_keys: &[(String, OrganismId)],
+    indexed_by_digest: &HashMap<Blake3Digest, Vec<PreparedManifestObservation>>,
+    existing_manifest_files: Vec<ExistingManifestFile>,
+) -> Vec<PreparedTargetObservation> {
+    let target_indexes = target_keys
+        .iter()
+        .enumerate()
+        .map(|(index, key)| (key.clone(), index))
+        .collect::<HashMap<_, _>>();
+    let mut targets = target_keys
+        .iter()
+        .map(|(source_run_id, organism_id)| PreparedTargetObservation {
+            source_run_id: source_run_id.clone(),
+            organism_id: *organism_id,
+            indexed_manifests: Vec::new(),
+            final_manifest_files: Vec::new(),
+        })
+        .collect::<Vec<_>>();
+    let sorted_indexed = sorted_indexed_observations(indexed_by_digest);
+
+    for (index, (source_run_id, organism_id)) in target_keys.iter().enumerate() {
+        targets[index].indexed_manifests = sorted_indexed
+            .iter()
+            .filter(|observation| {
+                observation.manifest.genetic.source_run_id == *source_run_id
+                    && observation.manifest.genetic.organism_id == *organism_id
+            })
+            .cloned()
+            .collect();
+    }
+
+    for existing in existing_manifest_files {
+        let key = (
+            existing.manifest.genetic.source_run_id.clone(),
+            existing.manifest.genetic.organism_id,
+        );
+        let Some(index) = target_indexes.get(&key).copied() else {
+            continue;
+        };
+        let mut indexed_rows = indexed_by_digest
+            .get(&existing.digest)
+            .into_iter()
+            .flatten()
+            .flat_map(|observation| observation.indexed_rows.iter().cloned())
+            .collect::<Vec<_>>();
+        indexed_rows.sort_by_key(|row| {
+            (
+                row.source_run_id.clone(),
+                row.organism_id.raw(),
+                row.genome_id.raw(),
+                row.is_life,
+                row.death_tick.map(Tick::raw),
+            )
+        });
+        targets[index]
+            .final_manifest_files
+            .push(PreparedManifestObservation {
+                digest: existing.digest,
+                manifest: existing.manifest,
+                raw_bytes: existing.raw_bytes,
+                indexed: !indexed_rows.is_empty(),
+                indexed_rows,
+            });
+    }
+    targets
+}
+
+fn prepared_payload_path(
+    archive_root: &Path,
+    destination: PreparedPayloadDestination,
+    digest: Blake3Digest,
+) -> PathBuf {
+    match destination {
+        PreparedPayloadDestination::Asset(_) => archive_root
+            .join("assets")
+            .join(digest_hex(digest))
+            .join("payload.bin"),
+        PreparedPayloadDestination::Manifest => archive_root
+            .join("manifests")
+            .join(format!("{}.json", digest_hex(digest))),
+    }
+}
+
+fn validate_prepared_batch_contents(
+    prepared: &PreparedCompositeBirthBatch,
+    archive_root: &Path,
+) -> Result<(), ArchiveError> {
+    if prepared.items.is_empty()
+        || prepared.items.len() > MAX_COMPOSITE_BIRTH_BATCH_ITEMS
+        || prepared.observations.archive_root != archive_root
+    {
+        return Err(ArchiveError::Integrity(
+            "prepared composite birth batch does not belong to this archive root".to_string(),
+        ));
+    }
+
+    let mut aggregate_bytes = 0_u64;
+    let mut owned_digests = HashSet::new();
+    let mut destinations = HashSet::<PathBuf>::new();
+    for payload in &prepared.payloads {
+        if payload.bytes.is_empty() || digest_bytes(&payload.bytes) != payload.digest {
+            return Err(ArchiveError::Integrity(
+                "prepared composite birth payload digest mismatch".to_string(),
+            ));
+        }
+        if owned_digests.insert(payload.digest) {
+            aggregate_bytes = ensure_prepared_byte_capacity(aggregate_bytes, payload.bytes.len())?;
+        }
+        if payload.destinations.is_empty() {
+            return Err(ArchiveError::Integrity(
+                "prepared composite birth payload has no destination".to_string(),
+            ));
+        }
+        for destination in &payload.destinations {
+            let path = prepared_payload_path(archive_root, *destination, payload.digest);
+            if !destinations.insert(path.clone()) {
+                return Err(ArchiveError::Integrity(
+                    "prepared composite birth payload has a duplicate destination".to_string(),
+                ));
+            }
+            let checked_path = checked_archive_path(archive_root, &path)?;
+            let observation = prepared
+                .observations
+                .final_files
+                .iter()
+                .find(|observation| {
+                    observation.destination == *destination
+                        && observation.expected_digest == payload.digest
+                })
+                .ok_or_else(|| {
+                    ArchiveError::Integrity(
+                        "prepared payload is missing its final-file observation".to_string(),
+                    )
+                })?;
+            if observation.canonical_path != checked_path.canonical_path {
+                return Err(ArchiveError::Integrity(
+                    "prepared final-file path changed or escaped the archive root".to_string(),
+                ));
+            }
+            if observation.existed {
+                if observation.observed_digest != Some(payload.digest)
+                    || observation.observed_bytes != payload.bytes
+                    || digest_bytes(&observation.observed_bytes) != payload.digest
+                    || observation.size_bytes != checked_byte_len(payload.bytes.len())?
+                {
+                    return Err(ArchiveError::Integrity(
+                        "prepared final-file observation has invalid owned bytes".to_string(),
+                    ));
+                }
+            } else if observation.observed_digest.is_some()
+                || !observation.observed_bytes.is_empty()
+                || observation.size_bytes != 0
+            {
+                return Err(ArchiveError::Integrity(
+                    "prepared absent final-file observation has bytes".to_string(),
+                ));
+            }
+        }
+    }
+    if aggregate_bytes != prepared.aggregate_bytes
+        || prepared.observations.final_files.len() != destinations.len()
+    {
+        return Err(ArchiveError::Integrity(
+            "prepared composite birth aggregate or destination observations changed".to_string(),
+        ));
+    }
+
+    for item in &prepared.items {
+        item.manifest.validate_contract()?;
+        if item.source_run_id != item.manifest.genetic.source_run_id
+            || item.organism_id != item.manifest.genetic.organism_id
+            || item.genome_id != item.manifest.genetic.genome_id
+            || item.lineage_id
+                != item.manifest.genetic.lineage_id.ok_or_else(|| {
+                    ArchiveError::Integrity(
+                        "prepared composite birth manifest is missing lineage identity".to_string(),
+                    )
+                })?
+            || item.birth_tick != item.manifest.genetic.birth_tick
+            || item.manifest.life.is_some()
+        {
+            return Err(ArchiveError::Integrity(
+                "prepared composite birth item metadata does not match its manifest".to_string(),
+            ));
+        }
+        let manifest_bytes = serde_json::to_vec(&item.manifest)?;
+        if digest_bytes(&manifest_bytes) != item.manifest_digest
+            || !prepared.payloads.iter().any(|payload| {
+                payload.digest == item.manifest_digest
+                    && payload.bytes == manifest_bytes
+                    && payload
+                        .destinations
+                        .contains(&PreparedPayloadDestination::Manifest)
+            })
+        {
+            return Err(ArchiveError::Integrity(
+                "prepared composite birth manifest bytes or digest changed".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct StagedCompositePublication {
+    destination: PreparedPayloadDestination,
+    digest: Blake3Digest,
+    bytes: Vec<u8>,
+    final_path: PathBuf,
+    staged_path: PathBuf,
+}
+
+#[derive(Debug)]
+struct BatchStagingAllocationFailure {
+    operation: ArchiveError,
+    owned_path: Option<PathBuf>,
+}
+
+impl From<ArchiveError> for BatchStagingAllocationFailure {
+    fn from(operation: ArchiveError) -> Self {
+        Self {
+            operation,
+            owned_path: None,
+        }
+    }
+}
+
+impl From<std::io::Error> for BatchStagingAllocationFailure {
+    fn from(operation: std::io::Error) -> Self {
+        ArchiveError::Io(operation).into()
+    }
+}
+
+fn retain_batch_staging_allocation_failure(
+    batch_staging: &Path,
+    operation: ArchiveError,
+) -> BatchStagingAllocationFailure {
+    BatchStagingAllocationFailure {
+        operation: ArchiveError::Integrity(format!(
+            "allocated composite staging path validation failed at {}: {operation}",
+            batch_staging.display()
+        )),
+        owned_path: Some(batch_staging.to_path_buf()),
+    }
+}
+
+#[derive(Debug)]
+struct NewCompositeFinalFile {
+    path: PathBuf,
+    digest: Blake3Digest,
+    bytes: Vec<u8>,
+}
+
+fn create_batch_staging_directory(
+    archive_root: &Path,
+) -> Result<PathBuf, BatchStagingAllocationFailure> {
+    let staging_root = archive_root.join("staging");
+    let checked_staging = checked_archive_path(archive_root, &staging_root)?;
+    if !checked_staging.existed
+        || checked_staging.canonical_path != staging_root
+        || !fs::symlink_metadata(&checked_staging.canonical_path)?.is_dir()
+    {
+        return Err(ArchiveError::Integrity(
+            "archive staging root must be a real directory".to_string(),
+        )
+        .into());
+    }
+    for _ in 0..128 {
+        let batch = checked_staging.canonical_path.join(format!(
+            "batch-{}-{}",
+            std::process::id(),
+            TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let current_staging = checked_archive_path(archive_root, &staging_root)?;
+        if !current_staging.existed || current_staging.canonical_path != staging_root {
+            return Err(ArchiveError::Integrity(
+                "archive staging root changed during batch allocation".to_string(),
+            )
+            .into());
+        }
+        match fs::create_dir(&batch) {
+            Ok(()) => {
+                if let Err(operation) = validate_created_batch_staging(archive_root, &batch) {
+                    return Err(retain_batch_staging_allocation_failure(&batch, operation));
+                }
+                return Ok(batch);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Err(ArchiveError::Integrity(
+        "could not allocate a unique composite birth staging directory".to_string(),
+    )
+    .into())
+}
+
+fn validate_created_batch_staging(
+    archive_root: &Path,
+    batch_staging: &Path,
+) -> Result<(), ArchiveError> {
+    let checked_batch = checked_archive_path(archive_root, batch_staging)?;
+    if !checked_batch.existed || checked_batch.canonical_path != batch_staging {
+        return Err(ArchiveError::Integrity(
+            "allocated composite staging path changed during creation".to_string(),
+        ));
+    }
+    let metadata = fs::symlink_metadata(&checked_batch.canonical_path)?;
+    if archive_metadata_is_reparse_point(&metadata) || !metadata.is_dir() {
+        return Err(ArchiveError::Integrity(
+            "allocated composite staging path is not a real directory".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn wait_for_composite_birth_lease_release(
+    archive_root: &Path,
+    lease_file_name: &str,
+) -> Result<(), ArchiveError> {
+    let lease_path = archive_root.join("staging").join(lease_file_name);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let checked_lease = checked_archive_path(archive_root, &lease_path)?;
+        if !checked_lease.existed {
+            return Ok(());
+        }
+        let metadata = fs::symlink_metadata(&checked_lease.canonical_path)?;
+        if archive_metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+            return Err(ArchiveError::Integrity(format!(
+                "composite birth lease is not a regular file at {}",
+                lease_path.display()
+            )));
+        }
+        if Instant::now() >= deadline {
+            return Err(ArchiveError::Integrity(format!(
+                "composite birth lease was not released at {}",
+                lease_path.display()
+            )));
+        }
+        std::thread::yield_now();
+    }
+}
+
+fn prepare_composite_birth_publication_lease(archive_root: &Path) -> Result<(), ArchiveError> {
+    let lease_path = archive_root
+        .join("staging")
+        .join(COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE);
+    let checked_lease = checked_archive_path(archive_root, &lease_path)?;
+    if !checked_lease.existed {
+        return Ok(());
+    }
+    let metadata = fs::symlink_metadata(&checked_lease.canonical_path)?;
+    if archive_metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+        return Err(ArchiveError::Integrity(format!(
+            "composite birth publication lease is not a regular file at {}",
+            lease_path.display()
+        )));
+    }
+    let mut lease = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&checked_lease.canonical_path)?;
+    lease.write_all(b"ready")?;
+    lease.sync_all()?;
+    wait_for_composite_birth_lease_release(archive_root, COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE)
+}
+
+fn stage_composite_payloads(
+    archive_root: &Path,
+    batch_staging: &Path,
+    payloads: &[PreparedArchivePayload],
+    publications: &mut Vec<StagedCompositePublication>,
+) -> Result<(), ArchiveError> {
+    wait_for_composite_birth_lease_release(archive_root, COMPOSITE_BIRTH_STAGE_LEASE_FILE)?;
+    let mut staged_index = 0_u64;
+    for payload in payloads {
+        for destination in &payload.destinations {
+            let staged_path = batch_staging.join(format!(
+                "payload-{staged_index:08}-{}",
+                digest_hex(payload.digest)
+            ));
+            staged_index = staged_index.checked_add(1).ok_or_else(|| {
+                ArchiveError::Integrity("composite staging file index overflow".to_string())
+            })?;
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&staged_path)?;
+            publications.push(StagedCompositePublication {
+                destination: *destination,
+                digest: payload.digest,
+                bytes: payload.bytes.clone(),
+                final_path: prepared_payload_path(archive_root, *destination, payload.digest),
+                staged_path: staged_path.clone(),
+            });
+            file.write_all(&payload.bytes)?;
+            file.sync_all()?;
+            drop(file);
+            let written = fs::read(&staged_path)?;
+            if written != payload.bytes || digest_bytes(&written) != payload.digest {
+                return Err(ArchiveError::Integrity(format!(
+                    "staged composite payload digest mismatch at {}",
+                    staged_path.display()
+                )));
+            }
+        }
+    }
+    prepare_composite_birth_publication_lease(archive_root)?;
+    Ok(())
+}
+
+fn rename_staged_publication(staged_path: &Path, final_path: &Path) -> Result<(), std::io::Error> {
+    #[cfg(windows)]
+    {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match fs::rename(staged_path, final_path) {
+                Ok(()) => return Ok(()),
+                Err(error) if error.raw_os_error() == Some(32) && Instant::now() < deadline => {
+                    std::thread::yield_now();
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        fs::rename(staged_path, final_path)
+    }
+}
+
+fn publish_composite_payloads(
+    archive_root: &Path,
+    publications: &[StagedCompositePublication],
+    new_final_files: &mut Vec<NewCompositeFinalFile>,
+    created_directories: &mut Vec<PathBuf>,
+) -> Result<(), ArchiveError> {
+    for publication in publications {
+        let checked_path = checked_archive_path(archive_root, &publication.final_path)?;
+        if checked_path.existed {
+            let existing = read_regular_archive_file(&checked_path.canonical_path)?;
+            if existing != publication.bytes || digest_bytes(&existing) != publication.digest {
+                return Err(ArchiveError::Integrity(format!(
+                    "content-addressed collision at {}",
+                    publication.final_path.display()
+                )));
+            }
+            continue;
+        }
+
+        ensure_final_parent_directory(
+            archive_root,
+            publication.destination,
+            &publication.final_path,
+            created_directories,
+        )?;
+        let checked_path = checked_archive_path(archive_root, &publication.final_path)?;
+        if checked_path.existed {
+            let existing = read_regular_archive_file(&checked_path.canonical_path)?;
+            if existing != publication.bytes || digest_bytes(&existing) != publication.digest {
+                return Err(ArchiveError::Integrity(format!(
+                    "content-addressed collision at {}",
+                    publication.final_path.display()
+                )));
+            }
+            continue;
+        }
+        match rename_staged_publication(&publication.staged_path, &publication.final_path) {
+            Ok(()) => {
+                new_final_files.push(NewCompositeFinalFile {
+                    path: publication.final_path.clone(),
+                    digest: publication.digest,
+                    bytes: publication.bytes.clone(),
+                });
+            }
+            Err(error) => match read_regular_archive_file(&publication.final_path) {
+                Ok(existing)
+                    if existing == publication.bytes
+                        && digest_bytes(&existing) == publication.digest =>
+                {
+                    continue;
+                }
+                Ok(_) => {
+                    return Err(ArchiveError::Integrity(format!(
+                        "content-addressed collision at {}",
+                        publication.final_path.display()
+                    )));
+                }
+                Err(read_error) => {
+                    return Err(ArchiveError::Integrity(format!(
+                        "could not publish {}: {error}; {read_error}",
+                        publication.final_path.display()
+                    )));
+                }
+            },
+        }
+
+        let final_bytes = read_regular_archive_file(&publication.final_path)?;
+        if final_bytes != publication.bytes || digest_bytes(&final_bytes) != publication.digest {
+            return Err(ArchiveError::Integrity(format!(
+                "published composite payload changed at {}",
+                publication.final_path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn ensure_final_parent_directory(
+    archive_root: &Path,
+    destination: PreparedPayloadDestination,
+    final_path: &Path,
+    created_directories: &mut Vec<PathBuf>,
+) -> Result<(), ArchiveError> {
+    let shared_root = match destination {
+        PreparedPayloadDestination::Asset(_) => archive_root.join("assets"),
+        PreparedPayloadDestination::Manifest => archive_root.join("manifests"),
+    };
+    let checked_shared = checked_archive_path(archive_root, &shared_root)?;
+    if !checked_shared.existed
+        || checked_shared.canonical_path != shared_root
+        || !fs::symlink_metadata(&checked_shared.canonical_path)?.is_dir()
+    {
+        return Err(ArchiveError::Integrity(
+            "archive shared payload root must be a real directory".to_string(),
+        ));
+    }
+    let parent = final_path
+        .parent()
+        .ok_or_else(|| ArchiveError::Integrity("archive payload has no parent".to_string()))?;
+    if parent == shared_root {
+        return Ok(());
+    }
+    if !parent.starts_with(&shared_root) {
+        return Err(ArchiveError::Integrity(
+            "archive payload parent escapes its shared root".to_string(),
+        ));
+    }
+    let checked_parent = checked_archive_path(archive_root, parent)?;
+    if checked_parent.existed {
+        let metadata = fs::symlink_metadata(&checked_parent.canonical_path)?;
+        if archive_metadata_is_reparse_point(&metadata) || !metadata.is_dir() {
+            return Err(ArchiveError::Integrity(format!(
+                "archive payload parent is not a real directory at {}",
+                parent.display()
+            )));
+        }
+        if checked_parent.canonical_path != parent {
+            return Err(ArchiveError::Integrity(
+                "archive payload parent changed its canonical location".to_string(),
+            ));
+        }
+    } else {
+        fs::create_dir(&checked_parent.canonical_path)?;
+        created_directories.push(checked_parent.canonical_path.clone());
+        let revalidated = checked_archive_path(archive_root, parent)?;
+        if !revalidated.existed || revalidated.canonical_path != parent {
+            return Err(ArchiveError::Integrity(format!(
+                "created archive payload parent escaped the archive root at {}",
+                parent.display()
+            )));
+        }
+        let metadata = fs::symlink_metadata(&revalidated.canonical_path)?;
+        if archive_metadata_is_reparse_point(&metadata) || !metadata.is_dir() {
+            return Err(ArchiveError::Integrity(format!(
+                "created archive payload parent is not a real directory at {}",
+                parent.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn read_regular_archive_file(path: &Path) -> Result<Vec<u8>, ArchiveError> {
+    let metadata = fs::symlink_metadata(path)?;
+    if archive_metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+        return Err(ArchiveError::Integrity(format!(
+            "archive final destination is not a regular file at {}",
+            path.display()
+        )));
+    }
+    Ok(fs::read(path)?)
+}
+
+fn revalidate_archive_deletion_target(
+    archive_root: &Path,
+    candidate: &Path,
+) -> Result<Option<PathBuf>, ArchiveError> {
+    let live_root = canonical_archive_root(archive_root)?;
+    if live_root != archive_root {
+        return Err(ArchiveError::Integrity(
+            "archive root changed before cleanup deletion".to_string(),
+        ));
+    }
+    let checked = checked_archive_path(archive_root, candidate)?;
+    if !checked.existed {
+        return Ok(None);
+    }
+    if checked.canonical_path != candidate {
+        return Err(ArchiveError::Integrity(format!(
+            "cleanup target changed canonical location at {}",
+            candidate.display()
+        )));
+    }
+    let metadata = fs::symlink_metadata(&checked.canonical_path)?;
+    if archive_metadata_is_reparse_point(&metadata) {
+        return Err(ArchiveError::Integrity(format!(
+            "cleanup target is a symbolic link or reparse point at {}",
+            candidate.display()
+        )));
+    }
+    Ok(Some(checked.canonical_path))
+}
+
+fn remove_tree_without_following(archive_root: &Path, target: &Path) -> Result<(), ArchiveError> {
+    let Some(path) = revalidate_archive_deletion_target(archive_root, target)? else {
+        return Ok(());
+    };
+    let metadata = fs::symlink_metadata(&path)?;
+    if metadata.is_dir() {
+        for entry in fs::read_dir(&path)? {
+            remove_tree_without_following(archive_root, &entry?.path())?;
+        }
+        let Some(delete_path) = revalidate_archive_deletion_target(archive_root, &path)? else {
+            return Ok(());
+        };
+        let mut remaining = fs::read_dir(&delete_path)?;
+        if remaining.next().is_some() {
+            return Err(ArchiveError::Integrity(format!(
+                "preserved non-empty cleanup directory {}",
+                delete_path.display()
+            )));
+        }
+        fs::remove_dir(delete_path)?;
+    } else {
+        let Some(delete_path) = revalidate_archive_deletion_target(archive_root, &path)? else {
+            return Ok(());
+        };
+        fs::remove_file(delete_path)?;
+    }
+    Ok(())
+}
+
+fn clear_archive_staging_for_open(archive_root: &Path) -> Result<(), ArchiveError> {
+    let staging_root = archive_root.join("staging");
+    let checked = checked_archive_path(archive_root, &staging_root)?;
+    if !checked.existed {
+        return Ok(());
+    }
+    let metadata = fs::symlink_metadata(&checked.canonical_path)?;
+    if archive_metadata_is_reparse_point(&metadata) || !metadata.is_dir() {
+        return Err(ArchiveError::Integrity(
+            "archive staging root must be a real directory".to_string(),
+        ));
+    }
+    for entry in fs::read_dir(&checked.canonical_path)? {
+        remove_tree_without_following(archive_root, &entry?.path())?;
+    }
+    Ok(())
+}
+
+fn cleanup_failed_composite_batch(
+    library: &LineageLibrary,
+    archive_root: &Path,
+    batch_staging: Option<&Path>,
+    staged_publications: &[StagedCompositePublication],
+    new_final_files: &[NewCompositeFinalFile],
+    created_directories: &[PathBuf],
+) -> Result<(), ArchiveError> {
+    let mut failures = Vec::new();
+    for final_file in new_final_files.iter().rev() {
+        let path = match revalidate_archive_deletion_target(archive_root, &final_file.path) {
+            Ok(Some(path)) => path,
+            Ok(None) => continue,
+            Err(error) => {
+                failures.push(format!(
+                    "could not prove final path ownership at {}: {error}",
+                    final_file.path.display()
+                ));
+                continue;
+            }
+        };
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                failures.push(format!("could not inspect {}: {error}", path.display()));
+                continue;
+            }
+        };
+        if archive_metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+            failures.push(format!("preserved changed final path {}", path.display()));
+            continue;
+        }
+        let current = match fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                failures.push(format!("could not read {}: {error}", path.display()));
+                continue;
+            }
+        };
+        if current != final_file.bytes || digest_bytes(&current) != final_file.digest {
+            failures.push(format!("preserved changed final path {}", path.display()));
+            continue;
+        }
+        match library.archive_digest_is_referenced(final_file.digest) {
+            Ok(true) => continue,
+            Ok(false) => {}
+            Err(error) => {
+                failures.push(format!(
+                    "could not prove ownership of {}: {error}",
+                    final_file.path.display()
+                ));
+                continue;
+            }
+        }
+        let delete_path = match revalidate_archive_deletion_target(archive_root, &path) {
+            Ok(Some(path)) => path,
+            Ok(None) => continue,
+            Err(error) => {
+                failures.push(format!(
+                    "could not prove final path ownership at {}: {error}",
+                    path.display()
+                ));
+                continue;
+            }
+        };
+        let current = match read_regular_archive_file(&delete_path) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                failures.push(format!("could not read {}: {error}", delete_path.display()));
+                continue;
+            }
+        };
+        if current != final_file.bytes || digest_bytes(&current) != final_file.digest {
+            failures.push(format!(
+                "preserved changed final path {}",
+                delete_path.display()
+            ));
+            continue;
+        }
+        let Some(delete_path) =
+            (match revalidate_archive_deletion_target(archive_root, &delete_path) {
+                Ok(path) => path,
+                Err(error) => {
+                    failures.push(format!(
+                        "could not prove final path ownership at {}: {error}",
+                        final_file.path.display()
+                    ));
+                    continue;
+                }
+            })
+        else {
+            continue;
+        };
+        if let Err(error) = fs::remove_file(&delete_path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                failures.push(format!(
+                    "could not remove {}: {error}",
+                    delete_path.display()
+                ));
+            }
+        }
+    }
+
+    for directory in created_directories.iter().rev() {
+        let path = match revalidate_archive_deletion_target(archive_root, directory) {
+            Ok(Some(path)) => path,
+            Ok(None) => continue,
+            Err(error) => {
+                failures.push(format!(
+                    "could not prove created directory ownership at {}: {error}",
+                    directory.display()
+                ));
+                continue;
+            }
+        };
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                failures.push(format!(
+                    "could not inspect directory {}: {error}",
+                    path.display()
+                ));
+                continue;
+            }
+        };
+        if archive_metadata_is_reparse_point(&metadata) || !metadata.is_dir() {
+            failures.push(format!("preserved changed directory {}", path.display()));
+            continue;
+        }
+        match fs::read_dir(&path) {
+            Ok(mut entries) => match entries.next() {
+                Some(Ok(_)) => {
+                    failures.push(format!(
+                        "preserved non-empty created directory {}",
+                        path.display()
+                    ));
+                    continue;
+                }
+                Some(Err(error)) => {
+                    failures.push(format!(
+                        "could not inspect created directory {}: {error}",
+                        path.display()
+                    ));
+                    continue;
+                }
+                None => {}
+            },
+            Err(error) => {
+                failures.push(format!(
+                    "could not inspect created directory {}: {error}",
+                    path.display()
+                ));
+                continue;
+            }
+        }
+        let delete_path = match revalidate_archive_deletion_target(archive_root, &path) {
+            Ok(Some(path)) => path,
+            Ok(None) => continue,
+            Err(error) => {
+                failures.push(format!(
+                    "could not prove created directory ownership at {}: {error}",
+                    path.display()
+                ));
+                continue;
+            }
+        };
+        match fs::remove_dir(&delete_path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty => {
+                failures.push(format!(
+                    "preserved non-empty created directory {}",
+                    delete_path.display()
+                ));
+            }
+            Err(error) => failures.push(format!(
+                "could not remove directory {}: {error}",
+                delete_path.display()
+            )),
+        }
+    }
+    if let Some(batch_staging) = batch_staging {
+        if let Err(error) =
+            cleanup_batch_staging_directory(archive_root, batch_staging, staged_publications)
+        {
+            failures.push(format!(
+                "batch staging cleanup at {}: {error}",
+                batch_staging.display()
+            ));
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(ArchiveError::Integrity(failures.join("; ")))
+    }
+}
+
+fn cleanup_batch_staging_directory(
+    archive_root: &Path,
+    batch_staging: &Path,
+    staged_publications: &[StagedCompositePublication],
+) -> Result<(), ArchiveError> {
+    let staging_root = archive_root.join("staging");
+    let Some(batch_name) = batch_staging.file_name().and_then(|name| name.to_str()) else {
+        return Err(ArchiveError::Integrity(
+            "composite batch staging path has no direct-child name".to_string(),
+        ));
+    };
+    if batch_staging.parent() != Some(staging_root.as_path()) || !batch_name.starts_with("batch-") {
+        return Err(ArchiveError::Integrity(
+            "composite batch staging path is not this operation's direct child".to_string(),
+        ));
+    }
+    let live_root = canonical_archive_root(archive_root)?;
+    if live_root != archive_root {
+        return Err(ArchiveError::Integrity(
+            "archive root changed before staging cleanup".to_string(),
+        ));
+    }
+    let checked_staging = checked_archive_path(archive_root, &staging_root)?;
+    if !checked_staging.existed
+        || checked_staging.canonical_path != staging_root
+        || !fs::symlink_metadata(&checked_staging.canonical_path)?.is_dir()
+    {
+        return Err(ArchiveError::Integrity(
+            "archive staging root changed before staging cleanup".to_string(),
+        ));
+    }
+    let checked_batch = checked_archive_path(archive_root, batch_staging)?;
+    if !checked_batch.existed {
+        return Ok(());
+    }
+    if checked_batch.canonical_path != batch_staging {
+        return Err(ArchiveError::Integrity(
+            "composite batch staging path changed canonical location".to_string(),
+        ));
+    }
+    let metadata = fs::symlink_metadata(&checked_batch.canonical_path)?;
+    if archive_metadata_is_reparse_point(&metadata) || !metadata.is_dir() {
+        return Err(ArchiveError::Integrity(
+            "composite batch staging path is not a real directory".to_string(),
+        ));
+    }
+
+    let mut expected_paths = HashSet::new();
+    let mut failures = Vec::new();
+    for publication in staged_publications {
+        expected_paths.insert(publication.staged_path.clone());
+        if publication.staged_path.parent() != Some(batch_staging) {
+            failures.push(format!(
+                "staged publication is not a direct child of {}",
+                batch_staging.display()
+            ));
+            continue;
+        }
+        let checked =
+            match revalidate_archive_deletion_target(archive_root, &publication.staged_path) {
+                Ok(Some(path)) => path,
+                Ok(None) => continue,
+                Err(error) => {
+                    failures.push(format!(
+                        "could not prove staging ownership at {}: {error}",
+                        publication.staged_path.display()
+                    ));
+                    continue;
+                }
+            };
+        if checked.parent() != Some(batch_staging) {
+            failures.push(format!(
+                "staged publication escaped its batch directory at {}",
+                publication.staged_path.display()
+            ));
+            continue;
+        }
+        let metadata = match fs::symlink_metadata(&checked) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                failures.push(format!(
+                    "could not inspect staging path {}: {error}",
+                    checked.display()
+                ));
+                continue;
+            }
+        };
+        if archive_metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+            failures.push(format!(
+                "preserved changed staging path {}",
+                checked.display()
+            ));
+            continue;
+        }
+        let current = match fs::read(&checked) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                failures.push(format!(
+                    "could not read staging path {}: {error}",
+                    checked.display()
+                ));
+                continue;
+            }
+        };
+        if current != publication.bytes || digest_bytes(&current) != publication.digest {
+            failures.push(format!(
+                "preserved changed staging path {}",
+                checked.display()
+            ));
+            continue;
+        }
+        let delete_path = match revalidate_archive_deletion_target(archive_root, &checked) {
+            Ok(Some(path)) => path,
+            Ok(None) => continue,
+            Err(error) => {
+                failures.push(format!(
+                    "could not prove staging ownership at {}: {error}",
+                    checked.display()
+                ));
+                continue;
+            }
+        };
+        if let Err(error) = fs::remove_file(&delete_path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                failures.push(format!(
+                    "could not remove staging path {}: {error}",
+                    delete_path.display()
+                ));
+            }
+        }
+    }
+
+    let checked_batch = checked_archive_path(archive_root, batch_staging)?;
+    if checked_batch.existed {
+        let entries = fs::read_dir(&checked_batch.canonical_path)?;
+        for entry in entries {
+            let path = entry?.path();
+            if !expected_paths.contains(&path) {
+                failures.push(format!(
+                    "preserved residual staging path {}",
+                    path.display()
+                ));
+            }
+        }
+        let mut remaining = fs::read_dir(&checked_batch.canonical_path)?;
+        if remaining.next().is_none() {
+            let delete_batch = revalidate_archive_deletion_target(archive_root, batch_staging)?;
+            if let Some(delete_batch) = delete_batch {
+                match fs::remove_dir(&delete_batch) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty => {
+                        failures.push(format!(
+                            "preserved non-empty staging directory {}",
+                            delete_batch.display()
+                        ));
+                    }
+                    Err(error) => failures.push(format!(
+                        "could not remove staging directory {}: {error}",
+                        delete_batch.display()
+                    )),
+                }
+            }
+        } else {
+            failures.push(format!(
+                "preserved non-empty staging directory {}",
+                checked_batch.canonical_path.display()
+            ));
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(ArchiveError::Integrity(failures.join("; ")))
+    }
+}
+
+fn combine_composite_batch_failure(
+    operation: ArchiveError,
+    rollback_error: Option<rusqlite::Error>,
+    cleanup_error: Option<ArchiveError>,
+) -> ArchiveError {
+    if rollback_error.is_none() && cleanup_error.is_none() {
+        return operation;
+    }
+    let mut details = Vec::new();
+    if let Some(error) = rollback_error {
+        details.push(format!("database rollback failed: {error}"));
+    }
+    if let Some(error) = cleanup_error {
+        details.push(format!("batch cleanup failed: {error}"));
+    }
+    ArchiveError::Integrity(format!("{operation}; {}", details.join("; ")))
+}
+
+fn index_composite_manifest_transaction(
+    transaction: &Transaction<'_>,
+    digest: Blake3Digest,
+    manifest: &CreatureArchiveManifest,
+) -> Result<(), ArchiveError> {
+    manifest.validate_contract()?;
+    if manifest.life.is_some() || digest_bytes(&serde_json::to_vec(manifest)?) != digest {
+        return Err(ArchiveError::Integrity(
+            "composite batch can index only an exact birth manifest".to_string(),
+        ));
+    }
+    let expected_digest = digest_hex(digest);
+    let existing_rows = {
+        let mut statement = transaction.prepare(
+            "SELECT source_run_id,organism_id,genome_id,is_life,death_tick \
+             FROM manifests WHERE digest=?1",
+        )?;
+        let rows = statement.query_map(params![expected_digest], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+    for (source_run_id, organism_id, genome_id, is_life, death_tick) in &existing_rows {
+        if source_run_id != &manifest.genetic.source_run_id
+            || organism_id != &manifest.genetic.organism_id.raw().to_string()
+            || genome_id != &manifest.genetic.genome_id.raw().to_string()
+            || *is_life != 0
+            || death_tick.is_some()
+        {
+            return Err(ArchiveError::Integrity(
+                "existing manifest digest row is incompatible with the prepared birth".to_string(),
+            ));
+        }
+    }
+    if existing_rows.is_empty() {
+        transaction.execute(
+            "INSERT INTO manifests(digest,source_run_id,organism_id,genome_id,is_life,death_tick) \
+             VALUES(?1,?2,?3,?4,?5,?6)",
+            params![
+                expected_digest,
+                manifest.genetic.source_run_id,
+                manifest.genetic.organism_id.raw().to_string(),
+                manifest.genetic.genome_id.raw().to_string(),
+                0_i64,
+                Option::<String>::None,
+            ],
+        )?;
+    }
+    Ok(())
 }
 
 fn validate_foundation_identity(
@@ -1493,6 +2961,91 @@ mod archive_path_tests {
         assert!(super::archive_reparse_point_flags(false, 0x400));
         assert!(super::archive_reparse_point_flags(true, 0));
         assert!(!super::archive_reparse_point_flags(false, 0));
+    }
+
+    #[test]
+    fn deletion_target_predicate_rejects_lexical_escape_without_link_creation() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-archive-delete-predicate-{}",
+            super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let canonical_root = super::canonical_archive_root(&root).unwrap();
+        let escaped = canonical_root.join("assets").join("..").join("outside");
+        let error =
+            super::revalidate_archive_deletion_target(&canonical_root, &escaped).unwrap_err();
+        assert!(error.to_string().contains("unsafe components"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn staged_child_create_new_collision_is_unowned() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-archive-staged-child-collision-{}",
+            super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
+        ));
+        let staging_root = root.join("staging");
+        let batch = staging_root.join("batch-private-test");
+        std::fs::create_dir_all(&batch).unwrap();
+        let archive_root = super::canonical_archive_root(&root).unwrap();
+        let bytes = b"new staged payload".to_vec();
+        let digest = super::digest_bytes(&bytes);
+        let staged_path = batch.join(format!("payload-00000000-{}", super::digest_hex(digest)));
+        let sentinel = b"pre-existing staged payload";
+        std::fs::write(&staged_path, sentinel).unwrap();
+        let payload = super::PreparedArchivePayload {
+            digest,
+            bytes,
+            destinations: vec![super::PreparedPayloadDestination::Manifest],
+        };
+        let mut publications = Vec::new();
+
+        let error =
+            super::stage_composite_payloads(&archive_root, &batch, &[payload], &mut publications)
+                .unwrap_err();
+
+        assert!(error.to_string().contains("exists"));
+        assert!(publications.is_empty());
+        assert_eq!(std::fs::read(&staged_path).unwrap(), sentinel);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn created_batch_validation_failure_retains_exact_owned_path_receipt() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-archive-batch-receipt-{}",
+            super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
+        ));
+        let staging_root = root.join("staging");
+        let batch = staging_root.join("batch-private-test");
+        std::fs::create_dir_all(&batch).unwrap();
+        let archive_root = super::canonical_archive_root(&root).unwrap();
+        std::fs::remove_dir(&batch).unwrap();
+
+        let operation = super::validate_created_batch_staging(&archive_root, &batch).unwrap_err();
+        let failure = super::retain_batch_staging_allocation_failure(&batch, operation);
+        assert_eq!(failure.owned_path.as_deref(), Some(batch.as_path()));
+        assert!(failure
+            .operation
+            .to_string()
+            .contains(&batch.display().to_string()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn composite_batch_failure_preserves_operation_and_cleanup_residual() {
+        let residual = std::env::temp_dir().join("owned-batch-residual");
+        let error = super::combine_composite_batch_failure(
+            super::ArchiveError::Integrity("original operation failure".to_string()),
+            None,
+            Some(super::ArchiveError::Integrity(format!(
+                "preserved residual {}",
+                residual.display()
+            ))),
+        );
+        let text = error.to_string();
+        assert!(text.contains("original operation failure"));
+        assert!(text.contains(&residual.display().to_string()));
     }
 }
 
@@ -1654,15 +3207,7 @@ fn observe_prepared_final_file(
     digest: Blake3Digest,
     bytes: &[u8],
 ) -> Result<PreparedFinalFileObservation, ArchiveError> {
-    let path = match destination {
-        PreparedPayloadDestination::Asset(_) => archive_root
-            .join("assets")
-            .join(digest_hex(digest))
-            .join("payload.bin"),
-        PreparedPayloadDestination::Manifest => archive_root
-            .join("manifests")
-            .join(format!("{}.json", digest_hex(digest))),
-    };
+    let path = prepared_payload_path(archive_root, destination, digest);
     let checked_path = checked_archive_path(archive_root, &path)?;
     if !checked_path.existed {
         return Ok(PreparedFinalFileObservation {
@@ -1675,7 +3220,7 @@ fn observe_prepared_final_file(
             size_bytes: 0,
         });
     }
-    let existing = fs::read(&checked_path.canonical_path)?;
+    let existing = read_regular_archive_file(&checked_path.canonical_path)?;
     let observed_digest = digest_bytes(&existing);
     if observed_digest != digest || existing != bytes {
         return Err(ArchiveError::Integrity(format!(
@@ -1762,6 +3307,7 @@ fn write_content_addressed(
     destination: &Path,
     bytes: &[u8],
 ) -> Result<(), ArchiveError> {
+    let canonical_staging = canonical_content_staging_root(staging_root)?;
     if destination.exists() {
         if fs::read(destination)? == bytes {
             return Ok(());
@@ -1775,7 +3321,7 @@ fn write_content_addressed(
         .parent()
         .ok_or_else(|| ArchiveError::Integrity("archive destination has no parent".to_string()))?;
     fs::create_dir_all(parent)?;
-    let staged = staging_root.join(format!(
+    let staged = canonical_staging.join(format!(
         "asset-{}-{}",
         std::process::id(),
         TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
@@ -1790,14 +3336,103 @@ fn write_content_addressed(
     match fs::rename(&staged, destination) {
         Ok(()) => Ok(()),
         Err(_) if destination.exists() && fs::read(destination)? == bytes => {
-            fs::remove_file(staged)?;
+            remove_exact_content_staging_file(&canonical_staging, &staged, bytes)?;
             Ok(())
         }
         Err(error) => {
-            let _ = fs::remove_file(staged);
+            let _ = remove_exact_content_staging_file(&canonical_staging, &staged, bytes);
             Err(error.into())
         }
     }
+}
+
+fn write_archive_content_addressed(
+    archive_root: &Path,
+    staging_root: &Path,
+    destination: &Path,
+    bytes: &[u8],
+) -> Result<(), ArchiveError> {
+    let archive_root = canonical_archive_root(archive_root)?;
+    let canonical_staging = archive_root.join("staging");
+    let checked_staging = checked_archive_path(&archive_root, staging_root)?;
+    if !checked_staging.existed
+        || checked_staging.canonical_path != canonical_staging
+        || !fs::symlink_metadata(&checked_staging.canonical_path)?.is_dir()
+    {
+        return Err(ArchiveError::Integrity(
+            "archive staging root must be a real directory".to_string(),
+        ));
+    }
+    let checked_destination = checked_archive_path(&archive_root, destination)?;
+    write_content_addressed(
+        &checked_staging.canonical_path,
+        &checked_destination.canonical_path,
+        bytes,
+    )
+}
+
+fn canonical_content_staging_root(staging_root: &Path) -> Result<PathBuf, ArchiveError> {
+    let metadata = fs::symlink_metadata(staging_root)?;
+    if archive_metadata_is_reparse_point(&metadata) || !metadata.is_dir() {
+        return Err(ArchiveError::Integrity(
+            "content-addressed staging root must be a real directory".to_string(),
+        ));
+    }
+    let canonical = staging_root.canonicalize()?;
+    let canonical_metadata = fs::symlink_metadata(&canonical)?;
+    if archive_metadata_is_reparse_point(&canonical_metadata) || !canonical_metadata.is_dir() {
+        return Err(ArchiveError::Integrity(
+            "canonical content-addressed staging root must be a real directory".to_string(),
+        ));
+    }
+    Ok(canonical)
+}
+
+fn remove_exact_content_staging_file(
+    staging_root: &Path,
+    staged_path: &Path,
+    expected_bytes: &[u8],
+) -> Result<(), ArchiveError> {
+    let live_staging = canonical_content_staging_root(staging_root)?;
+    if staged_path.parent() != Some(live_staging.as_path()) {
+        return Err(ArchiveError::Integrity(format!(
+            "preserved staging path outside its exact root {}",
+            staged_path.display()
+        )));
+    }
+    let checked = checked_archive_path(&live_staging, staged_path)?;
+    if !checked.existed {
+        return Ok(());
+    }
+    if checked.canonical_path != staged_path {
+        return Err(ArchiveError::Integrity(format!(
+            "preserved changed staging path {}",
+            staged_path.display()
+        )));
+    }
+    let metadata = fs::symlink_metadata(&checked.canonical_path)?;
+    if archive_metadata_is_reparse_point(&metadata) || !metadata.is_file() {
+        return Err(ArchiveError::Integrity(format!(
+            "preserved changed staging path {}",
+            staged_path.display()
+        )));
+    }
+    let current = fs::read(&checked.canonical_path)?;
+    if current != expected_bytes || digest_bytes(&current) != digest_bytes(expected_bytes) {
+        return Err(ArchiveError::Integrity(format!(
+            "preserved changed staging path {}",
+            staged_path.display()
+        )));
+    }
+    let checked = checked_archive_path(&live_staging, staged_path)?;
+    if !checked.existed || checked.canonical_path != staged_path {
+        return Err(ArchiveError::Integrity(format!(
+            "preserved changed staging path {}",
+            staged_path.display()
+        )));
+    }
+    fs::remove_file(checked.canonical_path)?;
+    Ok(())
 }
 
 fn validate_run_id(run_id: &str) -> Result<(), ArchiveError> {
