@@ -12,15 +12,16 @@ use alife_bevy_adapter::{
     core_vec3_to_bevy, AffordanceTags, AlifeBevyAdapterPlugin, BevyEntityMap, CreatureBody,
     SensoryEmitter,
 };
-use alife_core::{ActionKind, AffordanceBits, Vec3f, WorldEntityId};
+use alife_core::{ActionKind, AffordanceBits, Tick, Vec3f, WorldEntityId};
 #[cfg(feature = "gpu-runtime")]
 use alife_world::persistence::PortableSaveFile;
 use alife_world::{
     activate_procedural_chunks_around_creatures, generate_procedural_world_content,
-    sample_procedural_terrain_tile, CreatureWorldAnchor, ProceduralChunkActivationReport,
-    ProceduralChunkCoord, ProceduralTerrainSample, ProceduralTileCoord, ProceduralWorldConfig,
-    ProceduralWorldContentCandidate, ProceduralWorldContentKind, ProceduralWorldContentReport,
-    TerrainZoneKind, WorldObjectKind,
+    sample_procedural_terrain_tile, CreatureWorldAnchor, HeadlessWorld,
+    ProceduralChunkActivationReport, ProceduralChunkCoord, ProceduralTerrainSample,
+    ProceduralTileCoord, ProceduralWorldConfig, ProceduralWorldContentCandidate,
+    ProceduralWorldContentKind, ProceduralWorldContentReport, TerrainZoneKind, WorldObject,
+    WorldObjectKind,
 };
 use bevy::{
     app::AppExit,
@@ -443,6 +444,112 @@ pub struct LiveBrainLoopResource {
     pub last_summary: LiveBrainTickSummary,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveBrainPresentationFrame {
+    pub tick_summaries: Vec<LiveBrainTickSummary>,
+    pub authoritative_world_tick: Tick,
+    world_objects_by_id: BTreeMap<u64, WorldObject>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiveBrainPresentationFrameError {
+    DuplicateWorldEntityId(WorldEntityId),
+}
+
+impl LiveBrainPresentationFrame {
+    pub fn try_new(
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        authoritative_world_tick: Tick,
+        world_objects: Vec<WorldObject>,
+    ) -> Result<Self, LiveBrainPresentationFrameError> {
+        let mut world_objects_by_id = BTreeMap::new();
+        for object in world_objects {
+            let stable_id = object.id;
+            if world_objects_by_id
+                .insert(stable_id.raw(), object)
+                .is_some()
+            {
+                return Err(LiveBrainPresentationFrameError::DuplicateWorldEntityId(
+                    stable_id,
+                ));
+            }
+        }
+        Ok(Self {
+            tick_summaries,
+            authoritative_world_tick,
+            world_objects_by_id,
+        })
+    }
+
+    pub fn from_authoritative_world(
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        world: &HeadlessWorld,
+    ) -> Result<Self, LiveBrainPresentationFrameError> {
+        Self::try_new(tick_summaries, world.tick(), world.object_snapshots())
+    }
+
+    pub fn object(&self, stable_id: WorldEntityId) -> Option<&WorldObject> {
+        self.world_objects_by_id.get(&stable_id.raw())
+    }
+
+    pub fn object_snapshots(&self) -> Vec<WorldObject> {
+        self.world_objects_by_id.values().cloned().collect()
+    }
+
+    pub fn object_count(&self) -> usize {
+        self.world_objects_by_id.len()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct LiveBrainPresentationFrameResource {
+    pub previous: LiveBrainPresentationFrame,
+    pub current: LiveBrainPresentationFrame,
+}
+
+impl LiveBrainPresentationFrameResource {
+    pub fn from_authoritative_world(
+        world: &HeadlessWorld,
+    ) -> Result<Self, LiveBrainPresentationFrameError> {
+        let baseline = LiveBrainPresentationFrame::from_authoritative_world(Vec::new(), world)?;
+        Ok(Self {
+            previous: baseline.clone(),
+            current: baseline,
+        })
+    }
+
+    pub fn from_current_frame(current: LiveBrainPresentationFrame) -> Self {
+        Self {
+            previous: current.clone(),
+            current,
+        }
+    }
+
+    pub fn try_publish_successful_tick(
+        &mut self,
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        world: &HeadlessWorld,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
+        self.try_publish(tick_summaries, world.tick(), world.object_snapshots())
+    }
+
+    pub fn try_publish(
+        &mut self,
+        tick_summaries: Vec<LiveBrainTickSummary>,
+        authoritative_world_tick: Tick,
+        world_objects: Vec<WorldObject>,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
+        let next = LiveBrainPresentationFrame::try_new(
+            tick_summaries,
+            authoritative_world_tick,
+            world_objects,
+        )?;
+        self.previous = self.current.clone();
+        self.current = next;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct CreatureVisualStateResource {
     pub snapshot: CreatureVisualSnapshot,
@@ -650,12 +757,24 @@ fn tick_production_gpu_brain(
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut authority: ResMut<ProductionGpuBrainAuthorityResource>,
     mut schedule: ResMut<ProductionGpuBrainTickScheduleResource>,
+    mut presentation: ResMut<LiveBrainPresentationFrameResource>,
 ) {
     if !schedule.take_dispatch_permit() {
         return;
     }
     match runtime.runtime.tick() {
-        Ok(_) => authority.telemetry = runtime.runtime.authority_telemetry(),
+        Ok(tick_summaries) => {
+            let world = runtime.runtime.world_snapshot();
+            match presentation.try_publish_successful_tick(tick_summaries, &world) {
+                Ok(()) => authority.telemetry = runtime.runtime.authority_telemetry(),
+                Err(error) => {
+                    authority.telemetry.authoritative = false;
+                    authority.telemetry.unavailable_reason = Some(format!(
+                        "live presentation frame publication failed: {error:?}"
+                    ));
+                }
+            }
+        }
         Err(error) => {
             authority.telemetry.authoritative = false;
             authority.telemetry.unavailable_reason = Some(error.to_string());
@@ -4924,12 +5043,25 @@ pub fn build_production_voxel_frontend_app_shell(
         })?;
         let runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
         let telemetry = runtime.authority_telemetry();
+        let initial_world = runtime.world_snapshot();
+        let presentation = LiveBrainPresentationFrameResource::from_authoritative_world(
+            &initial_world,
+        )
+        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+            message: format!("failed to seed live presentation frames: {error:?}"),
+        })?;
         app.insert_resource(ProductionGpuBrainAuthorityResource { telemetry })
+            .insert_resource(presentation)
             .insert_resource(ProductionGpuBrainTickScheduleResource::new(
                 PRODUCTION_GPU_STARTUP_RENDER_FRAMES,
             ))
             .insert_non_send_resource(ProductionGpuBrainRuntimeResource { runtime })
-            .add_systems(Update, tick_production_gpu_brain);
+            .add_systems(
+                Update,
+                tick_production_gpu_brain.in_set(
+                    crate::production_voxel_renderer::ProductionVoxelPresentationSet::LiveGpuTick,
+                ),
+            );
     }
     crate::spawn_fvr03_production_voxel_scene(&mut app, &summary)?;
     if let Some(seconds) = launch.smoke_seconds {
@@ -4974,9 +5106,161 @@ mod fvr11_asset_root_tests {
     }
 }
 
+#[cfg(test)]
+mod live_brain_presentation_frame_tests {
+    use super::{
+        LiveBrainPresentationFrame, LiveBrainPresentationFrameError,
+        LiveBrainPresentationFrameResource,
+    };
+    use alife_core::{BrainTickStatus, OrganismId, Tick, Vec3f, WorldEntityId};
+    use alife_world::{HeadlessScenarioBuilder, HeadlessWorld};
+
+    fn fixture_world() -> HeadlessWorld {
+        HeadlessScenarioBuilder::new(21)
+            .agent("agent", OrganismId(1), Vec3f::ZERO)
+            .food("berry", Vec3f::new(1.0, 0.0, 0.0), 0.8)
+            .build()
+            .expect("frame fixture world must build")
+    }
+
+    fn successful_summary(tick_before: Tick, sequence: u64) -> super::LiveBrainTickSummary {
+        let tick_after = Tick::new(tick_before.raw().saturating_add(1));
+        super::LiveBrainTickSummary {
+            schema: crate::G03_LIVE_BRAIN_LOOP_SCHEMA,
+            schema_version: crate::G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+            organism_id: OrganismId(1),
+            tick_before,
+            tick_after,
+            world_tick_before: tick_before,
+            world_tick_after: tick_after,
+            status: BrainTickStatus::Normal,
+            selected_action_kind: None,
+            selected_action_id: None,
+            target_entity: None,
+            patch_sealed: true,
+            patch_sequence_id: Some(sequence),
+            patch_success: Some(true),
+            physical_contact: None,
+            action_failure: None,
+            sealed_patch_count: 1,
+            packed_record_count: 1,
+            memory_updates: 0,
+            topology_updates: 0,
+            learning_updates: 1,
+            invalid_or_rejected_action_count: 0,
+            last_diagnostic: None,
+            causal_stages: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn first_publication_has_a_coherent_previous_current_baseline() {
+        let world = fixture_world();
+        let mut frames = LiveBrainPresentationFrameResource::from_authoritative_world(&world)
+            .expect("authoritative world must seed presentation frames");
+
+        assert_eq!(frames.previous, frames.current);
+        assert_eq!(frames.current.authoritative_world_tick, Tick::ZERO);
+        assert!(frames.current.tick_summaries.is_empty());
+
+        let mut next_world = world.clone();
+        next_world.advance_tick();
+        let summary = successful_summary(Tick::ZERO, 1);
+        frames
+            .try_publish_successful_tick(vec![summary.clone()], &next_world)
+            .expect("first successful publication must be accepted");
+
+        assert_eq!(frames.previous.authoritative_world_tick, Tick::ZERO);
+        assert_eq!(frames.current.authoritative_world_tick, Tick::new(1));
+        assert_eq!(frames.current.tick_summaries, vec![summary]);
+    }
+
+    #[test]
+    fn second_publication_rotates_the_earlier_current_frame_into_previous() {
+        let mut world = fixture_world();
+        let mut frames = LiveBrainPresentationFrameResource::from_authoritative_world(&world)
+            .expect("authoritative world must seed presentation frames");
+
+        world.advance_tick();
+        let first = successful_summary(Tick::ZERO, 1);
+        frames
+            .try_publish_successful_tick(vec![first.clone()], &world)
+            .expect("first successful publication must be accepted");
+
+        world.advance_tick();
+        let second = successful_summary(Tick::new(1), 2);
+        frames
+            .try_publish_successful_tick(vec![second.clone()], &world)
+            .expect("second successful publication must be accepted");
+
+        assert_eq!(frames.previous.tick_summaries, vec![first]);
+        assert_eq!(frames.previous.authoritative_world_tick, Tick::new(1));
+        assert_eq!(frames.current.tick_summaries, vec![second]);
+        assert_eq!(frames.current.authoritative_world_tick, Tick::new(2));
+    }
+
+    #[test]
+    fn stable_id_lookup_is_deterministic_and_duplicate_objects_are_rejected() {
+        let world = fixture_world();
+        let frames = LiveBrainPresentationFrameResource::from_authoritative_world(&world)
+            .expect("authoritative world must seed presentation frames");
+        let objects = frames.current.object_snapshots();
+        let ids = objects
+            .iter()
+            .map(|object| object.id.raw())
+            .collect::<Vec<_>>();
+
+        assert_eq!(ids, vec![1, 2]);
+        let stable_id = WorldEntityId(2);
+        assert_eq!(frames.current.object(stable_id).unwrap().id, stable_id);
+
+        let duplicate = objects[0].clone();
+        assert_eq!(
+            LiveBrainPresentationFrame::try_new(
+                Vec::new(),
+                Tick::ZERO,
+                vec![duplicate.clone(), duplicate],
+            ),
+            Err(LiveBrainPresentationFrameError::DuplicateWorldEntityId(
+                objects[0].id,
+            )),
+        );
+    }
+
+    #[test]
+    fn failed_publication_retains_the_last_good_pair() {
+        let mut world = fixture_world();
+        let mut frames = LiveBrainPresentationFrameResource::from_authoritative_world(&world)
+            .expect("authoritative world must seed presentation frames");
+        world.advance_tick();
+        frames
+            .try_publish_successful_tick(vec![successful_summary(Tick::ZERO, 1)], &world)
+            .expect("first successful publication must be accepted");
+        let before_failure = frames.clone();
+        let duplicate = world.object_snapshots()[0].clone();
+
+        assert_eq!(
+            frames.try_publish(
+                vec![successful_summary(Tick::new(1), 2)],
+                Tick::new(2),
+                vec![duplicate.clone(), duplicate],
+            ),
+            Err(LiveBrainPresentationFrameError::DuplicateWorldEntityId(
+                world.object_snapshots()[0].id,
+            )),
+        );
+        assert_eq!(frames, before_failure);
+    }
+}
+
 #[cfg(all(test, feature = "gpu-runtime"))]
 mod production_gpu_tick_schedule_tests {
-    use super::ProductionGpuBrainTickScheduleResource;
+    use super::{
+        tick_production_gpu_brain, LiveBrainPresentationFrameResource,
+        ProductionGpuBrainTickScheduleResource,
+    };
+    use bevy::ecs::system::{IntoSystem, System};
+    use bevy::prelude::World;
 
     #[test]
     fn first_gpu_world_tick_waits_for_the_startup_render_barrier() {
@@ -4986,6 +5270,18 @@ mod production_gpu_tick_schedule_tests {
         }
         assert!(schedule.take_dispatch_permit());
         assert!(schedule.take_dispatch_permit());
+    }
+
+    #[test]
+    fn production_gpu_tick_system_writes_the_paired_frame_resource() {
+        let mut world = World::new();
+        let frame_resource_id = world.register_resource::<LiveBrainPresentationFrameResource>();
+        let mut system = IntoSystem::into_system(tick_production_gpu_brain);
+        let access = system.initialize(&mut world);
+
+        assert!(access
+            .combined_access()
+            .has_resource_write(frame_resource_id));
     }
 }
 

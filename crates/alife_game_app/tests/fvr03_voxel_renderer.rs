@@ -7,6 +7,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use alife_core::{ActionKind, BrainTickStatus, Tick, Vec3f, WorldEntityId};
+use alife_game_app::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
 use alife_game_app::{
     default_environment_manifest_path, run_production_voxel_frontend_dry_run, CreaturePartSlot,
     Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk,
@@ -19,14 +21,15 @@ use alife_game_app::{
     Fvr09MesherMode, Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker,
     Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
     Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
-    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionCreatureAssemblyRoot,
-    ProductionCreatureJoinCoverMarker, ProductionCreaturePartMarker, ProductionFrontendProfileId,
-    ProductionVoxelLaunchConfig, V0PlayerControlStrip, V0PlayerCreaturePanel, V0PlayerStatusChip,
+    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, LiveBrainCausalStage,
+    LiveBrainTickSummary, ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
+    ProductionCreaturePartMarker, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
+    V0PlayerControlStrip, V0PlayerCreaturePanel, V0PlayerStatusChip,
     FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
-    persistence::PortableSaveFile, CreatureAppearanceGenome, StableVoxelRefKind,
-    CREATURE_APPEARANCE_SPECIES_COUNT, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
+    persistence::PortableSaveFile, CreatureAppearanceGenome, HeadlessActionIds, StableVoxelRefKind,
+    WorldObjectKind, CREATURE_APPEARANCE_SPECIES_COUNT, FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
     mesh::VertexAttributeValues,
@@ -35,6 +38,51 @@ use bevy::{
         Mesh, Mesh3d, MeshMaterial3d, Projection, StandardMaterial, Text, Transform, Visibility,
     },
 };
+
+fn successful_gpu_move_summary(
+    organism_id: alife_core::OrganismId,
+    target_entity: alife_core::WorldEntityId,
+) -> LiveBrainTickSummary {
+    LiveBrainTickSummary {
+        schema: alife_game_app::G03_LIVE_BRAIN_LOOP_SCHEMA,
+        schema_version: alife_game_app::G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+        organism_id,
+        tick_before: Tick::new(7),
+        tick_after: Tick::new(8),
+        world_tick_before: Tick::new(7),
+        world_tick_after: Tick::new(8),
+        status: BrainTickStatus::Normal,
+        selected_action_kind: Some(ActionKind::Move),
+        selected_action_id: Some(HeadlessActionIds::APPROACH),
+        target_entity: Some(target_entity),
+        patch_sealed: true,
+        patch_sequence_id: Some(7),
+        patch_success: Some(true),
+        physical_contact: None,
+        action_failure: None,
+        sealed_patch_count: 1,
+        packed_record_count: 1,
+        memory_updates: 1,
+        topology_updates: 0,
+        learning_updates: 1,
+        invalid_or_rejected_action_count: 0,
+        last_diagnostic: None,
+        causal_stages: vec![
+            LiveBrainCausalStage::GpuBrainTick,
+            LiveBrainCausalStage::ExecuteAction,
+            LiveBrainCausalStage::MeasureOutcome,
+            LiveBrainCausalStage::SealPatch,
+            LiveBrainCausalStage::ApplyLearning,
+        ],
+    }
+}
+
+fn production_voxel_center(world_position: Vec3f) -> (f32, f32) {
+    (
+        world_position.x.round() as i32 as f32 + 0.5,
+        world_position.z.round() as i32 as f32 + 0.5,
+    )
+}
 
 fn production_launch(profile_id: ProductionFrontendProfileId) -> ProductionVoxelLaunchConfig {
     let mut launch = ProductionVoxelLaunchConfig::from_manifest(
@@ -583,6 +631,227 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
     assert!(!selection_text.to_ascii_lowercase().contains("entity("));
     assert!(!selection_text.to_ascii_lowercase().contains("bevy"));
     assert!(!selection_text.to_ascii_lowercase().contains("wgpu"));
+}
+
+#[test]
+fn fvr04_live_world_projection_moves_matching_creature_by_stable_id() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, launch_summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let (stable_id, organism_id, initial_translation) = {
+        let mut roots = app.world_mut().query::<(
+            &ProductionCreatureAssemblyRoot,
+            &Fvr04ProductionCreatureVisualMarker,
+            &Transform,
+        )>();
+        roots
+            .iter(app.world())
+            .map(|(root, visual, transform)| {
+                (root.stable_id, visual.organism_id, transform.translation)
+            })
+            .next()
+            .expect("production voxel scene must spawn a creature root")
+    };
+    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
+    let initial_object = save
+        .world
+        .objects
+        .iter()
+        .find(|object| object.id == stable_id)
+        .cloned()
+        .expect("production creature root must have a matching saved world object");
+    assert_eq!(initial_object.id, stable_id);
+    assert_eq!(initial_object.organism_id, Some(organism_id));
+    let target_entity = save
+        .world
+        .objects
+        .iter()
+        .find(|object| object.id != stable_id && object.kind == WorldObjectKind::Food)
+        .map(|object| object.id)
+        .expect("launch save must contain a non-self food target");
+    let mut authoritative_post_action_object = initial_object.clone();
+    authoritative_post_action_object.position = Vec3f::new(
+        initial_object.position.x + 2.0,
+        initial_object.position.y,
+        initial_object.position.z + 1.0,
+    );
+    let summary = successful_gpu_move_summary(organism_id, target_entity);
+    assert_eq!(
+        summary.selected_action_id,
+        Some(HeadlessActionIds::APPROACH)
+    );
+    assert_eq!(summary.selected_action_kind, Some(ActionKind::Move));
+    assert_eq!(summary.target_entity, Some(target_entity));
+    let expected_world_position = authoritative_post_action_object.position;
+    let (expected_x, expected_z) = production_voxel_center(expected_world_position);
+    let expected_y = initial_translation.y;
+    let live_tick_after = summary.world_tick_after.raw();
+    assert!(
+        (expected_x - initial_translation.x).abs() > f32::EPSILON
+            || (expected_z - initial_translation.z).abs() > f32::EPSILON,
+        "authoritative production position must differ from the initial rendered position"
+    );
+    let frame = LiveBrainPresentationFrame::try_new(
+        vec![summary.clone()],
+        summary.world_tick_after,
+        vec![authoritative_post_action_object.into()],
+    )
+    .unwrap();
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        frame,
+    ));
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = false;
+
+    app.update();
+
+    let actual_translation = {
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        roots
+            .iter(app.world())
+            .find(|(root, _)| root.stable_id == stable_id)
+            .map(|(_, transform)| transform.translation)
+            .expect("matching production creature root must remain present after update")
+    };
+    assert!(
+        (actual_translation.x - expected_x).abs() < f32::EPSILON
+            && (actual_translation.y - expected_y).abs() < f32::EPSILON
+            && (actual_translation.z - expected_z).abs() < f32::EPSILON,
+        "stable creature {} did not project the authoritative live position at live tick {}: initial=({:.3},{:.3},{:.3}) expected=({:.3},{:.3},{:.3}) actual=({:.3},{:.3},{:.3})",
+        stable_id.raw(),
+        live_tick_after,
+        initial_translation.x,
+        initial_translation.y,
+        initial_translation.z,
+        expected_x,
+        expected_y,
+        expected_z,
+        actual_translation.x,
+        actual_translation.y,
+        actual_translation.z,
+    );
+}
+
+#[test]
+fn fvr04_live_world_projection_ignores_unmatched_and_non_agent_objects() {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, launch_summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let (stable_id, organism_id, initial_translation) = {
+        let mut roots = app.world_mut().query::<(
+            &ProductionCreatureAssemblyRoot,
+            &Fvr04ProductionCreatureVisualMarker,
+            &Transform,
+        )>();
+        roots
+            .iter(app.world())
+            .map(|(root, visual, transform)| {
+                (root.stable_id, visual.organism_id, transform.translation)
+            })
+            .next()
+            .expect("production voxel scene must spawn a creature root")
+    };
+    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
+    let initial_object = save
+        .world
+        .objects
+        .iter()
+        .find(|object| object.id == stable_id)
+        .cloned()
+        .expect("production creature root must have a matching saved world object");
+
+    let mut moved_agent = initial_object.clone();
+    moved_agent.position = Vec3f::new(
+        initial_object.position.x + 2.0,
+        initial_object.position.y,
+        initial_object.position.z + 1.0,
+    );
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        LiveBrainPresentationFrame::try_new(
+            Vec::new(),
+            Tick::new(8),
+            vec![moved_agent.clone().into()],
+        )
+        .unwrap(),
+    ));
+    app.update();
+
+    let moved_translation = {
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        roots
+            .iter(app.world())
+            .find(|(root, _)| root.stable_id == stable_id)
+            .map(|(_, transform)| transform.translation)
+            .expect("matching production creature root must remain present after update")
+    };
+    assert_ne!(moved_translation.x, initial_translation.x);
+    assert_ne!(moved_translation.z, initial_translation.z);
+
+    let mut unmatched_agent = moved_agent.clone();
+    unmatched_agent.id = WorldEntityId(stable_id.raw() + 10_000);
+    unmatched_agent.organism_id = Some(organism_id);
+    unmatched_agent.position = Vec3f::new(-4.0, 0.0, 6.0);
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(9), vec![unmatched_agent.into()])
+            .unwrap(),
+    ));
+    app.update();
+
+    let after_unmatched = {
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        roots
+            .iter(app.world())
+            .find(|(root, _)| root.stable_id == stable_id)
+            .map(|(_, transform)| transform.translation)
+            .expect("unmatched frame must not remove the production creature root")
+    };
+    assert_eq!(after_unmatched, moved_translation);
+
+    let mut colliding_non_agent = moved_agent;
+    colliding_non_agent.kind = WorldObjectKind::Food;
+    colliding_non_agent.organism_id = None;
+    colliding_non_agent.position = Vec3f::new(8.0, 0.0, -7.0);
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        LiveBrainPresentationFrame::try_new(
+            Vec::new(),
+            Tick::new(10),
+            vec![colliding_non_agent.into()],
+        )
+        .unwrap(),
+    ));
+    app.update();
+
+    let after_non_agent = {
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        roots
+            .iter(app.world())
+            .find(|(root, _)| root.stable_id == stable_id)
+            .map(|(_, transform)| transform.translation)
+            .expect("non-agent collision must not remove the production creature root")
+    };
+    assert_eq!(after_non_agent, moved_translation);
 }
 
 #[test]

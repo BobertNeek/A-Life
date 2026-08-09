@@ -11,7 +11,7 @@ use std::{
     time::Instant,
 };
 
-use alife_core::Vec3f;
+use alife_core::{OrganismId, Vec3f, WorldEntityId};
 use alife_world::{
     persistence::{CreatureSaveState, GpuRuntimeSaveState, PortableSaveFile},
     CreatureAppearanceGenome, CreatureWorldAnchor, PersistentVoxelWorldBackend,
@@ -24,6 +24,7 @@ use bevy::{
     app::AppExit,
     asset::RenderAssetUsages,
     camera::ScalingMode,
+    ecs::schedule::{IntoScheduleConfigs, SystemSet},
     math::primitives::InfinitePlane3d,
     mesh::Indices,
     prelude::{
@@ -41,6 +42,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 
+use crate::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
 use crate::terrain_mesh::build_production_terrain_meshes;
 #[cfg(feature = "gpu-runtime")]
 use crate::ProductionConversationLineageUiState;
@@ -882,6 +884,15 @@ pub struct ProductionCreatureAssemblyRoot {
     pub display_only: bool,
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum ProductionVoxelPresentationSet {
+    Input,
+    LiveGpuTick,
+    AuthoritativeProjection,
+    ProceduralAnimation,
+    RootReaders,
+}
+
 #[derive(Debug, Clone, PartialEq, Component)]
 pub struct ProductionCreaturePartMarker {
     pub stable_id: alife_core::WorldEntityId,
@@ -1413,6 +1424,20 @@ impl Fvr05ProductionUxStateResource {
     }
 }
 
+fn configure_production_voxel_presentation_schedule(app: &mut App) {
+    app.configure_sets(
+        Update,
+        (
+            ProductionVoxelPresentationSet::Input,
+            ProductionVoxelPresentationSet::LiveGpuTick,
+            ProductionVoxelPresentationSet::AuthoritativeProjection,
+            ProductionVoxelPresentationSet::ProceduralAnimation,
+            ProductionVoxelPresentationSet::RootReaders,
+        )
+            .chain(),
+    );
+}
+
 pub fn spawn_fvr03_production_voxel_scene(
     app: &mut App,
     summary: &ProductionVoxelLaunchSummary,
@@ -1775,20 +1800,38 @@ pub fn spawn_fvr03_production_voxel_scene(
                 .flatten()
         }),
     });
+    configure_production_voxel_presentation_schedule(app);
     app.add_systems(
+        Update,
+        project_live_world_to_fvr04_creature_roots
+            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
+    )
+    .add_systems(
         Update,
         (
             handle_fvr03_mouse_selection,
             handle_fvr03_camera_mode_input,
+            handle_fvr04_camera_follow_input,
+            handle_fvr05_production_ux_input,
+        )
+            .in_set(ProductionVoxelPresentationSet::Input),
+    )
+    .add_systems(
+        Update,
+        (
             animate_fvr04_creatures,
             animate_fvr04_creature_parts,
             animate_fvr07_production_vfx,
+        )
+            .in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
+    )
+    .add_systems(
+        Update,
+        (
             sync_fvr04_selection_marker,
-            handle_fvr04_camera_follow_input,
             sync_fvr04_camera_follow,
             sync_fvr04_creature_label,
             sync_fvr04_creature_inspector_panel,
-            handle_fvr05_production_ux_input,
             sync_fvr05_panel_visibility,
             sync_fvr05_overlay_visibility,
             sync_fvr05_top_runtime_bar,
@@ -1796,7 +1839,8 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_fvr05_right_inspector_panel,
             sync_fvr05_bottom_overlay_toolbar,
             sync_fvr05_footer_status_bar,
-        ),
+        )
+            .in_set(ProductionVoxelPresentationSet::RootReaders),
     )
     .add_systems(
         Update,
@@ -1804,7 +1848,8 @@ pub fn spawn_fvr03_production_voxel_scene(
             sync_v0_player_status_chip,
             sync_v0_player_creature_panel,
             sync_v0_player_control_strip,
-        ),
+        )
+            .in_set(ProductionVoxelPresentationSet::RootReaders),
     );
     #[cfg(feature = "gpu-runtime")]
     crate::install_production_conversation_lineage_ui(app, summary);
@@ -3999,6 +4044,45 @@ fn fvr04_creature_scale(visual: &CreatureVisualSnapshot, lod: Fvr04CreatureLod) 
     }
 }
 
+fn project_authoritative_creature_root_transform(
+    stable_id: WorldEntityId,
+    organism_id: OrganismId,
+    transform: &mut Transform,
+    frame: &LiveBrainPresentationFrame,
+) -> bool {
+    let Some(object) = frame.object(stable_id) else {
+        return false;
+    };
+    if object.kind != WorldObjectKind::Agent || object.organism_id != Some(organism_id) {
+        return false;
+    }
+
+    transform.translation.x = object.position.x.round() + 0.5;
+    transform.translation.z = object.position.z.round() + 0.5;
+    true
+}
+
+fn project_live_world_to_fvr04_creature_roots(
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    mut roots: bevy::prelude::Query<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr04ProductionCreatureVisualMarker,
+        &mut Transform,
+    )>,
+) {
+    let Some(frame) = frame else {
+        return;
+    };
+    for (root, visual, mut transform) in &mut roots {
+        project_authoritative_creature_root_transform(
+            root.stable_id,
+            visual.organism_id,
+            &mut transform,
+            &frame.current,
+        );
+    }
+}
+
 fn animate_fvr04_creatures(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
@@ -4023,20 +4107,6 @@ fn animate_fvr04_creatures(
             pose.rotation_xyz[2],
         );
         let rotation = Quat::from_rotation_y(std::f32::consts::PI) * pose_rotation;
-        let pose_translation = Vec3::from_array(pose.translation);
-        let grounded_height = grounded_root_height(
-            marker.surface_height,
-            0.04,
-            marker.local_bounds,
-            marker.base_scale.to_array(),
-            bevy::math::Mat3::from_quat(rotation).to_cols_array(),
-        );
-        let requested_height = marker.base_translation.y + pose_translation.y;
-        transform.translation = Vec3::new(
-            marker.base_translation.x + marker.local_offset.x + pose_translation.x,
-            requested_height.max(grounded_height) + marker.local_offset.y,
-            marker.base_translation.z + marker.local_offset.z + pose_translation.z,
-        );
         transform.rotation = rotation;
         transform.scale = marker.base_scale * Vec3::from_array(pose.scale);
     }
@@ -5588,6 +5658,27 @@ impl bevy_voxel_world::prelude::VoxelWorldConfig for Fvr03BevyVoxelWorldConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alife_core::{OrganismId, Tick, WorldEntityId};
+    use alife_world::{HeadlessScenarioBuilder, WorldObjectKind};
+
+    #[derive(Resource, Default)]
+    struct ProjectionScheduleOrder(Vec<&'static str>);
+
+    fn record_live_gpu_tick(mut order: ResMut<ProjectionScheduleOrder>) {
+        order.0.push("live-gpu-tick");
+    }
+
+    fn record_authoritative_projection(mut order: ResMut<ProjectionScheduleOrder>) {
+        order.0.push("authoritative-projection");
+    }
+
+    fn record_procedural_animation(mut order: ResMut<ProjectionScheduleOrder>) {
+        order.0.push("procedural-animation");
+    }
+
+    fn record_root_reader(mut order: ResMut<ProjectionScheduleOrder>) {
+        order.0.push("root-reader");
+    }
 
     fn empty_scene() -> Fvr03ProductionVoxelSceneResource {
         Fvr03ProductionVoxelSceneResource {
@@ -5721,6 +5812,36 @@ mod tests {
     }
 
     #[test]
+    fn production_presentation_schedule_orders_tick_projection_animation_and_readers() {
+        let mut app = App::new();
+        configure_production_voxel_presentation_schedule(&mut app);
+        app.insert_resource(ProjectionScheduleOrder::default())
+            .add_systems(
+                Update,
+                (
+                    record_live_gpu_tick.in_set(ProductionVoxelPresentationSet::LiveGpuTick),
+                    record_authoritative_projection
+                        .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
+                    record_procedural_animation
+                        .in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
+                    record_root_reader.in_set(ProductionVoxelPresentationSet::RootReaders),
+                ),
+            );
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<ProjectionScheduleOrder>().0,
+            vec![
+                "live-gpu-tick",
+                "authoritative-projection",
+                "procedural-animation",
+                "root-reader",
+            ]
+        );
+    }
+
+    #[test]
     fn socket_transform_preserves_catalog_translation_rotation_and_scale() {
         let half_turn = std::f32::consts::FRAC_PI_4;
         let transform = socket_transform_to_bevy(
@@ -5736,5 +5857,113 @@ mod tests {
         assert!((transform.translation - Vec3::new(-0.08, 0.3, -0.2)).length() < 1.0e-5);
         assert!((transform.scale - Vec3::new(1.0, 0.5, 0.75)).length() < 1.0e-5);
         assert!((transform.rotation * Vec3::X - Vec3::NEG_Z).length() < 1.0e-5);
+    }
+
+    fn presentation_frame(
+        kind: WorldObjectKind,
+        stable_id: WorldEntityId,
+        organism_id: Option<OrganismId>,
+        position: Vec3f,
+    ) -> LiveBrainPresentationFrame {
+        let world = HeadlessScenarioBuilder::new(13)
+            .agent("agent", OrganismId(7), Vec3f::ZERO)
+            .build()
+            .expect("projection fixture world must build");
+        let mut object = world
+            .object_snapshots()
+            .into_iter()
+            .next()
+            .expect("projection fixture must contain an agent");
+        object.id = stable_id;
+        object.kind = kind;
+        object.organism_id = organism_id;
+        object.position = position;
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(3), vec![object])
+            .expect("projection fixture frame must be valid")
+    }
+
+    #[test]
+    fn authoritative_projection_maps_stable_agent_to_voxel_center_and_preserves_root_state() {
+        let stable_id = WorldEntityId(41);
+        let organism_id = OrganismId(7);
+        let frame = presentation_frame(
+            WorldObjectKind::Agent,
+            stable_id,
+            Some(organism_id),
+            Vec3f::new(1.6, 99.0, -2.6),
+        );
+        let rotation = Quat::from_rotation_x(0.4);
+        let scale = Vec3::new(2.0, 3.0, 4.0);
+        let mut transform = Transform {
+            translation: Vec3::new(-8.0, 1.75, 9.0),
+            rotation,
+            scale,
+        };
+
+        assert!(project_authoritative_creature_root_transform(
+            stable_id,
+            organism_id,
+            &mut transform,
+            &frame,
+        ));
+        assert_eq!(transform.translation, Vec3::new(2.5, 1.75, -2.5));
+        assert_eq!(transform.rotation, rotation);
+        assert_eq!(transform.scale, scale);
+    }
+
+    #[test]
+    fn authoritative_projection_ignores_unmatched_ids_and_non_agents() {
+        let stable_id = WorldEntityId(41);
+        let organism_id = OrganismId(7);
+        let original = Transform {
+            translation: Vec3::new(4.0, 1.75, 5.0),
+            rotation: Quat::from_rotation_z(0.2),
+            scale: Vec3::splat(1.5),
+        };
+
+        let unmatched_frame = presentation_frame(
+            WorldObjectKind::Agent,
+            WorldEntityId(42),
+            Some(organism_id),
+            Vec3f::new(8.0, 0.0, 9.0),
+        );
+        let mut unmatched_transform = original;
+        assert!(!project_authoritative_creature_root_transform(
+            stable_id,
+            organism_id,
+            &mut unmatched_transform,
+            &unmatched_frame,
+        ));
+        assert_eq!(unmatched_transform, original);
+
+        let wrong_identity_frame = presentation_frame(
+            WorldObjectKind::Agent,
+            stable_id,
+            Some(OrganismId(8)),
+            Vec3f::new(8.0, 0.0, 9.0),
+        );
+        let mut wrong_identity_transform = original;
+        assert!(!project_authoritative_creature_root_transform(
+            stable_id,
+            organism_id,
+            &mut wrong_identity_transform,
+            &wrong_identity_frame,
+        ));
+        assert_eq!(wrong_identity_transform, original);
+
+        let non_agent_frame = presentation_frame(
+            WorldObjectKind::Food,
+            stable_id,
+            None,
+            Vec3f::new(-8.0, 0.0, -9.0),
+        );
+        let mut non_agent_transform = original;
+        assert!(!project_authoritative_creature_root_transform(
+            stable_id,
+            organism_id,
+            &mut non_agent_transform,
+            &non_agent_frame,
+        ));
+        assert_eq!(non_agent_transform, original);
     }
 }
