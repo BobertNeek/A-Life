@@ -3118,6 +3118,8 @@ const fn gpu_consolidation_overlay_label(state: &ConsolidationState) -> &'static
     }
 }
 
+const N512_FOUNDATION_SEED: u64 = 0x4E35_3132_5F00_0001;
+
 pub(crate) fn compile_gpu_birth_components(
     deterministic_seed: u64,
     brain_class: BrainScaleTier,
@@ -3130,27 +3132,36 @@ pub(crate) fn compile_gpu_birth_components(
     }
     organism_id.validate()?;
     let capacity = BrainCapacityClass::production_for_id(brain_class.default_class_id())?;
-    let birth_seed = deterministic_seed ^ organism_id.raw().rotate_left(17);
-    let genome = BrainGenome::scaffold(birth_seed, capacity.id());
-    let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35)?);
-    let phenotype = if capacity.id() == BrainCapacityClass::N2048_ID {
+    if capacity.id() == BrainCapacityClass::N2048_ID {
+        let birth_seed = deterministic_seed ^ organism_id.raw().rotate_left(17);
+        let genome = BrainGenome::scaffold(birth_seed, capacity.id());
+        let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35)?);
         let foundation = alife_core::FoundationWeightAsset::builtin_n2048_v1(sensor_profile)?;
-        PhenotypeCompiler::compile_from_foundation_asset(
+        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
             &genome,
             &capacity,
             &development,
             sensor_profile,
             &foundation,
-        )?
-    } else {
-        PhenotypeCompiler::compile_testing_procedural_baseline(
+        )?;
+        return Ok((phenotype, genome, development));
+    }
+
+    if capacity.id() == BrainCapacityClass::N512_ID {
+        let genome = BrainGenome::scaffold(N512_FOUNDATION_SEED, capacity.id());
+        let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(1.0)?);
+        let foundation = alife_core::FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
+        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
             &genome,
             &capacity,
             &development,
             sensor_profile,
-        )?
-    };
-    Ok((phenotype, genome, development))
+            &foundation,
+        )?;
+        return Ok((phenotype, genome, development));
+    }
+
+    Err(ScaffoldContractError::UnsupportedProductionBrainClass)
 }
 
 #[cfg(test)]
@@ -3219,6 +3230,68 @@ mod tests {
                 Some(asset.digest())
             );
         }
+    }
+
+    #[test]
+    fn n512_gpu_birth_uses_checked_foundation_and_rejects_unsupported_classes() {
+        for (organism_id, profile) in [
+            (79, SensorProfile::PrivilegedAffordanceV1),
+            (80, SensorProfile::GroundedObjectSlotsV1),
+        ] {
+            let asset = alife_core::FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
+            let (phenotype, _, _) = compile_gpu_birth_components(
+                0xB17A_DA7C,
+                BrainScaleTier::Nano512,
+                OrganismId::new(organism_id).unwrap(),
+                Tick::ZERO,
+                profile,
+            )
+            .unwrap();
+            let abi = phenotype.foundation_abi();
+
+            assert_eq!(abi.capacity_class_id(), BrainCapacityClass::N512_ID);
+            assert_eq!(phenotype.sensor_profile(), profile);
+            assert_eq!(
+                abi.foundation_id().map(|id| id.raw()),
+                Some(0x004E_3531_325F_5631)
+            );
+            assert_eq!(
+                abi.compatibility_family_id().map(|id| id.raw()),
+                Some(0x4E35_3132_5F00_FA11)
+            );
+            assert_eq!(abi.foundation_payload_digest(), Some(asset.digest()));
+        }
+
+        let (n2048, _, _) = compile_gpu_birth_components(
+            0xB17A_DA7D,
+            BrainScaleTier::Standard2048,
+            OrganismId::new(81).unwrap(),
+            Tick::ZERO,
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .unwrap();
+        let n2048_asset = alife_core::FoundationWeightAsset::builtin_n2048_v1(
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .unwrap();
+        assert_eq!(n2048.brain_class_id(), BrainCapacityClass::N2048_ID);
+        assert_eq!(
+            n2048.foundation_abi().foundation_payload_digest(),
+            Some(n2048_asset.digest())
+        );
+        assert_ne!(
+            n2048.foundation_abi().foundation_id().unwrap().raw(),
+            0x004E_3531_325F_5631
+        );
+
+        assert!(compile_gpu_birth_components(
+            0xB17A_DA7E,
+            BrainScaleTier::Small1024,
+            OrganismId::new(82).unwrap(),
+            Tick::ZERO,
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .is_err());
     }
 
     impl GpuSleepConsolidationDriver for NoProgressSleepDriver {

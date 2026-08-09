@@ -20,7 +20,8 @@ const FOUNDATION_PAYLOAD_DOMAIN: &[u8] = b"alife.foundation.weight-payload.v1";
 const TRAINING_STAGE_DOMAIN: &[u8] = b"alife.foundation.training-stage.v1";
 const PROMOTION_RECEIPT_DOMAIN: &[u8] = b"alife.foundation.promotion-receipt.v1";
 const FOUNDATION_BOOTSTRAP_PROVENANCE_DOMAIN: &[u8] = b"alife.foundation.bootstrap-provenance.v1";
-const FOUNDATION_ASSET_MAGIC: [u8; 8] = *b"ALFN2048";
+const FOUNDATION_ASSET_MAGIC_N512: [u8; 8] = *b"ALFN0512";
+const FOUNDATION_ASSET_MAGIC_N2048: [u8; 8] = *b"ALFN2048";
 const FOUNDATION_ASSET_CODEC_VERSION: u16 = 1;
 const FOUNDATION_ASSET_MAX_WEIGHTS: usize = 65_536;
 
@@ -327,6 +328,7 @@ pub struct FoundationLayoutId(pub u64);
 pub struct FoundationId(u64);
 
 impl FoundationId {
+    pub const N512_V1: Self = Self(0x004E_3531_325F_5631);
     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
 
     pub const fn raw(self) -> u64 {
@@ -349,6 +351,7 @@ impl FoundationVersion {
 pub struct FoundationCompatibilityFamilyId(u64);
 
 impl FoundationCompatibilityFamilyId {
+    pub const N512_FOUNDATION: Self = Self(0x4E35_3132_5F00_FA11);
     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
 
     pub const fn raw(self) -> u64 {
@@ -555,11 +558,13 @@ impl FoundationManifest {
         weight_asset: FoundationWeightAssetRef,
     ) -> Result<Self, ScaffoldContractError> {
         let training_stage = TrainingStageManifest::bootstrap();
+        let (foundation_id, compatibility_family_id) =
+            foundation_identity_for_class(phenotype.brain_class_id())?;
         Ok(Self {
             schema_version: 1,
-            foundation_id: FoundationId::N2048_V1,
+            foundation_id,
             foundation_version: FoundationVersion::V1,
-            compatibility_family_id: FoundationCompatibilityFamilyId::N2048_FOUNDATION,
+            compatibility_family_id,
             capacity_class_id: phenotype.brain_class_id(),
             sensor_profile: phenotype.sensor_profile(),
             layout_digest: phenotype.foundation_abi().layout_digest(),
@@ -610,10 +615,12 @@ impl FoundationManifest {
     ) -> Result<(), ScaffoldContractError> {
         self.training_stage.validate()?;
         self.promotion_receipt.validate(self.training_stage)?;
+        let (foundation_id, compatibility_family_id) =
+            foundation_identity_for_class(self.capacity_class_id)?;
         if self.schema_version != 1
-            || self.foundation_id != FoundationId::N2048_V1
+            || self.foundation_id != foundation_id
             || self.foundation_version != FoundationVersion::V1
-            || self.compatibility_family_id != FoundationCompatibilityFamilyId::N2048_FOUNDATION
+            || self.compatibility_family_id != compatibility_family_id
             || self.capacity_class_id != phenotype.brain_class_id()
             || self.sensor_profile != phenotype.sensor_profile()
             || self.layout_digest != phenotype.foundation_abi().layout_digest()
@@ -651,6 +658,22 @@ pub struct FoundationWeightAsset {
 }
 
 impl FoundationWeightAsset {
+    pub fn builtin_nano512_v1(
+        sensor_profile: SensorProfile,
+    ) -> Result<Self, ScaffoldContractError> {
+        let bytes: &[u8] = match sensor_profile {
+            SensorProfile::PrivilegedAffordanceV1 => include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../assets/brain_foundations/n512-v1-privileged.alife-foundation"
+            )),
+            SensorProfile::GroundedObjectSlotsV1 => include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../assets/brain_foundations/n512-v1-grounded.alife-foundation"
+            )),
+        };
+        Self::decode_canonical(bytes)
+    }
+
     pub fn builtin_n2048_v1(sensor_profile: SensorProfile) -> Result<Self, ScaffoldContractError> {
         let bytes: &[u8] = match sensor_profile {
             SensorProfile::PrivilegedAffordanceV1 => include_bytes!(concat!(
@@ -725,7 +748,7 @@ impl FoundationWeightAsset {
         training_stage: TrainingStageManifest,
         promotion_receipt: FoundationPromotionReceipt,
     ) -> Result<Self, ScaffoldContractError> {
-        if phenotype.brain_class_id() != BrainCapacityClass::N2048_ID
+        if foundation_identity_for_class(phenotype.brain_class_id()).is_err()
             || weights.len() != phenotype.synapses().len()
             || weights.iter().any(|weight| !weight.is_finite())
         {
@@ -793,7 +816,7 @@ impl FoundationWeightAsset {
     pub fn encode_canonical(&self) -> Result<Vec<u8>, ScaffoldContractError> {
         self.validate_self_contained()?;
         let mut out = Vec::with_capacity(512 + self.weights.len() * size_of::<f32>());
-        out.extend_from_slice(&FOUNDATION_ASSET_MAGIC);
+        out.extend_from_slice(&foundation_asset_magic(self.manifest.capacity_class_id)?);
         push_u16(&mut out, FOUNDATION_ASSET_CODEC_VERSION);
         encode_manifest(&mut out, &self.manifest);
         push_u32(
@@ -810,13 +833,17 @@ impl FoundationWeightAsset {
 
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self, ScaffoldContractError> {
         let mut cursor = FoundationAssetCursor::new(bytes);
-        if cursor.take(FOUNDATION_ASSET_MAGIC.len())? != FOUNDATION_ASSET_MAGIC {
+        let magic = cursor.take(FOUNDATION_ASSET_MAGIC_N2048.len())?;
+        if magic != FOUNDATION_ASSET_MAGIC_N512 && magic != FOUNDATION_ASSET_MAGIC_N2048 {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         if cursor.u16()? != FOUNDATION_ASSET_CODEC_VERSION {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         let manifest = decode_manifest(&mut cursor)?;
+        if magic != foundation_asset_magic(manifest.capacity_class_id)?.as_slice() {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         let weight_count =
             usize::try_from(cursor.u32()?).map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
         if weight_count == 0 || weight_count > FOUNDATION_ASSET_MAX_WEIGHTS {
@@ -851,8 +878,12 @@ impl FoundationWeightAsset {
         self.manifest
             .promotion_receipt
             .validate(self.manifest.training_stage)?;
+        let (foundation_id, compatibility_family_id) =
+            foundation_identity_for_class(self.manifest.capacity_class_id)?;
         if self.manifest.schema_version != 1
-            || self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
+            || self.manifest.foundation_id != foundation_id
+            || self.manifest.foundation_version != FoundationVersion::V1
+            || self.manifest.compatibility_family_id != compatibility_family_id
             || self.weights.is_empty()
             || self.weights.len() > FOUNDATION_ASSET_MAX_WEIGHTS
             || self.weights.len() != self.manifest.weight_asset.weight_count as usize
@@ -979,10 +1010,10 @@ impl FoundationAbiBinding {
             self.compatibility_family_id,
             self.weight_asset,
         ) {
-            if capacity.id() != BrainCapacityClass::N2048_ID
-                || id != FoundationId::N2048_V1
+            let (expected_id, expected_family) = foundation_identity_for_class(capacity.id())?;
+            if id != expected_id
                 || version != FoundationVersion::V1
-                || family != FoundationCompatibilityFamilyId::N2048_FOUNDATION
+                || family != expected_family
                 || asset.weight_count == 0
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
@@ -992,6 +1023,30 @@ impl FoundationAbiBinding {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         Ok(())
+    }
+}
+
+fn foundation_identity_for_class(
+    class_id: BrainClassId,
+) -> Result<(FoundationId, FoundationCompatibilityFamilyId), ScaffoldContractError> {
+    match class_id {
+        BrainCapacityClass::N512_ID => Ok((
+            FoundationId::N512_V1,
+            FoundationCompatibilityFamilyId::N512_FOUNDATION,
+        )),
+        BrainCapacityClass::N2048_ID => Ok((
+            FoundationId::N2048_V1,
+            FoundationCompatibilityFamilyId::N2048_FOUNDATION,
+        )),
+        _ => Err(ScaffoldContractError::PhenotypeCompile),
+    }
+}
+
+fn foundation_asset_magic(class_id: BrainClassId) -> Result<[u8; 8], ScaffoldContractError> {
+    match class_id {
+        BrainCapacityClass::N512_ID => Ok(FOUNDATION_ASSET_MAGIC_N512),
+        BrainCapacityClass::N2048_ID => Ok(FOUNDATION_ASSET_MAGIC_N2048),
+        _ => Err(ScaffoldContractError::PhenotypeCompile),
     }
 }
 

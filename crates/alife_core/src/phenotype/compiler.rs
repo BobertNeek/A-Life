@@ -15,7 +15,15 @@ impl PhenotypeCompiler {
         capacity: &BrainCapacityClass,
     ) -> Result<BrainPhenotype, ScaffoldContractError> {
         if let Some(expected_digest) = inputs.foundation_abi().foundation_payload_digest() {
-            let foundation = FoundationWeightAsset::builtin_n2048_v1(inputs.sensor_profile())?;
+            let foundation = match capacity.id() {
+                BrainCapacityClass::N512_ID => {
+                    FoundationWeightAsset::builtin_nano512_v1(inputs.sensor_profile())?
+                }
+                BrainCapacityClass::N2048_ID => {
+                    FoundationWeightAsset::builtin_n2048_v1(inputs.sensor_profile())?
+                }
+                _ => return Err(ScaffoldContractError::PhenotypeCompile),
+            };
             if foundation.digest() != expected_digest
                 || inputs.foundation_abi().foundation_weight_asset() != Some(foundation.asset_ref())
             {
