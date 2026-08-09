@@ -11,7 +11,7 @@ pub(super) fn compile(
     inputs: &PhenotypeCompilerInputs,
     capacity: &BrainCapacityClass,
 ) -> Result<BrainPhenotype, ScaffoldContractError> {
-    compile_inner(inputs, capacity, None)
+    compile_inner(inputs, capacity, None, None)
 }
 
 pub(super) fn compile_with_foundation_asset(
@@ -19,13 +19,26 @@ pub(super) fn compile_with_foundation_asset(
     capacity: &BrainCapacityClass,
     foundation: &crate::FoundationWeightAsset,
 ) -> Result<BrainPhenotype, ScaffoldContractError> {
-    compile_inner(inputs, capacity, Some(foundation))
+    compile_inner(inputs, capacity, Some(foundation), None)
+}
+
+pub(super) fn compile_with_foundation_asset_and_overlay_seed(
+    inputs: &PhenotypeCompilerInputs,
+    capacity: &BrainCapacityClass,
+    foundation: &crate::FoundationWeightAsset,
+    overlay_seed: u64,
+) -> Result<BrainPhenotype, ScaffoldContractError> {
+    if overlay_seed == 0 {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    compile_inner(inputs, capacity, Some(foundation), Some(overlay_seed))
 }
 
 fn compile_inner(
     inputs: &PhenotypeCompilerInputs,
     capacity: &BrainCapacityClass,
     foundation: Option<&crate::FoundationWeightAsset>,
+    overlay_seed: Option<u64>,
 ) -> Result<BrainPhenotype, ScaffoldContractError> {
     inputs.validate_against(capacity)?;
     let genome = inputs.genome();
@@ -150,7 +163,10 @@ fn compile_inner(
             let projection = projections
                 .get(usize::from(synapse.route_index()))
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            let delta = genome_weight_delta(genome.genetic_prior_seed, global_index as u32);
+            let delta = genome_weight_delta(
+                overlay_seed.unwrap_or(genome.genetic_prior_seed),
+                global_index as u32,
+            );
             let mut composed = *weight + delta;
             match projection.projection_type() {
                 crate::ProjectionType::LateralInhibition if composed >= 0.0 => {

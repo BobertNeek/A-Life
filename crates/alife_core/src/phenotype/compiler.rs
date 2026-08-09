@@ -77,4 +77,32 @@ impl PhenotypeCompiler {
         )?;
         super::construction::compile_with_foundation_asset(&inputs, capacity, foundation)
     }
+
+    pub(super) fn compile_from_foundation_asset_with_overlay_seed(
+        genome: &BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: &DevelopmentState,
+        sensor_profile: SensorProfile,
+        foundation: &FoundationWeightAsset,
+        overlay_seed: u64,
+    ) -> Result<BrainPhenotype, ScaffoldContractError> {
+        if overlay_seed == 0 {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        let foundation_abi =
+            FoundationAbiBinding::canonical_for_foundation_asset(capacity, foundation)?;
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+            genome.clone(),
+            capacity,
+            development.clone(),
+            sensor_profile,
+            foundation_abi,
+        )?;
+        super::construction::compile_with_foundation_asset_and_overlay_seed(
+            &inputs,
+            capacity,
+            foundation,
+            overlay_seed,
+        )
+    }
 }

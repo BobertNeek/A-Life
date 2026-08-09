@@ -16,6 +16,7 @@ mod layout_compile;
 mod learning;
 mod memory_channel;
 mod migration;
+mod n512_founder_projection;
 mod persistent_address;
 mod record;
 mod topology_compile;
@@ -36,6 +37,9 @@ pub use learning::{
 };
 pub use memory_channel::MemoryChannelPlan;
 pub use migration::{N4096ResearchLayoutV1, PhenotypeGrowthMigration, PhenotypeGrowthReceipt};
+pub use n512_founder_projection::{
+    N512FounderFoundationProjection, N512FounderProjectionReceipt, N512FrozenAbiRecipe,
+};
 pub use persistent_address::{
     PersistentAddressMap, PersistentDecoderAddress, PersistentDecoderAddressEntry,
     PersistentNeuronAddress, PersistentNeuronAddressEntry, PersistentProjectionAddress,
