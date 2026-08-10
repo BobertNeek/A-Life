@@ -1,43 +1,53 @@
 //! Player speech and cross-save lineage selection for the production frontend.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 
-use alife_archive::{LineageLibrary, LineageLibraryConfig};
+use alife_archive::{LineageLibrary, LineageLibraryConfig, ResolvedFounder};
 use alife_core::{
-    ArchiveCheckpointDisposition, ArchiveCheckpointRetention, Blake3Digest, BrainClassId,
-    FounderMode, FounderSelection, GenomeId, LanguageCodebookV1, LineageId, MetricReading,
-    OrganismId, PassiveLifeStatistics, PassiveMetricKind, PolicyBackend, SpeechTranslationInput,
-    SpeechTranslationReceipt, SpeechTranslationRequest, SurfaceTokenBinding, Tick, UtteranceId,
-    UtteranceSourceKind, Validate, Vec3f,
+    ArchiveCheckpointDisposition, ArchiveCheckpointRetention, Blake3Digest, BrainCapacityClass,
+    BrainClassId, DevelopmentState, FoundationWeightAsset, FounderMode, FounderSelection, GenomeId,
+    LanguageCodebookV1, LineageId, MetricReading, NormalizedScalar, OrganismId,
+    PassiveLifeStatistics, PassiveMetricKind, PhenotypeCompiler, PolicyBackend, SensorProfile,
+    SpeechTranslationInput, SpeechTranslationReceipt, SpeechTranslationRequest,
+    SurfaceTokenBinding, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
 };
 use alife_semantic::{
     BoundedSpeechTranslator, LlamaCppSpeechTranslationConfig, LlamaCppSpeechTranslator,
     TranslationAssistance,
 };
 use alife_world::{
-    persistence::PortableSaveFile, AssistanceProvenance, FoundationProvenance, Habitat,
-    HabitatActor, HabitatAuthorityError, HabitatAuthorityKind, HabitatBreedingKind,
-    HabitatBreedingReceipt, HabitatBreedingRequest, HabitatCreaturePresentation, HabitatId,
-    HabitatMembership, HabitatMode, HabitatOperation, HabitatOperationRequest,
-    HabitatPermissionReceipt, HabitatTagRecord, HabitatTransferProvenance, HabitatTransferRecord,
-    HabitatTransferRequest, HeadlessWorld, PossessionProvenance, PresentationEvidence,
-    QuarantineProvenance, SelectionExposureProvenance, StableVoxelRefKind, WorldObjectKind,
+    AssistanceProvenance, FoundationProvenance, Habitat, HabitatActor, HabitatAuthorityError,
+    HabitatAuthorityKind, HabitatBreedingKind, HabitatBreedingReceipt, HabitatBreedingRequest,
+    HabitatCreaturePresentation, HabitatId, HabitatMembership, HabitatMode, HabitatOperation,
+    HabitatOperationRequest, HabitatPermissionReceipt, HabitatTagRecord, HabitatTransferProvenance,
+    HabitatTransferRecord, HabitatTransferRequest, HeadlessWorld, PossessionProvenance,
+    PresentationEvidence, QuarantineProvenance, SelectionExposureProvenance, StableVoxelRefKind,
+    WorldObjectKind,
 };
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::{
         App, BackgroundColor, ButtonInput, ChildOf, Color, Component, FlexDirection, FlexWrap,
-        GlobalZIndex, KeyCode, MessageReader, Name, Node, NonSend, NonSendMut, ParamSet,
-        PositionType, Res, ResMut, Resource, Text, Text2d, TextColor, TextFont, Transform, UiRect,
-        Update, Val, Visibility, With,
+        GlobalZIndex, KeyCode, MessageReader, MessageWriter, Name, Node, NonSend, NonSendMut,
+        ParamSet, PositionType, Res, ResMut, Resource, Text, Text2d, TextColor, TextFont,
+        Transform, UiRect, Update, Val, Visibility, With,
     },
 };
 
-use crate::bevy_shell::ProductionGpuBrainRuntimeResource;
+use crate::bevy_shell::{
+    ProductionCuratedFounderResetCommand, ProductionCuratedFounderResetResultResource,
+    ProductionGpuBrainRuntimeResource,
+};
 use crate::{
-    materialize_founder_gpu_states, Fvr03ProductionVoxelSceneResource,
-    Fvr03ProductionVoxelSelectionResource, Fvr04ProductionCreatureSceneResource,
-    Fvr05ProductionUxStateResource, GameAppShellError, ProductionVoxelLaunchSummary,
+    curated_founder_reset::CuratedFounderAgentInput,
+    gpu_live_runtime::CuratedFounderGpuResidencyState,
+    gpu_live_runtime::CuratedFounderResetDispatchResult, gpu_live_runtime::LiveAgentResetIntent,
+    Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionResource,
+    Fvr04ProductionCreatureSceneResource, Fvr05ProductionUxStateResource, GameAppShellError,
+    ProductionVoxelLaunchSummary,
 };
 
 const MAX_TYPED_CHARS: usize = 512;
@@ -1097,7 +1107,7 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
         app,
         cohort,
         LineageLabTextRole::CohortHeader,
-        "FOUNDER COHORT 0/16  /  4 required  [A add] [X remove] [Enter create]",
+        "FOUNDER COHORT 0/16  /  4 required  [A add] [X remove] [Enter reset] [V live] [T retry]",
         layout.critical_font_size,
         Node {
             width: Val::Percent(100.0),
@@ -1125,7 +1135,7 @@ fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
         app,
         root,
         LineageLabTextRole::Footer,
-        "S source  D/Tab data  O sort  Up/Down archive  F founder  A add  X remove  H habitat  P partner  1-4 operate  Y/Esc close",
+        "S source  D/Tab data  O sort  Up/Down archive  F founder  A add  X remove  H habitat  P partner  1-4 operate  Enter archive reset  V current live Agents  T retry  Y/Esc close",
         layout.critical_font_size,
         Node {
             position_type: PositionType::Absolute,
@@ -1208,12 +1218,521 @@ fn lab_flow_text_node() -> Node {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LineageResetMappingError {
+    CohortSize {
+        actual: usize,
+    },
+    ArchiveOpen {
+        reason: String,
+    },
+    ArchiveManifest {
+        digest: Blake3Digest,
+        reason: String,
+    },
+    FounderMode {
+        digest: Blake3Digest,
+    },
+    SensorProfileMismatch {
+        digest: Blake3Digest,
+    },
+    FoundationMismatch {
+        digest: Blake3Digest,
+        field: &'static str,
+    },
+    MissingLiveAgent {
+        organism_id: OrganismId,
+    },
+    AmbiguousLiveAgent {
+        organism_id: OrganismId,
+        count: usize,
+    },
+    NonAgentBinding {
+        organism_id: OrganismId,
+    },
+    MissingOrganismBinding {
+        world_entity_id: WorldEntityId,
+    },
+    DuplicateWorldEntityId {
+        world_entity_id: WorldEntityId,
+    },
+    DuplicateOrganismId {
+        organism_id: OrganismId,
+    },
+    NoLiveAgents,
+    ArchiveCohort {
+        reason: String,
+    },
+    RuntimeCompatibility {
+        reason: String,
+    },
+    PopulationOverflow,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RuntimeSaveAuthority {
+    save_id: String,
+    deterministic_seed: u64,
+    sensor_profile: SensorProfile,
+}
+
+fn runtime_save_authority(
+    runtime: &mut crate::GpuLiveBrainRuntime,
+    world: &HeadlessWorld,
+) -> Result<RuntimeSaveAuthority, LineageResetMappingError> {
+    let save = runtime.capture_portable_checkpoint().map_err(|error| {
+        LineageResetMappingError::RuntimeCompatibility {
+            reason: format!("current GPU runtime checkpoint is unavailable: {error}"),
+        }
+    })?;
+    let mut current_agents = BTreeSet::new();
+    for object in world.object_snapshots() {
+        if object.kind != WorldObjectKind::Agent {
+            continue;
+        }
+        let Some(organism_id) = object.organism_id else {
+            return Err(LineageResetMappingError::MissingOrganismBinding {
+                world_entity_id: object.id,
+            });
+        };
+        if !current_agents.insert(organism_id.raw()) {
+            return Err(LineageResetMappingError::AmbiguousLiveAgent {
+                organism_id,
+                count: 2,
+            });
+        }
+    }
+    if current_agents.is_empty() {
+        return Err(LineageResetMappingError::NoLiveAgents);
+    }
+    if save.creatures.len() != current_agents.len() {
+        return Err(LineageResetMappingError::RuntimeCompatibility {
+            reason: format!(
+                "current runtime save has {} creatures for {} current Agents",
+                save.creatures.len(),
+                current_agents.len()
+            ),
+        });
+    }
+
+    let mut profile = None;
+    let mut save_agents = BTreeSet::new();
+    for creature in &save.creatures {
+        if !current_agents.contains(&creature.organism_id.raw()) {
+            return Err(LineageResetMappingError::RuntimeCompatibility {
+                reason: format!(
+                    "runtime save contains organism {} absent from the current Agent world",
+                    creature.organism_id.raw()
+                ),
+            });
+        }
+        if !save_agents.insert(creature.organism_id.raw()) {
+            return Err(LineageResetMappingError::RuntimeCompatibility {
+                reason: format!(
+                    "current runtime save contains duplicate organism {}",
+                    creature.organism_id.raw()
+                ),
+            });
+        }
+        let Some(brain) = &creature.gpu_brain else {
+            return Err(LineageResetMappingError::RuntimeCompatibility {
+                reason: format!(
+                    "current Agent {} has no GPU sensor profile",
+                    creature.organism_id.raw()
+                ),
+            });
+        };
+        let current = SensorProfile::try_from_raw(brain.sensor_profile.profile_id.raw()).map_err(
+            |error| LineageResetMappingError::RuntimeCompatibility {
+                reason: format!("runtime sensor profile is invalid: {error}"),
+            },
+        )?;
+        if let Some(previous) = profile {
+            if previous != current {
+                return Err(LineageResetMappingError::RuntimeCompatibility {
+                    reason: "current runtime save contains mixed sensor profiles".to_string(),
+                });
+            }
+        }
+        profile = Some(current);
+    }
+    if save_agents != current_agents {
+        return Err(LineageResetMappingError::RuntimeCompatibility {
+            reason: "current runtime save does not cover every current Agent".to_string(),
+        });
+    }
+    let sensor_profile = profile.ok_or_else(|| LineageResetMappingError::RuntimeCompatibility {
+        reason: "current runtime save has no GPU sensor profiles".to_string(),
+    })?;
+    Ok(RuntimeSaveAuthority {
+        save_id: save.save_id,
+        deterministic_seed: save.deterministic_seed,
+        sensor_profile,
+    })
+}
+
+fn map_lineage_cohort(
+    root: &Path,
+    cohort: &[FounderSelection],
+    world: &HeadlessWorld,
+    target_save_id: &str,
+    deterministic_seed: u64,
+    sensor_profile: SensorProfile,
+) -> Result<LiveAgentResetIntent, LineageResetMappingError> {
+    if !founder_cohort_ready(cohort) {
+        return Err(LineageResetMappingError::CohortSize {
+            actual: cohort.len(),
+        });
+    }
+    if let Some(selection) = cohort
+        .iter()
+        .find(|selection| selection.mode != FounderMode::GeneticFounder)
+    {
+        return Err(LineageResetMappingError::FounderMode {
+            digest: selection.source_manifest_digest,
+        });
+    }
+    let library =
+        LineageLibrary::open(LineageLibraryConfig::profile_default(root)).map_err(|error| {
+            LineageResetMappingError::ArchiveOpen {
+                reason: error.to_string(),
+            }
+        })?;
+    let foundation_asset =
+        FoundationWeightAsset::builtin_nano512_v1(sensor_profile).map_err(|error| {
+            LineageResetMappingError::RuntimeCompatibility {
+                reason: format!("checked Nano512 foundation is unavailable: {error}"),
+            }
+        })?;
+    let foundation_bytes = foundation_asset.encode_canonical().map_err(|error| {
+        LineageResetMappingError::RuntimeCompatibility {
+            reason: format!("checked Nano512 foundation cannot be encoded: {error}"),
+        }
+    })?;
+    let resolved = library
+        .resolve_founder_cohort(target_save_id.to_string(), deterministic_seed, cohort)
+        .map_err(|error| LineageResetMappingError::ArchiveCohort {
+            reason: error.to_string(),
+        })?;
+    let mut bindings = Vec::with_capacity(cohort.len());
+    let snapshots = world.object_snapshots();
+
+    for founder in &resolved.founders {
+        let digest = founder.selection.source_manifest_digest;
+        if founder.selection.mode != FounderMode::GeneticFounder {
+            return Err(LineageResetMappingError::FounderMode { digest });
+        }
+        validate_resolved_genetic_founder(
+            founder,
+            sensor_profile,
+            &foundation_asset,
+            &foundation_bytes,
+        )?;
+        let organism_id = founder.manifest.genetic.organism_id;
+        let matching = snapshots
+            .iter()
+            .filter(|object| object.organism_id == Some(organism_id))
+            .collect::<Vec<_>>();
+        if matching.is_empty() {
+            return Err(LineageResetMappingError::MissingLiveAgent { organism_id });
+        }
+        if matching.len() != 1 {
+            return Err(LineageResetMappingError::AmbiguousLiveAgent {
+                organism_id,
+                count: matching.len(),
+            });
+        }
+        let object = matching.into_iter().next().expect("one matching object");
+        if object.kind != WorldObjectKind::Agent {
+            return Err(LineageResetMappingError::NonAgentBinding { organism_id });
+        }
+        bindings.push((object.id, organism_id));
+    }
+
+    ordered_live_agent_intent(bindings)
+}
+
+fn validate_resolved_genetic_founder(
+    founder: &ResolvedFounder,
+    sensor_profile: SensorProfile,
+    expected_foundation: &FoundationWeightAsset,
+    expected_foundation_bytes: &[u8],
+) -> Result<(), LineageResetMappingError> {
+    let digest = founder.selection.source_manifest_digest;
+    let genetic = &founder.manifest.genetic;
+    if genetic.sensor_profile != sensor_profile {
+        return Err(LineageResetMappingError::SensorProfileMismatch { digest });
+    }
+    if genetic.brain_class_id != BrainCapacityClass::N512_ID
+        || founder.genome.brain_class_id != BrainCapacityClass::N512_ID
+    {
+        return Err(LineageResetMappingError::FoundationMismatch {
+            digest,
+            field: "architecture/brain class",
+        });
+    }
+    let capacity =
+        BrainCapacityClass::production_for_id(genetic.brain_class_id).map_err(|error| {
+            LineageResetMappingError::FoundationMismatch {
+                digest,
+                field: "architecture/brain class",
+            }
+        })?;
+    let Some(foundation_bytes) = founder.foundation_bytes.as_deref() else {
+        return Err(LineageResetMappingError::FoundationMismatch {
+            digest,
+            field: "foundation asset presence",
+        });
+    };
+    let foundation =
+        FoundationWeightAsset::decode_canonical(foundation_bytes).map_err(|error| {
+            LineageResetMappingError::ArchiveManifest {
+                digest,
+                reason: format!("foundation asset is invalid: {error}"),
+            }
+        })?;
+    if foundation_bytes != expected_foundation_bytes || &foundation != expected_foundation {
+        return Err(LineageResetMappingError::FoundationMismatch {
+            digest,
+            field: "exact checked Nano512 foundation payload",
+        });
+    }
+    let manifest = foundation.manifest();
+    if genetic.foundation_id != Some(manifest.foundation_id())
+        || genetic.foundation_version != Some(manifest.foundation_version())
+        || genetic.compatibility_family_id != Some(manifest.compatibility_family_id())
+        || genetic.foundation_payload_digest != Some(foundation.digest())
+    {
+        return Err(LineageResetMappingError::FoundationMismatch {
+            digest,
+            field: "foundation identity/version/compatibility/payload",
+        });
+    }
+    let development = DevelopmentState::new(
+        founder.genome.id,
+        Tick::ZERO,
+        NormalizedScalar::new(0.25).map_err(|error| {
+            LineageResetMappingError::RuntimeCompatibility {
+                reason: format!("genetic founder development baseline is invalid: {error}"),
+            }
+        })?,
+    );
+    let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+        &founder.genome,
+        &capacity,
+        &development,
+        sensor_profile,
+        &foundation,
+    )
+    .map_err(|error| LineageResetMappingError::ArchiveManifest {
+        digest,
+        reason: format!("archived genetic founder cannot compile against Nano512: {error}"),
+    })?;
+    phenotype.validate_against(&capacity).map_err(|error| {
+        LineageResetMappingError::ArchiveManifest {
+            digest,
+            reason: format!("compiled genetic founder phenotype is invalid: {error}"),
+        }
+    })?;
+    foundation.validate_against(&phenotype).map_err(|error| {
+        LineageResetMappingError::FoundationMismatch {
+            digest,
+            field: "foundation ABI/route/plasticity/address-map contract",
+        }
+    })?;
+    let abi = phenotype.foundation_abi();
+    if genetic.genome_id != founder.genome.id
+        || genetic.lineage_id != founder.genome.lineage_id
+        || genetic.phenotype_hash != phenotype.phenotype_hash()
+        || genetic.foundation_id != abi.foundation_id()
+        || genetic.foundation_version != abi.foundation_version()
+        || genetic.compatibility_family_id != abi.compatibility_family_id()
+        || genetic.foundation_payload_digest != abi.foundation_payload_digest()
+        || genetic.persistent_address_map_digest != phenotype.persistent_address_map().digest()
+        || genetic.language_codebook_id != phenotype.language_codebook().id()
+        || genetic.language_codebook_digest != phenotype.language_codebook().canonical_digest()
+    {
+        return Err(LineageResetMappingError::FoundationMismatch {
+            digest,
+            field: "manifest phenotype/ABI/address-map/language compatibility",
+        });
+    }
+    Ok(())
+}
+
+fn map_lineage_enter_command(
+    root: &Path,
+    cohort: &[FounderSelection],
+    world: &HeadlessWorld,
+    target_save_id: &str,
+    deterministic_seed: u64,
+    sensor_profile: SensorProfile,
+) -> Result<ProductionCuratedFounderResetCommand, LineageResetMappingError> {
+    map_lineage_cohort(
+        root,
+        cohort,
+        world,
+        target_save_id,
+        deterministic_seed,
+        sensor_profile,
+    )
+    .map(ProductionCuratedFounderResetCommand::Attempt)
+}
+
+fn map_current_live_command(
+    world: &HeadlessWorld,
+) -> Result<ProductionCuratedFounderResetCommand, LineageResetMappingError> {
+    map_current_live_agents(world).map(ProductionCuratedFounderResetCommand::Attempt)
+}
+
+fn map_current_live_agents(
+    world: &HeadlessWorld,
+) -> Result<LiveAgentResetIntent, LineageResetMappingError> {
+    let mut bindings = Vec::new();
+    for object in world.object_snapshots() {
+        if object.kind != WorldObjectKind::Agent {
+            continue;
+        }
+        let Some(organism_id) = object.organism_id else {
+            return Err(LineageResetMappingError::MissingOrganismBinding {
+                world_entity_id: object.id,
+            });
+        };
+        bindings.push((object.id, organism_id));
+    }
+    if bindings.is_empty() {
+        return Err(LineageResetMappingError::NoLiveAgents);
+    }
+    ordered_live_agent_intent(bindings)
+}
+
+fn ordered_live_agent_intent(
+    mut bindings: Vec<(WorldEntityId, OrganismId)>,
+) -> Result<LiveAgentResetIntent, LineageResetMappingError> {
+    let mut world_entity_ids = BTreeSet::new();
+    let mut organism_ids = BTreeSet::new();
+    for (world_entity_id, organism_id) in &bindings {
+        if !world_entity_ids.insert(world_entity_id.raw()) {
+            return Err(LineageResetMappingError::DuplicateWorldEntityId {
+                world_entity_id: *world_entity_id,
+            });
+        }
+        if !organism_ids.insert(organism_id.raw()) {
+            return Err(LineageResetMappingError::DuplicateOrganismId {
+                organism_id: *organism_id,
+            });
+        }
+    }
+    bindings.sort_unstable_by(|left, right| {
+        left.0
+            .raw()
+            .cmp(&right.0.raw())
+            .then_with(|| left.1.raw().cmp(&right.1.raw()))
+    });
+    let final_agents = bindings
+        .into_iter()
+        .enumerate()
+        .map(|(slot, (world_entity_id, organism_id))| {
+            Ok(CuratedFounderAgentInput {
+                world_entity_id,
+                organism_id: Some(organism_id),
+                final_population_slot: u32::try_from(slot)
+                    .map_err(|_| LineageResetMappingError::PopulationOverflow)?,
+                legacy_genome_id: None,
+            })
+        })
+        .collect::<Result<Vec<_>, LineageResetMappingError>>()?;
+    Ok(LiveAgentResetIntent { final_agents })
+}
+
+fn reset_result_is_retryable(result: &CuratedFounderResetDispatchResult) -> bool {
+    matches!(
+        result,
+        CuratedFounderResetDispatchResult::Conflict {
+            retryable: true,
+            ..
+        } | CuratedFounderResetDispatchResult::Unknown {
+            retryable: true,
+            ..
+        }
+    )
+}
+
+fn retry_command_if_available(
+    result: &CuratedFounderResetDispatchResult,
+) -> Option<ProductionCuratedFounderResetCommand> {
+    reset_result_is_retryable(result).then_some(ProductionCuratedFounderResetCommand::Retry)
+}
+
+fn curated_founder_reset_status(result: &CuratedFounderResetDispatchResult) -> String {
+    match result {
+        CuratedFounderResetDispatchResult::Idle => "Curated reset: idle".to_string(),
+        CuratedFounderResetDispatchResult::PreCommitRejected { rejection } => format!(
+            "Curated reset rejected before durable publication: {rejection:?}; live reset not claimed"
+        ),
+        CuratedFounderResetDispatchResult::Published {
+            status,
+            save_state,
+            gpu_residency,
+            ..
+        } => format!(
+            "Durable publication verified ({status:?}; save {save_state:?}); GPU residency {}; live reset not claimed",
+            gpu_residency_label(*gpu_residency)
+        ),
+        CuratedFounderResetDispatchResult::Conflict {
+            expected_save_digest,
+            actual_save_digest,
+            proposed_save_digest,
+            retryable,
+            gpu_residency,
+            ..
+        } => format!(
+            "Durable publication conflict (expected {expected_save_digest}, actual {actual_save_digest}, proposed {proposed_save_digest}); GPU residency {}; {}",
+            gpu_residency_label(*gpu_residency),
+            retry_label(*retryable)
+        ),
+        CuratedFounderResetDispatchResult::Unknown {
+            cause,
+            proposed_save_digest,
+            retryable,
+            gpu_residency,
+            ..
+        } => format!(
+            "Durable publication state unknown ({cause}; proposed {proposed_save_digest}); GPU residency {}; {}",
+            gpu_residency_label(*gpu_residency),
+            retry_label(*retryable)
+        ),
+    }
+}
+
+const fn gpu_residency_label(state: CuratedFounderGpuResidencyState) -> &'static str {
+    match state {
+        CuratedFounderGpuResidencyState::Pending => "Pending",
+    }
+}
+
+const fn retry_label(retryable: bool) -> &'static str {
+    if retryable {
+        "Retry [T] available"
+    } else {
+        "Retry unavailable"
+    }
+}
+
+fn lineage_mapping_rejection_status(error: &LineageResetMappingError) -> String {
+    format!(
+        "Archive selection cannot construct a live reset ({error:?}); use V for current live Agents"
+    )
+}
+
 pub(crate) fn handle_production_conversation_lineage_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut key_messages: MessageReader<KeyboardInput>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     ux: Res<Fvr05ProductionUxStateResource>,
+    reset_result: Res<ProductionCuratedFounderResetResultResource>,
+    mut reset_commands: MessageWriter<ProductionCuratedFounderResetCommand>,
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
@@ -1225,6 +1744,8 @@ pub(crate) fn handle_production_conversation_lineage_input(
             &ux,
             &mut runtime.runtime,
             &mut state,
+            &reset_result,
+            &mut reset_commands,
         );
         return;
     }
@@ -1454,9 +1975,11 @@ fn handle_lineage_input(
     keyboard: &ButtonInput<KeyCode>,
     selection: &Fvr03ProductionVoxelSelectionResource,
     creatures: &Fvr04ProductionCreatureSceneResource,
-    ux: &Fvr05ProductionUxStateResource,
+    _ux: &Fvr05ProductionUxStateResource,
     runtime: &mut crate::GpuLiveBrainRuntime,
     state: &mut ProductionConversationLineageUiState,
+    reset_result: &ProductionCuratedFounderResetResultResource,
+    reset_commands: &mut MessageWriter<ProductionCuratedFounderResetCommand>,
 ) {
     if keyboard.just_pressed(KeyCode::Escape) || keyboard.just_pressed(KeyCode::KeyY) {
         state.lineage_open = false;
@@ -1536,11 +2059,51 @@ fn handle_lineage_input(
             Err(error) => state.status = format!("Lineage refresh failed: {error}"),
         }
     }
+    if keyboard.just_pressed(KeyCode::KeyT) {
+        if let Some(command) = retry_command_if_available(&reset_result.outcome) {
+            reset_commands.write(command);
+            state.status =
+                "Curated reset retry submitted; durable result remains authoritative".to_string();
+        } else {
+            state.status =
+                "Retry is unavailable until the typed result marks it retryable".to_string();
+        }
+        return;
+    }
+    if keyboard.just_pressed(KeyCode::KeyV) {
+        let world = runtime.world_snapshot();
+        match runtime_save_authority(runtime, &world).and_then(|_| map_current_live_command(&world))
+        {
+            Ok(intent) => {
+                reset_commands.write(intent);
+                state.status =
+                    "Current live-Agent reset submitted; durable publication and GPU residency are pending"
+                        .to_string();
+            }
+            Err(error) => state.status = lineage_mapping_rejection_status(&error),
+        }
+        return;
+    }
     if keyboard.just_pressed(KeyCode::Enter) {
         if founder_cohort_ready(&state.cohort) {
-            match create_founder_world(state, ux) {
-                Ok(path) => state.status = format!("Created new founder world: {}", path.display()),
-                Err(error) => state.status = format!("Founder world creation failed: {error}"),
+            let world = runtime.world_snapshot();
+            match runtime_save_authority(runtime, &world).and_then(|authority| {
+                map_lineage_enter_command(
+                    &state.lineage_root,
+                    &state.cohort,
+                    &world,
+                    &authority.save_id,
+                    authority.deterministic_seed,
+                    authority.sensor_profile,
+                )
+            }) {
+                Ok(command) => {
+                    reset_commands.write(command);
+                    state.status =
+                        "Lineage selection mapped to current live Agents; durable publication and GPU residency are pending"
+                            .to_string();
+                }
+                Err(error) => state.status = lineage_mapping_rejection_status(&error),
             }
         } else {
             state.status = format!(
@@ -1715,43 +2278,6 @@ fn habitat_command_for_input(
     Ok(command)
 }
 
-fn create_founder_world(
-    state: &ProductionConversationLineageUiState,
-    ux: &Fvr05ProductionUxStateResource,
-) -> Result<PathBuf, GameAppShellError> {
-    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&state.lineage_root))?;
-    let source_save_path = PathBuf::from(&ux.settings.runtime_save_path);
-    let mut base = PortableSaveFile::from_json_file(&source_save_path)?;
-    let organism_ids = base
-        .creatures
-        .iter()
-        .map(|creature| creature.organism_id)
-        .collect::<Vec<_>>();
-    let mut world = base.restore_headless_world()?;
-    for organism in organism_ids {
-        world.remove_organism(organism)?;
-    }
-    base.replace_headless_world_snapshot(&world)?;
-    base.creatures.clear();
-    let seed = base.deterministic_seed;
-    let save_id = format!("founder-world-{seed:016x}");
-    base.save_id = save_id.clone();
-    let cohort = library.resolve_founder_cohort(&save_id, seed, &state.cohort)?;
-    let asset_root = &ux.asset_root;
-    let skeleton = library.create_new_save_from_founders(base, asset_root, &cohort)?;
-    let backend = alife_gpu_backend::GpuClosedLoopBackend::new_required(
-        alife_gpu_backend::GpuRuntimeProfile::production_v1(),
-    )?;
-    let completed = materialize_founder_gpu_states(backend, skeleton, asset_root, &cohort)?;
-    let output = source_save_path
-        .parent()
-        .unwrap_or(asset_root)
-        .join(format!("{save_id}.json"));
-    completed.validate_with_asset_root(asset_root)?;
-    completed.to_json_file(&output)?;
-    Ok(output)
-}
-
 #[allow(clippy::type_complexity)]
 fn sync_production_conversation_lineage_ui(
     state: Res<ProductionConversationLineageUiState>,
@@ -1885,6 +2411,7 @@ fn sync_production_lineage_laboratory_ui(
     layout: Res<LineageLabLayout>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
+    reset_result: Res<ProductionCuratedFounderResetResultResource>,
     runtime: NonSend<ProductionGpuBrainRuntimeResource>,
     mut roots: bevy::prelude::Query<
         &mut Visibility,
@@ -1912,6 +2439,7 @@ fn sync_production_lineage_laboratory_ui(
     };
     let selected = state.current_row();
     let world = runtime.runtime.world_snapshot();
+    let reset_status = curated_founder_reset_status(&reset_result.outcome);
     let live_selected = selected_organism(&selection, &creatures);
     let habitat_view = live_selected
         .map(|organism_id| habitat_lab_view(&world, organism_id, state.habitat_focus_id));
@@ -2051,7 +2579,7 @@ fn sync_production_lineage_laboratory_ui(
                 matches!(state.pending_founder_mode, FounderMode::GeneticOffspring { .. }),
             ),
             LineageLabTextRole::CohortHeader => format!(
-                "FOUNDER COHORT {}/{}  /  {}  [A add] [X remove] [Enter create]",
+                "FOUNDER COHORT {}/{}  /  {}  [A add] [X remove] [Enter reset] [V live] [T retry]",
                 state.cohort.len(),
                 MAX_COHORT_SIZE,
                 if founder_cohort_ready(&state.cohort) {
@@ -2077,8 +2605,8 @@ fn sync_production_lineage_laboratory_ui(
                 },
             ),
             LineageLabTextRole::Footer => format!(
-                "S source  D/Tab data  O sort  Up/Down archive  F founder  A add  X remove  H habitat  P partner  1-4 operate  Y/Esc close\n{}",
-                state.status
+                "S source  D/Tab data  O sort  Up/Down archive  F founder  A add  X remove  H habitat  P partner  1-4 operate  Enter archive reset  V current live Agents  T retry  Y/Esc close\n{}\n{}",
+                state.status, reset_status
             ),
         };
     }
@@ -2424,6 +2952,8 @@ mod tests {
     };
     use bevy::prelude::{Children, Entity};
 
+    use crate::curated_founder_staging::CuratedFounderSaveState;
+
     fn temp_lineage_root(label: &str) -> PathBuf {
         let nonce = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -2501,6 +3031,50 @@ mod tests {
             .unwrap();
         world.replace_habitat_authority(authority).unwrap();
         world
+    }
+
+    fn lineage_test_world(organism_ids: &[u64]) -> alife_world::HeadlessWorld {
+        let mut builder = HeadlessScenarioBuilder::new(913_777);
+        for (index, raw) in organism_ids.iter().copied().enumerate() {
+            let label = format!("lineage-agent-{index}");
+            builder = builder.agent(
+                &label,
+                OrganismId::new(raw).unwrap(),
+                Vec3f::new(index as f32, 0.0, 0.0),
+            );
+        }
+        builder.build().unwrap()
+    }
+
+    fn archive_agent_record(
+        library: &mut LineageLibrary,
+        organism_id: OrganismId,
+        capacity: &BrainCapacityClass,
+        foundation: &FoundationWeightAsset,
+        sensor_profile: SensorProfile,
+    ) -> Blake3Digest {
+        let genome = BrainGenome::scaffold(812_100 + organism_id.raw(), capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.25).unwrap());
+        let phenotype = PhenotypeCompiler::compile_from_foundation_asset(
+            &genome,
+            capacity,
+            &development,
+            sensor_profile,
+            foundation,
+        )
+        .unwrap();
+        let foundation_bytes = foundation.encode_canonical().unwrap();
+        library
+            .archive_birth(GeneticArchiveInput {
+                source_run_id: "lineage-causal-test-run",
+                organism_id,
+                birth_tick: Tick::new(4),
+                genome: &genome,
+                phenotype: &phenotype,
+                foundation_asset_bytes: Some(&foundation_bytes),
+            })
+            .unwrap()
     }
 
     #[test]
@@ -2967,5 +3541,204 @@ mod tests {
             assert_eq!(list_rows, MAX_LIST_ROW_NODES);
             assert_eq!(cohort_slots, MAX_COHORT_SIZE);
         }
+    }
+
+    #[test]
+    fn lineage_enter_maps_only_current_live_agent_bindings() {
+        let root = temp_lineage_root("enter-current-live");
+        let organism_ids = [4_003, 4_001, 4_002, 4_004];
+        let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
+        let n512 = BrainCapacityClass::production_for_id(BrainCapacityClass::N512_ID).unwrap();
+        let n512_foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile).unwrap();
+        let n2048 = BrainCapacityClass::production_for_id(BrainCapacityClass::N2048_ID).unwrap();
+        let n2048_foundation = FoundationWeightAsset::builtin_n2048_v1(sensor_profile).unwrap();
+        let mut library =
+            LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+        let digests = organism_ids
+            .iter()
+            .copied()
+            .map(|raw| {
+                archive_agent_record(
+                    &mut library,
+                    OrganismId::new(raw).unwrap(),
+                    &n512,
+                    &n512_foundation,
+                    sensor_profile,
+                )
+            })
+            .collect::<Vec<_>>();
+        let foundation_mismatch_digest = archive_agent_record(
+            &mut library,
+            OrganismId::new(organism_ids[0]).unwrap(),
+            &n2048,
+            &n2048_foundation,
+            sensor_profile,
+        );
+        drop(library);
+
+        let world = lineage_test_world(&organism_ids);
+        let selections = digests
+            .iter()
+            .copied()
+            .map(|source_manifest_digest| FounderSelection {
+                source_manifest_digest,
+                mode: FounderMode::GeneticFounder,
+            })
+            .collect::<Vec<_>>();
+        let enter_command = map_lineage_enter_command(
+            &root,
+            &selections,
+            &world,
+            "causal-runtime-save",
+            913_777,
+            sensor_profile,
+        )
+        .unwrap();
+        let ProductionCuratedFounderResetCommand::Attempt(intent) = enter_command else {
+            panic!("Enter action core emitted a non-attempt command");
+        };
+        assert_eq!(intent.final_agents.len(), organism_ids.len());
+        assert_eq!(
+            intent
+                .final_agents
+                .iter()
+                .map(|agent| agent.organism_id.unwrap().raw())
+                .collect::<Vec<_>>(),
+            organism_ids
+        );
+        assert_eq!(
+            intent
+                .final_agents
+                .iter()
+                .map(|agent| agent.final_population_slot)
+                .collect::<Vec<_>>(),
+            (0..organism_ids.len() as u32).collect::<Vec<_>>()
+        );
+        assert!(intent
+            .final_agents
+            .iter()
+            .all(|agent| agent.legacy_genome_id.is_none()));
+
+        let absent_world = lineage_test_world(&organism_ids[..3]);
+        let absent = map_lineage_enter_command(
+            &root,
+            &selections,
+            &absent_world,
+            "causal-runtime-save",
+            913_777,
+            sensor_profile,
+        );
+        assert!(matches!(
+            absent,
+            Err(LineageResetMappingError::MissingLiveAgent { .. })
+        ));
+
+        let mut non_founder = selections.clone();
+        non_founder[0].mode = FounderMode::GeneticOffspring { mutation_seed: 1 };
+        let rejected_mode = map_lineage_enter_command(
+            &root,
+            &non_founder,
+            &world,
+            "causal-runtime-save",
+            913_777,
+            sensor_profile,
+        );
+        assert!(matches!(
+            rejected_mode,
+            Err(LineageResetMappingError::FounderMode { .. })
+        ));
+
+        let mut duplicate = selections.clone();
+        duplicate[1] = duplicate[0];
+        let rejected_duplicate = map_lineage_enter_command(
+            &root,
+            &duplicate,
+            &world,
+            "causal-runtime-save",
+            913_777,
+            sensor_profile,
+        );
+        assert!(matches!(
+            rejected_duplicate,
+            Err(LineageResetMappingError::DuplicateWorldEntityId { .. })
+                | Err(LineageResetMappingError::DuplicateOrganismId { .. })
+        ));
+
+        let sensor_mismatch = map_lineage_enter_command(
+            &root,
+            &selections,
+            &world,
+            "causal-runtime-save",
+            913_777,
+            SensorProfile::GroundedObjectSlotsV1,
+        );
+        assert!(matches!(
+            sensor_mismatch,
+            Err(LineageResetMappingError::SensorProfileMismatch { .. })
+        ));
+
+        let mut foundation_mismatch = selections.clone();
+        foundation_mismatch[0].source_manifest_digest = foundation_mismatch_digest;
+        let foundation_mismatch = map_lineage_enter_command(
+            &root,
+            &foundation_mismatch,
+            &world,
+            "causal-runtime-save",
+            913_777,
+            sensor_profile,
+        );
+        assert!(matches!(
+            foundation_mismatch,
+            Err(LineageResetMappingError::FoundationMismatch { .. })
+        ));
+
+        let non_agent_world = HeadlessScenarioBuilder::new(913_778)
+            .food("lineage-food", Vec3f::ZERO, 1.0)
+            .build()
+            .unwrap();
+        assert!(matches!(
+            map_current_live_command(&non_agent_world),
+            Err(LineageResetMappingError::NoLiveAgents)
+        ));
+
+        let live_command = map_current_live_command(&world).unwrap();
+        let ProductionCuratedFounderResetCommand::Attempt(live_intent) = live_command else {
+            panic!("current-live action core emitted a non-attempt command");
+        };
+        assert_eq!(live_intent.final_agents, intent.final_agents);
+        assert!(live_intent
+            .final_agents
+            .iter()
+            .all(|agent| agent.legacy_genome_id.is_none()));
+
+        let retryable = CuratedFounderResetDispatchResult::Unknown {
+            cause: "durable save conflict".to_string(),
+            proposed_save_digest: "proposed".to_string(),
+            archive_count: organism_ids.len(),
+            save_state: CuratedFounderSaveState::Unknown,
+            gpu_residency: CuratedFounderGpuResidencyState::Pending,
+            retryable: true,
+        };
+        assert_eq!(
+            retry_command_if_available(&retryable),
+            Some(ProductionCuratedFounderResetCommand::Retry)
+        );
+        let status = curated_founder_reset_status(&retryable);
+        assert!(status.contains("Durable publication"));
+        assert!(status.contains("GPU residency Pending"));
+        assert!(status.contains("Retry [T] available"));
+        assert!(!status.contains("live reset complete"));
+
+        let non_retryable = CuratedFounderResetDispatchResult::Unknown {
+            cause: "manual recovery required".to_string(),
+            proposed_save_digest: "proposed".to_string(),
+            archive_count: organism_ids.len(),
+            save_state: CuratedFounderSaveState::Unknown,
+            gpu_residency: CuratedFounderGpuResidencyState::Pending,
+            retryable: false,
+        };
+        assert_eq!(retry_command_if_available(&non_retryable), None);
+
+        fs::remove_dir_all(root).unwrap();
     }
 }
