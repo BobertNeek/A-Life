@@ -31,9 +31,18 @@ use alife_world::{
     persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
     HeadlessWorld, WorldEditorSpawnSpec, WorldObjectKind,
 };
+use thiserror::Error;
 
 use crate::{
-    merge_gpu_checkpoint_manifest_entries, AppShellLaunchConfig, GameAppShellError,
+    curated_founder_materializer::{
+        materialize_curated_founder_bundle, CuratedFounderMaterializationError,
+    },
+    curated_founder_staging::{
+        CuratedFounderDurableOperation, CuratedFounderDurableOperationAttempt,
+        CuratedFounderPublicationStatus, CuratedFounderSaveState, CuratedFounderStagingError,
+    },
+    merge_gpu_checkpoint_manifest_entries, plan_curated_founder_reset, AppShellLaunchConfig,
+    CuratedFounderResetError, CuratedFounderResetRequest, GameAppShellError,
     GpuBrainAuthorityTelemetry, GpuBrainCheckpointWrite, GpuBrainSidecarCapture,
     GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
     GpuSleepConsolidationDriver, GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage,
@@ -157,6 +166,23 @@ impl GpuLiveCheckpointDurability {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "published GPU checkpoint save differs from its validated replacement"
                     .to_string(),
+            });
+        }
+        self.published = published;
+        self.durable_reference()
+    }
+
+    fn refresh_published(
+        &mut self,
+        expected_digest: &str,
+    ) -> Result<DurableGpuCheckpointRef, GameAppShellError> {
+        let published = self.durable_manifest.load()?;
+        if published.digest.as_str() != expected_digest {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "curated founder publication reload digest differs from verified result: expected {expected_digest}, actual {}",
+                    published.digest.as_str()
+                ),
             });
         }
         self.published = published;
@@ -427,6 +453,77 @@ pub(crate) struct GpuLiveBrainEvidenceMetrics {
     pub active_synapses: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CuratedFounderGpuResidencyState {
+    Pending,
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum CuratedFounderResetRuntimeError {
+    #[error("curated founder reset requires the runtime-owned durable save boundary")]
+    MissingDurability,
+    #[error("curated founder reset requires the already-attached lineage archive")]
+    MissingLineageArchive,
+    #[error("curated founder reset requires the attached lineage archive source run ID")]
+    MissingLineageRunId,
+    #[error("no retained curated founder operation is available for same-process retry")]
+    NoRetainedOperation,
+    #[error("a curated founder operation is retained; retry it before starting another reset")]
+    RetainedOperationPending,
+    #[error("curated founder reset plan rejected before archive commit: {0}")]
+    Plan(#[from] CuratedFounderResetError),
+    #[error("curated founder reset bundle rejected before archive commit: {0}")]
+    Materialization(#[from] CuratedFounderMaterializationError),
+    #[error("curated founder reset staging rejected before archive commit: {0}")]
+    PreCommit(#[from] CuratedFounderStagingError),
+    #[error("curated founder reset durable publication refresh failed: {0}")]
+    DurableRefresh(#[source] GameAppShellError),
+    #[error("curated founder reset GPU checkpoint notification failed: {0}")]
+    DurableCheckpointNotification(#[source] GameAppShellError),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct CuratedFounderResetAttempt {
+    publication: CuratedFounderDurableOperationAttempt,
+    gpu_residency: CuratedFounderGpuResidencyState,
+}
+
+impl CuratedFounderResetAttempt {
+    pub(crate) const fn publication_status(&self) -> CuratedFounderPublicationStatus {
+        self.publication.status()
+    }
+
+    pub(crate) const fn save_state(&self) -> CuratedFounderSaveState {
+        self.publication.save_state()
+    }
+
+    pub(crate) const fn gpu_residency_state(&self) -> CuratedFounderGpuResidencyState {
+        self.gpu_residency
+    }
+
+    pub(crate) fn receipt(
+        &self,
+    ) -> &crate::curated_founder_staging::CuratedFounderDurablePublicationReceipt {
+        self.publication.receipt()
+    }
+
+    pub(crate) fn expected_save_digest(&self) -> Option<&str> {
+        self.publication.expected_save_digest()
+    }
+
+    pub(crate) fn actual_save_digest(&self) -> Option<&str> {
+        self.publication.actual_save_digest()
+    }
+
+    pub(crate) fn proposed_save_digest(&self) -> &str {
+        self.publication.proposed_save_digest()
+    }
+
+    pub(crate) fn cause(&self) -> Option<&str> {
+        self.publication.cause()
+    }
+}
+
 /// Owns all production neural authority for one headless world.
 pub struct GpuLiveBrainRuntime {
     backend: GpuAuthoritativeSession,
@@ -464,9 +561,112 @@ pub struct GpuLiveBrainRuntime {
     checkpoint_durability: Option<GpuLiveCheckpointDurability>,
     lineage_library: Option<LineageLibrary>,
     lineage_run_id: Option<String>,
+    retained_curated_founder_operation: Option<CuratedFounderDurableOperation>,
     archive_learned_capture_policy: ArchiveLearnedCapturePolicy,
     archive_birth_manifests: BTreeMap<u64, Blake3Digest>,
     archive_retirement_receipts: BTreeMap<u64, ArchiveRetirementReceipt>,
+}
+
+fn attempt_curated_founder_reset_with_owned_authorities(
+    checkpoint_durability: &mut Option<GpuLiveCheckpointDurability>,
+    lineage_library: &mut Option<LineageLibrary>,
+    lineage_run_id: Option<&str>,
+    world: &mut HeadlessWorld,
+    retained_operation: &mut Option<CuratedFounderDurableOperation>,
+    request: Option<CuratedFounderResetRequest>,
+) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+    if checkpoint_durability.is_none() {
+        return Err(CuratedFounderResetRuntimeError::MissingDurability);
+    }
+    if lineage_library.is_none() {
+        return Err(CuratedFounderResetRuntimeError::MissingLineageArchive);
+    }
+    if retained_operation.is_some() && request.is_some() {
+        return Err(CuratedFounderResetRuntimeError::RetainedOperationPending);
+    }
+
+    let (operation, operation_was_retained) = match retained_operation.take() {
+        Some(operation) => (operation, true),
+        None => {
+            let request = request.ok_or(CuratedFounderResetRuntimeError::NoRetainedOperation)?;
+            let archive_run_id =
+                lineage_run_id.ok_or(CuratedFounderResetRuntimeError::MissingLineageRunId)?;
+            let plan = plan_curated_founder_reset(&request)?;
+            let bundle = materialize_curated_founder_bundle(&plan)?;
+            let durability = checkpoint_durability
+                .as_ref()
+                .expect("durability presence was checked above");
+            let lineage_library = lineage_library
+                .as_ref()
+                .expect("lineage archive presence was checked above");
+            let operation = CuratedFounderDurableOperation::bind_and_stage(
+                &plan,
+                bundle,
+                &durability.durable_manifest,
+                world,
+                lineage_library,
+                archive_run_id,
+            )?;
+            (operation, false)
+        }
+    };
+
+    let publication = {
+        let durability = checkpoint_durability
+            .as_ref()
+            .expect("durability presence was checked above");
+        let lineage_library = lineage_library
+            .as_ref()
+            .expect("lineage archive presence was checked above");
+        match operation.attempt(&durability.durable_manifest, lineage_library, world) {
+            Ok(publication) => publication,
+            Err(error) => {
+                if operation_was_retained {
+                    *retained_operation = Some(operation);
+                }
+                return Err(error.into());
+            }
+        }
+    };
+
+    if publication.retains_operation() {
+        *retained_operation = Some(operation);
+        return Ok(CuratedFounderResetAttempt {
+            publication,
+            gpu_residency: CuratedFounderGpuResidencyState::Pending,
+        });
+    }
+
+    let final_save_digest = publication.final_save_digest().ok_or_else(|| {
+        CuratedFounderResetRuntimeError::DurableRefresh(
+            GameAppShellError::InvalidProductionFrontend {
+                message: "curated founder success omitted its verified final save digest"
+                    .to_string(),
+            },
+        )
+    });
+    let final_save_digest = match final_save_digest {
+        Ok(digest) => digest,
+        Err(error) => {
+            *retained_operation = Some(operation);
+            return Err(error);
+        }
+    };
+    if let Err(error) = checkpoint_durability
+        .as_mut()
+        .expect("durability presence was checked above")
+        .refresh_published(final_save_digest)
+        .map(|_| ())
+        .map_err(CuratedFounderResetRuntimeError::DurableRefresh)
+    {
+        *retained_operation = Some(operation);
+        return Err(error);
+    }
+
+    Ok(CuratedFounderResetAttempt {
+        publication,
+        gpu_residency: CuratedFounderGpuResidencyState::Pending,
+    })
 }
 
 impl GpuLiveBrainRuntime {
@@ -541,6 +741,62 @@ impl GpuLiveBrainRuntime {
             runtime.persist_sleep_checkpoint_boundary()?;
         }
         Ok(runtime)
+    }
+
+    pub(crate) fn attempt_curated_founder_reset(
+        &mut self,
+        request: CuratedFounderResetRequest,
+    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+        let result = attempt_curated_founder_reset_with_owned_authorities(
+            &mut self.checkpoint_durability,
+            &mut self.lineage_library,
+            self.lineage_run_id.as_deref(),
+            &mut self.world,
+            &mut self.retained_curated_founder_operation,
+            Some(request),
+        )?;
+        self.note_curated_founder_durable_checkpoint(&result)?;
+        Ok(result)
+    }
+
+    pub(crate) fn retry_curated_founder_reset(
+        &mut self,
+    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+        let result = attempt_curated_founder_reset_with_owned_authorities(
+            &mut self.checkpoint_durability,
+            &mut self.lineage_library,
+            self.lineage_run_id.as_deref(),
+            &mut self.world,
+            &mut self.retained_curated_founder_operation,
+            None,
+        )?;
+        self.note_curated_founder_durable_checkpoint(&result)?;
+        Ok(result)
+    }
+
+    fn note_curated_founder_durable_checkpoint(
+        &mut self,
+        result: &CuratedFounderResetAttempt,
+    ) -> Result<(), CuratedFounderResetRuntimeError> {
+        if !matches!(
+            result.publication_status(),
+            CuratedFounderPublicationStatus::Published
+                | CuratedFounderPublicationStatus::AlreadyApplied
+        ) {
+            return Ok(());
+        }
+        let durability = self
+            .checkpoint_durability
+            .as_ref()
+            .ok_or(CuratedFounderResetRuntimeError::MissingDurability)?;
+        let durable_reference = durability
+            .durable_reference()
+            .map_err(CuratedFounderResetRuntimeError::DurableCheckpointNotification)?;
+        self.backend
+            .note_durable_checkpoint(durable_reference)
+            .map_err(|error| {
+                CuratedFounderResetRuntimeError::DurableCheckpointNotification(error.into())
+            })
     }
 
     pub fn new(
@@ -745,6 +1001,7 @@ impl GpuLiveBrainRuntime {
             checkpoint_durability: None,
             lineage_library,
             lineage_run_id,
+            retained_curated_founder_operation: None,
             archive_learned_capture_policy,
             archive_birth_manifests: BTreeMap::new(),
             archive_retirement_receipts: BTreeMap::new(),
@@ -841,6 +1098,7 @@ impl GpuLiveBrainRuntime {
             checkpoint_durability: None,
             lineage_library: None,
             lineage_run_id: None,
+            retained_curated_founder_operation: None,
             archive_learned_capture_policy: ArchiveLearnedCapturePolicy::GeneticOnly,
             archive_birth_manifests: BTreeMap::new(),
             archive_retirement_receipts: BTreeMap::new(),
@@ -3166,15 +3424,644 @@ pub(crate) fn compile_gpu_birth_components(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::GpuSleepConsolidationDriver;
-    use alife_core::{
-        ActionTarget, CandidateActionFamily, OutcomeCreditPacket, PreActionBrainEvidence, Vec3f,
-        WorldEntityId,
+    use std::{
+        collections::BTreeMap,
+        fs,
+        path::{Path, PathBuf},
     };
-    use alife_world::HeadlessScenarioBuilder;
+
+    use super::*;
+    use crate::{
+        curated_founder_materializer::materialize_curated_founder_bundle,
+        plan_curated_founder_reset, CuratedFounderAgentInput, CuratedFounderResetRequest,
+        CURATED_FOUNDER_RESET_POLICY,
+    };
+    use alife_archive::{LineageLibrary, LineageLibraryConfig};
+    use alife_core::{
+        ActionTarget, BrainCapacityClass, CandidateActionFamily, FoundationGeneticIdentity,
+        FoundationWeightAsset, OrganismId, OutcomeCreditPacket, PreActionBrainEvidence,
+        SensorProfile, Tick, Vec3f, WorldEntityId,
+    };
+    use alife_runtime::GpuDurableSaveManifest;
+    use alife_world::{
+        persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
+        HeadlessScenarioBuilder, HeadlessWorld,
+    };
 
     struct NoProgressSleepDriver;
+
+    const CURATED_RUNTIME_WORLD_SEED: u64 = 0xA11F_E3E2_3C3A_0001;
+    const CURATED_RUNTIME_WORLD_ENTITY_IDS: [u64; 3] = [1, 2, 3];
+    const CURATED_RUNTIME_ORGANISM_IDS: [u64; 3] = [101, 202, 303];
+
+    struct CuratedRuntimeAuthorityFixture {
+        request: CuratedFounderResetRequest,
+        source_save: PortableSaveFile,
+        world: HeadlessWorld,
+        durable_root: PathBuf,
+        durable_save_path: PathBuf,
+        asset_root: PathBuf,
+        archive_root: PathBuf,
+        durability: Option<GpuLiveCheckpointDurability>,
+        lineage_library: Option<LineageLibrary>,
+        archive_run_id: String,
+    }
+
+    impl Drop for CuratedRuntimeAuthorityFixture {
+        fn drop(&mut self) {
+            let _ = self.lineage_library.take();
+            let _ = self.durability.take();
+            let _ = fs::remove_dir_all(&self.durable_root);
+            let _ = fs::remove_dir_all(&self.archive_root);
+        }
+    }
+
+    fn curated_runtime_request() -> CuratedFounderResetRequest {
+        let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
+        let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(sensor_profile).unwrap();
+        let foundation_manifest = foundation_asset.manifest();
+        let foundation = FoundationGeneticIdentity::new(
+            foundation_manifest.foundation_id().raw(),
+            foundation_manifest.foundation_version().raw() as u16,
+            foundation_manifest.compatibility_family_id().raw(),
+            BrainCapacityClass::N512_ID,
+        )
+        .unwrap();
+        let final_agents = (0..3)
+            .rev()
+            .map(|slot| CuratedFounderAgentInput {
+                world_entity_id: WorldEntityId(CURATED_RUNTIME_WORLD_ENTITY_IDS[slot as usize]),
+                organism_id: Some(OrganismId(CURATED_RUNTIME_ORGANISM_IDS[slot as usize])),
+                final_population_slot: slot,
+                legacy_genome_id: None,
+            })
+            .collect();
+        CuratedFounderResetRequest {
+            policy_label: Some(CURATED_FOUNDER_RESET_POLICY.to_string()),
+            source_save_identity: "save-curated-runtime".to_string(),
+            source_save_label: "runtime authority fixture".to_string(),
+            source_save_seed: CURATED_RUNTIME_WORLD_SEED,
+            world_seed: CURATED_RUNTIME_WORLD_SEED,
+            restored_tick: Tick::ZERO,
+            target_population: 3,
+            sensor_profile,
+            foundation,
+            foundation_content_digest: foundation_asset.digest(),
+            source_run_identity: "curated-runtime-source".to_string(),
+            final_agents,
+        }
+    }
+
+    fn archive_snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+        fn visit(root: &Path, current: &Path, files: &mut BTreeMap<PathBuf, Vec<u8>>) {
+            for entry in fs::read_dir(current).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    visit(root, &path, files);
+                } else {
+                    files.insert(
+                        path.strip_prefix(root).unwrap().to_path_buf(),
+                        fs::read(path).unwrap(),
+                    );
+                }
+            }
+        }
+        let mut files = BTreeMap::new();
+        visit(root, root, &mut files);
+        files
+    }
+
+    fn registry_snapshot(world: &HeadlessWorld) -> Vec<Vec<u8>> {
+        let mut records = world
+            .organism_registry()
+            .iter()
+            .map(|record| serde_json::to_vec(record).unwrap())
+            .collect::<Vec<_>>();
+        records.sort();
+        records
+    }
+
+    struct CuratedRuntimeAuthoritySnapshot {
+        world_signature: alife_world::HeadlessWorldSignatureDigest,
+        registry: Vec<Vec<u8>>,
+        save: Vec<u8>,
+        archive: BTreeMap<PathBuf, Vec<u8>>,
+        archive_count: Option<u64>,
+    }
+
+    fn authority_snapshot(
+        fixture: &CuratedRuntimeAuthorityFixture,
+    ) -> CuratedRuntimeAuthoritySnapshot {
+        let archive_count = fixture
+            .lineage_library
+            .as_ref()
+            .map(|library| library.manifest_count().unwrap());
+        CuratedRuntimeAuthoritySnapshot {
+            world_signature: fixture.world.canonical_signature_digest().unwrap(),
+            registry: registry_snapshot(&fixture.world),
+            save: fs::read(&fixture.durable_save_path).unwrap(),
+            archive: archive_snapshot(&fixture.archive_root),
+            archive_count,
+        }
+    }
+
+    fn assert_authority_unchanged(
+        before: CuratedRuntimeAuthoritySnapshot,
+        fixture: &CuratedRuntimeAuthorityFixture,
+    ) {
+        let after = authority_snapshot(fixture);
+        assert_eq!(after.world_signature, before.world_signature);
+        assert_eq!(after.registry, before.registry);
+        assert_eq!(after.save, before.save);
+        assert_eq!(after.archive, before.archive);
+        if let (Some(before_count), Some(after_count)) = (before.archive_count, after.archive_count)
+        {
+            assert_eq!(after_count, before_count);
+        }
+    }
+
+    fn curated_runtime_authority_fixture(label: &str) -> CuratedRuntimeAuthorityFixture {
+        let request = curated_runtime_request();
+        let source_world = HeadlessScenarioBuilder::new(CURATED_RUNTIME_WORLD_SEED)
+            .agent(
+                "runtime-founder-0",
+                OrganismId(CURATED_RUNTIME_ORGANISM_IDS[0]),
+                Vec3f::ZERO,
+            )
+            .agent(
+                "runtime-founder-1",
+                OrganismId(CURATED_RUNTIME_ORGANISM_IDS[1]),
+                Vec3f::new(1.0, 0.0, 0.0),
+            )
+            .agent(
+                "runtime-founder-2",
+                OrganismId(CURATED_RUNTIME_ORGANISM_IDS[2]),
+                Vec3f::new(2.0, 0.0, 0.0),
+            )
+            .build()
+            .unwrap();
+        let source_save = PortableSaveFile::from_headless_world(
+            "save-curated-runtime",
+            &source_world,
+            RuntimeConfig::deterministic_default(
+                CURATED_RUNTIME_WORLD_SEED,
+                BrainScaleTier::Nano512,
+            ),
+            AssetManifest::empty(),
+            Vec::new(),
+        )
+        .unwrap();
+        let world = source_save.restore_headless_world().unwrap();
+        let suffix = format!("{}-{label}", std::process::id());
+        let archive_root =
+            std::env::temp_dir().join(format!("alife-curated-runtime-archive-{suffix}"));
+        let durable_root =
+            std::env::temp_dir().join(format!("alife-curated-runtime-durable-{suffix}"));
+        let _ = fs::remove_dir_all(&archive_root);
+        let _ = fs::remove_dir_all(&durable_root);
+        fs::create_dir_all(&durable_root).unwrap();
+        let lineage_library =
+            LineageLibrary::open(LineageLibraryConfig::profile_default(&archive_root)).unwrap();
+        let asset_root = std::env::current_dir().unwrap();
+        let durable_save_path = durable_root.join("live-save.json");
+        GpuDurableSaveManifest::publish_snapshot(&durable_save_path, &asset_root, &source_save)
+            .unwrap();
+        let durable_manifest =
+            GpuDurableSaveManifest::open(&durable_save_path, &asset_root).unwrap();
+        let published = durable_manifest.load().unwrap();
+        let store = GpuCheckpointAssetStore::new(asset_root.clone()).unwrap();
+        CuratedRuntimeAuthorityFixture {
+            request,
+            source_save,
+            world,
+            durable_root,
+            durable_save_path,
+            asset_root,
+            archive_root,
+            durability: Some(GpuLiveCheckpointDurability {
+                store,
+                durable_manifest,
+                published,
+            }),
+            lineage_library: Some(lineage_library),
+            archive_run_id: "curated-runtime-archive".to_string(),
+        }
+    }
+
+    fn seed_retained_operation(
+        fixture: &CuratedRuntimeAuthorityFixture,
+        retained_operation: &mut Option<CuratedFounderDurableOperation>,
+    ) -> String {
+        let plan = plan_curated_founder_reset(&fixture.request).unwrap();
+        let bundle = materialize_curated_founder_bundle(&plan).unwrap();
+        let durability = fixture.durability.as_ref().unwrap();
+        let lineage_library = fixture.lineage_library.as_ref().unwrap();
+        let operation = CuratedFounderDurableOperation::bind_and_stage(
+            &plan,
+            bundle,
+            &durability.durable_manifest,
+            &fixture.world,
+            lineage_library,
+            &fixture.archive_run_id,
+        )
+        .unwrap();
+        let proposed = operation.proposed_save_digest().to_string();
+        *retained_operation = Some(operation);
+        proposed
+    }
+
+    fn operation_fingerprint(
+        operation: &CuratedFounderDurableOperation,
+    ) -> (Vec<OrganismId>, Vec<(WorldEntityId, OrganismId)>, String) {
+        operation.test_identity_fingerprint()
+    }
+
+    fn run_curated_runtime_authority(
+        fixture: &mut CuratedRuntimeAuthorityFixture,
+        retained_operation: &mut Option<CuratedFounderDurableOperation>,
+        request: Option<CuratedFounderResetRequest>,
+    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+        let archive_run_id = fixture.archive_run_id.clone();
+        attempt_curated_founder_reset_with_owned_authorities(
+            &mut fixture.durability,
+            &mut fixture.lineage_library,
+            Some(&archive_run_id),
+            &mut fixture.world,
+            retained_operation,
+            request,
+        )
+    }
+
+    fn competing_valid_save(source: &PortableSaveFile) -> PortableSaveFile {
+        let mut competing = source.clone();
+        let mut world = source.restore_headless_world().unwrap();
+        world.advance_tick();
+        competing.replace_headless_world_snapshot(&world).unwrap();
+        competing
+    }
+
+    fn assert_runtime_owned_curated_reset_call(
+        runtime: &mut GpuLiveBrainRuntime,
+        request: CuratedFounderResetRequest,
+    ) {
+        let _ = runtime.attempt_curated_founder_reset(request);
+    }
+
+    #[test]
+    fn curated_reset_runtime_owned_call_seam_exists() {
+        let _ = assert_runtime_owned_curated_reset_call
+            as fn(&mut GpuLiveBrainRuntime, CuratedFounderResetRequest);
+    }
+
+    #[test]
+    fn curated_reset_runtime_owned_authorities_publish_and_leave_gpu_residency_pending() {
+        let mut fixture = curated_runtime_authority_fixture("publish");
+        let mut retained_operation = None;
+        let request = fixture.request.clone();
+        let result =
+            run_curated_runtime_authority(&mut fixture, &mut retained_operation, Some(request))
+                .unwrap();
+
+        assert_eq!(
+            result.publication_status(),
+            CuratedFounderPublicationStatus::Published
+        );
+        assert_eq!(result.save_state(), CuratedFounderSaveState::Verified);
+        assert_eq!(
+            result.gpu_residency_state(),
+            CuratedFounderGpuResidencyState::Pending
+        );
+        assert_eq!(result.receipt().archive_receipt_count(), 3);
+        assert_eq!(fixture.world.organism_registry().len(), 3);
+        assert!(retained_operation.is_none());
+        assert_eq!(
+            fixture
+                .durability
+                .as_ref()
+                .unwrap()
+                .published
+                .digest
+                .as_str(),
+            fixture
+                .durability
+                .as_ref()
+                .unwrap()
+                .durable_manifest
+                .load()
+                .unwrap()
+                .digest
+                .as_str()
+        );
+        assert_eq!(
+            fixture
+                .lineage_library
+                .as_ref()
+                .unwrap()
+                .manifest_count()
+                .unwrap(),
+            3
+        );
+    }
+
+    #[test]
+    fn curated_reset_missing_owned_authority_fails_before_archive_save_or_world_mutation() {
+        let mut fixture = curated_runtime_authority_fixture("missing-durability");
+        let before = authority_snapshot(&fixture);
+        let mut missing_durability = None;
+        let mut retained_operation = None;
+        let archive_run_id = fixture.archive_run_id.clone();
+        let request = fixture.request.clone();
+        let error = attempt_curated_founder_reset_with_owned_authorities(
+            &mut missing_durability,
+            &mut fixture.lineage_library,
+            Some(&archive_run_id),
+            &mut fixture.world,
+            &mut retained_operation,
+            Some(request),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            CuratedFounderResetRuntimeError::MissingDurability
+        ));
+        assert!(retained_operation.is_none());
+        assert_authority_unchanged(before, &fixture);
+
+        let mut fixture = curated_runtime_authority_fixture("missing-archive");
+        let before = authority_snapshot(&fixture);
+        let mut durability = fixture.durability.take();
+        let mut missing_library = None;
+        let mut retained_operation = None;
+        let archive_run_id = fixture.archive_run_id.clone();
+        let request = fixture.request.clone();
+        let error = attempt_curated_founder_reset_with_owned_authorities(
+            &mut durability,
+            &mut missing_library,
+            Some(&archive_run_id),
+            &mut fixture.world,
+            &mut retained_operation,
+            Some(request),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            CuratedFounderResetRuntimeError::MissingLineageArchive
+        ));
+        assert!(retained_operation.is_none());
+        assert_authority_unchanged(before, &fixture);
+    }
+
+    #[test]
+    fn curated_reset_conflict_retry_reuses_exact_operation_without_double_archive() {
+        let mut fixture = curated_runtime_authority_fixture("conflict-retry");
+        let mut retained_operation = None;
+        let proposed = seed_retained_operation(&fixture, &mut retained_operation);
+        let old_world_signature = fixture.world.canonical_signature_digest().unwrap();
+        let old_registry = registry_snapshot(&fixture.world);
+        let competing_save = competing_valid_save(&fixture.source_save);
+        GpuDurableSaveManifest::publish_snapshot(
+            &fixture.durable_save_path,
+            &fixture.asset_root,
+            &competing_save,
+        )
+        .unwrap();
+
+        let conflict =
+            run_curated_runtime_authority(&mut fixture, &mut retained_operation, None).unwrap();
+        assert_eq!(
+            conflict.publication_status(),
+            CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict
+        );
+        assert_eq!(conflict.save_state(), CuratedFounderSaveState::Conflict);
+        assert_eq!(
+            conflict.gpu_residency_state(),
+            CuratedFounderGpuResidencyState::Pending
+        );
+        assert_eq!(conflict.proposed_save_digest(), proposed);
+        assert!(conflict.expected_save_digest().is_some());
+        assert!(conflict.actual_save_digest().is_some());
+        assert_eq!(conflict.receipt().archive_receipt_count(), 3);
+        assert_eq!(
+            retained_operation.as_ref().unwrap().proposed_save_digest(),
+            proposed
+        );
+        assert_eq!(
+            fixture.world.canonical_signature_digest().unwrap(),
+            old_world_signature
+        );
+        assert_eq!(registry_snapshot(&fixture.world), old_registry);
+        let archive_after_conflict =
+            archive_snapshot(fixture.lineage_library.as_ref().unwrap().root());
+        let archive_count_after_conflict = fixture
+            .lineage_library
+            .as_ref()
+            .unwrap()
+            .manifest_count()
+            .unwrap();
+        assert_eq!(archive_count_after_conflict, 3);
+
+        GpuDurableSaveManifest::publish_snapshot(
+            &fixture.durable_save_path,
+            &fixture.asset_root,
+            &fixture.source_save,
+        )
+        .unwrap();
+        let retry =
+            run_curated_runtime_authority(&mut fixture, &mut retained_operation, None).unwrap();
+        assert!(matches!(
+            retry.publication_status(),
+            CuratedFounderPublicationStatus::Published
+                | CuratedFounderPublicationStatus::AlreadyApplied
+        ));
+        assert_eq!(retry.save_state(), CuratedFounderSaveState::Verified);
+        assert_eq!(retry.proposed_save_digest(), proposed);
+        assert!(retained_operation.is_none());
+        assert_eq!(
+            fixture
+                .lineage_library
+                .as_ref()
+                .unwrap()
+                .manifest_count()
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            archive_snapshot(fixture.lineage_library.as_ref().unwrap().root()),
+            archive_after_conflict
+        );
+    }
+
+    #[test]
+    fn curated_reset_precommit_retry_restores_exact_retained_operation() {
+        let mut fixture = curated_runtime_authority_fixture("precommit-retry");
+        let mut retained_operation = None;
+        let proposed = seed_retained_operation(&fixture, &mut retained_operation);
+        let staged_fingerprint = operation_fingerprint(retained_operation.as_ref().unwrap());
+        let original_world = fixture.world.clone();
+        let competing_save = competing_valid_save(&fixture.source_save);
+        GpuDurableSaveManifest::publish_snapshot(
+            &fixture.durable_save_path,
+            &fixture.asset_root,
+            &competing_save,
+        )
+        .unwrap();
+
+        let conflict =
+            run_curated_runtime_authority(&mut fixture, &mut retained_operation, None).unwrap();
+        assert_eq!(
+            conflict.publication_status(),
+            CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict
+        );
+        assert_eq!(
+            operation_fingerprint(retained_operation.as_ref().unwrap()),
+            staged_fingerprint
+        );
+        let archive_after_conflict =
+            archive_snapshot(fixture.lineage_library.as_ref().unwrap().root());
+        let archive_count_after_conflict = fixture
+            .lineage_library
+            .as_ref()
+            .unwrap()
+            .manifest_count()
+            .unwrap();
+
+        fixture.world.advance_tick();
+        let precommit =
+            run_curated_runtime_authority(&mut fixture, &mut retained_operation, None).unwrap_err();
+        assert!(matches!(
+            precommit,
+            CuratedFounderResetRuntimeError::PreCommit(CuratedFounderStagingError::Mismatch {
+                field: "apply world tick"
+            })
+        ));
+        assert!(
+            retained_operation.is_some(),
+            "a retained operation must survive a retry pre-commit error"
+        );
+        assert_eq!(
+            operation_fingerprint(retained_operation.as_ref().unwrap()),
+            staged_fingerprint
+        );
+        assert_eq!(
+            retained_operation.as_ref().unwrap().proposed_save_digest(),
+            proposed
+        );
+        assert_eq!(
+            fixture
+                .lineage_library
+                .as_ref()
+                .unwrap()
+                .manifest_count()
+                .unwrap(),
+            archive_count_after_conflict
+        );
+        assert_eq!(
+            archive_snapshot(fixture.lineage_library.as_ref().unwrap().root()),
+            archive_after_conflict
+        );
+
+        fixture.world = original_world;
+        GpuDurableSaveManifest::publish_snapshot(
+            &fixture.durable_save_path,
+            &fixture.asset_root,
+            &fixture.source_save,
+        )
+        .unwrap();
+        let retry =
+            run_curated_runtime_authority(&mut fixture, &mut retained_operation, None).unwrap();
+        assert!(matches!(
+            retry.publication_status(),
+            CuratedFounderPublicationStatus::Published
+                | CuratedFounderPublicationStatus::AlreadyApplied
+        ));
+        assert_eq!(retry.proposed_save_digest(), proposed);
+        assert!(retained_operation.is_none());
+        assert_eq!(
+            fixture
+                .lineage_library
+                .as_ref()
+                .unwrap()
+                .manifest_count()
+                .unwrap(),
+            archive_count_after_conflict
+        );
+        assert_eq!(
+            archive_snapshot(fixture.lineage_library.as_ref().unwrap().root()),
+            archive_after_conflict
+        );
+    }
+
+    #[test]
+    fn curated_reset_post_archive_failure_retains_unknown_receipt_and_retries_exact_operation() {
+        let mut fixture = curated_runtime_authority_fixture("failure-retry");
+        let mut retained_operation = None;
+        let proposed = seed_retained_operation(&fixture, &mut retained_operation);
+        let old_world_signature = fixture.world.canonical_signature_digest().unwrap();
+        let old_registry = registry_snapshot(&fixture.world);
+        let durable_root = fixture.durable_root.clone();
+        fs::remove_dir_all(&durable_root).unwrap();
+
+        let failure =
+            run_curated_runtime_authority(&mut fixture, &mut retained_operation, None).unwrap();
+        assert_eq!(
+            failure.publication_status(),
+            CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure
+        );
+        assert_eq!(failure.save_state(), CuratedFounderSaveState::Unknown);
+        assert_eq!(
+            failure.gpu_residency_state(),
+            CuratedFounderGpuResidencyState::Pending
+        );
+        assert_eq!(failure.proposed_save_digest(), proposed);
+        assert!(failure.cause().is_some());
+        assert_eq!(failure.receipt().archive_receipt_count(), 3);
+        assert!(retained_operation.is_some());
+        assert_eq!(
+            fixture.world.canonical_signature_digest().unwrap(),
+            old_world_signature
+        );
+        assert_eq!(registry_snapshot(&fixture.world), old_registry);
+        let archive_after_failure =
+            archive_snapshot(fixture.lineage_library.as_ref().unwrap().root());
+        let archive_count_after_failure = fixture
+            .lineage_library
+            .as_ref()
+            .unwrap()
+            .manifest_count()
+            .unwrap();
+        assert_eq!(archive_count_after_failure, 3);
+
+        fs::create_dir_all(&durable_root).unwrap();
+        GpuDurableSaveManifest::publish_snapshot(
+            &fixture.durable_save_path,
+            &fixture.asset_root,
+            &fixture.source_save,
+        )
+        .unwrap();
+        let retry =
+            run_curated_runtime_authority(&mut fixture, &mut retained_operation, None).unwrap();
+        assert!(matches!(
+            retry.publication_status(),
+            CuratedFounderPublicationStatus::Published
+                | CuratedFounderPublicationStatus::AlreadyApplied
+        ));
+        assert_eq!(retry.save_state(), CuratedFounderSaveState::Verified);
+        assert_eq!(retry.proposed_save_digest(), proposed);
+        assert!(retained_operation.is_none());
+        assert_eq!(
+            fixture
+                .lineage_library
+                .as_ref()
+                .unwrap()
+                .manifest_count()
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            archive_snapshot(fixture.lineage_library.as_ref().unwrap().root()),
+            archive_after_failure
+        );
+    }
 
     #[test]
     fn n2048_gpu_birth_uses_foundation_bound_compiler_inputs() {

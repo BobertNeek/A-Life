@@ -86,7 +86,7 @@ struct CuratedFounderPreparedReset {
     candidate_world_signature: HeadlessWorldSignatureDigest,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CuratedFounderBoundSourceSave {
     loaded_generation: GpuLoadedSaveManifest,
     canonical_save_path: PathBuf,
@@ -94,7 +94,7 @@ struct CuratedFounderBoundSourceSave {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CuratedFounderPublicationStatus {
+pub(crate) enum CuratedFounderPublicationStatus {
     Published,
     AlreadyApplied,
     ArchiveCommittedSaveConflict,
@@ -102,7 +102,9 @@ enum CuratedFounderPublicationStatus {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CuratedFounderSaveState {
+pub(crate) enum CuratedFounderSaveState {
+    Verified,
+    Conflict,
     Unknown,
 }
 
@@ -118,7 +120,7 @@ struct CuratedFounderArchiveReceiptRow {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct CuratedFounderDurablePublicationReceipt {
+pub(crate) struct CuratedFounderDurablePublicationReceipt {
     source_save_identity: String,
     source_save_seed: u64,
     source_world_seed: u64,
@@ -137,8 +139,14 @@ struct CuratedFounderDurablePublicationReceipt {
     status: CuratedFounderPublicationStatus,
 }
 
+impl CuratedFounderDurablePublicationReceipt {
+    pub(crate) fn archive_receipt_count(&self) -> usize {
+        self.archive_receipts.len()
+    }
+}
+
 #[derive(Debug, Error)]
-enum CuratedFounderDurablePublicationError {
+pub(crate) enum CuratedFounderDurablePublicationError {
     #[error("curated founder publication failed before archive commit: {0}")]
     PreCommit(#[source] CuratedFounderStagingError),
     #[error(
@@ -153,6 +161,40 @@ enum CuratedFounderDurablePublicationError {
     #[error(
         "curated founder archive committed but save publication failed: {cause}; save state is {save_state:?}"
     )]
+    ArchiveCommittedSaveFailure {
+        receipt: CuratedFounderDurablePublicationReceipt,
+        cause: String,
+        proposed_save_digest: String,
+        save_state: CuratedFounderSaveState,
+    },
+}
+
+#[derive(Debug)]
+pub(crate) struct CuratedFounderDurableOperation {
+    stage: CuratedFounderResetStage,
+    bundle: CuratedFounderBundle,
+    bound_source: CuratedFounderBoundSourceSave,
+    candidate_world: HeadlessWorld,
+    linked_record_candidates: Vec<WorldOrganismRecord>,
+    candidate_world_signature: HeadlessWorldSignatureDigest,
+    replacement_save: PortableSaveFile,
+    proposed_save_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum CuratedFounderDurableOperationAttempt {
+    Published {
+        receipt: CuratedFounderDurablePublicationReceipt,
+    },
+    AlreadyApplied {
+        receipt: CuratedFounderDurablePublicationReceipt,
+    },
+    ArchiveCommittedSaveConflict {
+        receipt: CuratedFounderDurablePublicationReceipt,
+        expected_save_digest: String,
+        actual_save_digest: String,
+        proposed_save_digest: String,
+    },
     ArchiveCommittedSaveFailure {
         receipt: CuratedFounderDurablePublicationReceipt,
         cause: String,
@@ -209,6 +251,208 @@ fn bind_curated_founder_source(
         canonical_save_path: durable_manifest.save_path().to_path_buf(),
         canonical_asset_root: durable_manifest.asset_root().to_path_buf(),
     })
+}
+
+impl CuratedFounderDurableOperation {
+    pub(crate) fn bind_and_stage(
+        plan: &CuratedFounderPlan,
+        bundle: CuratedFounderBundle,
+        durable_manifest: &GpuDurableSaveManifest,
+        canonical_live_world: &HeadlessWorld,
+        lineage_library: &LineageLibrary,
+        archive_run_id: &str,
+    ) -> Result<Self, CuratedFounderStagingError> {
+        let bound_source = bind_curated_founder_source(durable_manifest)?;
+        let stage = stage_curated_founder_reset(
+            plan,
+            &bundle,
+            &bound_source.loaded_generation.save,
+            canonical_live_world,
+            lineage_library,
+            &bound_source.canonical_asset_root,
+            archive_run_id,
+        )?;
+        let prepared = prepare_curated_founder_reset(
+            &stage,
+            &bundle,
+            lineage_library,
+            canonical_live_world,
+            false,
+        )?;
+        let mut replacement_save = bound_source.loaded_generation.save.clone();
+        replacement_save.replace_headless_world_snapshot(&prepared.candidate_world)?;
+        replacement_save.validate_with_asset_root(&bound_source.canonical_asset_root)?;
+        let proposed_save_digest = portable_save_digest(&replacement_save)?;
+
+        Ok(Self {
+            stage,
+            bundle,
+            bound_source,
+            candidate_world: prepared.candidate_world,
+            linked_record_candidates: prepared.linked_record_candidates,
+            candidate_world_signature: prepared.candidate_world_signature,
+            replacement_save,
+            proposed_save_digest,
+        })
+    }
+
+    pub(crate) fn attempt(
+        &self,
+        durable_manifest: &GpuDurableSaveManifest,
+        lineage_library: &LineageLibrary,
+        live_world: &mut HeadlessWorld,
+    ) -> Result<CuratedFounderDurableOperationAttempt, CuratedFounderStagingError> {
+        match publish_curated_founder_operation_durably(
+            self,
+            durable_manifest,
+            lineage_library,
+            live_world,
+        ) {
+            Ok(receipt) => match receipt.status {
+                CuratedFounderPublicationStatus::Published => {
+                    Ok(CuratedFounderDurableOperationAttempt::Published { receipt })
+                }
+                CuratedFounderPublicationStatus::AlreadyApplied => {
+                    Ok(CuratedFounderDurableOperationAttempt::AlreadyApplied { receipt })
+                }
+                CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict
+                | CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure => {
+                    Err(CuratedFounderStagingError::Mismatch {
+                        field: "successful durable publication status",
+                    })
+                }
+            },
+            Err(CuratedFounderDurablePublicationError::PreCommit(error)) => Err(error),
+            Err(CuratedFounderDurablePublicationError::ArchiveCommittedSaveConflict {
+                receipt,
+                expected_save_digest,
+                actual_save_digest,
+                proposed_save_digest,
+            }) => Ok(
+                CuratedFounderDurableOperationAttempt::ArchiveCommittedSaveConflict {
+                    receipt,
+                    expected_save_digest,
+                    actual_save_digest,
+                    proposed_save_digest,
+                },
+            ),
+            Err(CuratedFounderDurablePublicationError::ArchiveCommittedSaveFailure {
+                receipt,
+                cause,
+                proposed_save_digest,
+                save_state,
+            }) => Ok(
+                CuratedFounderDurableOperationAttempt::ArchiveCommittedSaveFailure {
+                    receipt,
+                    cause,
+                    proposed_save_digest,
+                    save_state,
+                },
+            ),
+        }
+    }
+
+    pub(crate) fn proposed_save_digest(&self) -> &str {
+        &self.proposed_save_digest
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_identity_fingerprint(
+        &self,
+    ) -> (Vec<OrganismId>, Vec<(WorldEntityId, OrganismId)>, String) {
+        (
+            self.stage.ordered_founder_ids.clone(),
+            self.stage.target_agent_bindings.clone(),
+            self.proposed_save_digest.clone(),
+        )
+    }
+}
+
+impl CuratedFounderDurableOperationAttempt {
+    pub(crate) const fn status(&self) -> CuratedFounderPublicationStatus {
+        match self {
+            Self::Published { .. } => CuratedFounderPublicationStatus::Published,
+            Self::AlreadyApplied { .. } => CuratedFounderPublicationStatus::AlreadyApplied,
+            Self::ArchiveCommittedSaveConflict { .. } => {
+                CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict
+            }
+            Self::ArchiveCommittedSaveFailure { .. } => {
+                CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure
+            }
+        }
+    }
+
+    pub(crate) const fn save_state(&self) -> CuratedFounderSaveState {
+        match self {
+            Self::Published { .. } | Self::AlreadyApplied { .. } => {
+                CuratedFounderSaveState::Verified
+            }
+            Self::ArchiveCommittedSaveConflict { .. } => CuratedFounderSaveState::Conflict,
+            Self::ArchiveCommittedSaveFailure { save_state, .. } => *save_state,
+        }
+    }
+
+    pub(crate) const fn retains_operation(&self) -> bool {
+        matches!(
+            self,
+            Self::ArchiveCommittedSaveConflict { .. } | Self::ArchiveCommittedSaveFailure { .. }
+        )
+    }
+
+    pub(crate) fn receipt(&self) -> &CuratedFounderDurablePublicationReceipt {
+        match self {
+            Self::Published { receipt }
+            | Self::AlreadyApplied { receipt }
+            | Self::ArchiveCommittedSaveConflict { receipt, .. }
+            | Self::ArchiveCommittedSaveFailure { receipt, .. } => receipt,
+        }
+    }
+
+    pub(crate) fn expected_save_digest(&self) -> Option<&str> {
+        match self {
+            Self::ArchiveCommittedSaveConflict {
+                expected_save_digest,
+                ..
+            } => Some(expected_save_digest),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn actual_save_digest(&self) -> Option<&str> {
+        match self {
+            Self::ArchiveCommittedSaveConflict {
+                actual_save_digest, ..
+            } => Some(actual_save_digest),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn proposed_save_digest(&self) -> &str {
+        match self {
+            Self::Published { receipt } | Self::AlreadyApplied { receipt } => {
+                &receipt.proposed_save_digest
+            }
+            Self::ArchiveCommittedSaveConflict {
+                proposed_save_digest,
+                ..
+            }
+            | Self::ArchiveCommittedSaveFailure {
+                proposed_save_digest,
+                ..
+            } => proposed_save_digest,
+        }
+    }
+
+    pub(crate) fn cause(&self) -> Option<&str> {
+        match self {
+            Self::ArchiveCommittedSaveFailure { cause, .. } => Some(cause),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn final_save_digest(&self) -> Option<&str> {
+        self.receipt().final_save_digest.as_deref()
+    }
 }
 
 pub(crate) fn stage_curated_founder_reset(
@@ -520,15 +764,16 @@ fn prepare_curated_founder_reset(
     })
 }
 
-fn publish_curated_founder_reset_durably(
-    stage: &CuratedFounderResetStage,
-    bundle: &CuratedFounderBundle,
-    bound_source: &CuratedFounderBoundSourceSave,
+fn publish_curated_founder_operation_durably(
+    operation: &CuratedFounderDurableOperation,
     durable_manifest: &GpuDurableSaveManifest,
-    canonical_asset_root: &Path,
     lineage_library: &LineageLibrary,
     live_world: &mut HeadlessWorld,
 ) -> Result<CuratedFounderDurablePublicationReceipt, CuratedFounderDurablePublicationError> {
+    let stage = &operation.stage;
+    let bundle = &operation.bundle;
+    let bound_source = &operation.bound_source;
+    let canonical_asset_root = bound_source.canonical_asset_root.as_path();
     validate_durable_publication_inputs(
         stage,
         bound_source,
@@ -540,15 +785,17 @@ fn publish_curated_founder_reset_durably(
     let expected_save_digest = &bound_source.loaded_generation.digest;
     let prepared = prepare_curated_founder_reset(stage, bundle, lineage_library, live_world, true)
         .map_err(CuratedFounderDurablePublicationError::PreCommit)?;
+    if prepared.candidate_world_signature != operation.candidate_world_signature
+        || prepared.linked_record_candidates != operation.linked_record_candidates
+    {
+        return Err(CuratedFounderDurablePublicationError::PreCommit(
+            CuratedFounderStagingError::Mismatch {
+                field: "retained curated founder candidate",
+            },
+        ));
+    }
 
-    let mut replacement_save = source_save.clone();
-    replacement_save
-        .replace_headless_world_snapshot(&prepared.candidate_world)
-        .map_err(|error| {
-            CuratedFounderDurablePublicationError::PreCommit(CuratedFounderStagingError::Save(
-                error,
-            ))
-        })?;
+    let replacement_save = operation.replacement_save.clone();
     replacement_save
         .validate_with_asset_root(canonical_asset_root)
         .map_err(|error| {
@@ -558,6 +805,13 @@ fn publish_curated_founder_reset_durably(
         })?;
     let proposed_save_digest = portable_save_digest(&replacement_save)
         .map_err(CuratedFounderDurablePublicationError::PreCommit)?;
+    if proposed_save_digest != operation.proposed_save_digest {
+        return Err(CuratedFounderDurablePublicationError::PreCommit(
+            CuratedFounderStagingError::Mismatch {
+                field: "retained curated founder replacement identity",
+            },
+        ));
+    }
     let archive_source_run = stage
         .archive_birth_intents
         .first()
@@ -587,12 +841,10 @@ fn publish_curated_founder_reset_durably(
         status: CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure,
     };
 
-    let CuratedFounderPreparedReset {
-        prepared_archive_batch,
-        linked_record_candidates,
-        candidate_world,
-        candidate_world_signature,
-    } = prepared;
+    let prepared_archive_batch = prepared.prepared_archive_batch;
+    let linked_record_candidates = operation.linked_record_candidates.clone();
+    let candidate_world = operation.candidate_world.clone();
+    let candidate_world_signature = operation.candidate_world_signature;
 
     let committed_archive_batch = lineage_library
         .commit_composite_birth_batch(prepared_archive_batch)
@@ -678,6 +930,53 @@ fn publish_curated_founder_reset_durably(
     }
     *live_world = candidate_world;
     Ok(receipt)
+}
+
+#[cfg(test)]
+fn publish_curated_founder_reset_durably(
+    stage: &CuratedFounderResetStage,
+    bundle: &CuratedFounderBundle,
+    bound_source: &CuratedFounderBoundSourceSave,
+    durable_manifest: &GpuDurableSaveManifest,
+    _canonical_asset_root: &Path,
+    lineage_library: &LineageLibrary,
+    live_world: &mut HeadlessWorld,
+) -> Result<CuratedFounderDurablePublicationReceipt, CuratedFounderDurablePublicationError> {
+    let prepared = prepare_curated_founder_reset(stage, bundle, lineage_library, live_world, true)
+        .map_err(CuratedFounderDurablePublicationError::PreCommit)?;
+    let mut replacement_save = bound_source.loaded_generation.save.clone();
+    replacement_save
+        .replace_headless_world_snapshot(&prepared.candidate_world)
+        .map_err(|error| {
+            CuratedFounderDurablePublicationError::PreCommit(CuratedFounderStagingError::Save(
+                error,
+            ))
+        })?;
+    replacement_save
+        .validate_with_asset_root(&bound_source.canonical_asset_root)
+        .map_err(|error| {
+            CuratedFounderDurablePublicationError::PreCommit(CuratedFounderStagingError::Save(
+                error,
+            ))
+        })?;
+    let proposed_save_digest = portable_save_digest(&replacement_save)
+        .map_err(CuratedFounderDurablePublicationError::PreCommit)?;
+    let operation = CuratedFounderDurableOperation {
+        stage: stage.clone(),
+        bundle: bundle.clone(),
+        bound_source: bound_source.clone(),
+        candidate_world: prepared.candidate_world,
+        linked_record_candidates: prepared.linked_record_candidates,
+        candidate_world_signature: prepared.candidate_world_signature,
+        replacement_save,
+        proposed_save_digest,
+    };
+    publish_curated_founder_operation_durably(
+        &operation,
+        durable_manifest,
+        lineage_library,
+        live_world,
+    )
 }
 
 fn validate_durable_publication_inputs(
