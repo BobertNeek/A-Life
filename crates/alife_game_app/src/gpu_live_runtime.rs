@@ -669,6 +669,215 @@ fn attempt_curated_founder_reset_with_owned_authorities(
     })
 }
 
+const LINEAGE_SOURCE_RUN_DOMAIN: &[u8] = b"alife.production.lineage-source-run.v1";
+const CANONICAL_DIGEST_TAG_U64: u8 = 0x05;
+const CANONICAL_DIGEST_TAG_UTF8: u8 = 0x10;
+const CANONICAL_DIGEST_TAG_DOMAIN: u8 = 0xd0;
+
+fn append_canonical_length(bytes: &mut Vec<u8>, length: usize) {
+    let length = u64::try_from(length).expect("canonical input length fits in u64");
+    bytes.extend_from_slice(&length.to_le_bytes());
+}
+
+fn append_canonical_utf8(bytes: &mut Vec<u8>, value: &str) {
+    bytes.push(CANONICAL_DIGEST_TAG_UTF8);
+    append_canonical_length(bytes, value.len());
+    bytes.extend_from_slice(value.as_bytes());
+}
+
+fn append_canonical_u64(bytes: &mut Vec<u8>, value: u64) {
+    bytes.push(CANONICAL_DIGEST_TAG_U64);
+    bytes.extend_from_slice(&value.to_le_bytes());
+}
+
+/// Builds the versioned bytes emitted before `CanonicalDigestBuilder`'s
+/// legacy finalizer. The production source-run identity hashes these bytes
+/// with BLAKE3 instead of using that finalizer.
+fn lineage_source_run_canonical_bytes(
+    save_id: &str,
+    deterministic_seed: u64,
+    world_seed: u64,
+    world_tick: u64,
+    raw_generation_digest: &str,
+) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    bytes.push(CANONICAL_DIGEST_TAG_DOMAIN);
+    append_canonical_length(&mut bytes, LINEAGE_SOURCE_RUN_DOMAIN.len());
+    bytes.extend_from_slice(LINEAGE_SOURCE_RUN_DOMAIN);
+    append_canonical_utf8(&mut bytes, save_id);
+    append_canonical_u64(&mut bytes, deterministic_seed);
+    append_canonical_u64(&mut bytes, world_seed);
+    append_canonical_u64(&mut bytes, world_tick);
+    append_canonical_utf8(&mut bytes, raw_generation_digest);
+    bytes
+}
+
+fn lineage_source_run_id_for_fields(
+    save_id: &str,
+    deterministic_seed: u64,
+    world_seed: u64,
+    world_tick: u64,
+    raw_generation_digest: &str,
+) -> String {
+    let digest = Blake3Digest::from_bytes(
+        *blake3::hash(&lineage_source_run_canonical_bytes(
+            save_id,
+            deterministic_seed,
+            world_seed,
+            world_tick,
+            raw_generation_digest,
+        ))
+        .as_bytes(),
+    );
+    let digest_hex = digest
+        .bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("runtime-save-v1-{digest_hex}")
+}
+
+fn derive_lineage_run_id(published: &GpuLoadedSaveManifest) -> String {
+    lineage_source_run_id_for_fields(
+        &published.save.save_id,
+        published.save.deterministic_seed,
+        published.save.world.seed,
+        published.save.world.tick.raw(),
+        published.digest.as_str(),
+    )
+}
+
+fn attach_lineage_archive_with_owned_authorities(
+    checkpoint_durability: Option<&GpuLiveCheckpointDurability>,
+    sensor_profile: SensorProfile,
+    world_tick: Tick,
+    residents: &BTreeMap<u64, ResidentCognition>,
+    lineage_library: &mut Option<LineageLibrary>,
+    lineage_run_id: &mut Option<String>,
+    archive_learned_capture_policy: &mut ArchiveLearnedCapturePolicy,
+    archive_birth_manifests: &mut BTreeMap<u64, Blake3Digest>,
+    config: LineageLibraryConfig,
+    learned_capture_policy: ArchiveLearnedCapturePolicy,
+) -> Result<(), GameAppShellError> {
+    if lineage_library.is_some() || lineage_run_id.is_some() || !archive_birth_manifests.is_empty()
+    {
+        return Err(GameAppShellError::InvalidProductionFrontend {
+            message: "lineage archive is already attached".to_string(),
+        });
+    }
+    let durability =
+        checkpoint_durability.ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+            message: "lineage archive attachment requires the durable save boundary".to_string(),
+        })?;
+    let source_run_id = derive_lineage_run_id(&durability.published);
+    let mut candidate_library = LineageLibrary::open(config)?;
+    let mut candidate_birth_manifests = BTreeMap::new();
+    for (&raw, resident) in residents {
+        let organism_id = OrganismId(raw);
+        let digest = archive_birth_into_library(
+            &mut candidate_library,
+            &source_run_id,
+            organism_id,
+            world_tick,
+            sensor_profile,
+            resident,
+        )?;
+        candidate_birth_manifests.insert(raw, digest);
+    }
+
+    *lineage_library = Some(candidate_library);
+    *lineage_run_id = Some(source_run_id);
+    *archive_learned_capture_policy = learned_capture_policy;
+    *archive_birth_manifests = candidate_birth_manifests;
+    Ok(())
+}
+
+fn archive_birth_into_library(
+    lineage_library: &mut LineageLibrary,
+    source_run_id: &str,
+    organism_id: OrganismId,
+    birth_tick: Tick,
+    sensor_profile: SensorProfile,
+    resident: &ResidentCognition,
+) -> Result<Blake3Digest, GameAppShellError> {
+    if resident.phenotype.sensor_profile() != sensor_profile {
+        return Err(ScaffoldContractError::SensorProfileMismatch.into());
+    }
+    if let Some(existing_digest) =
+        lineage_library.latest_manifest_for(source_run_id, organism_id)?
+    {
+        let manifest = lineage_library.load_manifest(existing_digest)?;
+        let genetic = &manifest.genetic;
+        let abi = resident.phenotype.foundation_abi();
+        let language = resident.phenotype.language_codebook();
+        let archived_genome = lineage_library.load_brain_genome(&manifest)?;
+        if manifest.life.is_some()
+            || manifest.previous_manifest_digest.is_some()
+            || archived_genome != resident.genome
+            || genetic.source_run_id != source_run_id
+            || genetic.organism_id != organism_id
+            || genetic.genome_id != resident.genome.id
+            || genetic.lineage_id != resident.genome.lineage_id
+            || genetic.brain_class_id != resident.phenotype.brain_class_id()
+            || genetic.birth_tick != birth_tick
+            || genetic.sensor_profile != resident.phenotype.sensor_profile()
+            || genetic.phenotype_hash != resident.phenotype.phenotype_hash()
+            || genetic.foundation_id != abi.foundation_id()
+            || genetic.foundation_version != abi.foundation_version()
+            || genetic.compatibility_family_id != abi.compatibility_family_id()
+            || genetic.foundation_payload_digest != abi.foundation_payload_digest()
+            || genetic.persistent_address_map_digest
+                != resident.phenotype.persistent_address_map().digest()
+            || genetic.language_codebook_id != language.id()
+            || genetic.language_codebook_digest != language.canonical_digest()
+        {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "existing lineage birth target conflicts for source run {source_run_id}, organism {}",
+                    organism_id.raw()
+                ),
+            });
+        }
+        return Ok(existing_digest);
+    }
+
+    let foundation_asset_bytes = archive_foundation_asset_bytes(resident)?;
+    Ok(lineage_library.archive_birth(GeneticArchiveInput {
+        source_run_id,
+        organism_id,
+        birth_tick,
+        genome: &resident.genome,
+        phenotype: &resident.phenotype,
+        foundation_asset_bytes: foundation_asset_bytes.as_deref(),
+    })?)
+}
+
+fn archive_foundation_asset_bytes(
+    resident: &ResidentCognition,
+) -> Result<Option<Vec<u8>>, GameAppShellError> {
+    let Some(expected_digest) = resident
+        .phenotype
+        .foundation_abi()
+        .foundation_payload_digest()
+    else {
+        return Ok(None);
+    };
+    let sensor_profile = resident.phenotype.sensor_profile();
+    let foundation = match resident.phenotype.brain_class_id() {
+        id if id == BrainCapacityClass::N512_ID => {
+            alife_core::FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?
+        }
+        id if id == BrainCapacityClass::N2048_ID => {
+            alife_core::FoundationWeightAsset::builtin_n2048_v1(sensor_profile)?
+        }
+        _ => return Err(ScaffoldContractError::UnsupportedProductionBrainClass.into()),
+    };
+    if foundation.digest() != expected_digest {
+        return Err(ScaffoldContractError::PhenotypeCompile.into());
+    }
+    Ok(Some(foundation.encode_canonical()?))
+}
+
 impl GpuLiveBrainRuntime {
     pub fn from_p34_launch(
         backend: GpuClosedLoopBackend,
@@ -1514,26 +1723,20 @@ impl GpuLiveBrainRuntime {
     pub fn attach_lineage_archive(
         &mut self,
         config: LineageLibraryConfig,
-        source_run_id: impl Into<String>,
         learned_capture_policy: ArchiveLearnedCapturePolicy,
     ) -> Result<(), GameAppShellError> {
-        if self.lineage_library.is_some() {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "lineage archive is already attached".to_string(),
-            });
-        }
-        self.lineage_library = Some(LineageLibrary::open(config)?);
-        self.lineage_run_id = Some(source_run_id.into());
-        self.archive_learned_capture_policy = learned_capture_policy;
-        let residents = self
-            .residents
-            .iter()
-            .map(|(&raw, resident)| (raw, resident.clone()))
-            .collect::<Vec<_>>();
-        for (raw, resident) in residents {
-            self.archive_birth_before_gpu_insert(OrganismId(raw), &resident)?;
-        }
-        Ok(())
+        attach_lineage_archive_with_owned_authorities(
+            self.checkpoint_durability.as_ref(),
+            self.sensor_profile,
+            self.world.tick(),
+            &self.residents,
+            &mut self.lineage_library,
+            &mut self.lineage_run_id,
+            &mut self.archive_learned_capture_policy,
+            &mut self.archive_birth_manifests,
+            config,
+            learned_capture_policy,
+        )
     }
 
     /// Performs the canonical death transaction. The immutable life manifest
@@ -1688,38 +1891,17 @@ impl GpuLiveBrainRuntime {
                 message: "lineage archive source run id is missing".to_string(),
             }
         })?;
-        let foundation_bytes = if resident
-            .phenotype
-            .foundation_abi()
-            .foundation_payload_digest()
-            .is_some()
-        {
-            let foundation =
-                alife_core::FoundationWeightAsset::builtin_n2048_v1(self.sensor_profile)?;
-            if Some(foundation.digest())
-                != resident
-                    .phenotype
-                    .foundation_abi()
-                    .foundation_payload_digest()
-            {
-                return Err(ScaffoldContractError::PhenotypeCompile.into());
-            }
-            Some(foundation.encode_canonical()?)
-        } else {
-            None
-        };
-        let digest = self
-            .lineage_library
-            .as_mut()
-            .expect("lineage library presence checked above")
-            .archive_birth(GeneticArchiveInput {
-                source_run_id,
-                organism_id,
-                birth_tick: self.world.tick(),
-                genome: &resident.genome,
-                phenotype: &resident.phenotype,
-                foundation_asset_bytes: foundation_bytes.as_deref(),
-            })?;
+        let source_run_id = source_run_id.to_string();
+        let digest = archive_birth_into_library(
+            self.lineage_library
+                .as_mut()
+                .expect("lineage library presence checked above"),
+            &source_run_id,
+            organism_id,
+            self.world.tick(),
+            self.sensor_profile,
+            resident,
+        )?;
         self.archive_birth_manifests
             .insert(organism_id.raw(), digest);
         Ok(())
@@ -3439,7 +3621,7 @@ mod tests {
     use alife_archive::{LineageLibrary, LineageLibraryConfig};
     use alife_core::{
         ActionTarget, BrainCapacityClass, CandidateActionFamily, FoundationGeneticIdentity,
-        FoundationWeightAsset, OrganismId, OutcomeCreditPacket, PreActionBrainEvidence,
+        FoundationWeightAsset, GenomeId, OrganismId, OutcomeCreditPacket, PreActionBrainEvidence,
         SensorProfile, Tick, Vec3f, WorldEntityId,
     };
     use alife_runtime::GpuDurableSaveManifest;
@@ -3674,6 +3856,291 @@ mod tests {
         operation: &CuratedFounderDurableOperation,
     ) -> (Vec<OrganismId>, Vec<(WorldEntityId, OrganismId)>, String) {
         operation.test_identity_fingerprint()
+    }
+
+    struct ArchiveAttachmentTestCarrier {
+        checkpoint_durability: Option<GpuLiveCheckpointDurability>,
+        residents: BTreeMap<u64, ResidentCognition>,
+        sensor_profile: SensorProfile,
+        world_tick: Tick,
+        lineage_library: Option<LineageLibrary>,
+        lineage_run_id: Option<String>,
+        archive_learned_capture_policy: ArchiveLearnedCapturePolicy,
+        archive_birth_manifests: BTreeMap<u64, Blake3Digest>,
+    }
+
+    impl ArchiveAttachmentTestCarrier {
+        fn attach(
+            &mut self,
+            config: LineageLibraryConfig,
+            learned_capture_policy: ArchiveLearnedCapturePolicy,
+        ) -> Result<(), GameAppShellError> {
+            attach_lineage_archive_with_owned_authorities(
+                self.checkpoint_durability.as_ref(),
+                self.sensor_profile,
+                self.world_tick,
+                &self.residents,
+                &mut self.lineage_library,
+                &mut self.lineage_run_id,
+                &mut self.archive_learned_capture_policy,
+                &mut self.archive_birth_manifests,
+                config,
+                learned_capture_policy,
+            )
+        }
+    }
+
+    struct ArchiveAttachmentTestFixture {
+        durability: GpuLiveCheckpointDurability,
+        residents: BTreeMap<u64, ResidentCognition>,
+        sensor_profile: SensorProfile,
+        world_tick: Tick,
+        archive_root: PathBuf,
+        durable_root: PathBuf,
+        asset_root: PathBuf,
+    }
+
+    impl Drop for ArchiveAttachmentTestFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.archive_root);
+            let _ = fs::remove_dir_all(&self.durable_root);
+        }
+    }
+
+    fn archive_attachment_test_fixture(label: &str) -> ArchiveAttachmentTestFixture {
+        let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
+        let world_tick = Tick::ZERO;
+        let seed = 0xA11F_E3C3_3B01_0001;
+        let source_world = HeadlessScenarioBuilder::new(seed)
+            .agent("archive-attachment-0", OrganismId(101), Vec3f::ZERO)
+            .agent(
+                "archive-attachment-1",
+                OrganismId(202),
+                Vec3f::new(1.0, 0.0, 0.0),
+            )
+            .build()
+            .unwrap();
+        let source_save = PortableSaveFile::from_headless_world(
+            "save-archive-attachment",
+            &source_world,
+            RuntimeConfig::deterministic_default(seed, BrainScaleTier::Nano512),
+            AssetManifest::empty(),
+            Vec::new(),
+        )
+        .unwrap();
+        let suffix = format!("{}-{label}", std::process::id());
+        let archive_root =
+            std::env::temp_dir().join(format!("alife-production-archive-attachment-{suffix}"));
+        let durable_root = std::env::temp_dir().join(format!(
+            "alife-production-archive-attachment-durable-{suffix}"
+        ));
+        let _ = fs::remove_dir_all(&archive_root);
+        let _ = fs::remove_dir_all(&durable_root);
+        fs::create_dir_all(&durable_root).unwrap();
+        let asset_root = std::env::current_dir().unwrap();
+        let durable_save_path = durable_root.join("live-save.json");
+        GpuDurableSaveManifest::publish_snapshot(&durable_save_path, &asset_root, &source_save)
+            .unwrap();
+        let durable_manifest =
+            GpuDurableSaveManifest::open(&durable_save_path, &asset_root).unwrap();
+        let published = durable_manifest.load().unwrap();
+        let store = GpuCheckpointAssetStore::new(asset_root.clone()).unwrap();
+        let residents = [101_u64, 202_u64]
+            .into_iter()
+            .map(|raw| {
+                let (phenotype, genome, development) = compile_gpu_birth_components(
+                    seed,
+                    BrainScaleTier::Nano512,
+                    OrganismId(raw),
+                    world_tick,
+                    sensor_profile,
+                )
+                .unwrap();
+                let capacity =
+                    BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
+                let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+                    genome.clone(),
+                    &capacity,
+                    development.clone(),
+                    sensor_profile,
+                    phenotype.foundation_abi().clone(),
+                )
+                .unwrap();
+                (
+                    raw,
+                    ResidentCognition {
+                        phenotype,
+                        compiler_inputs,
+                        genome,
+                        development,
+                        homeostasis: HomeostaticSnapshot::baseline(world_tick),
+                        sleep_scheduler: GpuSleepScheduler::new(
+                            SleepConsolidationConfig::reference(),
+                        )
+                        .unwrap(),
+                        next_sequence: 1,
+                        language_grounding: LanguageGroundingLedger::default(),
+                        life_statistics: PassiveLifeStatistics::new(OrganismId(raw), world_tick)
+                            .unwrap(),
+                    },
+                )
+            })
+            .collect();
+        ArchiveAttachmentTestFixture {
+            durability: GpuLiveCheckpointDurability {
+                store,
+                durable_manifest,
+                published,
+            },
+            residents,
+            sensor_profile,
+            world_tick,
+            archive_root,
+            durable_root,
+            asset_root,
+        }
+    }
+
+    fn archive_attachment_test_carrier(
+        fixture: &ArchiveAttachmentTestFixture,
+        durability: Option<GpuLiveCheckpointDurability>,
+    ) -> ArchiveAttachmentTestCarrier {
+        ArchiveAttachmentTestCarrier {
+            checkpoint_durability: durability.or_else(|| Some(fixture.durability.clone())),
+            residents: fixture.residents.clone(),
+            sensor_profile: fixture.sensor_profile,
+            world_tick: fixture.world_tick,
+            lineage_library: None,
+            lineage_run_id: None,
+            archive_learned_capture_policy: ArchiveLearnedCapturePolicy::GeneticOnly,
+            archive_birth_manifests: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn production_archive_source_run_identity_exact_vector() {
+        assert_eq!(
+            lineage_source_run_id_for_fields(
+                "save-vector",
+                0x0102_0304_0506_0708,
+                0x1112_1314_1516_1718,
+                0x1920_2122_2324_2526,
+                "generation-vector",
+            ),
+            "runtime-save-v1-a86cb6f2aa429bfe69efc1b82c1cdb5d046a5dcdb85dde9a45e8028bccf0e36c"
+        );
+    }
+
+    #[test]
+    fn production_archive_attachment_derives_save_bound_run_id() {
+        let fixture = archive_attachment_test_fixture("identity");
+        let config = LineageLibraryConfig::profile_default(&fixture.archive_root);
+        let mut first = archive_attachment_test_carrier(&fixture, None);
+        first
+            .attach(config.clone(), ArchiveLearnedCapturePolicy::GeneticOnly)
+            .unwrap();
+        let first_root = first.lineage_library.as_ref().unwrap().root().to_path_buf();
+        let first_run_id = first.lineage_run_id.clone().unwrap();
+        let first_birth_manifests = first.archive_birth_manifests.clone();
+        let first_manifest_count = first
+            .lineage_library
+            .as_ref()
+            .unwrap()
+            .manifest_count()
+            .unwrap();
+        assert_eq!(first_root, fixture.archive_root);
+        assert!(first_run_id.starts_with("runtime-save-v1-"));
+        assert_eq!(first_birth_manifests.len(), 2);
+        assert_eq!(first_manifest_count, 2);
+
+        let second_attach = first.attach(
+            LineageLibraryConfig::profile_default(fixture.archive_root.join("must-not-be-opened")),
+            ArchiveLearnedCapturePolicy::Pinned,
+        );
+        assert!(matches!(
+            second_attach,
+            Err(GameAppShellError::InvalidProductionFrontend { .. })
+        ));
+        assert_eq!(
+            first.lineage_library.as_ref().unwrap().root(),
+            first_root.as_path()
+        );
+        assert_eq!(first.lineage_run_id.as_deref(), Some(first_run_id.as_str()));
+        assert_eq!(first.archive_birth_manifests, first_birth_manifests);
+        assert_eq!(
+            first
+                .lineage_library
+                .as_ref()
+                .unwrap()
+                .manifest_count()
+                .unwrap(),
+            first_manifest_count
+        );
+
+        let _ = first.lineage_library.take();
+        let mut relaunch = archive_attachment_test_carrier(&fixture, None);
+        relaunch
+            .attach(config, ArchiveLearnedCapturePolicy::GeneticOnly)
+            .unwrap();
+        assert_eq!(
+            relaunch.lineage_run_id.as_deref(),
+            Some(first_run_id.as_str())
+        );
+        assert_eq!(relaunch.archive_birth_manifests, first_birth_manifests);
+        assert_eq!(
+            relaunch
+                .lineage_library
+                .as_ref()
+                .unwrap()
+                .manifest_count()
+                .unwrap(),
+            first_manifest_count
+        );
+
+        let changed_save_path = fixture.durable_root.join("changed-save.json");
+        let mut changed_save = fixture.durability.published.save.clone();
+        changed_save.save_id = "save-archive-attachment-changed".to_string();
+        GpuDurableSaveManifest::publish_snapshot(
+            &changed_save_path,
+            &fixture.asset_root,
+            &changed_save,
+        )
+        .unwrap();
+        let changed_durable_manifest =
+            GpuDurableSaveManifest::open(&changed_save_path, &fixture.asset_root).unwrap();
+        let changed_durability = GpuLiveCheckpointDurability {
+            store: GpuCheckpointAssetStore::new(fixture.asset_root.clone()).unwrap(),
+            published: changed_durable_manifest.load().unwrap(),
+            durable_manifest: changed_durable_manifest,
+        };
+        let changed_root = fixture.archive_root.join("changed-generation");
+        let mut changed = archive_attachment_test_carrier(&fixture, Some(changed_durability));
+        changed
+            .attach(
+                LineageLibraryConfig::profile_default(changed_root),
+                ArchiveLearnedCapturePolicy::GeneticOnly,
+            )
+            .unwrap();
+        assert_ne!(changed.lineage_run_id, Some(first_run_id.clone()));
+
+        let mut malformed_residents = fixture.residents.clone();
+        malformed_residents.values_mut().next().unwrap().genome.id = GenomeId(0);
+        let failed_root = fixture.archive_root.join("failed-backfill");
+        let mut failed = archive_attachment_test_carrier(&fixture, None);
+        failed.residents = malformed_residents;
+        assert!(failed
+            .attach(
+                LineageLibraryConfig::profile_default(failed_root),
+                ArchiveLearnedCapturePolicy::GeneticOnly,
+            )
+            .is_err());
+        assert!(failed.lineage_library.is_none());
+        assert!(failed.lineage_run_id.is_none());
+        assert!(failed.archive_birth_manifests.is_empty());
+        assert!(matches!(
+            failed.archive_learned_capture_policy,
+            ArchiveLearnedCapturePolicy::GeneticOnly
+        ));
     }
 
     fn run_curated_runtime_authority(

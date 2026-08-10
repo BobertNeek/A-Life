@@ -5041,7 +5041,13 @@ pub fn build_production_voxel_frontend_app_shell(
         .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
             message: error.to_string(),
         })?;
-        let runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
+        let mut runtime = crate::GpuLiveBrainRuntime::from_p34_launch(backend, &runtime_launch)?;
+        runtime.attach_lineage_archive(
+            alife_archive::LineageLibraryConfig::profile_default(
+                crate::production_conversation_lineage_ui::default_lineage_root(),
+            ),
+            alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+        )?;
         let telemetry = runtime.authority_telemetry();
         let initial_world = runtime.world_snapshot();
         let presentation = LiveBrainPresentationFrameResource::from_authoritative_world(

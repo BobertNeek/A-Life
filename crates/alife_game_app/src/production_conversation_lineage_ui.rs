@@ -2399,7 +2399,7 @@ fn short_digest(digest: Blake3Digest) -> String {
         .collect()
 }
 
-fn default_lineage_root() -> PathBuf {
+pub(crate) fn default_lineage_root() -> PathBuf {
     std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
