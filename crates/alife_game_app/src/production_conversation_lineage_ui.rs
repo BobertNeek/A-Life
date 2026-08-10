@@ -859,7 +859,8 @@ pub fn install_production_conversation_lineage_ui(
     app.add_systems(
         Update,
         (
-            handle_production_conversation_lineage_input,
+            handle_production_conversation_lineage_input
+                .in_set(crate::production_voxel_renderer::ProductionVoxelPresentationSet::Input),
             refresh_creature_speech_receipt,
             sync_production_conversation_lineage_ui,
             sync_production_lineage_laboratory_ui,
@@ -1207,7 +1208,7 @@ fn lab_flow_text_node() -> Node {
     }
 }
 
-fn handle_production_conversation_lineage_input(
+pub(crate) fn handle_production_conversation_lineage_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut key_messages: MessageReader<KeyboardInput>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,

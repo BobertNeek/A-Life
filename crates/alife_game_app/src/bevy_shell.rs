@@ -39,7 +39,7 @@ use bevy::{
         default, AlphaMode, App, AssetServer, BackgroundColor, ButtonInput, Camera, Camera2d,
         Camera3d, Capsule3d, Circle, ClearColor, ClearColorConfig, Color, Commands, Component,
         Cone, Cuboid, DefaultPlugins, DirectionalLight, Entity, GlobalTransform, ImageNode,
-        KeyCode, Mesh, Mesh3d, MeshBuilder, MeshMaterial3d, Meshable, MessageWriter,
+        KeyCode, Mesh, Mesh3d, MeshBuilder, MeshMaterial3d, Meshable, Message, MessageWriter,
         MinimalPlugins, MouseButton, Name, Node, NonSend, NonSendMut, OrthographicProjection,
         Plane3d, Plugin, PluginGroup, PositionType, Projection, Quat, Res, ResMut, Resource,
         SceneRoot, Sphere, Sprite, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
@@ -680,6 +680,28 @@ pub(crate) struct ProductionGpuBrainAuthorityResource {
 #[cfg(feature = "gpu-runtime")]
 pub(crate) struct ProductionGpuBrainRuntimeResource {
     pub(crate) runtime: crate::GpuLiveBrainRuntime,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, PartialEq, Eq, Message)]
+pub(crate) enum ProductionCuratedFounderResetCommand {
+    Attempt(crate::gpu_live_runtime::LiveAgentResetIntent),
+    Retry,
+}
+
+#[cfg(feature = "gpu-runtime")]
+#[derive(Debug, Clone, PartialEq, Eq, Resource)]
+pub(crate) struct ProductionCuratedFounderResetResultResource {
+    pub(crate) outcome: crate::gpu_live_runtime::CuratedFounderResetDispatchResult,
+}
+
+#[cfg(feature = "gpu-runtime")]
+impl Default for ProductionCuratedFounderResetResultResource {
+    fn default() -> Self {
+        Self {
+            outcome: crate::gpu_live_runtime::CuratedFounderResetDispatchResult::Idle,
+        }
+    }
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -5032,6 +5054,9 @@ pub fn build_production_voxel_frontend_app_shell(
     app.insert_resource(ProductionGpuBrainAuthorityResource {
         telemetry: initial_authority,
     });
+    #[cfg(feature = "gpu-runtime")]
+    app.add_message::<ProductionCuratedFounderResetCommand>()
+        .insert_resource(ProductionCuratedFounderResetResultResource::default());
     #[cfg(feature = "gpu-runtime")]
     {
         let runtime_launch = prepare_production_gpu_runtime_launch(launch, &summary)?;

@@ -9,14 +9,15 @@ use alife_core::{
     BrainWorkReceipt, CanonicalDigestBuilder, Confidence, ConsolidationDriverEvent,
     ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
     EnvironmentalRegime, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    FinalizedMemoryRecall, HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot,
-    LanguageGroundingLedger, MemoryBankConfig, MemoryCompactionCheckpoint, MemoryCompactionReceipt,
-    MemoryRecallReceipt, MemorySidecarState, MemoryUpdateReceipt, NeuralActionSelection,
-    NormalizedScalar, OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame,
-    PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot,
-    ScaffoldContractError, SensorProfile, SensorProfileIdentity, SensoryAbiVersion,
-    SleepConsolidationConfig, SleepPhase, SleepState, Tick, TopologicalMapConfig,
-    TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind, Validate, Vec3f,
+    FinalizedMemoryRecall, FoundationGeneticIdentity, FoundationWeightAsset, HomeostaticDelta,
+    HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig,
+    MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
+    MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId, PassiveLifeEvent,
+    PassiveLifeStatistics, PerceptionFrame, PhenotypeCompiler, PhenotypeCompilerInputs,
+    PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile,
+    SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState,
+    Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
+    Validate, Vec3f,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -42,12 +43,12 @@ use crate::{
         CuratedFounderPublicationStatus, CuratedFounderSaveState, CuratedFounderStagingError,
     },
     merge_gpu_checkpoint_manifest_entries, plan_curated_founder_reset, AppShellLaunchConfig,
-    CuratedFounderResetError, CuratedFounderResetRequest, GameAppShellError,
-    GpuBrainAuthorityTelemetry, GpuBrainCheckpointWrite, GpuBrainSidecarCapture,
+    CuratedFounderAgentInput, CuratedFounderResetError, CuratedFounderResetRequest,
+    GameAppShellError, GpuBrainAuthorityTelemetry, GpuBrainCheckpointWrite, GpuBrainSidecarCapture,
     GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
     GpuSleepConsolidationDriver, GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage,
-    LiveBrainTickSummary, RetainedLearningCapture, G03_LIVE_BRAIN_LOOP_SCHEMA,
-    G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+    LiveBrainTickSummary, RetainedLearningCapture, CURATED_FOUNDER_RESET_POLICY,
+    G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
 
 #[derive(Debug, Clone)]
@@ -476,10 +477,18 @@ pub(crate) enum CuratedFounderResetRuntimeError {
     Materialization(#[from] CuratedFounderMaterializationError),
     #[error("curated founder reset staging rejected before archive commit: {0}")]
     PreCommit(#[from] CuratedFounderStagingError),
-    #[error("curated founder reset durable publication refresh failed: {0}")]
-    DurableRefresh(#[source] GameAppShellError),
-    #[error("curated founder reset GPU checkpoint notification failed: {0}")]
-    DurableCheckpointNotification(#[source] GameAppShellError),
+    #[error("curated founder reset durable publication refresh failed after publication: {error}")]
+    DurableRefresh {
+        evidence: CuratedFounderResetRuntimeEvidence,
+        #[source]
+        error: GameAppShellError,
+    },
+    #[error("curated founder reset GPU checkpoint notification failed after publication: {error}")]
+    DurableCheckpointNotification {
+        evidence: CuratedFounderResetRuntimeEvidence,
+        #[source]
+        error: GameAppShellError,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -521,6 +530,233 @@ impl CuratedFounderResetAttempt {
 
     pub(crate) fn cause(&self) -> Option<&str> {
         self.publication.cause()
+    }
+
+    pub(crate) fn archive_receipt_count(&self) -> usize {
+        self.receipt().archive_receipt_count()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CuratedFounderResetRuntimeEvidence {
+    pub(crate) status: CuratedFounderPublicationStatus,
+    pub(crate) save_state: CuratedFounderSaveState,
+    pub(crate) gpu_residency: CuratedFounderGpuResidencyState,
+    pub(crate) expected_save_digest: Option<String>,
+    pub(crate) actual_save_digest: Option<String>,
+    pub(crate) proposed_save_digest: String,
+    pub(crate) cause: Option<String>,
+    pub(crate) archive_count: usize,
+}
+
+impl CuratedFounderResetRuntimeEvidence {
+    fn from_attempt(result: &CuratedFounderResetAttempt) -> Self {
+        Self {
+            status: result.publication_status(),
+            save_state: result.save_state(),
+            gpu_residency: result.gpu_residency_state(),
+            expected_save_digest: result.expected_save_digest().map(str::to_string),
+            actual_save_digest: result.actual_save_digest().map(str::to_string),
+            proposed_save_digest: result.proposed_save_digest().to_string(),
+            cause: result.cause().map(str::to_string),
+            archive_count: result.archive_receipt_count(),
+        }
+    }
+}
+
+pub(crate) type CuratedFounderResetRuntimeResult =
+    Result<CuratedFounderResetRuntimeEvidence, CuratedFounderResetRuntimeError>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LiveAgentResetIntent {
+    pub(crate) final_agents: Vec<CuratedFounderAgentInput>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CuratedFounderResetDispatchRejection {
+    MultipleCommands,
+    RetainedOperationPending,
+    Runtime { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CuratedFounderResetDispatchResult {
+    Idle,
+    PreCommitRejected {
+        rejection: CuratedFounderResetDispatchRejection,
+    },
+    Published {
+        status: CuratedFounderPublicationStatus,
+        save_state: CuratedFounderSaveState,
+        gpu_residency: CuratedFounderGpuResidencyState,
+        proposed_save_digest: String,
+        archive_count: usize,
+    },
+    Conflict {
+        expected_save_digest: String,
+        actual_save_digest: String,
+        proposed_save_digest: String,
+        archive_count: usize,
+        save_state: CuratedFounderSaveState,
+        gpu_residency: CuratedFounderGpuResidencyState,
+        retryable: bool,
+    },
+    Unknown {
+        cause: String,
+        proposed_save_digest: String,
+        archive_count: usize,
+        save_state: CuratedFounderSaveState,
+        gpu_residency: CuratedFounderGpuResidencyState,
+        retryable: bool,
+    },
+}
+
+pub(crate) trait CuratedFounderResetRuntimePort {
+    fn dispatch_attempt(
+        &mut self,
+        intent: LiveAgentResetIntent,
+    ) -> CuratedFounderResetRuntimeResult;
+
+    fn dispatch_retry(&mut self) -> CuratedFounderResetRuntimeResult;
+}
+
+pub(crate) fn project_curated_founder_reset_result(
+    result: CuratedFounderResetRuntimeResult,
+) -> CuratedFounderResetDispatchResult {
+    let result = match result {
+        Ok(result) => result,
+        Err(error) => return project_curated_founder_reset_runtime_error(error),
+    };
+
+    match result.status {
+        CuratedFounderPublicationStatus::Published
+        | CuratedFounderPublicationStatus::AlreadyApplied => {
+            CuratedFounderResetDispatchResult::Published {
+                status: result.status,
+                save_state: result.save_state,
+                gpu_residency: result.gpu_residency,
+                proposed_save_digest: result.proposed_save_digest,
+                archive_count: result.archive_count,
+            }
+        }
+        CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict => {
+            CuratedFounderResetDispatchResult::Conflict {
+                expected_save_digest: result
+                    .expected_save_digest
+                    .expect("conflict runtime evidence has an expected save digest"),
+                actual_save_digest: result
+                    .actual_save_digest
+                    .expect("conflict runtime evidence has an actual save digest"),
+                proposed_save_digest: result.proposed_save_digest,
+                archive_count: result.archive_count,
+                save_state: result.save_state,
+                gpu_residency: result.gpu_residency,
+                retryable: true,
+            }
+        }
+        CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure => {
+            CuratedFounderResetDispatchResult::Unknown {
+                cause: result
+                    .cause
+                    .expect("unknown runtime evidence has a publication cause"),
+                proposed_save_digest: result.proposed_save_digest,
+                archive_count: result.archive_count,
+                save_state: result.save_state,
+                gpu_residency: result.gpu_residency,
+                retryable: true,
+            }
+        }
+    }
+}
+
+fn project_curated_founder_reset_runtime_error(
+    error: CuratedFounderResetRuntimeError,
+) -> CuratedFounderResetDispatchResult {
+    match error {
+        CuratedFounderResetRuntimeError::RetainedOperationPending => {
+            CuratedFounderResetDispatchResult::PreCommitRejected {
+                rejection: CuratedFounderResetDispatchRejection::RetainedOperationPending,
+            }
+        }
+        CuratedFounderResetRuntimeError::DurableRefresh { evidence, error } => {
+            project_post_publication_failure(
+                evidence,
+                "durable publication refresh",
+                error,
+                CuratedFounderSaveState::Unknown,
+                true,
+                "retry the retained operation",
+            )
+        }
+        CuratedFounderResetRuntimeError::DurableCheckpointNotification { evidence, error } => {
+            let save_state = evidence.save_state;
+            project_post_publication_failure(
+                evidence,
+                "durable checkpoint notification",
+                error,
+                save_state,
+                false,
+                "manual recovery is required",
+            )
+        }
+        error @ (CuratedFounderResetRuntimeError::MissingDurability
+        | CuratedFounderResetRuntimeError::MissingLineageArchive
+        | CuratedFounderResetRuntimeError::MissingLineageRunId
+        | CuratedFounderResetRuntimeError::NoRetainedOperation
+        | CuratedFounderResetRuntimeError::Plan(_)
+        | CuratedFounderResetRuntimeError::Materialization(_)
+        | CuratedFounderResetRuntimeError::PreCommit(_)) => {
+            CuratedFounderResetDispatchResult::PreCommitRejected {
+                rejection: CuratedFounderResetDispatchRejection::Runtime {
+                    message: error.to_string(),
+                },
+            }
+        }
+    }
+}
+
+fn project_post_publication_failure(
+    evidence: CuratedFounderResetRuntimeEvidence,
+    phase: &str,
+    error: GameAppShellError,
+    save_state: CuratedFounderSaveState,
+    retryable: bool,
+    recovery: &str,
+) -> CuratedFounderResetDispatchResult {
+    let publication = match evidence.status {
+        CuratedFounderPublicationStatus::Published => "published",
+        CuratedFounderPublicationStatus::AlreadyApplied => "already-applied",
+        CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict => {
+            "archive-committed-conflict"
+        }
+        CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure => {
+            "archive-committed-save-failure"
+        }
+    };
+    CuratedFounderResetDispatchResult::Unknown {
+        cause: format!(
+            "{phase} failed after {publication} durable publication: {error}; {recovery}"
+        ),
+        proposed_save_digest: evidence.proposed_save_digest,
+        archive_count: evidence.archive_count,
+        save_state,
+        gpu_residency: CuratedFounderGpuResidencyState::Pending,
+        retryable,
+    }
+}
+
+impl CuratedFounderResetRuntimePort for GpuLiveBrainRuntime {
+    fn dispatch_attempt(
+        &mut self,
+        intent: LiveAgentResetIntent,
+    ) -> CuratedFounderResetRuntimeResult {
+        self.attempt_live_agent_reset(intent)
+            .map(|result| CuratedFounderResetRuntimeEvidence::from_attempt(&result))
+    }
+
+    fn dispatch_retry(&mut self) -> CuratedFounderResetRuntimeResult {
+        self.retry_curated_founder_reset()
+            .map(|result| CuratedFounderResetRuntimeEvidence::from_attempt(&result))
     }
 }
 
@@ -637,19 +873,21 @@ fn attempt_curated_founder_reset_with_owned_authorities(
         });
     }
 
-    let final_save_digest = publication.final_save_digest().ok_or_else(|| {
-        CuratedFounderResetRuntimeError::DurableRefresh(
-            GameAppShellError::InvalidProductionFrontend {
-                message: "curated founder success omitted its verified final save digest"
-                    .to_string(),
-            },
-        )
-    });
-    let final_save_digest = match final_save_digest {
-        Ok(digest) => digest,
-        Err(error) => {
+    let result = CuratedFounderResetAttempt {
+        publication,
+        gpu_residency: CuratedFounderGpuResidencyState::Pending,
+    };
+    let final_save_digest = match result.publication.final_save_digest() {
+        Some(digest) => digest,
+        None => {
             *retained_operation = Some(operation);
-            return Err(error);
+            return Err(CuratedFounderResetRuntimeError::DurableRefresh {
+                evidence: CuratedFounderResetRuntimeEvidence::from_attempt(&result),
+                error: GameAppShellError::InvalidProductionFrontend {
+                    message: "curated founder success omitted its verified final save digest"
+                        .to_string(),
+                },
+            });
         }
     };
     if let Err(error) = checkpoint_durability
@@ -657,16 +895,15 @@ fn attempt_curated_founder_reset_with_owned_authorities(
         .expect("durability presence was checked above")
         .refresh_published(final_save_digest)
         .map(|_| ())
-        .map_err(CuratedFounderResetRuntimeError::DurableRefresh)
     {
         *retained_operation = Some(operation);
-        return Err(error);
+        return Err(CuratedFounderResetRuntimeError::DurableRefresh {
+            evidence: CuratedFounderResetRuntimeEvidence::from_attempt(&result),
+            error,
+        });
     }
 
-    Ok(CuratedFounderResetAttempt {
-        publication,
-        gpu_residency: CuratedFounderGpuResidencyState::Pending,
-    })
+    Ok(result)
 }
 
 const LINEAGE_SOURCE_RUN_DOMAIN: &[u8] = b"alife.production.lineage-source-run.v1";
@@ -952,6 +1189,63 @@ impl GpuLiveBrainRuntime {
         Ok(runtime)
     }
 
+    fn build_live_agent_reset_request(
+        &self,
+        intent: LiveAgentResetIntent,
+    ) -> Result<CuratedFounderResetRequest, CuratedFounderResetRuntimeError> {
+        let durability = self
+            .checkpoint_durability
+            .as_ref()
+            .ok_or(CuratedFounderResetRuntimeError::MissingDurability)?;
+        let source_run_identity = self
+            .lineage_run_id
+            .clone()
+            .ok_or(CuratedFounderResetRuntimeError::MissingLineageRunId)?;
+        let target_population = u32::try_from(intent.final_agents.len()).map_err(|_| {
+            CuratedFounderResetRuntimeError::Plan(CuratedFounderResetError::AgentCountMismatch {
+                expected: u32::MAX,
+                actual: intent.final_agents.len(),
+            })
+        })?;
+        let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(self.sensor_profile)
+            .map_err(|_| {
+                CuratedFounderResetRuntimeError::Plan(CuratedFounderResetError::FoundationMismatch)
+            })?;
+        let foundation_manifest = foundation_asset.manifest();
+        let foundation = FoundationGeneticIdentity::new(
+            foundation_manifest.foundation_id().raw(),
+            foundation_manifest.foundation_version().raw() as u16,
+            foundation_manifest.compatibility_family_id().raw(),
+            BrainCapacityClass::N512_ID,
+        )
+        .map_err(|_| {
+            CuratedFounderResetRuntimeError::Plan(CuratedFounderResetError::FoundationMismatch)
+        })?;
+        let save = &durability.published.save;
+        Ok(CuratedFounderResetRequest {
+            policy_label: Some(CURATED_FOUNDER_RESET_POLICY.to_string()),
+            source_save_identity: save.save_id.clone(),
+            source_save_label: format!("durable-save:{}", save.save_id),
+            source_save_seed: save.deterministic_seed,
+            world_seed: save.world.seed,
+            restored_tick: save.world.tick,
+            target_population,
+            sensor_profile: self.sensor_profile,
+            foundation,
+            foundation_content_digest: foundation_asset.digest(),
+            source_run_identity,
+            final_agents: intent.final_agents,
+        })
+    }
+
+    pub(crate) fn attempt_live_agent_reset(
+        &mut self,
+        intent: LiveAgentResetIntent,
+    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+        let request = self.build_live_agent_reset_request(intent)?;
+        self.attempt_curated_founder_reset(request)
+    }
+
     pub(crate) fn attempt_curated_founder_reset(
         &mut self,
         request: CuratedFounderResetRequest,
@@ -998,14 +1292,20 @@ impl GpuLiveBrainRuntime {
             .checkpoint_durability
             .as_ref()
             .ok_or(CuratedFounderResetRuntimeError::MissingDurability)?;
-        let durable_reference = durability
-            .durable_reference()
-            .map_err(CuratedFounderResetRuntimeError::DurableCheckpointNotification)?;
+        let durable_reference = durability.durable_reference().map_err(|error| {
+            CuratedFounderResetRuntimeError::DurableCheckpointNotification {
+                evidence: CuratedFounderResetRuntimeEvidence::from_attempt(result),
+                error,
+            }
+        })?;
         self.backend
             .note_durable_checkpoint(durable_reference)
-            .map_err(|error| {
-                CuratedFounderResetRuntimeError::DurableCheckpointNotification(error.into())
-            })
+            .map_err(
+                |error| CuratedFounderResetRuntimeError::DurableCheckpointNotification {
+                    evidence: CuratedFounderResetRuntimeEvidence::from_attempt(result),
+                    error: error.into(),
+                },
+            )
     }
 
     pub fn new(

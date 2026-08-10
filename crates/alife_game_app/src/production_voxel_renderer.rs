@@ -30,10 +30,10 @@ use bevy::{
     prelude::{
         default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, Capsule3d, ChildOf,
         Color, Commands, Component, Cuboid, DetectChanges, Entity, EulerRot, GlobalTransform,
-        Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, Meshable, MessageWriter,
-        MouseButton, Name, Node, ParamSet, PositionType, Projection, Quat, Res, ResMut, Resource,
-        Sphere, StandardMaterial, Text, Text2d, TextColor, TextFont, Time, Torus, Transform,
-        Update, Val, Vec3, Visibility, Window, With, Without,
+        Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, Meshable, MessageReader,
+        MessageWriter, MouseButton, Name, Node, NonSendMut, ParamSet, PositionType, Projection,
+        Quat, Res, ResMut, Resource, Sphere, StandardMaterial, Text, Text2d, TextColor, TextFont,
+        Time, Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -43,6 +43,13 @@ use bevy::{
 };
 
 use crate::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
+#[cfg(feature = "gpu-runtime")]
+use crate::bevy_shell::{
+    ProductionCuratedFounderResetCommand, ProductionCuratedFounderResetResultResource,
+    ProductionGpuBrainRuntimeResource,
+};
+#[cfg(feature = "gpu-runtime")]
+use crate::gpu_live_runtime::CuratedFounderResetRuntimePort;
 use crate::terrain_mesh::build_production_terrain_meshes;
 #[cfg(feature = "gpu-runtime")]
 use crate::ProductionConversationLineageUiState;
@@ -1438,6 +1445,42 @@ fn configure_production_voxel_presentation_schedule(app: &mut App) {
     );
 }
 
+#[cfg(feature = "gpu-runtime")]
+pub(crate) fn dispatch_production_curated_founder_reset_core<R: CuratedFounderResetRuntimePort>(
+    commands: &[ProductionCuratedFounderResetCommand],
+    runtime: &mut R,
+    result: &mut ProductionCuratedFounderResetResultResource,
+) {
+    if commands.len() != 1 {
+        result.outcome =
+            crate::gpu_live_runtime::CuratedFounderResetDispatchResult::PreCommitRejected {
+                rejection:
+                    crate::gpu_live_runtime::CuratedFounderResetDispatchRejection::MultipleCommands,
+            };
+        return;
+    }
+    let runtime_result = match &commands[0] {
+        ProductionCuratedFounderResetCommand::Attempt(intent) => {
+            runtime.dispatch_attempt(intent.clone())
+        }
+        ProductionCuratedFounderResetCommand::Retry => runtime.dispatch_retry(),
+    };
+    result.outcome = crate::gpu_live_runtime::project_curated_founder_reset_result(runtime_result);
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn dispatch_production_curated_founder_reset(
+    mut commands: MessageReader<ProductionCuratedFounderResetCommand>,
+    mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
+    mut result: ResMut<ProductionCuratedFounderResetResultResource>,
+) {
+    let pending = commands.read().cloned().collect::<Vec<_>>();
+    if pending.is_empty() {
+        return;
+    }
+    dispatch_production_curated_founder_reset_core(&pending, &mut runtime.runtime, &mut *result);
+}
+
 pub fn spawn_fvr03_production_voxel_scene(
     app: &mut App,
     summary: &ProductionVoxelLaunchSummary,
@@ -1853,6 +1896,14 @@ pub fn spawn_fvr03_production_voxel_scene(
     );
     #[cfg(feature = "gpu-runtime")]
     crate::install_production_conversation_lineage_ui(app, summary);
+    #[cfg(feature = "gpu-runtime")]
+    app.add_systems(
+        Update,
+        dispatch_production_curated_founder_reset
+            .in_set(ProductionVoxelPresentationSet::Input)
+            .after(crate::production_conversation_lineage_ui::handle_production_conversation_lineage_input)
+            .before(ProductionVoxelPresentationSet::LiveGpuTick),
+    );
     if summary.record_performance && !summary.dry_run {
         let screenshot_path = PathBuf::from(FVR03_PERFORMANCE_ARTIFACT_DIR).join(format!(
             "{}_runtime_screenshot.png",
@@ -5779,6 +5830,24 @@ mod tests {
     use alife_core::{OrganismId, Tick, WorldEntityId};
     use alife_world::{HeadlessScenarioBuilder, WorldObjectKind};
 
+    #[cfg(feature = "gpu-runtime")]
+    use crate::bevy_shell::{
+        ProductionCuratedFounderResetCommand, ProductionCuratedFounderResetResultResource,
+    };
+    #[cfg(feature = "gpu-runtime")]
+    use crate::curated_founder_staging::{
+        CuratedFounderPublicationStatus, CuratedFounderSaveState,
+    };
+    #[cfg(feature = "gpu-runtime")]
+    use crate::gpu_live_runtime::{
+        CuratedFounderGpuResidencyState, CuratedFounderResetDispatchRejection,
+        CuratedFounderResetDispatchResult, CuratedFounderResetRuntimeError,
+        CuratedFounderResetRuntimeEvidence, CuratedFounderResetRuntimePort,
+        CuratedFounderResetRuntimeResult, LiveAgentResetIntent,
+    };
+    #[cfg(feature = "gpu-runtime")]
+    use crate::CuratedFounderAgentInput;
+
     #[derive(Resource, Default)]
     struct ProjectionScheduleOrder(Vec<&'static str>);
 
@@ -5796,6 +5865,111 @@ mod tests {
 
     fn record_root_reader(mut order: ResMut<ProjectionScheduleOrder>) {
         order.0.push("root-reader");
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    #[derive(Resource)]
+    struct ResetInputFrames {
+        frames: std::collections::VecDeque<Vec<ProductionCuratedFounderResetCommand>>,
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    #[derive(Resource)]
+    struct BorrowedResetRuntimePort {
+        calls: Vec<&'static str>,
+        attempt_results: std::collections::VecDeque<CuratedFounderResetRuntimeResult>,
+        retry_results: std::collections::VecDeque<CuratedFounderResetRuntimeResult>,
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    impl CuratedFounderResetRuntimePort for BorrowedResetRuntimePort {
+        fn dispatch_attempt(
+            &mut self,
+            _intent: LiveAgentResetIntent,
+        ) -> CuratedFounderResetRuntimeResult {
+            self.calls.push("attempt");
+            self.attempt_results
+                .pop_front()
+                .expect("test attempt result must be available")
+        }
+
+        fn dispatch_retry(&mut self) -> CuratedFounderResetRuntimeResult {
+            self.calls.push("retry");
+            self.retry_results
+                .pop_front()
+                .expect("test retry result must be available")
+        }
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    fn runtime_evidence(
+        status: CuratedFounderPublicationStatus,
+        save_state: CuratedFounderSaveState,
+        proposed_save_digest: &str,
+        archive_count: usize,
+    ) -> CuratedFounderResetRuntimeEvidence {
+        CuratedFounderResetRuntimeEvidence {
+            status,
+            save_state,
+            gpu_residency: CuratedFounderGpuResidencyState::Pending,
+            expected_save_digest: (status
+                == CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict)
+                .then(|| "expected-digest".to_string()),
+            actual_save_digest: (status
+                == CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict)
+                .then(|| "actual-digest".to_string()),
+            proposed_save_digest: proposed_save_digest.to_string(),
+            cause: (status == CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure)
+                .then(|| "save publication state unknown".to_string()),
+            archive_count,
+        }
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    fn record_lineage_reset_input(
+        mut frames: ResMut<ResetInputFrames>,
+        mut commands: bevy::prelude::MessageWriter<ProductionCuratedFounderResetCommand>,
+        mut order: ResMut<ProjectionScheduleOrder>,
+    ) {
+        let Some(frame) = frames.frames.pop_front() else {
+            return;
+        };
+        order.0.push("lineage-input");
+        for command in frame {
+            commands.write(command);
+        }
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    fn dispatch_test_reset_commands(
+        mut commands: bevy::prelude::MessageReader<ProductionCuratedFounderResetCommand>,
+        mut runtime: ResMut<BorrowedResetRuntimePort>,
+        mut result: ResMut<ProductionCuratedFounderResetResultResource>,
+        mut order: ResMut<ProjectionScheduleOrder>,
+    ) {
+        let pending = commands.read().cloned().collect::<Vec<_>>();
+        if pending.is_empty() {
+            return;
+        }
+        order.0.push("reset-dispatch");
+        dispatch_production_curated_founder_reset_core(&pending, &mut *runtime, &mut *result);
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    fn reset_test_live_gpu_tick(mut order: ResMut<ProjectionScheduleOrder>) {
+        order.0.push("live-gpu-tick");
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    fn reset_test_intent() -> LiveAgentResetIntent {
+        LiveAgentResetIntent {
+            final_agents: vec![CuratedFounderAgentInput {
+                world_entity_id: WorldEntityId(7),
+                organism_id: Some(OrganismId(11)),
+                final_population_slot: 0,
+                legacy_genome_id: None,
+            }],
+        }
     }
 
     fn empty_scene() -> Fvr03ProductionVoxelSceneResource {
@@ -5957,6 +6131,228 @@ mod tests {
                 "root-reader",
             ]
         );
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn production_curated_reset_dispatch_orders_input_before_live_gpu_tick() {
+        let mut app = App::new();
+        app.add_message::<ProductionCuratedFounderResetCommand>()
+            .insert_resource(ProductionCuratedFounderResetResultResource::default())
+            .insert_resource(ProjectionScheduleOrder::default())
+            .insert_resource(ResetInputFrames {
+                frames: std::collections::VecDeque::from([
+                    vec![ProductionCuratedFounderResetCommand::Attempt(
+                        reset_test_intent(),
+                    )],
+                    vec![ProductionCuratedFounderResetCommand::Retry],
+                    vec![
+                        ProductionCuratedFounderResetCommand::Attempt(reset_test_intent()),
+                        ProductionCuratedFounderResetCommand::Retry,
+                    ],
+                    vec![ProductionCuratedFounderResetCommand::Attempt(
+                        reset_test_intent(),
+                    )],
+                    vec![ProductionCuratedFounderResetCommand::Retry],
+                ]),
+            })
+            .insert_resource(BorrowedResetRuntimePort {
+                calls: Vec::new(),
+                attempt_results: std::collections::VecDeque::from([
+                    Ok(runtime_evidence(
+                        CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict,
+                        CuratedFounderSaveState::Conflict,
+                        "proposed-digest",
+                        3,
+                    )),
+                    Err(CuratedFounderResetRuntimeError::DurableRefresh {
+                        evidence: runtime_evidence(
+                            CuratedFounderPublicationStatus::Published,
+                            CuratedFounderSaveState::Verified,
+                            "refresh-proposed-digest",
+                            4,
+                        ),
+                        error: crate::GameAppShellError::InvalidProductionFrontend {
+                            message: "refresh failed".to_string(),
+                        },
+                    }),
+                ]),
+                retry_results: std::collections::VecDeque::from([
+                    Ok(runtime_evidence(
+                        CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure,
+                        CuratedFounderSaveState::Unknown,
+                        "retry-proposed-digest",
+                        3,
+                    )),
+                    Err(
+                        CuratedFounderResetRuntimeError::DurableCheckpointNotification {
+                            evidence: runtime_evidence(
+                                CuratedFounderPublicationStatus::AlreadyApplied,
+                                CuratedFounderSaveState::Verified,
+                                "checkpoint-proposed-digest",
+                                5,
+                            ),
+                            error: crate::GameAppShellError::InvalidProductionFrontend {
+                                message: "checkpoint notification failed".to_string(),
+                            },
+                        },
+                    ),
+                ]),
+            });
+        configure_production_voxel_presentation_schedule(&mut app);
+        app.add_systems(
+            Update,
+            (
+                record_lineage_reset_input.in_set(ProductionVoxelPresentationSet::Input),
+                dispatch_test_reset_commands
+                    .in_set(ProductionVoxelPresentationSet::Input)
+                    .after(record_lineage_reset_input)
+                    .before(ProductionVoxelPresentationSet::LiveGpuTick),
+                reset_test_live_gpu_tick.in_set(ProductionVoxelPresentationSet::LiveGpuTick),
+            ),
+        );
+
+        app.update();
+        assert_eq!(
+            app.world().resource::<BorrowedResetRuntimePort>().calls,
+            vec!["attempt"]
+        );
+        assert_eq!(
+            app.world().resource::<ProjectionScheduleOrder>().0,
+            vec!["lineage-input", "reset-dispatch", "live-gpu-tick"]
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionCuratedFounderResetResultResource>()
+                .outcome,
+            CuratedFounderResetDispatchResult::Conflict {
+                expected_save_digest: "expected-digest".to_string(),
+                actual_save_digest: "actual-digest".to_string(),
+                proposed_save_digest: "proposed-digest".to_string(),
+                archive_count: 3,
+                save_state: CuratedFounderSaveState::Conflict,
+                gpu_residency: CuratedFounderGpuResidencyState::Pending,
+                retryable: true,
+            }
+        );
+
+        app.update();
+        assert_eq!(
+            app.world().resource::<BorrowedResetRuntimePort>().calls,
+            vec!["attempt", "retry"]
+        );
+        assert_eq!(
+            app.world().resource::<ProjectionScheduleOrder>().0,
+            vec![
+                "lineage-input",
+                "reset-dispatch",
+                "live-gpu-tick",
+                "lineage-input",
+                "reset-dispatch",
+                "live-gpu-tick",
+            ]
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionCuratedFounderResetResultResource>()
+                .outcome,
+            CuratedFounderResetDispatchResult::Unknown {
+                cause: "save publication state unknown".to_string(),
+                proposed_save_digest: "retry-proposed-digest".to_string(),
+                archive_count: 3,
+                save_state: CuratedFounderSaveState::Unknown,
+                gpu_residency: CuratedFounderGpuResidencyState::Pending,
+                retryable: true,
+            }
+        );
+
+        app.update();
+        assert_eq!(
+            app.world().resource::<BorrowedResetRuntimePort>().calls,
+            vec!["attempt", "retry"]
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionCuratedFounderResetResultResource>()
+                .outcome,
+            CuratedFounderResetDispatchResult::PreCommitRejected {
+                rejection: CuratedFounderResetDispatchRejection::MultipleCommands,
+            }
+        );
+        assert_eq!(
+            app.world().resource::<ProjectionScheduleOrder>().0,
+            vec![
+                "lineage-input",
+                "reset-dispatch",
+                "live-gpu-tick",
+                "lineage-input",
+                "reset-dispatch",
+                "live-gpu-tick",
+                "lineage-input",
+                "reset-dispatch",
+                "live-gpu-tick",
+            ]
+        );
+
+        app.update();
+        assert_eq!(
+            app.world().resource::<BorrowedResetRuntimePort>().calls,
+            vec!["attempt", "retry", "attempt"]
+        );
+        match &app
+            .world()
+            .resource::<ProductionCuratedFounderResetResultResource>()
+            .outcome
+        {
+            CuratedFounderResetDispatchResult::Unknown {
+                cause,
+                proposed_save_digest,
+                archive_count,
+                save_state,
+                gpu_residency,
+                retryable,
+            } => {
+                assert!(cause.contains("durable publication refresh failed"));
+                assert!(cause.contains("retry the retained operation"));
+                assert_eq!(proposed_save_digest, "refresh-proposed-digest");
+                assert_eq!(*archive_count, 4);
+                assert_eq!(*save_state, CuratedFounderSaveState::Unknown);
+                assert_eq!(*gpu_residency, CuratedFounderGpuResidencyState::Pending);
+                assert!(*retryable);
+            }
+            other => panic!("durable refresh must not project as pre-commit: {other:?}"),
+        }
+
+        app.update();
+        assert_eq!(
+            app.world().resource::<BorrowedResetRuntimePort>().calls,
+            vec!["attempt", "retry", "attempt", "retry"]
+        );
+        match &app
+            .world()
+            .resource::<ProductionCuratedFounderResetResultResource>()
+            .outcome
+        {
+            CuratedFounderResetDispatchResult::Unknown {
+                cause,
+                proposed_save_digest,
+                archive_count,
+                save_state,
+                gpu_residency,
+                retryable,
+            } => {
+                assert!(cause.contains("durable checkpoint notification failed"));
+                assert!(cause.contains("manual recovery is required"));
+                assert_eq!(proposed_save_digest, "checkpoint-proposed-digest");
+                assert_eq!(*archive_count, 5);
+                assert_eq!(*save_state, CuratedFounderSaveState::Verified);
+                assert_eq!(*gpu_residency, CuratedFounderGpuResidencyState::Pending);
+                assert!(!retryable);
+            }
+            other => {
+                panic!("durable checkpoint notification must not project as pre-commit: {other:?}")
+            }
+        }
     }
 
     #[test]
