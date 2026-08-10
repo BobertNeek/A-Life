@@ -1309,6 +1309,7 @@ impl LineageLibrary {
     ) -> Result<CreatureArchiveManifest, ArchiveError> {
         let archive_root = canonical_archive_root(&self.config.root)?;
         let (_, manifest) = self.load_manifest_with_bytes(&archive_root, digest)?;
+        self.validate_manifest_assets(&manifest)?;
         Ok(manifest)
     }
 

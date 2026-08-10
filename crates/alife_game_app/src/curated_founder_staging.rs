@@ -1,15 +1,27 @@
-use std::path::Path;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use alife_archive::{
     ArchiveError, CommittedCompositeBirthBatch, CompositeGeneticArchiveBatchInput, LineageLibrary,
+    PreparedCompositeBirthBatch,
 };
 use alife_core::{
     BiochemistryState, Blake3Digest, BrainCapacityClass, BrainPhenotype, FoundationGeneticIdentity,
     FoundationWeightAsset, GenomeId, LineageId, N512FounderProjectionReceipt, OrganismId,
     PhenotypeHash, ScaffoldContractError, SensorProfile, Tick, Validate, WorldEntityId,
 };
-use alife_world::persistence::{GpuRuntimeSafeCheckpoint, PersistenceError, PortableSaveFile};
-use alife_world::{HeadlessWorld, OrganismRegistryError, WorldObjectKind, WorldOrganismRecord};
+use alife_runtime::{
+    GpuDurableSaveManifest, GpuLoadedSaveManifest, GpuRuntimeError, GpuSaveManifestCasOutcome,
+};
+use alife_world::persistence::{
+    GpuRuntimeSafeCheckpoint, PersistenceError, PortableAssetDigest, PortableSaveFile,
+};
+use alife_world::{
+    HeadlessWorld, HeadlessWorldSignatureDigest, OrganismRegistryError, WorldObjectKind,
+    WorldOrganismRecord,
+};
 use thiserror::Error;
 
 use crate::{
@@ -63,7 +75,90 @@ struct CuratedFounderResetApplyResult {
     committed_archive_batch: CommittedCompositeBirthBatch,
     reset_receipt: CuratedFounderResetReceipt,
     applied_registry_identity: Vec<(OrganismId, WorldEntityId)>,
-    applied_world_signature: alife_world::HeadlessWorldSignatureDigest,
+    applied_world_signature: HeadlessWorldSignatureDigest,
+}
+
+#[derive(Debug)]
+struct CuratedFounderPreparedReset {
+    prepared_archive_batch: PreparedCompositeBirthBatch,
+    linked_record_candidates: Vec<WorldOrganismRecord>,
+    candidate_world: HeadlessWorld,
+    candidate_world_signature: HeadlessWorldSignatureDigest,
+}
+
+#[derive(Debug)]
+struct CuratedFounderBoundSourceSave {
+    loaded_generation: GpuLoadedSaveManifest,
+    canonical_save_path: PathBuf,
+    canonical_asset_root: PathBuf,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CuratedFounderPublicationStatus {
+    Published,
+    AlreadyApplied,
+    ArchiveCommittedSaveConflict,
+    ArchiveCommittedSaveFailure,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CuratedFounderSaveState {
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CuratedFounderArchiveReceiptRow {
+    final_population_slot: u32,
+    world_entity_id: WorldEntityId,
+    organism_id: OrganismId,
+    genome_id: GenomeId,
+    lineage_id: LineageId,
+    birth_tick: Tick,
+    manifest_digest: Blake3Digest,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CuratedFounderDurablePublicationReceipt {
+    source_save_identity: String,
+    source_save_seed: u64,
+    source_world_seed: u64,
+    source_tick: Tick,
+    reset_receipt: CuratedFounderResetReceipt,
+    durable_save_path: PathBuf,
+    expected_save_digest: String,
+    proposed_save_digest: String,
+    final_save_digest: Option<String>,
+    archive_source_run: String,
+    archive_receipts: Vec<CuratedFounderArchiveReceiptRow>,
+    candidate_world_signature: HeadlessWorldSignatureDigest,
+    candidate_world_schema_version: u16,
+    candidate_world_seed: u64,
+    candidate_world_tick: Tick,
+    status: CuratedFounderPublicationStatus,
+}
+
+#[derive(Debug, Error)]
+enum CuratedFounderDurablePublicationError {
+    #[error("curated founder publication failed before archive commit: {0}")]
+    PreCommit(#[source] CuratedFounderStagingError),
+    #[error(
+        "curated founder archive committed but save CAS conflicted: expected {expected_save_digest}, actual {actual_save_digest}, proposed {proposed_save_digest}"
+    )]
+    ArchiveCommittedSaveConflict {
+        receipt: CuratedFounderDurablePublicationReceipt,
+        expected_save_digest: String,
+        actual_save_digest: String,
+        proposed_save_digest: String,
+    },
+    #[error(
+        "curated founder archive committed but save publication failed: {cause}; save state is {save_state:?}"
+    )]
+    ArchiveCommittedSaveFailure {
+        receipt: CuratedFounderDurablePublicationReceipt,
+        cause: String,
+        proposed_save_digest: String,
+        save_state: CuratedFounderSaveState,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -91,6 +186,8 @@ pub(crate) enum CuratedFounderStagingError {
     },
     #[error("curated founder save preflight failed: {0}")]
     Save(#[from] PersistenceError),
+    #[error("curated founder durable save preflight failed: {0}")]
+    DurableSave(#[from] GpuRuntimeError),
     #[error("curated founder archive preflight failed: {0}")]
     Archive(#[from] ArchiveError),
     #[error("curated founder staging mismatch: {field}")]
@@ -101,6 +198,17 @@ pub(crate) enum CuratedFounderStagingError {
     InvalidArchiveRunId { value: String },
     #[error("an archive manifest already exists for organism {organism_id:?}")]
     ArchiveConflict { organism_id: OrganismId },
+}
+
+fn bind_curated_founder_source(
+    durable_manifest: &GpuDurableSaveManifest,
+) -> Result<CuratedFounderBoundSourceSave, CuratedFounderStagingError> {
+    let loaded_generation = durable_manifest.load()?;
+    Ok(CuratedFounderBoundSourceSave {
+        loaded_generation,
+        canonical_save_path: durable_manifest.save_path().to_path_buf(),
+        canonical_asset_root: durable_manifest.asset_root().to_path_buf(),
+    })
 }
 
 pub(crate) fn stage_curated_founder_reset(
@@ -288,7 +396,38 @@ fn apply_curated_founder_reset(
     lineage_library: &mut LineageLibrary,
     world: &mut HeadlessWorld,
 ) -> Result<CuratedFounderResetApplyResult, CuratedFounderStagingError> {
-    validate_curated_founder_apply_inputs(stage, bundle, world)?;
+    let prepared = prepare_curated_founder_reset(stage, bundle, lineage_library, world, false)?;
+    let CuratedFounderPreparedReset {
+        prepared_archive_batch,
+        linked_record_candidates,
+        candidate_world,
+        candidate_world_signature,
+    } = prepared;
+
+    let applied_registry_identity = linked_record_candidates
+        .iter()
+        .map(|record| (record.organism_id(), record.world_entity_id()))
+        .collect();
+    let committed_archive_batch =
+        lineage_library.commit_composite_birth_batch(prepared_archive_batch)?;
+    *world = candidate_world;
+
+    Ok(CuratedFounderResetApplyResult {
+        committed_archive_batch,
+        reset_receipt: stage.receipt.clone(),
+        applied_registry_identity,
+        applied_world_signature: candidate_world_signature,
+    })
+}
+
+fn prepare_curated_founder_reset(
+    stage: &CuratedFounderResetStage,
+    bundle: &CuratedFounderBundle,
+    lineage_library: &LineageLibrary,
+    world: &HeadlessWorld,
+    allow_existing_registry: bool,
+) -> Result<CuratedFounderPreparedReset, CuratedFounderStagingError> {
+    validate_curated_founder_apply_inputs(stage, bundle, world, allow_existing_registry)?;
 
     let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(stage.receipt.sensor_profile)
         .map_err(|source| CuratedFounderStagingError::Contract {
@@ -364,30 +503,447 @@ fn apply_curated_founder_reset(
             }
         })?;
     }
-    let applied_registry_identity = linked_records
-        .iter()
-        .map(|record| (record.organism_id(), record.world_entity_id()))
-        .collect();
-
     let mut replacement_world = world.clone();
-    replacement_world.replace_organism_registry_exact(linked_records)?;
-    let applied_world_signature = replacement_world.canonical_signature_digest()?;
+    if !world.organism_registry().is_empty() && !registry_matches_records(world, &linked_records) {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "already-applied candidate registry",
+        });
+    }
+    replacement_world.replace_organism_registry_exact(linked_records.clone())?;
+    let candidate_world_signature = replacement_world.canonical_signature_digest()?;
 
-    let committed_archive_batch = lineage_library.commit_composite_birth_batch(prepared)?;
-    *world = replacement_world;
-
-    Ok(CuratedFounderResetApplyResult {
-        committed_archive_batch,
-        reset_receipt: stage.receipt.clone(),
-        applied_registry_identity,
-        applied_world_signature,
+    Ok(CuratedFounderPreparedReset {
+        prepared_archive_batch: prepared,
+        linked_record_candidates: linked_records,
+        candidate_world: replacement_world,
+        candidate_world_signature,
     })
+}
+
+fn publish_curated_founder_reset_durably(
+    stage: &CuratedFounderResetStage,
+    bundle: &CuratedFounderBundle,
+    bound_source: &CuratedFounderBoundSourceSave,
+    durable_manifest: &GpuDurableSaveManifest,
+    canonical_asset_root: &Path,
+    lineage_library: &LineageLibrary,
+    live_world: &mut HeadlessWorld,
+) -> Result<CuratedFounderDurablePublicationReceipt, CuratedFounderDurablePublicationError> {
+    validate_durable_publication_inputs(
+        stage,
+        bound_source,
+        durable_manifest,
+        canonical_asset_root,
+    )
+    .map_err(CuratedFounderDurablePublicationError::PreCommit)?;
+    let source_save = &bound_source.loaded_generation.save;
+    let expected_save_digest = &bound_source.loaded_generation.digest;
+    let prepared = prepare_curated_founder_reset(stage, bundle, lineage_library, live_world, true)
+        .map_err(CuratedFounderDurablePublicationError::PreCommit)?;
+
+    let mut replacement_save = source_save.clone();
+    replacement_save
+        .replace_headless_world_snapshot(&prepared.candidate_world)
+        .map_err(|error| {
+            CuratedFounderDurablePublicationError::PreCommit(CuratedFounderStagingError::Save(
+                error,
+            ))
+        })?;
+    replacement_save
+        .validate_with_asset_root(canonical_asset_root)
+        .map_err(|error| {
+            CuratedFounderDurablePublicationError::PreCommit(CuratedFounderStagingError::Save(
+                error,
+            ))
+        })?;
+    let proposed_save_digest = portable_save_digest(&replacement_save)
+        .map_err(CuratedFounderDurablePublicationError::PreCommit)?;
+    let archive_source_run = stage
+        .archive_birth_intents
+        .first()
+        .map(|intent| intent.source_run_id.clone())
+        .ok_or_else(|| {
+            CuratedFounderDurablePublicationError::PreCommit(CuratedFounderStagingError::Mismatch {
+                field: "archive source run",
+            })
+        })?;
+
+    let mut receipt = CuratedFounderDurablePublicationReceipt {
+        source_save_identity: source_save.save_id.clone(),
+        source_save_seed: source_save.deterministic_seed,
+        source_world_seed: source_save.world.seed,
+        source_tick: source_save.world.tick,
+        reset_receipt: stage.receipt.clone(),
+        durable_save_path: durable_manifest.save_path().to_path_buf(),
+        expected_save_digest: expected_save_digest.as_str().to_string(),
+        proposed_save_digest: proposed_save_digest.clone(),
+        final_save_digest: None,
+        archive_source_run,
+        archive_receipts: Vec::new(),
+        candidate_world_signature: prepared.candidate_world_signature,
+        candidate_world_schema_version: prepared.candidate_world_signature.schema_version,
+        candidate_world_seed: prepared.candidate_world.seed(),
+        candidate_world_tick: prepared.candidate_world.tick(),
+        status: CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure,
+    };
+
+    let CuratedFounderPreparedReset {
+        prepared_archive_batch,
+        linked_record_candidates,
+        candidate_world,
+        candidate_world_signature,
+    } = prepared;
+
+    let committed_archive_batch = lineage_library
+        .commit_composite_birth_batch(prepared_archive_batch)
+        .map_err(|error| {
+            CuratedFounderDurablePublicationError::PreCommit(CuratedFounderStagingError::Archive(
+                error,
+            ))
+        })?;
+    receipt.archive_receipts = build_archive_receipt_rows(stage, bundle, &committed_archive_batch)
+        .map_err(|error| {
+            archive_committed_save_failure(&receipt, proposed_save_digest.clone(), error)
+        })?;
+    if let Err(error) =
+        verify_archive_receipt_rows(stage, bundle, lineage_library, &receipt.archive_receipts)
+    {
+        return Err(archive_committed_save_failure(
+            &receipt,
+            proposed_save_digest.clone(),
+            error,
+        ));
+    }
+
+    let cas_outcome =
+        match durable_manifest.compare_and_swap(expected_save_digest, &replacement_save) {
+            Ok(outcome) => outcome,
+            Err(GpuRuntimeError::GpuCheckpointManifestConflict { expected, actual }) => {
+                receipt.status = CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict;
+                return Err(
+                    CuratedFounderDurablePublicationError::ArchiveCommittedSaveConflict {
+                        receipt,
+                        expected_save_digest: expected,
+                        actual_save_digest: actual,
+                        proposed_save_digest,
+                    },
+                );
+            }
+            Err(error) => {
+                return Err(archive_committed_save_failure(
+                    &receipt,
+                    proposed_save_digest,
+                    error,
+                ));
+            }
+        };
+    let (status, final_save_digest) = match cas_outcome {
+        GpuSaveManifestCasOutcome::Replaced { replacement_digest } => (
+            CuratedFounderPublicationStatus::Published,
+            replacement_digest.as_str().to_string(),
+        ),
+        GpuSaveManifestCasOutcome::AlreadyApplied { replacement_digest } => (
+            CuratedFounderPublicationStatus::AlreadyApplied,
+            replacement_digest.as_str().to_string(),
+        ),
+    };
+    if final_save_digest != proposed_save_digest {
+        return Err(archive_committed_save_failure(
+            &receipt,
+            proposed_save_digest.clone(),
+            CuratedFounderStagingError::Mismatch {
+                field: "CAS replacement digest",
+            },
+        ));
+    }
+    receipt.status = status;
+    receipt.final_save_digest = Some(final_save_digest.clone());
+
+    if let Err(error) = verify_durable_reload(
+        durable_manifest,
+        canonical_asset_root,
+        &replacement_save,
+        &final_save_digest,
+        candidate_world_signature,
+        candidate_world.seed(),
+        candidate_world.tick(),
+        &linked_record_candidates,
+        &receipt.archive_receipts,
+    ) {
+        return Err(archive_committed_save_failure(
+            &receipt,
+            proposed_save_digest,
+            error,
+        ));
+    }
+    *live_world = candidate_world;
+    Ok(receipt)
+}
+
+fn validate_durable_publication_inputs(
+    stage: &CuratedFounderResetStage,
+    bound_source: &CuratedFounderBoundSourceSave,
+    durable_manifest: &GpuDurableSaveManifest,
+    canonical_asset_root: &Path,
+) -> Result<(), CuratedFounderStagingError> {
+    if bound_source.canonical_save_path.as_path() != durable_manifest.save_path()
+        || bound_source.canonical_asset_root.as_path() != durable_manifest.asset_root()
+    {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "bound source durable manifest provenance",
+        });
+    }
+    let canonical_asset_root = fs::canonicalize(canonical_asset_root)
+        .map_err(|error| CuratedFounderStagingError::DurableSave(GpuRuntimeError::Io(error)))?;
+    if durable_manifest.asset_root() != canonical_asset_root
+        || !durable_manifest.save_path().is_absolute()
+    {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "durable save or canonical asset-root identity",
+        });
+    }
+    bound_source
+        .loaded_generation
+        .save
+        .validate_with_asset_root(&canonical_asset_root)?;
+    validate_source_save_identity(stage, &bound_source.loaded_generation.save)?;
+    Ok(())
+}
+
+fn validate_source_save_identity(
+    stage: &CuratedFounderResetStage,
+    source_save: &PortableSaveFile,
+) -> Result<(), CuratedFounderStagingError> {
+    let safe_checkpoint = source_save
+        .gpu_runtime
+        .as_ref()
+        .map(|runtime| runtime.last_safe_checkpoint.clone());
+    if source_save.save_id != stage.source_save_id
+        || source_save.save_id != stage.source_save_identity
+        || source_save.deterministic_seed != stage.deterministic_seed
+        || source_save.world.seed != stage.world_seed
+        || source_save.world.tick != stage.restored_tick
+        || safe_checkpoint != stage.safe_checkpoint
+    {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "current source save identity",
+        });
+    }
+    Ok(())
+}
+
+fn portable_save_digest(save: &PortableSaveFile) -> Result<String, CuratedFounderStagingError> {
+    let json = serde_json::to_vec_pretty(save).map_err(PersistenceError::Json)?;
+    Ok(PortableAssetDigest::for_bytes(&json).0)
+}
+
+fn registry_matches_records(world: &HeadlessWorld, expected: &[WorldOrganismRecord]) -> bool {
+    let mut actual = world
+        .organism_registry()
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut expected = expected.to_vec();
+    actual.sort_by_key(|record| record.organism_id().raw());
+    expected.sort_by_key(|record| record.organism_id().raw());
+    actual == expected
+}
+
+fn build_archive_receipt_rows(
+    stage: &CuratedFounderResetStage,
+    bundle: &CuratedFounderBundle,
+    committed: &CommittedCompositeBirthBatch,
+) -> Result<Vec<CuratedFounderArchiveReceiptRow>, CuratedFounderStagingError> {
+    if committed.len() != stage.archive_birth_intents.len()
+        || stage.target_agent_bindings.len() != committed.len()
+        || bundle.entries.len() != committed.len()
+    {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "committed archive receipt count",
+        });
+    }
+    committed
+        .entries()
+        .iter()
+        .enumerate()
+        .map(|(_batch_index, entry)| {
+            let plan_entry = bundle
+                .entries
+                .iter()
+                .find(|candidate| candidate.plan_entry.organism_id == entry.organism_id())
+                .ok_or(CuratedFounderStagingError::Mismatch {
+                    field: "committed archive receipt plan entry",
+                })?;
+            Ok(CuratedFounderArchiveReceiptRow {
+                final_population_slot: plan_entry.plan_entry.final_population_slot,
+                world_entity_id: plan_entry.plan_entry.world_entity_id,
+                organism_id: entry.organism_id(),
+                genome_id: entry.genome_id(),
+                lineage_id: entry.lineage_id(),
+                birth_tick: entry.birth_tick(),
+                manifest_digest: entry.manifest_digest(),
+            })
+        })
+        .collect()
+}
+
+fn verify_archive_receipt_rows(
+    stage: &CuratedFounderResetStage,
+    bundle: &CuratedFounderBundle,
+    lineage_library: &LineageLibrary,
+    rows: &[CuratedFounderArchiveReceiptRow],
+) -> Result<(), CuratedFounderStagingError> {
+    if rows.len() != stage.archive_birth_intents.len() || rows.len() != bundle.entries.len() {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "durable archive receipt count",
+        });
+    }
+    for (batch_index, row) in rows.iter().enumerate() {
+        let intent = stage.archive_birth_intents.get(batch_index).ok_or(
+            CuratedFounderStagingError::Mismatch {
+                field: "durable archive receipt batch index",
+            },
+        )?;
+        let entry = bundle
+            .entries
+            .iter()
+            .find(|candidate| candidate.plan_entry.organism_id == row.organism_id)
+            .ok_or(CuratedFounderStagingError::Mismatch {
+                field: "durable archive bundle identity",
+            })?;
+        if row.final_population_slot != entry.plan_entry.final_population_slot
+            || row.world_entity_id != stage.target_agent_bindings[batch_index].0
+            || row.organism_id != intent.organism_id
+            || row.genome_id != intent.genome_id
+            || row.lineage_id != intent.lineage_id
+            || row.birth_tick != intent.birth_tick
+        {
+            return Err(CuratedFounderStagingError::Mismatch {
+                field: "durable archive receipt identity",
+            });
+        }
+        if lineage_library.latest_manifest_for(&intent.source_run_id, intent.organism_id)?
+            != Some(row.manifest_digest)
+        {
+            return Err(CuratedFounderStagingError::Mismatch {
+                field: "durable latest archive manifest",
+            });
+        }
+        let manifest = lineage_library.load_manifest(row.manifest_digest)?;
+        let genetic = &manifest.genetic;
+        let projection = &entry.projection;
+        let phenotype = projection.compiled_phenotype();
+        projection
+            .validate()
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "durable archive projection",
+                source,
+            })?;
+        intent
+            .projection_receipt
+            .validate_against_projection(projection)
+            .map_err(|source| CuratedFounderStagingError::Contract {
+                field: "durable archive projection receipt",
+                source,
+            })?;
+        if genetic.source_run_id != intent.source_run_id
+            || genetic.organism_id != intent.organism_id
+            || genetic.genome_id != intent.genome_id
+            || genetic.lineage_id != Some(intent.lineage_id)
+            || genetic.birth_tick != intent.birth_tick
+            || genetic.brain_class_id != intent.foundation.brain_class_id
+            || genetic.sensor_profile != intent.sensor_profile
+            || genetic.phenotype_hash != intent.phenotype_hash
+            || genetic.foundation_id.map(|value| value.raw())
+                != Some(intent.foundation.foundation_id)
+            || genetic.foundation_version.map(|value| value.raw())
+                != Some(u32::from(intent.foundation.version))
+            || genetic.compatibility_family_id.map(|value| value.raw())
+                != Some(intent.foundation.compatibility_family_id)
+            || genetic.foundation_payload_digest != Some(intent.foundation_content_digest)
+            || genetic.genome_asset.size_bytes == 0
+            || genetic.composite_genome_asset.is_none()
+            || genetic.foundation_asset.is_none()
+            || genetic.persistent_address_map_digest != phenotype.persistent_address_map().digest()
+            || genetic.language_codebook_id != phenotype.language_codebook().id()
+            || genetic.language_codebook_digest != phenotype.language_codebook().canonical_digest()
+            || manifest.previous_manifest_digest.is_some()
+            || manifest.life.is_some()
+        {
+            return Err(CuratedFounderStagingError::Mismatch {
+                field: "durable archive manifest identity",
+            });
+        }
+    }
+    Ok(())
+}
+
+fn verify_durable_reload(
+    durable_manifest: &GpuDurableSaveManifest,
+    canonical_asset_root: &Path,
+    replacement_save: &PortableSaveFile,
+    final_save_digest: &str,
+    candidate_world_signature: HeadlessWorldSignatureDigest,
+    candidate_world_seed: u64,
+    candidate_world_tick: Tick,
+    linked_record_candidates: &[WorldOrganismRecord],
+    archive_receipts: &[CuratedFounderArchiveReceiptRow],
+) -> Result<(), CuratedFounderStagingError> {
+    let loaded = durable_manifest.load()?;
+    if loaded.save != *replacement_save || loaded.digest.as_str() != final_save_digest {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "durable replacement save reload",
+        });
+    }
+    loaded.save.validate_with_asset_root(canonical_asset_root)?;
+    let restored_world = loaded.save.restore_headless_world()?;
+    if restored_world.seed() != candidate_world_seed
+        || restored_world.tick() != candidate_world_tick
+        || restored_world.canonical_signature_digest()? != candidate_world_signature
+        || !registry_matches_records(&restored_world, linked_record_candidates)
+    {
+        return Err(CuratedFounderStagingError::Mismatch {
+            field: "durable restored candidate world",
+        });
+    }
+    for row in archive_receipts {
+        let record = restored_world
+            .organism_registry()
+            .get(row.organism_id)
+            .ok_or(CuratedFounderStagingError::Mismatch {
+                field: "durable restored registry link",
+            })?;
+        if record.world_entity_id() != row.world_entity_id
+            || record.archive().birth_manifest_digest() != Some(row.manifest_digest)
+        {
+            return Err(CuratedFounderStagingError::Mismatch {
+                field: "durable restored archive link",
+            });
+        }
+    }
+    Ok(())
+}
+
+fn archive_committed_save_failure(
+    receipt: &CuratedFounderDurablePublicationReceipt,
+    proposed_save_digest: String,
+    cause: impl std::fmt::Display,
+) -> CuratedFounderDurablePublicationError {
+    let mut receipt = receipt.clone();
+    receipt.status = CuratedFounderPublicationStatus::ArchiveCommittedSaveFailure;
+    CuratedFounderDurablePublicationError::ArchiveCommittedSaveFailure {
+        receipt,
+        cause: cause.to_string(),
+        proposed_save_digest,
+        save_state: CuratedFounderSaveState::Unknown,
+    }
 }
 
 fn validate_curated_founder_apply_inputs(
     stage: &CuratedFounderResetStage,
     bundle: &CuratedFounderBundle,
     world: &HeadlessWorld,
+    allow_existing_registry: bool,
 ) -> Result<(), CuratedFounderStagingError> {
     stage.receipt.validate()?;
     if bundle.identity.plan_receipt != stage.receipt {
@@ -435,7 +991,7 @@ fn validate_curated_founder_apply_inputs(
         });
     }
     world.validate_organism_bindings()?;
-    if !world.organism_registry().is_empty() {
+    if !allow_existing_registry && !world.organism_registry().is_empty() {
         return Err(CuratedFounderStagingError::ExistingRegistry {
             records: world.organism_registry().len(),
         });
@@ -763,11 +1319,15 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use alife_archive::{GeneticArchiveInput, LineageLibrary, LineageLibraryConfig};
+    use alife_archive::{
+        CompositeGeneticArchiveBatchInput, GeneticArchiveInput, LineageLibrary,
+        LineageLibraryConfig,
+    };
     use alife_core::{
         BiochemistryState, BrainCapacityClass, BrainScaleTier, FoundationGeneticIdentity,
         FoundationWeightAsset, GenomeId, OrganismId, SensorProfile, Tick, Vec3f, WorldEntityId,
     };
+    use alife_runtime::GpuDurableSaveManifest;
     use alife_world::{
         persistence::{
             AssetKind, AssetManifest, AssetManifestEntry, AssetPresence,
@@ -787,7 +1347,9 @@ mod tests {
     };
 
     use super::{
-        apply_curated_founder_reset, stage_curated_founder_reset, CuratedFounderStagingError,
+        apply_curated_founder_reset, bind_curated_founder_source, build_archive_receipt_rows,
+        publish_curated_founder_reset_durably, stage_curated_founder_reset,
+        CuratedFounderDurablePublicationError, CuratedFounderStagingError,
     };
 
     const WORLD_SEED: u64 = 0x5555_6666_7777_8888;
@@ -869,6 +1431,9 @@ mod tests {
         restored_world: HeadlessWorld,
         lineage_library: Option<LineageLibrary>,
         archive_root: PathBuf,
+        asset_root: PathBuf,
+        durable_save_path: PathBuf,
+        durable_manifest: Option<GpuDurableSaveManifest>,
     }
 
     impl StageFixture {
@@ -879,11 +1444,17 @@ mod tests {
         fn lineage_library_mut(&mut self) -> &mut LineageLibrary {
             self.lineage_library.as_mut().unwrap()
         }
+
+        fn durable_manifest(&self) -> &GpuDurableSaveManifest {
+            self.durable_manifest.as_ref().unwrap()
+        }
     }
 
     impl Drop for StageFixture {
         fn drop(&mut self) {
             let _ = self.lineage_library.take();
+            let _ = self.durable_manifest.take();
+            let _ = fs::remove_file(&self.durable_save_path);
             let _ = fs::remove_dir_all(&self.archive_root);
         }
     }
@@ -921,6 +1492,12 @@ mod tests {
         let _ = fs::remove_dir_all(&archive_root);
         let lineage_library =
             LineageLibrary::open(LineageLibraryConfig::profile_default(&archive_root)).unwrap();
+        let asset_root = std::env::current_dir().unwrap();
+        let durable_save_path = archive_root.with_extension("durable-save.json");
+        GpuDurableSaveManifest::publish_snapshot(&durable_save_path, &asset_root, &source_save)
+            .unwrap();
+        let durable_manifest =
+            GpuDurableSaveManifest::open(&durable_save_path, &asset_root).unwrap();
         for entry in &plan.entries {
             assert_eq!(
                 lineage_library
@@ -936,6 +1513,9 @@ mod tests {
             restored_world,
             lineage_library: Some(lineage_library),
             archive_root,
+            asset_root,
+            durable_save_path,
+            durable_manifest: Some(durable_manifest),
         }
     }
 
@@ -1086,6 +1666,14 @@ mod tests {
             compact_action_readback_bytes_per_creature: 64,
             no_active_bulk_readback: true,
         }
+    }
+
+    fn competing_valid_save(source: &PortableSaveFile) -> PortableSaveFile {
+        let mut competing = source.clone();
+        let mut world = source.restore_headless_world().unwrap();
+        world.advance_tick();
+        competing.replace_headless_world_snapshot(&world).unwrap();
+        competing
     }
 
     #[test]
@@ -1261,7 +1849,7 @@ mod tests {
                 &fixture.bundle,
                 &fixture.source_save,
                 &fixture.restored_world,
-                fixture.lineage_library(),
+                fixture.lineage_library.as_ref().unwrap(),
                 Path::new("."),
                 "archive-run-3a",
             )
@@ -1319,7 +1907,7 @@ mod tests {
                 &fixture.bundle,
                 &fixture.source_save,
                 &fixture.restored_world,
-                fixture.lineage_library(),
+                fixture.lineage_library.as_ref().unwrap(),
                 Path::new("."),
                 "archive-run-3a",
             )
@@ -1354,7 +1942,7 @@ mod tests {
             &fixture.bundle,
             &fixture.source_save,
             &fixture.restored_world,
-            fixture.lineage_library(),
+            fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3a",
         )
@@ -1390,7 +1978,7 @@ mod tests {
                 &fixture.bundle,
                 &fixture.source_save,
                 &fixture.restored_world,
-                fixture.lineage_library(),
+                fixture.lineage_library.as_ref().unwrap(),
                 Path::new("."),
                 "archive-run-3a",
             )
@@ -1441,7 +2029,7 @@ mod tests {
                 &fixture.bundle,
                 &fixture.source_save,
                 &fixture.restored_world,
-                fixture.lineage_library(),
+                fixture.lineage_library.as_ref().unwrap(),
                 Path::new("."),
                 "archive-run-3a",
             )
@@ -1472,7 +2060,7 @@ mod tests {
             &wrong_seed_fixture.bundle,
             &wrong_seed_fixture.source_save,
             &wrong_seed_world,
-            wrong_seed_fixture.lineage_library(),
+            wrong_seed_fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3a",
         )
@@ -1502,7 +2090,7 @@ mod tests {
             &wrong_tick_fixture.bundle,
             &wrong_tick_fixture.source_save,
             &wrong_tick_world,
-            wrong_tick_fixture.lineage_library(),
+            wrong_tick_fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3a",
         )
@@ -1540,7 +2128,7 @@ mod tests {
             &asset_fixture.bundle,
             &asset_fixture.source_save,
             &asset_fixture.restored_world,
-            asset_fixture.lineage_library(),
+            asset_fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3a",
         )
@@ -1564,7 +2152,7 @@ mod tests {
                 &fixture.bundle,
                 &fixture.source_save,
                 &fixture.restored_world,
-                fixture.lineage_library(),
+                fixture.lineage_library.as_ref().unwrap(),
                 Path::new("."),
                 archive_run_id,
             )
@@ -1608,7 +2196,7 @@ mod tests {
             &fixture.bundle,
             &fixture.source_save,
             &fixture.restored_world,
-            fixture.lineage_library(),
+            fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3a",
         )
@@ -1637,7 +2225,7 @@ mod tests {
             &fixture.bundle,
             &fixture.source_save,
             &fixture.restored_world,
-            fixture.lineage_library(),
+            fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3a",
         )
@@ -1664,7 +2252,7 @@ mod tests {
             &fixture.bundle,
             &fixture.source_save,
             &fixture.restored_world,
-            fixture.lineage_library(),
+            fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3b3",
         )
@@ -1744,7 +2332,7 @@ mod tests {
             &fixture.bundle,
             &fixture.source_save,
             &fixture.restored_world,
-            fixture.lineage_library(),
+            fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3b3",
         )
@@ -1776,6 +2364,532 @@ mod tests {
     }
 
     #[test]
+    fn curated_publication_conflict_leaves_old_save_and_live_world_after_archive_commit() {
+        let mut fixture = stage_fixture("publication-conflict");
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library.as_ref().unwrap(),
+            Path::new("."),
+            "archive-run-3c2",
+        )
+        .unwrap();
+        let bound_source = bind_curated_founder_source(fixture.durable_manifest()).unwrap();
+        let competing_save = competing_valid_save(&fixture.source_save);
+        GpuDurableSaveManifest::publish_snapshot(
+            &fixture.durable_save_path,
+            &fixture.asset_root,
+            &competing_save,
+        )
+        .unwrap();
+        let old_world_signature = fixture.restored_world.canonical_signature_digest().unwrap();
+        let old_registry = registry_snapshot(&fixture.restored_world);
+
+        let result = publish_curated_founder_reset_durably(
+            &stage,
+            &fixture.bundle,
+            &bound_source,
+            fixture.durable_manifest.as_ref().unwrap(),
+            &fixture.asset_root,
+            fixture.lineage_library.as_ref().unwrap(),
+            &mut fixture.restored_world,
+        );
+        let error = result.unwrap_err();
+        let (receipt, expected, actual, proposed) = match error {
+            CuratedFounderDurablePublicationError::ArchiveCommittedSaveConflict {
+                receipt,
+                expected_save_digest,
+                actual_save_digest,
+                proposed_save_digest,
+            } => (
+                receipt,
+                expected_save_digest,
+                actual_save_digest,
+                proposed_save_digest,
+            ),
+            other => panic!("unexpected publication result: {other:?}"),
+        };
+
+        assert_eq!(expected, bound_source.loaded_generation.digest.as_str());
+        assert_eq!(
+            actual,
+            fixture.durable_manifest().load().unwrap().digest.as_str()
+        );
+        assert_eq!(proposed, receipt.proposed_save_digest);
+        assert_eq!(
+            receipt.expected_save_digest,
+            bound_source.loaded_generation.digest.as_str()
+        );
+        assert_eq!(receipt.final_save_digest, None);
+        assert_eq!(receipt.archive_receipts.len(), 3);
+        assert_eq!(
+            fixture.durable_manifest().load().unwrap().save,
+            competing_save
+        );
+        assert_eq!(
+            fixture.restored_world.canonical_signature_digest().unwrap(),
+            old_world_signature
+        );
+        assert_eq!(registry_snapshot(&fixture.restored_world), old_registry);
+        assert_eq!(fixture.lineage_library().manifest_count().unwrap(), 3);
+        for row in &receipt.archive_receipts {
+            assert_eq!(
+                fixture
+                    .lineage_library()
+                    .latest_manifest_for(&receipt.archive_source_run, row.organism_id)
+                    .unwrap(),
+                Some(row.manifest_digest)
+            );
+            let manifest = fixture
+                .lineage_library()
+                .load_manifest(row.manifest_digest)
+                .unwrap();
+            assert_eq!(manifest.genetic.organism_id, row.organism_id);
+            assert_eq!(manifest.genetic.birth_tick, row.birth_tick);
+            assert!(manifest.life.is_none());
+        }
+    }
+
+    #[test]
+    fn curated_publication_success_reloads_registry_and_verified_archive_links() {
+        let mut fixture = stage_fixture("publication-success");
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library.as_ref().unwrap(),
+            Path::new("."),
+            "archive-run-3c2",
+        )
+        .unwrap();
+        let bound_source = bind_curated_founder_source(fixture.durable_manifest()).unwrap();
+
+        let result = publish_curated_founder_reset_durably(
+            &stage,
+            &fixture.bundle,
+            &bound_source,
+            fixture.durable_manifest.as_ref().unwrap(),
+            &fixture.asset_root,
+            fixture.lineage_library.as_ref().unwrap(),
+            &mut fixture.restored_world,
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.status,
+            super::CuratedFounderPublicationStatus::Published
+        );
+        assert_eq!(result.archive_receipts.len(), 3);
+        assert_eq!(result.source_save_identity, fixture.source_save.save_id);
+        assert_eq!(
+            result.source_save_seed,
+            fixture.source_save.deterministic_seed
+        );
+        assert_eq!(result.source_world_seed, fixture.source_save.world.seed);
+        assert_eq!(result.source_tick, fixture.source_save.world.tick);
+        assert_eq!(result.reset_receipt, stage.receipt);
+        assert_eq!(
+            result.candidate_world_schema_version,
+            result.candidate_world_signature.schema_version
+        );
+        assert_eq!(result.candidate_world_seed, fixture.restored_world.seed());
+        assert_eq!(result.candidate_world_tick, fixture.restored_world.tick());
+        assert_eq!(
+            result.candidate_world_signature,
+            fixture.restored_world.canonical_signature_digest().unwrap()
+        );
+
+        let loaded = fixture.durable_manifest().load().unwrap();
+        assert_eq!(loaded.save, {
+            let mut expected = fixture.source_save.clone();
+            expected
+                .replace_headless_world_snapshot(&fixture.restored_world)
+                .unwrap();
+            expected
+        });
+        assert_eq!(
+            result.final_save_digest.as_deref(),
+            Some(loaded.digest.as_str())
+        );
+        assert_eq!(result.proposed_save_digest, loaded.digest.as_str());
+        let restored = loaded.save.restore_headless_world().unwrap();
+        assert_eq!(
+            restored.canonical_signature_digest().unwrap(),
+            result.candidate_world_signature
+        );
+        assert_eq!(
+            registry_snapshot(&restored),
+            registry_snapshot(&fixture.restored_world)
+        );
+        assert_eq!(
+            result.archive_receipts[0].final_population_slot,
+            fixture.bundle.entries[0].plan_entry.final_population_slot
+        );
+        for (batch_index, row) in result.archive_receipts.iter().enumerate() {
+            assert_eq!(
+                row.final_population_slot,
+                fixture.bundle.entries[batch_index]
+                    .plan_entry
+                    .final_population_slot
+            );
+            assert_eq!(
+                row.organism_id,
+                stage.archive_birth_intents[batch_index].organism_id
+            );
+            let record = restored.organism_registry().get(row.organism_id).unwrap();
+            assert_eq!(record.world_entity_id(), row.world_entity_id);
+            assert_eq!(
+                record.archive().birth_manifest_digest(),
+                Some(row.manifest_digest)
+            );
+            assert_eq!(
+                fixture
+                    .lineage_library()
+                    .latest_manifest_for(&result.archive_source_run, row.organism_id)
+                    .unwrap(),
+                Some(row.manifest_digest)
+            );
+            let manifest = fixture
+                .lineage_library()
+                .load_manifest(row.manifest_digest)
+                .unwrap();
+            assert_eq!(manifest.genetic.source_run_id, result.archive_source_run);
+            assert_eq!(manifest.genetic.genome_id, row.genome_id);
+            assert_eq!(manifest.genetic.lineage_id, Some(row.lineage_id));
+            assert_eq!(manifest.genetic.birth_tick, row.birth_tick);
+            assert_eq!(
+                manifest.genetic.sensor_profile,
+                stage.receipt.sensor_profile
+            );
+            assert_eq!(
+                manifest.genetic.phenotype_hash,
+                fixture.bundle.entries[batch_index]
+                    .projection
+                    .receipt()
+                    .phenotype_hash()
+            );
+            assert!(manifest.life.is_none());
+        }
+    }
+
+    #[test]
+    fn curated_publication_accepts_minified_source_with_raw_generation_digest() {
+        let mut fixture = stage_fixture("publication-minified-source");
+        let minified_source = serde_json::to_string(&fixture.source_save).unwrap();
+        fs::write(&fixture.durable_save_path, minified_source.as_bytes()).unwrap();
+        let bound_source = bind_curated_founder_source(fixture.durable_manifest()).unwrap();
+        let pretty_digest = PortableAssetDigest::for_bytes(
+            &serde_json::to_vec_pretty(&bound_source.loaded_generation.save).unwrap(),
+        )
+        .0;
+        assert_ne!(
+            bound_source.loaded_generation.digest.as_str(),
+            pretty_digest
+        );
+
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library.as_ref().unwrap(),
+            Path::new("."),
+            "archive-run-3c2",
+        )
+        .unwrap();
+        let result = publish_curated_founder_reset_durably(
+            &stage,
+            &fixture.bundle,
+            &bound_source,
+            fixture.durable_manifest.as_ref().unwrap(),
+            &fixture.asset_root,
+            fixture.lineage_library.as_ref().unwrap(),
+            &mut fixture.restored_world,
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.status,
+            super::CuratedFounderPublicationStatus::Published
+        );
+        assert_eq!(
+            result.expected_save_digest,
+            bound_source.loaded_generation.digest.as_str()
+        );
+        assert_eq!(
+            result.archive_receipts[0].final_population_slot,
+            fixture.bundle.entries[0].plan_entry.final_population_slot
+        );
+    }
+
+    #[test]
+    fn curated_publication_receipt_uses_matching_plan_slot_for_reversed_batch() {
+        let fixture = stage_fixture("publication-reversed-batch");
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library.as_ref().unwrap(),
+            Path::new("."),
+            "archive-run-3c2",
+        )
+        .unwrap();
+        let foundation =
+            FoundationWeightAsset::builtin_nano512_v1(stage.receipt.sensor_profile).unwrap();
+        let foundation_asset_bytes = foundation.encode_canonical().unwrap();
+        let reversed_inputs = (0..stage.archive_birth_intents.len())
+            .rev()
+            .map(|batch_index| {
+                let entry = &fixture.bundle.entries[batch_index];
+                let intent = &stage.archive_birth_intents[batch_index];
+                CompositeGeneticArchiveBatchInput {
+                    source_run_id: &intent.source_run_id,
+                    organism_id: intent.organism_id,
+                    genome_id: intent.genome_id,
+                    lineage_id: intent.lineage_id,
+                    birth_tick: intent.birth_tick,
+                    foundation: intent.foundation,
+                    foundation_content_digest: intent.foundation_content_digest,
+                    sensor_profile: intent.sensor_profile,
+                    projection_receipt: Some(&intent.projection_receipt),
+                    phenotype_hash: intent.phenotype_hash,
+                    creature_genome: &entry.genome,
+                    phenotype: &intent.compiled_phenotype,
+                    foundation_asset_bytes: &foundation_asset_bytes,
+                }
+            })
+            .collect::<Vec<_>>();
+        let prepared = fixture
+            .lineage_library()
+            .prepare_composite_birth_batch(&reversed_inputs)
+            .unwrap();
+        let committed = fixture
+            .lineage_library()
+            .commit_composite_birth_batch(prepared)
+            .unwrap();
+
+        let rows = build_archive_receipt_rows(&stage, &fixture.bundle, &committed).unwrap();
+
+        assert_eq!(
+            rows[0].organism_id,
+            fixture.bundle.entries[2].plan_entry.organism_id
+        );
+        assert_eq!(rows[0].final_population_slot, 2);
+        assert_eq!(
+            rows[1].organism_id,
+            fixture.bundle.entries[1].plan_entry.organism_id
+        );
+        assert_eq!(rows[1].final_population_slot, 1);
+        assert_eq!(
+            rows[2].organism_id,
+            fixture.bundle.entries[0].plan_entry.organism_id
+        );
+        assert_eq!(rows[2].final_population_slot, 0);
+    }
+
+    #[test]
+    fn curated_publication_rejects_mixed_bound_source_and_target_before_archive_commit() {
+        let mut fixture = stage_fixture("publication-mixed-target");
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library.as_ref().unwrap(),
+            Path::new("."),
+            "archive-run-3c2",
+        )
+        .unwrap();
+        let bound_source = bind_curated_founder_source(fixture.durable_manifest()).unwrap();
+        let other_save_path = fixture
+            .archive_root
+            .with_extension("durable-save-other.json");
+        GpuDurableSaveManifest::publish_snapshot(
+            &other_save_path,
+            &fixture.asset_root,
+            &fixture.source_save,
+        )
+        .unwrap();
+        let other_manifest =
+            GpuDurableSaveManifest::open(&other_save_path, &fixture.asset_root).unwrap();
+        let before = authority_snapshot(&fixture);
+        let primary_save_before = fs::read(&fixture.durable_save_path).unwrap();
+        let other_save_before = fs::read(&other_save_path).unwrap();
+
+        let error = publish_curated_founder_reset_durably(
+            &stage,
+            &fixture.bundle,
+            &bound_source,
+            &other_manifest,
+            &fixture.asset_root,
+            fixture.lineage_library.as_ref().unwrap(),
+            &mut fixture.restored_world,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            CuratedFounderDurablePublicationError::PreCommit(
+                CuratedFounderStagingError::Mismatch {
+                    field: "bound source durable manifest provenance"
+                }
+            )
+        ));
+        assert_authority_unchanged(before, &fixture);
+        assert_eq!(
+            fs::read(&fixture.durable_save_path).unwrap(),
+            primary_save_before
+        );
+        assert_eq!(fs::read(&other_save_path).unwrap(), other_save_before);
+
+        let other_asset_root = fixture.archive_root.join("asset-root-mismatch");
+        fs::create_dir_all(&other_asset_root).unwrap();
+        let root_mismatch_manifest =
+            GpuDurableSaveManifest::open(&fixture.durable_save_path, &other_asset_root).unwrap();
+        let before = authority_snapshot(&fixture);
+        let primary_save_before = fs::read(&fixture.durable_save_path).unwrap();
+
+        let error = publish_curated_founder_reset_durably(
+            &stage,
+            &fixture.bundle,
+            &bound_source,
+            &root_mismatch_manifest,
+            &fixture.asset_root,
+            fixture.lineage_library.as_ref().unwrap(),
+            &mut fixture.restored_world,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            CuratedFounderDurablePublicationError::PreCommit(
+                CuratedFounderStagingError::Mismatch {
+                    field: "bound source durable manifest provenance"
+                }
+            )
+        ));
+        assert_authority_unchanged(before, &fixture);
+        assert_eq!(
+            fs::read(&fixture.durable_save_path).unwrap(),
+            primary_save_before
+        );
+
+        drop(root_mismatch_manifest);
+        drop(other_manifest);
+        let _ = fs::remove_file(&other_save_path);
+    }
+
+    #[test]
+    fn curated_publication_retry_reuses_archive_and_handles_already_applied() {
+        let mut fixture = stage_fixture("publication-retry");
+        let stage = stage_curated_founder_reset(
+            &fixture.plan,
+            &fixture.bundle,
+            &fixture.source_save,
+            &fixture.restored_world,
+            fixture.lineage_library.as_ref().unwrap(),
+            Path::new("."),
+            "archive-run-3c2",
+        )
+        .unwrap();
+        let bound_source = bind_curated_founder_source(fixture.durable_manifest()).unwrap();
+        let competing_save = competing_valid_save(&fixture.source_save);
+        GpuDurableSaveManifest::publish_snapshot(
+            &fixture.durable_save_path,
+            &fixture.asset_root,
+            &competing_save,
+        )
+        .unwrap();
+        let conflict = publish_curated_founder_reset_durably(
+            &stage,
+            &fixture.bundle,
+            &bound_source,
+            fixture.durable_manifest.as_ref().unwrap(),
+            &fixture.asset_root,
+            fixture.lineage_library.as_ref().unwrap(),
+            &mut fixture.restored_world,
+        )
+        .unwrap_err();
+        let conflict_receipt = match conflict {
+            CuratedFounderDurablePublicationError::ArchiveCommittedSaveConflict {
+                receipt, ..
+            } => receipt,
+            other => panic!("unexpected conflict result: {other:?}"),
+        };
+        let archive_after_conflict = archive_snapshot(fixture.lineage_library().root());
+        let archive_count_after_conflict = fixture.lineage_library().manifest_count().unwrap();
+
+        GpuDurableSaveManifest::publish_snapshot(
+            &fixture.durable_save_path,
+            &fixture.asset_root,
+            &fixture.source_save,
+        )
+        .unwrap();
+        let published = publish_curated_founder_reset_durably(
+            &stage,
+            &fixture.bundle,
+            &bound_source,
+            fixture.durable_manifest.as_ref().unwrap(),
+            &fixture.asset_root,
+            fixture.lineage_library.as_ref().unwrap(),
+            &mut fixture.restored_world,
+        )
+        .unwrap();
+        assert_eq!(
+            published.status,
+            super::CuratedFounderPublicationStatus::Published
+        );
+        assert_eq!(
+            published.archive_receipts,
+            conflict_receipt.archive_receipts
+        );
+        assert_eq!(
+            fixture.lineage_library().manifest_count().unwrap(),
+            archive_count_after_conflict
+        );
+        assert_eq!(
+            archive_snapshot(fixture.lineage_library().root()),
+            archive_after_conflict
+        );
+        let published_world_signature =
+            fixture.restored_world.canonical_signature_digest().unwrap();
+
+        let already_applied = publish_curated_founder_reset_durably(
+            &stage,
+            &fixture.bundle,
+            &bound_source,
+            fixture.durable_manifest.as_ref().unwrap(),
+            &fixture.asset_root,
+            fixture.lineage_library.as_ref().unwrap(),
+            &mut fixture.restored_world,
+        )
+        .unwrap();
+        assert_eq!(
+            already_applied.status,
+            super::CuratedFounderPublicationStatus::AlreadyApplied
+        );
+        assert_eq!(already_applied.archive_receipts, published.archive_receipts);
+        assert_eq!(
+            fixture.lineage_library().manifest_count().unwrap(),
+            archive_count_after_conflict
+        );
+        assert_eq!(
+            archive_snapshot(fixture.lineage_library().root()),
+            archive_after_conflict
+        );
+        assert_eq!(
+            fixture.restored_world.canonical_signature_digest().unwrap(),
+            published_world_signature
+        );
+        assert_eq!(
+            fixture.durable_manifest().load().unwrap().digest.as_str(),
+            already_applied.final_save_digest.as_deref().unwrap()
+        );
+    }
+
+    #[test]
     fn curated_apply_archive_commit_failure_leaves_world_unpublished() {
         let mut fixture = stage_fixture("apply-archive-failure");
         let stage = stage_curated_founder_reset(
@@ -1783,7 +2897,7 @@ mod tests {
             &fixture.bundle,
             &fixture.source_save,
             &fixture.restored_world,
-            fixture.lineage_library(),
+            fixture.lineage_library.as_ref().unwrap(),
             Path::new("."),
             "archive-run-3b3",
         )

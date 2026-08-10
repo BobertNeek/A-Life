@@ -761,6 +761,36 @@ fn composite_birth_round_trips_complete_creature_genome_provenance() {
 }
 
 #[test]
+fn load_manifest_rejects_corrupted_referenced_composite_cas_payload() {
+    let root = temp_root("load-manifest-corrupt-cas");
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let fixture = generic_composite_fixture(704, SensorProfile::GroundedObjectSlotsV1);
+    let manifest_digest = library
+        .archive_composite_birth(CompositeGeneticArchiveInput {
+            source_run_id: "load-manifest-corrupt-cas",
+            organism_id: OrganismId(704),
+            birth_tick: Tick::new(10),
+            creature_genome: &fixture.creature_genome,
+            phenotype: &fixture.phenotype,
+            foundation_asset_bytes: &fixture.foundation_asset_bytes,
+        })
+        .unwrap();
+    let manifest = library.load_manifest(manifest_digest).unwrap();
+    let foundation_digest = manifest.genetic.foundation_asset.as_ref().unwrap().digest;
+    let cas_path = root
+        .join("assets")
+        .join(digest_hex_for_test(foundation_digest))
+        .join("payload.bin");
+    fs::write(&cas_path, b"corrupted composite foundation bytes").unwrap();
+
+    let error = library.load_manifest(manifest_digest).unwrap_err();
+
+    assert!(error.to_string().contains("digest") || error.to_string().contains("foundation"));
+    drop(library);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn composite_birth_rejects_a_phenotype_compiled_from_another_genome() {
     let root = temp_root("composite-mismatch");
     let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
