@@ -1328,6 +1328,31 @@ pub struct GpuClosedLoopBackend {
     pub(crate) committed_sleep: BTreeMap<(u16, u32, u32, u64), crate::GpuSleepConsolidationReceipt>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EphemeralBackendStatePlan {
+    backend_instance_id: NonZeroU64,
+    state: GpuBackendState,
+    next_dispatch_generation: u64,
+    next_sleep_job_id: u64,
+    curated_residency_generation: u64,
+    #[cfg(test)]
+    recorded_pressure_replay_empty: bool,
+}
+
+fn new_ephemeral_backend_state_plan() -> Result<EphemeralBackendStatePlan, ScaffoldContractError> {
+    let backend_instance_id = next_backend_instance_id()
+        .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
+    Ok(EphemeralBackendStatePlan {
+        backend_instance_id,
+        state: GpuBackendState::Ready,
+        next_dispatch_generation: 1,
+        next_sleep_job_id: 1,
+        curated_residency_generation: 0,
+        #[cfg(test)]
+        recorded_pressure_replay_empty: true,
+    })
+}
+
 impl GpuClosedLoopBackend {
     pub fn new_required(profile: GpuRuntimeProfile) -> Result<Self, ScaffoldContractError> {
         Self::new_with_factory_and_profile(&WgpuDeviceFactory, profile)
@@ -1394,6 +1419,61 @@ impl GpuClosedLoopBackend {
             pending_inference_timing: None,
             completed_neural_timing: None,
             next_sleep_job_id: 1,
+            sleep_jobs: BTreeMap::new(),
+            committed_sleep: BTreeMap::new(),
+        })
+    }
+
+    /// Creates a fresh restore target on this backend's exact GPU context.
+    ///
+    /// The adapter, device, queue, hardware receipt, immutable kernel set, and
+    /// device-loss signal remain tied to this backend. Resident brains,
+    /// admission, generations, counters, and replay state are new and cannot
+    /// accept handles issued by the live backend.
+    pub fn new_staging_like_live(&self) -> Result<Self, ScaffoldContractError> {
+        if !matches!(self.state, GpuBackendState::Ready)
+            || self.device_lost.load(Ordering::Acquire)
+        {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        let plan = new_ephemeral_backend_state_plan()?;
+        let timestamp_resources = GpuTimestampResources::new(&self.device, &self.queue)?;
+        let plasticity_timestamp_resources =
+            GpuTimestampResources::new(&self.device, &self.queue)?;
+        Ok(Self {
+            backend_instance_id: plan.backend_instance_id,
+            hardware: self.hardware.clone(),
+            adapter: self.adapter.clone(),
+            device: self.device.clone(),
+            queue: self.queue.clone(),
+            timestamp_resources,
+            plasticity_timestamp_resources,
+            device_lost: Arc::clone(&self.device_lost),
+            kernels: Arc::clone(&self.kernels),
+            state: plan.state.clone(),
+            runtime_profile: self.runtime_profile.clone(),
+            runtime_budget: self.runtime_budget.clone(),
+            activity_policy: self.activity_policy.clone(),
+            admission: GpuAdmissionReceipt::empty(self.runtime_budget.clone()),
+            class_buckets: BTreeMap::new(),
+            slot_generation_watermarks: BTreeMap::new(),
+            organisms: BTreeMap::new(),
+            curated_residency_generation: plan.curated_residency_generation,
+            curated_residency_generation_fingerprint: [0; 4],
+            next_dispatch_generation: plan.next_dispatch_generation,
+            force_device_lost_after_submit: false,
+            #[cfg(feature = "gpu-tests")]
+            forced_learning_rejections_remaining: 0,
+            #[cfg(feature = "gpu-tests")]
+            forced_discard_rejections_remaining: 0,
+            recorded_pressure_replay: VecDeque::new(),
+            completed_dispatch_count: 0,
+            perception_upload_count: 0,
+            completed_selection_count: 0,
+            last_compact_readback_bytes: 0,
+            pending_inference_timing: None,
+            completed_neural_timing: None,
+            next_sleep_job_id: plan.next_sleep_job_id,
             sleep_jobs: BTreeMap::new(),
             committed_sleep: BTreeMap::new(),
         })
@@ -4517,6 +4597,26 @@ impl RuntimePreflightTestHarness {
 #[cfg(test)]
 #[path = "../tests/support/closed_loop_runtime_private.rs"]
 mod task7_private_tests;
+
+#[cfg(test)]
+mod staging_backend_tests {
+    use super::*;
+
+    #[test]
+    fn staging_state_plan_separates_identity_and_resets_accounting() {
+        with_runtime_allocation_state_for_test(41, 77, || {
+            let live = new_ephemeral_backend_state_plan().expect("live plan is valid");
+            let staging = new_ephemeral_backend_state_plan().expect("staging plan is valid");
+
+            assert_ne!(live.backend_instance_id, staging.backend_instance_id);
+            assert_eq!(staging.state, GpuBackendState::Ready);
+            assert_eq!(staging.next_dispatch_generation, 1);
+            assert_eq!(staging.next_sleep_job_id, 1);
+            assert_eq!(staging.curated_residency_generation, 0);
+            assert!(staging.recorded_pressure_replay_empty);
+        });
+    }
+}
 
 #[cfg(test)]
 mod curated_founder_gpu_cutover_tests {
