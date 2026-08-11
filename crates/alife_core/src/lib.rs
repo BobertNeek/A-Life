@@ -68,7 +68,8 @@ pub use archive::{
 };
 pub use biochemistry::{
     BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
-    NeuralModulation, ReproductionReadiness, MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+    NeuralModulation, PassiveBodyUpkeepPolicy, ReproductionReadiness,
+    MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
 };
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{

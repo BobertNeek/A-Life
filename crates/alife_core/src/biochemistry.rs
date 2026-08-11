@@ -146,6 +146,64 @@ impl Validate for BodyEventDelta {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PassiveBodyUpkeepPolicy;
+
+impl PassiveBodyUpkeepPolicy {
+    pub const ADULT_LIFETIME_BASE_MULTIPLIER: f32 = 2.0;
+    pub const NO_FOOD_RESERVE_FRACTION: f32 = 0.55;
+    pub const MATURATION_RESERVE_BUFFER: f32 = 1.25;
+    pub const BODY_SIZE_LOAD_BASE: f32 = 0.90;
+    pub const BODY_SIZE_LOAD_SPAN: f32 = 0.20;
+    pub const EFFICIENCY_LOAD_BASE: f32 = 1.10;
+    pub const EFFICIENCY_LOAD_SPAN: f32 = 0.20;
+
+    pub fn maximum_lifespan_ticks(phenotype: &CreaturePhenotype) -> u64 {
+        rounded_ticks(
+            f64::from(phenotype.development.maturation_duration_ticks)
+                * f64::from(
+                    Self::ADULT_LIFETIME_BASE_MULTIPLIER + phenotype.body.lifespan_scale,
+                ),
+        )
+    }
+
+    pub fn body_load(phenotype: &CreaturePhenotype) -> f32 {
+        (Self::BODY_SIZE_LOAD_BASE + Self::BODY_SIZE_LOAD_SPAN * phenotype.body.size_scale)
+            * (Self::EFFICIENCY_LOAD_BASE
+                - Self::EFFICIENCY_LOAD_SPAN * phenotype.body.metabolic_efficiency)
+    }
+
+    pub fn reserve_horizon_ticks(phenotype: &CreaturePhenotype) -> u64 {
+        let maturation_ticks = f64::from(phenotype.development.maturation_duration_ticks);
+        let maximum_lifespan_ticks = Self::maximum_lifespan_ticks(phenotype) as f64;
+        let body_load = f64::from(Self::body_load(phenotype).max(f32::EPSILON));
+        rounded_ticks(
+            (f64::from(Self::MATURATION_RESERVE_BUFFER) * maturation_ticks).max(
+                f64::from(Self::NO_FOOD_RESERVE_FRACTION) * maximum_lifespan_ticks / body_load,
+            ),
+        )
+    }
+
+    pub fn upkeep_event(
+        phenotype: &CreaturePhenotype,
+        cadence: BiochemistryCadence,
+        crossed_metabolism_steps: u32,
+    ) -> BodyEventDelta {
+        if crossed_metabolism_steps == 0 {
+            return BodyEventDelta::zero();
+        }
+        let reserve_horizon_ticks = Self::reserve_horizon_ticks(phenotype).max(1) as f32;
+        let baseline_energy = 0.50 + 0.50 * phenotype.body.metabolic_efficiency;
+        let cost = baseline_energy * cadence.metabolism_ticks as f32
+            / reserve_horizon_ticks
+            * crossed_metabolism_steps as f32;
+        BodyEventDelta {
+            energy: -cost.clamp(0.0, 1.0),
+            ..BodyEventDelta::zero()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct NeuralModulation {
     pub threshold_scale: f32,
@@ -375,8 +433,6 @@ impl BiochemistryState {
         }
         Tick::validate_monotonic(self.tick, next_tick)?;
 
-        let body = self.body.apply_event(event, phenotype);
-        body.validate_contract()?;
         let fast_steps = crossed_boundaries(
             self.tick,
             next_tick,
@@ -401,6 +457,17 @@ impl BiochemistryState {
             self.cadence.reproduction_ticks,
             self.cadence.max_catch_up_steps,
         );
+        let upkeep = PassiveBodyUpkeepPolicy::upkeep_event(
+            phenotype,
+            self.cadence,
+            metabolic_steps,
+        );
+        let event = BodyEventDelta {
+            energy: signed_clamp(event.energy + upkeep.energy),
+            ..event
+        };
+        let body = self.body.apply_event(event, phenotype);
+        body.validate_contract()?;
         let parameters = scaled_parameters(
             phenotype.chemistry.endocrine.parameters,
             next_tick.raw().saturating_sub(self.tick.raw()),
@@ -566,6 +633,17 @@ fn crossed_boundaries(from: Tick, to: Tick, period: u32, cap: u32) -> u32 {
     let period = u64::from(period);
     let crossed = to.raw() / period - from.raw() / period;
     u32::try_from(crossed.min(u64::from(cap))).unwrap_or(cap)
+}
+
+fn rounded_ticks(value: f64) -> u64 {
+    let rounded = value.round();
+    if !rounded.is_finite() || rounded <= 0.0 {
+        0
+    } else if rounded >= u64::MAX as f64 {
+        u64::MAX
+    } else {
+        rounded as u64
+    }
 }
 
 fn cadence_boundary(tick: Tick, period: u32) -> Tick {

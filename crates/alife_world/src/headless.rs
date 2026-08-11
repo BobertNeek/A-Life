@@ -4297,4 +4297,128 @@ mod task_3_2a_tests {
             );
         }
     }
+
+    #[test]
+    fn try_advance_tick_applies_passive_upkeep_in_stable_order_and_rolls_back() {
+        let mut forward = task_4_1_world_with_registration_order(&[
+            TASK_4_1_LOW_ORGANISM,
+            TASK_4_1_HIGH_ORGANISM,
+        ]);
+        let mut reverse = task_4_1_world_with_registration_order(&[
+            TASK_4_1_HIGH_ORGANISM,
+            TASK_4_1_LOW_ORGANISM,
+        ]);
+        let _forward_food = task_4_1_consume_and_prepare_resource(&mut forward);
+        let _reverse_food = task_4_1_consume_and_prepare_resource(&mut reverse);
+
+        let baseline = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        let mut one_tick_cadence = baseline.biochemistry().cadence;
+        one_tick_cadence.metabolism_ticks = 1;
+        one_tick_cadence.development_ticks = 1;
+        let expected_upkeep_cost = 0.7925_f32 / 2551.0_f32;
+        let expected_upkeep = alife_core::PassiveBodyUpkeepPolicy::upkeep_event(
+            baseline.phenotype(),
+            one_tick_cadence,
+            1,
+        );
+        assert!(((-expected_upkeep.energy) - expected_upkeep_cost).abs() <= 1.0e-7);
+        let low_energy = expected_upkeep_cost - 1.0e-6;
+
+        for world in [&mut forward, &mut reverse] {
+            for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+                world
+                    .organism_registry
+                    .with_biology_mut(organism_id, |biology| {
+                        biology.cadence = one_tick_cadence;
+                        if organism_id == TASK_4_1_LOW_ORGANISM {
+                            biology.body.energy = low_energy;
+                        }
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+        }
+
+        let before_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
+        let before_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        assert!((before_high.biochemistry().body.energy - 0.7925).abs() <= 1.0e-6);
+        let next_tick = Tick::new(1);
+        let expected_development = before_high
+            .phenotype()
+            .development_state_at(next_tick)
+            .unwrap();
+
+        let mut late_failure = forward.clone();
+        let before_failure_tick = late_failure.tick();
+        let before_failure_low = task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM);
+        let before_failure_high = task_4_1_record_state(&late_failure, TASK_4_1_HIGH_ORGANISM);
+        let before_failure_objects = late_failure.object_snapshots();
+        let before_failure_ecology = late_failure.ecology().clone();
+        let before_failure_metrics = late_failure.ecology_metrics();
+        let before_failure_speech = late_failure.audible_utterances();
+        let before_failure_touched = late_failure.last_touched_entities.clone();
+        let before_failure_last_action = late_failure.last_action_result.clone();
+        let before_failure_signature = late_failure.canonical_signature_digest().unwrap();
+        late_failure.inject_tick_late_failure_after_first_organism_for_test();
+
+        assert_eq!(
+            late_failure.try_advance_tick(),
+            Err(ScaffoldContractError::InvalidDecisionEvidence)
+        );
+        assert_eq!(late_failure.tick(), before_failure_tick);
+        assert_eq!(
+            task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM),
+            before_failure_low
+        );
+        assert_eq!(
+            task_4_1_record_state(&late_failure, TASK_4_1_HIGH_ORGANISM),
+            before_failure_high
+        );
+        assert_eq!(late_failure.object_snapshots(), before_failure_objects);
+        assert_eq!(late_failure.ecology(), &before_failure_ecology);
+        assert_eq!(late_failure.ecology_metrics(), before_failure_metrics);
+        assert_eq!(late_failure.audible_utterances(), before_failure_speech);
+        assert_eq!(late_failure.last_touched_entities, before_failure_touched);
+        assert_eq!(late_failure.last_action_result, before_failure_last_action);
+        assert_eq!(
+            late_failure.canonical_signature_digest().unwrap(),
+            before_failure_signature
+        );
+
+        assert_eq!(forward.try_advance_tick().unwrap(), next_tick);
+        assert_eq!(reverse.try_advance_tick().unwrap(), next_tick);
+        let forward_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
+        let forward_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        assert!((forward_high.biochemistry().body.energy
+            - (before_high.biochemistry().body.energy - expected_upkeep_cost))
+            .abs()
+            <= 1.0e-6);
+        assert!(forward_high.biochemistry().body.energy > 0.0);
+        assert_eq!(forward_low.biochemistry().body.energy, 0.0);
+        assert_eq!(forward_low.lifecycle().death_tick(), Some(next_tick));
+        assert!(!forward_low.lifecycle().is_alive());
+        assert!(forward_high.lifecycle().is_alive());
+        for record in [&forward_low, &forward_high] {
+            assert_eq!(record.age_at(next_tick).unwrap(), next_tick);
+            assert_eq!(record.biochemistry().development.age_ticks, next_tick);
+            assert_eq!(
+                record.biochemistry().development.maturation,
+                expected_development.maturation.raw()
+            );
+        }
+        for (before, after) in [(&before_low, &forward_low), (&before_high, &forward_high)] {
+            assert_eq!(after.archive(), before.archive());
+            assert_eq!(after.world_entity_id(), before.world_entity_id());
+        }
+        assert_eq!(
+            forward.canonical_signature_digest().unwrap(),
+            reverse.canonical_signature_digest().unwrap()
+        );
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            assert_eq!(
+                task_4_1_record_state(&forward, organism_id),
+                task_4_1_record_state(&reverse, organism_id)
+            );
+        }
+    }
 }
