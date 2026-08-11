@@ -774,17 +774,36 @@ fn prepare_production_gpu_runtime_launch(
     Ok(runtime_launch)
 }
 
+fn apply_presentation_retirements(
+    commands: &mut Commands,
+    map: &mut BevyEntityMap,
+    retired_ids: &[WorldEntityId],
+) {
+    for world_id in retired_ids.iter().copied() {
+        if let Some(entity) = map.remove_by_world_id(world_id) {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 #[cfg(feature = "gpu-runtime")]
 fn tick_production_gpu_brain(
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut authority: ResMut<ProductionGpuBrainAuthorityResource>,
     mut schedule: ResMut<ProductionGpuBrainTickScheduleResource>,
     mut presentation: ResMut<LiveBrainPresentationFrameResource>,
+    mut commands: Commands,
+    mut map: ResMut<BevyEntityMap>,
 ) {
     if !schedule.take_dispatch_permit() {
         return;
     }
-    match runtime.runtime.tick() {
+
+    let tick_result = runtime.runtime.tick();
+    let retired_ids = runtime.runtime.take_presentation_retirements();
+    apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
+
+    match tick_result {
         Ok(tick_summaries) => {
             let world = runtime.runtime.world_snapshot();
             match presentation.try_publish_successful_tick(tick_summaries, &world) {
@@ -5313,6 +5332,54 @@ mod production_gpu_tick_schedule_tests {
         assert!(access
             .combined_access()
             .has_resource_write(frame_resource_id));
+    }
+}
+
+#[cfg(test)]
+mod presentation_retirement_tests {
+    use super::{apply_presentation_retirements, BevyEntityMap};
+    use alife_core::WorldEntityId;
+    use bevy::{
+        ecs::hierarchy::ChildOf,
+        prelude::{Commands, ResMut, Schedule, World},
+    };
+
+    fn retire_creature_root(mut commands: Commands, mut map: ResMut<BevyEntityMap>) {
+        apply_presentation_retirements(
+            &mut commands,
+            &mut map,
+            &[WorldEntityId(1)],
+        );
+    }
+
+    #[test]
+    fn retiring_a_mapped_root_removes_its_binding_and_descendants_idempotently() {
+        let mut world = World::new();
+        world.insert_resource(BevyEntityMap::default());
+        let root = world.spawn_empty().id();
+        let child = world.spawn(ChildOf(root)).id();
+        world
+            .resource_mut::<BevyEntityMap>()
+            .bind(root, WorldEntityId(1))
+            .expect("fixture root must bind to its world entity");
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(retire_creature_root);
+        schedule.run(&mut world);
+
+        let map = world.resource::<BevyEntityMap>();
+        assert_eq!(map.bevy_entity(WorldEntityId(1)), None);
+        assert_eq!(map.len(), 0);
+        assert!(!world.entities().contains(root));
+        assert!(!world.entities().contains(child));
+
+        schedule.run(&mut world);
+
+        let map = world.resource::<BevyEntityMap>();
+        assert_eq!(map.bevy_entity(WorldEntityId(1)), None);
+        assert_eq!(map.len(), 0);
+        assert!(!world.entities().contains(root));
+        assert!(!world.entities().contains(child));
     }
 }
 
