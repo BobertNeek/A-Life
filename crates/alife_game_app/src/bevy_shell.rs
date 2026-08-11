@@ -562,13 +562,13 @@ pub struct CameraNavigationResource {
 
 #[derive(Debug, Clone, Copy, PartialEq, Resource)]
 pub struct SelectionResource {
-    pub stable_id: WorldEntityId,
+    pub stable_id: Option<WorldEntityId>,
     pub local_entity: Option<Entity>,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct CreatureInspectorResource {
-    pub snapshot: CreatureInspectorSnapshot,
+    pub snapshot: Option<CreatureInspectorSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Component)]
@@ -786,6 +786,113 @@ fn apply_presentation_retirements(
     }
 }
 
+fn entity_selection_snapshot_from_world_object(
+    object: &WorldObject,
+) -> EntitySelectionSnapshot {
+    let mut selection = EntitySelectionSnapshot::default();
+    selection.stable_id = object.id;
+    selection.position = object.position;
+    selection
+}
+
+fn repair_presentation_focus_after_retirements(
+    commands: &mut Commands,
+    map: &BevyEntityMap,
+    retired_ids: &[WorldEntityId],
+    authoritative_objects: &[WorldObject],
+    mut selection: Option<&mut SelectionResource>,
+    mut inspector: Option<&mut CreatureInspectorResource>,
+    mut camera: Option<&mut CameraNavigationResource>,
+    mut panel_target: Option<&mut Option<u64>>,
+    selected_markers: &bevy::prelude::Query<
+        (Entity, &SelectedVisibleEntity),
+    >,
+) {
+    if retired_ids.is_empty() {
+        return;
+    }
+
+    let fallback = authoritative_objects
+        .iter()
+        .filter(|object| object.kind == WorldObjectKind::Agent)
+        .filter(|object| !retired_ids.contains(&object.id))
+        .filter_map(|object| map.bevy_entity(object.id).map(|entity| (object, entity)))
+        .min_by_key(|(object, _)| object.id.raw());
+
+    let selection_references_retired = selection
+        .as_ref()
+        .and_then(|selection| selection.stable_id)
+        .is_some_and(|stable_id| retired_ids.contains(&stable_id));
+
+    if selection_references_retired {
+        if let Some(selection) = selection.as_deref_mut() {
+            if let Some((object, entity)) = fallback {
+                selection.stable_id = Some(object.id);
+                selection.local_entity = Some(entity);
+            } else {
+                selection.stable_id = None;
+                selection.local_entity = None;
+            }
+        }
+
+        for (entity, _) in selected_markers.iter() {
+            commands.entity(entity).remove::<SelectedVisibleEntity>();
+        }
+        if let Some((object, entity)) = fallback {
+            commands.entity(entity).insert(SelectedVisibleEntity {
+                selection: entity_selection_snapshot_from_world_object(object),
+            });
+        }
+    } else {
+        for (entity, marker) in selected_markers.iter() {
+            if retired_ids.contains(&marker.selection.stable_id) {
+                commands.entity(entity).remove::<SelectedVisibleEntity>();
+            }
+        }
+    }
+
+    if let Some(inspector) = inspector.as_deref_mut() {
+        if inspector.snapshot.as_ref().is_some_and(|snapshot| {
+            retired_ids.contains(&snapshot.selection.stable_id)
+                || retired_ids.contains(&snapshot.visual.stable_id)
+                || snapshot
+                    .visual
+                    .target_entity
+                    .is_some_and(|target| retired_ids.contains(&target))
+        }) {
+            inspector.snapshot = None;
+        }
+    }
+
+    if let Some(camera) = camera.as_deref_mut() {
+        if camera
+            .state
+            .follow_target
+            .is_some_and(|target| retired_ids.contains(&target))
+        {
+            camera.state = fallback
+                .map(|(object, _)| {
+                    camera
+                        .state
+                        .with_follow_target(object.id)
+                        .and_then(|state| state.focus_on(object.position))
+                        .unwrap_or_else(|_| CameraNavigationState::top_down_default())
+                })
+                .unwrap_or_else(CameraNavigationState::top_down_default);
+        }
+    }
+
+    if let Some(panel_target) = panel_target.as_deref_mut() {
+        if panel_target.as_ref().is_some_and(|target| {
+            retired_ids
+                .iter()
+                .any(|retired| retired.raw() == *target)
+        }) {
+            *panel_target = None;
+        }
+    }
+}
+
 #[cfg(feature = "gpu-runtime")]
 fn tick_production_gpu_brain(
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
@@ -794,6 +901,13 @@ fn tick_production_gpu_brain(
     mut presentation: ResMut<LiveBrainPresentationFrameResource>,
     mut commands: Commands,
     mut map: ResMut<BevyEntityMap>,
+    mut selection: Option<ResMut<SelectionResource>>,
+    mut inspector: Option<ResMut<CreatureInspectorResource>>,
+    mut camera: Option<ResMut<CameraNavigationResource>>,
+    mut controls: Option<ResMut<GraphicalRuntimeControlsResource>>,
+    selected_markers: bevy::prelude::Query<
+        (Entity, &SelectedVisibleEntity),
+    >,
 ) {
     if !schedule.take_dispatch_permit() {
         return;
@@ -802,10 +916,27 @@ fn tick_production_gpu_brain(
     let tick_result = runtime.runtime.tick();
     let retired_ids = runtime.runtime.take_presentation_retirements();
     apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
+    let world = runtime.runtime.world_snapshot();
+    let authoritative_objects = world.object_snapshots();
+
+    if !retired_ids.is_empty() {
+        repair_presentation_focus_after_retirements(
+            &mut commands,
+            &map,
+            &retired_ids,
+            &authoritative_objects,
+            selection.as_deref_mut(),
+            inspector.as_deref_mut(),
+            camera.as_deref_mut(),
+            controls
+                .as_deref_mut()
+                .map(|controls| &mut controls.panel.target_entity),
+            &selected_markers,
+        );
+    }
 
     match tick_result {
         Ok(tick_summaries) => {
-            let world = runtime.runtime.world_snapshot();
             match presentation.try_publish_successful_tick(tick_summaries, &world) {
                 Ok(()) => authority.telemetry = runtime.runtime.authority_telemetry(),
                 Err(error) => {
@@ -1912,11 +2043,11 @@ pub fn build_creature_inspector_world_app_shell(
         state: inspector.camera,
     });
     app.insert_resource(SelectionResource {
-        stable_id: inspector.selection.stable_id,
+        stable_id: Some(inspector.selection.stable_id),
         local_entity,
     });
     app.insert_resource(CreatureInspectorResource {
-        snapshot: inspector.clone(),
+        snapshot: Some(inspector.clone()),
     });
     Ok((app, summary, inspector))
 }
@@ -2000,11 +2131,11 @@ pub fn build_graphical_playground_app_shell(
             state: camera_state,
         })
         .insert_resource(SelectionResource {
-            stable_id: inspector.selection.stable_id,
+            stable_id: Some(inspector.selection.stable_id),
             local_entity,
         })
         .insert_resource(CreatureInspectorResource {
-            snapshot: inspector,
+            snapshot: Some(inspector),
         })
         .insert_resource(GraphicalFeedbackCueResource { summary: feedback })
         .insert_resource(GraphicalSaveLoadMenuResource { session: save_load })
@@ -2575,6 +2706,7 @@ fn spawn_true_25d_terrain_island_patch(
             ));
         }
     }
+
 }
 
 fn spawn_true_25d_foundation_regions(
@@ -4547,11 +4679,11 @@ pub fn build_graphical_playground_preview_app_shell(
         spawn_true_25d_neurochemical_visual_feedback(&mut app, &inspector, &gpu);
     }
     app.insert_resource(SelectionResource {
-        stable_id: inspector.selection.stable_id,
+        stable_id: Some(inspector.selection.stable_id),
         local_entity,
     })
     .insert_resource(CreatureInspectorResource {
-        snapshot: inspector,
+        snapshot: Some(inspector),
     });
     if let Some(summary) = world_art_summary {
         app.insert_resource(GraphicalWorldArtStyleResource { summary });
@@ -4916,11 +5048,11 @@ pub fn build_graphical_playground_runtime_preview_app_shell(
             state: camera_state,
         })
         .insert_resource(SelectionResource {
-            stable_id: inspector.selection.stable_id,
+            stable_id: Some(inspector.selection.stable_id),
             local_entity,
         })
         .insert_resource(CreatureInspectorResource {
-            snapshot: inspector,
+            snapshot: Some(inspector),
         })
         .insert_resource(GraphicalFeedbackCueResource { summary: feedback })
         .insert_resource(GraphicalSaveLoadMenuResource { session: save_load })
@@ -4972,7 +5104,7 @@ pub fn build_ca03_intent_feedback_preview_app_shell(
         smoke_ticks_done: 0,
     })
     .insert_resource(SelectionResource {
-        stable_id: WorldEntityId(1),
+        stable_id: None,
         local_entity: None,
     })
     .add_systems(Update, update_graphical_intent_feedback);
@@ -5337,12 +5469,108 @@ mod production_gpu_tick_schedule_tests {
 
 #[cfg(test)]
 mod presentation_retirement_tests {
-    use super::{apply_presentation_retirements, BevyEntityMap};
-    use alife_core::WorldEntityId;
+    use super::{
+        apply_presentation_retirements, repair_presentation_focus_after_retirements,
+        BevyEntityMap, CameraNavigationResource, CreatureInspectorResource,
+        CreatureInspectorSnapshot, EntitySelectionSnapshot, SelectedVisibleEntity,
+        SelectionResource,
+    };
+    use alife_core::{OrganismId, Vec3f, WorldEntityId};
+    use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, WorldObject};
     use bevy::{
         ecs::hierarchy::ChildOf,
-        prelude::{Commands, ResMut, Schedule, World},
+        prelude::{Commands, Query, Res, ResMut, Resource, Schedule, World},
     };
+
+    #[derive(Resource)]
+    struct AuthoritativeWorldObjects(Vec<WorldObject>);
+
+    #[derive(Resource)]
+    struct PanelTarget(Option<u64>);
+
+    fn selection_snapshot(object: &WorldObject) -> EntitySelectionSnapshot {
+        super::entity_selection_snapshot_from_world_object(object)
+    }
+
+    fn inspector_snapshot(object: &WorldObject) -> CreatureInspectorSnapshot {
+        let mut inspector = CreatureInspectorSnapshot::default();
+        inspector.selection = selection_snapshot(object);
+        inspector.visual.stable_id = object.id;
+        inspector.visual.position = object.position;
+        inspector.visual.target_entity = Some(object.id);
+        inspector
+    }
+
+    fn fixture_world_with_seven_agents() -> HeadlessWorld {
+        HeadlessScenarioBuilder::new(41)
+            .agent("retired", OrganismId(1), Vec3f::new(-2.0, 0.0, 0.0))
+            .agent("survivor-2", OrganismId(2), Vec3f::new(2.0, 0.0, 0.0))
+            .agent("unmapped-3", OrganismId(3), Vec3f::new(3.0, 0.0, 0.0))
+            .agent("unmapped-4", OrganismId(4), Vec3f::new(4.0, 0.0, 0.0))
+            .agent("unmapped-5", OrganismId(5), Vec3f::new(5.0, 0.0, 0.0))
+            .agent("unmapped-6", OrganismId(6), Vec3f::new(6.0, 0.0, 0.0))
+            .agent("survivor-7", OrganismId(7), Vec3f::new(7.0, 0.0, 0.0))
+            .build()
+            .expect("retirement UI fixture world must build")
+    }
+
+    fn fixture_object(objects: &[WorldObject], id: u64) -> WorldObject {
+        objects
+            .iter()
+            .find(|object| object.id == WorldEntityId(id))
+            .cloned()
+            .expect("fixture object must exist")
+    }
+
+    fn retire_selected_agent_and_repair_ui(
+        mut commands: Commands,
+        mut map: ResMut<BevyEntityMap>,
+        authoritative: Res<AuthoritativeWorldObjects>,
+        mut selection: ResMut<SelectionResource>,
+        mut inspector: ResMut<CreatureInspectorResource>,
+        mut camera: ResMut<CameraNavigationResource>,
+        mut panel_target: ResMut<PanelTarget>,
+        selected_markers: Query<(bevy::prelude::Entity, &SelectedVisibleEntity)>,
+    ) {
+        let retired_ids = [WorldEntityId(1)];
+        apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
+        repair_presentation_focus_after_retirements(
+            &mut commands,
+            &map,
+            &retired_ids,
+            &authoritative.0,
+            Some(&mut *selection),
+            Some(&mut *inspector),
+            Some(&mut *camera),
+            Some(&mut panel_target.0),
+            &selected_markers,
+        );
+    }
+
+    fn retire_last_selected_agent_and_repair_ui(
+        mut commands: Commands,
+        mut map: ResMut<BevyEntityMap>,
+        authoritative: Res<AuthoritativeWorldObjects>,
+        mut selection: ResMut<SelectionResource>,
+        mut inspector: ResMut<CreatureInspectorResource>,
+        mut camera: ResMut<CameraNavigationResource>,
+        mut panel_target: ResMut<PanelTarget>,
+        selected_markers: Query<(bevy::prelude::Entity, &SelectedVisibleEntity)>,
+    ) {
+        let retired_ids = [WorldEntityId(1)];
+        apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
+        repair_presentation_focus_after_retirements(
+            &mut commands,
+            &map,
+            &retired_ids,
+            &authoritative.0,
+            Some(&mut *selection),
+            Some(&mut *inspector),
+            Some(&mut *camera),
+            Some(&mut panel_target.0),
+            &selected_markers,
+        );
+    }
 
     fn retire_creature_root(mut commands: Commands, mut map: ResMut<BevyEntityMap>) {
         apply_presentation_retirements(
@@ -5380,6 +5608,140 @@ mod presentation_retirement_tests {
         assert_eq!(map.len(), 0);
         assert!(!world.entities().contains(root));
         assert!(!world.entities().contains(child));
+    }
+
+    #[test]
+    fn retiring_selected_agent_rebinds_ui_to_smallest_surviving_mapped_agent() {
+        let fixture = fixture_world_with_seven_agents();
+        let objects = fixture.object_snapshots();
+        let retired = fixture_object(&objects, 1);
+        let survivor = fixture_object(&objects, 2);
+        let survivor_seven = fixture_object(&objects, 7);
+        let mut world = World::new();
+        world.insert_resource(BevyEntityMap::default());
+        world.insert_resource(AuthoritativeWorldObjects(objects));
+
+        let retired_entity = world
+            .spawn((SelectedVisibleEntity {
+                selection: selection_snapshot(&retired),
+            },))
+            .id();
+        let survivor_entity = world.spawn_empty().id();
+        let survivor_seven_entity = world.spawn_empty().id();
+        world
+            .resource_mut::<BevyEntityMap>()
+            .bind(retired_entity, retired.id)
+            .expect("retired fixture root must bind");
+        world
+            .resource_mut::<BevyEntityMap>()
+            .bind(survivor_entity, survivor.id)
+            .expect("survivor fixture root must bind");
+        world
+            .resource_mut::<BevyEntityMap>()
+            .bind(survivor_seven_entity, survivor_seven.id)
+            .expect("second survivor fixture root must bind");
+
+        world.insert_resource(SelectionResource {
+            stable_id: Some(retired.id),
+            local_entity: Some(retired_entity),
+        });
+        world.insert_resource(CreatureInspectorResource {
+            snapshot: Some(inspector_snapshot(&retired)),
+        });
+        world.insert_resource(CameraNavigationResource {
+            state: super::CameraNavigationState::top_down_default()
+                .with_follow_target(retired.id)
+                .expect("retired fixture follow target must be valid"),
+        });
+        world.insert_resource(PanelTarget(Some(retired.id.raw())));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(retire_selected_agent_and_repair_ui);
+        schedule.run(&mut world);
+
+        let map = world.resource::<BevyEntityMap>();
+        assert_eq!(map.bevy_entity(retired.id), None);
+        assert_eq!(map.bevy_entity(survivor.id), Some(survivor_entity));
+        assert_eq!(map.bevy_entity(survivor_seven.id), Some(survivor_seven_entity));
+        let selection = world.resource::<SelectionResource>();
+        assert_eq!(selection.stable_id, Some(survivor.id));
+        assert_eq!(selection.local_entity, Some(survivor_entity));
+        assert_eq!(
+            world.resource::<CameraNavigationResource>().state.follow_target,
+            Some(survivor.id)
+        );
+        assert_eq!(world.resource::<PanelTarget>().0, None);
+        assert!(world
+            .resource::<CreatureInspectorResource>()
+            .snapshot
+            .is_none());
+
+        let markers = world
+            .query::<(bevy::prelude::Entity, &SelectedVisibleEntity)>()
+            .iter(&world)
+            .collect::<Vec<_>>();
+        assert_eq!(markers.len(), 1);
+        assert_eq!(markers[0].0, survivor_entity);
+        assert_eq!(markers[0].1.selection.stable_id, survivor.id);
+        assert_eq!(markers[0].1.selection.position, survivor.position);
+    }
+
+    #[test]
+    fn retiring_last_mapped_agent_clears_ui_focus_without_fabricating_identity() {
+        let fixture = HeadlessScenarioBuilder::new(42)
+            .agent("retired", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .expect("last-agent retirement fixture world must build");
+        let objects = fixture.object_snapshots();
+        let retired = fixture_object(&objects, 1);
+        let mut world = World::new();
+        world.insert_resource(BevyEntityMap::default());
+        world.insert_resource(AuthoritativeWorldObjects(objects));
+        let retired_entity = world
+            .spawn((SelectedVisibleEntity {
+                selection: selection_snapshot(&retired),
+            },))
+            .id();
+        world
+            .resource_mut::<BevyEntityMap>()
+            .bind(retired_entity, retired.id)
+            .expect("last-agent fixture root must bind");
+        world.insert_resource(SelectionResource {
+            stable_id: Some(retired.id),
+            local_entity: Some(retired_entity),
+        });
+        world.insert_resource(CreatureInspectorResource {
+            snapshot: Some(inspector_snapshot(&retired)),
+        });
+        world.insert_resource(CameraNavigationResource {
+            state: super::CameraNavigationState::top_down_default()
+                .with_follow_target(retired.id)
+                .expect("last-agent follow target must be valid"),
+        });
+        world.insert_resource(PanelTarget(Some(retired.id.raw())));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(retire_last_selected_agent_and_repair_ui);
+        schedule.run(&mut world);
+
+        assert_eq!(world.resource::<BevyEntityMap>().len(), 0);
+        let selection = world.resource::<SelectionResource>();
+        assert_eq!(selection.stable_id, None);
+        assert_eq!(selection.local_entity, None);
+        assert_eq!(
+            world.resource::<CameraNavigationResource>().state,
+            super::CameraNavigationState::top_down_default()
+        );
+        assert!(world
+            .resource::<CreatureInspectorResource>()
+            .snapshot
+            .is_none());
+        assert_eq!(world.resource::<PanelTarget>().0, None);
+        assert!(world
+            .query::<&SelectedVisibleEntity>()
+            .iter(&world)
+            .next()
+            .is_none());
     }
 }
 
@@ -8460,11 +8822,15 @@ fn ca44a_sync_graphical_markers_from_live_world(
         }
     }
 
-    let selected = selection.map(|selection| selection.stable_id);
-    if let (Some(selected), Some(inspector)) = (selected, inspector) {
-        if let Some(object) = by_id.get(&selected.raw()) {
-            inspector.snapshot.selection.position = object.position;
-            inspector.snapshot.visual.position = object.position;
+    let selected = selection.and_then(|selection| selection.stable_id);
+    if let Some(selected) = selected {
+        if let Some(inspector) = inspector {
+            if let Some(snapshot) = inspector.snapshot.as_mut() {
+                if let Some(object) = by_id.get(&selected.raw()) {
+                    snapshot.selection.position = object.position;
+                    snapshot.visual.position = object.position;
+                }
+            }
         }
     }
 
@@ -9963,7 +10329,9 @@ fn handle_graphical_camera_selection_input(
         next = next.zoom_by(-0.25).unwrap_or(next);
     }
     if keyboard.just_pressed(KeyCode::KeyF) {
-        next = next.with_follow_target(selection.stable_id).unwrap_or(next);
+        if let Some(stable_id) = selection.stable_id {
+            next = next.with_follow_target(stable_id).unwrap_or(next);
+        }
     }
 
     camera.state = next;
@@ -10040,8 +10408,14 @@ fn handle_graphical_population_cycle_input(
     if !keyboard.just_pressed(KeyCode::Tab) {
         return;
     }
+    let Some(selected_stable_id) = selection.stable_id else {
+        runtime
+            .panel
+            .record_control_event("No selected creature available for Tab cycle.");
+        return;
+    };
     let Some(next_stable_id) =
-        ca18_cycle_selected_creature(&presentation.presentation, selection.stable_id)
+        ca18_cycle_selected_creature(&presentation.presentation, selected_stable_id)
     else {
         runtime
             .panel
@@ -10111,10 +10485,12 @@ pub fn apply_graphical_stable_selection(
     runtime: &mut GraphicalRuntimeControlsResource,
 ) -> Result<(), GameAppShellError> {
     let selection_snapshot = crate::select_visible_world_entity(presentation, stable_id)?;
-    selection.stable_id = stable_id;
+    selection.stable_id = Some(stable_id);
     selection.local_entity = local_entity;
     camera.state = camera.state.focus_on(selection_snapshot.position)?;
-    inspector.snapshot.selection = selection_snapshot;
+    if let Some(snapshot) = inspector.snapshot.as_mut() {
+        snapshot.selection = selection_snapshot;
+    }
     runtime
         .panel
         .record_control_event(format!("Mouse selected stable:{}.", stable_id.raw()));
@@ -10343,21 +10719,29 @@ fn update_graphical_selection_ring(
         (&GraphicalPlaygroundMarker, &Transform),
         Without<GraphicalSelectionRing>,
     >,
-    mut ring_query: bevy::prelude::Query<&mut Transform, With<GraphicalSelectionRing>>,
+    mut ring_query: bevy::prelude::Query<
+        (&mut Transform, &mut Visibility),
+        With<GraphicalSelectionRing>,
+    >,
 ) {
     let marker_position = markers
         .iter()
-        .find(|(marker, _)| marker.stable_id == selection.stable_id)
+        .find(|(marker, _)| Some(marker.stable_id) == selection.stable_id)
         .map(|(_, transform)| transform.translation);
-    let ring_position = marker_position.unwrap_or_else(|| {
-        let selected_position = inspector.snapshot.selection.position;
+    let snapshot_position = inspector.snapshot.as_ref().map(|snapshot| {
+        let selected_position = snapshot.selection.position;
         Vec3::new(
             selected_position.x * GRAPHICAL_WORLD_SCALE,
             selected_position.z * GRAPHICAL_WORLD_SCALE,
             0.2,
         )
     });
-    for mut ring in &mut ring_query {
+    for (mut ring, mut visibility) in &mut ring_query {
+        let Some(ring_position) = marker_position.or(snapshot_position) else {
+            *visibility = Visibility::Hidden;
+            continue;
+        };
+        *visibility = Visibility::Visible;
         ring.translation = Vec3::new(ring_position.x, ring_position.y, ring.translation.z);
     }
 }
@@ -10406,7 +10790,10 @@ fn update_true_25d_neurochemical_visual_feedback(
     if view_mode.mode != GraphicalPlaygroundViewMode::Player {
         return;
     }
-    let visual = &inspector.snapshot.visual;
+    let Some(inspector_snapshot) = inspector.snapshot.as_ref() else {
+        return;
+    };
+    let visual = &inspector_snapshot.visual;
     let base = true_25d_creature_visual_position(visual);
     let (gltf_contract_validated, gltf_contract_assets) = presentation
         .as_ref()
@@ -10420,7 +10807,7 @@ fn update_true_25d_neurochemical_visual_feedback(
         })
         .unwrap_or((false, 0));
     let endocrine = true_25d_endocrine_asset_feedback_from_snapshot(
-        &inspector.snapshot,
+        inspector_snapshot,
         &gpu.telemetry,
         runtime.panel.mind_tick,
         true,
@@ -10541,7 +10928,7 @@ fn update_true_25d_neurochemical_visual_feedback(
     }
     if let Some(feedback) = feedback.as_deref_mut() {
         *feedback =
-            true_25d_neurochemical_feedback_from_snapshot(&inspector.snapshot, &gpu.telemetry);
+            true_25d_neurochemical_feedback_from_snapshot(inspector_snapshot, &gpu.telemetry);
         feedback.cue_count = cue_count.max(feedback.cue_count);
         feedback.active_cue_count = active_cue_count;
     }
@@ -10918,7 +11305,9 @@ fn update_graphical_intent_feedback(
 
     for (marker, transform, true_25d) in &markers {
         let display_position = intent_feedback_display_position(transform, true_25d.is_some());
-        if marker.kind == WorldObjectKind::Agent && marker.stable_id == selection.stable_id {
+        if marker.kind == WorldObjectKind::Agent
+            && Some(marker.stable_id) == selection.stable_id
+        {
             creature_position = Some(display_position);
         }
         if Some(marker.stable_id) == target {
@@ -11074,7 +11463,15 @@ pub fn graphical_inspector_overlay_text(
     inspector: &CreatureInspectorResource,
     gpu: &GraphicalGpuTelemetryResource,
 ) -> String {
-    let snapshot = &inspector.snapshot;
+    let Some(snapshot) = inspector.snapshot.as_ref() else {
+        return format!(
+            "Creature Inspector\nStable ID: none\nNo creature selected\nGPU: {}",
+            compact_overlay_line(
+                &gpu.telemetry.selected_backend,
+                14,
+            )
+        );
+    };
     let action = snapshot
         .visual
         .selected_action_kind
@@ -11118,7 +11515,9 @@ pub fn graphical_inspector_overlay_text(
             "Read-only stable IDs\n",
             "Failure policy: stop learned actions"
         ),
-        selection.stable_id.raw(),
+        selection
+            .stable_id
+            .map_or_else(|| "none".to_string(), |id| id.raw().to_string()),
         sleep,
         snapshot.visual.animation.label(),
         snapshot.visual.expression.label(),
@@ -11216,7 +11615,12 @@ pub fn graphical_player_inspector_overlay_text(
     inspector: &CreatureInspectorResource,
     gpu: &GraphicalGpuTelemetryResource,
 ) -> String {
-    let snapshot = &inspector.snapshot;
+    let Some(snapshot) = inspector.snapshot.as_ref() else {
+        return format!(
+            "Creature\nnone\nGPU {}",
+            ca42a_gpu_status_chip(&gpu.telemetry)
+        );
+    };
     let action = snapshot
         .visual
         .selected_action_kind
@@ -11236,7 +11640,7 @@ pub fn graphical_player_inspector_overlay_text(
             "Act {}\n",
             "GPU {}"
         ),
-        if selection.stable_id == snapshot.visual.stable_id {
+        if selection.stable_id == Some(snapshot.visual.stable_id) {
             "active"
         } else {
             "creature"
@@ -11428,7 +11832,6 @@ pub fn feedback_cue_overlay_text(
     feedback: &crate::FeedbackPolishSummary,
     inspector: &CreatureInspectorResource,
 ) -> String {
-    let snapshot = &inspector.snapshot;
     let evidence = crate::Ca39RuntimeCueEvidence {
         selected_backend: "GpuAuthoritative".to_string(),
         unavailable_reason: None,
@@ -11439,6 +11842,13 @@ pub fn feedback_cue_overlay_text(
     };
     let drive_panel = crate::ca39_drive_audio_vfx_panel_text(feedback, &evidence)
         .unwrap_or_else(|_| "Drive Audio/VFX unavailable".to_string());
+    let Some(snapshot) = inspector.snapshot.as_ref() else {
+        return format!(
+            "Play Feedback (display-only)\n{}\n{}\nCreature: none\nBoundary: cues cannot act or mutate weights",
+            ca08_sensory_cue_panel_text(feedback, &GraphicalGpuRuntimeTelemetry::pending("N2048"),),
+            drive_panel,
+        );
+    };
     format!(
         concat!(
             "Play Feedback (display-only)\n",
