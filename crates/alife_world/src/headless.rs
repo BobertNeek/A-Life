@@ -243,6 +243,8 @@ pub struct HeadlessWorld {
     organism_registry: WorldOrganismRegistry,
     #[cfg(test)]
     injected_post_action_failure: bool,
+    #[cfg(test)]
+    injected_tick_late_failure_after_first_organism: bool,
 }
 
 /// Opaque, immutable lookup built once for one same-snapshot perception batch.
@@ -297,6 +299,8 @@ impl HeadlessWorld {
             organism_registry: WorldOrganismRegistry::default(),
             #[cfg(test)]
             injected_post_action_failure: false,
+            #[cfg(test)]
+            injected_tick_late_failure_after_first_organism: false,
         }
     }
 
@@ -385,11 +389,58 @@ impl HeadlessWorld {
         })
     }
 
+    pub fn try_advance_tick(&mut self) -> Result<Tick, ScaffoldContractError> {
+        let mut candidate = self.clone();
+        let next_tick = Tick::new(self.tick.raw().saturating_add(1));
+        let mut organism_ids = candidate
+            .organism_registry
+            .iter()
+            .filter(|record| record.lifecycle().is_alive())
+            .map(|record| record.organism_id())
+            .collect::<Vec<_>>();
+        organism_ids.sort_unstable_by_key(|organism_id| organism_id.raw());
+
+        let mut advanced_organism = false;
+        for organism_id in organism_ids {
+            let biology_tick = candidate
+                .organism_registry
+                .get(organism_id)
+                .ok_or(ScaffoldContractError::InvalidId)?
+                .biochemistry()
+                .tick;
+            match biology_tick {
+                tick if tick == self.tick => {
+                    candidate
+                        .organism_registry
+                        .advance_biology(organism_id, next_tick, BodyEventDelta::zero())
+                        .map_err(map_organism_registry_error)?;
+                    advanced_organism = true;
+                }
+                tick if tick == next_tick => {}
+                _ => return Err(ScaffoldContractError::NonMonotonicTick),
+            }
+
+            #[cfg(test)]
+            if advanced_organism && candidate.injected_tick_late_failure_after_first_organism {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+
+        candidate.tick = next_tick;
+        candidate.speech.retire_expired(candidate.tick);
+        let _ = candidate.advance_ecology_at_current_tick();
+        *self = candidate;
+        Ok(next_tick)
+    }
+
     pub fn advance_tick(&mut self) -> Tick {
-        self.tick = Tick::new(self.tick.raw().saturating_add(1));
-        self.speech.retire_expired(self.tick);
-        let _ = self.advance_ecology();
-        self.tick
+        self.try_advance_tick()
+            .expect("authoritative world tick scheduling failed")
+    }
+
+    #[cfg(test)]
+    fn inject_tick_late_failure_after_first_organism_for_test(&mut self) {
+        self.injected_tick_late_failure_after_first_organism = true;
     }
 
     pub fn emit_player_utterance(
@@ -1099,6 +1150,8 @@ impl HeadlessWorld {
             organism_registry,
             #[cfg(test)]
             injected_post_action_failure: false,
+            #[cfg(test)]
+            injected_tick_late_failure_after_first_organism: false,
         };
         if has_authoritative_organism_records {
             world.validate_complete_organism_bindings()?;
@@ -3832,5 +3885,232 @@ mod task_3_2a_tests {
             Some(&Tick::ZERO)
         );
         assert_eq!(retry.biology_after.tick, Tick(1));
+    }
+
+    const TASK_4_1_LOW_ORGANISM: OrganismId = OrganismId(7);
+    const TASK_4_1_HIGH_ORGANISM: OrganismId = OrganismId(19);
+
+    fn task_4_1_record(
+        organism_id: OrganismId,
+        world_entity_id: WorldEntityId,
+    ) -> WorldOrganismRecord {
+        let genome = alife_core::CreatureGenome::early_mammal_founder(
+            0xE10_4100 + organism_id.raw(),
+            alife_core::FoundationGeneticIdentity::new(
+                10,
+                1,
+                7,
+                alife_core::BrainCapacityClass::N512_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        WorldOrganismRecord::new(
+            organism_id,
+            world_entity_id,
+            genome,
+            phenotype,
+            biochemistry,
+            Tick::ZERO,
+        )
+        .unwrap()
+    }
+
+    fn task_4_1_world_with_registration_order(order: &[OrganismId]) -> HeadlessWorld {
+        let mut world = HeadlessScenarioBuilder::new(41_001)
+            .agent(
+                "agent-low",
+                TASK_4_1_LOW_ORGANISM,
+                Vec3f::ZERO,
+            )
+            .agent(
+                "agent-high",
+                TASK_4_1_HIGH_ORGANISM,
+                Vec3f::new(0.5, 0.0, 0.0),
+            )
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
+            .terrain_zone(
+                1,
+                "meadow",
+                TerrainZoneKind::Meadow,
+                Vec3f::ZERO,
+                3.0,
+                0.8,
+                0.0,
+            )
+            .track_resource("food", 1, 1, 4)
+            .build()
+            .unwrap();
+
+        let low_entity = world.entity_id("agent-low").unwrap();
+        let high_entity = world.entity_id("agent-high").unwrap();
+        for organism_id in order {
+            let world_entity_id = match *organism_id {
+                TASK_4_1_LOW_ORGANISM => low_entity,
+                TASK_4_1_HIGH_ORGANISM => high_entity,
+                _ => unreachable!("fixture only registers the two named organisms"),
+            };
+            world
+                .register_organism_record(task_4_1_record(*organism_id, world_entity_id))
+                .unwrap();
+        }
+        world
+    }
+
+    fn task_4_1_consume_and_prepare_resource(world: &mut HeadlessWorld) -> WorldEntityId {
+        let food = world.entity_id("food").unwrap();
+        let result = world
+            .apply_command(
+                &HeadlessWorldCommand::eat(TASK_4_1_LOW_ORGANISM, food).unwrap(),
+            )
+            .unwrap();
+        assert!(result.execution.succeeded);
+        assert_eq!(result.body_event.nutrition, 0.6);
+        assert!(world.entity(food).unwrap().is_consumed());
+
+        world
+            .emit_player_tokens(
+                None,
+                Vec3f::new(-1.0, 0.0, 0.0),
+                vec![alife_core::LanguageTokenId::new(42).unwrap()],
+            )
+            .unwrap();
+        food
+    }
+
+    fn task_4_1_record_state(
+        world: &HeadlessWorld,
+        organism_id: OrganismId,
+    ) -> WorldOrganismRecord {
+        world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn try_advance_tick_updates_all_registered_biology_and_resource_lifecycle_in_stable_order_and_rolls_back_late_failure(
+    ) {
+        let mut forward =
+            task_4_1_world_with_registration_order(&[
+                TASK_4_1_LOW_ORGANISM,
+                TASK_4_1_HIGH_ORGANISM,
+            ]);
+        let mut reverse =
+            task_4_1_world_with_registration_order(&[
+                TASK_4_1_HIGH_ORGANISM,
+                TASK_4_1_LOW_ORGANISM,
+            ]);
+        let forward_food = task_4_1_consume_and_prepare_resource(&mut forward);
+        let reverse_food = task_4_1_consume_and_prepare_resource(&mut reverse);
+
+        let before_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
+        let before_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        let expected_low = before_low
+            .biochemistry()
+            .advance(
+                Tick::new(1),
+                alife_core::BodyEventDelta::zero(),
+                before_low.phenotype(),
+            )
+            .unwrap();
+        let expected_high = before_high
+            .biochemistry()
+            .advance(
+                Tick::new(1),
+                alife_core::BodyEventDelta::zero(),
+                before_high.phenotype(),
+            )
+            .unwrap();
+
+        let mut late_failure = forward.clone();
+        let before_failure_tick = late_failure.tick();
+        let before_failure_low = task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM);
+        let before_failure_high = task_4_1_record_state(&late_failure, TASK_4_1_HIGH_ORGANISM);
+        let before_failure_objects = late_failure.object_snapshots();
+        let before_failure_ecology = late_failure.ecology().clone();
+        let before_failure_metrics = late_failure.ecology_metrics();
+        let before_failure_speech = late_failure.audible_utterances();
+        let before_failure_touched = late_failure.last_touched_entities.clone();
+        let before_failure_last_action = late_failure.last_action_result.clone();
+        let before_failure_signature = late_failure.canonical_signature_digest().unwrap();
+        late_failure.inject_tick_late_failure_after_first_organism_for_test();
+
+        assert_eq!(
+            late_failure.try_advance_tick(),
+            Err(ScaffoldContractError::InvalidDecisionEvidence)
+        );
+        assert_eq!(late_failure.tick(), before_failure_tick);
+        assert_eq!(
+            task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM),
+            before_failure_low
+        );
+        assert_eq!(
+            task_4_1_record_state(&late_failure, TASK_4_1_HIGH_ORGANISM),
+            before_failure_high
+        );
+        assert_eq!(late_failure.object_snapshots(), before_failure_objects);
+        assert_eq!(late_failure.ecology(), &before_failure_ecology);
+        assert_eq!(late_failure.ecology_metrics(), before_failure_metrics);
+        assert_eq!(late_failure.audible_utterances(), before_failure_speech);
+        assert_eq!(late_failure.last_touched_entities, before_failure_touched);
+        assert_eq!(late_failure.last_action_result, before_failure_last_action);
+        assert_eq!(
+            late_failure.canonical_signature_digest().unwrap(),
+            before_failure_signature
+        );
+
+        assert_eq!(forward.try_advance_tick().unwrap(), Tick::new(1));
+        assert_eq!(reverse.try_advance_tick().unwrap(), Tick::new(1));
+        assert_eq!(
+            forward
+                .organism_registry()
+                .get(TASK_4_1_LOW_ORGANISM)
+                .unwrap()
+                .biochemistry(),
+            &expected_low
+        );
+        assert_eq!(
+            forward
+                .organism_registry()
+                .get(TASK_4_1_HIGH_ORGANISM)
+                .unwrap()
+                .biochemistry(),
+            &expected_high
+        );
+        assert_ne!(expected_low.homeostasis, before_low.biochemistry().homeostasis);
+        assert_ne!(
+            expected_high.homeostasis,
+            before_high.biochemistry().homeostasis
+        );
+
+        for (world, food) in [(&forward, forward_food), (&reverse, reverse_food)] {
+            assert!(!world.entity(food).unwrap().is_consumed());
+            assert_eq!(world.entity(food).unwrap().nutrition, 0.6);
+            assert_eq!(world.ecology_metrics().resources_regrown, 1);
+            let resource = world
+                .ecology()
+                .resources
+                .iter()
+                .find(|resource| resource.object_id == food)
+                .unwrap();
+            assert_eq!(resource.consumed_at_tick, None);
+            assert_eq!(resource.last_regrown_tick, Some(Tick::new(1)));
+            assert!(!resource.low_salience_marker);
+        }
+
+        assert_eq!(
+            forward.canonical_signature_digest().unwrap(),
+            reverse.canonical_signature_digest().unwrap()
+        );
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            assert_eq!(
+                task_4_1_record_state(&forward, organism_id),
+                task_4_1_record_state(&reverse, organism_id)
+            );
+        }
     }
 }
