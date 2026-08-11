@@ -196,9 +196,10 @@ impl GpuAuthoritativeSession {
         cohort: &GpuCuratedResidencyCohort,
     ) -> GpuCuratedResidencyOutcome {
         if let Err(error) = self.ensure_neural_actions_available() {
-            return GpuCuratedResidencyOutcome::PreSubmitFailure {
+            self.fail_stop(GpuSessionFailStopCause::DeviceLost);
+            return GpuCuratedResidencyOutcome::Unknown {
                 error,
-                retryable: true,
+                fail_stop: true,
             };
         }
         let result = self.backend.replace_curated_cohort(cohort);

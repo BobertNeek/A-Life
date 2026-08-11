@@ -975,6 +975,7 @@ struct CuratedResidencySlotState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CuratedResidencyPortSnapshot {
+    backend_instance_id: NonZeroU64,
     generation: u64,
     admission_generation: u64,
     live_brains: u32,
@@ -993,6 +994,12 @@ struct CuratedResidencyPortSnapshot {
 trait CuratedResidencyTransactionPort {
     type StagedEntry;
 
+    fn classify_pre_submit(
+        &mut self,
+        error: ScaffoldContractError,
+    ) -> GpuCuratedResidencyOutcome {
+        curated_residency_pre_submit(error)
+    }
     fn snapshot(&mut self) -> Result<CuratedResidencyPortSnapshot, ScaffoldContractError>;
     fn prepare_entry(
         &mut self,
@@ -1018,7 +1025,6 @@ trait CuratedResidencyTransactionPort {
         receipt: &GpuCuratedResidencyReceipt,
     ) -> Result<(), ScaffoldContractError>;
     fn mark_unknown(&mut self);
-    fn staged_receipt(&self, staged: &Self::StagedEntry) -> GpuCuratedResidentReceipt;
 }
 
 fn curated_residency_pre_submit(
@@ -1109,15 +1115,17 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
 ) -> GpuCuratedResidencyOutcome {
     let snapshot = match port.snapshot() {
         Ok(snapshot) => snapshot,
-        Err(error) => return curated_residency_pre_submit(error),
+        Err(error) => return port.classify_pre_submit(error),
     };
     let class_id = match validate_curated_residency_cohort(cohort, &snapshot) {
         Ok(class_id) => class_id,
-        Err(error) => return curated_residency_pre_submit(error),
+        Err(error) => return port.classify_pre_submit(error),
     };
     let entry_count = match u32::try_from(cohort.ordered_entries.len()) {
         Ok(count) => count,
-        Err(_) => return curated_residency_pre_submit(ScaffoldContractError::NeuralBackendUnavailable),
+        Err(_) => {
+            return port.classify_pre_submit(ScaffoldContractError::NeuralBackendUnavailable);
+        }
     };
     if snapshot.live_brains.checked_add(entry_count).is_none_or(|live| live > snapshot.max_hot_brains)
         || snapshot
@@ -1134,7 +1142,7 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
             .checked_add(snapshot.transient_new_physical_bytes)
             .is_none_or(|bytes| bytes > snapshot.physical_ceiling_bytes)
     {
-        return curated_residency_pre_submit(ScaffoldContractError::NeuralBackendUnavailable);
+        return port.classify_pre_submit(ScaffoldContractError::NeuralBackendUnavailable);
     }
 
     let mut reservations = Vec::with_capacity(cohort.ordered_entries.len());
@@ -1144,7 +1152,9 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
         }
         let generation = match slot.generation_watermark.checked_add(1) {
             Some(generation) if generation != 0 => generation,
-            _ => return curated_residency_pre_submit(ScaffoldContractError::NeuralBackendUnavailable),
+            _ => {
+                return port.classify_pre_submit(ScaffoldContractError::NeuralBackendUnavailable);
+            }
         };
         reservations.push(CuratedResidencySlotState {
             reserved_generation: generation,
@@ -1155,7 +1165,7 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
         }
     }
     if reservations.len() != cohort.ordered_entries.len() {
-        return curated_residency_pre_submit(ScaffoldContractError::NeuralBackendUnavailable);
+        return port.classify_pre_submit(ScaffoldContractError::NeuralBackendUnavailable);
     }
 
     let mut staged = Vec::with_capacity(cohort.ordered_entries.len());
@@ -1167,17 +1177,17 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
     {
         match port.prepare_entry(entry_index, entry, reservation) {
             Ok(prepared) => staged.push(prepared),
-            Err(error) => return curated_residency_pre_submit(error),
+            Err(error) => return port.classify_pre_submit(error),
         }
     }
     for resident in &snapshot.old_residents {
         if let Err(error) = port.record_old_slot_scrub(resident) {
-            return curated_residency_pre_submit(error);
+            return port.classify_pre_submit(error);
         }
     }
     for prepared in &staged {
         if let Err(error) = port.record_new_slot_initialization(prepared) {
-            return curated_residency_pre_submit(error);
+            return port.classify_pre_submit(error);
         }
     }
     if let Err(error) = port.submit_once() {
@@ -1187,9 +1197,24 @@ fn run_curated_residency_transaction<P: CuratedResidencyTransactionPort>(
         return curated_residency_unknown(port, error);
     }
 
-    let ordered_residents = staged
+    let ordered_residents = cohort
+        .ordered_entries
         .iter()
-        .map(|prepared| port.staged_receipt(prepared))
+        .zip(reservations.iter())
+        .map(|(entry, reservation)| GpuCuratedResidentReceipt {
+            organism_id: entry.organism_id,
+            opaque_target_identity: entry.opaque_target_identity,
+            exact_phenotype_hash: entry.exact_phenotype_hash,
+            exact_foundation_hash: entry.exact_foundation_hash,
+            handle: GpuBrainHandle {
+                backend_instance_id: snapshot.backend_instance_id,
+                class_id,
+                slot: reservation.slot,
+                generation: reservation.reserved_generation,
+                organism_id: entry.organism_id,
+                phenotype_hash: entry.exact_phenotype_hash,
+            },
+        })
         .collect::<Vec<_>>();
     let receipt = GpuCuratedResidencyReceipt {
         generation_fingerprint: cohort.new_generation_fingerprint,
@@ -3061,7 +3086,11 @@ impl GpuClosedLoopBackend {
         cohort: &GpuCuratedResidencyCohort,
     ) -> GpuCuratedResidencyOutcome {
         if let Err(error) = self.ensure_ready() {
-            return curated_residency_pre_submit(error);
+            self.mark_device_lost();
+            return GpuCuratedResidencyOutcome::Unknown {
+                error,
+                fail_stop: true,
+            };
         }
         let mut port = GpuCuratedResidencyBackendPort::new(self);
         run_curated_residency_transaction(&mut port, cohort)
@@ -3660,7 +3689,7 @@ impl GpuClosedLoopBackend {
 }
 
 struct PreparedCuratedBackendEntry {
-    receipt: GpuCuratedResidentReceipt,
+    handle: GpuBrainHandle,
     class_id: BrainClassId,
     chunk_index: usize,
     upload: GpuFixedSlotUpload,
@@ -3670,6 +3699,7 @@ struct PreparedCuratedBackendEntry {
 struct GpuCuratedResidencyBackendPort<'a> {
     backend: &'a mut GpuClosedLoopBackend,
     encoder: Option<wgpu::CommandEncoder>,
+    staging_buffers: Vec<wgpu::Buffer>,
     submitted: bool,
 }
 
@@ -3678,6 +3708,7 @@ impl<'a> GpuCuratedResidencyBackendPort<'a> {
         Self {
             backend,
             encoder: None,
+            staging_buffers: Vec::new(),
             submitted: false,
         }
     }
@@ -3695,6 +3726,19 @@ impl<'a> GpuCuratedResidencyBackendPort<'a> {
 
 impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
     type StagedEntry = PreparedCuratedBackendEntry;
+
+    fn classify_pre_submit(
+        &mut self,
+        error: ScaffoldContractError,
+    ) -> GpuCuratedResidencyOutcome {
+        if self.backend.device_lost.load(Ordering::Acquire)
+            || !matches!(self.backend.state, GpuBackendState::Ready)
+        {
+            curated_residency_unknown(self, error)
+        } else {
+            curated_residency_pre_submit(error)
+        }
+    }
 
     fn snapshot(&mut self) -> Result<CuratedResidencyPortSnapshot, ScaffoldContractError> {
         self.backend.ensure_ready()?;
@@ -3759,6 +3803,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             }
         }
         Ok(CuratedResidencyPortSnapshot {
+            backend_instance_id: self.backend.backend_instance_id,
             generation: self.backend.curated_residency_generation,
             admission_generation: self.backend.admission.allocation_generation,
             live_brains: u32::try_from(old_residents.len())
@@ -3851,13 +3896,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             pending_eligibility_record: None,
         };
         Ok(PreparedCuratedBackendEntry {
-            receipt: GpuCuratedResidentReceipt {
-                organism_id: entry.organism_id,
-                opaque_target_identity: entry.opaque_target_identity,
-                exact_phenotype_hash: entry.exact_phenotype_hash,
-                exact_foundation_hash: entry.exact_foundation_hash,
-                handle,
-            },
+            handle,
             class_id: reservation.class_id,
             chunk_index: reservation.chunk_index,
             upload,
@@ -3924,11 +3963,12 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             .map_err(map_gpu_contract_error)?;
         bucket
             .buffers
-            .write_slot_upload(&self.backend.queue, &staged.upload)
-            .map_err(map_gpu_contract_error)?;
-        bucket
-            .buffers
-            .write_mutable_slot_upload(&self.backend.queue, &staged.upload)
+            .record_slot_upload(
+                &self.backend.device,
+                self.encoder.as_mut().expect("encoder was initialized"),
+                &staged.upload,
+                &mut self.staging_buffers,
+            )
             .map_err(map_gpu_contract_error)
     }
 
@@ -3984,7 +4024,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
                 .ordered_residents
                 .iter()
                 .zip(staged.iter())
-                .any(|(receipt_row, staged)| receipt_row != &staged.receipt)
+                .any(|(receipt_row, staged)| receipt_row.handle != staged.handle)
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
@@ -4078,7 +4118,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
                 );
             self.backend
                 .organisms
-                .insert(prepared.receipt.organism_id.raw(), prepared.receipt.handle);
+                .insert(prepared.handle.organism_id().raw(), prepared.handle);
         }
         self.backend.curated_residency_generation = self
             .backend
@@ -4101,10 +4141,6 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
 
     fn mark_unknown(&mut self) {
         self.backend.mark_device_lost();
-    }
-
-    fn staged_receipt(&self, staged: &Self::StagedEntry) -> GpuCuratedResidentReceipt {
-        staged.receipt.clone()
     }
 }
 
@@ -4508,8 +4544,16 @@ mod curated_founder_gpu_cutover_tests {
         assert_eq!(backend.snapshot(), old_snapshot);
         assert!(backend.snapshot().has_one_generation_only());
         assert_eq!(backend.port().submit_count(), 0);
+        assert_eq!(
+            backend.port().trace,
+            vec![
+                TestCuratedResidencyTrace::Prepare(0),
+                TestCuratedResidencyTrace::Prepare(1),
+            ]
+        );
 
         backend.clear_preparation_failure();
+        backend.clear_trace();
         let committed = backend.replace_curated_cohort(&cohort);
         let receipt = match committed {
             GpuCuratedResidencyOutcome::Committed(receipt) => receipt,
@@ -4522,6 +4566,20 @@ mod curated_founder_gpu_cutover_tests {
         assert_eq!(receipt.ordered_residents.len(), 2);
         assert_eq!(backend.port().submit_count(), 1);
         assert_eq!(backend.port().poll_count(), 1);
+        assert_eq!(
+            backend.port().trace,
+            vec![
+                TestCuratedResidencyTrace::Prepare(0),
+                TestCuratedResidencyTrace::Prepare(1),
+                TestCuratedResidencyTrace::Scrub(0),
+                TestCuratedResidencyTrace::Scrub(1),
+                TestCuratedResidencyTrace::Initialize(0),
+                TestCuratedResidencyTrace::Initialize(1),
+                TestCuratedResidencyTrace::Submit,
+                TestCuratedResidencyTrace::Poll,
+                TestCuratedResidencyTrace::Commit,
+            ]
+        );
 
         for (index, (entry, resident)) in cohort
             .ordered_entries
@@ -4542,7 +4600,7 @@ mod curated_founder_gpu_cutover_tests {
             assert_eq!(resident.handle.generation(), 1);
         }
         assert!(backend.snapshot().has_one_generation_only());
-        assert_eq!(backend.snapshot().admission_generation, 2);
+        assert_eq!(backend.snapshot(), old_snapshot);
     }
 
     fn test_phenotype(_seed: u64) -> BrainPhenotype {
@@ -4604,9 +4662,18 @@ mod curated_founder_gpu_cutover_tests {
         residents: Vec<GpuCuratedResidentReceipt>,
         slots: Vec<TestSlot>,
         fail_preparation_at: Option<usize>,
-        submit_count: usize,
-        poll_count: usize,
+        trace: Vec<TestCuratedResidencyTrace>,
         fail_stop: bool,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum TestCuratedResidencyTrace {
+        Prepare(usize),
+        Scrub(u32),
+        Initialize(usize),
+        Submit,
+        Poll,
+        Commit,
     }
 
     struct CuratedResidencyTestBackend {
@@ -4690,8 +4757,7 @@ mod curated_founder_gpu_cutover_tests {
                         },
                     ],
                     fail_preparation_at: None,
-                    submit_count: 0,
-                    poll_count: 0,
+                    trace: Vec::new(),
                     fail_stop: false,
                 },
             }
@@ -4735,6 +4801,10 @@ mod curated_founder_gpu_cutover_tests {
             self.port.fail_preparation_at = None;
         }
 
+        fn clear_trace(&mut self) {
+            self.port.trace.clear();
+        }
+
         fn replace_curated_cohort(
             &mut self,
             cohort: &GpuCuratedResidencyCohort,
@@ -4760,6 +4830,7 @@ mod curated_founder_gpu_cutover_tests {
     impl TestCuratedResidencyPort {
         fn snapshot(&self) -> Result<CuratedResidencyPortSnapshot, ScaffoldContractError> {
             Ok(CuratedResidencyPortSnapshot {
+                backend_instance_id: self.backend_instance_id,
                 generation: self.generation,
                 admission_generation: self.admission_generation,
                 live_brains: self.residents.len() as u32,
@@ -4790,16 +4861,22 @@ mod curated_founder_gpu_cutover_tests {
         }
 
         fn submit_count(&self) -> usize {
-            self.submit_count
+            self.trace
+                .iter()
+                .filter(|event| matches!(event, TestCuratedResidencyTrace::Submit))
+                .count()
         }
 
         fn poll_count(&self) -> usize {
-            self.poll_count
+            self.trace
+                .iter()
+                .filter(|event| matches!(event, TestCuratedResidencyTrace::Poll))
+                .count()
         }
     }
 
     impl CuratedResidencyTransactionPort for TestCuratedResidencyPort {
-        type StagedEntry = GpuCuratedResidentReceipt;
+        type StagedEntry = usize;
 
         fn snapshot(&mut self) -> Result<CuratedResidencyPortSnapshot, ScaffoldContractError> {
             TestCuratedResidencyPort::snapshot(self)
@@ -4808,89 +4885,58 @@ mod curated_founder_gpu_cutover_tests {
         fn prepare_entry(
             &mut self,
             entry_index: usize,
-            entry: &GpuCuratedResidencyEntry,
-            reservation: CuratedResidencySlotState,
+            _entry: &GpuCuratedResidencyEntry,
+            _reservation: CuratedResidencySlotState,
         ) -> Result<Self::StagedEntry, ScaffoldContractError> {
+            self.trace
+                .push(TestCuratedResidencyTrace::Prepare(entry_index));
             if self.fail_preparation_at == Some(entry_index) {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
-            Ok(GpuCuratedResidentReceipt {
-                organism_id: entry.organism_id,
-                opaque_target_identity: entry.opaque_target_identity,
-                exact_phenotype_hash: entry.exact_phenotype_hash,
-                exact_foundation_hash: entry.exact_foundation_hash,
-                handle: GpuBrainHandle {
-                    backend_instance_id: self.backend_instance_id,
-                    class_id: reservation.class_id,
-                    slot: reservation.slot,
-                    generation: reservation.reserved_generation,
-                    organism_id: entry.organism_id,
-                    phenotype_hash: entry.exact_phenotype_hash,
-                },
-            })
+            Ok(entry_index)
         }
 
         fn record_old_slot_scrub(
             &mut self,
-            _resident: &GpuCuratedResidentReceipt,
+            resident: &GpuCuratedResidentReceipt,
         ) -> Result<(), ScaffoldContractError> {
+            self.trace
+                .push(TestCuratedResidencyTrace::Scrub(resident.handle.slot()));
             Ok(())
         }
 
         fn record_new_slot_initialization(
             &mut self,
-            _staged: &Self::StagedEntry,
+            staged: &Self::StagedEntry,
         ) -> Result<(), ScaffoldContractError> {
+            self.trace
+                .push(TestCuratedResidencyTrace::Initialize(*staged));
             Ok(())
         }
 
         fn submit_once(&mut self) -> Result<(), ScaffoldContractError> {
-            self.submit_count += 1;
+            self.trace.push(TestCuratedResidencyTrace::Submit);
             Ok(())
         }
 
         fn poll_completion(&mut self) -> Result<(), ScaffoldContractError> {
-            self.poll_count += 1;
+            self.trace.push(TestCuratedResidencyTrace::Poll);
             Ok(())
         }
 
         fn commit(
             &mut self,
-            cohort: &GpuCuratedResidencyCohort,
-            reservations: &[CuratedResidencySlotState],
-            staged: Vec<Self::StagedEntry>,
+            _cohort: &GpuCuratedResidencyCohort,
+            _reservations: &[CuratedResidencySlotState],
+            _staged: Vec<Self::StagedEntry>,
             _receipt: &GpuCuratedResidencyReceipt,
         ) -> Result<(), ScaffoldContractError> {
-            for slot in &mut self.slots {
-                slot.owner = None;
-            }
-            for (slot, resident) in reservations.iter().zip(staged.iter()) {
-                let target = self
-                    .slots
-                    .get_mut(slot.slot as usize)
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                target.generation_watermark = slot.reserved_generation;
-                target.owner = Some(resident.organism_id);
-            }
-            self.residents = staged;
-            self.generation = self
-                .generation
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-            self.generation_fingerprint = cohort.new_generation_fingerprint;
-            self.admission_generation = self
-                .admission_generation
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            self.trace.push(TestCuratedResidencyTrace::Commit);
             Ok(())
         }
 
         fn mark_unknown(&mut self) {
             self.fail_stop = true;
-        }
-
-        fn staged_receipt(&self, staged: &Self::StagedEntry) -> GpuCuratedResidentReceipt {
-            staged.clone()
         }
     }
 }

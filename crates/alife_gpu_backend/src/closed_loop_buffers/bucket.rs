@@ -2813,6 +2813,80 @@ impl GpuFixedClassArenaBuffers {
         Ok(())
     }
 
+    pub(crate) fn record_slot_upload(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        upload: &GpuFixedSlotUpload,
+        staging: &mut Vec<wgpu::Buffer>,
+    ) -> Result<(), GpuClosedLoopError> {
+        use wgpu::util::DeviceExt;
+
+        if upload.arena_ownership_token != self.arena_ownership_token
+            || upload.ranges.arena_ownership_token != self.arena_ownership_token
+            || upload.ranges.slot >= self.slot_capacity
+            || upload.immutable_plan_words.len() as u64 * 4
+                != upload.ranges.immutable_plan_words.len() as u64 * 4
+            || upload.immutable_weight_words.len() as u64 * 4
+                != upload.ranges.immutable_weight_words.len() as u64 * 4
+            || upload.mutable_state_words.len() as u64 * 4
+                != upload.ranges.mutable_state_words.len() as u64 * 4
+        {
+            return Err(GpuClosedLoopError::StaleOrForeignHandle);
+        }
+
+        let mut record_copy = |label: &'static str,
+                               target: &wgpu::Buffer,
+                               target_offset: u64,
+                               contents: &[u8]| {
+            if contents.is_empty() {
+                return Ok(());
+            }
+            let size = u64::try_from(contents.len())
+                .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
+            let source = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents,
+                usage: wgpu::BufferUsages::COPY_SRC,
+            });
+            encoder.copy_buffer_to_buffer(&source, 0, target, target_offset, size);
+            staging.push(source);
+            Ok(())
+        };
+
+        record_copy(
+            "closed-loop-runtime-curated-brain-slot-upload",
+            &self.brain_slots,
+            upload.ranges.brain_slot_bytes.start,
+            bytemuck::bytes_of(upload.record()),
+        )?;
+        record_copy(
+            "closed-loop-runtime-curated-phenotype-identity-upload",
+            &self.phenotype_identities,
+            upload.ranges.identity_bytes.start,
+            bytemuck::bytes_of(upload.identity()),
+        )?;
+        record_copy(
+            "closed-loop-runtime-curated-immutable-plan-upload",
+            &self.immutable_plan_words,
+            u64::from(upload.ranges.immutable_plan_words.start) * 4,
+            bytemuck::cast_slice(&upload.immutable_plan_words),
+        )?;
+        record_copy(
+            "closed-loop-runtime-curated-immutable-weight-upload",
+            &self.immutable_weight_words,
+            u64::from(upload.ranges.immutable_weight_words.start) * 4,
+            bytemuck::cast_slice(&upload.immutable_weight_words),
+        )?;
+        record_copy(
+            "closed-loop-runtime-curated-mutable-state-upload",
+            &self.mutable_state_words,
+            u64::from(upload.ranges.mutable_state_words.start) * 4,
+            bytemuck::cast_slice(&upload.mutable_state_words),
+        )?;
+        Ok(())
+    }
+
     pub(crate) fn write_mutable_slot_upload(
         &self,
         queue: &wgpu::Queue,

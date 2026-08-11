@@ -1460,6 +1460,13 @@ impl GpuLiveBrainRuntime {
             Some(request),
         )?;
         self.note_curated_founder_durable_checkpoint(&result)?;
+        if self
+            .retained_curated_founder_gpu_residency_plan
+            .as_ref()
+            .is_some_and(|plan| matches!(plan.state, CuratedFounderGpuResidencyState::Pending))
+        {
+            self.commit_retained_curated_founder_gpu_residency()?;
+        }
         Ok(result)
     }
 
@@ -1476,13 +1483,19 @@ impl GpuLiveBrainRuntime {
             None,
         )?;
         self.note_curated_founder_durable_checkpoint(&result)?;
+        if self
+            .retained_curated_founder_gpu_residency_plan
+            .as_ref()
+            .is_some_and(|plan| matches!(plan.state, CuratedFounderGpuResidencyState::Pending))
+        {
+            self.commit_retained_curated_founder_gpu_residency()?;
+        }
         Ok(result)
     }
 
     /// Consumes the retained exact 4a projection only after every app-side
     /// resident and sidecar candidate is ready. The four maps publish only
     /// after the backend returns a completed residency receipt.
-    #[allow(dead_code)]
     pub(crate) fn commit_retained_curated_founder_gpu_residency(
         &mut self,
     ) -> Result<GpuCuratedResidencyReceipt, CuratedFounderResetRuntimeError> {
@@ -1501,6 +1514,7 @@ impl GpuLiveBrainRuntime {
         let mut candidate_memories = BTreeMap::new();
         let mut candidate_topologies = BTreeMap::new();
         let mut candidate_archive_birth_manifests = BTreeMap::new();
+        let mut candidate_handle_keys = Vec::with_capacity(plan.entries.len());
         let mut ordered_entries = Vec::with_capacity(plan.entries.len());
         let profile_identity = SensorProfileIdentity {
             profile_id: self.sensor_profile.into(),
@@ -1574,6 +1588,7 @@ impl GpuLiveBrainRuntime {
                     error: ScaffoldContractError::BrainOwnershipMismatch,
                 });
             }
+            candidate_handle_keys.push(raw);
             candidate_memories.insert(
                 raw,
                 Self::new_memory_sidecar(entry.organism_id, self.sensor_profile).map_err(
@@ -1608,20 +1623,7 @@ impl GpuLiveBrainRuntime {
         };
         let outcome = self.backend.replace_curated_cohort(&cohort);
         let receipt = match outcome {
-            GpuCuratedResidencyOutcome::Committed(receipt)
-                if receipt.submission_completed
-                    && receipt.generation_fingerprint == plan.fingerprint
-                    && receipt.ordered_residents.len() == plan.entries.len() => receipt,
-            GpuCuratedResidencyOutcome::Committed(_) => {
-                self.backend
-                    .fail_stop(alife_runtime::GpuSessionFailStopCause::DeviceLost);
-                if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
-                    plan.state = CuratedFounderGpuResidencyState::Unknown;
-                }
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown {
-                    error: ScaffoldContractError::BrainOwnershipMismatch,
-                });
-            }
+            GpuCuratedResidencyOutcome::Committed(receipt) => receipt,
             GpuCuratedResidencyOutcome::PreSubmitFailure { error, .. } => {
                 return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error });
             }
@@ -1632,44 +1634,10 @@ impl GpuLiveBrainRuntime {
                 return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown { error });
             }
         };
-        for (entry, resident) in cohort
-            .ordered_entries
-            .iter()
-            .zip(receipt.ordered_residents.iter())
-        {
-            if resident.organism_id != entry.organism_id
-                || resident.opaque_target_identity != entry.opaque_target_identity
-                || resident.exact_phenotype_hash != entry.exact_phenotype_hash
-                || resident.exact_foundation_hash != entry.exact_foundation_hash
-                || resident.handle.organism_id() != entry.organism_id
-                || resident.handle.phenotype_hash() != entry.exact_phenotype_hash
-            {
-                self.backend
-                    .fail_stop(alife_runtime::GpuSessionFailStopCause::DeviceLost);
-                if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
-                    plan.state = CuratedFounderGpuResidencyState::Unknown;
-                }
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown {
-                    error: ScaffoldContractError::BrainOwnershipMismatch,
-                });
-            }
-        }
-        let mut candidate_handles = BTreeMap::new();
-        for resident in &receipt.ordered_residents {
-            if candidate_handles
-                .insert(resident.organism_id.raw(), resident.handle)
-                .is_some()
-            {
-                self.backend
-                    .fail_stop(alife_runtime::GpuSessionFailStopCause::DeviceLost);
-                if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
-                    plan.state = CuratedFounderGpuResidencyState::Unknown;
-                }
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown {
-                    error: ScaffoldContractError::BrainOwnershipMismatch,
-                });
-            }
-        }
+        let candidate_handles = candidate_handle_keys
+            .into_iter()
+            .zip(receipt.ordered_residents.iter().map(|resident| resident.handle))
+            .collect();
         self.handles = candidate_handles;
         self.residents = candidate_residents;
         self.memories = candidate_memories;
