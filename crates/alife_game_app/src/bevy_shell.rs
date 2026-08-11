@@ -705,16 +705,26 @@ impl Default for ProductionCuratedFounderResetResultResource {
 }
 
 #[cfg(feature = "gpu-runtime")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Resource)]
-struct ProductionGpuBrainTickScheduleResource {
+#[derive(Debug, Clone, PartialEq, Eq, Resource)]
+pub(crate) struct ProductionGpuBrainTickScheduleResource {
     startup_render_frames_remaining: u8,
+    playback: RuntimePlaybackState,
+    run_speed_ticks: u32,
+    step_pending: bool,
+    scheduler: crate::DoubleBufferedGraphicalScheduler,
+    failed: bool,
 }
 
 #[cfg(feature = "gpu-runtime")]
 impl ProductionGpuBrainTickScheduleResource {
-    const fn new(startup_render_frames: u8) -> Self {
+    fn new(startup_render_frames: u8) -> Self {
         Self {
             startup_render_frames_remaining: startup_render_frames,
+            playback: RuntimePlaybackState::Running,
+            run_speed_ticks: 1,
+            step_pending: false,
+            scheduler: crate::DoubleBufferedGraphicalScheduler::default(),
+            failed: false,
         }
     }
 
@@ -726,10 +736,60 @@ impl ProductionGpuBrainTickScheduleResource {
             false
         }
     }
+
+    pub(crate) fn toggle_playback(&mut self) {
+        self.playback = match self.playback {
+            RuntimePlaybackState::Paused => RuntimePlaybackState::Running,
+            RuntimePlaybackState::Running => RuntimePlaybackState::Paused,
+            RuntimePlaybackState::ShutdownRequested => RuntimePlaybackState::ShutdownRequested,
+        };
+    }
+
+    pub(crate) fn queue_step(&mut self) {
+        self.playback = RuntimePlaybackState::Paused;
+        self.step_pending = true;
+    }
+
+    pub(crate) fn set_running_speed(&mut self, ticks: u32) {
+        self.run_speed_ticks = ticks.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
+        self.playback = RuntimePlaybackState::Running;
+    }
+
+    pub(crate) fn is_paused(&self) -> bool {
+        self.playback == RuntimePlaybackState::Paused
+    }
+
+    pub(crate) fn speed_ticks(&self) -> u32 {
+        self.run_speed_ticks
+    }
 }
 
 #[cfg(feature = "gpu-runtime")]
 const PRODUCTION_GPU_STARTUP_RENDER_FRAMES: u8 = 12;
+
+#[cfg(feature = "gpu-runtime")]
+fn production_tick_decision(
+    playback: RuntimePlaybackState,
+    step_pending: bool,
+    scheduled_ticks: u32,
+) -> (u32, bool) {
+    if step_pending {
+        (1, true)
+    } else if playback == RuntimePlaybackState::Running {
+        (scheduled_ticks, false)
+    } else {
+        (0, false)
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn mark_production_gpu_authority_unavailable(
+    authority: &mut ProductionGpuBrainAuthorityResource,
+    reason: impl Into<String>,
+) {
+    authority.telemetry.authoritative = false;
+    authority.telemetry.unavailable_reason = Some(reason.into());
+}
 
 #[cfg(feature = "gpu-runtime")]
 fn prepare_production_gpu_runtime_launch(
@@ -895,6 +955,7 @@ fn repair_presentation_focus_after_retirements(
 
 #[cfg(feature = "gpu-runtime")]
 fn tick_production_gpu_brain(
+    time: Res<Time>,
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut authority: ResMut<ProductionGpuBrainAuthorityResource>,
     mut schedule: ResMut<ProductionGpuBrainTickScheduleResource>,
@@ -909,47 +970,85 @@ fn tick_production_gpu_brain(
         (Entity, &SelectedVisibleEntity),
     >,
 ) {
+    if schedule.failed {
+        return;
+    }
     if !schedule.take_dispatch_permit() {
         return;
     }
 
-    let tick_result = runtime.runtime.tick();
-    let retired_ids = runtime.runtime.take_presentation_retirements();
-    apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
-    let world = runtime.runtime.world_snapshot();
-    let authoritative_objects = world.object_snapshots();
-
-    if !retired_ids.is_empty() {
-        repair_presentation_focus_after_retirements(
-            &mut commands,
-            &map,
-            &retired_ids,
-            &authoritative_objects,
-            selection.as_deref_mut(),
-            inspector.as_deref_mut(),
-            camera.as_deref_mut(),
-            controls
-                .as_deref_mut()
-                .map(|controls| &mut controls.panel.target_entity),
-            &selected_markers,
-        );
+    let playback = schedule.playback;
+    let speed = schedule.run_speed_ticks;
+    let plan = match schedule
+        .scheduler
+        .observe_render_frame(time.delta_secs(), playback, speed)
+    {
+        Ok(plan) => plan,
+        Err(error) => {
+            schedule.failed = true;
+            mark_production_gpu_authority_unavailable(
+                &mut authority,
+                format!("production scheduler failed: {error}"),
+            );
+            return;
+        }
+    };
+    let (ticks_to_run, consume_step) =
+        production_tick_decision(playback, schedule.step_pending, plan.ticks_to_run);
+    if consume_step {
+        schedule.step_pending = false;
     }
 
-    match tick_result {
-        Ok(tick_summaries) => {
-            match presentation.try_publish_successful_tick(tick_summaries, &world) {
-                Ok(()) => authority.telemetry = runtime.runtime.authority_telemetry(),
-                Err(error) => {
-                    authority.telemetry.authoritative = false;
-                    authority.telemetry.unavailable_reason = Some(format!(
-                        "live presentation frame publication failed: {error:?}"
-                    ));
-                }
+    for _ in 0..ticks_to_run {
+        let tick_summaries = match runtime.runtime.tick() {
+            Ok(tick_summaries) => tick_summaries,
+            Err(error) => {
+                schedule.failed = true;
+                mark_production_gpu_authority_unavailable(&mut authority, error.to_string());
+                return;
             }
+        };
+        if let Err(error) = schedule.scheduler.record_executed_ticks(1) {
+            schedule.failed = true;
+            mark_production_gpu_authority_unavailable(
+                &mut authority,
+                format!("production scheduler accounting failed: {error}"),
+            );
+            return;
         }
-        Err(error) => {
-            authority.telemetry.authoritative = false;
-            authority.telemetry.unavailable_reason = Some(error.to_string());
+        let retired_ids = runtime.runtime.take_presentation_retirements();
+        apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
+        let world = runtime.runtime.world_snapshot();
+        let authoritative_objects = world.object_snapshots();
+
+        if !retired_ids.is_empty() {
+            repair_presentation_focus_after_retirements(
+                &mut commands,
+                &map,
+                &retired_ids,
+                &authoritative_objects,
+                selection.as_deref_mut(),
+                inspector.as_deref_mut(),
+                camera.as_deref_mut(),
+                controls
+                    .as_deref_mut()
+                    .map(|controls| &mut controls.panel.target_entity),
+                &selected_markers,
+            );
+        }
+
+        match presentation.try_publish_successful_tick(tick_summaries, &world) {
+            Ok(()) => {
+                authority.telemetry = runtime.runtime.authority_telemetry();
+            }
+            Err(error) => {
+                schedule.failed = true;
+                mark_production_gpu_authority_unavailable(
+                    &mut authority,
+                    format!("live presentation frame publication failed: {error:?}"),
+                );
+                return;
+            }
         }
     }
 }
@@ -5438,11 +5537,74 @@ mod live_brain_presentation_frame_tests {
 #[cfg(all(test, feature = "gpu-runtime"))]
 mod production_gpu_tick_schedule_tests {
     use super::{
-        tick_production_gpu_brain, LiveBrainPresentationFrameResource,
-        ProductionGpuBrainTickScheduleResource,
+        production_tick_decision, tick_production_gpu_brain, LiveBrainPresentationFrameResource,
+        ProductionGpuBrainTickScheduleResource, RuntimePlaybackState,
     };
     use bevy::ecs::system::{IntoSystem, System};
     use bevy::prelude::World;
+
+    #[test]
+    fn production_tick_decision_is_truthful() {
+        assert_eq!(
+            production_tick_decision(RuntimePlaybackState::Paused, false, 4),
+            (0, false)
+        );
+        assert_eq!(
+            production_tick_decision(RuntimePlaybackState::Paused, true, 4),
+            (1, true)
+        );
+        assert_eq!(
+            production_tick_decision(RuntimePlaybackState::Running, false, 3),
+            (3, false)
+        );
+    }
+
+    #[test]
+    fn production_scheduler_pause_step_and_speed_are_deterministic() {
+        let mut schedule = ProductionGpuBrainTickScheduleResource::new(0);
+        schedule.playback = RuntimePlaybackState::Paused;
+        let accumulator_before = schedule.scheduler.accumulator_micros;
+        let paused = schedule
+            .scheduler
+            .observe_render_frame(1.0, schedule.playback, schedule.run_speed_ticks)
+            .expect("paused production frame must be schedulable");
+        assert_eq!(paused.ticks_to_run, 0);
+        assert_eq!(
+            schedule.scheduler.accumulator_micros,
+            accumulator_before
+        );
+
+        schedule.step_pending = true;
+        let (step_ticks, consume_step) = production_tick_decision(
+            schedule.playback,
+            schedule.step_pending,
+            paused.ticks_to_run,
+        );
+        assert_eq!(step_ticks, 1);
+        assert!(consume_step);
+        if consume_step {
+            schedule.step_pending = false;
+        }
+        assert_eq!(schedule.playback, RuntimePlaybackState::Paused);
+        assert!(!schedule.step_pending);
+
+        let mut one_x = ProductionGpuBrainTickScheduleResource::new(0);
+        let mut two_x = ProductionGpuBrainTickScheduleResource::new(0);
+        let one_x_ticks = one_x
+            .scheduler
+            .observe_render_frame(0.06, RuntimePlaybackState::Running, 1)
+            .expect("1x production frame must be schedulable")
+            .ticks_to_run;
+        let two_x_ticks = two_x
+            .scheduler
+            .observe_render_frame(0.06, RuntimePlaybackState::Running, 2)
+            .expect("2x production frame must be schedulable")
+            .ticks_to_run;
+        assert_eq!(
+            two_x_ticks,
+            (one_x_ticks * 2).min(two_x.scheduler.config.max_catch_up_ticks_per_frame)
+        );
+    }
 
     #[test]
     fn first_gpu_world_tick_waits_for_the_startup_render_barrier() {

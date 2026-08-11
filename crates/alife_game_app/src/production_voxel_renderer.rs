@@ -4718,7 +4718,7 @@ fn sync_v0_player_control_strip(
         "Free camera"
     };
     let text = format!(
-        "{}  {:.1}x  |  {}  |  LMB Select  O Orbit  I Isometric  F Follow  R Recover view  Space Pause",
+        "{}  {:.1}x  |  {}  |  LMB Select  O Orbit  I Isometric  F Follow  R Recover  Space/P Pause  N Step  [ ] or 1/2/3 Speed",
         playback, ux.settings.simulation_speed, follow_state
     );
     for mut strip in &mut strips {
@@ -4839,6 +4839,9 @@ fn handle_fvr05_production_ux_input(
     #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
         bevy::prelude::NonSendMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
     >,
+    #[cfg(feature = "gpu-runtime")] mut schedule: Option<
+        ResMut<crate::bevy_shell::ProductionGpuBrainTickScheduleResource>,
+    >,
 ) {
     #[cfg(feature = "gpu-runtime")]
     if conversation
@@ -4848,12 +4851,27 @@ fn handle_fvr05_production_ux_input(
         return;
     }
     ux.update_selection_snapshot(selection.selected, follow.enabled);
+    #[cfg(feature = "gpu-runtime")]
+    if let Some(schedule) = schedule.as_deref() {
+        ux.settings.paused = schedule.is_paused();
+        ux.settings.simulation_speed = schedule.speed_ticks() as f32;
+    }
     if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyP) {
-        ux.settings.paused = !ux.settings.paused;
-        ux.last_action = if ux.settings.paused {
-            "Paused production view".to_string()
+        #[cfg(feature = "gpu-runtime")]
+        if let Some(schedule) = schedule.as_deref_mut() {
+            schedule.toggle_playback();
+            ux.settings.paused = schedule.is_paused();
         } else {
-            "Resumed production view".to_string()
+            ux.settings.paused = !ux.settings.paused;
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            ux.settings.paused = !ux.settings.paused;
+        }
+        ux.last_action = if ux.settings.paused {
+            "Paused production simulation".to_string()
+        } else {
+            "Resumed production simulation".to_string()
         };
     }
     if keyboard.just_pressed(KeyCode::Tab) {
@@ -4876,12 +4894,55 @@ fn handle_fvr05_production_ux_input(
         ux.last_action = format!("Overlays visible: {}", ux.settings.show_overlays);
     }
     if keyboard.just_pressed(KeyCode::BracketLeft) {
-        ux.settings.simulation_speed = (ux.settings.simulation_speed * 0.5).clamp(0.10, 5.0);
+        #[cfg(feature = "gpu-runtime")]
+        if let Some(schedule) = schedule.as_deref_mut() {
+            let speed = schedule.speed_ticks().saturating_sub(1);
+            schedule.set_running_speed(speed);
+            ux.settings.paused = schedule.is_paused();
+            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
+        } else {
+            ux.settings.simulation_speed =
+                (ux.settings.simulation_speed * 0.5).clamp(0.10, 5.0);
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            ux.settings.simulation_speed =
+                (ux.settings.simulation_speed * 0.5).clamp(0.10, 5.0);
+        }
         ux.last_action = format!("Simulation speed {:.2}x", ux.settings.simulation_speed);
     }
     if keyboard.just_pressed(KeyCode::BracketRight) {
-        ux.settings.simulation_speed = (ux.settings.simulation_speed * 2.0).clamp(0.10, 5.0);
+        #[cfg(feature = "gpu-runtime")]
+        if let Some(schedule) = schedule.as_deref_mut() {
+            let speed = schedule.speed_ticks().saturating_add(1);
+            schedule.set_running_speed(speed);
+            ux.settings.paused = schedule.is_paused();
+            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
+        } else {
+            ux.settings.simulation_speed =
+                (ux.settings.simulation_speed * 2.0).clamp(0.10, 5.0);
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        {
+            ux.settings.simulation_speed =
+                (ux.settings.simulation_speed * 2.0).clamp(0.10, 5.0);
+        }
         ux.last_action = format!("Simulation speed {:.2}x", ux.settings.simulation_speed);
+    }
+    #[cfg(feature = "gpu-runtime")]
+    for (key, speed) in [
+        (KeyCode::Digit1, 1),
+        (KeyCode::Digit2, 2),
+        (KeyCode::Digit3, 3),
+    ] {
+        if keyboard.just_pressed(key) {
+            if let Some(schedule) = schedule.as_deref_mut() {
+                schedule.set_running_speed(speed);
+                ux.settings.paused = schedule.is_paused();
+                ux.settings.simulation_speed = schedule.speed_ticks() as f32;
+                ux.last_action = format!("Simulation speed {:.0}x", ux.settings.simulation_speed);
+            }
+        }
     }
     if keyboard.just_pressed(KeyCode::KeyS) {
         #[cfg(feature = "gpu-runtime")]
@@ -4898,13 +4959,23 @@ fn handle_fvr05_production_ux_input(
     }
     if keyboard.just_pressed(KeyCode::KeyN) {
         #[cfg(feature = "gpu-runtime")]
-        if let Some(runtime) = gpu_runtime.as_mut() {
+        if let Some(schedule) = schedule.as_deref_mut() {
+            schedule.queue_step();
+            ux.settings.paused = schedule.is_paused();
+            ux.settings.simulation_speed = schedule.speed_ticks() as f32;
+            ux.last_action = "Queued one production simulation step".to_string();
+        } else if let Some(runtime) = gpu_runtime.as_mut() {
             ux.write_gpu_runtime_save(true, &mut runtime.runtime);
         } else {
             ux.write_runtime_save(true);
         }
         #[cfg(not(feature = "gpu-runtime"))]
         ux.write_runtime_save(true);
+        #[cfg(feature = "gpu-runtime")]
+        if schedule.is_none() && ux.last_error.is_none() {
+            ux.persist_ui_settings();
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
         if ux.last_error.is_none() {
             ux.persist_ui_settings();
         }
@@ -4927,8 +4998,17 @@ fn handle_fvr05_production_ux_input(
         ux.settings.show_overlays = false;
         ux.last_action = "Recovered the player view".to_string();
     }
-    if let Some(kind) = fvr05_overlay_key_pressed(&keyboard) {
-        ux.toggle_overlay(kind);
+    #[cfg(feature = "gpu-runtime")]
+    let scheduler_speed_key = schedule.is_some()
+        && [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3]
+            .into_iter()
+            .any(|key| keyboard.just_pressed(key));
+    #[cfg(not(feature = "gpu-runtime"))]
+    let scheduler_speed_key = false;
+    if !scheduler_speed_key {
+        if let Some(kind) = fvr05_overlay_key_pressed(&keyboard) {
+            ux.toggle_overlay(kind);
+        }
     }
 }
 
@@ -5092,7 +5172,7 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P  play-pause: {}\nS save world + UX\nL load saved world\nN create world artifact\nM menu | G settings | H overlays\nTab inspector | Q preferred profile\n[ ] speed  1-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nSTATS (REAL RUNTIME)\ncreatures {}\nchunks loaded {}\nchunks resident {}\ntiles sampled {}\nmesher {} quads {} merge {:.2}x\nremesh budget {} dirty {} cached {} skipped {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1/2/3 speed\n[ ] adjust speed\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\n4-9/B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nSIM SPEED\n{:.2}x\n\nSTATS (REAL RUNTIME)\ncreatures {}\nchunks loaded {}\nchunks resident {}\ntiles sampled {}\nmesher {} quads {} merge {:.2}x\nremesh budget {} dirty {} cached {} skipped {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
         if ux.settings.paused { "paused" } else { "running" },
         ux.settings.follow_selection,
         ux.settings.pause_on_focus_loss,
