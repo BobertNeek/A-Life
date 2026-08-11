@@ -1345,6 +1345,37 @@ fn derive_lineage_run_id(published: &GpuLoadedSaveManifest) -> String {
     )
 }
 
+fn validate_replacement_policy(
+    persisted_policy: alife_core::PolicyBackend,
+    persisted_seed: u64,
+    persisted_brain_class: BrainScaleTier,
+    expected_seed: u64,
+    expected_brain_class: BrainScaleTier,
+) -> Result<(), GameAppShellError> {
+    if persisted_policy != alife_core::PolicyBackend::NeuralClosedLoopGpu
+        || persisted_seed != expected_seed
+        || persisted_brain_class != expected_brain_class
+    {
+        return Err(GameAppShellError::InvalidGraphicalLaunch {
+            message: "GPU neural runtime replacement requires persisted GPU policy and matching live seed and brain class",
+        });
+    }
+    Ok(())
+}
+
+fn commit_staged_runtime<T, E, F>(
+    live: &mut T,
+    staged: Result<T, E>,
+    commit: F,
+) -> Result<(), E>
+where
+    F: FnOnce(&mut T, T),
+{
+    let candidate = staged?;
+    commit(live, candidate);
+    Ok(())
+}
+
 fn attach_lineage_archive_with_owned_authorities(
     checkpoint_durability: Option<&GpuLiveCheckpointDurability>,
     sensor_profile: SensorProfile,
@@ -1593,8 +1624,37 @@ impl GpuLiveBrainRuntime {
                 message: "GPU neural runtime requires matching persisted neural policy and seed",
             });
         }
+        Self::restore_loaded_save(
+            backend,
+            durable_manifest,
+            loaded_save,
+            config.deterministic_seed,
+            config.brain_class,
+        )
+    }
+
+    fn restore_loaded_save(
+        backend: GpuClosedLoopBackend,
+        durable_manifest: GpuDurableSaveManifest,
+        loaded_save: GpuLoadedSaveManifest,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+    ) -> Result<Self, GameAppShellError> {
+        let save = &loaded_save.save;
+        if save.config.deterministic_seed != save.deterministic_seed {
+            return Err(GameAppShellError::InvalidGraphicalLaunch {
+                message: "GPU neural runtime requires matching persisted configuration and save seed",
+            });
+        }
+        validate_replacement_policy(
+            save.config.brain_policy.policy,
+            save.deterministic_seed,
+            save.config.brain_class,
+            deterministic_seed,
+            brain_class,
+        )?;
         let world = save.restore_headless_world()?;
-        let store = GpuCheckpointAssetStore::new(launch.asset_root.clone())?;
+        let store = GpuCheckpointAssetStore::new(durable_manifest.asset_root().to_path_buf())?;
         let checkpoints = save
             .creatures
             .iter()
@@ -1608,8 +1668,8 @@ impl GpuLiveBrainRuntime {
         let mut runtime = Self::restore_with_checkpoints(
             backend,
             world,
-            config.deterministic_seed,
-            config.brain_class,
+            deterministic_seed,
+            brain_class,
             &store,
             &save.assets,
             &checkpoints,
@@ -1618,7 +1678,7 @@ impl GpuLiveBrainRuntime {
             if !runtime.residents.contains_key(&creature.organism_id.raw()) {
                 return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
             }
-            if creature.brain_class != config.brain_class {
+            if creature.brain_class != brain_class {
                 return Err(ScaffoldContractError::PhenotypeCompile.into());
             }
         }
@@ -1637,6 +1697,58 @@ impl GpuLiveBrainRuntime {
             runtime.persist_sleep_checkpoint_boundary()?;
         }
         Ok(runtime)
+    }
+
+    /// Stages a complete durable save in a separate GPU backend, then commits
+    /// the replacement only after the world, residents, sidecars, and save
+    /// boundary all validate. The caller owns creation and adapter selection
+    /// for the staging backend.
+    pub fn replace_from_durable_save(
+        &mut self,
+        backend: GpuClosedLoopBackend,
+        durable_manifest: GpuDurableSaveManifest,
+    ) -> Result<(), GameAppShellError> {
+        let loaded_save = durable_manifest.load()?;
+        let deterministic_seed = self.deterministic_seed;
+        let brain_class = self.brain_class;
+        let preserve_lineage_archive = self.lineage_library.is_some();
+        let homeostatic_parameters = self.homeostatic_parameters.clone();
+        let schedule_sleep = self.schedule_sleep;
+        let birth_template_organism_id = self.birth_template_organism_id;
+        let observe_sidecars = self.observe_sidecars;
+        let retain_sealed_patch_history = self.retain_sealed_patch_history;
+        let archive_learned_capture_policy = self.archive_learned_capture_policy.clone();
+        let staged = Self::restore_loaded_save(
+            backend,
+            durable_manifest,
+            loaded_save,
+            deterministic_seed,
+            brain_class,
+        )
+        .map(|mut candidate| {
+            candidate.homeostatic_parameters = homeostatic_parameters;
+            candidate.schedule_sleep = schedule_sleep;
+            candidate.birth_template_organism_id = birth_template_organism_id;
+            candidate.observe_sidecars = observe_sidecars;
+            candidate.retain_sealed_patch_history = retain_sealed_patch_history;
+            candidate.archive_learned_capture_policy = archive_learned_capture_policy;
+            candidate.lineage_run_id = if preserve_lineage_archive {
+                candidate
+                    .checkpoint_durability
+                    .as_ref()
+                    .map(|durability| derive_lineage_run_id(&durability.published))
+            } else {
+                None
+            };
+            candidate.archive_birth_manifests.clear();
+            candidate
+        });
+
+        commit_staged_runtime(self, staged, |live, candidate| {
+            let lineage_library = live.lineage_library.take();
+            let _old_runtime = std::mem::replace(live, candidate);
+            live.lineage_library = lineage_library;
+        })
     }
 
     fn build_live_agent_reset_request(
@@ -5067,6 +5179,52 @@ mod tests {
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
         HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
     };
+
+    #[test]
+    fn failed_staged_runtime_commit_leaves_live_state_unchanged() {
+        let mut live = (7_u64, BTreeMap::from([(11_u64, "old")]));
+        let before = live.clone();
+        let result = commit_staged_runtime(
+            &mut live,
+            Err("checkpoint staging failed"),
+            |live, candidate| *live = candidate,
+        );
+
+        assert_eq!(result, Err("checkpoint staging failed"));
+        assert_eq!(live, before);
+    }
+
+    #[test]
+    fn replacement_rejects_persisted_policy_seed_or_brain_class_mismatch() {
+        for (policy, seed, brain_class) in [
+            (
+                alife_core::PolicyBackend::HeuristicBaseline,
+                7_u64,
+                BrainScaleTier::Nano512,
+            ),
+            (
+                alife_core::PolicyBackend::NeuralClosedLoopGpu,
+                8_u64,
+                BrainScaleTier::Nano512,
+            ),
+            (
+                alife_core::PolicyBackend::NeuralClosedLoopGpu,
+                7_u64,
+                BrainScaleTier::Small1024,
+            ),
+        ] {
+            assert!(matches!(
+                validate_replacement_policy(
+                    policy,
+                    seed,
+                    brain_class,
+                    7,
+                    BrainScaleTier::Nano512,
+                ),
+                Err(GameAppShellError::InvalidGraphicalLaunch { .. })
+            ));
+        }
+    }
 
     struct NoProgressSleepDriver;
 
