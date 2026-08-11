@@ -386,6 +386,14 @@ pub struct BiochemistryState {
 
 impl BiochemistryState {
     pub fn new(phenotype: &CreaturePhenotype, tick: Tick) -> Result<Self, ScaffoldContractError> {
+        Self::new_with_age(phenotype, tick, tick)
+    }
+
+    pub fn new_with_age(
+        phenotype: &CreaturePhenotype,
+        tick: Tick,
+        age: Tick,
+    ) -> Result<Self, ScaffoldContractError> {
         phenotype.brain_genome.validate_contract()?;
         phenotype.chemistry.endocrine.validate_contract()?;
         let cadence = BiochemistryCadence::early_mammal();
@@ -395,9 +403,9 @@ impl BiochemistryState {
         drives.brain_atp = phenotype.chemistry.brain_atp_efficiency;
         let homeostasis =
             HomeostaticSnapshot::new(tick, drives, phenotype.chemistry.endocrine.baseline)?;
-        let development_tick = cadence_boundary(tick, cadence.development_ticks);
-        let development = DevelopmentReadiness::derive(phenotype, tick, development_tick)?;
-        let reproduction_tick = cadence_boundary(tick, cadence.reproduction_ticks);
+        let development_tick = cadence_boundary(age, cadence.development_ticks);
+        let development = DevelopmentReadiness::derive(phenotype, age, development_tick)?;
+        let reproduction_tick = cadence_boundary(age, cadence.reproduction_ticks);
         let reproduction = ReproductionReadiness::derive(
             reproduction_tick,
             body,
@@ -431,6 +439,16 @@ impl BiochemistryState {
         event: BodyEventDelta,
         phenotype: &CreaturePhenotype,
     ) -> Result<Self, ScaffoldContractError> {
+        self.advance_with_age(next_tick, next_tick, event, phenotype)
+    }
+
+    pub fn advance_with_age(
+        &self,
+        next_tick: Tick,
+        next_age: Tick,
+        event: BodyEventDelta,
+        phenotype: &CreaturePhenotype,
+    ) -> Result<Self, ScaffoldContractError> {
         self.validate_contract()?;
         event.validate_contract()?;
         phenotype.brain_genome.validate_contract()?;
@@ -438,6 +456,8 @@ impl BiochemistryState {
             return Err(ScaffoldContractError::InvalidId);
         }
         Tick::validate_monotonic(self.tick, next_tick)?;
+        Tick::validate_monotonic(self.development.age_ticks, next_age)?;
+        Tick::validate_monotonic(next_age, next_tick)?;
 
         let fast_steps = crossed_boundaries(
             self.tick,
@@ -452,14 +472,14 @@ impl BiochemistryState {
             self.cadence.max_catch_up_steps,
         );
         let development_steps = crossed_boundaries(
-            self.tick,
-            next_tick,
+            self.development.age_ticks,
+            next_age,
             self.cadence.development_ticks,
             self.cadence.max_catch_up_steps,
         );
         let reproduction_steps = crossed_boundaries(
-            self.tick,
-            next_tick,
+            self.development.age_ticks,
+            next_age,
             self.cadence.reproduction_ticks,
             self.cadence.max_catch_up_steps,
         );
@@ -493,15 +513,18 @@ impl BiochemistryState {
         let development = if development_steps > 0 {
             DevelopmentReadiness::derive(
                 phenotype,
-                next_tick,
-                cadence_boundary(next_tick, self.cadence.development_ticks),
+                next_age,
+                cadence_boundary(next_age, self.cadence.development_ticks),
             )?
         } else {
-            self.development
+            DevelopmentReadiness {
+                age_ticks: next_age,
+                ..self.development
+            }
         };
         let reproduction = if reproduction_steps > 0 {
             ReproductionReadiness::derive(
-                cadence_boundary(next_tick, self.cadence.reproduction_ticks),
+                cadence_boundary(next_age, self.cadence.reproduction_ticks),
                 body,
                 &homeostasis,
                 development,
@@ -543,6 +566,7 @@ impl Validate for BiochemistryState {
         if self.homeostasis.tick != self.tick
             || self.development.age_ticks.raw() > self.tick.raw()
             || self.development.last_update_tick.raw() > self.tick.raw()
+            || self.reproduction.last_update_tick.raw() > self.development.age_ticks.raw()
             || self.reproduction.last_update_tick.raw() > self.tick.raw()
         {
             return Err(ScaffoldContractError::NonMonotonicTick);
@@ -683,4 +707,26 @@ fn clamp01(value: f32) -> f32 {
 
 fn signed_clamp(value: f32) -> f32 {
     value.clamp(-1.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
+
+    #[test]
+    fn newborn_at_late_world_tick_starts_development_at_biological_age_zero() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_31FF,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let mut phenotype = genome.express().unwrap();
+        phenotype.development.puberty_tick = Tick(1);
+
+        let state = BiochemistryState::new_with_age(&phenotype, Tick(10_000), Tick(0)).unwrap();
+
+        assert_eq!(state.development.age_ticks, Tick(0));
+        assert!(!state.development.puberty_reached);
+    }
 }

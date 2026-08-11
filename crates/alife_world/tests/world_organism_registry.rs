@@ -18,13 +18,11 @@ fn record_at(organism_id: u64, world_entity_id: u64, birth_tick: Tick) -> WorldO
     )
     .unwrap();
     let phenotype = genome.express().unwrap();
-    let biochemistry = BiochemistryState::new(&phenotype, birth_tick).unwrap();
-    WorldOrganismRecord::new(
+    WorldOrganismRecord::newborn(
         OrganismId(organism_id),
         WorldEntityId(world_entity_id),
         genome,
         phenotype,
-        biochemistry,
         birth_tick,
     )
     .unwrap()

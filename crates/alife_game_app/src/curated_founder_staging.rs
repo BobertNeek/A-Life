@@ -598,17 +598,11 @@ pub(crate) fn stage_curated_founder_reset(
     for (index, entry) in bundle.entries.iter().enumerate() {
         let plan_entry = &plan.entries[index];
         validate_bundle_entry(plan, entry, plan_entry, index as u32)?;
-        let record_biochemistry = BiochemistryState::new(&entry.phenotype, plan.restored_tick)
-            .map_err(|source| CuratedFounderStagingError::Contract {
-                field: "fresh record biochemistry",
-                source,
-            })?;
-        let record = WorldOrganismRecord::new(
+        let record = WorldOrganismRecord::newborn(
             entry.plan_entry.organism_id,
             entry.plan_entry.world_entity_id,
             entry.genome.clone(),
             entry.phenotype.clone(),
-            record_biochemistry,
             plan.restored_tick,
         )
         .map_err(|source| CuratedFounderStagingError::Record {
@@ -2266,14 +2260,11 @@ mod tests {
 
         let mut fixture = stage_fixture("existing-registry");
         let entry = &fixture.bundle.entries[0];
-        let record_biochemistry =
-            BiochemistryState::new(&entry.phenotype, fixture.plan.restored_tick).unwrap();
-        let record = WorldOrganismRecord::new(
+        let record = WorldOrganismRecord::newborn(
             entry.plan_entry.organism_id,
             entry.plan_entry.world_entity_id,
             entry.genome.clone(),
             entry.phenotype.clone(),
-            record_biochemistry,
             fixture.plan.restored_tick,
         )
         .unwrap();

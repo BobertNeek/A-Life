@@ -165,6 +165,24 @@ impl WorldOrganismRecord {
         Ok(record)
     }
 
+    pub fn newborn(
+        organism_id: OrganismId,
+        world_entity_id: WorldEntityId,
+        genome: CreatureGenome,
+        phenotype: CreaturePhenotype,
+        birth_tick: Tick,
+    ) -> Result<Self, OrganismRegistryError> {
+        let biochemistry = BiochemistryState::new_with_age(&phenotype, birth_tick, Tick(0))?;
+        Self::new(
+            organism_id,
+            world_entity_id,
+            genome,
+            phenotype,
+            biochemistry,
+            birth_tick,
+        )
+    }
+
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.organism_id.validate()?;
         self.world_entity_id.validate()?;
@@ -182,6 +200,10 @@ impl WorldOrganismRecord {
         }
 
         self.biochemistry.validate_contract()?;
+        let expected_age = self.age_at(self.biochemistry.tick)?;
+        if self.biochemistry.development.age_ticks != expected_age {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
         if self.birth_tick.raw() > self.biochemistry.tick.raw() {
             return Err(ScaffoldContractError::NonMonotonicTick);
         }
@@ -218,9 +240,10 @@ impl WorldOrganismRecord {
         }
         let original_biochemistry = self.biochemistry;
         self.validate_contract()?;
+        let next_age = self.age_at(next_tick)?;
         let next = self
             .biochemistry
-            .advance(next_tick, event, &self.phenotype)
+            .advance_with_age(next_tick, next_age, event, &self.phenotype)
             .map_err(OrganismRegistryError::InvalidRecord)?;
         self.biochemistry = next;
         if let Err(error) = self.validate_contract() {
@@ -427,19 +450,11 @@ impl WorldOrganismRegistry {
         next_tick: Tick,
         event: BodyEventDelta,
     ) -> Result<(), OrganismRegistryError> {
-        let phenotype = self
+        self
             .records_by_organism
-            .get(&organism_id.raw())
+            .get_mut(&organism_id.raw())
             .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
-            .phenotype
-            .clone();
-        self.with_biology_mut(organism_id, |biochemistry| {
-            let next = biochemistry
-                .advance(next_tick, event, &phenotype)
-                .map_err(OrganismRegistryError::InvalidRecord)?;
-            *biochemistry = next;
-            Ok(())
-        })
+            .advance_biology(next_tick, event)
     }
 
     pub fn mark_dead(
@@ -582,13 +597,11 @@ mod tests {
         )
         .unwrap();
         let phenotype = genome.express().unwrap();
-        let biochemistry = BiochemistryState::new(&phenotype, Tick(5)).unwrap();
-        let record = WorldOrganismRecord::new(
+        let record = WorldOrganismRecord::newborn(
             OrganismId(1),
             WorldEntityId(101),
             genome,
             phenotype,
-            biochemistry,
             Tick(5),
         )
         .unwrap();
@@ -640,6 +653,63 @@ mod tests {
             result,
             Err(OrganismRegistryError::InvalidRecord(
                 ScaffoldContractError::InvalidId,
+            ))
+        );
+        assert_eq!(*registry.get(organism_id).unwrap().biochemistry(), before);
+    }
+
+    #[test]
+    fn newborn_record_advance_uses_age_since_birth_not_absolute_world_tick() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_31FF,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let mut record = WorldOrganismRecord::newborn(
+            OrganismId(1),
+            WorldEntityId(101),
+            genome,
+            phenotype,
+            Tick(10_000),
+        )
+        .unwrap();
+
+        assert_eq!(record.biochemistry().development.age_ticks, Tick(0));
+        record
+            .advance_biology(Tick(10_001), BodyEventDelta::zero())
+            .unwrap();
+
+        assert_eq!(record.biochemistry().development.age_ticks, Tick(1));
+    }
+
+    #[test]
+    fn registry_failed_advance_preserves_exact_biochemistry() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_31FF,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let record = WorldOrganismRecord::newborn(
+            OrganismId(1),
+            WorldEntityId(101),
+            genome,
+            phenotype,
+            Tick(10_000),
+        )
+        .unwrap();
+        let organism_id = record.organism_id();
+        let mut registry = WorldOrganismRegistry::default();
+        registry.insert(record).unwrap();
+        let before = *registry.get(organism_id).unwrap().biochemistry();
+
+        let result = registry.advance_biology(organism_id, Tick(9_999), BodyEventDelta::zero());
+
+        assert_eq!(
+            result,
+            Err(OrganismRegistryError::InvalidRecord(
+                ScaffoldContractError::NonMonotonicTick,
             ))
         );
         assert_eq!(*registry.get(organism_id).unwrap().biochemistry(), before);
