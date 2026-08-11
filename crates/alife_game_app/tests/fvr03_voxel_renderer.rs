@@ -7,12 +7,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use alife_core::{ActionKind, BrainTickStatus, Tick, Vec3f, WorldEntityId};
+use alife_core::{ActionKind, BrainTickStatus, OrganismId, Tick, Vec3f, WorldEntityId};
 use alife_game_app::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
 use alife_game_app::{
     default_environment_manifest_path, run_production_voxel_frontend_dry_run, CreaturePartSlot,
     Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelChunk,
     Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
+    Fvr03ProductionVoxelCreatureMarker,
     Fvr03ProductionVoxelSelectionMarker, Fvr03ProductionVoxelSelectionResource,
     Fvr03ProductionVoxelTerrainBatch, Fvr03ProductionVoxelTerrainTile,
     Fvr04ProductionCreatureFollowResource, Fvr04ProductionCreatureInspectorPanel,
@@ -638,7 +639,7 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
 }
 
 #[test]
-fn fvr04_live_world_projection_moves_matching_creature_by_stable_id() {
+fn fvr04_live_world_projection_moves_matching_creature_and_creates_newborn_by_stable_id() {
     let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
@@ -692,32 +693,27 @@ fn fvr04_live_world_projection_moves_matching_creature_by_stable_id() {
     );
     assert_eq!(summary.selected_action_kind, Some(ActionKind::Move));
     assert_eq!(summary.target_entity, Some(target_entity));
-    let expected_world_position = authoritative_post_action_object.position;
-    let (expected_x, expected_z) = production_voxel_center(expected_world_position);
+    let expected_world_position_a = authoritative_post_action_object.position;
+    let (expected_x_a, expected_z_a) = production_voxel_center(expected_world_position_a);
     let expected_y = initial_translation.y;
-    let live_tick_after = summary.world_tick_after.raw();
+    let live_tick_after_a = summary.world_tick_after.raw();
     assert!(
-        (expected_x - initial_translation.x).abs() > f32::EPSILON
-            || (expected_z - initial_translation.z).abs() > f32::EPSILON,
+        (expected_x_a - initial_translation.x).abs() > f32::EPSILON
+            || (expected_z_a - initial_translation.z).abs() > f32::EPSILON,
         "authoritative production position must differ from the initial rendered position"
     );
-    let frame = LiveBrainPresentationFrame::try_new(
+    let frame_a = LiveBrainPresentationFrame::try_new(
         vec![summary.clone()],
         summary.world_tick_after,
-        vec![authoritative_post_action_object.into()],
+        vec![authoritative_post_action_object.clone().into()],
     )
     .unwrap();
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        frame,
+        frame_a,
     ));
-    app.world_mut()
-        .resource_mut::<Fvr05ProductionUxStateResource>()
-        .settings
-        .paused = false;
-
     app.update();
 
-    let actual_translation = {
+    let actual_translation_a = {
         let mut roots = app
             .world_mut()
             .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
@@ -728,22 +724,158 @@ fn fvr04_live_world_projection_moves_matching_creature_by_stable_id() {
             .expect("matching production creature root must remain present after update")
     };
     assert!(
-        (actual_translation.x - expected_x).abs() < f32::EPSILON
-            && (actual_translation.y - expected_y).abs() < f32::EPSILON
-            && (actual_translation.z - expected_z).abs() < f32::EPSILON,
+        (actual_translation_a.x - expected_x_a).abs() < f32::EPSILON
+            && (actual_translation_a.y - expected_y).abs() < f32::EPSILON
+            && (actual_translation_a.z - expected_z_a).abs() < f32::EPSILON,
         "stable creature {} did not project the authoritative live position at live tick {}: initial=({:.3},{:.3},{:.3}) expected=({:.3},{:.3},{:.3}) actual=({:.3},{:.3},{:.3})",
         stable_id.raw(),
-        live_tick_after,
+        live_tick_after_a,
         initial_translation.x,
         initial_translation.y,
         initial_translation.z,
-        expected_x,
+        expected_x_a,
         expected_y,
-        expected_z,
-        actual_translation.x,
-        actual_translation.y,
-        actual_translation.z,
+        expected_z_a,
+        actual_translation_a.x,
+        actual_translation_a.y,
+        actual_translation_a.z,
     );
+
+    let mismatched_organism_id = OrganismId(organism_id.raw() + 20_000);
+    let mut mismatched_identity_object = authoritative_post_action_object.clone();
+    mismatched_identity_object.organism_id = Some(mismatched_organism_id);
+    mismatched_identity_object.position = Vec3f::new(
+        initial_object.position.x + 5.0,
+        initial_object.position.y,
+        initial_object.position.z - 2.0,
+    );
+    let mismatched_frame = LiveBrainPresentationFrame::try_new(
+        vec![summary.clone()],
+        Tick::new(summary.world_tick_after.raw() + 1),
+        vec![mismatched_identity_object.into()],
+    )
+    .unwrap();
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        mismatched_frame,
+    ));
+    app.update();
+
+    let child_id = WorldEntityId(stable_id.raw() + 10_000);
+    let child_organism_id = OrganismId(organism_id.raw() + 10_000);
+    let mut child_object = initial_object.clone();
+    child_object.id = child_id;
+    child_object.organism_id = Some(child_organism_id);
+    child_object.label = "newborn-child".to_string();
+    child_object.position = Vec3f::new(
+        initial_object.position.x - 3.0,
+        initial_object.position.y,
+        initial_object.position.z + 4.0,
+    );
+    let second_child_id = WorldEntityId(stable_id.raw() + 20_000);
+    let second_child_organism_id = OrganismId(organism_id.raw() + 30_000);
+    let mut second_child_object = initial_object.clone();
+    second_child_object.id = second_child_id;
+    second_child_object.organism_id = Some(second_child_organism_id);
+    second_child_object.label = "newborn-second-child".to_string();
+    second_child_object.position = Vec3f::new(
+        initial_object.position.x + 6.0,
+        initial_object.position.y,
+        initial_object.position.z - 3.0,
+    );
+    let expected_child_world_position = child_object.position;
+    let (expected_child_x, expected_child_z) = production_voxel_center(expected_child_world_position);
+    let expected_second_child_world_position = second_child_object.position;
+    let (expected_second_child_x, expected_second_child_z) =
+        production_voxel_center(expected_second_child_world_position);
+    let frame_b = LiveBrainPresentationFrame::try_new(
+        vec![summary.clone()],
+        Tick::new(summary.world_tick_after.raw() + 2),
+        vec![
+            authoritative_post_action_object.into(),
+            child_object.into(),
+            second_child_object.into(),
+        ],
+    )
+    .unwrap();
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        frame_b.clone(),
+    ));
+    app.update();
+
+    let projected_roots = {
+        let mut roots = app.world_mut().query::<(
+            &ProductionCreatureAssemblyRoot,
+            &Fvr03ProductionVoxelCreatureMarker,
+            &Fvr04ProductionCreatureVisualMarker,
+            &Transform,
+        )>();
+        roots
+            .iter(app.world())
+            .map(|(root, voxel, visual, transform)| {
+                (
+                    root.stable_id,
+                    voxel.stable_id,
+                    visual.stable_id,
+                    visual.organism_id,
+                    transform.translation,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        projected_roots.len(),
+        4,
+        "mismatched identity plus snapshot B must create three distinct roots"
+    );
+    let existing_root = projected_roots
+        .iter()
+        .find(|(root_id, _, _, _, _)| *root_id == stable_id)
+        .expect("snapshot B must retain the existing root by stable world identity");
+    assert_eq!(existing_root.0, stable_id);
+    assert_eq!(existing_root.1, stable_id);
+    assert_eq!(existing_root.2, stable_id);
+    assert_eq!(existing_root.3, organism_id);
+    let mismatched_root = projected_roots
+        .iter()
+        .find(|(root_id, _, _, root_organism_id, _)| {
+            *root_id == stable_id && *root_organism_id == mismatched_organism_id
+        })
+        .expect("a mismatched organism identity must not deduplicate the existing root");
+    assert_eq!(mismatched_root.0, stable_id);
+    assert_eq!(mismatched_root.1, stable_id);
+    assert_eq!(mismatched_root.2, stable_id);
+    assert_eq!(mismatched_root.3, mismatched_organism_id);
+    let child_root = projected_roots
+        .iter()
+        .find(|(root_id, _, _, _, _)| *root_id == child_id)
+        .expect("snapshot B must create the child root by stable world identity");
+    assert_eq!(child_root.0, child_id);
+    assert_eq!(child_root.1, child_id);
+    assert_eq!(child_root.2, child_id);
+    assert_eq!(child_root.3, child_organism_id);
+    assert_eq!(child_root.4.x, expected_child_x);
+    assert_eq!(child_root.4.y, expected_y);
+    assert_eq!(child_root.4.z, expected_child_z);
+    let second_child_root = projected_roots
+        .iter()
+        .find(|(root_id, _, _, _, _)| *root_id == second_child_id)
+        .expect("snapshot B must create the second child root");
+    assert_eq!(second_child_root.0, second_child_id);
+    assert_eq!(second_child_root.1, second_child_id);
+    assert_eq!(second_child_root.2, second_child_id);
+    assert_eq!(second_child_root.3, second_child_organism_id);
+    assert_eq!(second_child_root.4.x, expected_second_child_x);
+    assert_eq!(second_child_root.4.y, expected_y);
+    assert_eq!(second_child_root.4.z, expected_second_child_z);
+
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(frame_b));
+    app.update();
+
+    let root_count = {
+        let mut roots = app.world_mut().query::<&ProductionCreatureAssemblyRoot>();
+        roots.iter(app.world()).count()
+    };
+    assert_eq!(root_count, 4, "reapplying snapshot B must remain idempotent");
 }
 
 #[test]

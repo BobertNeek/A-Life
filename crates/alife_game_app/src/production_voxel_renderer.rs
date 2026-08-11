@@ -3280,6 +3280,39 @@ fn spawn_fvr03_chunk_boundary(
     ));
 }
 
+fn fvr04_creature_root_bundle(
+    stable_id: WorldEntityId,
+    organism_id: OrganismId,
+    tile: VoxelTileCoord,
+    transform: Transform,
+    mut visual: Fvr04ProductionCreatureVisualMarker,
+    mut cute: Fvr09CuteBipedCreatureMarker,
+    mut species: Fvr10CreatureSpeciesMarker,
+    display_only: bool,
+) -> impl bevy::ecs::bundle::Bundle {
+    visual.stable_id = stable_id;
+    visual.organism_id = organism_id;
+    visual.tile = tile;
+    cute.stable_id = stable_id;
+    species.stable_id = stable_id;
+    (
+        Name::new(format!(
+            "A-Life modular creature assembly stable {}",
+            stable_id.raw()
+        )),
+        transform,
+        Visibility::Inherited,
+        Fvr03ProductionVoxelCreatureMarker { stable_id, tile },
+        visual,
+        ProductionCreatureAssemblyRoot {
+            stable_id,
+            display_only,
+        },
+        cute,
+        species,
+    )
+}
+
 fn spawn_fvr04_creatures(
     app: &mut App,
     creatures: &[Fvr04CreatureVisualRecord],
@@ -3403,37 +3436,28 @@ fn spawn_fvr04_creatures(
         transform.rotation = Quat::from_rotation_y(std::f32::consts::PI);
         transform.scale = base_scale;
         let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
+        let root_visual = Fvr04ProductionCreatureVisualMarker {
+            stable_id: visual.stable_id,
+            organism_id: visual.organism_id,
+            tile: creature.tile,
+            expression: visual.expression,
+            animation: visual.animation,
+            lod: settings.lod,
+            base_translation,
+            local_offset: Vec3::ZERO,
+            base_scale,
+            local_bounds,
+            surface_height,
+            phase,
+        };
         let root = app
             .world_mut()
-            .spawn((
-                Name::new(format!(
-                    "A-Life modular creature assembly stable {}",
-                    visual.stable_id.raw()
-                )),
+            .spawn(fvr04_creature_root_bundle(
+                visual.stable_id,
+                visual.organism_id,
+                creature.tile,
                 transform,
-                Visibility::Inherited,
-                Fvr03ProductionVoxelCreatureMarker {
-                    stable_id: visual.stable_id,
-                    tile: creature.tile,
-                },
-                Fvr04ProductionCreatureVisualMarker {
-                    stable_id: visual.stable_id,
-                    organism_id: visual.organism_id,
-                    tile: creature.tile,
-                    expression: visual.expression,
-                    animation: visual.animation,
-                    lod: settings.lod,
-                    base_translation,
-                    local_offset: Vec3::ZERO,
-                    base_scale,
-                    local_bounds,
-                    surface_height,
-                    phase,
-                },
-                ProductionCreatureAssemblyRoot {
-                    stable_id: visual.stable_id,
-                    display_only: recipe.display_only,
-                },
+                root_visual,
                 Fvr09CuteBipedCreatureMarker {
                     stable_id: visual.stable_id,
                     visual_profile: "modular-heritable-part-assembly-v1",
@@ -3452,6 +3476,7 @@ fn spawn_fvr04_creatures(
                     caveman_furry_design: true,
                     heritable_appearance: true,
                 },
+                recipe.display_only,
             ))
             .id();
 
@@ -4115,22 +4140,86 @@ fn project_authoritative_creature_root_transform(
 
 fn project_live_world_to_fvr04_creature_roots(
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    mut commands: Commands,
     mut roots: bevy::prelude::Query<(
         &ProductionCreatureAssemblyRoot,
         &Fvr04ProductionCreatureVisualMarker,
+        &Fvr09CuteBipedCreatureMarker,
+        &Fvr10CreatureSpeciesMarker,
         &mut Transform,
     )>,
 ) {
     let Some(frame) = frame else {
         return;
     };
-    for (root, visual, mut transform) in &mut roots {
+
+    let mut root_identities = BTreeSet::new();
+    let mut template = None;
+    for (root, visual, cute, species, transform) in roots.iter_mut() {
+        root_identities.insert((root.stable_id.raw(), visual.organism_id.raw()));
+        if template.is_none() {
+            template = Some((
+                visual.clone(),
+                cute.clone(),
+                species.clone(),
+                transform.clone(),
+                root.display_only,
+            ));
+        }
+    }
+
+    for (root, visual, _, _, mut transform) in &mut roots {
         project_authoritative_creature_root_transform(
             root.stable_id,
             visual.organism_id,
             &mut transform,
             &frame.current,
         );
+    }
+
+    let Some((template_visual, template_cute, template_species, template_transform, display_only)) =
+        template
+    else {
+        return;
+    };
+    for object in frame.current.object_snapshots() {
+        if object.kind != WorldObjectKind::Agent {
+            continue;
+        }
+        let Some(organism_id) = object.organism_id else {
+            continue;
+        };
+        let identity = (object.id.raw(), organism_id.raw());
+        if root_identities.contains(&identity) {
+            continue;
+        }
+
+        let mut transform = template_transform.clone();
+        if !project_authoritative_creature_root_transform(
+            object.id,
+            organism_id,
+            &mut transform,
+            &frame.current,
+        ) {
+            continue;
+        }
+        let tile = VoxelTileCoord::new(
+            object.position.x.round() as i32,
+            object.position.z.round() as i32,
+        );
+        let mut visual = template_visual.clone();
+        visual.base_translation = transform.translation;
+        commands.spawn(fvr04_creature_root_bundle(
+            object.id,
+            organism_id,
+            tile,
+            transform,
+            visual,
+            template_cute.clone(),
+            template_species.clone(),
+            display_only,
+        ));
+        root_identities.insert(identity);
     }
 }
 
