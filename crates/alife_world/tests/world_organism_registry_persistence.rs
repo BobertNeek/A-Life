@@ -112,6 +112,46 @@ fn creature_save_state() -> CreatureSaveState {
     }
 }
 
+fn bound_creature_save_state(world: &HeadlessWorld) -> CreatureSaveState {
+    let record = world.organism_registry().get(OrganismId(7)).unwrap();
+    let biochemistry = record.biochemistry();
+    CreatureSaveState {
+        organism_id: record.organism_id(),
+        genome_id: record.genome().id,
+        brain_class: alife_core::BrainScaleTier::Nano512,
+        development_tick: biochemistry.development.last_update_tick,
+        appearance: CreatureAppearanceGenome::default(),
+        mind: CreatureMindSaveSummary {
+            tick: biochemistry.tick,
+            homeostasis: biochemistry.homeostasis,
+            memory_record_count: 2,
+            memory_source_ids: Vec::new(),
+            concept_count: 1,
+            edge_count: 0,
+            simplex_count: 0,
+            unresolved_gap_count: 0,
+            sleep_state_label: "awake".to_string(),
+            diagnostics: vec!["fixture".to_string()],
+        },
+        weights: WeightLayerSaveSummary {
+            generated_weight_asset_id: None,
+            genetic_fixed_digest: "fnv1a64:0000000000000001".to_string(),
+            genetic_layer_mutable: false,
+            lifetime_consolidated_entries: 3,
+            h_operational_entries: 1,
+            h_shadow_entries: 1,
+        },
+        learning: LearningTraceSaveSummary {
+            lifetime_learning_enabled: true,
+            lamarckian_mode_enabled: false,
+            last_consolidated_tick: Some(Tick::new(2)),
+        },
+        composite_genetics: None,
+        lifetime_state_asset: None,
+        gpu_brain: None,
+    }
+}
+
 fn registry_records(world: &HeadlessWorld) -> Vec<WorldOrganismRecord> {
     let mut records: Vec<_> = world.organism_registry().iter().cloned().collect();
     records.sort_by_key(|record| record.organism_id().raw());
@@ -155,6 +195,76 @@ fn assert_rejected(value: serde_json::Value, label: &str) {
         PortableSaveFile::from_json_str(&text).is_err(),
         "JSON decoder accepted corruption case: {label}"
     );
+}
+
+fn assert_validation_rejected(value: serde_json::Value, label: &str) {
+    let text = serde_json::to_string(&value).unwrap();
+    let save = PortableSaveFile::from_json_str(&text).unwrap();
+    let error = save
+        .validate_with_asset_root(".")
+        .expect_err("JSON corruption unexpectedly passed portable validation");
+    assert!(
+        error.to_string().contains("world organism record"),
+        "corruption case {label} failed outside the creature/world binding seam: {error}"
+    );
+}
+
+#[test]
+fn portable_save_round_trip_binds_creature_summary_to_world_record() {
+    let world = world_with_nontrivial_registry();
+    let valid_save = save_with_creatures(&world, vec![bound_creature_save_state(&world)]);
+    let encoded = serde_json::to_string(&valid_save).unwrap();
+    PortableSaveFile::from_json_str(&encoded)
+        .unwrap()
+        .validate_with_asset_root(".")
+        .unwrap();
+
+    let cases: [(&str, Box<dyn Fn(&mut serde_json::Value)>); 6] = [
+        (
+            "missing matching organism record",
+            Box::new(|value| {
+                value["creatures"][0]["organism_id"] = serde_json::json!(99);
+            }),
+        ),
+        (
+            "genome ID disagreement",
+            Box::new(|value| {
+                value["creatures"][0]["genome_id"] = serde_json::json!(18);
+            }),
+        ),
+        (
+            "brain class disagreement",
+            Box::new(|value| {
+                value["creatures"][0]["brain_class"] = serde_json::json!("Small1024");
+            }),
+        ),
+        (
+            "mind tick disagreement",
+            Box::new(|value| {
+                value["creatures"][0]["mind"]["tick"] = serde_json::json!(3);
+                value["creatures"][0]["mind"]["homeostasis"]["tick"] = serde_json::json!(3);
+            }),
+        ),
+        (
+            "homeostasis disagreement",
+            Box::new(|value| {
+                value["creatures"][0]["mind"]["homeostasis"]["drives"]["hunger"] =
+                    serde_json::json!(0.0);
+            }),
+        ),
+        (
+            "development tick disagreement",
+            Box::new(|value| {
+                value["creatures"][0]["development_tick"] = serde_json::json!(1);
+            }),
+        ),
+    ];
+
+    for (label, mutate) in cases {
+        let mut value: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+        mutate(&mut value);
+        assert_validation_rejected(value, label);
+    }
 }
 
 #[test]

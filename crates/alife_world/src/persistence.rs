@@ -1457,6 +1457,7 @@ impl PortableSaveFile {
                 self.load_creature_lifetime_state(creature.organism_id, root.as_ref())?;
             }
         }
+        self.validate_creature_summaries_against_organism_records()?;
         self.world
             .habitats
             .validate_at_tick(&creature_ids(&self.creatures)?, self.world.tick)?;
@@ -1466,6 +1467,66 @@ impl PortableSaveFile {
             .chain(self.etf_prototype_asset_refs.iter())
         {
             require_asset_reference(&self.assets, asset_id)?;
+        }
+        Ok(())
+    }
+
+    fn validate_creature_summaries_against_organism_records(
+        &self,
+    ) -> Result<(), PersistenceError> {
+        let Some(records) = &self.world.organism_records else {
+            return Ok(());
+        };
+
+        for creature in &self.creatures {
+            let mut matching = records
+                .iter()
+                .filter(|record| record.organism_id() == creature.organism_id);
+            let Some(record) = matching.next() else {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.organism_id",
+                    message: "creature summary must match exactly one world organism record",
+                });
+            };
+            if matching.next().is_some() {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.organism_id",
+                    message: "creature summary must match exactly one world organism record",
+                });
+            }
+
+            let biochemistry = record.biochemistry();
+            if creature.genome_id != record.genome().id {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.genome_id",
+                    message: "creature summary disagrees with world organism record",
+                });
+            }
+            if creature.brain_class.default_class_id() != record.genome().foundation.brain_class_id
+            {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.brain_class",
+                    message: "creature summary disagrees with world organism record",
+                });
+            }
+            if creature.mind.tick != biochemistry.tick {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.mind.tick",
+                    message: "creature summary disagrees with world organism record",
+                });
+            }
+            if creature.mind.homeostasis != biochemistry.homeostasis {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.mind.homeostasis",
+                    message: "creature summary disagrees with world organism record",
+                });
+            }
+            if creature.development_tick != biochemistry.development.last_update_tick {
+                return Err(PersistenceError::InvalidConfig {
+                    field: "creature.development_tick",
+                    message: "creature summary disagrees with world organism record",
+                });
+            }
         }
         Ok(())
     }
