@@ -389,6 +389,11 @@ impl HeadlessWorld {
         })
     }
 
+    fn is_terminal_body_state(record: &WorldOrganismRecord) -> bool {
+        let body = &record.biochemistry().body;
+        body.health <= 0.0 || body.energy <= 0.0
+    }
+
     pub fn try_advance_tick(&mut self) -> Result<Tick, ScaffoldContractError> {
         let mut candidate = self.clone();
         let next_tick = Tick::new(self.tick.raw().saturating_add(1));
@@ -418,6 +423,19 @@ impl HeadlessWorld {
                 }
                 tick if tick == next_tick => {}
                 _ => return Err(ScaffoldContractError::NonMonotonicTick),
+            }
+
+            let terminal = Self::is_terminal_body_state(
+                candidate
+                    .organism_registry
+                    .get(organism_id)
+                    .ok_or(ScaffoldContractError::InvalidId)?,
+            );
+            if terminal {
+                candidate
+                    .organism_registry
+                    .mark_dead(organism_id, next_tick)
+                    .map_err(map_organism_registry_error)?;
             }
 
             #[cfg(test)]
@@ -4102,6 +4120,172 @@ mod task_3_2a_tests {
             assert!(!resource.low_salience_marker);
         }
 
+        assert_eq!(
+            forward.canonical_signature_digest().unwrap(),
+            reverse.canonical_signature_digest().unwrap()
+        );
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            assert_eq!(
+                task_4_1_record_state(&forward, organism_id),
+                task_4_1_record_state(&reverse, organism_id)
+            );
+        }
+    }
+
+    #[test]
+    fn try_advance_tick_advances_development_age_health_and_death_in_stable_order_and_rolls_back_late_failure(
+    ) {
+        let mut forward = task_4_1_world_with_registration_order(&[
+            TASK_4_1_LOW_ORGANISM,
+            TASK_4_1_HIGH_ORGANISM,
+        ]);
+        let mut reverse = task_4_1_world_with_registration_order(&[
+            TASK_4_1_HIGH_ORGANISM,
+            TASK_4_1_LOW_ORGANISM,
+        ]);
+        let hazard_spec = WorldEditorSpawnSpec {
+            label: "terminal-hazard".to_owned(),
+            kind: WorldObjectKind::Hazard,
+            organism_id: None,
+            position: Vec3f::new(1.0, 0.0, 0.0),
+            nutrition: 0.0,
+            hazard_pain: 1.0,
+            radius: 0.75,
+            token_id: None,
+        };
+        let forward_hazard = forward.editor_spawn_object(hazard_spec.clone()).unwrap();
+        let reverse_hazard = reverse.editor_spawn_object(hazard_spec).unwrap();
+
+        for world in [&mut forward, &mut reverse] {
+            for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+                world
+                    .organism_registry
+                    .with_biology_mut(organism_id, |biology| {
+                        biology.cadence.metabolism_ticks = 1;
+                        biology.cadence.development_ticks = 1;
+                        if organism_id == TASK_4_1_LOW_ORGANISM {
+                            biology.body.health = 0.1;
+                        }
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+        }
+
+        let before_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
+        let before_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        let next_tick = Tick::new(1);
+        let expected_low_development = before_low
+            .phenotype()
+            .development_state_at(next_tick)
+            .unwrap();
+        let forward_low_entity = forward.entity_id("agent-low").unwrap();
+        let reverse_low_entity = reverse.entity_id("agent-low").unwrap();
+        let forward_action = forward
+            .apply_registered_command(
+                &HeadlessWorldCommand::approach(TASK_4_1_LOW_ORGANISM, forward_hazard)
+                    .unwrap(),
+                forward_low_entity,
+                next_tick,
+            )
+            .unwrap();
+        let reverse_action = reverse
+            .apply_registered_command(
+                &HeadlessWorldCommand::approach(TASK_4_1_LOW_ORGANISM, reverse_hazard)
+                    .unwrap(),
+                reverse_low_entity,
+                next_tick,
+            )
+            .unwrap();
+        for action in [&forward_action, &reverse_action] {
+            assert!(action.action_result.execution.succeeded);
+            assert_eq!(action.action_result.body_event.damage, 1.0);
+            assert_eq!(action.biology_after.body.health, 0.0);
+            assert!(action.biology_after.body.energy < before_low.biochemistry().body.energy);
+        }
+
+        let mut late_failure = forward.clone();
+        let before_failure_tick = late_failure.tick();
+        let before_failure_low = task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM);
+        let before_failure_high = task_4_1_record_state(&late_failure, TASK_4_1_HIGH_ORGANISM);
+        let before_failure_objects = late_failure.object_snapshots();
+        let before_failure_ecology = late_failure.ecology().clone();
+        let before_failure_metrics = late_failure.ecology_metrics();
+        let before_failure_speech = late_failure.audible_utterances();
+        let before_failure_touched = late_failure.last_touched_entities.clone();
+        let before_failure_last_action = late_failure.last_action_result.clone();
+        let before_failure_signature = late_failure.canonical_signature_digest().unwrap();
+        late_failure.inject_tick_late_failure_after_first_organism_for_test();
+
+        assert_eq!(
+            late_failure.try_advance_tick(),
+            Err(ScaffoldContractError::InvalidDecisionEvidence)
+        );
+        assert_eq!(late_failure.tick(), before_failure_tick);
+        assert_eq!(
+            task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM),
+            before_failure_low
+        );
+        assert_eq!(
+            task_4_1_record_state(&late_failure, TASK_4_1_HIGH_ORGANISM),
+            before_failure_high
+        );
+        assert_eq!(late_failure.object_snapshots(), before_failure_objects);
+        assert_eq!(late_failure.ecology(), &before_failure_ecology);
+        assert_eq!(late_failure.ecology_metrics(), before_failure_metrics);
+        assert_eq!(late_failure.audible_utterances(), before_failure_speech);
+        assert_eq!(late_failure.last_touched_entities, before_failure_touched);
+        assert_eq!(late_failure.last_action_result, before_failure_last_action);
+        assert_eq!(
+            late_failure.canonical_signature_digest().unwrap(),
+            before_failure_signature
+        );
+
+        assert_eq!(forward.try_advance_tick().unwrap(), next_tick);
+        assert_eq!(reverse.try_advance_tick().unwrap(), next_tick);
+        let forward_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
+        let forward_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        assert_eq!(forward_low.age_at(next_tick).unwrap(), next_tick);
+        assert_eq!(forward_high.age_at(next_tick).unwrap(), next_tick);
+        assert_eq!(
+            forward_low.biochemistry().development.age_ticks,
+            next_tick
+        );
+        assert_eq!(
+            forward_low.biochemistry().development.maturation,
+            expected_low_development.maturation.raw()
+        );
+        assert_ne!(
+            forward_low.biochemistry().development.maturation,
+            before_low.biochemistry().development.maturation
+        );
+        assert_eq!(forward_low.biochemistry().body.health, 0.0);
+        assert_eq!(
+            forward_low.biochemistry().body.energy,
+            forward_action.biology_after.body.energy
+        );
+        assert_eq!(
+            forward_low.lifecycle().death_tick(),
+            Some(next_tick)
+        );
+        assert!(!forward_low.lifecycle().is_alive());
+        assert!(forward_high.lifecycle().is_alive());
+        assert_eq!(
+            forward_high.biochemistry().development.age_ticks,
+            next_tick
+        );
+        assert_eq!(
+            forward_high.biochemistry().body.health,
+            before_high.biochemistry().body.health
+        );
+        assert_eq!(
+            forward_high.biochemistry().body.energy,
+            before_high.biochemistry().body.energy
+        );
+        for (before, after) in [(&before_low, &forward_low), (&before_high, &forward_high)] {
+            assert_eq!(after.archive(), before.archive());
+            assert_eq!(after.world_entity_id(), before.world_entity_id());
+        }
         assert_eq!(
             forward.canonical_signature_digest().unwrap(),
             reverse.canonical_signature_digest().unwrap()
