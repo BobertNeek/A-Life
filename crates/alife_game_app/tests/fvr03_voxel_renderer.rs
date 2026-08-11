@@ -762,7 +762,7 @@ fn curated_first_gpu_action_consumes_receipt_updates_registered_world_and_publis
         &launch_summary.save_path,
     )
     .expect("production cutover test seam must return causal evidence");
-    assert_eq!(evidence.residency_gate_rejections, 4);
+    assert_eq!(evidence.residency_gate_rejections, 5);
     assert_eq!(evidence.receipt.ordered_residents.len(), 2);
     assert_eq!(evidence.gpu_selection_count, 1);
     assert_eq!(evidence.sealed_patch_count, 1);

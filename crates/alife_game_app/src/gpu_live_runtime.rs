@@ -1878,6 +1878,12 @@ impl GpuLiveBrainRuntime {
         record_rejection(&runtime)?;
 
         let mut invalid_plan = plan.clone();
+        runtime.curated_first_tick_pending = false;
+        invalid_plan.state = CuratedFounderGpuResidencyState::NotStarted;
+        runtime.retained_curated_founder_gpu_residency_plan = Some(invalid_plan.clone());
+        record_rejection(&runtime)?;
+
+        invalid_plan.state = CuratedFounderGpuResidencyState::Pending;
         runtime.retained_curated_founder_gpu_residency_plan = Some(invalid_plan.clone());
         record_rejection(&runtime)?;
 
@@ -2931,19 +2937,27 @@ impl GpuLiveBrainRuntime {
     fn curated_first_tick_residency_gate(
         &self,
     ) -> Result<Option<&GpuCuratedResidencyReceipt>, GameAppShellError> {
-        if !self.curated_first_tick_pending {
-            return Ok(None);
-        }
-
         let reject = || GameAppShellError::InvalidProductionFrontend {
             message: "curated first tick residency receipt is absent or mismatched".to_string(),
         };
-        let plan = self
-            .retained_curated_founder_gpu_residency_plan
-            .as_ref()
-            .ok_or_else(|| reject())?;
-        if plan.state != CuratedFounderGpuResidencyState::Committed
-            || curated_founder_gpu_residency_plan_fingerprint(plan) != plan.fingerprint
+        let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_ref() else {
+            return if self.curated_first_tick_pending
+                || self
+                    .retained_curated_founder_gpu_residency_receipt
+                    .is_some()
+            {
+                Err(reject())
+            } else {
+                Ok(None)
+            };
+        };
+        if plan.state != CuratedFounderGpuResidencyState::Committed {
+            return Err(reject());
+        }
+        if !self.curated_first_tick_pending {
+            return Ok(None);
+        }
+        if curated_founder_gpu_residency_plan_fingerprint(plan) != plan.fingerprint
             || plan.world_tick > self.world.tick()
         {
             return Err(reject());
