@@ -2971,30 +2971,42 @@ impl GpuLiveBrainRuntime {
             }
             let organism_id = OrganismId(raw);
             let (phenotype, resident) = self.compile_birth(organism_id)?;
-            self.archive_birth_before_gpu_insert(organism_id, &resident)?;
+            let birth_manifest_digest =
+                self.archive_birth_before_gpu_insert(organism_id, &resident)?;
+            let mut candidate_world = self.world.clone();
+            if let Some(digest) = birth_manifest_digest {
+                let record = candidate_world
+                    .organism_registry_mut()
+                    .get_mut(organism_id)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                record.link_birth_manifest(digest)?;
+            }
+            validate_candidate_newborn(&candidate_world, organism_id)?;
+            let memory = Self::new_memory_sidecar(organism_id, self.sensor_profile)?;
+            let topology = TopologySidecar::new_profiled(
+                organism_id,
+                SensorProfileIdentity {
+                    profile_id: self.sensor_profile.into(),
+                    profile_schema_version: 1,
+                    sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
+                },
+                TopologicalMapConfig::default(),
+            )?;
             let handle = self.backend.insert_brain(organism_id, phenotype)?;
-            if handle.organism_id().raw() != raw {
+            if handle.organism_id() != organism_id
+                || handle.phenotype_hash() != resident.phenotype.phenotype_hash()
+            {
                 self.backend.remove_brain(handle)?;
                 return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
             }
+            self.world = candidate_world;
+            if let Some(digest) = birth_manifest_digest {
+                self.archive_birth_manifests.insert(raw, digest);
+            }
             self.handles.insert(raw, handle);
             self.residents.insert(raw, resident);
-            self.memories.insert(
-                raw,
-                Self::new_memory_sidecar(organism_id, self.sensor_profile)?,
-            );
-            self.topologies.insert(
-                raw,
-                TopologySidecar::new_profiled(
-                    organism_id,
-                    SensorProfileIdentity {
-                        profile_id: self.sensor_profile.into(),
-                        profile_schema_version: 1,
-                        sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
-                    },
-                    TopologicalMapConfig::default(),
-                )?,
-            );
+            self.memories.insert(raw, memory);
+            self.topologies.insert(raw, topology);
         }
         Ok(())
     }
@@ -3204,13 +3216,12 @@ impl GpuLiveBrainRuntime {
         &mut self,
         organism_id: OrganismId,
         resident: &ResidentCognition,
-    ) -> Result<(), GameAppShellError> {
-        if self.lineage_library.is_none()
-            || self
-                .archive_birth_manifests
-                .contains_key(&organism_id.raw())
-        {
-            return Ok(());
+    ) -> Result<Option<Blake3Digest>, GameAppShellError> {
+        if self.lineage_library.is_none() {
+            return Ok(None);
+        }
+        if let Some(existing_digest) = self.archive_birth_manifests.get(&organism_id.raw()) {
+            return Ok(Some(*existing_digest));
         }
         let source_run_id = self.lineage_run_id.as_deref().ok_or_else(|| {
             GameAppShellError::InvalidProductionFrontend {
@@ -3228,9 +3239,7 @@ impl GpuLiveBrainRuntime {
             self.sensor_profile,
             resident,
         )?;
-        self.archive_birth_manifests
-            .insert(organism_id.raw(), digest);
-        Ok(())
+        Ok(Some(digest))
     }
 
     fn new_memory_sidecar(
@@ -3729,7 +3738,7 @@ impl GpuLiveBrainRuntime {
         }
         self.observe_passive_tick(tick_before, tick_after)?;
         self.world.advance_tick();
-        self.retire_dead_organisms()?;
+        self.reconcile_population()?;
         if persist_sleep_boundary {
             self.persist_sleep_checkpoint_boundary()?;
         }
@@ -4903,6 +4912,30 @@ impl GpuLiveBrainRuntime {
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         self.backend.tick_batch(&[(handle, frame)])
     }
+}
+
+fn validate_candidate_newborn(
+    world: &HeadlessWorld,
+    organism_id: OrganismId,
+) -> Result<WorldEntityId, GameAppShellError> {
+    let record = world
+        .organism_registry()
+        .get(organism_id)
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    if record.organism_id() != organism_id {
+        return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+    }
+    let world_entity_id = record.world_entity_id();
+    let object = world
+        .entity(world_entity_id)
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    if object.id != world_entity_id
+        || object.kind != WorldObjectKind::Agent
+        || object.organism_id != Some(organism_id)
+    {
+        return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+    }
+    Ok(world_entity_id)
 }
 
 fn gpu_sleep_state_label(state: SleepState) -> String {
@@ -7337,6 +7370,182 @@ mod tests {
         assert_eq!(runtime.backend.pending_eligibility(handle).unwrap(), None);
         assert_eq!(runtime.last_learning_receipts().len(), 1);
         assert!(runtime.last_eligibility_discard_receipts().is_empty());
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    fn archived_newborn_runtime(label: &str) -> (GpuLiveBrainRuntime, PathBuf) {
+        let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
+        let seed = 0x43B1_0001;
+        let world = HeadlessScenarioBuilder::new(seed)
+            .agent("parent-a", OrganismId(1), Vec3f::ZERO)
+            .agent("parent-b", OrganismId(2), Vec3f::new(1.0, 0.0, 0.0))
+            .build()
+            .unwrap();
+        let archive_root = std::env::temp_dir().join(format!(
+            "alife-gpu-newborn-{label}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&archive_root);
+        let backend = GpuClosedLoopBackend::new_in_process(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("in-process GPU backend");
+        let runtime = GpuLiveBrainRuntime::new_profiled_archived(
+            backend,
+            world,
+            seed,
+            BrainScaleTier::Nano512,
+            sensor_profile,
+            LineageLibraryConfig::profile_default(&archive_root),
+            "task-4.3b1-newborn",
+            ArchiveLearnedCapturePolicy::GeneticOnly,
+        )
+        .unwrap();
+        (runtime, archive_root)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    fn queue_deterministic_conception(runtime: &mut GpuLiveBrainRuntime) {
+        let parent = OrganismId(1);
+        let parent_entity_id = runtime
+            .world
+            .organism_entity_ids()
+            .into_iter()
+            .find_map(|(organism_id, world_entity_id)| {
+                (organism_id == parent).then_some(world_entity_id)
+            })
+            .expect("parent binding");
+        let resident = runtime.residents.get(&parent.raw()).unwrap();
+        let frame = runtime
+            .world
+            .perception_frame(
+                parent,
+                runtime.world.tick(),
+                runtime.sensor_profile,
+                resident.homeostasis,
+            )
+            .unwrap();
+        let conception = frame
+            .candidates()
+            .iter()
+            .find(|candidate| {
+                let family = format!("{:?}", candidate.family);
+                family.contains("Repro") || family.contains("Mate")
+            })
+            .copied()
+            .expect("deterministic conception candidate");
+        let command = conception
+            .to_command(parent, Confidence::new(1.0).unwrap())
+            .unwrap();
+        let next_tick = Tick::new(runtime.world.tick().raw().saturating_add(1));
+        runtime
+            .world
+            .apply_registered_neural_command(
+                &command,
+                parent_entity_id,
+                next_tick,
+                None,
+                false,
+            )
+            .unwrap();
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    fn newborn_id(runtime: &GpuLiveBrainRuntime) -> OrganismId {
+        let newborns = runtime
+            .world
+            .organism_entity_ids()
+            .into_iter()
+            .filter(|(organism_id, _)| organism_id.raw() > 2)
+            .map(|(organism_id, _)| organism_id)
+            .collect::<Vec<_>>();
+        assert_eq!(newborns.len(), 1);
+        newborns[0]
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn newborn_is_archived_linked_and_admitted_before_tick_returns() {
+        let (mut runtime, archive_root) = archived_newborn_runtime("success");
+        queue_deterministic_conception(&mut runtime);
+
+        runtime.tick().unwrap();
+
+        let newborn = newborn_id(&runtime);
+        let record = runtime.world.organism_registry().get(newborn).unwrap();
+        let digest = runtime
+            .archive_birth_manifest(newborn)
+            .expect("newborn archive manifest");
+        assert_eq!(record.birth_manifest_digest(), Some(digest));
+        assert_eq!(runtime.world.tick(), Tick::new(1));
+        let world_entity_id = record.world_entity_id();
+        assert!(runtime
+            .world
+            .organism_entity_ids()
+            .into_iter()
+            .any(|(organism_id, entity_id)| {
+                organism_id == newborn && entity_id == world_entity_id
+            }));
+        let handle = runtime.handle_for(newborn).expect("newborn handle");
+        assert_eq!(handle.organism_id(), newborn);
+        assert_eq!(
+            runtime
+                .residents
+                .get(&newborn.raw())
+                .unwrap()
+                .phenotype
+                .phenotype_hash(),
+            handle.phenotype_hash()
+        );
+        assert!(runtime.memories.contains_key(&newborn.raw()));
+        assert_eq!(runtime.topologies.get(&newborn.raw()).unwrap().organism_id(), newborn);
+        drop(runtime);
+        fs::remove_dir_all(archive_root).unwrap();
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn failed_newborn_admission_publishes_nothing_and_retry_reuses_manifest() {
+        let (mut runtime, archive_root) = archived_newborn_runtime("retry");
+        queue_deterministic_conception(&mut runtime);
+        runtime.backend.force_admission_failures_for_test(1);
+
+        assert!(runtime.tick().is_err());
+
+        let newborn = newborn_id(&runtime);
+        let failed_record = runtime.world.organism_registry().get(newborn).unwrap();
+        assert_eq!(failed_record.birth_manifest_digest(), None);
+        assert!(runtime.archive_birth_manifest(newborn).is_none());
+        assert!(!runtime.handles.contains_key(&newborn.raw()));
+        assert!(!runtime.residents.contains_key(&newborn.raw()));
+        assert!(!runtime.memories.contains_key(&newborn.raw()));
+        assert!(!runtime.topologies.contains_key(&newborn.raw()));
+        let archive_count_after_failure = runtime.lineage_archive_manifest_count().unwrap();
+
+        runtime.reconcile_population().unwrap();
+
+        let digest = runtime
+            .archive_birth_manifest(newborn)
+            .expect("retried newborn archive manifest");
+        assert_eq!(
+            runtime.lineage_archive_manifest_count().unwrap(),
+            archive_count_after_failure
+        );
+        assert_eq!(
+            runtime
+                .world
+                .organism_registry()
+                .get(newborn)
+                .unwrap()
+                .birth_manifest_digest(),
+            Some(digest)
+        );
+        assert!(runtime.handles.contains_key(&newborn.raw()));
+        assert!(runtime.residents.contains_key(&newborn.raw()));
+        assert!(runtime.memories.contains_key(&newborn.raw()));
+        assert_eq!(runtime.topologies.get(&newborn.raw()).unwrap().organism_id(), newborn);
+        drop(runtime);
+        fs::remove_dir_all(archive_root).unwrap();
     }
 
     #[cfg(feature = "gpu-tests")]
