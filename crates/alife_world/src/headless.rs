@@ -521,27 +521,40 @@ impl HeadlessWorld {
             }
         }
 
+        let living_capacity = candidate
+            .ecology
+            .config
+            .max_world_objects
+            .saturating_sub(candidate.ecology.config.max_resource_records);
+        let alive_count = candidate
+            .organism_registry
+            .iter()
+            .filter(|record| record.lifecycle().is_alive())
+            .count();
+
         let mut conception_pair = None;
-        for pair in eligible_pairs {
-            let maternal = candidate
-                .organism_registry
-                .get(pair.0)
-                .ok_or(ScaffoldContractError::InvalidId)?;
-            let paternal = candidate
-                .organism_registry
-                .get(pair.1)
-                .ok_or(ScaffoldContractError::InvalidId)?;
-            let maternal_age = maternal.age_at(next_tick)?;
-            let paternal_age = paternal.age_at(next_tick)?;
-            if maternal.lifecycle().is_alive()
-                && paternal.lifecycle().is_alive()
-                && maternal.biochemistry().reproduction.ready
-                && paternal.biochemistry().reproduction.ready
-                && maternal.biochemistry().reproduction.last_update_tick == maternal_age
-                && paternal.biochemistry().reproduction.last_update_tick == paternal_age
-            {
-                conception_pair = Some(pair);
-                break;
+        if alive_count < living_capacity {
+            for pair in eligible_pairs {
+                let maternal = candidate
+                    .organism_registry
+                    .get(pair.0)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let paternal = candidate
+                    .organism_registry
+                    .get(pair.1)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let maternal_age = maternal.age_at(next_tick)?;
+                let paternal_age = paternal.age_at(next_tick)?;
+                if maternal.lifecycle().is_alive()
+                    && paternal.lifecycle().is_alive()
+                    && maternal.biochemistry().reproduction.ready
+                    && paternal.biochemistry().reproduction.ready
+                    && maternal.biochemistry().reproduction.last_update_tick == maternal_age
+                    && paternal.biochemistry().reproduction.last_update_tick == paternal_age
+                {
+                    conception_pair = Some(pair);
+                    break;
+                }
             }
         }
 
@@ -5036,6 +5049,119 @@ mod task_4_3a2_tests {
         assert_eq!(child.phenotype().lineage_id, child.genome().lineage_id);
         assert_eq!(records(&forward), records(&replay));
         assert_eq!(forward.canonical_signature_digest().unwrap(), replay.canonical_signature_digest().unwrap());
+    }
+
+    #[test]
+    fn derived_living_capacity_blocks_ready_conception() {
+        let (mut world, next_tick) =
+            prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
+        let mut ecology = world.ecology().clone();
+        ecology.config = EcologyConfig {
+            max_world_objects: 4,
+            max_resource_records: 2,
+            ..ecology.config
+        };
+        world.configure_ecology(ecology).unwrap();
+        let before_next_organism_id = world.next_organism_id;
+        let before_agent_ids = world.organism_entity_ids();
+
+        assert_eq!(world.try_advance_tick().unwrap(), next_tick);
+        assert_eq!(world.tick(), next_tick);
+        assert_eq!(world.next_organism_id, before_next_organism_id);
+        assert_eq!(world.organism_entity_ids(), before_agent_ids);
+        assert_eq!(world.organism_registry().iter().count(), 2);
+        for organism_id in [MATERNAL_ID, PATERNAL_ID] {
+            assert_eq!(
+                world
+                    .organism_registry()
+                    .get(organism_id)
+                    .unwrap()
+                    .biochemistry()
+                    .tick,
+                next_tick
+            );
+        }
+    }
+
+    #[test]
+    fn terminal_death_frees_living_capacity_before_conception() {
+        let (mut world, next_tick) =
+            prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
+        let terminal_id = OrganismId(31);
+        let terminal_genome = founder(0xE10_43C5, COMPATIBILITY_FAMILY_ID);
+        let terminal_phenotype = terminal_genome.express().unwrap();
+        let terminal_biology = BiochemistryState::new_with_age(
+            &terminal_phenotype,
+            world.tick(),
+            world.tick(),
+        )
+        .unwrap();
+        let terminal_entity = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "terminal-organism".to_string(),
+                kind: WorldObjectKind::Agent,
+                organism_id: Some(terminal_id),
+                position: Vec3f::new(4.0, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.5,
+                token_id: None,
+            })
+            .unwrap();
+        world
+            .register_organism_record(
+                WorldOrganismRecord::new(
+                    terminal_id,
+                    terminal_entity,
+                    terminal_genome,
+                    terminal_phenotype,
+                    terminal_biology,
+                    Tick::ZERO,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        world
+            .organism_registry
+            .with_biology_mut(terminal_id, |biology| {
+                biology.body.energy = 0.0;
+                Ok(())
+            })
+            .unwrap();
+        let mut ecology = world.ecology().clone();
+        ecology.config = EcologyConfig {
+            max_world_objects: 6,
+            max_resource_records: 3,
+            ..ecology.config
+        };
+        world.configure_ecology(ecology).unwrap();
+        let expected_child_id = OrganismId(world.next_organism_id);
+
+        assert_eq!(
+            world
+                .organism_registry()
+                .iter()
+                .filter(|record| record.lifecycle().is_alive())
+                .count(),
+            3
+        );
+        assert_eq!(world.try_advance_tick().unwrap(), next_tick);
+        let terminal = world.organism_registry().get(terminal_id).unwrap();
+        assert_eq!(terminal.lifecycle().death_tick(), Some(next_tick));
+        assert!(!terminal.lifecycle().is_alive());
+        let child = world.organism_registry().get(expected_child_id).unwrap();
+        assert_eq!(child.birth_tick(), next_tick);
+        assert!(child.lifecycle().is_alive());
+        assert_eq!(world.next_organism_id, expected_child_id.raw() + 1);
+        assert_eq!(world.organism_registry().iter().count(), 4);
+        assert_eq!(
+            world
+                .organism_registry()
+                .iter()
+                .filter(|record| record.lifecycle().is_alive())
+                .count(),
+            3
+        );
     }
 
     #[test]
