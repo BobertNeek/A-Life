@@ -1603,6 +1603,13 @@ fn seal_prepared_selection_core(
 }
 
 impl GpuLiveBrainRuntime {
+    /// Creates an ephemeral restore target on the live session's exact GPU
+    /// context without exposing adapter selection to the caller.
+    pub fn new_staging_like_live(&self) -> Result<GpuClosedLoopBackend, ScaffoldContractError> {
+        self.backend.ensure_neural_actions_available()?;
+        self.backend.backend().new_staging_like_live()
+    }
+
     pub fn from_p34_launch(
         backend: GpuClosedLoopBackend,
         launch: &AppShellLaunchConfig,

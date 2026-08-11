@@ -525,6 +525,16 @@ impl LiveBrainPresentationFrameResource {
         }
     }
 
+    pub fn reseed_from_loaded_world(
+        &mut self,
+        world: &HeadlessWorld,
+    ) -> Result<(), LiveBrainPresentationFrameError> {
+        let baseline = LiveBrainPresentationFrame::from_authoritative_world(Vec::new(), world)?;
+        self.previous = baseline.clone();
+        self.current = baseline;
+        Ok(())
+    }
+
     pub fn try_publish_successful_tick(
         &mut self,
         tick_summaries: Vec<LiveBrainTickSummary>,
@@ -753,6 +763,12 @@ impl ProductionGpuBrainTickScheduleResource {
     pub(crate) fn set_running_speed(&mut self, ticks: u32) {
         self.run_speed_ticks = ticks.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
         self.playback = RuntimePlaybackState::Running;
+    }
+
+    pub(crate) fn reset_after_load(&mut self, playback: RuntimePlaybackState, speed_ticks: u32) {
+        *self = Self::new(PRODUCTION_GPU_STARTUP_RENDER_FRAMES);
+        self.playback = playback;
+        self.run_speed_ticks = speed_ticks.clamp(1, crate::S02_MAX_RUN_TICKS_PER_UPDATE);
     }
 
     pub(crate) fn is_paused(&self) -> bool {
@@ -5457,6 +5473,31 @@ mod live_brain_presentation_frame_tests {
     }
 
     #[test]
+    fn reseed_from_loaded_world_replaces_both_frames_and_drops_old_ids() {
+        let mut live_world = fixture_world();
+        let mut frames = LiveBrainPresentationFrameResource::from_authoritative_world(&live_world)
+            .expect("authoritative world must seed presentation frames");
+        live_world.advance_tick();
+        frames
+            .try_publish_successful_tick(vec![successful_summary(Tick::ZERO, 1)], &live_world)
+            .expect("live frame must publish before reseed");
+
+        let loaded_world = HeadlessScenarioBuilder::new(22)
+            .agent("loaded", OrganismId(7), Vec3f::new(4.0, 0.0, 0.0))
+            .build()
+            .expect("loaded frame fixture world must build");
+        frames
+            .reseed_from_loaded_world(&loaded_world)
+            .expect("loaded world must reseed presentation frames");
+
+        assert_eq!(frames.previous, frames.current);
+        assert_eq!(frames.current.authoritative_world_tick, loaded_world.tick());
+        assert!(frames.current.tick_summaries.is_empty());
+        assert_eq!(frames.current.object_count(), 1);
+        assert!(frames.current.object(WorldEntityId(2)).is_none());
+    }
+
+    #[test]
     fn second_publication_rotates_the_earlier_current_frame_into_previous() {
         let mut world = fixture_world();
         let mut frames = LiveBrainPresentationFrameResource::from_authoritative_world(&world)
@@ -5614,6 +5655,41 @@ mod production_gpu_tick_schedule_tests {
         }
         assert!(schedule.take_dispatch_permit());
         assert!(schedule.take_dispatch_permit());
+    }
+
+    #[test]
+    fn post_load_reset_clears_scheduler_debt_and_applies_loaded_controls() {
+        let mut schedule = ProductionGpuBrainTickScheduleResource::new(0);
+        schedule
+            .scheduler
+            .observe_render_frame(1.0, RuntimePlaybackState::Running, 1)
+            .expect("pre-load scheduler frame must be valid");
+        schedule.step_pending = true;
+        schedule.failed = true;
+
+        schedule.reset_after_load(RuntimePlaybackState::Paused, u32::MAX);
+
+        assert_eq!(schedule.playback, RuntimePlaybackState::Paused);
+        assert_eq!(schedule.run_speed_ticks, super::S02_MAX_RUN_TICKS_PER_UPDATE);
+        assert_eq!(
+            schedule.scheduler,
+            crate::DoubleBufferedGraphicalScheduler::default()
+        );
+        assert_eq!(
+            schedule.startup_render_frames_remaining,
+            super::PRODUCTION_GPU_STARTUP_RENDER_FRAMES
+        );
+        assert!(!schedule.step_pending);
+        assert!(!schedule.failed);
+        assert!(!schedule.take_dispatch_permit());
+        assert_eq!(
+            schedule
+                .scheduler
+                .observe_render_frame(1.0, schedule.playback, schedule.run_speed_ticks)
+                .expect("paused post-load frame must be valid")
+                .ticks_to_run,
+            0
+        );
     }
 
     #[test]
