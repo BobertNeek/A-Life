@@ -33,7 +33,7 @@ use bevy::{
         Handle, Image, KeyCode, Mat4, Mesh, Mesh3d, MeshMaterial3d, Meshable, MessageReader,
         MessageWriter, MouseButton, Name, Node, NonSendMut, ParamSet, PositionType, Projection,
         Quat, Res, ResMut, Resource, Sphere, StandardMaterial, Text, Text2d, TextColor, TextFont,
-        Time, Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without,
+        Time, Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without, World,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -1174,6 +1174,24 @@ struct Fvr04CreatureVisualRecord {
     visual: CreatureVisualSnapshot,
 }
 
+#[derive(Debug, Resource)]
+struct Fvr04CreatureSpawnContext {
+    settings: Fvr04ProductionCreatureRendererSettings,
+    catalog: GeneForgeCreaturePartCatalog,
+    preparations: GeneForgeAssemblyPreparationIndex,
+    assets_root: PathBuf,
+    creature_part_assets: CreaturePartAssetLibrary,
+    cue_mesh: Handle<Mesh>,
+    eye_sclera_mesh: Handle<Mesh>,
+    eye_iris_mesh: Handle<Mesh>,
+    eye_pupil_mesh: Handle<Mesh>,
+    eye_highlight_mesh: Handle<Mesh>,
+    eye_sclera_material: Handle<StandardMaterial>,
+    eye_pupil_material: Handle<StandardMaterial>,
+    eye_highlight_material: Handle<StandardMaterial>,
+    face_material: Handle<StandardMaterial>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct Fvr04RuntimeSceneState {
     snapshot: PersistentVoxelWorldSnapshot,
@@ -1695,26 +1713,29 @@ pub fn spawn_fvr03_production_voxel_scene(
         display_only: true,
         no_renderer_authority_over_world_actions_or_cognition: true,
     });
-    let creature_scene = spawn_fvr04_creatures(
-        app,
-        &runtime_state.creatures,
+    let mut creature_spawn_context = Fvr04CreatureSpawnContext {
+        settings: creature_settings,
+        catalog: creature_part_catalog,
+        preparations: creature_preparations,
+        assets_root: creature_assets_root,
+        creature_part_assets,
+        cue_mesh: creature_cue_mesh,
+        eye_sclera_mesh: creature_eye_sclera_mesh,
+        eye_iris_mesh: creature_eye_iris_mesh,
+        eye_pupil_mesh: creature_eye_pupil_mesh,
+        eye_highlight_mesh: creature_eye_highlight_mesh,
+        eye_sclera_material: creature_eye_sclera_material,
+        eye_pupil_material: creature_eye_pupil_material,
+        eye_highlight_material: creature_eye_highlight_material,
+        face_material: creature_face_material,
+    };
+    let creature_scene = spawn_fvr04_creature_batch(
+        app.world_mut(),
+        runtime_state.creatures.clone(),
         &tile_summaries_by_tile,
-        &creature_settings,
-        &creature_part_catalog,
-        &creature_preparations,
-        &creature_assets_root,
-        &mut creature_part_assets,
-        creature_cue_mesh,
-        creature_eye_sclera_mesh,
-        creature_eye_iris_mesh,
-        creature_eye_pupil_mesh,
-        creature_eye_highlight_mesh,
-        creature_eye_sclera_material,
-        creature_eye_pupil_material,
-        creature_eye_highlight_material,
-        creature_face_material,
+        &mut creature_spawn_context,
     );
-    app.insert_resource(creature_part_assets);
+    app.insert_resource(creature_spawn_context);
     spawn_fvr05_overlay_batches(
         app,
         &settings,
@@ -3313,32 +3334,33 @@ fn fvr04_creature_root_bundle(
     )
 }
 
-fn spawn_fvr04_creatures(
-    app: &mut App,
-    creatures: &[Fvr04CreatureVisualRecord],
+fn spawn_fvr04_creature_batch(
+    world: &mut World,
+    creatures: Vec<Fvr04CreatureVisualRecord>,
     tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-    settings: &Fvr04ProductionCreatureRendererSettings,
-    catalog: &GeneForgeCreaturePartCatalog,
-    preparations: &GeneForgeAssemblyPreparationIndex,
-    assets_root: &std::path::Path,
-    assets: &mut CreaturePartAssetLibrary,
-    cue_mesh: Handle<Mesh>,
-    eye_sclera_mesh: Handle<Mesh>,
-    eye_iris_mesh: Handle<Mesh>,
-    eye_pupil_mesh: Handle<Mesh>,
-    eye_highlight_mesh: Handle<Mesh>,
-    eye_sclera_material: Handle<StandardMaterial>,
-    eye_pupil_material: Handle<StandardMaterial>,
-    eye_highlight_material: Handle<StandardMaterial>,
-    face_material: Handle<StandardMaterial>,
+    context: &mut Fvr04CreatureSpawnContext,
 ) -> Fvr04ProductionCreatureSceneResource {
+    let settings = &context.settings;
+    let catalog = &context.catalog;
+    let preparations = &context.preparations;
+    let assets_root = context.assets_root.as_path();
+    let assets = &mut context.creature_part_assets;
+    let cue_mesh = context.cue_mesh.clone();
+    let eye_sclera_mesh = context.eye_sclera_mesh.clone();
+    let eye_iris_mesh = context.eye_iris_mesh.clone();
+    let eye_pupil_mesh = context.eye_pupil_mesh.clone();
+    let eye_highlight_mesh = context.eye_highlight_mesh.clone();
+    let eye_sclera_material = context.eye_sclera_material.clone();
+    let eye_pupil_material = context.eye_pupil_material.clone();
+    let eye_highlight_material = context.eye_highlight_material.clone();
+    let face_material = context.face_material.clone();
     let lod = match settings.lod {
         Fvr04CreatureLod::FullVoxel => CreaturePartLodId::Full,
         Fvr04CreatureLod::CompactVoxel => CreaturePartLodId::Compact,
         Fvr04CreatureLod::ImpostorVoxel => CreaturePartLodId::Impostor,
     };
     let cover_meshes = {
-        let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
+        let mut meshes = world.resource_mut::<Assets<Mesh>>();
         BTreeMap::from([
             (
                 JoinCoverPrimitive::Ruff,
@@ -3362,7 +3384,7 @@ fn spawn_fvr04_creatures(
             ),
         ])
     };
-    let detail_meshes = fvr10_creature_detail_meshes(app);
+    let detail_meshes = fvr10_creature_detail_meshes(world);
     let mut expression_buffer = Vec::new();
     let mut stable_lookup_by_raw_id = BTreeMap::new();
     let mut part_families = BTreeSet::new();
@@ -3450,9 +3472,7 @@ fn spawn_fvr04_creatures(
             surface_height,
             phase,
         };
-        let root = app
-            .world_mut()
-            .spawn(fvr04_creature_root_bundle(
+        let root = world.spawn(fvr04_creature_root_bundle(
                 visual.stable_id,
                 visual.organism_id,
                 creature.tile,
@@ -3480,9 +3500,7 @@ fn spawn_fvr04_creatures(
             ))
             .id();
 
-        let coat = app
-            .world_mut()
-            .resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
+        let coat = world.resource_scope(|world, mut images: bevy::prelude::Mut<Assets<Image>>| {
                 world.resource_scope(
                     |_world, mut materials: bevy::prelude::Mut<Assets<StandardMaterial>>| {
                         assets.acquire_geneforge_coat(
@@ -3506,9 +3524,7 @@ fn spawn_fvr04_creatures(
             scene_mesh_handles.insert(mesh.id());
             let part_transform = geneforge_authored_transform_to_bevy(part.authored_transform);
             let rest_transform = part_transform;
-            let part_entity = app
-                .world_mut()
-                .spawn((
+            let part_entity = world.spawn((
                     Name::new(format!(
                         "A-Life creature part {} {:?}",
                         visual.stable_id.raw(),
@@ -3539,7 +3555,7 @@ fn spawn_fvr04_creatures(
                 .expect("validated GeneForge join-cover kind");
             let scale = 0.72 + cover.overlap_depth;
             let transform = Transform::from_scale(Vec3::splat(scale));
-            app.world_mut().spawn((
+            world.spawn((
                 Name::new(format!(
                     "A-Life creature join cover {} {}",
                     visual.stable_id.raw(),
@@ -3559,7 +3575,7 @@ fn spawn_fvr04_creatures(
         }
 
         if !matches!(settings.lod, Fvr04CreatureLod::ImpostorVoxel) {
-            let detail_materials = fvr10_creature_detail_materials(app, visual);
+            let detail_materials = fvr10_creature_detail_materials(world, visual);
             let head = recipe
                 .parts
                 .get(&CreaturePartSlot::Head)
@@ -3651,7 +3667,7 @@ fn spawn_fvr04_creatures(
                     coat_material.clone(),
                 ),
             ] {
-                app.world_mut().spawn((
+                world.spawn((
                     Name::new(format!(
                         "A-Life creature {} stable {}",
                         feature,
@@ -3668,7 +3684,7 @@ fn spawn_fvr04_creatures(
                 ));
             }
             fvr10_spawn_creature_surface_details(
-                app,
+                world,
                 &part_entities,
                 visual,
                 settings.lod,
@@ -3678,7 +3694,7 @@ fn spawn_fvr04_creatures(
         }
 
         if settings.spawn_affordance_cues {
-            app.world_mut().spawn((
+            world.spawn((
                 Name::new(format!(
                     "A-Life creature cue stable {}",
                     visual.stable_id.raw()
@@ -3870,8 +3886,8 @@ impl Fvr10CreatureDetailMaterials {
     }
 }
 
-fn fvr10_creature_detail_meshes(app: &mut App) -> Fvr10CreatureDetailMeshes {
-    let mut meshes = app.world_mut().resource_mut::<Assets<Mesh>>();
+fn fvr10_creature_detail_meshes(world: &mut World) -> Fvr10CreatureDetailMeshes {
+    let mut meshes = world.resource_mut::<Assets<Mesh>>();
     Fvr10CreatureDetailMeshes {
         cheek_spot: meshes.add(
             Sphere::new(0.075)
@@ -3897,11 +3913,11 @@ fn fvr10_creature_detail_meshes(app: &mut App) -> Fvr10CreatureDetailMeshes {
 }
 
 fn fvr10_creature_detail_materials(
-    app: &mut App,
+    world: &mut World,
     visual: &CreatureVisualSnapshot,
 ) -> Fvr10CreatureDetailMaterials {
     let colors = fvr10_creature_color_set(visual.appearance);
-    let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
+    let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
     let belly = materials.add(fvr10_creature_detail_material(colors.belly));
     let accent_handle = materials.add(fvr10_creature_detail_material(colors.accent));
     let dark = materials.add(fvr10_creature_detail_material(colors.dark));
@@ -3996,7 +4012,7 @@ fn fvr10_creature_detail_material(rgba: [f32; 4]) -> StandardMaterial {
 }
 
 fn fvr10_spawn_creature_surface_details(
-    app: &mut App,
+    world: &mut World,
     part_entities: &BTreeMap<CreaturePartSlot, Entity>,
     visual: &CreatureVisualSnapshot,
     lod: Fvr04CreatureLod,
@@ -4010,7 +4026,7 @@ fn fvr10_spawn_creature_surface_details(
     };
     for detail in creature_surface_detail_recipe(visual.appearance, lod_scale) {
         let local_offset = Vec3::from_array(detail.local_offset);
-        app.world_mut().spawn((
+        world.spawn((
             Name::new(format!(
                 "A-Life FVR10 caveman furry creature detail {} stable {}",
                 detail.role,
