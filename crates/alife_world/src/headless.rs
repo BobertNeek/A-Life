@@ -52,6 +52,7 @@ use crate::{
 };
 
 const DEFAULT_ENTITY_ID_START: u64 = 1;
+const DEFAULT_ORGANISM_ID_START: u64 = 1;
 const DEFAULT_HEARING_RADIUS: f32 = 6.0;
 pub(crate) const HEADLESS_CONTACT_RADIUS: f32 = 0.75;
 const EAT_RADIUS: f32 = 1.25;
@@ -60,9 +61,9 @@ const MAX_VISIBLE_ENTITIES: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
-const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v3";
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v4";
 /// Current schema required by every fresh headless-world signature receipt.
-pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 3;
+pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 4;
 
 fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContractError {
     match error {
@@ -230,6 +231,7 @@ pub struct HeadlessWorld {
     seed: u64,
     tick: Tick,
     next_entity_id: u64,
+    next_organism_id: u64,
     next_spawn_sequence: u64,
     next_utterance_id: u64,
     objects: BTreeMap<u64, WorldObject>,
@@ -265,6 +267,7 @@ pub(crate) struct HeadlessWorldPersistenceParts {
     pub seed: u64,
     pub tick: Tick,
     pub next_entity_id: u64,
+    pub next_organism_id: u64,
     pub next_spawn_sequence: u64,
     pub next_utterance_id: u64,
     pub objects: Vec<WorldObject>,
@@ -282,6 +285,7 @@ impl HeadlessWorld {
             seed,
             tick: Tick::ZERO,
             next_entity_id: DEFAULT_ENTITY_ID_START,
+            next_organism_id: DEFAULT_ORGANISM_ID_START,
             next_spawn_sequence: 1,
             next_utterance_id: 1,
             objects: BTreeMap::new(),
@@ -642,6 +646,7 @@ impl HeadlessWorld {
         digest.write_u64(self.seed);
         digest.write_u64(self.tick.raw());
         digest.write_u64(self.next_entity_id);
+        digest.write_u64(self.next_organism_id);
         digest.write_u64(self.next_spawn_sequence);
         digest.write_u64(self.next_utterance_id);
 
@@ -792,6 +797,11 @@ impl HeadlessWorld {
         record: WorldOrganismRecord,
     ) -> Result<(), ScaffoldContractError> {
         record.validate_contract()?;
+        let registered_next_organism_id = record
+            .organism_id()
+            .raw()
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
         self.organism_registry
             .validate_contract()
             .map_err(map_organism_registry_error)?;
@@ -815,7 +825,9 @@ impl HeadlessWorld {
         }
         self.organism_registry
             .insert(record)
-            .map_err(map_organism_registry_error)
+            .map_err(map_organism_registry_error)?;
+        self.next_organism_id = self.next_organism_id.max(registered_next_organism_id);
+        Ok(())
     }
 
     pub fn link_life_manifest(
@@ -891,8 +903,21 @@ impl HeadlessWorld {
     {
         let registry = WorldOrganismRegistry::from_exact_records(records)
             .map_err(map_organism_registry_error)?;
+        let replacement_next_organism_id = registry
+            .iter()
+            .map(|record| record.organism_id().raw())
+            .max()
+            .map(|organism_id| {
+                organism_id
+                    .checked_add(1)
+                    .ok_or(ScaffoldContractError::InvalidId)
+            })
+            .transpose()?;
         let mut replacement = self.clone();
         replacement.organism_registry = registry;
+        if let Some(next_organism_id) = replacement_next_organism_id {
+            replacement.next_organism_id = replacement.next_organism_id.max(next_organism_id);
+        }
         replacement.validate_complete_organism_bindings()?;
         *self = replacement;
         Ok(())
@@ -1118,10 +1143,27 @@ impl HeadlessWorld {
         } else {
             Some(organism_records)
         };
+        let max_present_organism_id = self
+            .objects
+            .values()
+            .filter_map(|object| object.organism_id.map(OrganismId::raw))
+            .chain(
+                self.organism_registry
+                    .iter()
+                    .map(|record| record.organism_id().raw()),
+            )
+            .max()
+            .unwrap_or(0);
+        let next_organism_id = max_present_organism_id
+            .checked_add(1)
+            .map_or(self.next_organism_id, |derived| {
+                self.next_organism_id.max(derived)
+            });
         HeadlessWorldPersistenceParts {
             seed: self.seed,
             tick: self.tick,
             next_entity_id: self.next_entity_id,
+            next_organism_id,
             next_spawn_sequence: self.next_spawn_sequence,
             next_utterance_id: self.next_utterance_id,
             objects: self.objects.values().cloned().collect(),
@@ -1141,6 +1183,26 @@ impl HeadlessWorld {
     pub(crate) fn from_persistence_parts(
         parts: HeadlessWorldPersistenceParts,
     ) -> Result<Self, ScaffoldContractError> {
+        let max_present_organism_id = parts
+            .objects
+            .iter()
+            .filter_map(|object| object.organism_id.map(OrganismId::raw))
+            .chain(
+                parts
+                    .organism_records
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|records| records.iter())
+                    .map(|record| record.organism_id().raw()),
+            )
+            .max()
+            .unwrap_or(0);
+        if parts.next_organism_id == 0
+            || max_present_organism_id == u64::MAX
+            || parts.next_organism_id <= max_present_organism_id
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
         let organism_records = parts.organism_records;
         let has_authoritative_organism_records = organism_records.is_some();
         let organism_registry = match organism_records {
@@ -1216,6 +1278,7 @@ impl HeadlessWorld {
             seed: parts.seed,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
+            next_organism_id: parts.next_organism_id,
             next_spawn_sequence: parts.next_spawn_sequence,
             next_utterance_id: parts.next_utterance_id,
             objects,

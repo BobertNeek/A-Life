@@ -1076,6 +1076,7 @@ pub struct WorldSaveState {
     pub seed: u64,
     pub tick: Tick,
     pub next_entity_id: u64,
+    pub next_organism_id: u64,
     pub next_spawn_sequence: u64,
     pub next_utterance_id: u64,
     pub objects: Vec<WorldObjectSaveState>,
@@ -1228,6 +1229,8 @@ impl<'de> Deserialize<'de> for WorldSaveState {
             tick: Tick,
             next_entity_id: u64,
             #[serde(default)]
+            next_organism_id: Option<u64>,
+            #[serde(default)]
             next_spawn_sequence: Option<u64>,
             objects: Vec<WorldObjectSaveWire>,
             last_touched_entities: Vec<WorldEntityId>,
@@ -1289,11 +1292,32 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         let next_utterance_id = wire
             .next_utterance_id
             .unwrap_or_else(|| max_utterance_id.saturating_add(1));
+        let max_present_organism_id = wire
+            .objects
+            .iter()
+            .filter(|object| object.kind == WorldObjectKind::Agent)
+            .filter_map(|object| object.organism_id.map(OrganismId::raw))
+            .chain(
+                wire.organism_records
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|records| records.iter())
+                    .map(|record| record.organism_id().raw()),
+            )
+            .max()
+            .unwrap_or(0);
+        let next_organism_id = match wire.next_organism_id {
+            Some(value) => value,
+            None => max_present_organism_id
+                .checked_add(1)
+                .ok_or_else(|| D::Error::custom("world organism identity space exhausted"))?,
+        };
         let habitat_authority_was_missing = wire.habitats.is_none();
         let state = Self {
             seed: wire.seed,
             tick: wire.tick,
             next_entity_id: wire.next_entity_id,
+            next_organism_id,
             next_spawn_sequence,
             next_utterance_id,
             objects,
@@ -2026,6 +2050,7 @@ impl WorldSaveState {
             seed: parts.seed,
             tick: parts.tick,
             next_entity_id: parts.next_entity_id,
+            next_organism_id: parts.next_organism_id,
             next_spawn_sequence: parts.next_spawn_sequence,
             next_utterance_id: parts.next_utterance_id,
             objects: parts
@@ -2045,6 +2070,26 @@ impl WorldSaveState {
     }
 
     fn validate_organism_records(&self) -> Result<(), PersistenceError> {
+        let max_present_organism_id = self
+            .objects
+            .iter()
+            .filter(|object| object.kind == WorldObjectKind::Agent)
+            .filter_map(|object| object.organism_id.map(OrganismId::raw))
+            .chain(
+                self.organism_records
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|records| records.iter())
+                    .map(|record| record.organism_id().raw()),
+            )
+            .max()
+            .unwrap_or(0);
+        if self.next_organism_id == 0
+            || max_present_organism_id == u64::MAX
+            || self.next_organism_id <= max_present_organism_id
+        {
+            return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+        }
         let Some(records) = &self.organism_records else {
             return Ok(());
         };
@@ -2189,6 +2234,7 @@ impl WorldSaveState {
             seed: self.seed,
             tick: self.tick,
             next_entity_id: self.next_entity_id,
+            next_organism_id: self.next_organism_id,
             next_spawn_sequence: self.next_spawn_sequence,
             next_utterance_id: self.next_utterance_id,
             objects: self
