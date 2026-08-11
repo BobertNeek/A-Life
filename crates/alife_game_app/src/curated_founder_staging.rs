@@ -143,6 +143,43 @@ impl CuratedFounderDurablePublicationReceipt {
     pub(crate) fn archive_receipt_count(&self) -> usize {
         self.archive_receipts.len()
     }
+
+    pub(crate) fn final_save_digest(&self) -> Option<&str> {
+        self.final_save_digest.as_deref()
+    }
+
+    pub(crate) fn candidate_world_signature(&self) -> HeadlessWorldSignatureDigest {
+        self.candidate_world_signature
+    }
+
+    pub(crate) fn candidate_world_seed(&self) -> u64 {
+        self.candidate_world_seed
+    }
+
+    pub(crate) fn candidate_world_tick(&self) -> Tick {
+        self.candidate_world_tick
+    }
+
+    pub(crate) fn archive_source_run(&self) -> &str {
+        &self.archive_source_run
+    }
+
+    pub(crate) fn archive_receipt_identities(
+        &self,
+    ) -> Vec<(u32, WorldEntityId, OrganismId, LineageId, Blake3Digest)> {
+        self.archive_receipts
+            .iter()
+            .map(|row| {
+                (
+                    row.final_population_slot,
+                    row.world_entity_id,
+                    row.organism_id,
+                    row.lineage_id,
+                    row.manifest_digest,
+                )
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Error)]
@@ -354,6 +391,15 @@ impl CuratedFounderDurableOperation {
 
     pub(crate) fn proposed_save_digest(&self) -> &str {
         &self.proposed_save_digest
+    }
+
+    pub(crate) fn accepted_bundle(&self) -> &CuratedFounderBundle {
+        &self.bundle
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_replacement_save(&self) -> PortableSaveFile {
+        self.replacement_save.clone()
     }
 
     #[cfg(test)]

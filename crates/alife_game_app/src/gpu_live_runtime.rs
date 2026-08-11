@@ -17,7 +17,7 @@ use alife_core::{
     PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile,
     SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState,
     Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
-    Validate, Vec3f,
+    Validate, Vec3f, WorldEntityId, LineageId, N512FounderFoundationProjection,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -30,7 +30,7 @@ use alife_runtime::{
 };
 use alife_world::{
     persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
-    HeadlessWorld, WorldEditorSpawnSpec, WorldObjectKind,
+    HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec, WorldObjectKind,
 };
 use thiserror::Error;
 
@@ -40,7 +40,8 @@ use crate::{
     },
     curated_founder_staging::{
         CuratedFounderDurableOperation, CuratedFounderDurableOperationAttempt,
-        CuratedFounderPublicationStatus, CuratedFounderSaveState, CuratedFounderStagingError,
+        CuratedFounderDurablePublicationReceipt, CuratedFounderPublicationStatus,
+        CuratedFounderSaveState, CuratedFounderStagingError,
     },
     merge_gpu_checkpoint_manifest_entries, plan_curated_founder_reset, AppShellLaunchConfig,
     CuratedFounderAgentInput, CuratedFounderResetError, CuratedFounderResetRequest,
@@ -456,7 +457,112 @@ pub(crate) struct GpuLiveBrainEvidenceMetrics {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CuratedFounderGpuResidencyState {
+    NotStarted,
     Pending,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CuratedFounderGpuResidencyPlanEntry {
+    final_population_slot: u32,
+    world_entity_id: WorldEntityId,
+    organism_id: OrganismId,
+    lineage_id: LineageId,
+    archive_birth_manifest_digest: Blake3Digest,
+    projection: N512FounderFoundationProjection,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CuratedFounderGpuResidencyPlan {
+    state: CuratedFounderGpuResidencyState,
+    final_save_digest: String,
+    candidate_world_signature: HeadlessWorldSignatureDigest,
+    world_seed: u64,
+    world_tick: Tick,
+    source_run_identity: String,
+    entries: Vec<CuratedFounderGpuResidencyPlanEntry>,
+    fingerprint: [u64; 4],
+}
+
+impl CuratedFounderGpuResidencyPlan {
+    fn from_accepted_operation(
+        operation: &CuratedFounderDurableOperation,
+        publication: &CuratedFounderDurablePublicationReceipt,
+    ) -> Self {
+        let archive_identities = publication.archive_receipt_identities();
+        let entries = operation
+            .accepted_bundle()
+            .entries
+            .iter()
+            .map(|accepted| {
+                let archived = archive_identities
+                    .iter()
+                    .find(|row| row.2 == accepted.plan_entry.organism_id)
+                    .expect("validated durable publication contains every accepted founder");
+                CuratedFounderGpuResidencyPlanEntry {
+                    final_population_slot: accepted.plan_entry.final_population_slot,
+                    world_entity_id: accepted.plan_entry.world_entity_id,
+                    organism_id: accepted.plan_entry.organism_id,
+                    lineage_id: accepted.plan_entry.lineage_id,
+                    archive_birth_manifest_digest: archived.4,
+                    projection: accepted.projection.clone(),
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut plan = Self {
+            state: CuratedFounderGpuResidencyState::NotStarted,
+            final_save_digest: publication
+                .final_save_digest()
+                .expect("published curated founder receipt has a final save digest")
+                .to_string(),
+            candidate_world_signature: publication.candidate_world_signature(),
+            world_seed: publication.candidate_world_seed(),
+            world_tick: publication.candidate_world_tick(),
+            source_run_identity: publication.archive_source_run().to_string(),
+            entries,
+            fingerprint: [0; 4],
+        };
+        plan.fingerprint = curated_founder_gpu_residency_plan_fingerprint(&plan);
+        plan
+    }
+}
+
+fn curated_founder_gpu_residency_plan_fingerprint(
+    plan: &CuratedFounderGpuResidencyPlan,
+) -> [u64; 4] {
+    let mut digest = CanonicalDigestBuilder::new(b"alife.curated-founder.gpu-residency-plan.v1");
+    digest.write_utf8(&plan.final_save_digest);
+    digest.write_u16(plan.candidate_world_signature.schema_version);
+    for word in plan.candidate_world_signature.words {
+        digest.write_u64(word);
+    }
+    digest.write_u64(plan.world_seed);
+    digest.write_u64(plan.world_tick.raw());
+    digest.write_utf8(&plan.source_run_identity);
+    digest.write_sequence_len(plan.entries.len());
+    for entry in &plan.entries {
+        digest.write_u32(entry.final_population_slot);
+        digest.write_u64(entry.world_entity_id.raw());
+        digest.write_u64(entry.organism_id.raw());
+        digest.write_u64(entry.lineage_id.raw());
+        digest.write_bytes(entry.archive_birth_manifest_digest.bytes());
+        let projection = &entry.projection;
+        let foundation = projection.foundation();
+        digest.write_u64(foundation.foundation_id);
+        digest.write_u16(foundation.version);
+        digest.write_u64(foundation.compatibility_family_id);
+        digest.write_u16(foundation.brain_class_id.raw());
+        digest.write_u16(projection.sensor_profile().raw());
+        digest.write_bytes(projection.foundation_asset_digest().bytes());
+        for word in projection.receipt().phenotype_hash().0 {
+            digest.write_u64(word);
+        }
+        for word in projection.receipt().digest() {
+            digest.write_u64(word);
+        }
+        digest.write_bytes(projection.frozen_abi().address_map_digest().bytes());
+    }
+    digest.finish256()
 }
 
 #[derive(Debug, Error)]
@@ -471,6 +577,10 @@ pub(crate) enum CuratedFounderResetRuntimeError {
     NoRetainedOperation,
     #[error("a curated founder operation is retained; retry it before starting another reset")]
     RetainedOperationPending,
+    #[error("a curated founder GPU residency plan is retained; recover it before starting another reset")]
+    RetainedResidencyPlanPending,
+    #[error("the retained curated founder GPU residency plan changed during retry")]
+    ResidencyPlanMismatch,
     #[error("curated founder reset plan rejected before archive commit: {0}")]
     Plan(#[from] CuratedFounderResetError),
     #[error("curated founder reset bundle rejected before archive commit: {0}")]
@@ -576,6 +686,7 @@ pub(crate) struct LiveAgentResetIntent {
 pub(crate) enum CuratedFounderResetDispatchRejection {
     MultipleCommands,
     RetainedOperationPending,
+    RetainedResidencyPlanPending,
     Runtime { message: String },
 }
 
@@ -678,14 +789,19 @@ fn project_curated_founder_reset_runtime_error(
                 rejection: CuratedFounderResetDispatchRejection::RetainedOperationPending,
             }
         }
+        CuratedFounderResetRuntimeError::RetainedResidencyPlanPending => {
+            CuratedFounderResetDispatchResult::PreCommitRejected {
+                rejection: CuratedFounderResetDispatchRejection::RetainedResidencyPlanPending,
+            }
+        }
         CuratedFounderResetRuntimeError::DurableRefresh { evidence, error } => {
             project_post_publication_failure(
                 evidence,
                 "durable publication refresh",
                 error,
                 CuratedFounderSaveState::Unknown,
-                true,
-                "retry the retained operation",
+                false,
+                "manual recovery is required",
             )
         }
         CuratedFounderResetRuntimeError::DurableCheckpointNotification { evidence, error } => {
@@ -703,6 +819,7 @@ fn project_curated_founder_reset_runtime_error(
         | CuratedFounderResetRuntimeError::MissingLineageArchive
         | CuratedFounderResetRuntimeError::MissingLineageRunId
         | CuratedFounderResetRuntimeError::NoRetainedOperation
+        | CuratedFounderResetRuntimeError::ResidencyPlanMismatch
         | CuratedFounderResetRuntimeError::Plan(_)
         | CuratedFounderResetRuntimeError::Materialization(_)
         | CuratedFounderResetRuntimeError::PreCommit(_)) => {
@@ -740,7 +857,7 @@ fn project_post_publication_failure(
         proposed_save_digest: evidence.proposed_save_digest,
         archive_count: evidence.archive_count,
         save_state,
-        gpu_residency: CuratedFounderGpuResidencyState::Pending,
+        gpu_residency: evidence.gpu_residency,
         retryable,
     }
 }
@@ -798,9 +915,24 @@ pub struct GpuLiveBrainRuntime {
     lineage_library: Option<LineageLibrary>,
     lineage_run_id: Option<String>,
     retained_curated_founder_operation: Option<CuratedFounderDurableOperation>,
+    retained_curated_founder_gpu_residency_plan: Option<CuratedFounderGpuResidencyPlan>,
     archive_learned_capture_policy: ArchiveLearnedCapturePolicy,
     archive_birth_manifests: BTreeMap<u64, Blake3Digest>,
     archive_retirement_receipts: BTreeMap<u64, ArchiveRetirementReceipt>,
+}
+
+type CuratedFounderDurableRefresh = fn(
+    &mut GpuLiveCheckpointDurability,
+    &str,
+) -> Result<(), GameAppShellError>;
+
+fn curated_founder_gpu_residency_state(
+    retained_plan: &Option<CuratedFounderGpuResidencyPlan>,
+) -> CuratedFounderGpuResidencyState {
+    retained_plan
+        .as_ref()
+        .map(|plan| plan.state)
+        .unwrap_or(CuratedFounderGpuResidencyState::NotStarted)
 }
 
 fn attempt_curated_founder_reset_with_owned_authorities(
@@ -809,7 +941,30 @@ fn attempt_curated_founder_reset_with_owned_authorities(
     lineage_run_id: Option<&str>,
     world: &mut HeadlessWorld,
     retained_operation: &mut Option<CuratedFounderDurableOperation>,
+    retained_plan: &mut Option<CuratedFounderGpuResidencyPlan>,
     request: Option<CuratedFounderResetRequest>,
+) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+    attempt_curated_founder_reset_with_owned_authorities_and_refresh(
+        checkpoint_durability,
+        lineage_library,
+        lineage_run_id,
+        world,
+        retained_operation,
+        retained_plan,
+        request,
+        |durability, expected_digest| durability.refresh_published(expected_digest).map(|_| ()),
+    )
+}
+
+fn attempt_curated_founder_reset_with_owned_authorities_and_refresh(
+    checkpoint_durability: &mut Option<GpuLiveCheckpointDurability>,
+    lineage_library: &mut Option<LineageLibrary>,
+    lineage_run_id: Option<&str>,
+    world: &mut HeadlessWorld,
+    retained_operation: &mut Option<CuratedFounderDurableOperation>,
+    retained_plan: &mut Option<CuratedFounderGpuResidencyPlan>,
+    request: Option<CuratedFounderResetRequest>,
+    refresh_published: CuratedFounderDurableRefresh,
 ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
     if checkpoint_durability.is_none() {
         return Err(CuratedFounderResetRuntimeError::MissingDurability);
@@ -819,6 +974,9 @@ fn attempt_curated_founder_reset_with_owned_authorities(
     }
     if retained_operation.is_some() && request.is_some() {
         return Err(CuratedFounderResetRuntimeError::RetainedOperationPending);
+    }
+    if retained_plan.is_some() && request.is_some() {
+        return Err(CuratedFounderResetRuntimeError::RetainedResidencyPlanPending);
     }
 
     let (operation, operation_was_retained) = match retained_operation.take() {
@@ -869,18 +1027,18 @@ fn attempt_curated_founder_reset_with_owned_authorities(
         *retained_operation = Some(operation);
         return Ok(CuratedFounderResetAttempt {
             publication,
-            gpu_residency: CuratedFounderGpuResidencyState::Pending,
+            gpu_residency: curated_founder_gpu_residency_state(retained_plan),
         });
     }
 
-    let result = CuratedFounderResetAttempt {
-        publication,
-        gpu_residency: CuratedFounderGpuResidencyState::Pending,
-    };
-    let final_save_digest = match result.publication.final_save_digest() {
+    let final_save_digest = match publication.final_save_digest() {
         Some(digest) => digest,
         None => {
-            *retained_operation = Some(operation);
+            *retained_operation = None;
+            let result = CuratedFounderResetAttempt {
+                publication,
+                gpu_residency: curated_founder_gpu_residency_state(retained_plan),
+            };
             return Err(CuratedFounderResetRuntimeError::DurableRefresh {
                 evidence: CuratedFounderResetRuntimeEvidence::from_attempt(&result),
                 error: GameAppShellError::InvalidProductionFrontend {
@@ -890,19 +1048,48 @@ fn attempt_curated_founder_reset_with_owned_authorities(
             });
         }
     };
-    if let Err(error) = checkpoint_durability
-        .as_mut()
-        .expect("durability presence was checked above")
-        .refresh_published(final_save_digest)
-        .map(|_| ())
-    {
-        *retained_operation = Some(operation);
+
+    let next_plan = CuratedFounderGpuResidencyPlan::from_accepted_operation(
+        &operation,
+        publication.receipt(),
+    );
+    if let Some(existing_plan) = retained_plan.as_ref() {
+        if existing_plan.fingerprint != next_plan.fingerprint {
+            *retained_operation = Some(operation);
+            return Err(CuratedFounderResetRuntimeError::ResidencyPlanMismatch);
+        }
+    } else {
+        *retained_plan = Some(next_plan);
+    }
+
+    if let Err(error) = refresh_published(
+        checkpoint_durability
+            .as_mut()
+            .expect("durability presence was checked above"),
+        final_save_digest,
+    ) {
+        *retained_operation = None;
+        if let Some(plan) = retained_plan.as_mut() {
+            plan.state = CuratedFounderGpuResidencyState::Unknown;
+        }
+        let result = CuratedFounderResetAttempt {
+            publication,
+            gpu_residency: CuratedFounderGpuResidencyState::Unknown,
+        };
         return Err(CuratedFounderResetRuntimeError::DurableRefresh {
             evidence: CuratedFounderResetRuntimeEvidence::from_attempt(&result),
             error,
         });
     }
 
+    let plan = retained_plan
+        .as_mut()
+        .expect("published curated founder reset has an exact GPU residency plan");
+    plan.state = CuratedFounderGpuResidencyState::Pending;
+    let result = CuratedFounderResetAttempt {
+        publication,
+        gpu_residency: CuratedFounderGpuResidencyState::Pending,
+    };
     Ok(result)
 }
 
@@ -1256,6 +1443,7 @@ impl GpuLiveBrainRuntime {
             self.lineage_run_id.as_deref(),
             &mut self.world,
             &mut self.retained_curated_founder_operation,
+            &mut self.retained_curated_founder_gpu_residency_plan,
             Some(request),
         )?;
         self.note_curated_founder_durable_checkpoint(&result)?;
@@ -1271,6 +1459,7 @@ impl GpuLiveBrainRuntime {
             self.lineage_run_id.as_deref(),
             &mut self.world,
             &mut self.retained_curated_founder_operation,
+            &mut self.retained_curated_founder_gpu_residency_plan,
             None,
         )?;
         self.note_curated_founder_durable_checkpoint(&result)?;
@@ -1292,20 +1481,34 @@ impl GpuLiveBrainRuntime {
             .checkpoint_durability
             .as_ref()
             .ok_or(CuratedFounderResetRuntimeError::MissingDurability)?;
-        let durable_reference = durability.durable_reference().map_err(|error| {
-            CuratedFounderResetRuntimeError::DurableCheckpointNotification {
-                evidence: CuratedFounderResetRuntimeEvidence::from_attempt(result),
-                error,
+        let durable_reference = match durability.durable_reference() {
+            Ok(reference) => reference,
+            Err(error) => {
+                self.retained_curated_founder_operation = None;
+                if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
+                    plan.state = CuratedFounderGpuResidencyState::Unknown;
+                }
+                let mut evidence = CuratedFounderResetRuntimeEvidence::from_attempt(result);
+                evidence.gpu_residency = CuratedFounderGpuResidencyState::Unknown;
+                return Err(CuratedFounderResetRuntimeError::DurableCheckpointNotification {
+                    evidence,
+                    error,
+                });
             }
-        })?;
-        self.backend
-            .note_durable_checkpoint(durable_reference)
-            .map_err(
-                |error| CuratedFounderResetRuntimeError::DurableCheckpointNotification {
-                    evidence: CuratedFounderResetRuntimeEvidence::from_attempt(result),
-                    error: error.into(),
-                },
-            )
+        };
+        if let Err(error) = self.backend.note_durable_checkpoint(durable_reference) {
+            self.retained_curated_founder_operation = None;
+            if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
+                plan.state = CuratedFounderGpuResidencyState::Unknown;
+            }
+            let mut evidence = CuratedFounderResetRuntimeEvidence::from_attempt(result);
+            evidence.gpu_residency = CuratedFounderGpuResidencyState::Unknown;
+            return Err(CuratedFounderResetRuntimeError::DurableCheckpointNotification {
+                evidence,
+                error: error.into(),
+            });
+        }
+        Ok(())
     }
 
     pub fn new(
@@ -1511,6 +1714,7 @@ impl GpuLiveBrainRuntime {
             lineage_library,
             lineage_run_id,
             retained_curated_founder_operation: None,
+            retained_curated_founder_gpu_residency_plan: None,
             archive_learned_capture_policy,
             archive_birth_manifests: BTreeMap::new(),
             archive_retirement_receipts: BTreeMap::new(),
@@ -1608,6 +1812,7 @@ impl GpuLiveBrainRuntime {
             lineage_library: None,
             lineage_run_id: None,
             retained_curated_founder_operation: None,
+            retained_curated_founder_gpu_residency_plan: None,
             archive_learned_capture_policy: ArchiveLearnedCapturePolicy::GeneticOnly,
             archive_birth_manifests: BTreeMap::new(),
             archive_retirement_receipts: BTreeMap::new(),
@@ -4449,13 +4654,56 @@ mod tests {
         request: Option<CuratedFounderResetRequest>,
     ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
         let archive_run_id = fixture.archive_run_id.clone();
+        let mut retained_plan = None;
         attempt_curated_founder_reset_with_owned_authorities(
             &mut fixture.durability,
             &mut fixture.lineage_library,
             Some(&archive_run_id),
             &mut fixture.world,
             retained_operation,
+            &mut retained_plan,
             request,
+        )
+    }
+
+    fn run_curated_runtime_authority_with_plan(
+        fixture: &mut CuratedRuntimeAuthorityFixture,
+        retained_operation: &mut Option<CuratedFounderDurableOperation>,
+        retained_plan: &mut Option<CuratedFounderGpuResidencyPlan>,
+        request: Option<CuratedFounderResetRequest>,
+    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+        let archive_run_id = fixture.archive_run_id.clone();
+        attempt_curated_founder_reset_with_owned_authorities(
+            &mut fixture.durability,
+            &mut fixture.lineage_library,
+            Some(&archive_run_id),
+            &mut fixture.world,
+            retained_operation,
+            retained_plan,
+            request,
+        )
+    }
+
+    fn run_curated_runtime_authority_with_refresh_failure(
+        fixture: &mut CuratedRuntimeAuthorityFixture,
+        retained_operation: &mut Option<CuratedFounderDurableOperation>,
+        retained_plan: &mut Option<CuratedFounderGpuResidencyPlan>,
+        request: Option<CuratedFounderResetRequest>,
+    ) -> Result<CuratedFounderResetAttempt, CuratedFounderResetRuntimeError> {
+        let archive_run_id = fixture.archive_run_id.clone();
+        attempt_curated_founder_reset_with_owned_authorities_and_refresh(
+            &mut fixture.durability,
+            &mut fixture.lineage_library,
+            Some(&archive_run_id),
+            &mut fixture.world,
+            retained_operation,
+            retained_plan,
+            request,
+            |_durability, _expected_digest| {
+                Err(GameAppShellError::InvalidProductionFrontend {
+                    message: "test-forced post-publication refresh failure".to_string(),
+                })
+            },
         )
     }
 
@@ -4536,6 +4784,7 @@ mod tests {
         let before = authority_snapshot(&fixture);
         let mut missing_durability = None;
         let mut retained_operation = None;
+        let mut retained_plan = None;
         let archive_run_id = fixture.archive_run_id.clone();
         let request = fixture.request.clone();
         let error = attempt_curated_founder_reset_with_owned_authorities(
@@ -4544,6 +4793,7 @@ mod tests {
             Some(&archive_run_id),
             &mut fixture.world,
             &mut retained_operation,
+            &mut retained_plan,
             Some(request),
         )
         .unwrap_err();
@@ -4559,6 +4809,7 @@ mod tests {
         let mut durability = fixture.durability.take();
         let mut missing_library = None;
         let mut retained_operation = None;
+        let mut retained_plan = None;
         let archive_run_id = fixture.archive_run_id.clone();
         let request = fixture.request.clone();
         let error = attempt_curated_founder_reset_with_owned_authorities(
@@ -4567,6 +4818,7 @@ mod tests {
             Some(&archive_run_id),
             &mut fixture.world,
             &mut retained_operation,
+            &mut retained_plan,
             Some(request),
         )
         .unwrap_err();
@@ -4602,7 +4854,7 @@ mod tests {
         assert_eq!(conflict.save_state(), CuratedFounderSaveState::Conflict);
         assert_eq!(
             conflict.gpu_residency_state(),
-            CuratedFounderGpuResidencyState::Pending
+            CuratedFounderGpuResidencyState::NotStarted
         );
         assert_eq!(conflict.proposed_save_digest(), proposed);
         assert!(conflict.expected_save_digest().is_some());
@@ -4777,7 +5029,7 @@ mod tests {
         assert_eq!(failure.save_state(), CuratedFounderSaveState::Unknown);
         assert_eq!(
             failure.gpu_residency_state(),
-            CuratedFounderGpuResidencyState::Pending
+            CuratedFounderGpuResidencyState::NotStarted
         );
         assert_eq!(failure.proposed_save_digest(), proposed);
         assert!(failure.cause().is_some());
@@ -4828,6 +5080,310 @@ mod tests {
             archive_snapshot(fixture.lineage_library.as_ref().unwrap().root()),
             archive_after_failure
         );
+    }
+
+    #[test]
+    fn published_curated_reset_retains_receipt_bound_gpu_residency_plan() {
+        fn reduce_to_two_entries(fixture: &mut CuratedRuntimeAuthorityFixture) {
+            fixture
+                .request
+                .final_agents
+                .sort_by_key(|agent| agent.final_population_slot);
+            fixture.request.final_agents.truncate(2);
+            fixture.request.target_population = 2;
+        }
+
+        fn assert_plan_matches_accepted_bundle(
+            plan: &CuratedFounderGpuResidencyPlan,
+            bundle: &crate::curated_founder_materializer::CuratedFounderBundle,
+            result: &CuratedFounderResetAttempt,
+            source_run_identity: &str,
+        ) {
+            assert_eq!(plan.entries.len(), 2);
+            assert_eq!(plan.source_run_identity, source_run_identity);
+            assert_eq!(
+                plan.final_save_digest,
+                result.receipt().final_save_digest().unwrap()
+            );
+            assert_eq!(
+                plan.candidate_world_signature,
+                result.receipt().candidate_world_signature()
+            );
+            assert_eq!(plan.world_seed, result.receipt().candidate_world_seed());
+            assert_eq!(plan.world_tick, result.receipt().candidate_world_tick());
+
+            let archive_identities = result.receipt().archive_receipt_identities();
+            assert_eq!(archive_identities.len(), bundle.entries.len());
+            for ((planned, accepted), archived) in plan
+                .entries
+                .iter()
+                .zip(&bundle.entries)
+                .zip(archive_identities)
+            {
+                assert_eq!(
+                    planned.final_population_slot,
+                    accepted.plan_entry.final_population_slot
+                );
+                assert_eq!(planned.world_entity_id, accepted.plan_entry.world_entity_id);
+                assert_eq!(planned.organism_id, accepted.plan_entry.organism_id);
+                assert_eq!(planned.lineage_id, accepted.plan_entry.lineage_id);
+                assert_eq!(planned.projection, accepted.projection);
+                assert_eq!(
+                    planned.projection.foundation_asset_digest(),
+                    accepted.projection.foundation_asset_digest()
+                );
+                assert_eq!(
+                    planned.projection.sensor_profile(),
+                    accepted.projection.sensor_profile()
+                );
+                assert_eq!(
+                    planned.projection.receipt().phenotype_hash(),
+                    accepted.projection.receipt().phenotype_hash()
+                );
+                assert_eq!(
+                    planned.projection.receipt().digest(),
+                    accepted.projection.receipt().digest()
+                );
+                assert_eq!(
+                    (
+                        planned.final_population_slot,
+                        planned.world_entity_id,
+                        planned.organism_id
+                    ),
+                    (archived.0, archived.1, archived.2)
+                );
+                assert_eq!(planned.lineage_id, archived.3);
+                assert_eq!(planned.archive_birth_manifest_digest, archived.4);
+            }
+            assert_eq!(
+                plan.fingerprint,
+                curated_founder_gpu_residency_plan_fingerprint(plan)
+            );
+        }
+
+        let mut conflict_fixture = curated_runtime_authority_fixture("gpu-plan-conflict");
+        reduce_to_two_entries(&mut conflict_fixture);
+        let mut retained_operation = None;
+        let mut retained_plan = None;
+        let proposed = seed_retained_operation(&conflict_fixture, &mut retained_operation);
+        let accepted_bundle = retained_operation
+            .as_ref()
+            .unwrap()
+            .accepted_bundle()
+            .clone();
+        assert!(retained_plan.is_none(), "a retained operation is not GPU residency");
+        let retained_fingerprint = operation_fingerprint(retained_operation.as_ref().unwrap());
+
+        let competing = competing_valid_save(&conflict_fixture.source_save);
+        GpuDurableSaveManifest::publish_snapshot(
+            &conflict_fixture.durable_save_path,
+            &conflict_fixture.asset_root,
+            &competing,
+        )
+        .unwrap();
+        let conflict = run_curated_runtime_authority_with_plan(
+            &mut conflict_fixture,
+            &mut retained_operation,
+            &mut retained_plan,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            conflict.publication_status(),
+            CuratedFounderPublicationStatus::ArchiveCommittedSaveConflict
+        );
+        assert_eq!(
+            conflict.gpu_residency_state(),
+            CuratedFounderGpuResidencyState::NotStarted
+        );
+        assert!(retained_plan.is_none());
+        assert_eq!(
+            operation_fingerprint(retained_operation.as_ref().unwrap()),
+            retained_fingerprint
+        );
+        assert_eq!(conflict.proposed_save_digest(), proposed);
+
+        conflict_fixture.world.advance_tick();
+        let precommit = run_curated_runtime_authority_with_plan(
+            &mut conflict_fixture,
+            &mut retained_operation,
+            &mut retained_plan,
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            precommit,
+            CuratedFounderResetRuntimeError::PreCommit(
+                CuratedFounderStagingError::Mismatch {
+                    field: "apply world tick"
+                }
+            )
+        ));
+        assert!(retained_plan.is_none());
+        assert_eq!(
+            operation_fingerprint(retained_operation.as_ref().unwrap()),
+            retained_fingerprint
+        );
+
+        conflict_fixture.world = conflict_fixture.source_save.restore_headless_world().unwrap();
+        GpuDurableSaveManifest::publish_snapshot(
+            &conflict_fixture.durable_save_path,
+            &conflict_fixture.asset_root,
+            &conflict_fixture.source_save,
+        )
+        .unwrap();
+        let retried = run_curated_runtime_authority_with_plan(
+            &mut conflict_fixture,
+            &mut retained_operation,
+            &mut retained_plan,
+            None,
+        )
+        .unwrap();
+        assert!(matches!(
+            retried.publication_status(),
+            CuratedFounderPublicationStatus::Published
+                | CuratedFounderPublicationStatus::AlreadyApplied
+        ));
+        assert_eq!(
+            retried.gpu_residency_state(),
+            CuratedFounderGpuResidencyState::Pending
+        );
+        assert!(retained_operation.is_none());
+        assert_plan_matches_accepted_bundle(
+            retained_plan.as_ref().unwrap(),
+            &accepted_bundle,
+            &retried,
+            &conflict_fixture.archive_run_id,
+        );
+        let pending_plan = retained_plan.as_ref().unwrap().clone();
+        let pending_attempt_request = conflict_fixture.request.clone();
+        let pending_attempt = run_curated_runtime_authority_with_plan(
+            &mut conflict_fixture,
+            &mut retained_operation,
+            &mut retained_plan,
+            Some(pending_attempt_request),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            pending_attempt,
+            CuratedFounderResetRuntimeError::RetainedResidencyPlanPending
+        ));
+        assert!(retained_operation.is_none());
+        assert_eq!(retained_plan.as_ref(), Some(&pending_plan));
+
+        let mut already_applied_fixture = curated_runtime_authority_fixture("gpu-plan-already");
+        reduce_to_two_entries(&mut already_applied_fixture);
+        let mut already_operation = None;
+        let mut already_plan = None;
+        seed_retained_operation(&already_applied_fixture, &mut already_operation);
+        let already_bundle = already_operation
+            .as_ref()
+            .unwrap()
+            .accepted_bundle()
+            .clone();
+        let replacement = already_operation
+            .as_ref()
+            .unwrap()
+            .test_replacement_save();
+        GpuDurableSaveManifest::publish_snapshot(
+            &already_applied_fixture.durable_save_path,
+            &already_applied_fixture.asset_root,
+            &replacement,
+        )
+        .unwrap();
+        let already_applied = run_curated_runtime_authority_with_plan(
+            &mut already_applied_fixture,
+            &mut already_operation,
+            &mut already_plan,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            already_applied.publication_status(),
+            CuratedFounderPublicationStatus::AlreadyApplied
+        );
+        assert_eq!(
+            already_applied.gpu_residency_state(),
+            CuratedFounderGpuResidencyState::Pending
+        );
+        assert_plan_matches_accepted_bundle(
+            already_plan.as_ref().unwrap(),
+            &already_bundle,
+            &already_applied,
+            &already_applied_fixture.archive_run_id,
+        );
+
+        let mut refresh_fixture = curated_runtime_authority_fixture("gpu-plan-refresh-failure");
+        reduce_to_two_entries(&mut refresh_fixture);
+        let mut refresh_operation = None;
+        let mut refresh_plan = None;
+        seed_retained_operation(&refresh_fixture, &mut refresh_operation);
+        let refresh_bundle = refresh_operation
+            .as_ref()
+            .unwrap()
+            .accepted_bundle()
+            .clone();
+        let refresh_error = run_curated_runtime_authority_with_refresh_failure(
+            &mut refresh_fixture,
+            &mut refresh_operation,
+            &mut refresh_plan,
+            None,
+        )
+        .unwrap_err();
+        let projected_refresh_failure =
+            project_curated_founder_reset_runtime_error(refresh_error);
+        assert!(matches!(
+            projected_refresh_failure,
+            CuratedFounderResetDispatchResult::Unknown {
+                gpu_residency: CuratedFounderGpuResidencyState::Unknown,
+                retryable: false,
+                ..
+            }
+        ));
+        assert!(refresh_operation.is_none());
+        let retained_refresh_plan = refresh_plan.as_ref().unwrap().clone();
+        assert_eq!(
+            retained_refresh_plan.state,
+            CuratedFounderGpuResidencyState::Unknown
+        );
+        assert_eq!(retained_refresh_plan.entries.len(), refresh_bundle.entries.len());
+        assert_eq!(
+            retained_refresh_plan.fingerprint,
+            curated_founder_gpu_residency_plan_fingerprint(&retained_refresh_plan)
+        );
+
+        let before_retry = authority_snapshot(&refresh_fixture);
+        let retry_error = run_curated_runtime_authority_with_plan(
+            &mut refresh_fixture,
+            &mut refresh_operation,
+            &mut refresh_plan,
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            retry_error,
+            CuratedFounderResetRuntimeError::NoRetainedOperation
+        ));
+        assert!(refresh_operation.is_none());
+        assert_eq!(refresh_plan.as_ref(), Some(&retained_refresh_plan));
+        assert_authority_unchanged(before_retry, &refresh_fixture);
+
+        let new_attempt_request = refresh_fixture.request.clone();
+        let before_new_attempt = authority_snapshot(&refresh_fixture);
+        let new_attempt_error = run_curated_runtime_authority_with_plan(
+            &mut refresh_fixture,
+            &mut refresh_operation,
+            &mut refresh_plan,
+            Some(new_attempt_request),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            new_attempt_error,
+            CuratedFounderResetRuntimeError::RetainedResidencyPlanPending
+        ));
+        assert!(refresh_operation.is_none());
+        assert_eq!(refresh_plan.as_ref(), Some(&retained_refresh_plan));
+        assert_authority_unchanged(before_new_attempt, &refresh_fixture);
     }
 
     #[test]

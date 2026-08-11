@@ -1707,7 +1707,9 @@ fn curated_founder_reset_status(result: &CuratedFounderResetDispatchResult) -> S
 
 const fn gpu_residency_label(state: CuratedFounderGpuResidencyState) -> &'static str {
     match state {
+        CuratedFounderGpuResidencyState::NotStarted => "Not started",
         CuratedFounderGpuResidencyState::Pending => "Pending",
+        CuratedFounderGpuResidencyState::Unknown => "Unknown",
     }
 }
 
