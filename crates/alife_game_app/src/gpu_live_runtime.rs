@@ -337,6 +337,12 @@ struct PreparedLiveSelection {
     speech_prompted: bool,
 }
 
+fn resident_homeostasis_from_world_biology_receipt(
+    biology_receipt: &alife_world::HeadlessActionBiologyReceipt,
+) -> HomeostaticSnapshot {
+    biology_receipt.biology_after.homeostasis
+}
+
 struct SealedLiveSelection {
     handle: GpuBrainHandle,
     pending_eligibility: PendingEligibilityReceipt,
@@ -4068,7 +4074,7 @@ impl GpuLiveBrainRuntime {
             speech_payload,
             speech_prompted,
         )?;
-        let action_result = biology_receipt.action_result;
+        let action_result = &biology_receipt.action_result;
         let mut outcome = PostActionOutcome::new(
             organism_id,
             sequence_id,
@@ -4098,11 +4104,7 @@ impl GpuLiveBrainRuntime {
             return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
         }
         resident.language_grounding.observe_sealed(&patch)?;
-        resident.homeostasis = resident.homeostasis.advance(
-            outcome_tick,
-            patch.outcome().homeostatic_delta,
-            self.homeostatic_parameters,
-        )?;
+        resident.homeostasis = resident_homeostasis_from_world_biology_receipt(&biology_receipt);
         resident.development.age_ticks = outcome_tick;
         resident.next_sequence = resident
             .next_sequence
@@ -6371,6 +6373,64 @@ mod tests {
             runtime.sealed_patches()[0].pre_action().brain_evidence,
             PreActionBrainEvidence::NeuralClosedLoopGpu { .. }
         ));
+    }
+
+    #[test]
+    fn seal_prepared_selection_uses_world_biology_receipt_as_resident_authority() {
+        let organism_id = OrganismId(1);
+        let mut world = HeadlessScenarioBuilder::new(9_308)
+            .agent("agent", organism_id, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let world_entity_id = world
+            .organism_entity_ids()
+            .into_iter()
+            .find(|(bound_organism_id, _)| *bound_organism_id == organism_id)
+            .map(|(_, world_entity_id)| world_entity_id)
+            .unwrap();
+        let command = alife_core::ActionCommand::new(
+            organism_id,
+            alife_core::ActionKind::Rest,
+            None,
+            alife_core::Confidence::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+        )
+        .unwrap();
+        let receipt = world
+            .apply_registered_neural_command(
+                &command,
+                world_entity_id,
+                Tick::new(1),
+                None,
+                false,
+            )
+            .unwrap();
+
+        assert_eq!(receipt.action_result.body_event.sleep_recovery, 1.0);
+        assert_eq!(
+            receipt
+                .action_result
+                .observation
+                .homeostatic_delta
+                .drives
+                .fatigue,
+            -0.35
+        );
+        let learning_projection = receipt
+            .biology_before
+            .homeostasis
+            .advance(
+                receipt.outcome_tick,
+                receipt.action_result.observation.homeostatic_delta,
+                HomeostaticParameters::reference(),
+            )
+            .unwrap();
+        assert_ne!(receipt.biology_after.homeostasis, learning_projection);
+
+        let resident_homeostasis =
+            resident_homeostasis_from_world_biology_receipt(&receipt);
+        assert_eq!(resident_homeostasis, receipt.biology_after.homeostasis);
+        assert_ne!(resident_homeostasis, learning_projection);
     }
 
     #[test]
