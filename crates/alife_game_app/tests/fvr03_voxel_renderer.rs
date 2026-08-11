@@ -747,6 +747,118 @@ fn fvr04_live_world_projection_moves_matching_creature_by_stable_id() {
 }
 
 #[test]
+fn curated_first_gpu_action_consumes_receipt_updates_registered_world_and_publishes_matching_live_frame(
+) {
+    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, launch_summary) =
+        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = true;
+    app.update();
+
+    let evidence = alife_game_app::GpuLiveBrainRuntime::run_curated_first_gpu_action_for_test(
+        &launch_summary.save_path,
+    )
+    .expect("production cutover test seam must return causal evidence");
+    assert_eq!(evidence.residency_gate_rejections, 4);
+    assert_eq!(evidence.receipt.ordered_residents.len(), 2);
+    assert_eq!(evidence.gpu_selection_count, 1);
+    assert_eq!(evidence.sealed_patch_count, 1);
+
+    let stable_id = evidence.selected_world_entity_id;
+    let initial_translation = {
+        let mut roots = app.world_mut().query::<(
+            &ProductionCreatureAssemblyRoot,
+            &Fvr04ProductionCreatureVisualMarker,
+            &Transform,
+        )>();
+        roots
+            .iter(app.world())
+            .find(|(root, visual, _)| {
+                root.stable_id == stable_id && visual.organism_id == evidence.selected_organism_id
+            })
+            .map(|(_, _, transform)| transform.translation)
+            .expect("receipt-bound creature must have a production root");
+    };
+    let post_action_object = evidence
+        .post_action_world
+        .object_snapshots()
+        .into_iter()
+        .find(|object| object.id == stable_id)
+        .expect("registered world must publish the receipt-bound object");
+    assert_eq!(
+        post_action_object.organism_id,
+        Some(evidence.selected_organism_id)
+    );
+    assert_eq!(
+        evidence.summary.world_tick_after,
+        evidence.post_action_world.tick()
+    );
+    assert_eq!(evidence.summary.organism_id, evidence.selected_organism_id);
+    assert!(evidence.summary.patch_sealed);
+    assert_eq!(evidence.summary.patch_sequence_id, Some(1));
+    assert_eq!(
+        evidence.receipt.ordered_residents[0].organism_id,
+        evidence.selected_organism_id
+    );
+    assert_eq!(
+        evidence.receipt.ordered_residents[0]
+            .opaque_target_identity
+            .raw(),
+        stable_id.raw()
+    );
+    assert!(
+        (post_action_object.position.x - evidence.pre_action_position.x).abs() > f32::EPSILON
+            || (post_action_object.position.z - evidence.pre_action_position.z).abs()
+                > f32::EPSILON,
+        "registered world action must change the bound object"
+    );
+
+    let frame = LiveBrainPresentationFrame::from_authoritative_world(
+        vec![evidence.summary.clone()],
+        &evidence.post_action_world,
+    )
+    .expect("post-action world must publish as a paired live frame");
+    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+        frame,
+    ));
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .settings
+        .paused = false;
+    app.update();
+
+    let current_object = app
+        .world()
+        .resource::<LiveBrainPresentationFrameResource>()
+        .current
+        .object(stable_id)
+        .expect("current live frame must retain the receipt-bound stable ID");
+    assert_eq!(current_object.position, post_action_object.position);
+    let (expected_x, expected_z) = production_voxel_center(current_object.position);
+    let actual_translation = {
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        roots
+            .iter(app.world())
+            .find(|(root, _)| root.stable_id == stable_id)
+            .map(|(_, transform)| transform.translation)
+            .expect("stable-ID projection must keep the matching root")
+    };
+    assert!(
+        (actual_translation.x - expected_x).abs() < f32::EPSILON
+            && (actual_translation.y - initial_translation.y).abs() < f32::EPSILON
+            && (actual_translation.z - expected_z).abs() < f32::EPSILON,
+        "stable-ID projection must move the receipt-bound creature root"
+    );
+
+    let _ = launch_summary;
+}
+
+#[test]
 fn fvr04_live_world_projection_ignores_unmatched_and_non_agent_objects() {
     let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =

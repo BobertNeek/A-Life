@@ -28,7 +28,8 @@ use alife_gpu_backend::{
     GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
 };
 use alife_runtime::{
-    DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority, GpuSessionConsumerKind,
+    DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority,
+    GpuSessionConsumerKind, GpuSessionFailStopCause,
 };
 use alife_world::{
     persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
@@ -324,6 +325,7 @@ where
 
 struct PreparedLiveSelection {
     handle: GpuBrainHandle,
+    world_entity_id: WorldEntityId,
     pending_eligibility: PendingEligibilityReceipt,
     frame: PerceptionFrame,
     memory_recall: FinalizedMemoryRecall,
@@ -344,6 +346,7 @@ struct SealedLiveSelection {
 
 struct PreparedGpuBrainFrame {
     handle: GpuBrainHandle,
+    world_entity_id: WorldEntityId,
     frame: PerceptionFrame,
     memory_recall: FinalizedMemoryRecall,
     memory_upload: GpuMemoryContextUpload,
@@ -929,9 +932,26 @@ pub struct GpuLiveBrainRuntime {
     lineage_run_id: Option<String>,
     retained_curated_founder_operation: Option<CuratedFounderDurableOperation>,
     retained_curated_founder_gpu_residency_plan: Option<CuratedFounderGpuResidencyPlan>,
+    retained_curated_founder_gpu_residency_receipt: Option<GpuCuratedResidencyReceipt>,
+    curated_first_tick_pending: bool,
     archive_learned_capture_policy: ArchiveLearnedCapturePolicy,
     archive_birth_manifests: BTreeMap<u64, Blake3Digest>,
     archive_retirement_receipts: BTreeMap<u64, ArchiveRetirementReceipt>,
+}
+
+#[cfg(feature = "bevy-app")]
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct CuratedFirstGpuActionTestEvidence {
+    pub receipt: alife_gpu_backend::GpuCuratedResidencyReceipt,
+    pub summary: LiveBrainTickSummary,
+    pub post_action_world: HeadlessWorld,
+    pub pre_action_position: Vec3f,
+    pub selected_world_entity_id: WorldEntityId,
+    pub selected_organism_id: OrganismId,
+    pub residency_gate_rejections: u8,
+    pub gpu_selection_count: u64,
+    pub sealed_patch_count: usize,
 }
 
 type CuratedFounderDurableRefresh = fn(
@@ -1465,7 +1485,9 @@ impl GpuLiveBrainRuntime {
             .as_ref()
             .is_some_and(|plan| matches!(plan.state, CuratedFounderGpuResidencyState::Pending))
         {
-            self.commit_retained_curated_founder_gpu_residency()?;
+            let receipt = self.commit_retained_curated_founder_gpu_residency()?;
+            self.retained_curated_founder_gpu_residency_receipt = Some(receipt);
+            self.curated_first_tick_pending = true;
         }
         Ok(result)
     }
@@ -1488,7 +1510,9 @@ impl GpuLiveBrainRuntime {
             .as_ref()
             .is_some_and(|plan| matches!(plan.state, CuratedFounderGpuResidencyState::Pending))
         {
-            self.commit_retained_curated_founder_gpu_residency()?;
+            let receipt = self.commit_retained_curated_founder_gpu_residency()?;
+            self.retained_curated_founder_gpu_residency_receipt = Some(receipt);
+            self.curated_first_tick_pending = true;
         }
         Ok(result)
     }
@@ -1727,6 +1751,195 @@ impl GpuLiveBrainRuntime {
         )
     }
 
+    #[cfg(feature = "bevy-app")]
+    #[doc(hidden)]
+    pub fn run_curated_first_gpu_action_for_test(
+        save_path: impl AsRef<std::path::Path>,
+    ) -> Result<CuratedFirstGpuActionTestEvidence, GameAppShellError> {
+        let invalid = |message: &str| GameAppShellError::InvalidProductionFrontend {
+            message: message.to_string(),
+        };
+        let save = PortableSaveFile::from_json_file(save_path.as_ref())?;
+        let world = save.restore_headless_world()?;
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
+            message: error.to_string(),
+        })?;
+        let mut runtime = Self::new_causal_acceptance_profiled(
+            backend,
+            world,
+            save.deterministic_seed,
+            save.config.brain_class,
+            SensorProfile::PrivilegedAffordanceV1,
+        )?;
+        let bindings = runtime.world.organism_entity_ids();
+        if bindings.len() < 2 {
+            return Err(invalid(
+                "curated first-tick test seam requires two registered organisms",
+            ));
+        }
+        let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(runtime.sensor_profile)
+            .map_err(|error| invalid(&error.to_string()))?;
+        let foundation_manifest = foundation_asset.manifest();
+        let foundation = FoundationGeneticIdentity::new(
+            foundation_manifest.foundation_id().raw(),
+            foundation_manifest.foundation_version().raw() as u16,
+            foundation_manifest.compatibility_family_id().raw(),
+            BrainCapacityClass::N512_ID,
+        )
+        .map_err(|error| invalid(&error.to_string()))?;
+        let final_agents = bindings
+            .iter()
+            .take(2)
+            .enumerate()
+            .map(
+                |(slot, (organism_id, world_entity_id))| CuratedFounderAgentInput {
+                    world_entity_id: *world_entity_id,
+                    organism_id: Some(*organism_id),
+                    final_population_slot: u32::try_from(slot)
+                        .expect("the two-row test cohort fits in a population slot"),
+                    legacy_genome_id: None,
+                },
+            )
+            .collect::<Vec<_>>();
+        let source_run_identity = format!("task-3.2b4c-test-seam:{}", save.save_id);
+        let founder_plan = plan_curated_founder_reset(&CuratedFounderResetRequest {
+            policy_label: Some(CURATED_FOUNDER_RESET_POLICY.to_string()),
+            source_save_identity: save.save_id.clone(),
+            source_save_label: format!("test-save:{}", save.save_id),
+            source_save_seed: save.deterministic_seed,
+            world_seed: save.world.seed,
+            restored_tick: runtime.world.tick(),
+            target_population: 2,
+            sensor_profile: runtime.sensor_profile,
+            foundation,
+            foundation_content_digest: foundation_asset.digest(),
+            source_run_identity: source_run_identity.clone(),
+            final_agents,
+        })
+        .map_err(|error| invalid(&error.to_string()))?;
+        let bundle = materialize_curated_founder_bundle(&founder_plan)
+            .map_err(|error| invalid(&error.to_string()))?;
+        let mut plan = CuratedFounderGpuResidencyPlan {
+            state: CuratedFounderGpuResidencyState::Pending,
+            final_save_digest: format!("test-save-digest:{}", save.save_id),
+            candidate_world_signature: runtime.world.canonical_signature_digest()?,
+            world_seed: save.world.seed,
+            world_tick: runtime.world.tick(),
+            source_run_identity,
+            entries: bundle
+                .entries
+                .into_iter()
+                .map(|entry| {
+                    let mut digest_bytes = [0; 32];
+                    digest_bytes[..4]
+                        .copy_from_slice(&entry.plan_entry.final_population_slot.to_le_bytes());
+                    CuratedFounderGpuResidencyPlanEntry {
+                        final_population_slot: entry.plan_entry.final_population_slot,
+                        world_entity_id: entry.plan_entry.world_entity_id,
+                        organism_id: entry.plan_entry.organism_id,
+                        lineage_id: entry.plan_entry.lineage_id,
+                        archive_birth_manifest_digest: Blake3Digest::from_bytes(digest_bytes),
+                        projection: entry.projection,
+                    }
+                })
+                .collect(),
+            fingerprint: [0; 4],
+        };
+        plan.fingerprint = curated_founder_gpu_residency_plan_fingerprint(&plan);
+
+        runtime.curated_first_tick_pending = true;
+        let baseline_tick = runtime.world.tick();
+        let baseline_handles = runtime.handles.clone();
+        let baseline_resident_keys = runtime.residents.keys().copied().collect::<Vec<_>>();
+        let baseline_memory_keys = runtime.memories.keys().copied().collect::<Vec<_>>();
+        let baseline_topology_keys = runtime.topologies.keys().copied().collect::<Vec<_>>();
+        let mut residency_gate_rejections = 0;
+        let mut record_rejection = |runtime: &Self| -> Result<(), GameAppShellError> {
+            if runtime.curated_first_tick_residency_gate().is_ok()
+                || runtime.world.tick() != baseline_tick
+                || runtime.handles != baseline_handles
+                || runtime.residents.keys().copied().collect::<Vec<_>>() != baseline_resident_keys
+                || runtime.memories.keys().copied().collect::<Vec<_>>() != baseline_memory_keys
+                || runtime.topologies.keys().copied().collect::<Vec<_>>() != baseline_topology_keys
+            {
+                return Err(invalid(
+                    "curated first-tick residency rejection mutated runtime state",
+                ));
+            }
+            residency_gate_rejections = residency_gate_rejections.saturating_add(1);
+            Ok(())
+        };
+
+        runtime.retained_curated_founder_gpu_residency_plan = None;
+        runtime.retained_curated_founder_gpu_residency_receipt = None;
+        record_rejection(&runtime)?;
+
+        let mut invalid_plan = plan.clone();
+        runtime.retained_curated_founder_gpu_residency_plan = Some(invalid_plan.clone());
+        record_rejection(&runtime)?;
+
+        invalid_plan.state = CuratedFounderGpuResidencyState::Unknown;
+        runtime.retained_curated_founder_gpu_residency_plan = Some(invalid_plan);
+        record_rejection(&runtime)?;
+
+        runtime.retained_curated_founder_gpu_residency_plan = Some(plan);
+        let receipt = runtime
+            .commit_retained_curated_founder_gpu_residency()
+            .map_err(|error| invalid(&error.to_string()))?;
+        runtime.retained_curated_founder_gpu_residency_receipt = Some(receipt.clone());
+        runtime.curated_first_tick_pending = true;
+
+        let mut mismatched_receipt = receipt.clone();
+        mismatched_receipt.generation_fingerprint[0] ^= 1;
+        runtime.retained_curated_founder_gpu_residency_receipt = Some(mismatched_receipt);
+        if runtime.curated_first_tick_residency_gate().is_ok()
+            || runtime.world.tick() != baseline_tick
+        {
+            return Err(invalid(
+                "mismatched curated first-tick receipt was admitted",
+            ));
+        }
+        residency_gate_rejections = residency_gate_rejections.saturating_add(1);
+        runtime.retained_curated_founder_gpu_residency_receipt = Some(receipt.clone());
+
+        let first_resident = receipt
+            .ordered_residents
+            .first()
+            .ok_or_else(|| invalid("curated first-tick receipt is empty"))?;
+        let selected_world_entity_id = WorldEntityId(first_resident.opaque_target_identity.raw());
+        let selected_organism_id = first_resident.organism_id;
+        let pre_action_position = runtime
+            .world
+            .entity(selected_world_entity_id)
+            .ok_or_else(|| invalid("receipt-bound world object is absent"))?
+            .position;
+        let selection_before = runtime.backend.completed_selection_count();
+        let summary = runtime
+            .tick()?
+            .into_iter()
+            .next()
+            .ok_or_else(|| invalid("curated first tick returned no summary"))?;
+        let gpu_selection_count = runtime
+            .backend
+            .completed_selection_count()
+            .saturating_sub(selection_before);
+        let sealed_patch_count = runtime.sealed_patch_count();
+        Ok(CuratedFirstGpuActionTestEvidence {
+            receipt,
+            summary,
+            post_action_world: runtime.world_snapshot(),
+            pre_action_position,
+            selected_world_entity_id,
+            selected_organism_id,
+            residency_gate_rejections,
+            gpu_selection_count,
+            sealed_patch_count,
+        })
+    }
+
     /// Creates a production GPU runtime whose immutable genetic archives are
     /// committed before each neural slot is allocated.
     #[allow(clippy::too_many_arguments)]
@@ -1899,6 +2112,8 @@ impl GpuLiveBrainRuntime {
             lineage_run_id,
             retained_curated_founder_operation: None,
             retained_curated_founder_gpu_residency_plan: None,
+            retained_curated_founder_gpu_residency_receipt: None,
+            curated_first_tick_pending: false,
             archive_learned_capture_policy,
             archive_birth_manifests: BTreeMap::new(),
             archive_retirement_receipts: BTreeMap::new(),
@@ -1997,6 +2212,8 @@ impl GpuLiveBrainRuntime {
             lineage_run_id: None,
             retained_curated_founder_operation: None,
             retained_curated_founder_gpu_residency_plan: None,
+            retained_curated_founder_gpu_residency_receipt: None,
+            curated_first_tick_pending: false,
             archive_learned_capture_policy: ArchiveLearnedCapturePolicy::GeneticOnly,
             archive_birth_manifests: BTreeMap::new(),
             archive_retirement_receipts: BTreeMap::new(),
@@ -2711,6 +2928,74 @@ impl GpuLiveBrainRuntime {
         Ok(true)
     }
 
+    fn curated_first_tick_residency_gate(
+        &self,
+    ) -> Result<Option<&GpuCuratedResidencyReceipt>, GameAppShellError> {
+        if !self.curated_first_tick_pending {
+            return Ok(None);
+        }
+
+        let reject = || GameAppShellError::InvalidProductionFrontend {
+            message: "curated first tick residency receipt is absent or mismatched".to_string(),
+        };
+        let plan = self
+            .retained_curated_founder_gpu_residency_plan
+            .as_ref()
+            .ok_or_else(|| reject())?;
+        if plan.state != CuratedFounderGpuResidencyState::Committed
+            || curated_founder_gpu_residency_plan_fingerprint(plan) != plan.fingerprint
+            || plan.world_tick > self.world.tick()
+        {
+            return Err(reject());
+        }
+        let receipt = self
+            .retained_curated_founder_gpu_residency_receipt
+            .as_ref()
+            .ok_or_else(|| reject())?;
+        if !receipt.submission_completed
+            || receipt.generation_fingerprint != plan.fingerprint
+            || receipt.backend_hardware_generation != self.backend.hardware_receipt().generation
+            || receipt.ordered_residents.len() != plan.entries.len()
+            || self.handles.len() != receipt.ordered_residents.len()
+            || self.residents.len() != receipt.ordered_residents.len()
+            || self.memories.len() != receipt.ordered_residents.len()
+            || self.topologies.len() != receipt.ordered_residents.len()
+            || receipt.ordered_residents.is_empty()
+        {
+            return Err(reject());
+        }
+
+        let world_bindings = self.world.organism_entity_ids();
+        for (entry, resident) in plan.entries.iter().zip(&receipt.ordered_residents) {
+            let world_entity_id = WorldEntityId(resident.opaque_target_identity.raw());
+            if world_entity_id.validate().is_err()
+                || resident.organism_id != entry.organism_id
+                || resident.opaque_target_identity.raw() != entry.world_entity_id.raw()
+                || resident.exact_phenotype_hash != entry.projection.receipt().phenotype_hash()
+                || resident.exact_foundation_hash != entry.projection.foundation_asset_digest()
+                || !world_bindings.iter().any(|(organism_id, bound_entity_id)| {
+                    *organism_id == resident.organism_id && *bound_entity_id == world_entity_id
+                })
+            {
+                return Err(reject());
+            }
+            let Some(handle) = self.handles.get(&resident.organism_id.raw()) else {
+                return Err(reject());
+            };
+            if *handle != resident.handle
+                || handle.organism_id() != resident.organism_id
+                || handle.phenotype_hash() != resident.exact_phenotype_hash
+            {
+                return Err(reject());
+            }
+        }
+        if self.curated_first_tick_pending {
+            Ok(Some(receipt))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn tick(&mut self) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
         self.tick_with_sleep_progress(|backend, handle, organism_id, state, intent| {
             let mut driver = AuthoritativeGpuSleepDriver { backend, handle };
@@ -2770,6 +3055,15 @@ impl GpuLiveBrainRuntime {
             Option<ConsolidationIntent>,
         ) -> SleepProgressResult,
     {
+        let curated_first_tick_resident = match self.curated_first_tick_residency_gate() {
+            Ok(receipt) => receipt.and_then(|receipt| receipt.ordered_residents.first().cloned()),
+            Err(error) => {
+                self.backend
+                    .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                return Err(error);
+            }
+        };
+        let curated_first_tick = curated_first_tick_resident.is_some();
         self.reconcile_population()?;
         self.last_sealed_patches.clear();
         self.last_learning_receipts.clear();
@@ -2796,13 +3090,31 @@ impl GpuLiveBrainRuntime {
         let mut summaries_by_organism = BTreeMap::new();
         let mut persist_sleep_boundary = false;
         let mut completed_promotions = Vec::new();
-        let scheduled_handles = self
-            .handles
-            .iter()
-            .map(|(&raw, &handle)| (raw, handle))
-            .collect::<Vec<_>>();
+        let scheduled_handles = if let Some(first) = curated_first_tick_resident {
+            vec![(
+                first.organism_id.raw(),
+                first.handle,
+                WorldEntityId(first.opaque_target_identity.raw()),
+            )]
+        } else {
+            self.handles
+                .iter()
+                .map(|(&raw, &handle)| {
+                    let organism_id = OrganismId(raw);
+                    let world_entity_id = self
+                        .world
+                        .organism_entity_ids()
+                        .into_iter()
+                        .find_map(|(bound_organism_id, world_entity_id)| {
+                            (bound_organism_id == organism_id).then_some(world_entity_id)
+                        })
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch);
+                    (raw, handle, world_entity_id)
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
         let perception_index = self.world.build_perception_batch_index()?;
-        for (raw, handle) in scheduled_handles {
+        for (raw, handle, world_entity_id) in scheduled_handles {
             let retained_learning_pending =
                 self.retry_retained_learning(OrganismId(raw), tick_before)?;
             let resident = self
@@ -2918,6 +3230,7 @@ impl GpuLiveBrainRuntime {
                         .prepare_memory_context_upload(handle, &frame, &memory_recall)?;
                 Ok(PreparedGpuBrainFrame {
                     handle,
+                    world_entity_id,
                     frame,
                     memory_recall,
                     memory_upload,
@@ -2977,7 +3290,12 @@ impl GpuLiveBrainRuntime {
         for summary in awake_summaries {
             summaries_by_organism.insert(summary.organism_id.raw(), summary);
         }
-        if summaries_by_organism.len() != self.handles.len() {
+        let expected_summary_count = if curated_first_tick {
+            1
+        } else {
+            self.handles.len()
+        };
+        if summaries_by_organism.len() != expected_summary_count {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         self.observe_passive_tick(tick_before, tick_after)?;
@@ -3611,6 +3929,7 @@ impl GpuLiveBrainRuntime {
     ) -> Result<PreparedLiveSelection, GameAppShellError> {
         let PreparedGpuBrainFrame {
             handle,
+            world_entity_id,
             frame,
             memory_recall,
             memory_upload: _,
@@ -3697,6 +4016,7 @@ impl GpuLiveBrainRuntime {
         let outcome_tick = Tick::new(frame.tick().raw().saturating_add(1));
         Ok(PreparedLiveSelection {
             handle,
+            world_entity_id,
             pending_eligibility: gpu_tick.pending_eligibility,
             frame,
             memory_recall,
@@ -3715,6 +4035,7 @@ impl GpuLiveBrainRuntime {
     ) -> Result<SealedLiveSelection, GameAppShellError> {
         let PreparedLiveSelection {
             handle,
+            world_entity_id,
             pending_eligibility,
             frame,
             memory_recall: _,
@@ -3726,11 +4047,14 @@ impl GpuLiveBrainRuntime {
             speech_prompted,
         } = prepared;
         let organism_id = handle.organism_id();
-        let action_result = self.world.apply_neural_command(
+        let biology_receipt = self.world.apply_registered_neural_command(
             &decision.selected_action,
+            world_entity_id,
+            outcome_tick,
             speech_payload,
             speech_prompted,
         )?;
+        let action_result = biology_receipt.action_result;
         let mut outcome = PostActionOutcome::new(
             organism_id,
             sequence_id,
@@ -3818,6 +4142,9 @@ impl GpuLiveBrainRuntime {
         if sealed.is_empty() {
             return Ok(Vec::new());
         }
+        let curated_first_tick_succeeded = self.curated_first_tick_pending
+            && sealed.len() == 1
+            && sealed[0].patch.outcome().success;
         let learning_batch = sealed
             .iter()
             .map(|selection| (selection.handle, &selection.patch))
@@ -3954,6 +4281,9 @@ impl GpuLiveBrainRuntime {
             self.sealed_patches.extend(committed_patches);
         } else {
             self.last_sealed_patches = committed_patches;
+        }
+        if curated_first_tick_succeeded {
+            self.curated_first_tick_pending = false;
         }
         Ok(summaries)
     }
@@ -6108,6 +6438,13 @@ mod tests {
         let mut runtime =
             GpuLiveBrainRuntime::new(backend, world, 9_307, BrainScaleTier::Nano512).unwrap();
         let handle = runtime.handle_for(organism_id).unwrap();
+        let world_entity_id = runtime
+            .world
+            .organism_entity_ids()
+            .into_iter()
+            .find(|(bound_organism_id, _)| *bound_organism_id == organism_id)
+            .map(|(_, world_entity_id)| world_entity_id)
+            .unwrap();
         let draft = runtime
             .world
             .perception_frame_draft(
@@ -6132,6 +6469,7 @@ mod tests {
         let result = runtime.process_selection_batch(vec![(
             PreparedGpuBrainFrame {
                 handle,
+                world_entity_id,
                 frame,
                 memory_recall,
                 memory_upload,
@@ -6191,6 +6529,13 @@ mod tests {
         let mut runtime =
             GpuLiveBrainRuntime::new(backend, world, 95, BrainScaleTier::Nano512).unwrap();
         let handle = runtime.handle_for(OrganismId(1)).unwrap();
+        let world_entity_id = runtime
+            .world
+            .organism_entity_ids()
+            .into_iter()
+            .find(|(bound_organism_id, _)| *bound_organism_id == OrganismId(1))
+            .map(|(_, world_entity_id)| world_entity_id)
+            .unwrap();
         let resident = runtime.residents.get(&1).unwrap();
         let normal = runtime
             .world
@@ -6234,6 +6579,7 @@ mod tests {
             .process_selection_batch(vec![(
                 PreparedGpuBrainFrame {
                     handle,
+                    world_entity_id,
                     frame,
                     memory_recall,
                     memory_upload,
