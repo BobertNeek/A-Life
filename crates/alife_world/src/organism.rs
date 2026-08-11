@@ -92,6 +92,8 @@ pub enum OrganismRegistryError {
     LifeManifestRequiresBirth(OrganismId),
     #[error("life manifest requires a dead organism: {0:?}")]
     LifeManifestRequiresDead(OrganismId),
+    #[error("dead organism is missing its linked life manifest: {0:?}")]
+    LifeManifestNotLinked(OrganismId),
     #[error("organism registry indexes are not bijective")]
     IndexMismatch,
 }
@@ -471,6 +473,50 @@ impl WorldOrganismRegistry {
             .get_mut(&organism_id.raw())
             .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
             .link_life_manifest(digest)
+    }
+
+    pub fn remove_dead(
+        &mut self,
+        organism_id: OrganismId,
+    ) -> Result<WorldOrganismRecord, OrganismRegistryError> {
+        let record = self
+            .records_by_organism
+            .get(&organism_id.raw())
+            .cloned()
+            .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?;
+        record.validate_contract()?;
+        if record.lifecycle().is_alive() {
+            return Err(OrganismRegistryError::LifeManifestRequiresDead(organism_id));
+        }
+        if record.archive().life_manifest_digest().is_none() {
+            return Err(OrganismRegistryError::LifeManifestNotLinked(organism_id));
+        }
+        if self.organism_by_world_entity.get(&record.world_entity_id().raw())
+            != Some(&organism_id)
+        {
+            return Err(OrganismRegistryError::IndexMismatch);
+        }
+
+        let removed_record = self
+            .records_by_organism
+            .remove(&organism_id.raw())
+            .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?;
+        let Some(removed_index) = self
+            .organism_by_world_entity
+            .remove(&record.world_entity_id().raw())
+        else {
+            self.records_by_organism
+                .insert(organism_id.raw(), removed_record);
+            return Err(OrganismRegistryError::IndexMismatch);
+        };
+        if let Err(error) = self.validate_contract() {
+            self.records_by_organism
+                .insert(organism_id.raw(), removed_record);
+            self.organism_by_world_entity
+                .insert(record.world_entity_id().raw(), removed_index);
+            return Err(error);
+        }
+        Ok(removed_record)
     }
 
     pub(crate) fn write_canonical_signature(

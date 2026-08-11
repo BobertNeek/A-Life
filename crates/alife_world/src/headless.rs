@@ -818,6 +818,70 @@ impl HeadlessWorld {
             .map_err(map_organism_registry_error)
     }
 
+    pub fn link_life_manifest(
+        &mut self,
+        organism_id: OrganismId,
+        digest: alife_core::Blake3Digest,
+    ) -> Result<(), ScaffoldContractError> {
+        let mut candidate = self.clone();
+        candidate.validate_organism_bindings()?;
+        candidate
+            .organism_registry
+            .link_life_manifest(organism_id, digest)
+            .map_err(map_organism_registry_error)?;
+        candidate.validate_organism_bindings()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    pub fn retire_dead_organism(
+        &mut self,
+        organism_id: OrganismId,
+    ) -> Result<(WorldOrganismRecord, WorldObject), ScaffoldContractError> {
+        let mut candidate = self.clone();
+        candidate.validate_organism_bindings()?;
+        let record = candidate
+            .organism_registry
+            .get(organism_id)
+            .cloned()
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let object = candidate
+            .objects
+            .get(&record.world_entity_id().raw())
+            .cloned()
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if object.id != record.world_entity_id()
+            || object.kind != WorldObjectKind::Agent
+            || object.organism_id != Some(organism_id)
+            || candidate.labels.get(&object.label) != Some(&object.id)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+
+        let final_record = candidate
+            .organism_registry
+            .remove_dead(organism_id)
+            .map_err(map_organism_registry_error)?;
+        let final_object = candidate
+            .objects
+            .remove(&object.id.raw())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        candidate.labels.remove(&final_object.label);
+        candidate
+            .last_touched_entities
+            .retain(|touched| *touched != final_object.id);
+        if candidate.last_action_result.as_ref().is_some_and(|result| {
+            result.command.organism_id == organism_id
+                || result.touched_entities.contains(&final_object.id)
+        }) {
+            candidate.last_action_result = None;
+        }
+        candidate.last_creature_utterance_ticks.remove(&organism_id.raw());
+        candidate.validate_organism_bindings()?;
+        *self = candidate;
+        Ok((final_record, final_object))
+    }
+
     pub fn replace_organism_registry_exact<I>(
         &mut self,
         records: I,

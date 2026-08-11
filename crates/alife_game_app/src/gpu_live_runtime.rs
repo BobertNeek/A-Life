@@ -1073,6 +1073,11 @@ pub struct GpuLiveBrainRuntime {
     archive_learned_capture_policy: ArchiveLearnedCapturePolicy,
     archive_birth_manifests: BTreeMap<u64, Blake3Digest>,
     archive_retirement_receipts: BTreeMap<u64, ArchiveRetirementReceipt>,
+    presentation_retirements: BTreeSet<u64>,
+    #[cfg(test)]
+    forced_retirement_post_receipt_failure: bool,
+    #[cfg(test)]
+    retirement_backend_removal_count: usize,
 }
 
 #[cfg(feature = "bevy-app")]
@@ -2348,6 +2353,11 @@ impl GpuLiveBrainRuntime {
             archive_learned_capture_policy,
             archive_birth_manifests: BTreeMap::new(),
             archive_retirement_receipts: BTreeMap::new(),
+            presentation_retirements: BTreeSet::new(),
+            #[cfg(test)]
+            forced_retirement_post_receipt_failure: false,
+            #[cfg(test)]
+            retirement_backend_removal_count: 0,
         };
         runtime.reconcile_population()?;
         Ok(runtime)
@@ -2451,6 +2461,11 @@ impl GpuLiveBrainRuntime {
             archive_learned_capture_policy: ArchiveLearnedCapturePolicy::GeneticOnly,
             archive_birth_manifests: BTreeMap::new(),
             archive_retirement_receipts: BTreeMap::new(),
+            presentation_retirements: BTreeSet::new(),
+            #[cfg(test)]
+            forced_retirement_post_receipt_failure: false,
+            #[cfg(test)]
+            retirement_backend_removal_count: 0,
         };
         let mut tracked_object_states = Vec::new();
         for raw in live_ids {
@@ -2884,11 +2899,33 @@ impl GpuLiveBrainRuntime {
         Ok(())
     }
 
+    fn retire_dead_organisms(&mut self) -> Result<(), GameAppShellError> {
+        let mut dead_ids = self
+            .world
+            .organism_registry()
+            .iter()
+            .filter(|record| !record.lifecycle().is_alive())
+            .map(|record| record.organism_id())
+            .collect::<Vec<_>>();
+        dead_ids.sort_unstable_by_key(|organism_id| organism_id.raw());
+        for organism_id in dead_ids {
+            self.retire_organism(organism_id, "world-authoritative death")?;
+        }
+        Ok(())
+    }
+
     pub fn reconcile_population(&mut self) -> Result<(), GameAppShellError> {
+        self.retire_dead_organisms()?;
         let live_ids = self
             .world
             .organism_entity_ids()
             .into_iter()
+            .filter(|(organism_id, _)| {
+                self.world
+                    .organism_registry()
+                    .get(*organism_id)
+                    .is_none_or(|record| record.lifecycle().is_alive())
+            })
             .map(|(organism_id, _)| organism_id.raw())
             .collect::<BTreeSet<_>>();
 
@@ -2996,82 +3033,120 @@ impl GpuLiveBrainRuntime {
             return Err(ScaffoldContractError::InvalidId.into());
         }
         let raw = organism_id.raw();
-        let handle = *self
-            .handles
-            .get(&raw)
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if !self
+        let existing_receipt = self.archive_retirement_receipts.get(&raw).cloned();
+        let Some(record) = self.world.organism_registry().get(organism_id).cloned() else {
+            return existing_receipt.ok_or_else(|| {
+                GameAppShellError::Core(ScaffoldContractError::BrainOwnershipMismatch)
+            });
+        };
+        let death_tick = record
+            .lifecycle()
+            .death_tick()
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let world_entity_id = record.world_entity_id();
+        let object = self
             .world
-            .organism_entity_ids()
-            .iter()
-            .any(|(candidate, _)| *candidate == organism_id)
+            .entity(world_entity_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if object.id != world_entity_id
+            || object.kind != WorldObjectKind::Agent
+            || object.organism_id != Some(organism_id)
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
-        let birth_manifest_digest = *self.archive_birth_manifests.get(&raw).ok_or_else(|| {
-            GameAppShellError::InvalidProductionFrontend {
-                message: format!("organism {raw} has no committed genetic archive"),
-            }
-        })?;
-        let archive_root = self
-            .lineage_library
-            .as_ref()
-            .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
-                message: "lineage archive is not attached".to_string(),
-            })?
-            .root()
-            .to_path_buf();
-        let checkpoint_retention = self.archive_learned_capture_policy.retention();
-        let checkpoint_bytes = checkpoint_retention
-            .map(|_| {
-                let checkpoint_store = GpuCheckpointAssetStore::new(archive_root)?;
-                let checkpoint = self.checkpoint_brain(organism_id, &checkpoint_store)?;
-                Ok::<_, GameAppShellError>(serde_json::to_vec(&serde_json::json!({
-                    "save_state": checkpoint.save_state,
-                    "manifest_entries": checkpoint.manifest_entries,
-                    "checkpoint_digest": checkpoint.checkpoint_digest,
-                }))?)
-            })
-            .transpose()?;
-        let final_experience_sequence = self
-            .sealed_patches
-            .iter()
-            .rev()
-            .find(|patch| patch.header().organism_id == organism_id)
-            .map(|patch| patch.header().sequence_id);
-        let resident = self
-            .residents
-            .get(&raw)
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let mut final_statistics = resident.life_statistics.clone();
-        final_statistics.finalize(self.world.tick(), death_reason)?;
-        let statistics = serde_json::to_vec(&final_statistics)?;
-        let receipt = self
-            .lineage_library
-            .as_mut()
-            .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
-                message: "lineage archive is not attached".to_string(),
-            })?
-            .archive_life(LifeArchiveInput {
-                birth_manifest_digest,
-                death_tick: self.world.tick(),
-                final_experience_sequence,
-                statistics_bytes: &statistics,
-                learned_checkpoint_bytes: checkpoint_bytes.as_deref(),
-                checkpoint_retention: checkpoint_retention
-                    .unwrap_or(ArchiveCheckpointRetention::TemporaryPeak),
-            })?;
-        receipt.validate_contract()?;
-        self.archive_retirement_receipts
-            .insert(raw, receipt.clone());
+        let handle = self.handles.get(&raw).copied();
+        if existing_receipt.is_none() && handle.is_none() {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+        }
 
-        self.backend.remove_brain(handle)?;
-        self.world.remove_organism(organism_id)?;
-        self.handles.remove(&raw);
+        let receipt = if let Some(receipt) = existing_receipt {
+            receipt.validate_contract()?;
+            receipt
+        } else {
+            let birth_manifest_digest = *self.archive_birth_manifests.get(&raw).ok_or_else(|| {
+                GameAppShellError::InvalidProductionFrontend {
+                    message: format!("organism {raw} has no committed genetic archive"),
+                }
+            })?;
+            let archive_root = self
+                .lineage_library
+                .as_ref()
+                .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+                    message: "lineage archive is not attached".to_string(),
+                })?
+                .root()
+                .to_path_buf();
+            let checkpoint_retention = self.archive_learned_capture_policy.retention();
+            let checkpoint_bytes = checkpoint_retention
+                .map(|_| {
+                    let checkpoint_store = GpuCheckpointAssetStore::new(archive_root)?;
+                    let checkpoint = self.checkpoint_brain(organism_id, &checkpoint_store)?;
+                    Ok::<_, GameAppShellError>(serde_json::to_vec(&serde_json::json!({
+                        "save_state": checkpoint.save_state,
+                        "manifest_entries": checkpoint.manifest_entries,
+                        "checkpoint_digest": checkpoint.checkpoint_digest,
+                    }))?)
+                })
+                .transpose()?;
+            let final_experience_sequence = self
+                .sealed_patches
+                .iter()
+                .rev()
+                .find(|patch| patch.header().organism_id == organism_id)
+                .map(|patch| patch.header().sequence_id);
+            let resident = self
+                .residents
+                .get(&raw)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let mut final_statistics = resident.life_statistics.clone();
+            final_statistics.finalize(death_tick, death_reason)?;
+            let statistics = serde_json::to_vec(&final_statistics)?;
+            let receipt = self
+                .lineage_library
+                .as_mut()
+                .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
+                    message: "lineage archive is not attached".to_string(),
+                })?
+                .archive_life(LifeArchiveInput {
+                    birth_manifest_digest,
+                    death_tick,
+                    final_experience_sequence,
+                    statistics_bytes: &statistics,
+                    learned_checkpoint_bytes: checkpoint_bytes.as_deref(),
+                    checkpoint_retention: checkpoint_retention
+                        .unwrap_or(ArchiveCheckpointRetention::TemporaryPeak),
+                })?;
+            receipt.validate_contract()?;
+            self.archive_retirement_receipts
+                .insert(raw, receipt.clone());
+            receipt
+        };
+
+        self.world
+            .link_life_manifest(organism_id, receipt.committed_manifest_digest)?;
+        #[cfg(test)]
+        if self.forced_retirement_post_receipt_failure {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "test-forced post-receipt retirement failure".to_string(),
+            });
+        }
+
+        if let Some(handle) = handle {
+            #[cfg(test)]
+            {
+                self.retirement_backend_removal_count =
+                    self.retirement_backend_removal_count.saturating_add(1);
+            }
+            self.backend.remove_brain(handle)?;
+            self.handles.remove(&raw);
+        }
         self.residents.remove(&raw);
         self.memories.remove(&raw);
         self.topologies.remove(&raw);
         self.retained_learning.remove(&raw);
+        let (final_record, _) = self.world.retire_dead_organism(organism_id)?;
+        self.presentation_retirements
+            .insert(final_record.world_entity_id().raw());
         Ok(receipt)
     }
 
@@ -3086,6 +3161,13 @@ impl GpuLiveBrainRuntime {
         organism_id: OrganismId,
     ) -> Option<&ArchiveRetirementReceipt> {
         self.archive_retirement_receipts.get(&organism_id.raw())
+    }
+
+    pub fn take_presentation_retirements(&mut self) -> Vec<WorldEntityId> {
+        std::mem::take(&mut self.presentation_retirements)
+            .into_iter()
+            .map(WorldEntityId)
+            .collect()
     }
 
     pub fn lineage_archive_manifest_count(&self) -> Result<Option<u64>, GameAppShellError> {
@@ -3410,6 +3492,7 @@ impl GpuLiveBrainRuntime {
             }
         };
         let curated_first_tick = curated_first_tick_resident.is_some();
+        self.retire_dead_organisms()?;
         self.reconcile_population()?;
         self.last_sealed_patches.clear();
         self.last_learning_receipts.clear();
@@ -3646,6 +3729,7 @@ impl GpuLiveBrainRuntime {
         }
         self.observe_passive_tick(tick_before, tick_after)?;
         self.world.advance_tick();
+        self.retire_dead_organisms()?;
         if persist_sleep_boundary {
             self.persist_sleep_checkpoint_boundary()?;
         }
@@ -4948,7 +5032,7 @@ mod tests {
     use alife_runtime::GpuDurableSaveManifest;
     use alife_world::{
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
-        HeadlessScenarioBuilder, HeadlessWorld,
+        HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
     };
 
     struct NoProgressSleepDriver;
@@ -7258,6 +7342,8 @@ mod tests {
     #[cfg(feature = "gpu-tests")]
     #[test]
     fn archived_death_commits_before_gpu_scrub_and_world_despawn() {
+        let organism_id = OrganismId(1);
+        let sensor_profile = SensorProfile::GroundedObjectSlotsV1;
         let root = std::env::temp_dir().join(format!(
             "alife-gpu-retirement-{}-{}",
             std::process::id(),
@@ -7272,38 +7358,102 @@ mod tests {
         )
         .expect("required GPU");
         let world = HeadlessScenarioBuilder::new(96)
-            .agent("archived", OrganismId(1), Vec3f::ZERO)
-            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
+            .agent("archived", organism_id, Vec3f::ZERO)
+            .hazard("terminal", Vec3f::new(1.0, 0.0, 0.0), 1_000.0)
             .build()
+            .unwrap();
+        let world_entity_id = world.entity_id("archived").unwrap();
+        let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(sensor_profile).unwrap();
+        let foundation_manifest = foundation_asset.manifest();
+        let foundation = FoundationGeneticIdentity::new(
+            foundation_manifest.foundation_id().raw(),
+            foundation_manifest.foundation_version().raw() as u16,
+            foundation_manifest.compatibility_family_id().raw(),
+            BrainCapacityClass::N512_ID,
+        )
+        .unwrap();
+        let genome = alife_core::CreatureGenome::early_mammal_founder(0xE10_42C1, foundation)
+            .unwrap();
+        let phenotype = genome.express().unwrap();
+        let biochemistry =
+            alife_core::BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        let mut world = world;
+        world
+            .register_organism_record(
+                WorldOrganismRecord::new(
+                    organism_id,
+                    world_entity_id,
+                    genome,
+                    phenotype,
+                    biochemistry,
+                    Tick::ZERO,
+                )
+                .unwrap(),
+            )
             .unwrap();
         let mut runtime = GpuLiveBrainRuntime::new_profiled_archived(
             backend,
             world,
             96,
             BrainScaleTier::Nano512,
-            SensorProfile::GroundedObjectSlotsV1,
+            sensor_profile,
             config.clone(),
             "gpu-retirement-test",
             ArchiveLearnedCapturePolicy::Pinned,
         )
         .unwrap();
-        let birth = runtime.archive_birth_manifest(OrganismId(1)).unwrap();
+        let birth = runtime.archive_birth_manifest(organism_id).unwrap();
         assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(1));
-        assert!(runtime.handle_for(OrganismId(1)).is_some());
+        assert!(runtime.handle_for(organism_id).is_some());
 
-        runtime.tick().unwrap();
-        let live_statistics = runtime.passive_life_statistics(OrganismId(1)).unwrap();
-        assert_eq!(live_statistics.survival_ticks(), 1);
-        assert_eq!(live_statistics.gpu_dispatches(), 1);
+        let terminal = runtime.world.entity_id("terminal").unwrap();
+        runtime
+            .world_mut()
+            .apply_registered_command(
+                &HeadlessWorldCommand::approach(organism_id, terminal).unwrap(),
+                world_entity_id,
+                Tick(1),
+            )
+            .unwrap();
+        assert_eq!(runtime.world_mut().try_advance_tick().unwrap(), Tick(1));
+        let final_record = runtime
+            .world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap()
+            .clone();
+        let final_object = runtime.world.entity(world_entity_id).unwrap().clone();
+        assert_eq!(final_record.world_entity_id(), final_object.id);
+        assert_eq!(final_object.organism_id, Some(organism_id));
+        assert_eq!(final_record.lifecycle().death_tick(), Some(Tick(1)));
+
         let receipt = runtime
-            .retire_organism(OrganismId(1), "test-death")
+            .retire_organism(organism_id, "test-death")
             .unwrap();
         assert_eq!(
-            runtime.archive_retirement_receipt(OrganismId(1)),
+            runtime.archive_retirement_receipt(organism_id),
             Some(&receipt)
         );
         assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(2));
-        assert!(runtime.handle_for(OrganismId(1)).is_none());
+        assert!(runtime.handle_for(organism_id).is_none());
+        assert!(!runtime.residents.contains_key(&organism_id.raw()));
+        assert!(!runtime.memories.contains_key(&organism_id.raw()));
+        assert!(!runtime.topologies.contains_key(&organism_id.raw()));
+        assert!(runtime.world.organism_registry().get(organism_id).is_none());
+        assert!(runtime.world.entity(world_entity_id).is_none());
+        assert_eq!(
+            runtime.take_presentation_retirements(),
+            vec![world_entity_id]
+        );
+        assert!(runtime.take_presentation_retirements().is_empty());
+
+        let repeated = runtime
+            .retire_organism(organism_id, "test-death")
+            .unwrap();
+        assert_eq!(repeated, receipt);
+        assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(2));
+        assert_eq!(runtime.retirement_backend_removal_count, 1);
+        assert!(runtime.take_presentation_retirements().is_empty());
         assert!(runtime.world.organism_entity_ids().is_empty());
         drop(runtime);
 
@@ -7320,6 +7470,157 @@ mod tests {
             alife_core::ArchiveCheckpointDisposition::Stored(_)
         ));
         drop(library);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn retirement_failures_preserve_pre_receipt_state_and_retry_post_receipt_forward() {
+        let organism_id = OrganismId(1);
+        let sensor_profile = SensorProfile::GroundedObjectSlotsV1;
+        let root = std::env::temp_dir().join(format!(
+            "alife-gpu-retirement-failure-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let config = LineageLibraryConfig::profile_default(&root);
+        let backend = GpuClosedLoopBackend::new_required(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )
+        .expect("required GPU");
+        let mut world = HeadlessScenarioBuilder::new(97)
+            .agent("archived", organism_id, Vec3f::ZERO)
+            .hazard("terminal", Vec3f::new(1.0, 0.0, 0.0), 1_000.0)
+            .build()
+            .unwrap();
+        let world_entity_id = world.entity_id("archived").unwrap();
+        let foundation_asset = FoundationWeightAsset::builtin_nano512_v1(sensor_profile).unwrap();
+        let foundation_manifest = foundation_asset.manifest();
+        let foundation = FoundationGeneticIdentity::new(
+            foundation_manifest.foundation_id().raw(),
+            foundation_manifest.foundation_version().raw() as u16,
+            foundation_manifest.compatibility_family_id().raw(),
+            BrainCapacityClass::N512_ID,
+        )
+        .unwrap();
+        let genome = alife_core::CreatureGenome::early_mammal_founder(0xE10_42C2, foundation)
+            .unwrap();
+        let phenotype = genome.express().unwrap();
+        let biochemistry =
+            alife_core::BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        world
+            .register_organism_record(
+                WorldOrganismRecord::new(
+                    organism_id,
+                    world_entity_id,
+                    genome,
+                    phenotype,
+                    biochemistry,
+                    Tick::ZERO,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let mut runtime = GpuLiveBrainRuntime::new_profiled_archived(
+            backend,
+            world,
+            97,
+            BrainScaleTier::Nano512,
+            sensor_profile,
+            config.clone(),
+            "gpu-retirement-failure-test",
+            ArchiveLearnedCapturePolicy::Pinned,
+        )
+        .unwrap();
+        let terminal = runtime.world.entity_id("terminal").unwrap();
+        runtime
+            .world_mut()
+            .apply_registered_command(
+                &HeadlessWorldCommand::approach(organism_id, terminal).unwrap(),
+                world_entity_id,
+                Tick(1),
+            )
+            .unwrap();
+        runtime.world_mut().try_advance_tick().unwrap();
+
+        let before_record = runtime
+            .world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap()
+            .clone();
+        let before_object = runtime.world.entity(world_entity_id).unwrap().clone();
+        let before_handles = runtime.handles.clone();
+        let before_resident_keys = runtime.residents.keys().copied().collect::<Vec<_>>();
+        let before_memory_keys = runtime.memories.keys().copied().collect::<Vec<_>>();
+        let before_topology_keys = runtime.topologies.keys().copied().collect::<Vec<_>>();
+        let before_signature = runtime.world.canonical_signature_digest().unwrap();
+        let before_handle = runtime.handle_for(organism_id).unwrap();
+        let archive = runtime.lineage_library.take();
+        assert!(runtime
+            .retire_organism(organism_id, "pre-receipt-failure")
+            .is_err());
+        runtime.lineage_library = archive;
+        assert!(runtime.archive_retirement_receipt(organism_id).is_none());
+        assert_eq!(runtime.world.canonical_signature_digest().unwrap(), before_signature);
+        assert_eq!(
+            runtime.world.organism_registry().get(organism_id),
+            Some(&before_record)
+        );
+        assert_eq!(runtime.world.entity(world_entity_id), Some(&before_object));
+        assert_eq!(runtime.handles, before_handles);
+        assert_eq!(runtime.residents.keys().copied().collect::<Vec<_>>(), before_resident_keys);
+        assert_eq!(runtime.memories.keys().copied().collect::<Vec<_>>(), before_memory_keys);
+        assert_eq!(runtime.topologies.keys().copied().collect::<Vec<_>>(), before_topology_keys);
+        assert_eq!(runtime.handle_for(organism_id), Some(before_handle));
+        assert_eq!(runtime.retirement_backend_removal_count, 0);
+        assert!(runtime.take_presentation_retirements().is_empty());
+
+        runtime.forced_retirement_post_receipt_failure = true;
+        assert!(runtime
+            .retire_organism(organism_id, "post-receipt-failure")
+            .is_err());
+        let receipt = runtime
+            .archive_retirement_receipt(organism_id)
+            .unwrap()
+            .clone();
+        assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(2));
+        assert_eq!(
+            runtime
+                .world
+                .organism_registry()
+                .get(organism_id)
+                .unwrap()
+                .archive()
+                .life_manifest_digest(),
+            Some(receipt.committed_manifest_digest)
+        );
+        assert_eq!(runtime.handle_for(organism_id), Some(before_handle));
+        assert!(runtime.world.entity(world_entity_id).is_some());
+        assert_eq!(runtime.retirement_backend_removal_count, 0);
+        assert!(runtime.take_presentation_retirements().is_empty());
+
+        runtime.forced_retirement_post_receipt_failure = false;
+        assert_eq!(
+            runtime
+                .retire_organism(organism_id, "post-receipt-failure")
+                .unwrap(),
+            receipt
+        );
+        assert_eq!(runtime.lineage_archive_manifest_count().unwrap(), Some(2));
+        assert_eq!(runtime.retirement_backend_removal_count, 1);
+        assert!(runtime.handle_for(organism_id).is_none());
+        assert!(runtime.world.organism_registry().get(organism_id).is_none());
+        assert!(runtime.world.entity(world_entity_id).is_none());
+        assert_eq!(
+            runtime.take_presentation_retirements(),
+            vec![world_entity_id]
+        );
+        assert!(runtime.take_presentation_retirements().is_empty());
+        drop(runtime);
         std::fs::remove_dir_all(root).unwrap();
     }
 }
