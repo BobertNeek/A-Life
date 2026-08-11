@@ -21,7 +21,9 @@ use alife_core::{
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
-    GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuLearningReceipt, GpuMemoryContextUpload,
+    GpuClosedLoopMemoryTickInput, GpuClosedLoopTick, GpuCuratedResidencyCohort,
+    GpuCuratedResidencyEntry, GpuCuratedResidencyOutcome, GpuCuratedResidencyReceipt,
+    GpuCuratedResidencyTargetIdentity, GpuLearningReceipt, GpuMemoryContextUpload,
     PendingEligibilityDiscardReceipt, PendingEligibilityIdentity, PendingEligibilityReceipt,
     GPU_CLOSED_LOOP_TICK_READBACK_BYTES, GPU_FAST_PLASTICITY_COMMIT_BYTES,
 };
@@ -459,6 +461,7 @@ pub(crate) struct GpuLiveBrainEvidenceMetrics {
 pub(crate) enum CuratedFounderGpuResidencyState {
     NotStarted,
     Pending,
+    Committed,
     Unknown,
 }
 
@@ -598,6 +601,16 @@ pub(crate) enum CuratedFounderResetRuntimeError {
         evidence: CuratedFounderResetRuntimeEvidence,
         #[source]
         error: GameAppShellError,
+    },
+    #[error("curated founder GPU residency remains retryable before submission: {error}")]
+    GpuResidencyPreSubmit {
+        #[source]
+        error: ScaffoldContractError,
+    },
+    #[error("curated founder GPU residency is unknown after submission: {error}")]
+    GpuResidencyUnknown {
+        #[source]
+        error: ScaffoldContractError,
     },
 }
 
@@ -1464,6 +1477,209 @@ impl GpuLiveBrainRuntime {
         )?;
         self.note_curated_founder_durable_checkpoint(&result)?;
         Ok(result)
+    }
+
+    /// Consumes the retained exact 4a projection only after every app-side
+    /// resident and sidecar candidate is ready. The four maps publish only
+    /// after the backend returns a completed residency receipt.
+    #[allow(dead_code)]
+    pub(crate) fn commit_retained_curated_founder_gpu_residency(
+        &mut self,
+    ) -> Result<GpuCuratedResidencyReceipt, CuratedFounderResetRuntimeError> {
+        let plan = self
+            .retained_curated_founder_gpu_residency_plan
+            .as_ref()
+            .ok_or(CuratedFounderResetRuntimeError::NoRetainedOperation)?
+            .clone();
+        if !matches!(plan.state, CuratedFounderGpuResidencyState::Pending)
+            || curated_founder_gpu_residency_plan_fingerprint(&plan) != plan.fingerprint
+        {
+            return Err(CuratedFounderResetRuntimeError::ResidencyPlanMismatch);
+        }
+
+        let mut candidate_residents = BTreeMap::new();
+        let mut candidate_memories = BTreeMap::new();
+        let mut candidate_topologies = BTreeMap::new();
+        let mut candidate_archive_birth_manifests = BTreeMap::new();
+        let mut ordered_entries = Vec::with_capacity(plan.entries.len());
+        let profile_identity = SensorProfileIdentity {
+            profile_id: self.sensor_profile.into(),
+            profile_schema_version: 1,
+            sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
+        };
+        for entry in &plan.entries {
+            entry
+                .projection
+                .validate()
+                .map_err(|error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                    error,
+                })?;
+            if entry.projection.sensor_profile() != self.sensor_profile {
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                    error: ScaffoldContractError::SensorProfileMismatch,
+                });
+            }
+            let phenotype = entry.projection.compiled_phenotype().clone();
+            let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())
+                .map_err(|error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                    error,
+                })?;
+            let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+                entry.projection.source_brain_genome().clone(),
+                &capacity,
+                entry.projection.runtime_development_state().clone(),
+                entry.projection.sensor_profile(),
+                phenotype.foundation_abi().clone(),
+            )
+            .map_err(|error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                error,
+            })?;
+            let verified = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)
+                .map_err(|error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                    error,
+                })?;
+            if verified != phenotype
+                || verified.phenotype_hash() != entry.projection.receipt().phenotype_hash()
+                || phenotype.foundation_abi().foundation_payload_digest()
+                    != Some(entry.projection.foundation_asset_digest())
+            {
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                    error: ScaffoldContractError::PhenotypeCompile,
+                });
+            }
+            let resident = ResidentCognition {
+                phenotype: phenotype.clone(),
+                genome: compiler_inputs.genome().clone(),
+                development: compiler_inputs.development().clone(),
+                compiler_inputs,
+                homeostasis: HomeostaticSnapshot::baseline(plan.world_tick),
+                sleep_scheduler: GpuSleepScheduler::new(SleepConsolidationConfig::reference())
+                    .map_err(|error| {
+                        CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                    })?,
+                next_sequence: 1,
+                language_grounding: LanguageGroundingLedger::default(),
+                life_statistics: PassiveLifeStatistics::new(entry.organism_id, plan.world_tick)
+                    .map_err(|error| {
+                        CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+                    })?,
+            };
+            let raw = entry.organism_id.raw();
+            if candidate_residents.insert(raw, resident).is_some()
+                || candidate_archive_birth_manifests
+                    .insert(raw, entry.archive_birth_manifest_digest)
+                    .is_some()
+            {
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                    error: ScaffoldContractError::BrainOwnershipMismatch,
+                });
+            }
+            candidate_memories.insert(
+                raw,
+                Self::new_memory_sidecar(entry.organism_id, self.sensor_profile).map_err(
+                    |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
+                )?,
+            );
+            candidate_topologies.insert(
+                raw,
+                TopologySidecar::new_profiled(
+                    entry.organism_id,
+                    profile_identity,
+                    TopologicalMapConfig::default(),
+                )
+                .map_err(|error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                    error,
+                })?,
+            );
+            ordered_entries.push(GpuCuratedResidencyEntry {
+                organism_id: entry.organism_id,
+                opaque_target_identity: GpuCuratedResidencyTargetIdentity::new(
+                    entry.world_entity_id.raw(),
+                ),
+                phenotype,
+                exact_phenotype_hash: entry.projection.receipt().phenotype_hash(),
+                exact_foundation_hash: entry.projection.foundation_asset_digest(),
+            });
+        }
+        let cohort = GpuCuratedResidencyCohort {
+            expected_old_generation: self.backend.curated_residency_generation(),
+            new_generation_fingerprint: plan.fingerprint,
+            ordered_entries,
+        };
+        let outcome = self.backend.replace_curated_cohort(&cohort);
+        let receipt = match outcome {
+            GpuCuratedResidencyOutcome::Committed(receipt)
+                if receipt.submission_completed
+                    && receipt.generation_fingerprint == plan.fingerprint
+                    && receipt.ordered_residents.len() == plan.entries.len() => receipt,
+            GpuCuratedResidencyOutcome::Committed(_) => {
+                self.backend
+                    .fail_stop(alife_runtime::GpuSessionFailStopCause::DeviceLost);
+                if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
+                    plan.state = CuratedFounderGpuResidencyState::Unknown;
+                }
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown {
+                    error: ScaffoldContractError::BrainOwnershipMismatch,
+                });
+            }
+            GpuCuratedResidencyOutcome::PreSubmitFailure { error, .. } => {
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error });
+            }
+            GpuCuratedResidencyOutcome::Unknown { error, .. } => {
+                if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
+                    plan.state = CuratedFounderGpuResidencyState::Unknown;
+                }
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown { error });
+            }
+        };
+        for (entry, resident) in cohort
+            .ordered_entries
+            .iter()
+            .zip(receipt.ordered_residents.iter())
+        {
+            if resident.organism_id != entry.organism_id
+                || resident.opaque_target_identity != entry.opaque_target_identity
+                || resident.exact_phenotype_hash != entry.exact_phenotype_hash
+                || resident.exact_foundation_hash != entry.exact_foundation_hash
+                || resident.handle.organism_id() != entry.organism_id
+                || resident.handle.phenotype_hash() != entry.exact_phenotype_hash
+            {
+                self.backend
+                    .fail_stop(alife_runtime::GpuSessionFailStopCause::DeviceLost);
+                if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
+                    plan.state = CuratedFounderGpuResidencyState::Unknown;
+                }
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown {
+                    error: ScaffoldContractError::BrainOwnershipMismatch,
+                });
+            }
+        }
+        let mut candidate_handles = BTreeMap::new();
+        for resident in &receipt.ordered_residents {
+            if candidate_handles
+                .insert(resident.organism_id.raw(), resident.handle)
+                .is_some()
+            {
+                self.backend
+                    .fail_stop(alife_runtime::GpuSessionFailStopCause::DeviceLost);
+                if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
+                    plan.state = CuratedFounderGpuResidencyState::Unknown;
+                }
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown {
+                    error: ScaffoldContractError::BrainOwnershipMismatch,
+                });
+            }
+        }
+        self.handles = candidate_handles;
+        self.residents = candidate_residents;
+        self.memories = candidate_memories;
+        self.topologies = candidate_topologies;
+        self.retained_learning.clear();
+        self.archive_birth_manifests = candidate_archive_birth_manifests;
+        if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
+            plan.state = CuratedFounderGpuResidencyState::Committed;
+        }
+        Ok(receipt)
     }
 
     fn note_curated_founder_durable_checkpoint(

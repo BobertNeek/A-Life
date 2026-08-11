@@ -3,7 +3,8 @@ use std::ops::{Deref, DerefMut};
 use alife_core::{PhenotypeGrowthMigration, ScaffoldContractError, Tick};
 use alife_gpu_backend::{
     GpuBrainCheckpointSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
-    GpuResearchGrowthEquivalenceReceipt, GpuResearchGrowthHandoffOutcome,
+    GpuCuratedResidencyCohort, GpuCuratedResidencyOutcome, GpuResearchGrowthEquivalenceReceipt,
+    GpuResearchGrowthHandoffOutcome,
 };
 
 /// Identifies the production consumer using the shared neural session.
@@ -186,6 +187,23 @@ impl GpuAuthoritativeSession {
         );
         if let Err(error) = &result {
             self.record_contract_failure(error);
+        }
+        result
+    }
+
+    pub fn replace_curated_cohort(
+        &mut self,
+        cohort: &GpuCuratedResidencyCohort,
+    ) -> GpuCuratedResidencyOutcome {
+        if let Err(error) = self.ensure_neural_actions_available() {
+            return GpuCuratedResidencyOutcome::PreSubmitFailure {
+                error,
+                retryable: true,
+            };
+        }
+        let result = self.backend.replace_curated_cohort(cohort);
+        if matches!(result, GpuCuratedResidencyOutcome::Unknown { .. }) {
+            self.fail_stop(GpuSessionFailStopCause::DeviceLost);
         }
         result
     }
