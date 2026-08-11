@@ -337,6 +337,23 @@ struct PreparedLiveSelection {
     speech_prompted: bool,
 }
 
+struct PreparedSealInput {
+    organism_id: OrganismId,
+    world_entity_id: WorldEntityId,
+    frame: PerceptionFrame,
+    sequence_id: ExperienceSequenceId,
+    outcome_tick: Tick,
+    pre_action: PreActionSnapshot,
+    decision: DecisionSnapshot,
+    speech_payload: Option<alife_core::SpeechMotorPayload>,
+    speech_prompted: bool,
+}
+
+struct SealedWorldSelection {
+    summary: LiveBrainTickSummary,
+    patch: ExperiencePatch,
+}
+
 fn resident_homeostasis_from_world_biology_receipt(
     biology_receipt: &alife_world::HeadlessActionBiologyReceipt,
 ) -> HomeostaticSnapshot {
@@ -1339,6 +1356,101 @@ fn archive_foundation_asset_bytes(
         return Err(ScaffoldContractError::PhenotypeCompile.into());
     }
     Ok(Some(foundation.encode_canonical()?))
+}
+
+fn seal_prepared_selection_core(
+    world: &mut HeadlessWorld,
+    residents: &mut BTreeMap<u64, ResidentCognition>,
+    sealed_patch_count: usize,
+    prepared: PreparedSealInput,
+) -> Result<SealedWorldSelection, GameAppShellError> {
+    let PreparedSealInput {
+        organism_id,
+        world_entity_id,
+        frame,
+        sequence_id,
+        outcome_tick,
+        pre_action,
+        decision,
+        speech_payload,
+        speech_prompted,
+    } = prepared;
+    let biology_receipt = world.apply_registered_neural_command(
+        &decision.selected_action,
+        world_entity_id,
+        outcome_tick,
+        speech_payload,
+        speech_prompted,
+    )?;
+    let action_result = &biology_receipt.action_result;
+    let mut outcome = PostActionOutcome::new(
+        organism_id,
+        sequence_id,
+        outcome_tick,
+        action_result.observation.success && action_result.execution.succeeded,
+        action_result.execution.physical,
+        action_result.observation.homeostatic_delta,
+        action_result.observation.reward_valence,
+        action_result.observation.frustration_delta,
+        action_result.observation.pain_delta,
+        action_result.observation.energy_delta,
+        action_result.observation.prediction_error,
+    )?;
+    outcome.contradiction_observed =
+        action_result.observation.contradiction_observed || !action_result.execution.succeeded;
+    outcome.validate_contract()?;
+    let patch = ExperiencePatchBuilder::new(sequence_id)
+        .record_pre_action(pre_action)?
+        .record_decision(decision.clone())?
+        .record_outcome(outcome)?
+        .seal()?;
+    let resident = residents
+        .get_mut(&organism_id.raw())
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    if resident.next_sequence != sequence_id.raw() {
+        return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
+    }
+    resident.language_grounding.observe_sealed(&patch)?;
+    resident.homeostasis = resident_homeostasis_from_world_biology_receipt(&biology_receipt);
+    resident.development.age_ticks = outcome_tick;
+    resident.next_sequence = resident
+        .next_sequence
+        .checked_add(1)
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    let summary = LiveBrainTickSummary {
+        schema: G03_LIVE_BRAIN_LOOP_SCHEMA,
+        schema_version: G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+        organism_id,
+        tick_before: frame.tick(),
+        tick_after: outcome_tick,
+        world_tick_before: frame.tick(),
+        world_tick_after: outcome_tick,
+        status: BrainTickStatus::Normal,
+        selected_action_kind: Some(decision.selected_action.kind),
+        selected_action_id: Some(decision.selected_action.action_id),
+        target_entity: decision.selected_action.target_entity,
+        patch_sealed: true,
+        patch_sequence_id: Some(sequence_id.raw()),
+        patch_success: Some(patch.outcome().success),
+        physical_contact: Some(patch.outcome().physical.contact),
+        action_failure: action_result.execution.failure,
+        sealed_patch_count: sealed_patch_count.saturating_add(1),
+        packed_record_count: 0,
+        memory_updates: 0,
+        topology_updates: 0,
+        learning_updates: 0,
+        invalid_or_rejected_action_count: u32::from(!action_result.execution.succeeded),
+        last_diagnostic: None,
+        causal_stages: vec![
+            LiveBrainCausalStage::GatherSensory,
+            LiveBrainCausalStage::RecallMemory,
+            LiveBrainCausalStage::GpuBrainTick,
+            LiveBrainCausalStage::ExecuteAction,
+            LiveBrainCausalStage::MeasureOutcome,
+            LiveBrainCausalStage::SealPatch,
+        ],
+    };
+    Ok(SealedWorldSelection { summary, patch })
 }
 
 impl GpuLiveBrainRuntime {
@@ -4067,87 +4179,27 @@ impl GpuLiveBrainRuntime {
             speech_prompted,
         } = prepared;
         let organism_id = handle.organism_id();
-        let biology_receipt = self.world.apply_registered_neural_command(
-            &decision.selected_action,
-            world_entity_id,
-            outcome_tick,
-            speech_payload,
-            speech_prompted,
+        let sealed = seal_prepared_selection_core(
+            &mut self.world,
+            &mut self.residents,
+            self.sealed_patch_count,
+            PreparedSealInput {
+                organism_id,
+                world_entity_id,
+                frame,
+                sequence_id,
+                outcome_tick,
+                pre_action,
+                decision,
+                speech_payload,
+                speech_prompted,
+            },
         )?;
-        let action_result = &biology_receipt.action_result;
-        let mut outcome = PostActionOutcome::new(
-            organism_id,
-            sequence_id,
-            outcome_tick,
-            action_result.observation.success && action_result.execution.succeeded,
-            action_result.execution.physical,
-            action_result.observation.homeostatic_delta,
-            action_result.observation.reward_valence,
-            action_result.observation.frustration_delta,
-            action_result.observation.pain_delta,
-            action_result.observation.energy_delta,
-            action_result.observation.prediction_error,
-        )?;
-        outcome.contradiction_observed =
-            action_result.observation.contradiction_observed || !action_result.execution.succeeded;
-        outcome.validate_contract()?;
-        let patch = ExperiencePatchBuilder::new(sequence_id)
-            .record_pre_action(pre_action)?
-            .record_decision(decision.clone())?
-            .record_outcome(outcome)?
-            .seal()?;
-        let resident = self
-            .residents
-            .get_mut(&organism_id.raw())
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if resident.next_sequence != sequence_id.raw() {
-            return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
-        }
-        resident.language_grounding.observe_sealed(&patch)?;
-        resident.homeostasis = resident_homeostasis_from_world_biology_receipt(&biology_receipt);
-        resident.development.age_ticks = outcome_tick;
-        resident.next_sequence = resident
-            .next_sequence
-            .checked_add(1)
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        let summary = LiveBrainTickSummary {
-            schema: G03_LIVE_BRAIN_LOOP_SCHEMA,
-            schema_version: G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
-            organism_id,
-            tick_before: frame.tick(),
-            tick_after: outcome_tick,
-            world_tick_before: frame.tick(),
-            world_tick_after: outcome_tick,
-            status: BrainTickStatus::Normal,
-            selected_action_kind: Some(decision.selected_action.kind),
-            selected_action_id: Some(decision.selected_action.action_id),
-            target_entity: decision.selected_action.target_entity,
-            patch_sealed: true,
-            patch_sequence_id: Some(sequence_id.raw()),
-            patch_success: Some(patch.outcome().success),
-            physical_contact: Some(patch.outcome().physical.contact),
-            action_failure: action_result.execution.failure,
-            sealed_patch_count: self.sealed_patch_count.saturating_add(1),
-            packed_record_count: 0,
-            memory_updates: 0,
-            topology_updates: 0,
-            learning_updates: 0,
-            invalid_or_rejected_action_count: u32::from(!action_result.execution.succeeded),
-            last_diagnostic: None,
-            causal_stages: vec![
-                LiveBrainCausalStage::GatherSensory,
-                LiveBrainCausalStage::RecallMemory,
-                LiveBrainCausalStage::GpuBrainTick,
-                LiveBrainCausalStage::ExecuteAction,
-                LiveBrainCausalStage::MeasureOutcome,
-                LiveBrainCausalStage::SealPatch,
-            ],
-        };
         Ok(SealedLiveSelection {
             handle,
             pending_eligibility,
-            summary,
-            patch,
+            summary: sealed.summary,
+            patch: sealed.patch,
         })
     }
 
@@ -6388,27 +6440,140 @@ mod tests {
             .find(|(bound_organism_id, _)| *bound_organism_id == organism_id)
             .map(|(_, world_entity_id)| world_entity_id)
             .unwrap();
-        let command = alife_core::ActionCommand::new(
+        let biology_before = world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap()
+            .biochemistry()
+            .clone();
+        let normal = world
+            .perception_frame(
+                organism_id,
+                Tick::ZERO,
+                SensorProfile::PrivilegedAffordanceV1,
+                biology_before.homeostasis,
+            )
+            .unwrap();
+        let mut rest = *normal
+            .candidates()
+            .iter()
+            .find(|candidate| candidate.kind == alife_core::ActionKind::Rest)
+            .expect("rest candidate");
+        rest.candidate_index = 0;
+        let draft = alife_core::PerceptionFrameDraft::new(
             organism_id,
-            alife_core::ActionKind::Rest,
-            None,
-            alife_core::Confidence::new(1.0).unwrap(),
-            alife_core::DurationTicks::new(1),
+            Tick::ZERO,
+            SensorProfile::PrivilegedAffordanceV1,
+            normal.sensory().clone(),
+            normal.body(),
+            *normal.homeostasis(),
+            vec![rest],
+            normal.profile_provenance(),
+            normal.grounded_object_slots().to_vec(),
         )
         .unwrap();
-        let receipt = world
+        let frame = draft
+            .finalize(alife_core::PerceptionContextBlock::empty())
+            .unwrap();
+        let (phenotype, genome, development) = compile_gpu_birth_components(
+            9_308,
+            BrainScaleTier::Nano512,
+            organism_id,
+            Tick::ZERO,
+            SensorProfile::PrivilegedAffordanceV1,
+        )
+        .unwrap();
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
+        let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
+            genome.clone(),
+            &capacity,
+            development.clone(),
+            SensorProfile::PrivilegedAffordanceV1,
+            phenotype.foundation_abi().clone(),
+        )
+        .unwrap();
+        let mut residents = BTreeMap::from([(
+            organism_id.raw(),
+            ResidentCognition {
+                phenotype: phenotype.clone(),
+                compiler_inputs,
+                genome: genome.clone(),
+                development: development.clone(),
+                homeostasis: biology_before.homeostasis,
+                sleep_scheduler: GpuSleepScheduler::new(
+                    SleepConsolidationConfig::reference(),
+                )
+                .unwrap(),
+                next_sequence: 1,
+                language_grounding: LanguageGroundingLedger::default(),
+                life_statistics: PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap(),
+            },
+        )]);
+        let confidence = Confidence::new(1.0).unwrap();
+        let command = rest.to_command(organism_id, confidence).unwrap();
+        let sequence_id = ExperienceSequenceId(1);
+        let pre_action = PreActionSnapshot::from_neural_frame(
+            sequence_id,
+            phenotype.brain_class_id(),
+            phenotype.phenotype_hash(),
+            genome.id,
+            genome.schema_version,
+            development,
+            frame.clone(),
+        )
+        .unwrap();
+        let decision = DecisionSnapshot::from_neural_selection(
+            sequence_id,
+            phenotype.phenotype_hash(),
+            1,
+            0,
+            &frame,
+            NeuralActionSelection {
+                candidate_index: 0,
+                logit: 0.0,
+                confidence,
+                active_tiles: 1,
+                active_synapses: 1,
+            },
+            command,
+        )
+        .unwrap();
+        let mut world_before = world.clone();
+        let expected_receipt = world_before
             .apply_registered_neural_command(
-                &command,
+                &decision.selected_action,
                 world_entity_id,
                 Tick::new(1),
                 None,
                 false,
             )
             .unwrap();
+        let sealed = seal_prepared_selection_core(
+            &mut world,
+            &mut residents,
+            0,
+            PreparedSealInput {
+                organism_id,
+                world_entity_id,
+                frame,
+                sequence_id,
+                outcome_tick: Tick::new(1),
+                pre_action,
+                decision,
+                speech_payload: None,
+                speech_prompted: false,
+            },
+        )
+        .unwrap();
+        let world_after = *world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap()
+            .biochemistry();
 
-        assert_eq!(receipt.action_result.body_event.sleep_recovery, 1.0);
+        assert_eq!(expected_receipt.action_result.body_event.sleep_recovery, 1.0);
         assert_eq!(
-            receipt
+            expected_receipt
                 .action_result
                 .observation
                 .homeostatic_delta
@@ -6416,21 +6581,37 @@ mod tests {
                 .fatigue,
             -0.35
         );
-        let learning_projection = receipt
+        let learning_projection = expected_receipt
             .biology_before
             .homeostasis
             .advance(
-                receipt.outcome_tick,
-                receipt.action_result.observation.homeostatic_delta,
+                expected_receipt.outcome_tick,
+                expected_receipt.action_result.observation.homeostatic_delta,
                 HomeostaticParameters::reference(),
             )
             .unwrap();
-        assert_ne!(receipt.biology_after.homeostasis, learning_projection);
-
-        let resident_homeostasis =
-            resident_homeostasis_from_world_biology_receipt(&receipt);
-        assert_eq!(resident_homeostasis, receipt.biology_after.homeostasis);
-        assert_ne!(resident_homeostasis, learning_projection);
+        assert_ne!(expected_receipt.biology_after.homeostasis, learning_projection);
+        assert_eq!(world_after.homeostasis, expected_receipt.biology_after.homeostasis);
+        assert_eq!(
+            residents.get(&organism_id.raw()).unwrap().homeostasis,
+            expected_receipt.biology_after.homeostasis
+        );
+        let next_frame = world
+            .perception_frame(
+                organism_id,
+                expected_receipt.outcome_tick,
+                SensorProfile::PrivilegedAffordanceV1,
+                residents.get(&organism_id.raw()).unwrap().homeostasis,
+            )
+            .unwrap();
+        assert_eq!(
+            *next_frame.homeostasis(),
+            expected_receipt.biology_after.homeostasis
+        );
+        assert_eq!(
+            sealed.patch.outcome().homeostatic_delta,
+            expected_receipt.action_result.observation.homeostatic_delta
+        );
     }
 
     #[test]
