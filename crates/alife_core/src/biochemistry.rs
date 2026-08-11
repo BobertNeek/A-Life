@@ -167,6 +167,12 @@ impl PassiveBodyUpkeepPolicy {
         )
     }
 
+    pub fn is_terminal(body: &BodyState, age_ticks: u64, phenotype: &CreaturePhenotype) -> bool {
+        body.health <= 0.0
+            || body.energy <= 0.0
+            || age_ticks >= Self::maximum_lifespan_ticks(phenotype)
+    }
+
     pub fn body_load(phenotype: &CreaturePhenotype) -> f32 {
         (Self::BODY_SIZE_LOAD_BASE + Self::BODY_SIZE_LOAD_SPAN * phenotype.body.size_scale)
             * (Self::EFFICIENCY_LOAD_BASE

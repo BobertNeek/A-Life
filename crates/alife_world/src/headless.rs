@@ -15,8 +15,9 @@ use alife_core::{
     BodySnapshot, BrainTickInput, BrainTickOutput, CanonicalDigestBuilder, Confidence,
     ContextStreams, DriveDelta, EndocrineDelta, ExperiencePatch, HeardToken, HomeostaticDelta,
     HomeostaticSnapshot, Intensity, LanguageContextSnapshot, NormalizedScalar, OrganismId,
-    PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PhysicalActionOutcome,
-    PhysicalContactKind, PlayerUtterance, Pose, Quatf, ReferenceActionExecution,
+    PerceptionContextBlock, PerceptionFrame, PerceptionFrameDraft, PassiveBodyUpkeepPolicy,
+    PhysicalActionOutcome, PhysicalContactKind, PlayerUtterance, Pose, Quatf,
+    ReferenceActionExecution,
     ReferenceActionExecutor, ReferenceActionFailure, ReferenceOutcomeObservation,
     ReferenceOutcomeObserver, ReferenceOutcomeRequest, ReferenceSensoryAdapter,
     ReferenceSensoryRequest, ScaffoldContractError, SensorProfile, SensorProfileProvenance,
@@ -389,11 +390,6 @@ impl HeadlessWorld {
         })
     }
 
-    fn is_terminal_body_state(record: &WorldOrganismRecord) -> bool {
-        let body = &record.biochemistry().body;
-        body.health <= 0.0 || body.energy <= 0.0
-    }
-
     pub fn try_advance_tick(&mut self) -> Result<Tick, ScaffoldContractError> {
         let mut candidate = self.clone();
         let next_tick = Tick::new(self.tick.raw().saturating_add(1));
@@ -425,12 +421,21 @@ impl HeadlessWorld {
                 _ => return Err(ScaffoldContractError::NonMonotonicTick),
             }
 
-            let terminal = Self::is_terminal_body_state(
-                candidate
+            let terminal = {
+                let record = candidate
                     .organism_registry
                     .get(organism_id)
-                    .ok_or(ScaffoldContractError::InvalidId)?,
-            );
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                let age_ticks = record
+                    .age_at(next_tick)
+                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?
+                    .raw();
+                PassiveBodyUpkeepPolicy::is_terminal(
+                    &record.biochemistry().body,
+                    age_ticks,
+                    record.phenotype(),
+                )
+            };
             if terminal {
                 candidate
                     .organism_registry
@@ -4286,6 +4291,187 @@ mod task_3_2a_tests {
             assert_eq!(after.archive(), before.archive());
             assert_eq!(after.world_entity_id(), before.world_entity_id());
         }
+        assert_eq!(
+            forward.canonical_signature_digest().unwrap(),
+            reverse.canonical_signature_digest().unwrap()
+        );
+        for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+            assert_eq!(
+                task_4_1_record_state(&forward, organism_id),
+                task_4_1_record_state(&reverse, organism_id)
+            );
+        }
+    }
+
+    #[test]
+    fn try_advance_tick_applies_maximum_lifespan_in_stable_order_and_rolls_back() {
+        let mut forward = task_4_1_world_with_registration_order(&[
+            TASK_4_1_LOW_ORGANISM,
+            TASK_4_1_HIGH_ORGANISM,
+        ]);
+        let mut reverse = task_4_1_world_with_registration_order(&[
+            TASK_4_1_HIGH_ORGANISM,
+            TASK_4_1_LOW_ORGANISM,
+        ]);
+        let _forward_food = task_4_1_consume_and_prepare_resource(&mut forward);
+        let _reverse_food = task_4_1_consume_and_prepare_resource(&mut reverse);
+
+        let before_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
+        let before_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        let low_maximum = alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(
+            before_low.phenotype(),
+        );
+        let high_maximum = alife_core::PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(
+            before_high.phenotype(),
+        );
+        assert_ne!(low_maximum, high_maximum);
+        let minimum_maximum = low_maximum.min(high_maximum);
+        assert!(minimum_maximum > 0);
+        let next_tick = Tick::new(minimum_maximum);
+        let current_tick = Tick::new(next_tick.raw().saturating_sub(1));
+        let terminal_organism = if low_maximum < high_maximum {
+            TASK_4_1_LOW_ORGANISM
+        } else {
+            TASK_4_1_HIGH_ORGANISM
+        };
+        let survivor_organism = if terminal_organism == TASK_4_1_LOW_ORGANISM {
+            TASK_4_1_HIGH_ORGANISM
+        } else {
+            TASK_4_1_LOW_ORGANISM
+        };
+
+        for world in [&mut forward, &mut reverse] {
+            world.tick = current_tick;
+            for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
+                let phenotype = world
+                    .organism_registry
+                    .get(organism_id)
+                    .unwrap()
+                    .phenotype()
+                    .clone();
+                let biology = alife_core::BiochemistryState::new(&phenotype, current_tick)
+                    .unwrap();
+                world
+                    .organism_registry
+                    .with_biology_mut(organism_id, |current| {
+                        *current = biology;
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+            if terminal_organism == TASK_4_1_HIGH_ORGANISM {
+                let phenotype = world
+                    .organism_registry
+                    .get(TASK_4_1_LOW_ORGANISM)
+                    .unwrap()
+                    .phenotype()
+                    .clone();
+                let biology = alife_core::BiochemistryState::new(&phenotype, next_tick)
+                    .unwrap();
+                world
+                    .organism_registry
+                    .with_biology_mut(TASK_4_1_LOW_ORGANISM, |current| {
+                        *current = biology;
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+        }
+
+        let expected_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
+        let expected_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        let expected_low_biology = if expected_low.biochemistry().tick == next_tick {
+            *expected_low.biochemistry()
+        } else {
+            expected_low
+                .biochemistry()
+                .advance(
+                    next_tick,
+                    alife_core::BodyEventDelta::zero(),
+                    expected_low.phenotype(),
+                )
+                .unwrap()
+        };
+        let expected_high_biology = if expected_high.biochemistry().tick == next_tick {
+            *expected_high.biochemistry()
+        } else {
+            expected_high
+                .biochemistry()
+                .advance(
+                    next_tick,
+                    alife_core::BodyEventDelta::zero(),
+                    expected_high.phenotype(),
+                )
+                .unwrap()
+        };
+
+        let mut late_failure = forward.clone();
+        let before_failure_tick = late_failure.tick();
+        let before_failure_low = task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM);
+        let before_failure_high = task_4_1_record_state(&late_failure, TASK_4_1_HIGH_ORGANISM);
+        let before_failure_objects = late_failure.object_snapshots();
+        let before_failure_ecology = late_failure.ecology().clone();
+        let before_failure_metrics = late_failure.ecology_metrics();
+        let before_failure_speech = late_failure.audible_utterances();
+        let before_failure_touched = late_failure.last_touched_entities.clone();
+        let before_failure_last_action = late_failure.last_action_result.clone();
+        let before_failure_signature = late_failure.canonical_signature_digest().unwrap();
+        late_failure.inject_tick_late_failure_after_first_organism_for_test();
+
+        assert_eq!(
+            late_failure.try_advance_tick(),
+            Err(ScaffoldContractError::InvalidDecisionEvidence)
+        );
+        assert_eq!(late_failure.tick(), before_failure_tick);
+        assert_eq!(
+            task_4_1_record_state(&late_failure, TASK_4_1_LOW_ORGANISM),
+            before_failure_low
+        );
+        assert_eq!(
+            task_4_1_record_state(&late_failure, TASK_4_1_HIGH_ORGANISM),
+            before_failure_high
+        );
+        assert_eq!(late_failure.object_snapshots(), before_failure_objects);
+        assert_eq!(late_failure.ecology(), &before_failure_ecology);
+        assert_eq!(late_failure.ecology_metrics(), before_failure_metrics);
+        assert_eq!(late_failure.audible_utterances(), before_failure_speech);
+        assert_eq!(late_failure.last_touched_entities, before_failure_touched);
+        assert_eq!(late_failure.last_action_result, before_failure_last_action);
+        assert_eq!(
+            late_failure.canonical_signature_digest().unwrap(),
+            before_failure_signature
+        );
+
+        assert_eq!(forward.try_advance_tick().unwrap(), next_tick);
+        assert_eq!(reverse.try_advance_tick().unwrap(), next_tick);
+        let forward_low = task_4_1_record_state(&forward, TASK_4_1_LOW_ORGANISM);
+        let forward_high = task_4_1_record_state(&forward, TASK_4_1_HIGH_ORGANISM);
+        assert_eq!(forward_low.biochemistry(), &expected_low_biology);
+        assert_eq!(forward_high.biochemistry(), &expected_high_biology);
+        for record in [&forward_low, &forward_high] {
+            assert_eq!(record.age_at(next_tick).unwrap(), next_tick);
+            assert!(record.biochemistry().body.health > 0.0);
+            assert!(record.biochemistry().body.energy > 0.0);
+            assert_eq!(record.archive(), {
+                if record.organism_id() == TASK_4_1_LOW_ORGANISM {
+                    before_low.archive()
+                } else {
+                    before_high.archive()
+                }
+            });
+            assert_eq!(record.world_entity_id(), {
+                if record.organism_id() == TASK_4_1_LOW_ORGANISM {
+                    before_low.world_entity_id()
+                } else {
+                    before_high.world_entity_id()
+                }
+            });
+        }
+        let terminal_record = task_4_1_record_state(&forward, terminal_organism);
+        let survivor_record = task_4_1_record_state(&forward, survivor_organism);
+        assert_eq!(terminal_record.lifecycle().death_tick(), Some(next_tick));
+        assert!(!terminal_record.lifecycle().is_alive());
+        assert!(survivor_record.lifecycle().is_alive());
         assert_eq!(
             forward.canonical_signature_digest().unwrap(),
             reverse.canonical_signature_digest().unwrap()
