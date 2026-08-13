@@ -5,17 +5,25 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     ensure_current_version, validate_finite, validate_optional_target, ActionArbitrationTrace,
-    ActionCandidate, ActionCommand, ActionDecision, ActionDecisionStatus, ActionProposal,
-    BodySnapshot, BrainClassId, BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily,
-    CandidateFeatureDigest, CandidateFeatureVector, CandidateObservationRef, ConceptCellId,
-    Confidence, DevelopmentState, DriveDelta, EpisodicDecisionKeyV2, ExperienceSequenceId,
-    FinalizedMemoryRecall, GenomeId, HomeostaticDelta, HomeostaticSnapshot, LobeLayout, MemoryId,
-    NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionBaseDigest, PerceptionFrame,
-    PerceptionFrameDigest, PhenotypeHash, PolicyBackend, Pose, RankedActionProposal, RoutingMatrix,
-    ScaffoldContractError, SchemaKind, SchemaVersions, SensorProfile, SensorProfileProvenance,
-    SensoryAbiVersion, SensorySnapshot, SignedValence, TeacherPerceptionChannel, Tick, Validate,
-    Vec3f, Velocity, WeightSplitContract, WorldEntityId, MAX_ACTION_CANDIDATES,
+    ActionArbitrationTraceRef, ActionCandidate, ActionCommand, ActionDecision,
+    ActionDecisionStatus, ActionProposal, ActionWtaResult, BodySnapshot, BrainClassId,
+    BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateFeatureDigest,
+    CandidateFeatureVector, CandidateObservationRef, CanonicalDigestBuilder, CognitiveContextFrame,
+    CognitiveWorkReceipt, ConceptCellId, Confidence, DevelopmentState, DriveDelta,
+    EpisodicDecisionKeyV2, ExperienceSequenceId, FinalizedMemoryRecall, GenomeId, HomeostaticDelta,
+    HomeostaticSnapshot, LobeLayout, MeasuredChannelObservation, MemoryId, MotorChannel,
+    MotorCommandBundle, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionBaseDigest,
+    PerceptionFrame, PerceptionFrameDigest, PhenotypeHash, PolicyBackend, Pose,
+    PredictionTargetReceipt, RankedActionProposal, RoutingMatrix, ScaffoldContractError,
+    SchemaKind, SchemaVersions, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
+    SensorySnapshot, SignedValence, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
+    WeightSplitContract, WorldEntityId, MAX_ACTION_CANDIDATES,
 };
+
+/// The v1.1 semantic spine is a deliberate ABI after the legacy/current
+/// experience ABI. The central version registry remains owned by migration
+/// work, so this source task keeps the new boundary explicit here.
+pub const V11_EXPERIENCE_ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION + 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExperiencePatchPhase {
@@ -37,6 +45,7 @@ pub struct ExperiencePatchHeader {
 
 impl ExperiencePatchHeader {
     pub const ABI_VERSION: u16 = SchemaVersions::CURRENT.experience.0;
+    pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
 
     pub fn new(
         organism_id: OrganismId,
@@ -71,11 +80,30 @@ impl ExperiencePatchHeader {
         header.validate_contract()?;
         Ok(header)
     }
+
+    pub fn for_v11_phase(
+        organism_id: OrganismId,
+        sequence_id: ExperienceSequenceId,
+        world_tick: Tick,
+        sensor_profile: SensorProfileProvenance,
+        phase: ExperiencePatchPhase,
+    ) -> Result<Self, ScaffoldContractError> {
+        let header = Self {
+            abi_version: Self::V11_ABI_VERSION,
+            organism_id,
+            sequence_id,
+            world_tick,
+            sensor_profile,
+            phase,
+        };
+        header.validate_contract()?;
+        Ok(header)
+    }
 }
 
 impl Validate for ExperiencePatchHeader {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        ensure_current_version(SchemaKind::Experience, self.abi_version)?;
+        validate_experience_abi(self.abi_version)?;
         self.organism_id.validate()?;
         self.sequence_id.validate()?;
         self.sensor_profile.validate_contract()?;
@@ -84,6 +112,18 @@ impl Validate for ExperiencePatchHeader {
         }
         Ok(())
     }
+}
+
+fn validate_experience_abi(actual: u16) -> Result<(), ScaffoldContractError> {
+    if actual == ExperiencePatchHeader::ABI_VERSION || actual == V11_EXPERIENCE_ABI_VERSION {
+        Ok(())
+    } else {
+        ensure_current_version(SchemaKind::Experience, actual)
+    }
+}
+
+fn is_v11_abi(actual: u16) -> bool {
+    actual == V11_EXPERIENCE_ABI_VERSION
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -203,10 +243,15 @@ pub struct PreActionSnapshot {
     perception: PerceptionFrame,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     heuristic_evidence: Option<HeuristicPreActionEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cognitive_context: Option<CognitiveContextFrame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prediction_target: Option<PredictionTargetReceipt>,
 }
 
 impl PreActionSnapshot {
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
+    pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
 
     #[allow(clippy::too_many_arguments)]
     pub fn from_neural_frame(
@@ -236,6 +281,8 @@ impl PreActionSnapshot {
             },
             perception,
             heuristic_evidence: None,
+            cognitive_context: None,
+            prediction_target: None,
         };
         snapshot.validate_contract()?;
         Ok(snapshot)
@@ -298,6 +345,8 @@ impl PreActionSnapshot {
             },
             perception,
             heuristic_evidence: Some(heuristic_evidence),
+            cognitive_context: None,
+            prediction_target: None,
         };
         snapshot.validate_contract()?;
         Ok(snapshot)
@@ -305,6 +354,20 @@ impl PreActionSnapshot {
 
     pub const fn perception(&self) -> &PerceptionFrame {
         &self.perception
+    }
+
+    pub fn with_v11_context(
+        mut self,
+        cognitive_context: CognitiveContextFrame,
+        prediction_target: PredictionTargetReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        cognitive_context.validate_contract()?;
+        prediction_target.validate_contract()?;
+        self.abi_version = V11_EXPERIENCE_ABI_VERSION;
+        self.cognitive_context = Some(cognitive_context);
+        self.prediction_target = Some(prediction_target);
+        self.validate_contract()?;
+        Ok(self)
     }
 
     pub const fn body(&self) -> BodySnapshot {
@@ -369,7 +432,7 @@ impl PreActionSnapshot {
 
 impl Validate for PreActionSnapshot {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        ensure_current_version(SchemaKind::Experience, self.abi_version)?;
+        validate_experience_abi(self.abi_version)?;
         ensure_current_version(SchemaKind::Genome, self.genome_schema_version)?;
         self.organism_id.validate()?;
         self.sequence_id.validate()?;
@@ -381,6 +444,24 @@ impl Validate for PreActionSnapshot {
             || self.tick != self.perception.tick()
         {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        match (&self.cognitive_context, &self.prediction_target) {
+            (Some(context), Some(prediction)) => {
+                context.validate_contract()?;
+                prediction.validate_contract()?;
+                if self.abi_version != V11_EXPERIENCE_ABI_VERSION
+                    || context.organism_id != self.organism_id
+                    || context.sequence_id != self.sequence_id
+                    || context.world_tick != self.tick
+                    || prediction.organism_id != self.organism_id
+                    || prediction.experience_sequence != self.sequence_id
+                    || prediction.world_tick != self.tick
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+            }
+            (None, None) if self.abi_version == ExperiencePatchHeader::ABI_VERSION => {}
+            _ => return Err(ScaffoldContractError::InvalidDecisionEvidence),
         }
         match self.brain_evidence {
             PreActionBrainEvidence::NeuralClosedLoopGpu {
@@ -461,6 +542,12 @@ pub struct DecisionSnapshot {
     pub evidence: DecisionEvidence,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     episodic_key: Option<EpisodicDecisionKeyV2>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_bundle: Option<MotorCommandBundle>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prediction_target: Option<PredictionTargetReceipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cognitive_work: Option<CognitiveWorkReceipt>,
 }
 
 impl<'de> Deserialize<'de> for DecisionSnapshot {
@@ -480,6 +567,12 @@ impl<'de> Deserialize<'de> for DecisionSnapshot {
             evidence: DecisionEvidence,
             #[serde(default)]
             episodic_key: Option<EpisodicDecisionKeyV2>,
+            #[serde(default)]
+            selected_bundle: Option<MotorCommandBundle>,
+            #[serde(default)]
+            prediction_target: Option<PredictionTargetReceipt>,
+            #[serde(default)]
+            cognitive_work: Option<CognitiveWorkReceipt>,
         }
 
         let wire = Wire::deserialize(deserializer)?;
@@ -493,6 +586,9 @@ impl<'de> Deserialize<'de> for DecisionSnapshot {
             confidence: wire.confidence,
             evidence: wire.evidence,
             episodic_key: wire.episodic_key,
+            selected_bundle: wire.selected_bundle,
+            prediction_target: wire.prediction_target,
+            cognitive_work: wire.cognitive_work,
         };
         snapshot.validate_contract().map_err(D::Error::custom)?;
         Ok(snapshot)
@@ -501,6 +597,7 @@ impl<'de> Deserialize<'de> for DecisionSnapshot {
 
 impl DecisionSnapshot {
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
+    pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
 
     pub fn from_action_decision(
         sequence_id: ExperienceSequenceId,
@@ -525,6 +622,9 @@ impl DecisionSnapshot {
                 status: decision.status,
             }),
             episodic_key: None,
+            selected_bundle: None,
+            prediction_target: None,
+            cognitive_work: None,
         };
         snapshot.validate_contract()?;
         Ok(snapshot)
@@ -589,6 +689,57 @@ impl DecisionSnapshot {
                 confidence: selection.confidence,
             }),
             episodic_key: None,
+            selected_bundle: None,
+            prediction_target: None,
+            cognitive_work: None,
+        };
+        snapshot.validate_contract()?;
+        Ok(snapshot)
+    }
+
+    pub fn from_v11_bundle(
+        sequence_id: ExperienceSequenceId,
+        bundle: MotorCommandBundle,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        bundle.validate_contract()?;
+        prediction_target.validate_contract()?;
+        cognitive_work.validate_contract()?;
+        if bundle.sequence_id != sequence_id
+            || prediction_target.organism_id != bundle.organism_id
+            || prediction_target.experience_sequence != sequence_id
+            || prediction_target.world_tick != bundle.tick
+            || prediction_target.decision.raw() == 0
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let selected_action = legacy_action_for_bundle(&bundle, prediction_target.decision)?;
+        let snapshot = Self {
+            abi_version: V11_EXPERIENCE_ABI_VERSION,
+            organism_id: bundle.organism_id,
+            sequence_id,
+            decision_tick: bundle.tick,
+            action_abi_version: ActionCommand::ABI_VERSION,
+            confidence: bundle
+                .channels
+                .iter()
+                .map(|command| command.confidence.raw())
+                .reduce(f32::min)
+                .map_or_else(|| Confidence::new(0.0), Confidence::new)?,
+            selected_action,
+            evidence: DecisionEvidence::HeuristicBaseline(HeuristicDecisionEvidence {
+                baseline_schema_version: HeuristicDecisionEvidence::SCHEMA_VERSION,
+                proposals: Vec::new(),
+                rejected_top_proposal: None,
+                ranked_top_proposals: Vec::new(),
+                arbitration_trace: v11_compatibility_trace(),
+                status: ActionDecisionStatus::FallbackSelected,
+            }),
+            episodic_key: None,
+            selected_bundle: Some(bundle),
+            prediction_target: Some(prediction_target),
+            cognitive_work: Some(cognitive_work),
         };
         snapshot.validate_contract()?;
         Ok(snapshot)
@@ -679,9 +830,80 @@ impl DecisionSnapshot {
     }
 }
 
+fn v11_compatibility_trace() -> ActionArbitrationTrace {
+    ActionArbitrationTrace {
+        trace_ref: ActionArbitrationTraceRef(1),
+        inhibition_inputs: Vec::new(),
+        inhibition_outputs: Vec::new(),
+        wta_result: ActionWtaResult {
+            selected_proposal_index: None,
+            selected_action_id: None,
+            selected_score: 0.0,
+        },
+        score_threshold: 0.0,
+        confidence_threshold: 0.0,
+        tied_proposal_indices: Vec::new(),
+        suppressed_proposals: Vec::new(),
+        tie_breaker_seed: 0,
+        tie_breaker_index: None,
+    }
+}
+
+fn legacy_action_for_bundle(
+    bundle: &MotorCommandBundle,
+    action_id: crate::ActionId,
+) -> Result<ActionCommand, ScaffoldContractError> {
+    let command = bundle
+        .channels
+        .iter()
+        .find(|command| command.primitive == action_id)
+        .or_else(|| bundle.channels.first());
+    let (kind, target, intensity, duration_ticks, confidence) = match command {
+        Some(command) => {
+            let kind = match command.channel {
+                MotorChannel::Locomotion => crate::ActionKind::Move,
+                MotorChannel::Orientation => crate::ActionKind::Inspect,
+                MotorChannel::Manipulation => crate::ActionKind::Interact,
+                MotorChannel::Vocal => crate::ActionKind::Vocalize,
+                MotorChannel::Posture => crate::ActionKind::Gesture,
+                MotorChannel::SpeciesSpecific(_) => crate::ActionKind::Gesture,
+            };
+            (
+                kind,
+                command
+                    .target
+                    .unwrap_or_else(|| crate::ActionTarget::new(None, None)),
+                command.intensity,
+                command.duration_ticks,
+                command.confidence,
+            )
+        }
+        None => (
+            crate::ActionKind::Idle,
+            crate::ActionTarget::new(None, None),
+            crate::Intensity::new(0.0)?,
+            crate::DurationTicks::new(1),
+            crate::Confidence::new(0.0)?,
+        ),
+    };
+    ActionCommand::structured(
+        bundle.organism_id,
+        action_id,
+        kind,
+        target,
+        intensity,
+        duration_ticks,
+        confidence,
+        0,
+        None,
+        None,
+        Some(ActionArbitrationTraceRef(1)),
+    )
+}
+
 impl Validate for DecisionSnapshot {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        ensure_current_version(SchemaKind::Experience, self.abi_version)?;
+        validate_experience_abi(self.abi_version)?;
         ensure_current_version(SchemaKind::ActionAbi, self.action_abi_version)?;
         self.organism_id.validate()?;
         self.sequence_id.validate()?;
@@ -690,6 +912,30 @@ impl Validate for DecisionSnapshot {
             return Err(ScaffoldContractError::MismatchedCreatureId);
         }
         Confidence::new(self.confidence.raw())?;
+        match (
+            self.abi_version == V11_EXPERIENCE_ABI_VERSION,
+            &self.selected_bundle,
+            &self.prediction_target,
+            &self.cognitive_work,
+        ) {
+            (true, Some(bundle), Some(prediction), Some(work)) => {
+                bundle.validate_contract()?;
+                prediction.validate_contract()?;
+                work.validate_contract()?;
+                if bundle.organism_id != self.organism_id
+                    || bundle.sequence_id != self.sequence_id
+                    || bundle.tick != self.decision_tick
+                    || prediction.organism_id != self.organism_id
+                    || prediction.experience_sequence != self.sequence_id
+                    || prediction.world_tick != self.decision_tick
+                    || prediction.decision != self.selected_action.action_id
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+            }
+            (false, None, None, None) => {}
+            _ => return Err(ScaffoldContractError::InvalidDecisionEvidence),
+        }
         match &self.evidence {
             DecisionEvidence::HeuristicBaseline(evidence) => {
                 if self.episodic_key.is_some() {
@@ -779,6 +1025,52 @@ impl Validate for PhysicalActionOutcome {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct JointPhysicalOutcome {
+    pub execution: PhysicalActionOutcome,
+    pub channel_observations: Vec<MeasuredChannelObservation>,
+}
+
+impl JointPhysicalOutcome {
+    pub fn new(
+        execution: PhysicalActionOutcome,
+        channel_observations: Vec<MeasuredChannelObservation>,
+    ) -> Result<Self, ScaffoldContractError> {
+        let outcome = Self {
+            execution,
+            channel_observations,
+        };
+        outcome.validate_contract()?;
+        Ok(outcome)
+    }
+
+    pub const fn joint_reward(&self) -> Option<SignedValence> {
+        None
+    }
+}
+
+impl Validate for JointPhysicalOutcome {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.execution.validate_contract()?;
+        if self.channel_observations.len() > crate::MAX_MOTOR_CHANNELS {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        for observation in &self.channel_observations {
+            observation.validate_contract()?;
+        }
+        let mut channels = self
+            .channel_observations
+            .iter()
+            .map(|observation| format!("{:?}", observation.channel))
+            .collect::<Vec<_>>();
+        channels.sort();
+        if channels.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ConceptHint {
     pub concept_id: ConceptCellId,
@@ -843,10 +1135,15 @@ pub struct PostActionOutcome {
     pub concept_hints: Vec<ConceptHint>,
     pub memory_hints: Vec<MemoryHint>,
     pub teacher_feedback: Option<TeacherFeedbackObservation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joint: Option<JointPhysicalOutcome>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cognitive_work: Option<CognitiveWorkReceipt>,
 }
 
 impl PostActionOutcome {
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
+    pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
 
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -879,15 +1176,32 @@ impl PostActionOutcome {
             concept_hints: Vec::new(),
             memory_hints: Vec::new(),
             teacher_feedback: None,
+            joint: None,
+            cognitive_work: None,
         };
         outcome.validate_contract()?;
         Ok(outcome)
+    }
+
+    pub fn with_v11_joint(
+        mut self,
+        joint: JointPhysicalOutcome,
+        cognitive_work: CognitiveWorkReceipt,
+    ) -> Result<Self, ScaffoldContractError> {
+        joint.validate_contract()?;
+        cognitive_work.validate_contract()?;
+        self.abi_version = V11_EXPERIENCE_ABI_VERSION;
+        self.physical = joint.execution;
+        self.joint = Some(joint);
+        self.cognitive_work = Some(cognitive_work);
+        self.validate_contract()?;
+        Ok(self)
     }
 }
 
 impl Validate for PostActionOutcome {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        ensure_current_version(SchemaKind::Experience, self.abi_version)?;
+        validate_experience_abi(self.abi_version)?;
         self.organism_id.validate()?;
         self.sequence_id.validate()?;
         self.physical.validate_contract()?;
@@ -905,6 +1219,20 @@ impl Validate for PostActionOutcome {
         }
         if let Some(feedback) = self.teacher_feedback {
             feedback.validate_contract()?;
+        }
+        match (&self.joint, &self.cognitive_work) {
+            (Some(joint), Some(work)) => {
+                if self.abi_version != V11_EXPERIENCE_ABI_VERSION {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                joint.validate_contract()?;
+                work.validate_contract()?;
+                if joint.execution != self.physical {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+            }
+            (None, None) if self.abi_version == ExperiencePatchHeader::ABI_VERSION => {}
+            _ => return Err(ScaffoldContractError::InvalidDecisionEvidence),
         }
         Ok(())
     }
@@ -1040,6 +1368,8 @@ impl ExperiencePatchBuilder {
             pre_action,
             decision,
             outcome,
+            prediction_target: None,
+            cognitive_work: None,
         };
         patch.validate_contract()?;
         Ok(patch)
@@ -1052,10 +1382,68 @@ pub struct ExperiencePatch {
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
     outcome: PostActionOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prediction_target: Option<PredictionTargetReceipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cognitive_work: Option<CognitiveWorkReceipt>,
 }
 
 impl ExperiencePatch {
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
+    pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
+
+    pub fn new_v11(
+        pre_action: PreActionSnapshot,
+        bundle: MotorCommandBundle,
+        joint: JointPhysicalOutcome,
+        prediction_target: PredictionTargetReceipt,
+        cognitive_work: CognitiveWorkReceipt,
+        cognitive_context: CognitiveContextFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        let pre_action =
+            pre_action.with_v11_context(cognitive_context, prediction_target.clone())?;
+        let decision = DecisionSnapshot::from_v11_bundle(
+            pre_action.sequence_id,
+            bundle,
+            prediction_target.clone(),
+            cognitive_work,
+        )?;
+        let work = decision
+            .cognitive_work
+            .as_ref()
+            .copied()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let outcome = PostActionOutcome::new(
+            pre_action.organism_id,
+            pre_action.sequence_id,
+            Tick::new(pre_action.tick.raw().saturating_add(1)),
+            true,
+            joint.execution,
+            HomeostaticDelta::zero(),
+            SignedValence::new(0.0)?,
+            NormalizedScalar::new(0.0)?,
+            NormalizedScalar::new(0.0)?,
+            SignedValence::new(0.0)?,
+            NormalizedScalar::new(0.0)?,
+        )?
+        .with_v11_joint(joint, work)?;
+        let patch = Self {
+            header: ExperiencePatchHeader::for_v11_phase(
+                pre_action.organism_id,
+                pre_action.sequence_id,
+                pre_action.tick,
+                pre_action.perception().profile_provenance(),
+                ExperiencePatchPhase::Sealed,
+            )?,
+            pre_action,
+            decision,
+            outcome,
+            prediction_target: Some(prediction_target),
+            cognitive_work: Some(work),
+        };
+        patch.validate_contract()?;
+        Ok(patch)
+    }
 
     pub const fn header(&self) -> &ExperiencePatchHeader {
         &self.header
@@ -1071,6 +1459,49 @@ impl ExperiencePatch {
 
     pub const fn outcome(&self) -> &PostActionOutcome {
         &self.outcome
+    }
+
+    pub const fn selected_bundle(&self) -> Option<&MotorCommandBundle> {
+        self.decision.selected_bundle.as_ref()
+    }
+
+    pub const fn prediction_target(&self) -> Option<&PredictionTargetReceipt> {
+        self.prediction_target.as_ref()
+    }
+
+    pub const fn cognitive_work(&self) -> Option<&CognitiveWorkReceipt> {
+        self.cognitive_work.as_ref()
+    }
+
+    pub fn causal_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        self.validate_contract()?;
+        let mut builder = CanonicalDigestBuilder::new(b"ALIFE-V11-EXPERIENCE-PATCH");
+        builder.write_u16(self.header.abi_version);
+        builder.write_u64(self.header.organism_id.raw());
+        builder.write_u64(self.header.sequence_id.raw());
+        builder.write_u64(self.header.world_tick.raw());
+        if let Some(context) = &self.pre_action.cognitive_context {
+            for word in context.canonical_digest()? {
+                builder.write_u64(word);
+            }
+        }
+        if let Some(bundle) = self.selected_bundle() {
+            for word in bundle.canonical_digest()? {
+                builder.write_u64(word);
+            }
+        }
+        if let Some(prediction) = self.prediction_target() {
+            for word in prediction.canonical_digest()? {
+                builder.write_u64(word);
+            }
+        }
+        if let Some(work) = self.cognitive_work() {
+            for word in work.canonical_digest()? {
+                builder.write_u64(word);
+            }
+        }
+        write_physical_outcome(&mut builder, self.outcome.physical)?;
+        Ok(builder.finish256())
     }
 
     pub const fn phase_sequence(&self) -> [ExperiencePatchPhase; 4] {
@@ -1111,6 +1542,44 @@ impl Validate for ExperiencePatch {
         Tick::validate_monotonic(self.pre_action.tick, self.decision.decision_tick)?;
         Tick::validate_monotonic(self.decision.decision_tick, self.outcome.outcome_tick)?;
         validate_decision_binding(&self.pre_action, &self.decision)?;
+        if is_v11_abi(self.header.abi_version) {
+            let prediction = self
+                .prediction_target
+                .as_ref()
+                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            let work = self
+                .cognitive_work
+                .as_ref()
+                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            if self.pre_action.abi_version != V11_EXPERIENCE_ABI_VERSION
+                || self.decision.abi_version != V11_EXPERIENCE_ABI_VERSION
+                || self.outcome.abi_version != V11_EXPERIENCE_ABI_VERSION
+                || self.decision.prediction_target.as_ref() != Some(prediction)
+                || self.decision.cognitive_work.as_ref() != Some(work)
+                || self.pre_action.prediction_target.as_ref() != Some(prediction)
+                || self.outcome.cognitive_work.as_ref() != Some(work)
+                || self.decision.selected_bundle.is_none()
+                || prediction.organism_id != self.header.organism_id
+                || prediction.experience_sequence != self.header.sequence_id
+                || prediction.world_tick != self.header.world_tick
+                || self.outcome.joint.is_none()
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+            let bundle = self
+                .decision
+                .selected_bundle
+                .as_ref()
+                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            if bundle.organism_id != self.header.organism_id
+                || bundle.sequence_id != self.header.sequence_id
+                || bundle.tick != self.header.world_tick
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        } else if self.prediction_target.is_some() || self.cognitive_work.is_some() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         Ok(())
     }
 }
@@ -1121,6 +1590,10 @@ struct CurrentExperiencePatchWire {
     pre_action: PreActionSnapshot,
     decision: DecisionSnapshot,
     outcome: PostActionOutcome,
+    #[serde(default)]
+    prediction_target: Option<PredictionTargetReceipt>,
+    #[serde(default)]
+    cognitive_work: Option<CognitiveWorkReceipt>,
 }
 
 #[derive(Deserialize)]
@@ -1219,12 +1692,20 @@ impl<'de> Deserialize<'de> for ExperiencePatch {
         D: serde::Deserializer<'de>,
     {
         match ExperiencePatchWire::deserialize(deserializer)? {
-            ExperiencePatchWire::Current(wire) => Ok(Self {
-                header: wire.header,
-                pre_action: wire.pre_action,
-                decision: wire.decision,
-                outcome: wire.outcome,
-            }),
+            ExperiencePatchWire::Current(wire) => {
+                let patch = Self {
+                    header: wire.header,
+                    pre_action: wire.pre_action,
+                    decision: wire.decision,
+                    outcome: wire.outcome,
+                    prediction_target: wire.prediction_target,
+                    cognitive_work: wire.cognitive_work,
+                };
+                patch
+                    .validate_contract()
+                    .map_err(serde::de::Error::custom)?;
+                Ok(patch)
+            }
             ExperiencePatchWire::LegacyV2(wire) => {
                 Self::migrate_unprofiled_v2(*wire).map_err(serde::de::Error::custom)
             }
@@ -1266,6 +1747,9 @@ impl ExperiencePatch {
             confidence: legacy.decision.confidence,
             evidence: legacy.decision.evidence,
             episodic_key: legacy.decision.episodic_key,
+            selected_bundle: None,
+            prediction_target: None,
+            cognitive_work: None,
         };
         let mut outcome = legacy.outcome;
         outcome.abi_version = ExperiencePatchHeader::ABI_VERSION;
@@ -1274,6 +1758,8 @@ impl ExperiencePatch {
             pre_action,
             decision,
             outcome,
+            prediction_target: None,
+            cognitive_work: None,
         };
         patch.validate_contract()?;
         Ok(patch)
@@ -1356,6 +1842,9 @@ impl ExperiencePatch {
                 status: legacy.decision.status,
             }),
             episodic_key: None,
+            selected_bundle: None,
+            prediction_target: None,
+            cognitive_work: None,
         };
         let header = ExperiencePatchHeader::for_phase(
             legacy.header.organism_id,
@@ -1371,6 +1860,8 @@ impl ExperiencePatch {
             pre_action,
             decision,
             outcome,
+            prediction_target: None,
+            cognitive_work: None,
         };
         patch.validate_contract()?;
         Ok(patch)
@@ -1657,6 +2148,33 @@ fn same_optional_vec3_bits(left: Option<Vec3f>, right: Option<Vec3f>) -> bool {
         }
         _ => false,
     }
+}
+
+fn write_physical_outcome(
+    builder: &mut CanonicalDigestBuilder,
+    outcome: PhysicalActionOutcome,
+) -> Result<(), ScaffoldContractError> {
+    builder.write_u8(outcome.contact as u8);
+    match outcome.target_entity {
+        Some(entity) => {
+            builder.write_some();
+            builder.write_u64(entity.raw());
+        }
+        None => builder.write_none(),
+    }
+    builder.write_f32(outcome.displacement.x)?;
+    builder.write_f32(outcome.displacement.y)?;
+    builder.write_f32(outcome.displacement.z)?;
+    match outcome.collision_normal {
+        Some(normal) => {
+            builder.write_some();
+            builder.write_f32(normal.x)?;
+            builder.write_f32(normal.y)?;
+            builder.write_f32(normal.z)?;
+        }
+        None => builder.write_none(),
+    }
+    builder.write_f32(outcome.energy_cost.raw())
 }
 
 fn validate_action_trace(trace: &ActionArbitrationTrace) -> Result<(), ScaffoldContractError> {

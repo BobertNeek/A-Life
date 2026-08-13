@@ -5,12 +5,15 @@ pub mod action_abi;
 pub mod activity;
 pub mod adapter;
 pub mod archive;
+pub mod attention;
 pub mod biochemistry;
 mod blake3_digest;
 pub mod brain_class;
 pub mod canonical_digest;
 pub mod checkpoint;
 pub mod chemistry;
+pub mod cognitive_context;
+pub mod cognitive_work;
 pub mod diagnostics;
 pub mod era1_evaluation;
 pub mod error;
@@ -29,10 +32,12 @@ pub mod lobe;
 pub mod math;
 pub mod memory;
 pub mod memory_query;
+pub mod motor;
 pub mod neural;
 pub mod packed_log;
 pub mod perception;
 pub mod phenotype;
+pub mod predictive;
 pub mod reference_brain;
 pub mod routing;
 pub mod sensory_abi;
@@ -66,6 +71,11 @@ pub use archive::{
     FounderCohortManifest, FounderIdentityRemap, FounderMode, FounderProvenance, FounderSelection,
     GeneticArchiveRecord, CREATURE_ARCHIVE_SCHEMA_VERSION, FOUNDER_COHORT_SCHEMA_VERSION,
 };
+pub use attention::{
+    AttentionBudgetReceipt, AttentionFrame, HysteresisState, NeuralStructuralIdentity,
+    PeripheralSummary, SalienceComponents, StableFocusIdentity, ATTENTION_SCHEMA_VERSION,
+    MAX_ATTENTION_SALIENCE_COMPONENTS, MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES,
+};
 pub use biochemistry::{
     BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
     NeuralModulation, PassiveBodyUpkeepPolicy, ReproductionReadiness,
@@ -82,6 +92,17 @@ pub use chemistry::{
     EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand, HomeostaticDelta,
     HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment, RecoveryTrigger,
     DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
+};
+pub use cognitive_context::{
+    CognitiveBudgetView, CognitiveConceptActivation, CognitiveConceptView, CognitiveContextFrame,
+    CognitiveFocalView, CognitiveGapActivation, CognitiveGapView, CognitiveInteroceptiveView,
+    CognitiveMemoryExpectancy, CognitiveMemoryView, CognitivePeripheralView,
+    CognitivePredictionView, COGNITIVE_CONTEXT_SCHEMA_VERSION, MAX_ACTIVE_CONCEPTS,
+    MAX_ACTIVE_GAPS, MAX_CONTEXT_MEMORY_EXPECTANCIES, MAX_PREDICTION_ERROR_FEATURES,
+};
+pub use cognitive_work::{
+    CognitiveWorkReceipt, COGNITIVE_WORK_POLICY_VERSION, COGNITIVE_WORK_SCHEMA_VERSION,
+    MAX_COGNITIVE_WORK_COUNTER,
 };
 pub use diagnostics::{ContractDiagnostic, DiagnosticCode};
 pub use era1_evaluation::{
@@ -116,9 +137,10 @@ pub use evolutionary_genetics::{
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
     ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,
-    HeuristicDecisionEvidence, HeuristicPreActionEvidence, MemoryExpectancySnapshot, MemoryHint,
-    NeuralDecisionEvidence, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
-    PreActionBrainEvidence, PreActionSnapshot, TeacherFeedbackObservation,
+    HeuristicDecisionEvidence, HeuristicPreActionEvidence, JointPhysicalOutcome,
+    MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence, PreActionSnapshot,
+    TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
 };
 pub use foundation::{
     FoundationAbiBinding, FoundationCompatibilityFamilyId, FoundationId, FoundationLayoutId,
@@ -187,6 +209,12 @@ pub use memory_query::{
     MEMORY_LATENT_V1_COUNT, MEMORY_PROFILE_RANGE, MEMORY_QUERY_V2_FEATURE_COUNT,
     MEMORY_RESERVED_RANGE, MEMORY_STATE_SENSORY_RANGE, MEMORY_TARGET_RANGE, MEMORY_VALUE_V1_COUNT,
 };
+pub use motor::{
+    BoundedCoordinationSummary, BoundedMotorPayload, ChannelCommand, CoordinationGroup,
+    EgocentricDirection, MeasuredChannelObservation, MotorChannel, MotorCommandBundle,
+    TargetBinding, MAX_COORDINATION_GROUPS, MAX_MOTOR_CHANNELS, MAX_MOTOR_PAYLOAD_VALUES,
+    MOTOR_COMMAND_SCHEMA_VERSION,
+};
 pub use neural::{
     cpu_spmv_projection, finalize_cpu_activations, update_oja_shadow_traces, ActivationFunction,
     CooEntry, CooTile, CpuNeuralState, DecodedSynapse, DenseTile, LobeActivationView, Microtile,
@@ -229,6 +257,10 @@ pub use phenotype::{
     ReplayCapturePlan, RouteBudgetReceipt, SensorEncoderAssignment, SensorEncoderPlan,
     SensorEncoderSourceGroup, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,
     REQUIRED_GPU_FEATURE_MASK,
+};
+pub use predictive::{
+    PredictionTargetFamily, PredictionTargetReceipt, MAX_SUCCESSOR_FEATURES,
+    PREDICTION_TARGET_SCHEMA_VERSION, SUCCESSOR_FEATURE_ABI_V1,
 };
 pub use reference_brain::{
     BrainTickDiagnostics, BrainTickInput, BrainTickOutput, BrainTickStatus, CreatureActionState,
