@@ -72,9 +72,10 @@ pub use archive::{
     GeneticArchiveRecord, CREATURE_ARCHIVE_SCHEMA_VERSION, FOUNDER_COHORT_SCHEMA_VERSION,
 };
 pub use attention::{
-    AttentionBudgetReceipt, AttentionFrame, HysteresisState, NeuralStructuralIdentity,
-    PeripheralSummary, SalienceComponents, StableFocusIdentity, ATTENTION_SCHEMA_VERSION,
-    MAX_ATTENTION_SALIENCE_COMPONENTS, MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES,
+    select_focal_targets, AttentionBudgetReceipt, AttentionFrame, AttentionSelectionPolicy,
+    HysteresisState, NeuralStructuralIdentity, PeripheralSummary, SalienceComponents,
+    StableFocusIdentity, ATTENTION_SCHEMA_VERSION, MAX_ATTENTION_SALIENCE_COMPONENTS,
+    MAX_FOCAL_TARGETS, MAX_PERIPHERAL_SUMMARIES,
 };
 pub use biochemistry::{
     BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
@@ -201,7 +202,8 @@ pub use memory::{
     MEMORY_RECALL_TOP_K, MEMORY_TARGET_SEARCH_CAP, MEMORY_TOTAL_SEARCH_CAP,
 };
 pub use memory_query::{
-    CandidateMemoryContextV1, CandidateMemoryQueryV2, EpisodicDecisionKeyV2,
+    finalized_memory_attention_evidence, CandidateMemoryContextV1, CandidateMemoryQueryV2,
+    EpisodicDecisionKeyV2, FinalizedMemoryAttentionEvidence,
     EpisodicRetrievalContextV1, MemoryQueryEncoderV2, MemoryQueryVersion,
     EPISODIC_RETRIEVAL_CONTEXT_SCHEMA_VERSION, MEMORY_ACTION_FAMILY_RANGE,
     MEMORY_ACTION_KIND_RANGE, MEMORY_BODY_RANGE, MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE,

@@ -8,7 +8,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     ensure_current_version, ActionCandidate, ActionId, ActionKind, BodySnapshot,
     CandidateActionFamily, CandidateFeatureDigest, CandidateObservationRef, CanonicalDigestBuilder,
-    Confidence, HomeostaticSnapshot, MemoryId, OrganismId, PerceptionBaseDigest,
+    Confidence, FinalizedMemoryRecall, HomeostaticSnapshot, MemoryId, NormalizedScalar,
+    OrganismId, PerceptionBaseDigest,
     PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind, PerceptionFrame,
     PerceptionFrameDigest, PerceptionFrameDraft, ScaffoldContractError, SchemaKind, SchemaVersions,
     SensorProfileIdentity, SensorySnapshot, Tick, TrackedObjectId, Validate, MAX_ACTION_CANDIDATES,
@@ -29,9 +30,80 @@ pub const MEMORY_VALUE_V1_COUNT: usize = 4;
 pub const MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE: usize = 16;
 pub const MEMORY_CONTEXT_V1_MAX_SOURCES: u16 = 4;
 pub const EPISODIC_RETRIEVAL_CONTEXT_SCHEMA_VERSION: u16 = 1;
+pub const MAX_FINALIZED_MEMORY_ATTENTION_EVIDENCE: usize = MAX_ACTION_CANDIDATES;
 
 const MEMORY_QUERY_DOMAIN: &[u8] = b"ALIFE-MEMORY-QUERY-V2";
 const EPISODIC_DECISION_KEY_DOMAIN: &[u8] = b"ALIFE-EPISODIC-DECISION-KEY-V2";
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct FinalizedMemoryAttentionEvidence {
+    pub tracked_object_id: Option<TrackedObjectId>,
+    pub salience: NormalizedScalar,
+    pub confidence: Confidence,
+    pub source_count: u16,
+}
+
+impl Validate for FinalizedMemoryAttentionEvidence {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.source_count > MEMORY_CONTEXT_V1_MAX_SOURCES {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        if let Some(id) = self.tracked_object_id {
+            id.validate()?;
+        }
+        NormalizedScalar::new(self.salience.raw())?;
+        Confidence::new(self.confidence.raw())?;
+        Ok(())
+    }
+}
+
+pub fn finalized_memory_attention_evidence(
+    recall: &FinalizedMemoryRecall,
+) -> Result<Vec<FinalizedMemoryAttentionEvidence>, ScaffoldContractError> {
+    let context = recall.context();
+    let keys = recall.candidate_keys();
+    context.validate_contract()?;
+    if keys.len() != context.candidates.len()
+        || keys.len() > MAX_FINALIZED_MEMORY_ATTENTION_EVIDENCE
+    {
+        return Err(ScaffoldContractError::InvalidMemoryQuery);
+    }
+
+    let mut evidence = Vec::with_capacity(keys.len());
+    for (key, candidate) in keys.iter().zip(&context.candidates) {
+        key.validate_contract()?;
+        if key.query().candidate_index() != candidate.candidate_index {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        let confidence = candidate
+            .target_confidence
+            .raw()
+            .max(candidate.family_confidence.raw());
+        let source_count = candidate
+            .target_source_count
+            .max(candidate.family_source_count);
+        let signal = candidate
+            .target_latent
+            .iter()
+            .chain(candidate.family_value.iter())
+            .copied()
+            .map(f32::abs)
+            .fold(0.0, f32::max);
+        let source_support = f32::from(source_count) / f32::from(MEMORY_CONTEXT_V1_MAX_SOURCES);
+        let salience = NormalizedScalar::new(
+            (confidence * 0.6 + source_support * 0.2 + signal * 0.2).clamp(0.0, 1.0),
+        )?;
+        let entry = FinalizedMemoryAttentionEvidence {
+            tracked_object_id: key.query().tracked_object_id(),
+            salience,
+            confidence: Confidence::new(confidence)?,
+            source_count,
+        };
+        entry.validate_contract()?;
+        evidence.push(entry);
+    }
+    Ok(evidence)
+}
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -68,6 +68,7 @@ impl StableFocusIdentity {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SalienceComponents {
+    pub peripheral_intensity: NormalizedScalar,
     pub drive: NormalizedScalar,
     pub memory_expectancy: NormalizedScalar,
     pub concept: NormalizedScalar,
@@ -79,6 +80,7 @@ pub struct SalienceComponents {
 impl Default for SalienceComponents {
     fn default() -> Self {
         Self {
+            peripheral_intensity: NormalizedScalar(0.0),
             drive: NormalizedScalar(0.0),
             memory_expectancy: NormalizedScalar(0.0),
             concept: NormalizedScalar(0.0),
@@ -92,6 +94,7 @@ impl Default for SalienceComponents {
 impl Validate for SalienceComponents {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         for value in [
+            self.peripheral_intensity,
             self.drive,
             self.memory_expectancy,
             self.concept,
@@ -136,6 +139,41 @@ pub struct HysteresisState {
     pub previous_identity: Option<StableFocusIdentity>,
     pub retained_ticks: u16,
     pub switch_margin: NormalizedScalar,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct AttentionSelectionPolicy {
+    pub focal_capacity: u8,
+    pub protected_minimum: u8,
+    pub requested_focal_count: u8,
+    pub switch_cost: NormalizedScalar,
+    pub hysteresis_margin: NormalizedScalar,
+}
+
+impl Default for AttentionSelectionPolicy {
+    fn default() -> Self {
+        Self {
+            focal_capacity: MAX_FOCAL_TARGETS as u8,
+            protected_minimum: 0,
+            requested_focal_count: MAX_FOCAL_TARGETS as u8,
+            switch_cost: NormalizedScalar(0.05),
+            hysteresis_margin: NormalizedScalar(0.05),
+        }
+    }
+}
+
+impl Validate for AttentionSelectionPolicy {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if usize::from(self.focal_capacity) > MAX_FOCAL_TARGETS
+            || self.protected_minimum > self.focal_capacity
+            || self.requested_focal_count > self.focal_capacity
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        NormalizedScalar::new(self.switch_cost.raw())?;
+        NormalizedScalar::new(self.hysteresis_margin.raw())?;
+        Ok(())
+    }
 }
 
 impl Default for HysteresisState {
@@ -364,6 +402,7 @@ fn write_salience(
     salience: SalienceComponents,
 ) -> Result<(), ScaffoldContractError> {
     for value in [
+        salience.peripheral_intensity,
         salience.drive,
         salience.memory_expectancy,
         salience.concept,
@@ -374,6 +413,144 @@ fn write_salience(
         builder.write_f32(value.raw())?;
     }
     Ok(())
+}
+
+pub fn select_focal_targets(
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    world_tick: Tick,
+    peripheral_summaries: &[PeripheralSummary],
+    previous_hysteresis: HysteresisState,
+    policy: AttentionSelectionPolicy,
+) -> Result<AttentionFrame, ScaffoldContractError> {
+    policy.validate_contract()?;
+    if peripheral_summaries.len() > MAX_PERIPHERAL_SUMMARIES
+        || usize::from(policy.requested_focal_count) < usize::from(policy.protected_minimum)
+    {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    for summary in peripheral_summaries {
+        summary.validate_contract()?;
+    }
+
+    let requested = usize::from(policy.requested_focal_count);
+    let mut ranked = peripheral_summaries
+        .iter()
+        .enumerate()
+        .map(|(index, summary)| (index, salience_score(summary.salience)))
+        .collect::<Vec<_>>();
+    ranked.sort_by(|left, right| {
+        right.1.total_cmp(&left.1).then_with(|| {
+            peripheral_summaries[left.0]
+                .identity
+                .canonical_key()
+                .cmp(&peripheral_summaries[right.0].identity.canonical_key())
+        })
+    });
+
+    let mut selected = ranked
+        .iter()
+        .take(requested)
+        .map(|(index, _)| *index)
+        .collect::<Vec<_>>();
+    if let Some(previous_identity) = previous_hysteresis.previous_identity {
+        if let Some(previous_index) = peripheral_summaries
+            .iter()
+            .position(|summary| summary.identity == previous_identity)
+        {
+            let previous_score = salience_score(peripheral_summaries[previous_index].salience);
+            let best_other_score = ranked
+                .iter()
+                .find_map(|(index, score)| (*index != previous_index).then_some(*score));
+            let retain_previous = best_other_score.map_or(true, |score| {
+                score <= previous_score
+                    + policy.hysteresis_margin.raw()
+                    + policy.switch_cost.raw()
+            });
+            if retain_previous && !selected.contains(&previous_index) && !selected.is_empty() {
+                selected.pop();
+                selected.push(previous_index);
+            } else if retain_previous && selected.is_empty() && requested > 0 {
+                selected.push(previous_index);
+            }
+        }
+    }
+    selected.sort_by(|left, right| {
+        salience_score(peripheral_summaries[*right].salience)
+            .total_cmp(&salience_score(peripheral_summaries[*left].salience))
+            .then_with(|| {
+                peripheral_summaries[*left]
+                    .identity
+                    .canonical_key()
+                    .cmp(&peripheral_summaries[*right].identity.canonical_key())
+            })
+    });
+    selected.dedup();
+
+    if selected.len() < usize::from(policy.protected_minimum) {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    let first_identity = selected
+        .first()
+        .map(|index| peripheral_summaries[*index].identity);
+    let switches: u64 = if previous_hysteresis
+        .previous_identity
+        .is_some_and(|previous| Some(previous) != first_identity)
+    {
+        1
+    } else {
+        0
+    };
+    let work_units = u64::try_from(peripheral_summaries.len())
+        .unwrap_or(u64::MAX)
+        .saturating_add(u64::try_from(ranked.len()).unwrap_or(u64::MAX).saturating_mul(2))
+        .saturating_add(u64::try_from(selected.len()).unwrap_or(u64::MAX).saturating_mul(3))
+        .saturating_add(switches.saturating_mul(7));
+    let budget_receipt = AttentionBudgetReceipt::new(
+        u16::try_from(peripheral_summaries.len())
+            .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+        policy.focal_capacity,
+        policy.protected_minimum,
+        policy.requested_focal_count,
+        u8::try_from(selected.len())
+            .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
+        work_units,
+    )?;
+    let retained_ticks = if previous_hysteresis.previous_identity == first_identity {
+        previous_hysteresis.retained_ticks.saturating_add(1)
+    } else {
+        if first_identity.is_some() { 1 } else { 0 }
+    };
+    AttentionFrame::new(
+        organism_id,
+        sequence_id,
+        world_tick,
+        peripheral_summaries.to_vec(),
+        selected
+            .iter()
+            .map(|index| peripheral_summaries[*index].identity)
+            .collect(),
+        selected
+            .iter()
+            .map(|index| peripheral_summaries[*index].salience)
+            .collect(),
+        HysteresisState {
+            previous_identity: first_identity,
+            retained_ticks,
+            switch_margin: policy.hysteresis_margin,
+        },
+        budget_receipt,
+    )
+}
+
+fn salience_score(salience: SalienceComponents) -> f32 {
+    0.20 * salience.peripheral_intensity.raw()
+        + 0.10 * salience.novelty.raw()
+        + 0.10 * salience.uncertainty.raw()
+        + 0.20 * salience.drive.raw()
+        + 0.20 * salience.memory_expectancy.raw()
+        + 0.10 * salience.concept.raw()
+        + 0.10 * salience.gap_voltage.raw()
 }
 
 fn write_hysteresis(

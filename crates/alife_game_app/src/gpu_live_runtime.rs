@@ -6,7 +6,9 @@ use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, Linea
 use alife_core::{
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     BiochemistryState, Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
-    BrainWorkReceipt, CanonicalDigestBuilder, CognitiveContextFrame, CognitiveMemoryExpectancy,
+    finalized_memory_attention_evidence, select_focal_targets, AttentionFrame,
+    AttentionSelectionPolicy, BrainWorkReceipt, CanonicalDigestBuilder, CognitiveContextFrame,
+    CognitiveMemoryExpectancy, FinalizedMemoryAttentionEvidence,
     Confidence, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
     DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, FinalizedMemoryRecall, FoundationGeneticIdentity,
@@ -34,6 +36,7 @@ use alife_runtime::{
     GpuSessionConsumerKind, GpuSessionFailStopCause,
 };
 use alife_world::{
+    grounded_peripheral_summaries,
     persistence::{AssetManifest, GpuBrainSaveState, PortableSaveFile, RuntimeConfig},
     HeadlessWorld, HeadlessWorldSignatureDigest, WorldEditorSpawnSpec, WorldObjectKind,
     WorldOrganismRecord,
@@ -69,6 +72,7 @@ struct ResidentCognition {
     next_sequence: u64,
     language_grounding: LanguageGroundingLedger,
     life_statistics: PassiveLifeStatistics,
+    attention_hysteresis: alife_core::HysteresisState,
 }
 
 struct StagedLiveAuthority {
@@ -318,6 +322,7 @@ impl ResidentAuthorityPlan {
             next_sequence: 1,
             language_grounding: LanguageGroundingLedger::default(),
             life_statistics: PassiveLifeStatistics::new(self.organism_id, self.world_tick)?,
+            attention_hysteresis: alife_core::HysteresisState::default(),
         })
     }
 }
@@ -1727,6 +1732,64 @@ fn cognitive_context_for_recall(
     Ok(context)
 }
 
+fn apply_predecision_attention_evidence(
+    summaries: &mut [alife_core::PeripheralSummary],
+    body_need: f32,
+    memory_evidence: &[FinalizedMemoryAttentionEvidence],
+    context: &CognitiveContextFrame,
+) -> Result<(), ScaffoldContractError> {
+    let concept_evidence = context
+        .concept
+        .active_concepts
+        .iter()
+        .map(|concept| concept.activation.raw() * concept.utility.raw())
+        .fold(0.0, f32::max);
+    let gap_evidence = context
+        .gap
+        .gap_voltage
+        .raw()
+        .max(
+            context
+                .gap
+                .active_gaps
+                .iter()
+                .map(|gap| gap.voltage.raw())
+                .fold(0.0, f32::max),
+        );
+    for summary in summaries {
+        summary.salience.drive = NormalizedScalar::new(body_need.clamp(0.0, 1.0))?;
+        summary.salience.concept = NormalizedScalar::new(concept_evidence.clamp(0.0, 1.0))?;
+        summary.salience.gap_voltage = NormalizedScalar::new(gap_evidence.clamp(0.0, 1.0))?;
+        if let alife_core::StableFocusIdentity::TrackedObject(tracked_object_id) = summary.identity
+        {
+            if let Some(memory) = memory_evidence.iter().find(|memory| {
+                memory.tracked_object_id == Some(tracked_object_id)
+            }) {
+                summary.salience.memory_expectancy = memory.salience;
+            }
+        }
+        summary.validate_contract()?;
+    }
+    Ok(())
+}
+
+fn cognitive_context_with_attention(
+    mut context: CognitiveContextFrame,
+    attention: AttentionFrame,
+) -> Result<CognitiveContextFrame, ScaffoldContractError> {
+    context.attention = attention.clone();
+    context.peripheral.summaries = attention.peripheral_summaries.clone();
+    context.focal.identities = attention.focal_targets.clone();
+    context.focal.salience = attention.salience_components.clone();
+    context.focal.hysteresis = attention.hysteresis;
+    context.budget.peripheral_capacity = attention.budget_receipt.peripheral_capacity;
+    context.budget.focal_capacity = attention.budget_receipt.focal_capacity;
+    context.budget.work_used = attention.budget_receipt.work_units;
+    context.budget.work_limit = attention.budget_receipt.work_units;
+    context.validate_contract()?;
+    Ok(context)
+}
+
 fn seal_prepared_selection_core(
     world: &mut HeadlessWorld,
     residents: &mut BTreeMap<u64, ResidentCognition>,
@@ -2167,6 +2230,7 @@ impl GpuLiveBrainRuntime {
                     .map_err(|error| {
                         CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
                     })?,
+                attention_hysteresis: alife_core::HysteresisState::default(),
             };
             let raw = entry.organism_id.raw();
             if candidate_residents.insert(raw, resident).is_some()
@@ -4013,16 +4077,45 @@ impl GpuLiveBrainRuntime {
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
                     .recall_frame(&draft)?;
                 let sequence_id = ExperienceSequenceId(resident.next_sequence);
-                let prepared_recall = if sequence_id.validate().is_ok() {
-                    let cognitive_context = cognitive_context_for_recall(
-                        OrganismId(raw),
-                        sequence_id,
-                        &prepared_recall,
-                    )?;
-                    prepared_recall.with_cognitive_context(cognitive_context)?
-                } else {
-                    prepared_recall
-                };
+                sequence_id.validate()?;
+                let baseline_context = cognitive_context_for_recall(
+                    OrganismId(raw),
+                    sequence_id,
+                    &prepared_recall,
+                )?;
+                let baseline_prepared = prepared_recall
+                    .clone()
+                    .with_cognitive_context(baseline_context.clone())?;
+                let (baseline_frame, baseline_recall) = baseline_prepared.finalize(draft.clone())?;
+                baseline_recall.validate_for_frame(&baseline_frame)?;
+                let memory_evidence = finalized_memory_attention_evidence(&baseline_recall)?;
+                let mut peripheral_summaries =
+                    grounded_peripheral_summaries(draft.grounded_object_slots())?;
+                let body_need = resident
+                    .homeostasis
+                    .drives
+                    .to_array()
+                    .iter()
+                    .copied()
+                    .fold(0.0, f32::max);
+                apply_predecision_attention_evidence(
+                    &mut peripheral_summaries,
+                    body_need,
+                    &memory_evidence,
+                    &baseline_context,
+                )?;
+                let attention = select_focal_targets(
+                    OrganismId(raw),
+                    sequence_id,
+                    tick_before,
+                    &peripheral_summaries,
+                    resident.attention_hysteresis,
+                    AttentionSelectionPolicy::default(),
+                )?;
+                resident.attention_hysteresis = attention.hysteresis;
+                let cognitive_context =
+                    cognitive_context_with_attention(baseline_context, attention)?;
+                let prepared_recall = prepared_recall.with_cognitive_context(cognitive_context)?;
                 let (frame, memory_recall) = prepared_recall.finalize(draft)?;
                 memory_recall.validate_for_frame(&frame)?;
                 let memory_upload =
@@ -6061,6 +6154,7 @@ mod tests {
                         language_grounding: LanguageGroundingLedger::default(),
                         life_statistics: PassiveLifeStatistics::new(OrganismId(raw), world_tick)
                             .unwrap(),
+                        attention_hysteresis: alife_core::HysteresisState::default(),
                     },
                 )
             })
@@ -7665,6 +7759,7 @@ mod tests {
                 next_sequence: 1,
                 language_grounding: LanguageGroundingLedger::default(),
                 life_statistics: PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap(),
+                attention_hysteresis: alife_core::HysteresisState::default(),
             },
         )]);
         let confidence = Confidence::new(1.0).unwrap();

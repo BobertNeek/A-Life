@@ -353,6 +353,7 @@ impl CognitiveContextFrame {
                 nested.write_u64(summary.identity.raw());
                 nested.write_f32(summary.confidence.raw())?;
                 for value in [
+                    summary.salience.peripheral_intensity,
                     summary.salience.drive,
                     summary.salience.memory_expectancy,
                     summary.salience.concept,
@@ -468,6 +469,7 @@ fn write_salience(
     salience: SalienceComponents,
 ) -> Result<(), ScaffoldContractError> {
     for value in [
+        salience.peripheral_intensity,
         salience.drive,
         salience.memory_expectancy,
         salience.concept,

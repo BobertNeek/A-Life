@@ -3,9 +3,10 @@
 use std::collections::BTreeSet;
 
 use alife_core::{
-    BodySnapshot, Confidence, ContextStreams, GroundedObjectSlotV1, OrganismId, Pose,
-    ScaffoldContractError, SensoryChannels, SensorySnapshot, Tick, TrackedObjectId, Validate,
-    Vec3f, Velocity, WorldEntityId, MAX_GROUNDED_OBJECT_SLOTS,
+    BodySnapshot, Confidence, ContextStreams, GroundedObjectSlotV1, NormalizedScalar, OrganismId,
+    PeripheralSummary, Pose, SalienceComponents, ScaffoldContractError, SensoryChannels,
+    SensorySnapshot, StableFocusIdentity, Tick, TrackedObjectId, Validate, Vec3f, Velocity,
+    WorldEntityId, MAX_GROUNDED_OBJECT_SLOTS, MAX_PERIPHERAL_SUMMARIES,
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,42 @@ use crate::{
 
 pub const GROUNDED_VISION_RADIUS: f32 = 8.0;
 pub const GROUNDED_VELOCITY_CEILING: f32 = 4.0;
+
+/// Converts only grounded sensory facts into cheap peripheral cues. It never
+/// assigns desirability, reward, legality, or an action score.
+pub fn grounded_peripheral_summaries(
+    slots: &[GroundedObjectSlotV1],
+) -> Result<Vec<PeripheralSummary>, ScaffoldContractError> {
+    if slots.len() > MAX_PERIPHERAL_SUMMARIES {
+        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
+    let mut summaries = Vec::with_capacity(slots.len());
+    for slot in slots {
+        slot.validate_contract()?;
+        let motion = (slot.relative_velocity[0] * slot.relative_velocity[0]
+            + slot.relative_velocity[1] * slot.relative_velocity[1]
+            + slot.relative_velocity[2] * slot.relative_velocity[2])
+            .sqrt()
+            .clamp(0.0, 1.0);
+        let proximity = (1.0 - slot.distance).clamp(0.0, 1.0);
+        let intensity = motion.max(slot.contact).max(proximity * 0.25);
+        let novelty = (motion + slot.contact).mul_add(0.5, proximity * 0.25).clamp(0.0, 1.0);
+        let uncertainty = (1.0 - slot.confidence.raw()).clamp(0.0, 1.0);
+        let summary = PeripheralSummary {
+            identity: StableFocusIdentity::TrackedObject(slot.tracked_object_id),
+            salience: SalienceComponents {
+                peripheral_intensity: NormalizedScalar::new(intensity)?,
+                novelty: NormalizedScalar::new(novelty)?,
+                uncertainty: NormalizedScalar::new(uncertainty)?,
+                ..SalienceComponents::default()
+            },
+            confidence: slot.confidence,
+        };
+        summary.validate_contract()?;
+        summaries.push(summary);
+    }
+    Ok(summaries)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GroundedPhysicalProperties {
