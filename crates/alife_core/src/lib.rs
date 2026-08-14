@@ -42,6 +42,7 @@ pub mod reference_brain;
 pub mod routing;
 pub mod sensory_abi;
 pub mod sleep;
+pub mod structural_plasticity;
 pub mod topology;
 pub mod traits;
 pub mod units;
@@ -225,6 +226,12 @@ pub use neural::{
     ProjectionTile, SparseProjection, SparseTileCoord, SparseTilePayload, SparseTileType,
     SupertileMask, SynapseWeightSplit, TileMetadata, MICROTILE_CELLS, MICROTILE_EDGE,
     SUPERTILE_EDGE, SUPERTILE_MICROTILES,
+};
+pub use structural_plasticity::{
+    CoactivationEvidence, StructuralDiscoveryReceipt, StructuralPlasticityConfig,
+    StructuralPlasticityError, StructuralPlasticityState, StructuralWorkReceipt,
+    MAX_ACCEPTED_PER_PHASE, MAX_CANDIDATES_PER_REGION, MAX_EVIDENCE_PER_PHASE,
+    MAX_REGIONS_PER_STATE, MAX_STRUCTURAL_EDGES,
 };
 pub use packed_log::{
     ExperiencePacker, InMemoryPackedExperienceLog, PackedExperienceFrame, PackedExperienceRecord,
