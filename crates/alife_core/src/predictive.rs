@@ -10,6 +10,11 @@ use crate::{
 pub const PREDICTION_TARGET_SCHEMA_VERSION: u16 = 1;
 pub const MAX_SUCCESSOR_FEATURES: usize = 64;
 pub const SUCCESSOR_FEATURE_ABI_V1: u16 = 1;
+pub const DEFAULT_PREDICTOR_LEARNING_RATE: f32 = 0.25;
+
+const MAX_PREDICTOR_ACTIONS: usize = 32;
+const PREDICTOR_CONTEXT_FEATURES: usize = 8;
+const PREDICTOR_INPUT_FEATURES: usize = PREDICTOR_CONTEXT_FEATURES + 1;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,6 +43,221 @@ pub struct PredictionTargetReceipt {
     pub representation_variance: f32,
     pub action_sensitivity_score: f32,
     pub successor_separability_score: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SuccessorPrediction {
+    pub source_digest: [u64; 4],
+    pub decision: ActionId,
+    pub successor_feature_abi: u16,
+    pub predicted_successor: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PredictionUpdate {
+    pub prediction: SuccessorPrediction,
+    pub target_digest: [u64; 4],
+    pub error: Vec<f32>,
+    pub mean_squared_error: f32,
+    pub mean_absolute_error: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GroundedSuccessorPredictor {
+    successor_feature_abi: u16,
+    successor_feature_count: usize,
+    learning_rate: f32,
+    action_heads: Vec<ActionPredictionHead>,
+    last_update: Option<PredictionUpdate>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct ActionPredictionHead {
+    action: ActionId,
+    weights: Vec<f32>,
+}
+
+impl Default for GroundedSuccessorPredictor {
+    fn default() -> Self {
+        Self {
+            successor_feature_abi: 0,
+            successor_feature_count: 0,
+            learning_rate: DEFAULT_PREDICTOR_LEARNING_RATE,
+            action_heads: Vec::new(),
+            last_update: None,
+        }
+    }
+}
+
+impl GroundedSuccessorPredictor {
+    pub fn with_learning_rate(learning_rate: f32) -> Result<Self, ScaffoldContractError> {
+        if !learning_rate.is_finite() || !(0.0..=1.0).contains(&learning_rate) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        if learning_rate == 0.0 {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        Ok(Self {
+            learning_rate,
+            ..Self::default()
+        })
+    }
+
+    pub fn predict(
+        &self,
+        source_digest: [u64; 4],
+        decision: ActionId,
+        successor_feature_count: usize,
+    ) -> Result<SuccessorPrediction, ScaffoldContractError> {
+        validate_prediction_input(source_digest, decision, successor_feature_count)?;
+        if self.successor_feature_count != 0
+            && self.successor_feature_count != successor_feature_count
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+
+        let successor_feature_abi = if self.successor_feature_abi == 0 {
+            SUCCESSOR_FEATURE_ABI_V1
+        } else {
+            self.successor_feature_abi
+        };
+        let inputs = predictor_inputs(source_digest);
+        let mut predicted_successor = vec![0.0; successor_feature_count];
+        if let Some(head) = self
+            .action_heads
+            .iter()
+            .find(|head| head.action == decision)
+        {
+            for (feature_index, predicted) in predicted_successor.iter_mut().enumerate() {
+                let offset = feature_index * PREDICTOR_INPUT_FEATURES;
+                let raw_prediction = head.weights[offset..offset + PREDICTOR_INPUT_FEATURES]
+                    .iter()
+                    .zip(inputs)
+                    .map(|(weight, input)| weight * input)
+                    .sum::<f32>();
+                *predicted = raw_prediction.clamp(0.0, 1.0);
+            }
+        }
+
+        Ok(SuccessorPrediction {
+            source_digest,
+            decision,
+            successor_feature_abi,
+            predicted_successor,
+        })
+    }
+
+    pub fn observe(
+        &mut self,
+        receipt: &PredictionTargetReceipt,
+    ) -> Result<PredictionUpdate, ScaffoldContractError> {
+        receipt.validate_contract()?;
+        if self.successor_feature_abi == 0 {
+            self.successor_feature_abi = receipt.successor_feature_abi;
+        } else if self.successor_feature_abi != receipt.successor_feature_abi {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        if self.successor_feature_count == 0 {
+            self.successor_feature_count = receipt.successor_features.len();
+        } else if self.successor_feature_count != receipt.successor_features.len() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+
+        let prediction = self.predict(
+            receipt.source_digest,
+            receipt.decision,
+            receipt.successor_features.len(),
+        )?;
+        let inputs = predictor_inputs(receipt.source_digest);
+        let input_energy = inputs.iter().map(|input| input * input).sum::<f32>();
+        let normalized_step = self.learning_rate / input_energy.max(f32::EPSILON);
+        let mut error = Vec::with_capacity(receipt.successor_features.len());
+        let mut squared_error = 0.0;
+        let mut absolute_error = 0.0;
+        let head = self.action_head_mut(receipt.decision)?;
+        for (feature_index, (predicted, target)) in prediction
+            .predicted_successor
+            .iter()
+            .zip(&receipt.successor_features)
+            .enumerate()
+        {
+            let feature_error = *target - *predicted;
+            error.push(feature_error);
+            squared_error += feature_error * feature_error;
+            absolute_error += feature_error.abs();
+
+            let offset = feature_index * PREDICTOR_INPUT_FEATURES;
+            for (weight, input) in head.weights[offset..offset + PREDICTOR_INPUT_FEATURES]
+                .iter_mut()
+                .zip(inputs)
+            {
+                *weight += normalized_step * feature_error * input;
+            }
+        }
+
+        let feature_count = receipt.successor_features.len() as f32;
+        let update = PredictionUpdate {
+            prediction,
+            target_digest: receipt.target_digest,
+            error,
+            mean_squared_error: squared_error / feature_count,
+            mean_absolute_error: absolute_error / feature_count,
+        };
+        self.last_update = Some(update.clone());
+        Ok(update)
+    }
+
+    pub fn last_update(&self) -> Option<&PredictionUpdate> {
+        self.last_update.as_ref()
+    }
+
+    fn action_head_mut(
+        &mut self,
+        action: ActionId,
+    ) -> Result<&mut ActionPredictionHead, ScaffoldContractError> {
+        if let Some(index) = self
+            .action_heads
+            .iter()
+            .position(|head| head.action == action)
+        {
+            return Ok(&mut self.action_heads[index]);
+        }
+        if self.action_heads.len() >= MAX_PREDICTOR_ACTIONS {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        self.action_heads.push(ActionPredictionHead {
+            action,
+            weights: vec![0.0; self.successor_feature_count * PREDICTOR_INPUT_FEATURES],
+        });
+        self.action_heads
+            .last_mut()
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)
+    }
+}
+
+fn validate_prediction_input(
+    source_digest: [u64; 4],
+    decision: ActionId,
+    successor_feature_count: usize,
+) -> Result<(), ScaffoldContractError> {
+    if source_digest == [0; 4] {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    decision.validate()?;
+    if successor_feature_count == 0 || successor_feature_count > MAX_SUCCESSOR_FEATURES {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    Ok(())
+}
+
+fn predictor_inputs(source_digest: [u64; 4]) -> [f32; PREDICTOR_INPUT_FEATURES] {
+    let mut inputs = [0.0; PREDICTOR_INPUT_FEATURES];
+    inputs[0] = 1.0;
+    for (index, word) in source_digest.into_iter().enumerate() {
+        inputs[1 + index * 2] = (word as u32 as f32) / u32::MAX as f32;
+        inputs[2 + index * 2] = ((word >> 32) as u32 as f32) / u32::MAX as f32;
+    }
+    inputs
 }
 
 impl PredictionTargetReceipt {
