@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkReceipt};
 use alife_core::{
     BiochemistryState, Blake3Digest, BodyEventDelta, CanonicalDigestBuilder, CreatureGenome,
-    CreaturePhenotype, OrganismId, ScaffoldContractError, Tick, Validate, WorldEntityId,
+    CreaturePhenotype, HomeostaticSnapshot, OrganismId, ScaffoldContractError, SleepPhase, Tick,
+    Validate, WorldEntityId,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -18,6 +19,33 @@ fn is_zero_cognitive_work(value: &CognitiveWorkReceipt) -> bool {
 
 fn is_zero_energy_debit(value: &f32) -> bool {
     *value == 0.0
+}
+
+fn default_sleep_phase() -> SleepPhase {
+    SleepPhase::Awake
+}
+
+fn default_sleep_phase_tick() -> Tick {
+    Tick::ZERO
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OrganismSleepSeal {
+    pub phase: SleepPhase,
+    pub cycle_id: u64,
+    pub tick: Tick,
+    pub work_units: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OrganismSleepInput {
+    pub organism_id: OrganismId,
+    pub lifecycle: OrganismLifecycle,
+    pub biological_tick: Tick,
+    pub energy: f32,
+    pub homeostasis: HomeostaticSnapshot,
+    pub body_sleeping: bool,
+    pub seal: OrganismSleepSeal,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -116,6 +144,14 @@ pub struct WorldOrganismRecord {
     biochemistry: BiochemistryState,
     birth_tick: Tick,
     lifecycle: OrganismLifecycle,
+    #[serde(default = "default_sleep_phase")]
+    sleep_phase: SleepPhase,
+    #[serde(default = "default_sleep_phase_tick")]
+    sleep_phase_tick: Tick,
+    #[serde(default)]
+    sleep_cycle_id: u64,
+    #[serde(default)]
+    sleep_work_units: u64,
     archive: OrganismArchiveIdentity,
     #[serde(default, skip_serializing_if = "is_zero_cognitive_work")]
     cognitive_work: CognitiveWorkReceipt,
@@ -160,6 +196,44 @@ impl WorldOrganismRecord {
 
     pub const fn lifecycle(&self) -> OrganismLifecycle {
         self.lifecycle
+    }
+
+    pub const fn sleep_phase(&self) -> SleepPhase {
+        self.sleep_phase
+    }
+
+    pub const fn sleep_phase_tick(&self) -> Tick {
+        self.sleep_phase_tick
+    }
+
+    pub const fn sleep_cycle_id(&self) -> u64 {
+        self.sleep_cycle_id
+    }
+
+    pub const fn sleep_work_units(&self) -> u64 {
+        self.sleep_work_units
+    }
+
+    pub const fn sleep_seal(&self) -> OrganismSleepSeal {
+        OrganismSleepSeal {
+            phase: self.sleep_phase,
+            cycle_id: self.sleep_cycle_id,
+            tick: self.sleep_phase_tick,
+            work_units: self.sleep_work_units,
+        }
+    }
+
+    pub fn authoritative_sleep_input(&self) -> Result<OrganismSleepInput, ScaffoldContractError> {
+        self.validate_contract()?;
+        Ok(OrganismSleepInput {
+            organism_id: self.organism_id,
+            lifecycle: self.lifecycle,
+            biological_tick: self.biochemistry.tick,
+            energy: self.biochemistry.body.energy,
+            homeostasis: self.biochemistry.homeostasis,
+            body_sleeping: self.biochemistry.body.sleeping,
+            seal: self.sleep_seal(),
+        })
     }
 
     pub fn archive(&self) -> &OrganismArchiveIdentity {
@@ -208,6 +282,10 @@ impl WorldOrganismRecord {
             biochemistry,
             birth_tick,
             lifecycle: OrganismLifecycle::Alive,
+            sleep_phase: SleepPhase::Awake,
+            sleep_phase_tick: biochemistry.tick,
+            sleep_cycle_id: 0,
+            sleep_work_units: 0,
             archive: OrganismArchiveIdentity::default(),
             cognitive_work: CognitiveWorkReceipt::zero(),
             cognitive_energy_debit: 0.0,
@@ -260,6 +338,9 @@ impl WorldOrganismRecord {
             return Err(ScaffoldContractError::NonMonotonicTick);
         }
         if self.birth_tick.raw() > self.biochemistry.tick.raw() {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        if self.sleep_phase_tick.raw() > self.biochemistry.tick.raw() {
             return Err(ScaffoldContractError::NonMonotonicTick);
         }
         match self.lifecycle {
@@ -332,6 +413,67 @@ impl WorldOrganismRecord {
         if let Err(error) = self.validate_contract() {
             self.biochemistry = original_biochemistry;
             return Err(error.into());
+        }
+        Ok(())
+    }
+
+    /// Advances world biology once for a causal tick. Repeated scheduling of
+    /// the same tick is an intentional no-op, so sleep cannot double-charge
+    /// recovery or biological time.
+    pub fn advance_biology_once(
+        &mut self,
+        next_tick: Tick,
+        event: BodyEventDelta,
+    ) -> Result<bool, ScaffoldContractError> {
+        self.validate_contract()?;
+        if !self.lifecycle.is_alive() {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        if self.biochemistry.tick == next_tick {
+            return Ok(false);
+        }
+        self.advance_biology(next_tick, event)
+            .map(|_| true)
+            .map_err(map_organism_error)
+    }
+
+    /// Seals the current sleep phase into the authoritative organism record.
+    /// Presentation and persistence consumers can read this boundary without
+    /// consulting a renderer or a second biological clock.
+    pub fn seal_sleep_phase(
+        &mut self,
+        phase: SleepPhase,
+        cycle_id: u64,
+        tick: Tick,
+        work_units: u64,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        if !self.lifecycle.is_alive()
+            || tick != self.biochemistry.tick
+            || tick.raw() < self.sleep_phase_tick.raw()
+            || (phase != SleepPhase::Awake && cycle_id == 0)
+            || cycle_id < self.sleep_cycle_id
+        {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        let original = (
+            self.sleep_phase,
+            self.sleep_phase_tick,
+            self.sleep_cycle_id,
+            self.sleep_work_units,
+        );
+        self.sleep_phase = phase;
+        self.sleep_phase_tick = tick;
+        self.sleep_cycle_id = cycle_id;
+        self.sleep_work_units = self.sleep_work_units.saturating_add(work_units);
+        if let Err(error) = self.validate_contract() {
+            (
+                self.sleep_phase,
+                self.sleep_phase_tick,
+                self.sleep_cycle_id,
+                self.sleep_work_units,
+            ) = original;
+            return Err(error);
         }
         Ok(())
     }
@@ -417,6 +559,24 @@ impl WorldOrganismRecord {
             return Err(error.into());
         }
         Ok(())
+    }
+}
+
+fn map_organism_error(error: OrganismRegistryError) -> ScaffoldContractError {
+    match error {
+        OrganismRegistryError::InvalidRecord(error) => error,
+        OrganismRegistryError::UnknownOrganism(_)
+        | OrganismRegistryError::DuplicateOrganism(_)
+        | OrganismRegistryError::DuplicateWorldEntity(_)
+        | OrganismRegistryError::AlreadyDead(_)
+        | OrganismRegistryError::InvalidDeathTick(_)
+        | OrganismRegistryError::DeadOrganism(_)
+        | OrganismRegistryError::BirthManifestAlreadyLinked(_)
+        | OrganismRegistryError::LifeManifestAlreadyLinked(_)
+        | OrganismRegistryError::LifeManifestRequiresBirth(_)
+        | OrganismRegistryError::LifeManifestRequiresDead(_)
+        | OrganismRegistryError::LifeManifestNotLinked(_)
+        | OrganismRegistryError::IndexMismatch => ScaffoldContractError::InvalidId,
     }
 }
 
