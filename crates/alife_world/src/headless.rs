@@ -2017,7 +2017,9 @@ impl HeadlessWorld {
 
         #[cfg(test)]
         if self.injected_post_action_failure {
-            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            return Err(HeadlessMotorTransactionError::Contract(
+                ScaffoldContractError::InvalidDecisionEvidence,
+            ));
         }
 
         Ok(HeadlessMotorTransactionReceipt {
