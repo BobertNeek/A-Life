@@ -687,6 +687,8 @@ pub struct MemoryBank {
     #[serde(default)]
     candidate_store: CandidateMemoryStoreV2,
     records: Vec<Option<MemoryRecord>>,
+    #[serde(default)]
+    lifetime_records: Vec<MemoryRecord>,
     next_write_index: usize,
     len: usize,
     next_memory_id: u64,
@@ -704,6 +706,8 @@ impl<'de> Deserialize<'de> for MemoryBank {
             #[serde(default)]
             candidate_store: CandidateMemoryStoreV2,
             records: Vec<Option<MemoryRecord>>,
+            #[serde(default)]
+            lifetime_records: Vec<MemoryRecord>,
             next_write_index: usize,
             len: usize,
             next_memory_id: u64,
@@ -720,6 +724,7 @@ impl<'de> Deserialize<'de> for MemoryBank {
             || wire.next_write_index >= wire.config.capacity
             || wire.len > wire.config.capacity
             || legacy_count != wire.len
+            || wire.lifetime_records.len() > wire.config.capacity
             || wire.next_memory_id == 0
             || (wire.len != 0 && !wire.candidate_store.records.is_empty())
         {
@@ -730,6 +735,21 @@ impl<'de> Deserialize<'de> for MemoryBank {
             record.validate_contract().map_err(D::Error::custom)?;
             if record.features.len() > wire.config.max_feature_len {
                 return Err(D::Error::custom("legacy memory feature width exceeds bank"));
+            }
+            highest_legacy_id = highest_legacy_id.max(record.memory_id.raw());
+        }
+        let mut seen_memory_ids = wire
+            .records
+            .iter()
+            .flatten()
+            .map(|record| record.memory_id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        for record in &wire.lifetime_records {
+            record.validate_contract().map_err(D::Error::custom)?;
+            if record.features.len() > wire.config.max_feature_len
+                || !seen_memory_ids.insert(record.memory_id.raw())
+            {
+                return Err(D::Error::custom("invalid lifetime memory identity"));
             }
             highest_legacy_id = highest_legacy_id.max(record.memory_id.raw());
         }
@@ -748,6 +768,7 @@ impl<'de> Deserialize<'de> for MemoryBank {
             config: wire.config,
             candidate_store: wire.candidate_store,
             records: wire.records,
+            lifetime_records: wire.lifetime_records,
             next_write_index: wire.next_write_index,
             len: wire.len,
             next_memory_id: wire.next_memory_id,
@@ -765,6 +786,7 @@ impl MemoryBank {
             candidate_store: CandidateMemoryStoreV2::default(),
             next_write_index: 0,
             len: 0,
+            lifetime_records: Vec::new(),
             next_memory_id: 1,
             last_inserted_ticks: Vec::new(),
         })
@@ -774,12 +796,24 @@ impl MemoryBank {
         self.config.capacity
     }
 
-    pub fn len(&self) -> usize {
+    pub fn fast_len(&self) -> usize {
         self.len + self.candidate_store.records.len()
     }
 
+    pub fn lifetime_len(&self) -> usize {
+        self.lifetime_records.len()
+    }
+
+    pub fn lifetime_records(&self) -> &[MemoryRecord] {
+        &self.lifetime_records
+    }
+
+    pub fn len(&self) -> usize {
+        self.fast_len()
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.len == 0 && self.candidate_store.records.is_empty()
+        self.fast_len() == 0 && self.lifetime_records.is_empty()
     }
 
     pub fn recall_frame(
@@ -897,7 +931,7 @@ impl MemoryBank {
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
         patch.validate_contract()?;
-        if self.len != 0 {
+        if self.len != 0 || !self.lifetime_records.is_empty() {
             return Err(ScaffoldContractError::MemoryModeConflict);
         }
         let key = patch
@@ -1327,7 +1361,7 @@ impl MemoryBank {
         }
 
         let mut matches = Vec::new();
-        for record in self.records_chronological() {
+        for record in self.all_records_chronological() {
             if record.organism_id != query.organism_id {
                 continue;
             }
@@ -1438,6 +1472,92 @@ impl MemoryBank {
         records
     }
 
+    pub fn all_records_chronological(&self) -> Vec<&MemoryRecord> {
+        let mut records = self
+            .lifetime_records
+            .iter()
+            .chain(self.records.iter().flatten())
+            .collect::<Vec<_>>();
+        records.sort_by_key(|record| (record.source_tick.raw(), record.memory_id.raw()));
+        records
+    }
+
+    pub fn fast_record_for_sequence(
+        &self,
+        sequence_id: ExperienceSequenceId,
+    ) -> Option<&MemoryRecord> {
+        self.records
+            .iter()
+            .flatten()
+            .find(|record| record.source_sequence_id == sequence_id)
+    }
+
+    /// Moves finalized waking records into a bounded lifetime tier. The
+    /// source records are removed from the fast ring, while the lifetime tier
+    /// remains available to later recall.
+    pub fn promote_fast_memory_to_lifetime(
+        &mut self,
+        source_sequences: &[ExperienceSequenceId],
+        max_records_after: usize,
+    ) -> Result<Vec<MemoryId>, ScaffoldContractError> {
+        if !self.candidate_store.records.is_empty()
+            || source_sequences.is_empty()
+            || max_records_after == 0
+            || max_records_after > self.config.capacity
+            || source_sequences.len() > max_records_after
+        {
+            return Err(ScaffoldContractError::MemoryModeConflict);
+        }
+
+        let mut seen_sequences = std::collections::BTreeSet::new();
+        let fast_records = self.records_chronological();
+        let mut selected = Vec::with_capacity(source_sequences.len());
+        for sequence_id in source_sequences {
+            sequence_id.validate()?;
+            if !seen_sequences.insert(sequence_id.raw()) {
+                return Err(ScaffoldContractError::MemoryReplayRejected);
+            }
+            let record = fast_records
+                .iter()
+                .find(|record| record.source_sequence_id == *sequence_id)
+                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            selected.push((*record).clone());
+        }
+
+        let selected_ids = selected
+            .iter()
+            .map(|record| record.memory_id)
+            .collect::<Vec<_>>();
+        let selected_id_set = selected_ids
+            .iter()
+            .map(|memory_id| memory_id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        let remaining = fast_records
+            .into_iter()
+            .filter(|record| !selected_id_set.contains(&record.memory_id.raw()))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let mut lifetime = self.lifetime_records.clone();
+        lifetime.extend(selected);
+        lifetime.sort_by_key(|record| (record.source_tick.raw(), record.memory_id.raw()));
+        if lifetime.len() > self.config.capacity {
+            let overflow = lifetime.len() - self.config.capacity;
+            let removable = lifetime
+                .iter()
+                .take(overflow)
+                .all(|record| !selected_id_set.contains(&record.memory_id.raw()));
+            if !removable {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+            lifetime.drain(..overflow);
+        }
+
+        self.replace_with_consolidated_records(remaining)?;
+        self.lifetime_records = lifetime;
+        Ok(selected_ids)
+    }
+
     pub fn replace_with_consolidated_records(
         &mut self,
         records: Vec<MemoryRecord>,
@@ -1458,9 +1578,9 @@ impl MemoryBank {
     }
 
     fn record_by_id(&self, memory_id: MemoryId) -> Option<&MemoryRecord> {
-        self.records
+        self.lifetime_records
             .iter()
-            .flatten()
+            .chain(self.records.iter().flatten())
             .find(|record| record.memory_id == memory_id)
     }
 

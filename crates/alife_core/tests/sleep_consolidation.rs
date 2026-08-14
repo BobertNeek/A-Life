@@ -1,17 +1,21 @@
+use alife_core::predictive::GroundedSuccessorPredictor;
+use alife_core::sleep::{SleepReplayEvidence, SleepWorkStatus};
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainClassSpec,
-    BrainScaleTier, CandidateActionFamily, CandidateObservationRef, Confidence, CreatureMind,
-    DenseTile, DriveDelta, DurationTicks, EndocrineDelta, HomeostaticDelta, HomeostaticParameters,
-    HomeostaticSnapshot, LobeKind, MemoryBank, MemoryBankConfig, MemoryExpectancy,
-    MemoryOutcomeSummary, MemoryRecord, NeuralActionSelection, NeuralProjectionSchema,
-    NormalizedScalar, OrganismId, PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome,
-    PhysicalContactKind, PostActionOutcome, ProjectionRoutingRef, ProjectionTile,
-    ScaffoldContractError, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
-    SensoryChannels, SensorySnapshot, SignedValence, SleepConsolidationConfig, SleepConsolidator,
-    SleepController, SleepPhase, SleepTrigger, SparseTileCoord, SparseTilePayload,
-    StableLifetimeTraitKind, StructuralEditBatch, StructuralEditCandidate, StructuralEditKind,
-    StructuralEditReason, SynapseWeightSplit, Tick, TopologicalMapConfig, TopologySidecar,
-    TrackedObjectId, Vec3f, Velocity, WorldEntityId, MICROTILE_CELLS,
+    BrainScaleTier, CandidateActionFamily, CandidateFeatureDigest, CandidateObservationRef,
+    Confidence, CreatureMind, DenseTile, DriveDelta, DurationTicks, EndocrineDelta,
+    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, LobeKind, MemoryBank,
+    MemoryBankConfig, MemoryExpectancy, MemoryOutcomeSummary, MemoryRecord, NeuralActionSelection,
+    NeuralProjectionSchema, NeuromodulatorSample, NormalizedScalar, OrganismId,
+    PerceptionFrameDigest, PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, PredictionTargetReceipt, ProjectionRoutingRef,
+    ProjectionTile, ReplayCapturePlan, ScaffoldContractError, SensorProfile,
+    SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
+    SleepConsolidationConfig, SleepConsolidator, SleepController, SleepPhase, SleepReplayEvent,
+    SleepReplayJournal, SleepTrigger, SparseTileCoord, SparseTilePayload, StableLifetimeTraitKind,
+    StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
+    SynapseWeightSplit, Tick, TopologicalMapConfig, TopologySidecar, TrackedObjectId, Vec3f,
+    Velocity, WorldEntityId, MICROTILE_CELLS,
 };
 
 fn organism() -> OrganismId {
@@ -334,6 +338,18 @@ fn topology_with_gap() -> TopologySidecar {
     let second = map.observe_sealed_patch(&sealed_patch(2, 20, WorldEntityId(2), true));
     assert!(!second.rejected_invalid);
     map
+}
+
+fn replay_event(sequence: u64) -> SleepReplayEvent {
+    SleepReplayEvent {
+        sequence_id: alife_core::ExperienceSequenceId(sequence),
+        originating_tick: Tick::new(sequence),
+        frame_digest: PerceptionFrameDigest([sequence, 2, 3, 4]),
+        candidate_feature_digest: CandidateFeatureDigest([sequence, 9]),
+        action_id: ActionId(400),
+        family: CandidateActionFamily::Contact,
+        modulator: NeuromodulatorSample::from_components(0.4, 0.1, 0.2, 0.0, 0.3).unwrap(),
+    }
 }
 
 #[test]
@@ -674,4 +690,82 @@ fn sleep_consolidation_contract_stays_engine_independent() {
             "sleep consolidation core must not embed engine type {forbidden}"
         );
     }
+}
+
+#[test]
+fn biologically_due_sleep_commits_replayed_memory_prediction_and_concept_state() {
+    let plan = ReplayCapturePlan::try_new(vec![3], 1, 1, 1).unwrap();
+    let mut journal = SleepReplayJournal::new(plan).unwrap();
+    journal.push(replay_event(1), &[0.75]).unwrap();
+    let batch = journal.build_bounded_batch(1, 1, u32::MAX).unwrap();
+    let target = PredictionTargetReceipt::for_successor(
+        organism(),
+        alife_core::ExperienceSequenceId(1),
+        ActionId(400),
+        Tick::new(1),
+        [1, 2, 3, 4],
+        1,
+        vec![0.9, 0.1],
+    )
+    .unwrap();
+    let evidence = SleepReplayEvidence::new(batch, vec![target]).unwrap();
+
+    let consolidator = SleepConsolidator::new(config()).unwrap();
+    let mut memory = memory_bank_with_three_records();
+    let mut predictor = GroundedSuccessorPredictor::default();
+    let mut topology = topology_with_gap();
+    let before_prediction = predictor.predict([1, 2, 3, 4], ActionId(400), 2).unwrap();
+    let before_topology_digest = topology.diagnostics().canonical_digest;
+
+    let receipt = consolidator
+        .run_bounded_transaction(
+            &high_fatigue_homeostasis(Tick::new(100)),
+            Tick::new(100),
+            &evidence,
+            &mut memory,
+            &mut predictor,
+            &mut topology,
+        )
+        .unwrap();
+
+    assert_eq!(receipt.status, SleepWorkStatus::Consolidated);
+    assert_eq!(receipt.replay_event_count, 1);
+    assert_eq!(receipt.promoted_memory_ids.len(), 1);
+    assert_eq!(memory.fast_len(), 2);
+    assert_eq!(memory.lifetime_len(), 1);
+    let after_prediction = predictor.predict([1, 2, 3, 4], ActionId(400), 2).unwrap();
+    assert_ne!(
+        before_prediction.predicted_successor,
+        after_prediction.predicted_successor
+    );
+    assert_ne!(
+        before_topology_digest,
+        topology.diagnostics().canonical_digest
+    );
+    assert_eq!(
+        receipt.concept.unwrap().preserved_gap_count,
+        topology.map().unresolved_gaps().len() as u32
+    );
+
+    let mut low_memory = memory_bank_with_three_records();
+    let low_memory_before = low_memory.clone();
+    let mut low_predictor = GroundedSuccessorPredictor::default();
+    let low_predictor_before = low_predictor.clone();
+    let mut low_topology = topology_with_gap();
+    let low_topology_before = low_topology.clone();
+    let low_receipt = consolidator
+        .run_bounded_transaction(
+            &HomeostaticSnapshot::baseline(Tick::new(100)),
+            Tick::new(100),
+            &evidence,
+            &mut low_memory,
+            &mut low_predictor,
+            &mut low_topology,
+        )
+        .unwrap();
+
+    assert_eq!(low_receipt.status, SleepWorkStatus::SkippedLowPressure);
+    assert_eq!(low_memory, low_memory_before);
+    assert_eq!(low_predictor, low_predictor_before);
+    assert_eq!(low_topology, low_topology_before);
 }

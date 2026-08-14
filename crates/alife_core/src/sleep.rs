@@ -15,11 +15,11 @@ mod replay;
 pub use replay::*;
 
 use crate::{
-    require_current_version, validate_finite, ChemistryModulation, Confidence, DurationTicks,
-    HomeostaticParameters, HomeostaticSnapshot, LobeKind, MemoryBank, MemoryId,
-    NeuralProjectionSchema, NormalizedScalar, ProjectionRoutingRef, RecoveryTrigger,
-    ScaffoldContractError, SchemaKind, SchemaVersions, SparseTilePayload, SynapseWeightSplit, Tick,
-    TopologicalMap, TopologySidecar, Validate,
+    require_current_version, validate_finite, CanonicalDigestBuilder, ChemistryModulation,
+    Confidence, DurationTicks, GroundedSuccessorPredictor, HomeostaticParameters,
+    HomeostaticSnapshot, LobeKind, MemoryBank, MemoryId, NeuralProjectionSchema, NormalizedScalar,
+    ProjectionRoutingRef, RecoveryTrigger, ScaffoldContractError, SchemaKind, SchemaVersions,
+    SparseTilePayload, SynapseWeightSplit, Tick, TopologicalMap, TopologySidecar, Validate,
 };
 
 pub const SLEEP_CONSOLIDATION_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.sleep_consolidation.0;
@@ -735,6 +735,138 @@ pub struct ConceptConsolidationReport {
     pub curiosity_bias_count: u32,
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SleepWorkStatus {
+    SkippedLowPressure = 1,
+    Consolidated = 2,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SleepWorkReceipt {
+    pub schema_version: u16,
+    pub tick: Tick,
+    pub status: SleepWorkStatus,
+    pub fatigue: NormalizedScalar,
+    pub sleep_pressure: NormalizedScalar,
+    pub replay_digest: [u64; 4],
+    pub replay_event_count: u32,
+    pub replay_eligibility_sample_count: u32,
+    pub promoted_memory_ids: Vec<MemoryId>,
+    pub predictor_update_count: u32,
+    pub concept: Option<ConceptConsolidationReport>,
+    pub work_units: u64,
+    pub canonical_digest: [u64; 4],
+}
+
+impl SleepWorkReceipt {
+    fn new(
+        tick: Tick,
+        status: SleepWorkStatus,
+        fatigue: NormalizedScalar,
+        sleep_pressure: NormalizedScalar,
+        replay_digest: [u64; 4],
+        replay_event_count: u32,
+        replay_eligibility_sample_count: u32,
+        promoted_memory_ids: Vec<MemoryId>,
+        predictor_update_count: u32,
+        concept: Option<ConceptConsolidationReport>,
+        work_units: u64,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut receipt = Self {
+            schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+            tick,
+            status,
+            fatigue,
+            sleep_pressure,
+            replay_digest,
+            replay_event_count,
+            replay_eligibility_sample_count,
+            promoted_memory_ids,
+            predictor_update_count,
+            concept,
+            work_units,
+            canonical_digest: [0; 4],
+        };
+        receipt.canonical_digest = receipt.recompute_canonical_digest()?;
+        receipt.validate_contract()?;
+        Ok(receipt)
+    }
+
+    pub fn recompute_canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-WORK-RECEIPT-V1");
+        digest.write_u16(self.schema_version);
+        digest.write_u64(self.tick.raw());
+        digest.write_u8(self.status as u8);
+        digest.write_f32(self.fatigue.raw())?;
+        digest.write_f32(self.sleep_pressure.raw())?;
+        digest.write_sequence_len(self.replay_digest.len());
+        for word in self.replay_digest {
+            digest.write_u64(word);
+        }
+        digest.write_u32(self.replay_event_count);
+        digest.write_u32(self.replay_eligibility_sample_count);
+        digest.write_sequence_len(self.promoted_memory_ids.len());
+        for memory_id in &self.promoted_memory_ids {
+            digest.write_u64(memory_id.raw());
+        }
+        digest.write_u32(self.predictor_update_count);
+        if let Some(concept) = self.concept {
+            digest.write_u8(1);
+            digest.write_u32(concept.concepts_considered);
+            digest.write_u32(concept.simplexes_considered);
+            digest.write_u32(concept.preserved_gap_count);
+            digest.write_u32(concept.decayed_gap_count);
+            digest.write_u32(concept.curiosity_bias_count);
+        } else {
+            digest.write_u8(0);
+        }
+        digest.write_u64(self.work_units);
+        Ok(digest.finish256())
+    }
+}
+
+impl Validate for SleepWorkReceipt {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        require_current_version(SchemaKind::SleepConsolidation, self.schema_version)?;
+        NormalizedScalar::new(self.fatigue.raw())?;
+        NormalizedScalar::new(self.sleep_pressure.raw())?;
+        for memory_id in &self.promoted_memory_ids {
+            memory_id.validate()?;
+        }
+        match self.status {
+            SleepWorkStatus::SkippedLowPressure => {
+                if self.replay_digest != [0; 4]
+                    || self.replay_event_count != 0
+                    || self.replay_eligibility_sample_count != 0
+                    || !self.promoted_memory_ids.is_empty()
+                    || self.predictor_update_count != 0
+                    || self.concept.is_some()
+                    || self.work_units != 0
+                {
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                }
+            }
+            SleepWorkStatus::Consolidated => {
+                if self.replay_digest == [0; 4]
+                    || self.replay_event_count == 0
+                    || self.replay_eligibility_sample_count == 0
+                    || self.promoted_memory_ids.len() != self.replay_event_count as usize
+                    || self.predictor_update_count != self.replay_event_count
+                    || self.concept.is_none()
+                    || self.work_units == 0
+                {
+                    return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                }
+            }
+        }
+        if self.canonical_digest != self.recompute_canonical_digest()? {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum StructuralEditKind {
     PruneMarker,
@@ -887,6 +1019,104 @@ impl SleepConsolidator {
 
     pub const fn config(&self) -> SleepConsolidationConfig {
         self.config
+    }
+
+    pub fn run_bounded_transaction(
+        &self,
+        homeostasis: &HomeostaticSnapshot,
+        tick: Tick,
+        evidence: &SleepReplayEvidence,
+        memory: &mut MemoryBank,
+        predictor: &mut GroundedSuccessorPredictor,
+        topology: &mut TopologySidecar,
+    ) -> Result<SleepWorkReceipt, ScaffoldContractError> {
+        homeostasis.validate_contract()?;
+        let fatigue = NormalizedScalar::new(homeostasis.drives.fatigue)?;
+        let sleep_pressure = NormalizedScalar::new(homeostasis.hormones.sleep_pressure)?;
+        let sleep_due = fatigue.raw() >= self.config.fatigue_threshold.raw()
+            || sleep_pressure.raw() >= self.config.sleep_pressure_threshold.raw();
+        if !sleep_due {
+            return SleepWorkReceipt::new(
+                tick,
+                SleepWorkStatus::SkippedLowPressure,
+                fatigue,
+                sleep_pressure,
+                [0; 4],
+                0,
+                0,
+                Vec::new(),
+                0,
+                None,
+                0,
+            );
+        }
+
+        evidence.validate_contract()?;
+        if evidence.batch.events.is_empty() {
+            return Err(ScaffoldContractError::MissingPhaseData);
+        }
+
+        let mut source_sequences = Vec::with_capacity(evidence.batch.events.len());
+        for (event, target) in evidence
+            .batch
+            .events
+            .iter()
+            .zip(&evidence.prediction_targets)
+        {
+            let record = memory
+                .fast_record_for_sequence(event.sequence_id)
+                .ok_or(ScaffoldContractError::MissingPhaseData)?;
+            if record.organism_id != target.organism_id
+                || record.selected_action_id != Some(event.action_id)
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+            source_sequences.push(event.sequence_id);
+        }
+
+        let mut next_memory = memory.clone();
+        let mut next_predictor = predictor.clone();
+        let mut next_topology = topology.clone();
+        let promoted_memory_ids = next_memory.promote_fast_memory_to_lifetime(
+            &source_sequences,
+            self.config.memory_max_records_after,
+        )?;
+        let mut predictor_update_count = 0_u32;
+        for target in &evidence.prediction_targets {
+            next_predictor.observe(target)?;
+            predictor_update_count = predictor_update_count.saturating_add(1);
+        }
+        let concept = self.consolidate_topology_sidecar(&mut next_topology, 1)?;
+        let replay_event_count = u32::try_from(evidence.batch.events.len())
+            .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
+        let replay_eligibility_sample_count =
+            u32::try_from(evidence.batch.eligibility_samples.len())
+                .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
+        let work_units = u64::from(replay_event_count)
+            .saturating_add(u64::from(replay_eligibility_sample_count))
+            .saturating_add(u64::try_from(promoted_memory_ids.len()).unwrap_or(u64::MAX))
+            .saturating_add(u64::from(predictor_update_count))
+            .saturating_add(u64::from(concept.concepts_considered))
+            .saturating_add(u64::from(concept.simplexes_considered))
+            .saturating_add(u64::from(concept.preserved_gap_count))
+            .saturating_add(u64::from(concept.decayed_gap_count));
+        let receipt = SleepWorkReceipt::new(
+            tick,
+            SleepWorkStatus::Consolidated,
+            fatigue,
+            sleep_pressure,
+            evidence.canonical_digest,
+            replay_event_count,
+            replay_eligibility_sample_count,
+            promoted_memory_ids,
+            predictor_update_count,
+            Some(concept),
+            work_units,
+        )?;
+        *memory = next_memory;
+        *predictor = next_predictor;
+        *topology = next_topology;
+        Ok(receipt)
     }
 
     pub fn promote_stable_traits(

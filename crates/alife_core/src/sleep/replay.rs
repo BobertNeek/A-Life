@@ -4,12 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ActionId, CandidateActionFamily, CandidateFeatureDigest, CanonicalDigestBuilder,
-    ExperienceSequenceId, NeuromodulatorSample, PerceptionFrameDigest, ReplayCapturePlan,
-    ScaffoldContractError, Tick,
+    ExperienceSequenceId, NeuromodulatorSample, PerceptionFrameDigest, PredictionTargetReceipt,
+    ReplayCapturePlan, ScaffoldContractError, Tick,
 };
 
 pub const BOUNDED_REPLAY_BATCH_SCHEMA_VERSION: u16 = 1;
+pub const MAX_SLEEP_TRANSACTION_EVENTS: u32 = 256;
+pub const MAX_SLEEP_TRANSACTION_SAMPLES: u32 = 4_096;
 const REPLAY_BATCH_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-SLEEP-REPLAY-BATCH-V1";
+const SLEEP_REPLAY_EVIDENCE_DIGEST_DOMAIN: &[u8] = b"ALIFE-SLEEP-REPLAY-EVIDENCE-V1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SleepReplayEvent {
@@ -161,6 +164,78 @@ impl BoundedReplayBatch {
             || self.canonical_digest != self.recompute_canonical_digest()?
         {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
+        Ok(())
+    }
+}
+
+/// Finalized replay evidence joined to the grounded successor targets that
+/// were produced by the waking action/outcome path.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SleepReplayEvidence {
+    pub batch: BoundedReplayBatch,
+    pub prediction_targets: Vec<PredictionTargetReceipt>,
+    pub canonical_digest: [u64; 4],
+}
+
+impl SleepReplayEvidence {
+    pub fn new(
+        batch: BoundedReplayBatch,
+        prediction_targets: Vec<PredictionTargetReceipt>,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut evidence = Self {
+            batch,
+            prediction_targets,
+            canonical_digest: [0; 4],
+        };
+        evidence.canonical_digest = evidence.recompute_canonical_digest()?;
+        evidence.validate_contract()?;
+        Ok(evidence)
+    }
+
+    pub fn recompute_canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        self.batch.validate_contract(
+            MAX_SLEEP_TRANSACTION_EVENTS,
+            MAX_SLEEP_TRANSACTION_SAMPLES,
+            u32::MAX,
+        )?;
+        if self.prediction_targets.len() != self.batch.events.len() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let mut digest = CanonicalDigestBuilder::new(SLEEP_REPLAY_EVIDENCE_DIGEST_DOMAIN);
+        digest.write_sequence_len(self.batch.canonical_digest.len());
+        for word in self.batch.canonical_digest {
+            digest.write_u64(word);
+        }
+        digest.write_sequence_len(self.prediction_targets.len());
+        for target in &self.prediction_targets {
+            for word in target.canonical_digest()? {
+                digest.write_u64(word);
+            }
+        }
+        Ok(digest.finish256())
+    }
+
+    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        self.batch.validate_contract(
+            MAX_SLEEP_TRANSACTION_EVENTS,
+            MAX_SLEEP_TRANSACTION_SAMPLES,
+            u32::MAX,
+        )?;
+        if self.prediction_targets.len() != self.batch.events.len()
+            || self.canonical_digest != self.recompute_canonical_digest()?
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        for (event, target) in self.batch.events.iter().zip(&self.prediction_targets) {
+            target.validate_contract()?;
+            if target.experience_sequence != event.sequence_id
+                || target.decision != event.action_id
+                || target.source_digest != event.frame_digest.0
+                || target.world_tick.raw() < event.originating_tick.raw()
+            {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
         }
         Ok(())
     }
