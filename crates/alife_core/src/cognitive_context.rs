@@ -319,6 +319,22 @@ impl CognitiveContextFrame {
         Ok(frame)
     }
 
+    pub fn apply_topology_context(
+        &mut self,
+        contribution: &crate::topology::TopologyContextContribution,
+    ) -> Result<(), ScaffoldContractError> {
+        contribution.validate_contract()?;
+        self.concept = CognitiveConceptView {
+            active_concepts: contribution.active_concepts.clone(),
+            topology_digest: contribution.topology_digest,
+        };
+        self.gap = CognitiveGapView {
+            active_gaps: contribution.active_gaps.clone(),
+            gap_voltage: contribution.gap_voltage,
+        };
+        self.validate_contract()
+    }
+
     pub fn canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
         self.validate_contract()?;
         let mut builder = CanonicalDigestBuilder::new(b"ALIFE-V11-COGNITIVE-CONTEXT");

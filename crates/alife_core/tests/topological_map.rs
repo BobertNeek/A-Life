@@ -672,7 +672,10 @@ fn topology_curiosity_api_does_not_produce_or_bypass_action_commands() {
 
     let biases = map.curiosity_biases();
     let bias = &biases[0];
-    assert_eq!(bias.source_concepts, vec![ConceptCellId(1)]);
+    assert_eq!(
+        bias.source_concepts,
+        vec![ConceptCellId(1), ConceptCellId(2)]
+    );
     assert!(bias.salience.raw() > 0.0);
     assert!(bias.curiosity_voltage.raw() > 0.0);
 }
@@ -695,4 +698,218 @@ fn topology_source_uses_no_engine_types_or_action_command_shortcuts() {
             "topology core must not reference engine types or public action commands"
         );
     }
+}
+
+#[test]
+fn v11_active_concepts_and_gaps_change_context_and_reconcile() {
+    let mut sidecar = map();
+
+    let first = observe(
+        &mut sidecar,
+        &patch(99, 10, WorldEntityId(2), true, 0.25, 0.2, false),
+    );
+    let first_activation = sidecar
+        .context_contribution()
+        .unwrap()
+        .active_concepts
+        .iter()
+        .find(|entry| entry.concept_id == first.primary_concept_id)
+        .unwrap()
+        .activation
+        .raw();
+
+    let repeated = observe(
+        &mut sidecar,
+        &patch(100, 20, WorldEntityId(2), true, 0.25, 0.2, false),
+    );
+    let primary_concept = repeated.primary_concept_id;
+    let baseline = sidecar.context_contribution().unwrap();
+    let repeated_activation = baseline
+        .active_concepts
+        .iter()
+        .find(|entry| entry.concept_id == primary_concept)
+        .unwrap()
+        .activation
+        .raw();
+    assert!(repeated_activation > first_activation);
+    assert!(baseline
+        .active_concepts
+        .iter()
+        .any(|entry| entry.concept_id == primary_concept));
+
+    assert!(sidecar
+        .split_concept(
+            primary_concept,
+            Tick::new(30),
+            NormalizedScalar::new(0.8).unwrap(),
+        )
+        .is_err());
+
+    let mut frame =
+        alife_core::CognitiveContextFrame::empty(organism(), sequence(100), Tick::new(20)).unwrap();
+    let empty_digest = frame.canonical_digest().unwrap();
+    frame.apply_topology_context(&baseline).unwrap();
+    assert_ne!(frame.canonical_digest().unwrap(), empty_digest);
+
+    let mismatch = observe(
+        &mut sidecar,
+        &patch(101, 30, WorldEntityId(2), false, -0.6, 0.9, false),
+    );
+    let mismatch_gap_id = mismatch.gap_ids[0];
+    let action_concept = sidecar.edge(mismatch.edge_ids[0]).unwrap().to;
+    let gap = sidecar.gap(mismatch_gap_id).unwrap();
+    assert_eq!(gap.source_concepts.len(), 2);
+    assert!(gap.source_concepts.contains(&primary_concept));
+    assert!(gap.source_concepts.contains(&action_concept));
+    let mismatch_voltage = gap.curiosity_voltage.raw();
+
+    let repeated_mismatch = observe(
+        &mut sidecar,
+        &patch(102, 35, WorldEntityId(2), false, -0.6, 0.9, false),
+    );
+    assert_eq!(repeated_mismatch.gap_ids, vec![mismatch_gap_id]);
+    assert_eq!(sidecar.counts().unresolved_gaps, 1);
+    assert!(
+        sidecar
+            .gap(mismatch_gap_id)
+            .unwrap()
+            .curiosity_voltage
+            .raw()
+            >= mismatch_voltage
+    );
+    let with_gap = sidecar.context_contribution().unwrap();
+    assert!(!with_gap.active_gaps.is_empty());
+    assert!(with_gap.gap_voltage.raw() > 0.0);
+
+    frame.apply_topology_context(&with_gap).unwrap();
+    assert!(!frame.gap.active_gaps.is_empty());
+
+    let split = sidecar
+        .split_concept(
+            primary_concept,
+            Tick::new(36),
+            NormalizedScalar::new(0.8).unwrap(),
+        )
+        .unwrap();
+    assert_ne!(split, primary_concept);
+    assert_eq!(sidecar.counts().concepts, 3);
+    assert!(sidecar
+        .context_contribution()
+        .unwrap()
+        .active_concepts
+        .iter()
+        .any(|entry| entry.concept_id == split));
+    let source_objects = sidecar
+        .map()
+        .concept(primary_concept)
+        .unwrap()
+        .bindings
+        .objects
+        .clone();
+    assert!(!source_objects.is_empty());
+    assert!(sidecar
+        .map()
+        .concept(split)
+        .unwrap()
+        .bindings
+        .objects
+        .iter()
+        .all(|object| source_objects.contains(object)));
+    assert!(sidecar
+        .map()
+        .concept(primary_concept)
+        .unwrap()
+        .bindings
+        .semantic_refs
+        .contains(&split));
+    assert!(sidecar.map().edges().iter().any(|edge| {
+        edge.from == primary_concept
+            && edge.to == split
+            && edge.relation == EdgeRelationKind::Contradicts
+    }));
+    assert!(sidecar
+        .merge_concepts(primary_concept, split, Tick::new(37))
+        .is_err());
+
+    observe(
+        &mut sidecar,
+        &patch(103, 40, WorldEntityId(2), true, 0.25, 0.05, false),
+    );
+    let after_one_stable = sidecar.gap(mismatch_gap_id).unwrap();
+    assert_eq!(
+        after_one_stable.status,
+        GapResolutionStatus::BiasingCuriosity
+    );
+    assert!(after_one_stable.curiosity_voltage.raw() < mismatch_voltage);
+    assert!(!sidecar
+        .context_contribution()
+        .unwrap()
+        .active_gaps
+        .is_empty());
+
+    observe(
+        &mut sidecar,
+        &patch(105, 60, WorldEntityId(2), true, 0.25, 0.05, false),
+    );
+    assert!(
+        sidecar
+            .map()
+            .concept(primary_concept)
+            .unwrap()
+            .bindings
+            .emotions
+            .mean_prediction_error
+            .raw()
+            <= 0.35
+    );
+
+    observe(
+        &mut sidecar,
+        &patch(104, 50, WorldEntityId(2), true, 0.25, 0.05, false),
+    );
+    assert_eq!(
+        sidecar.gap(mismatch_gap_id).unwrap().status,
+        GapResolutionStatus::Resolved
+    );
+    assert!(sidecar
+        .context_contribution()
+        .unwrap()
+        .active_gaps
+        .is_empty());
+
+    let before_decay = sidecar
+        .context_contribution()
+        .unwrap()
+        .active_concepts
+        .iter()
+        .find(|entry| entry.concept_id == primary_concept)
+        .unwrap()
+        .activation
+        .raw();
+    sidecar.decay_active_state(4).unwrap();
+    let after_decay = sidecar
+        .context_contribution()
+        .unwrap()
+        .active_concepts
+        .iter()
+        .find(|entry| entry.concept_id == primary_concept)
+        .unwrap()
+        .activation
+        .raw();
+    assert!(after_decay < before_decay);
+
+    sidecar
+        .merge_concepts(primary_concept, split, Tick::new(61))
+        .unwrap();
+    assert_eq!(sidecar.counts().concepts, 2);
+    assert!(sidecar
+        .map()
+        .edges()
+        .iter()
+        .all(|edge| edge.from != edge.to));
+    assert!(sidecar
+        .map()
+        .concepts()
+        .iter()
+        .all(|concept| !concept.bindings.semantic_refs.contains(&split)));
 }

@@ -4,14 +4,24 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     validate_finite, ActionId, ActionKind, AffordanceBits, CandidateActionFamily,
-    CanonicalDigestBuilder, ConceptCellId, Confidence, DriveSnapshot, ExperiencePatch,
-    ExperienceSequenceId, GaussianClusterId, NormalizedScalar, OrganismId, ScaffoldContractError,
-    SignedValence, Tick, TrackedObjectId, Validate, Vec3f,
+    CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveGapActivation, ConceptCellId,
+    Confidence, DriveSnapshot, ExperiencePatch, ExperienceSequenceId, GaussianClusterId,
+    NormalizedScalar, OrganismId, ScaffoldContractError, SignedValence, Tick, TrackedObjectId,
+    Validate, Vec3f,
 };
 
 const MAX_BINDING_REFS: usize = 32;
 const MAX_SIMPLEX_CONCEPTS: usize = 8;
 const CONTRADICTION_ERROR_THRESHOLD: f32 = 0.65;
+const GAP_RESOLUTION_ERROR_THRESHOLD: f32 = 0.25;
+const GAP_RESOLUTION_VOLTAGE_THRESHOLD: f32 = 0.1;
+const ACTIVE_STATE_DECAY_SCALE: f32 = 0.1;
+const CONCEPT_SPLIT_MIN_OBSERVATIONS: u32 = 3;
+const CONCEPT_SPLIT_MIN_GAP_VOLTAGE: f32 = 0.5;
+const CONCEPT_SPLIT_MIN_GAP_TICKS: u64 = 1;
+const CONCEPT_MERGE_MIN_SURVIVOR_OBSERVATIONS: u32 = 4;
+const CONCEPT_MERGE_MIN_ABSORBED_OBSERVATIONS: u32 = 2;
+const CONCEPT_MERGE_MAX_MEAN_PREDICTION_ERROR: f32 = 0.35;
 const EDGE_STRENGTH_INCREMENT: f32 = 0.2;
 const TOPOLOGY_MAP_DIGEST_DOMAIN: &[u8] = b"alife.topology.map.v2";
 const PORTABLE_TOPOLOGY_SIDECAR_DIGEST_DOMAIN: &[u8] = b"ALIFE-PORTABLE-TOPOLOGY-SIDECAR-V1";
@@ -725,6 +735,43 @@ impl UnresolvedGap {
         self.confidence = Confidence::new((self.confidence.raw() + 0.2).min(1.0))?;
         Ok(self.id)
     }
+
+    fn resolve(
+        &mut self,
+        prediction_error: NormalizedScalar,
+        tick: Tick,
+    ) -> Result<UnresolvedGapId, ScaffoldContractError> {
+        // Stable evidence reduces pressure, but one patch does not erase a high-voltage gap.
+        Tick::validate_monotonic(self.last_tick, tick)?;
+        self.prediction_error = NormalizedScalar::new(
+            (self.prediction_error.raw() * 0.75 + prediction_error.raw() * 0.25).clamp(0.0, 1.0),
+        )?;
+        self.curiosity_voltage =
+            NormalizedScalar::new((self.curiosity_voltage.raw() * 0.25).clamp(0.0, 1.0))?;
+        self.last_tick = tick;
+        self.status = if self.curiosity_voltage.raw() <= GAP_RESOLUTION_VOLTAGE_THRESHOLD {
+            GapResolutionStatus::Resolved
+        } else {
+            GapResolutionStatus::BiasingCuriosity
+        };
+        Ok(self.id)
+    }
+
+    fn decay(&mut self, amount: f32) -> Result<(), ScaffoldContractError> {
+        validate_finite(amount)?;
+        self.curiosity_voltage =
+            NormalizedScalar::new((self.curiosity_voltage.raw() - amount).max(0.0))?;
+        self.salience = NormalizedScalar::new((self.salience.raw() - amount).max(0.0))?;
+        if self.curiosity_voltage.raw() <= GAP_RESOLUTION_VOLTAGE_THRESHOLD
+            && matches!(
+                self.status,
+                GapResolutionStatus::Open | GapResolutionStatus::BiasingCuriosity
+            )
+        {
+            self.status = GapResolutionStatus::Dismissed;
+        }
+        Ok(())
+    }
 }
 
 impl Validate for UnresolvedGap {
@@ -862,6 +909,69 @@ pub struct CuriosityBias {
     pub confidence: Confidence,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TopologyContextContribution {
+    pub active_concepts: Vec<CognitiveConceptActivation>,
+    pub active_gaps: Vec<CognitiveGapActivation>,
+    pub topology_digest: [u64; 4],
+    pub gap_voltage: NormalizedScalar,
+}
+
+impl Validate for TopologyContextContribution {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.active_concepts.len() > crate::MAX_ACTIVE_CONCEPTS
+            || self.active_gaps.len() > crate::MAX_ACTIVE_GAPS
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        for concept in &self.active_concepts {
+            concept.validate_contract()?;
+        }
+        for gap in &self.active_gaps {
+            gap.validate_contract()?;
+        }
+        NormalizedScalar::new(self.gap_voltage.raw())?;
+        Ok(())
+    }
+}
+
+fn has_grounded_binding(bindings: &ConceptBindings) -> bool {
+    !bindings.objects.is_empty()
+        || !bindings.actions.is_empty()
+        || !bindings.agents.is_empty()
+        || !bindings.locations.is_empty()
+}
+
+fn causal_identity_matches(left: &[ConceptCellId], right: &[ConceptCellId]) -> bool {
+    left.len() == right.len()
+        && left.iter().all(|concept_id| right.contains(concept_id))
+        && right.iter().all(|concept_id| left.contains(concept_id))
+}
+
+fn concepts_share_grounded_binding(left: &ConceptCell, right: &ConceptCell) -> bool {
+    left.bindings
+        .objects
+        .iter()
+        .any(|object| right.bindings.objects.contains(object))
+        || left.bindings.actions.iter().any(|action| {
+            right
+                .bindings
+                .actions
+                .iter()
+                .any(|other| other.action_id == action.action_id)
+        })
+        || left
+            .bindings
+            .agents
+            .iter()
+            .any(|agent| right.bindings.agents.contains(agent))
+        || left
+            .bindings
+            .locations
+            .iter()
+            .any(|location| right.bindings.locations.contains(location))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ConceptSignature {
     TrackedObject(TrackedObjectId),
@@ -987,6 +1097,349 @@ impl TopologicalMap {
         self.unresolved_gaps.iter().find(|gap| gap.id == id)
     }
 
+    pub fn context_contribution(
+        &self,
+    ) -> Result<TopologyContextContribution, ScaffoldContractError> {
+        self.validate_contract()?;
+
+        let mut concepts = self
+            .concepts
+            .iter()
+            .filter_map(|concept| {
+                let activation = concept.confidence.raw() * concept.salience.raw();
+                (activation > 0.0).then_some((q16(activation), concept.id.raw(), concept))
+            })
+            .collect::<Vec<_>>();
+        concepts.sort_by_key(|(score, id, _)| (std::cmp::Reverse(*score), *id));
+
+        let active_concepts = concepts
+            .into_iter()
+            .take(crate::MAX_ACTIVE_CONCEPTS)
+            .map(|(_, _, concept)| {
+                Ok(CognitiveConceptActivation {
+                    concept_id: concept.id,
+                    activation: NormalizedScalar::new(
+                        concept.confidence.raw() * concept.salience.raw(),
+                    )?,
+                    utility: concept.salience,
+                })
+            })
+            .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
+
+        let mut gaps = self
+            .unresolved_gaps
+            .iter()
+            .filter(|gap| {
+                matches!(
+                    gap.status,
+                    GapResolutionStatus::Open | GapResolutionStatus::BiasingCuriosity
+                ) && gap.curiosity_voltage.raw() > 0.0
+            })
+            .map(|gap| {
+                (
+                    q16(gap.curiosity_voltage.raw() * gap.salience.raw()),
+                    gap.id.raw(),
+                    gap,
+                )
+            })
+            .collect::<Vec<_>>();
+        gaps.sort_by_key(|(score, id, _)| (std::cmp::Reverse(*score), *id));
+
+        let gap_voltage = gaps
+            .iter()
+            .map(|(_, _, gap)| gap.curiosity_voltage.raw())
+            .fold(0.0, f32::max);
+        let active_gaps = gaps
+            .into_iter()
+            .take(crate::MAX_ACTIVE_GAPS)
+            .map(|(_, _, gap)| {
+                Ok(CognitiveGapActivation {
+                    gap_id: gap.id,
+                    voltage: gap.curiosity_voltage,
+                    uncertainty: NormalizedScalar::new(
+                        (gap.prediction_error.raw() + (1.0 - gap.confidence.raw())) * 0.5,
+                    )?,
+                })
+            })
+            .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
+
+        let contribution = TopologyContextContribution {
+            active_concepts,
+            active_gaps,
+            topology_digest: self.canonical_digest()?,
+            gap_voltage: NormalizedScalar::new(gap_voltage)?,
+        };
+        contribution.validate_contract()?;
+        Ok(contribution)
+    }
+
+    pub fn decay_active_state(&mut self, elapsed_ticks: u64) -> Result<(), ScaffoldContractError> {
+        let elapsed = elapsed_ticks.min(u64::from(u32::MAX)) as f32;
+        let amount = validate_finite(
+            self.config.edge_decay_per_tick.raw() * elapsed * ACTIVE_STATE_DECAY_SCALE,
+        )?;
+        for concept in &mut self.concepts {
+            concept.salience = NormalizedScalar::new((concept.salience.raw() - amount).max(0.0))?;
+            concept.confidence =
+                Confidence::new((concept.confidence.raw() - amount * 0.5).max(0.0))?;
+        }
+        for gap in &mut self.unresolved_gaps {
+            gap.decay(amount)?;
+        }
+        self.validate_contract()
+    }
+
+    pub fn split_concept(
+        &mut self,
+        source_id: ConceptCellId,
+        tick: Tick,
+        salience: NormalizedScalar,
+    ) -> Result<ConceptCellId, ScaffoldContractError> {
+        source_id.validate()?;
+        salience.validate_contract()?;
+        let source = self
+            .concept(source_id)
+            .cloned()
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if source.observation_count < CONCEPT_SPLIT_MIN_OBSERVATIONS {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let gap = self
+            .unresolved_gaps
+            .iter()
+            .filter(|gap| {
+                gap.source_concepts.len() == 2
+                    && gap.source_concepts.contains(&source_id)
+                    && gap.prediction_error.raw() >= CONTRADICTION_ERROR_THRESHOLD
+                    && gap.curiosity_voltage.raw() >= CONCEPT_SPLIT_MIN_GAP_VOLTAGE
+                    && gap
+                        .first_tick
+                        .raw()
+                        .saturating_add(CONCEPT_SPLIT_MIN_GAP_TICKS)
+                        <= gap.last_tick.raw()
+                    && matches!(
+                        gap.status,
+                        GapResolutionStatus::Open | GapResolutionStatus::BiasingCuriosity
+                    )
+            })
+            .max_by_key(|gap| {
+                (
+                    q16(gap.curiosity_voltage.raw()),
+                    gap.last_tick.raw(),
+                    gap.id.raw(),
+                )
+            })
+            .cloned()
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        let bindings = self.split_bindings_from_evidence(source_id, &gap)?;
+        if !has_grounded_binding(&bindings) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        if self.concepts.len() >= self.config.max_concepts {
+            return Err(ScaffoldContractError::TopologyCapacityExceeded);
+        }
+
+        let mut candidate = self.clone();
+        let id = candidate.split_concept_unchecked(source_id, bindings, tick, salience)?;
+        candidate.validate_contract()?;
+        *self = candidate;
+        Ok(id)
+    }
+
+    fn split_bindings_from_evidence(
+        &self,
+        source_id: ConceptCellId,
+        gap: &UnresolvedGap,
+    ) -> Result<ConceptBindings, ScaffoldContractError> {
+        let source = self
+            .concept(source_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let secondary_id = gap
+            .source_concepts
+            .iter()
+            .copied()
+            .find(|concept_id| *concept_id != source_id)
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        let secondary = self
+            .concept(secondary_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if secondary.bindings.actions.is_empty() || secondary.bindings.action_families.is_empty() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+
+        let mut bindings = source.bindings.clone();
+        bindings.actions = secondary.bindings.actions.clone();
+        bindings.action_families = secondary.bindings.action_families.clone();
+        bindings.semantic_refs.clear();
+        bindings.validate_contract()?;
+        Ok(bindings)
+    }
+
+    fn split_concept_unchecked(
+        &mut self,
+        source_id: ConceptCellId,
+        mut bindings: ConceptBindings,
+        tick: Tick,
+        salience: NormalizedScalar,
+    ) -> Result<ConceptCellId, ScaffoldContractError> {
+        let source_index = self
+            .concepts
+            .iter()
+            .position(|concept| concept.id == source_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if self.concepts[source_index].bindings.semantic_refs.len() >= MAX_BINDING_REFS {
+            return Err(ScaffoldContractError::TopologyCapacityExceeded);
+        }
+        if bindings.semantic_refs.len() >= MAX_BINDING_REFS {
+            return Err(ScaffoldContractError::TopologyCapacityExceeded);
+        }
+        bindings.semantic_refs.push(source_id);
+        bindings.validate_contract()?;
+
+        let id = ConceptCellId(self.next_concept_id);
+        self.next_concept_id = self
+            .next_concept_id
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let mut child = ConceptCell::new(id, ConceptBindings::default())?;
+        child.observe(bindings, tick, salience)?;
+        self.concepts[source_index].bindings.semantic_refs.push(id);
+        self.concepts.push(child);
+        let mut degradations = Vec::new();
+        self.ensure_edge(
+            source_id,
+            id,
+            EdgeRelationKind::Contradicts,
+            salience,
+            tick,
+            &mut degradations,
+        )?;
+        Ok(id)
+    }
+
+    pub fn merge_concepts(
+        &mut self,
+        survivor_id: ConceptCellId,
+        absorbed_id: ConceptCellId,
+        tick: Tick,
+    ) -> Result<(), ScaffoldContractError> {
+        if survivor_id == absorbed_id {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let survivor = self
+            .concept(survivor_id)
+            .cloned()
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let absorbed = self
+            .concept(absorbed_id)
+            .cloned()
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if survivor.observation_count < CONCEPT_MERGE_MIN_SURVIVOR_OBSERVATIONS
+            || absorbed.observation_count < CONCEPT_MERGE_MIN_ABSORBED_OBSERVATIONS
+            || !absorbed.bindings.semantic_refs.contains(&survivor_id)
+            || !concepts_share_grounded_binding(&survivor, &absorbed)
+            || survivor.bindings.emotions.mean_prediction_error.raw()
+                > CONCEPT_MERGE_MAX_MEAN_PREDICTION_ERROR
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+
+        let mut candidate = self.clone();
+        candidate.merge_concepts_unchecked(survivor_id, absorbed_id, tick)?;
+        candidate.validate_contract()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    fn merge_concepts_unchecked(
+        &mut self,
+        survivor_id: ConceptCellId,
+        absorbed_id: ConceptCellId,
+        tick: Tick,
+    ) -> Result<(), ScaffoldContractError> {
+        let survivor_index = self
+            .concepts
+            .iter()
+            .position(|concept| concept.id == survivor_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let absorbed_index = self
+            .concepts
+            .iter()
+            .position(|concept| concept.id == absorbed_id)
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let absorbed = self.concepts[absorbed_index].clone();
+        let absorbed_count = absorbed.observation_count.saturating_sub(1);
+        let absorbed_bindings = absorbed.bindings;
+        let absorbed_salience = absorbed.salience;
+        self.concepts[survivor_index].observe(absorbed_bindings, tick, absorbed_salience)?;
+        self.concepts[survivor_index].observation_count = self.concepts[survivor_index]
+            .observation_count
+            .saturating_add(absorbed_count);
+        self.concepts[survivor_index].salience = NormalizedScalar::new(
+            self.concepts[survivor_index]
+                .salience
+                .raw()
+                .max(absorbed_salience.raw()),
+        )?;
+
+        for edge in &mut self.edges {
+            if edge.from == absorbed_id {
+                edge.from = survivor_id;
+            }
+            if edge.to == absorbed_id {
+                edge.to = survivor_id;
+            }
+        }
+        let mut retained_edge_keys = Vec::new();
+        self.edges.retain(|edge| {
+            if edge.from == edge.to {
+                return false;
+            }
+            let key = (edge.from, edge.to, edge.relation);
+            if retained_edge_keys.contains(&key) {
+                false
+            } else {
+                retained_edge_keys.push(key);
+                true
+            }
+        });
+        for concept in &mut self.concepts {
+            for semantic_id in &mut concept.bindings.semantic_refs {
+                if *semantic_id == absorbed_id {
+                    *semantic_id = survivor_id;
+                }
+            }
+            concept.bindings.semantic_refs.dedup();
+            concept
+                .bindings
+                .semantic_refs
+                .retain(|semantic_id| *semantic_id != concept.id);
+        }
+        for simplex in &mut self.simplexes {
+            for concept_id in &mut simplex.concept_ids {
+                if *concept_id == absorbed_id {
+                    *concept_id = survivor_id;
+                }
+            }
+            simplex
+                .concept_ids
+                .sort_by_key(|concept_id| concept_id.raw());
+            simplex.concept_ids.dedup();
+        }
+        for gap in &mut self.unresolved_gaps {
+            for concept_id in &mut gap.source_concepts {
+                if *concept_id == absorbed_id {
+                    *concept_id = survivor_id;
+                }
+            }
+            gap.source_concepts
+                .sort_by_key(|concept_id| concept_id.raw());
+            gap.source_concepts.dedup();
+        }
+        self.concepts.remove(absorbed_index);
+        self.validate_contract()
+    }
+
     fn plan_observation(
         &self,
         patch: &ExperiencePatch,
@@ -1034,6 +1487,12 @@ impl TopologicalMap {
             TopologyDegradationKind::ActionBindingTruncated,
             &mut degradations,
         )?;
+        planned.observe_split_children(
+            primary_concept_id,
+            &observation_bindings.primary_bindings,
+            tick,
+            salience,
+        )?;
         let edge_id = planned.ensure_edge(
             primary_concept_id,
             action_concept_id,
@@ -1052,6 +1511,7 @@ impl TopologicalMap {
         )?;
         let gap_ids = planned.detect_or_update_gap(
             primary_concept_id,
+            action_concept_id,
             patch,
             salience,
             tick,
@@ -1198,6 +1658,22 @@ impl TopologicalMap {
             .position(|concept| concept_matches_signature(concept, signature))
     }
 
+    fn observe_split_children(
+        &mut self,
+        source_id: ConceptCellId,
+        bindings: &ConceptBindings,
+        tick: Tick,
+        salience: NormalizedScalar,
+    ) -> Result<(), ScaffoldContractError> {
+        let children = self.concepts.iter_mut().filter(|concept| {
+            concept.id != source_id && concept.bindings.semantic_refs.contains(&source_id)
+        });
+        for child in children {
+            child.observe(bindings.clone(), tick, salience)?;
+        }
+        Ok(())
+    }
+
     fn ensure_edge(
         &mut self,
         from: ConceptCellId,
@@ -1278,6 +1754,7 @@ impl TopologicalMap {
     fn detect_or_update_gap(
         &mut self,
         source_concept: ConceptCellId,
+        action_concept: ConceptCellId,
         patch: &ExperiencePatch,
         salience: NormalizedScalar,
         tick: Tick,
@@ -1292,12 +1769,27 @@ impl TopologicalMap {
             None
         };
 
+        let source_concepts = vec![source_concept, action_concept];
+
         let Some(contradiction_type) = contradiction_type else {
-            return Ok(Vec::new());
+            let mut resolved = Vec::new();
+            if prediction_error.raw() <= GAP_RESOLUTION_ERROR_THRESHOLD {
+                for gap in &mut self.unresolved_gaps {
+                    if causal_identity_matches(&gap.source_concepts, &source_concepts)
+                        && matches!(
+                            gap.status,
+                            GapResolutionStatus::Open | GapResolutionStatus::BiasingCuriosity
+                        )
+                    {
+                        resolved.push(gap.resolve(prediction_error, tick)?);
+                    }
+                }
+            }
+            return Ok(resolved);
         };
 
         if let Some(gap) = self.unresolved_gaps.iter_mut().find(|gap| {
-            gap.source_concepts.contains(&source_concept)
+            causal_identity_matches(&gap.source_concepts, &source_concepts)
                 && gap.contradiction_type == contradiction_type
                 && matches!(
                     gap.status,
@@ -1317,7 +1809,7 @@ impl TopologicalMap {
             NormalizedScalar::new((prediction_error.raw() * 0.8 + salience.raw() * 0.2).min(1.0))?;
         let gap = UnresolvedGap::new(
             id,
-            vec![source_concept],
+            source_concepts,
             contradiction_type,
             prediction_error,
             curiosity_voltage,
@@ -1589,6 +2081,38 @@ impl TopologySidecar {
 
     pub const fn map(&self) -> &TopologicalMap {
         &self.map
+    }
+
+    pub fn context_contribution(
+        &self,
+    ) -> Result<TopologyContextContribution, ScaffoldContractError> {
+        self.map.context_contribution()
+    }
+
+    pub fn decay_active_state(&mut self, elapsed_ticks: u64) -> Result<(), ScaffoldContractError> {
+        self.map.decay_active_state(elapsed_ticks)?;
+        self.refresh_diagnostics_after_map_mutation()
+    }
+
+    pub fn split_concept(
+        &mut self,
+        source_id: ConceptCellId,
+        tick: Tick,
+        salience: NormalizedScalar,
+    ) -> Result<ConceptCellId, ScaffoldContractError> {
+        let id = self.map.split_concept(source_id, tick, salience)?;
+        self.refresh_diagnostics_after_map_mutation()?;
+        Ok(id)
+    }
+
+    pub fn merge_concepts(
+        &mut self,
+        survivor_id: ConceptCellId,
+        absorbed_id: ConceptCellId,
+        tick: Tick,
+    ) -> Result<(), ScaffoldContractError> {
+        self.map.merge_concepts(survivor_id, absorbed_id, tick)?;
+        self.refresh_diagnostics_after_map_mutation()
     }
 
     /// Preserves learned concepts and relations for a new founder while
