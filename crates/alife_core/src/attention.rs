@@ -68,6 +68,7 @@ impl StableFocusIdentity {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SalienceComponents {
+    #[serde(default = "default_peripheral_intensity")]
     pub peripheral_intensity: NormalizedScalar,
     pub drive: NormalizedScalar,
     pub memory_expectancy: NormalizedScalar,
@@ -75,6 +76,10 @@ pub struct SalienceComponents {
     pub novelty: NormalizedScalar,
     pub uncertainty: NormalizedScalar,
     pub gap_voltage: NormalizedScalar,
+}
+
+fn default_peripheral_intensity() -> NormalizedScalar {
+    NormalizedScalar(0.0)
 }
 
 impl Default for SalienceComponents {
@@ -453,38 +458,51 @@ pub fn select_focal_targets(
         .take(requested)
         .map(|(index, _)| *index)
         .collect::<Vec<_>>();
+    let mut retained_previous = false;
     if let Some(previous_identity) = previous_hysteresis.previous_identity {
         if let Some(previous_index) = peripheral_summaries
             .iter()
             .position(|summary| summary.identity == previous_identity)
         {
             let previous_score = salience_score(peripheral_summaries[previous_index].salience);
-            let best_other_score = ranked
+            let challenger_exceeds_switch_cost = ranked
                 .iter()
-                .find_map(|(index, score)| (*index != previous_index).then_some(*score));
-            let retain_previous = best_other_score.map_or(true, |score| {
-                score <= previous_score
-                    + policy.hysteresis_margin.raw()
-                    + policy.switch_cost.raw()
-            });
-            if retain_previous && !selected.contains(&previous_index) && !selected.is_empty() {
-                selected.pop();
-                selected.push(previous_index);
-            } else if retain_previous && selected.is_empty() && requested > 0 {
-                selected.push(previous_index);
+                .find_map(|(index, score)| (*index != previous_index).then_some(*score))
+                .is_some_and(|score| score > previous_score + policy.switch_cost.raw());
+            if selected.contains(&previous_index)
+                && !challenger_exceeds_switch_cost
+                && requested > 0
+            {
+                selected.retain(|index| *index != previous_index);
+                retained_previous = true;
+                selected.insert(0, previous_index);
             }
         }
     }
-    selected.sort_by(|left, right| {
-        salience_score(peripheral_summaries[*right].salience)
-            .total_cmp(&salience_score(peripheral_summaries[*left].salience))
-            .then_with(|| {
-                peripheral_summaries[*left]
-                    .identity
-                    .canonical_key()
-                    .cmp(&peripheral_summaries[*right].identity.canonical_key())
-            })
-    });
+    if retained_previous {
+        selected[1..].sort_by(|left, right| {
+            salience_score(peripheral_summaries[*right].salience)
+                .total_cmp(&salience_score(peripheral_summaries[*left].salience))
+                .then_with(|| {
+                    peripheral_summaries[*left]
+                        .identity
+                        .canonical_key()
+                        .cmp(&peripheral_summaries[*right].identity.canonical_key())
+                })
+        });
+        selected.truncate(requested);
+    } else {
+        selected.sort_by(|left, right| {
+            salience_score(peripheral_summaries[*right].salience)
+                .total_cmp(&salience_score(peripheral_summaries[*left].salience))
+                .then_with(|| {
+                    peripheral_summaries[*left]
+                        .identity
+                        .canonical_key()
+                        .cmp(&peripheral_summaries[*right].identity.canonical_key())
+                })
+        });
+    }
     selected.dedup();
 
     if selected.len() < usize::from(policy.protected_minimum) {

@@ -7,8 +7,9 @@ use alife_core::{
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     BiochemistryState, Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
     finalized_memory_attention_evidence, select_focal_targets, AttentionFrame,
-    AttentionSelectionPolicy, BrainWorkReceipt, CanonicalDigestBuilder, CognitiveContextFrame,
-    CognitiveMemoryExpectancy, FinalizedMemoryAttentionEvidence,
+    AttentionSelectionPolicy, BrainWorkReceipt, CanonicalDigestBuilder, CognitiveConceptActivation,
+    CognitiveContextFrame, CognitiveGapActivation, CognitiveMemoryExpectancy,
+    FinalizedMemoryAttentionEvidence,
     Confidence, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
     DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, FinalizedMemoryRecall, FoundationGeneticIdentity,
@@ -16,12 +17,15 @@ use alife_core::{
     MAX_CONTEXT_MEMORY_EXPECTANCIES, MemoryBankConfig,
     MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
     MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId, PassiveLifeEvent,
-    PassiveLifeStatistics, PerceptionFrame, PhenotypeCompiler, PhenotypeCompilerInputs,
+    PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
+    PhenotypeCompilerInputs,
     PostActionOutcome, PreActionSnapshot, PreparedMemoryRecall, ScaffoldContractError,
+    CandidateObservationRef,
     SensorProfile, SignedValence,
     SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState,
     Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
     Validate, Vec3f, WorldEntityId, LineageId, N512FounderFoundationProjection,
+    MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
 };
 use alife_gpu_backend::{
     GpuBrainHandle, GpuClosedLoopBackend, GpuClosedLoopMemoryBatchInput,
@@ -1680,6 +1684,7 @@ fn cognitive_context_for_recall(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,
     recall: &PreparedMemoryRecall,
+    topology: &TopologySidecar,
 ) -> Result<CognitiveContextFrame, ScaffoldContractError> {
     let mut context =
         CognitiveContextFrame::empty(organism_id, sequence_id, recall.context().tick)?;
@@ -1728,6 +1733,47 @@ fn cognitive_context_for_recall(
             });
         }
     }
+    let mut concepts = topology.map().concepts().iter().collect::<Vec<_>>();
+    concepts.sort_by(|left, right| {
+        (right.salience.raw() * right.confidence.raw())
+            .total_cmp(&(left.salience.raw() * left.confidence.raw()))
+            .then_with(|| left.id.raw().cmp(&right.id.raw()))
+    });
+    context.concept.active_concepts = concepts
+        .into_iter()
+        .take(MAX_ACTIVE_CONCEPTS)
+        .map(|concept| CognitiveConceptActivation {
+            concept_id: concept.id,
+            activation: concept.salience,
+            utility: NormalizedScalar::new(concept.confidence.raw())?,
+        })
+        .collect();
+    context.concept.topology_digest = topology.diagnostics().canonical_digest;
+
+    let mut gaps = topology.map().curiosity_biases();
+    gaps.sort_by(|left, right| {
+        right
+            .salience
+            .raw()
+            .total_cmp(&left.salience.raw())
+            .then_with(|| left.gap_id.raw().cmp(&right.gap_id.raw()))
+    });
+    context.gap.gap_voltage = NormalizedScalar::new(
+        gaps.iter()
+            .map(|gap| gap.salience.raw())
+            .fold(0.0, f32::max),
+    )?;
+    context.gap.active_gaps = gaps
+        .into_iter()
+        .take(MAX_ACTIVE_GAPS)
+        .map(|gap| {
+            Ok(CognitiveGapActivation {
+                gap_id: gap.gap_id,
+                voltage: gap.salience,
+                uncertainty: NormalizedScalar::new((1.0 - gap.confidence.raw()).clamp(0.0, 1.0))?,
+            })
+        })
+        .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
     context.validate_contract()?;
     Ok(context)
 }
@@ -1771,6 +1817,53 @@ fn apply_predecision_attention_evidence(
         summary.validate_contract()?;
     }
     Ok(())
+}
+
+fn route_focal_candidates(
+    draft: PerceptionFrameDraft,
+    attention: &AttentionFrame,
+) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
+    attention.validate_contract()?;
+    let Some(alife_core::StableFocusIdentity::TrackedObject(focal_id)) =
+        attention.focal_targets.first().copied()
+    else {
+        return Ok(draft);
+    };
+    let Some(focal_slot) = draft
+        .grounded_object_slots()
+        .iter()
+        .position(|slot| slot.tracked_object_id == focal_id)
+        .and_then(|index| u16::try_from(index).ok())
+    else {
+        return Ok(draft);
+    };
+
+    let mut candidates = draft.candidates().to_vec();
+    candidates.sort_by_key(|candidate| {
+        (
+            !matches!(
+                candidate.observation,
+                CandidateObservationRef::ObjectSlot(slot) if slot == focal_slot
+            ),
+            candidate.candidate_index,
+        )
+    });
+    for (index, candidate) in candidates.iter_mut().enumerate() {
+        candidate.candidate_index = u16::try_from(index)
+            .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?;
+    }
+
+    PerceptionFrameDraft::new(
+        draft.organism_id(),
+        draft.tick(),
+        draft.sensor_profile(),
+        draft.sensory().clone(),
+        draft.body(),
+        draft.homeostasis().clone(),
+        candidates,
+        draft.profile_provenance(),
+        draft.grounded_object_slots().to_vec(),
+    )
 }
 
 fn cognitive_context_with_attention(
@@ -2986,6 +3079,7 @@ impl GpuLiveBrainRuntime {
                         next_sequence,
                         language_grounding: restored.language_grounding,
                         life_statistics,
+                        attention_hysteresis: alife_core::HysteresisState::default(),
                     };
                     Ok((
                         resident,
@@ -4071,17 +4165,22 @@ impl GpuLiveBrainRuntime {
                     resident.homeostasis,
                     &perception_index,
                 )?;
-                let prepared_recall = self
+                let memory = self
                     .memories
                     .get(&raw)
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                    .recall_frame(&draft)?;
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let topology = self
+                    .topologies
+                    .get(&raw)
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
                 let sequence_id = ExperienceSequenceId(resident.next_sequence);
                 sequence_id.validate()?;
+                let prepared_recall = memory.recall_frame(&draft)?;
                 let baseline_context = cognitive_context_for_recall(
                     OrganismId(raw),
                     sequence_id,
                     &prepared_recall,
+                    topology,
                 )?;
                 let baseline_prepared = prepared_recall
                     .clone()
@@ -4113,10 +4212,18 @@ impl GpuLiveBrainRuntime {
                     AttentionSelectionPolicy::default(),
                 )?;
                 resident.attention_hysteresis = attention.hysteresis;
+                let routed_draft = route_focal_candidates(draft, &attention)?;
+                let routed_recall = memory.recall_frame(&routed_draft)?;
+                let cognitive_context = cognitive_context_for_recall(
+                    OrganismId(raw),
+                    sequence_id,
+                    &routed_recall,
+                    topology,
+                )?;
                 let cognitive_context =
-                    cognitive_context_with_attention(baseline_context, attention)?;
-                let prepared_recall = prepared_recall.with_cognitive_context(cognitive_context)?;
-                let (frame, memory_recall) = prepared_recall.finalize(draft)?;
+                    cognitive_context_with_attention(cognitive_context, attention)?;
+                let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
+                let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
                 memory_recall.validate_for_frame(&frame)?;
                 let memory_upload =
                     self.backend
@@ -5485,15 +5592,229 @@ mod tests {
     };
     use alife_archive::{LineageLibrary, LineageLibraryConfig};
     use alife_core::{
-        ActionTarget, BrainCapacityClass, CandidateActionFamily, FoundationGeneticIdentity,
-        FoundationWeightAsset, GenomeId, OrganismId, OutcomeCreditPacket, PreActionBrainEvidence,
-        SensorProfile, Tick, Vec3f, WorldEntityId,
+        ActionTarget, AttentionSelectionPolicy, BrainCapacityClass, CandidateActionFamily,
+        Confidence, ExperienceSequenceId, FoundationGeneticIdentity, FoundationWeightAsset,
+        GenomeId, HysteresisState, NormalizedScalar, OrganismId, OutcomeCreditPacket,
+        PeripheralSummary, PreActionBrainEvidence, SalienceComponents, SensorProfile,
+        StableFocusIdentity, Tick, TrackedObjectId, Vec3f, WorldEntityId,
     };
     use alife_runtime::GpuDurableSaveManifest;
     use alife_world::{
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
         HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
     };
+
+    #[test]
+    fn v11_attention_causally_changes_finalized_upload_and_holds_top_k_primary() {
+        let organism_id = OrganismId(1);
+        let seed = 77_111;
+        let world = HeadlessScenarioBuilder::new(seed)
+            .agent("agent", organism_id, Vec3f::ZERO)
+            .food("food-a", Vec3f::new(1.0, 0.0, 0.0), 0.8)
+            .food("food-b", Vec3f::new(-1.0, 0.0, 0.0), 0.8)
+            .build()
+            .unwrap();
+        let mut runtime = GpuLiveBrainRuntime::new_profiled(
+            GpuClosedLoopBackend::new_required(
+                alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+            )
+            .expect("required GPU"),
+            world,
+            seed,
+            BrainScaleTier::Nano512,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let handle = runtime.handle_for(organism_id).unwrap();
+        let homeostasis = runtime.residents[&organism_id.raw()].homeostasis;
+        let perception_index = runtime.world.build_perception_batch_index().unwrap();
+        let draft = runtime
+            .world
+            .perception_frame_draft_indexed(
+                organism_id,
+                Tick::ZERO,
+                SensorProfile::GroundedObjectSlotsV1,
+                homeostasis,
+                &perception_index,
+            )
+            .unwrap();
+        let memory = runtime.memories[&organism_id.raw()].clone();
+        let topology = runtime.topologies[&organism_id.raw()].clone();
+        let sequence_id = ExperienceSequenceId(runtime.residents[&organism_id.raw()].next_sequence);
+        let prepared_recall = memory.recall_frame(&draft).unwrap();
+        let baseline_context = cognitive_context_for_recall(
+            organism_id,
+            sequence_id,
+            &prepared_recall,
+            &topology,
+        )
+        .unwrap();
+        let baseline_prepared = prepared_recall
+            .clone()
+            .with_cognitive_context(baseline_context.clone())
+            .unwrap();
+        let (baseline_frame, baseline_recall) = baseline_prepared.finalize(draft.clone()).unwrap();
+        baseline_recall
+            .validate_for_frame(&baseline_frame)
+            .unwrap();
+        let memory_evidence = finalized_memory_attention_evidence(&baseline_recall).unwrap();
+        let body_need = homeostasis
+            .drives
+            .to_array()
+            .iter()
+            .copied()
+            .fold(0.0, f32::max);
+
+        let mut base_summaries = grounded_peripheral_summaries(draft.grounded_object_slots())
+            .unwrap();
+        assert!(base_summaries.len() >= 2);
+        for summary in &mut base_summaries {
+            summary.salience = SalienceComponents::default();
+        }
+        base_summaries[0].salience.peripheral_intensity = NormalizedScalar::new(0.2).unwrap();
+        base_summaries[1].salience.peripheral_intensity = NormalizedScalar::new(0.1).unwrap();
+        let first_identity = base_summaries[0].identity;
+        let second_identity = base_summaries[1].identity;
+        apply_predecision_attention_evidence(
+            &mut base_summaries,
+            body_need,
+            &memory_evidence,
+            &baseline_context,
+        )
+        .unwrap();
+        let single_target_policy = AttentionSelectionPolicy {
+            focal_capacity: 1,
+            protected_minimum: 1,
+            requested_focal_count: 1,
+            ..AttentionSelectionPolicy::default()
+        };
+        let base_attention = select_focal_targets(
+            organism_id,
+            sequence_id,
+            Tick::ZERO,
+            &base_summaries,
+            HysteresisState::default(),
+            single_target_policy,
+        )
+        .unwrap();
+        assert_eq!(base_attention.focal_targets, vec![first_identity]);
+
+        let mut changed_summaries = base_summaries.clone();
+        changed_summaries[0].salience.peripheral_intensity = NormalizedScalar::new(0.2).unwrap();
+        changed_summaries[1].salience.peripheral_intensity = NormalizedScalar::new(1.0).unwrap();
+        let changed_attention = select_focal_targets(
+            organism_id,
+            sequence_id,
+            Tick::ZERO,
+            &changed_summaries,
+            HysteresisState::default(),
+            single_target_policy,
+        )
+        .unwrap();
+        assert_eq!(changed_attention.focal_targets, vec![second_identity]);
+
+        let mut finalize_with_attention = |attention: AttentionFrame| {
+            let routed_draft = route_focal_candidates(draft.clone(), &attention)?;
+            let routed_recall = memory.recall_frame(&routed_draft)?;
+            let context = cognitive_context_for_recall(
+                organism_id,
+                sequence_id,
+                &routed_recall,
+                &topology,
+            )?;
+            let context = cognitive_context_with_attention(context, attention)?;
+            let prepared = routed_recall.with_cognitive_context(context)?;
+            let (frame, memory_recall) = prepared.finalize(routed_draft)?;
+            memory_recall.validate_for_frame(&frame)?;
+            let upload = runtime
+                .backend
+                .prepare_memory_context_upload(handle, &frame, &memory_recall)?;
+            Ok::<_, ScaffoldContractError>((frame, memory_recall, upload))
+        };
+        let (base_frame, base_recall, base_upload) =
+            finalize_with_attention(base_attention.clone()).unwrap();
+        let (changed_frame, changed_recall, changed_upload) =
+            finalize_with_attention(changed_attention.clone()).unwrap();
+        assert_eq!(
+            base_recall
+                .cognitive_context()
+                .unwrap()
+                .focal
+                .identities,
+            base_attention.focal_targets
+        );
+        assert_eq!(
+            changed_recall
+                .cognitive_context()
+                .unwrap()
+                .focal
+                .identities,
+            changed_attention.focal_targets
+        );
+        assert_ne!(
+            base_recall.cognitive_context_digest().unwrap(),
+            changed_recall.cognitive_context_digest().unwrap()
+        );
+        assert_ne!(base_frame.base_digest(), changed_frame.base_digest());
+        assert_ne!(base_frame.frame_digest(), changed_frame.frame_digest());
+        assert_eq!(base_upload.final_frame_digest, base_frame.frame_digest());
+        assert_eq!(changed_upload.final_frame_digest, changed_frame.frame_digest());
+        assert_ne!(base_upload.final_frame_digest, changed_upload.final_frame_digest);
+
+        let summary = |id: u64, intensity: f32| PeripheralSummary {
+            identity: StableFocusIdentity::TrackedObject(TrackedObjectId(id)),
+            salience: SalienceComponents {
+                peripheral_intensity: NormalizedScalar::new(intensity).unwrap(),
+                ..SalienceComponents::default()
+            },
+            confidence: Confidence::new(1.0).unwrap(),
+        };
+        let top_k_policy = AttentionSelectionPolicy {
+            focal_capacity: 2,
+            protected_minimum: 1,
+            requested_focal_count: 2,
+            switch_cost: NormalizedScalar::new(0.05).unwrap(),
+            ..AttentionSelectionPolicy::default()
+        };
+        let first = select_focal_targets(
+            organism_id,
+            sequence_id,
+            Tick::ZERO,
+            &[summary(101, 0.40), summary(102, 0.39), summary(103, 0.10)],
+            HysteresisState::default(),
+            top_k_policy,
+        )
+        .unwrap();
+        let near_challenger = select_focal_targets(
+            organism_id,
+            sequence_id,
+            Tick::ZERO,
+            &[summary(101, 0.40), summary(102, 0.44), summary(103, 0.10)],
+            first.hysteresis,
+            top_k_policy,
+        )
+        .unwrap();
+        assert_eq!(
+            near_challenger.focal_targets,
+            vec![
+                StableFocusIdentity::TrackedObject(TrackedObjectId(101)),
+                StableFocusIdentity::TrackedObject(TrackedObjectId(102)),
+            ]
+        );
+        let far_challenger = select_focal_targets(
+            organism_id,
+            sequence_id,
+            Tick::ZERO,
+            &[summary(101, 0.40), summary(102, 0.80), summary(103, 0.10)],
+            first.hysteresis,
+            top_k_policy,
+        )
+        .unwrap();
+        assert_eq!(
+            far_challenger.focal_targets[0],
+            StableFocusIdentity::TrackedObject(TrackedObjectId(102))
+        );
+    }
 
     #[test]
     fn v11_authoritative_admission_real_runtime() {
