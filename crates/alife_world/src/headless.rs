@@ -1007,6 +1007,22 @@ impl HeadlessWorld {
         Ok(())
     }
 
+    pub fn link_birth_manifest(
+        &mut self,
+        organism_id: OrganismId,
+        digest: alife_core::Blake3Digest,
+    ) -> Result<(), ScaffoldContractError> {
+        let mut candidate = self.clone();
+        candidate.validate_organism_bindings()?;
+        candidate
+            .organism_registry
+            .link_birth_manifest(organism_id, digest)
+            .map_err(map_organism_registry_error)?;
+        candidate.validate_organism_bindings()?;
+        *self = candidate;
+        Ok(())
+    }
+
     pub fn retire_dead_organism(
         &mut self,
         organism_id: OrganismId,

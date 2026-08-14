@@ -5,12 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::{
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
-    Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
+    BiochemistryState, Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
     BrainWorkReceipt, CanonicalDigestBuilder, Confidence, ConsolidationDriverEvent,
     ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
     EnvironmentalRegime, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    FinalizedMemoryRecall, FoundationGeneticIdentity, FoundationWeightAsset, HomeostaticDelta,
-    HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig,
+    FinalizedMemoryRecall, FoundationGeneticIdentity, FoundationWeightAsset, HomeostaticParameters,
+    HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig,
     MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
     MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId, PassiveLifeEvent,
     PassiveLifeStatistics, PerceptionFrame, PhenotypeCompiler, PhenotypeCompilerInputs,
@@ -69,6 +69,73 @@ struct ResidentCognition {
     life_statistics: PassiveLifeStatistics,
 }
 
+struct StagedLiveAuthority {
+    world: HeadlessWorld,
+    residents: BTreeMap<u64, ResidentCognition>,
+}
+
+impl StagedLiveAuthority {
+    fn begin(
+        world: &mut HeadlessWorld,
+        residents: &mut BTreeMap<u64, ResidentCognition>,
+    ) -> Self {
+        Self {
+            world: world.clone(),
+            residents: residents.clone(),
+        }
+        .install(world, residents)
+    }
+
+    fn install(
+        self,
+        world: &mut HeadlessWorld,
+        residents: &mut BTreeMap<u64, ResidentCognition>,
+    ) -> Self {
+        Self {
+            world: std::mem::replace(world, self.world),
+            residents: std::mem::replace(residents, self.residents),
+        }
+    }
+
+    fn finish<T, E>(
+        self,
+        world: &mut HeadlessWorld,
+        residents: &mut BTreeMap<u64, ResidentCognition>,
+        result: Result<T, E>,
+    ) -> Result<T, E> {
+        let candidate = self.install(world, residents);
+        match result {
+            Ok(value) => {
+                let _previous = candidate.install(world, residents);
+                Ok(value)
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
+trait LiveAuthorityOwner {
+    fn world_and_residents(
+        &mut self,
+    ) -> (&mut HeadlessWorld, &mut BTreeMap<u64, ResidentCognition>);
+}
+
+fn tick_with_sleep_progress_inner<O, T, E>(
+    owner: &mut O,
+    staged_tick: impl FnOnce(&mut O) -> Result<T, E>,
+) -> Result<T, E>
+where
+    O: LiveAuthorityOwner,
+{
+    let staged = {
+        let (world, residents) = owner.world_and_residents();
+        StagedLiveAuthority::begin(world, residents)
+    };
+    let result = staged_tick(owner);
+    let (world, residents) = owner.world_and_residents();
+    staged.finish(world, residents, result)
+}
+
 #[derive(Debug, Clone)]
 struct ResidentAuthorityPlan {
     organism_id: OrganismId,
@@ -78,7 +145,7 @@ struct ResidentAuthorityPlan {
     compiler_inputs: PhenotypeCompilerInputs,
     genome: BrainGenome,
     development: DevelopmentState,
-    homeostasis: HomeostaticSnapshot,
+    biochemistry: BiochemistryState,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -99,12 +166,12 @@ fn resident_authority_plan_from_record(
     brain_class: BrainScaleTier,
     sensor_profile: SensorProfile,
 ) -> Result<ResidentAuthorityPlan, ScaffoldContractError> {
-    if record.organism_id() != organism_id || record.world_entity_id() != world_entity_id {
+    let admission = record.authoritative_admission_at(world_tick)?;
+    if admission.organism_id != organism_id || admission.world_entity_id != world_entity_id {
         return Err(ScaffoldContractError::BrainOwnershipMismatch);
     }
-    let age = record.age_at(world_tick)?;
-    let development = record.phenotype().development_state_at(age)?;
-    let genome = record.phenotype().brain_genome.clone();
+    let development = admission.phenotype.development_state_at(admission.age)?;
+    let genome = admission.phenotype.brain_genome.clone();
     let (phenotype, compiler_inputs) =
         compile_gpu_components_from_genome(genome.clone(), development.clone(), sensor_profile)?;
     if phenotype.brain_class_id() != brain_class.default_class_id() {
@@ -118,8 +185,57 @@ fn resident_authority_plan_from_record(
         compiler_inputs,
         genome,
         development,
-        homeostasis: record.biochemistry().homeostasis,
+        biochemistry: admission.biochemistry,
     })
+}
+
+fn synchronize_resident_from_record(
+    resident: &mut ResidentCognition,
+    record: &WorldOrganismRecord,
+    world_tick: Tick,
+) -> Result<(), ScaffoldContractError> {
+    let admission = record.authoritative_admission_at(world_tick)?;
+    if resident.genome != admission.phenotype.brain_genome {
+        return Err(ScaffoldContractError::BrainOwnershipMismatch);
+    }
+    resident.homeostasis = admission.biochemistry.homeostasis;
+    resident.development = admission.phenotype.development_state_at(admission.age)?;
+    Ok(())
+}
+
+fn synchronize_residents_from_world(
+    world: &HeadlessWorld,
+    residents: &mut BTreeMap<u64, ResidentCognition>,
+    world_tick: Tick,
+) -> Result<(), ScaffoldContractError> {
+    let organism_ids = residents.keys().copied().collect::<Vec<_>>();
+    for raw in organism_ids {
+        let record = world
+            .organism_registry()
+            .get(OrganismId(raw))
+            .cloned()
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        if !record.lifecycle().is_alive() {
+            continue;
+        }
+        let resident = residents
+            .get_mut(&raw)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        synchronize_resident_from_record(resident, &record, world_tick)?;
+    }
+    Ok(())
+}
+
+fn advance_and_synchronize_authority(
+    world: &mut HeadlessWorld,
+    residents: &mut BTreeMap<u64, ResidentCognition>,
+    tick_after: Tick,
+) -> Result<(), ScaffoldContractError> {
+    let advanced_tick = world.try_advance_tick()?;
+    if advanced_tick != tick_after {
+        return Err(ScaffoldContractError::NonMonotonicTick);
+    }
+    synchronize_residents_from_world(world, residents, tick_after)
 }
 
 fn compare_resident_checkpoint_metadata(
@@ -142,6 +258,29 @@ fn compare_resident_checkpoint_metadata(
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
     Ok(())
+}
+
+fn restore_resident_authority_from_record(
+    record: &WorldOrganismRecord,
+    organism_id: OrganismId,
+    world_entity_id: WorldEntityId,
+    world_tick: Tick,
+    brain_class: BrainScaleTier,
+    sensor_profile: SensorProfile,
+    checkpoint: Option<ResidentCheckpointMetadata<'_>>,
+) -> Result<ResidentAuthorityPlan, ScaffoldContractError> {
+    let authority = resident_authority_plan_from_record(
+        record,
+        organism_id,
+        world_entity_id,
+        world_tick,
+        brain_class,
+        sensor_profile,
+    )?;
+    if let Some(checkpoint) = checkpoint {
+        compare_resident_checkpoint_metadata(&authority, checkpoint)?;
+    }
+    Ok(authority)
 }
 
 fn cleanup_restored_gpu_handle(
@@ -172,7 +311,7 @@ impl ResidentAuthorityPlan {
             compiler_inputs: self.compiler_inputs,
             genome: self.genome,
             development: self.development,
-            homeostasis: self.homeostasis,
+            homeostasis: self.biochemistry.homeostasis,
             sleep_scheduler: GpuSleepScheduler::new(SleepConsolidationConfig::reference())?,
             next_sequence: 1,
             language_grounding: LanguageGroundingLedger::default(),
@@ -192,7 +331,6 @@ struct GpuLiveCheckpointDurability {
 struct GpuLiveRuntimeConstructionOptions {
     homeostatic_parameters: HomeostaticParameters,
     schedule_sleep: bool,
-    birth_template_organism_id: Option<OrganismId>,
     observe_sidecars: bool,
     retain_sealed_patch_history: bool,
 }
@@ -202,7 +340,6 @@ impl GpuLiveRuntimeConstructionOptions {
         Self {
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: true,
-            birth_template_organism_id: None,
             observe_sidecars: true,
             retain_sealed_patch_history: true,
         }
@@ -212,7 +349,6 @@ impl GpuLiveRuntimeConstructionOptions {
         Self {
             homeostatic_parameters,
             schedule_sleep: false,
-            birth_template_organism_id: Some(OrganismId(1)),
             observe_sidecars: false,
             retain_sealed_patch_history: false,
         }
@@ -222,7 +358,6 @@ impl GpuLiveRuntimeConstructionOptions {
         Self {
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: false,
-            birth_template_organism_id: None,
             observe_sidecars: true,
             retain_sealed_patch_history: true,
         }
@@ -233,7 +368,6 @@ impl GpuLiveRuntimeConstructionOptions {
         Self {
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: true,
-            birth_template_organism_id: None,
             observe_sidecars: true,
             retain_sealed_patch_history: false,
         }
@@ -465,12 +599,6 @@ struct PreparedSealInput {
 struct SealedWorldSelection {
     summary: LiveBrainTickSummary,
     patch: ExperiencePatch,
-}
-
-fn resident_homeostasis_from_world_biology_receipt(
-    biology_receipt: &alife_world::HeadlessActionBiologyReceipt,
-) -> HomeostaticSnapshot {
-    biology_receipt.biology_after.homeostasis
 }
 
 struct SealedLiveSelection {
@@ -748,6 +876,7 @@ pub(crate) enum CuratedFounderResetRuntimeError {
     },
     #[error("curated founder GPU residency is unknown after submission: {error}")]
     GpuResidencyUnknown {
+        evidence: Option<CuratedFounderResetRuntimeEvidence>,
         #[source]
         error: ScaffoldContractError,
     },
@@ -972,6 +1101,7 @@ fn project_curated_founder_reset_runtime_error(
         | CuratedFounderResetRuntimeError::MissingLineageRunId
         | CuratedFounderResetRuntimeError::NoRetainedOperation
         | CuratedFounderResetRuntimeError::ResidencyPlanMismatch
+        | CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { .. }
         | CuratedFounderResetRuntimeError::Plan(_)
         | CuratedFounderResetRuntimeError::Materialization(_)
         | CuratedFounderResetRuntimeError::PreCommit(_)) => {
@@ -979,6 +1109,26 @@ fn project_curated_founder_reset_runtime_error(
                 rejection: CuratedFounderResetDispatchRejection::Runtime {
                     message: error.to_string(),
                 },
+            }
+        }
+        CuratedFounderResetRuntimeError::GpuResidencyUnknown { evidence, error } => {
+            let (proposed_save_digest, archive_count, save_state) = evidence.map_or_else(
+                || (String::new(), 0, CuratedFounderSaveState::Unknown),
+                |evidence| {
+                    (
+                        evidence.proposed_save_digest,
+                        evidence.archive_count,
+                        evidence.save_state,
+                    )
+                },
+            );
+            CuratedFounderResetDispatchResult::Unknown {
+                cause: error.to_string(),
+                proposed_save_digest,
+                archive_count,
+                save_state,
+                gpu_residency: CuratedFounderGpuResidencyState::Unknown,
+                retryable: false,
             }
         }
     }
@@ -1043,7 +1193,6 @@ pub struct GpuLiveBrainRuntime {
     sensor_profile: SensorProfile,
     homeostatic_parameters: HomeostaticParameters,
     schedule_sleep: bool,
-    birth_template_organism_id: Option<OrganismId>,
     sealed_patches: Vec<ExperiencePatch>,
     sealed_patch_count: usize,
     last_sealed_patches: Vec<ExperiencePatch>,
@@ -1078,6 +1227,16 @@ pub struct GpuLiveBrainRuntime {
     forced_retirement_post_receipt_failure: bool,
     #[cfg(test)]
     retirement_backend_removal_count: usize,
+    #[cfg(test)]
+    forced_late_advance_failure: bool,
+}
+
+impl LiveAuthorityOwner for GpuLiveBrainRuntime {
+    fn world_and_residents(
+        &mut self,
+    ) -> (&mut HeadlessWorld, &mut BTreeMap<u64, ResidentCognition>) {
+        (&mut self.world, &mut self.residents)
+    }
 }
 
 #[cfg(feature = "bevy-app")]
@@ -1560,8 +1719,6 @@ fn seal_prepared_selection_core(
         return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
     }
     resident.language_grounding.observe_sealed(&patch)?;
-    resident.homeostasis = resident_homeostasis_from_world_biology_receipt(&biology_receipt);
-    resident.development.age_ticks = outcome_tick;
     resident.next_sequence = resident
         .next_sequence
         .checked_add(1)
@@ -1721,7 +1878,6 @@ impl GpuLiveBrainRuntime {
         let preserve_lineage_archive = self.lineage_library.is_some();
         let homeostatic_parameters = self.homeostatic_parameters.clone();
         let schedule_sleep = self.schedule_sleep;
-        let birth_template_organism_id = self.birth_template_organism_id;
         let observe_sidecars = self.observe_sidecars;
         let retain_sealed_patch_history = self.retain_sealed_patch_history;
         let archive_learned_capture_policy = self.archive_learned_capture_policy.clone();
@@ -1735,7 +1891,6 @@ impl GpuLiveBrainRuntime {
         .map(|mut candidate| {
             candidate.homeostatic_parameters = homeostatic_parameters;
             candidate.schedule_sleep = schedule_sleep;
-            candidate.birth_template_organism_id = birth_template_organism_id;
             candidate.observe_sidecars = observe_sidecars;
             candidate.retain_sealed_patch_history = retain_sealed_patch_history;
             candidate.archive_learned_capture_policy = archive_learned_capture_policy;
@@ -1834,7 +1989,7 @@ impl GpuLiveBrainRuntime {
             .as_ref()
             .is_some_and(|plan| matches!(plan.state, CuratedFounderGpuResidencyState::Pending))
         {
-            let receipt = self.commit_retained_curated_founder_gpu_residency()?;
+            let receipt = self.commit_retained_curated_founder_gpu_residency(Some(&result))?;
             self.retained_curated_founder_gpu_residency_receipt = Some(receipt);
             self.curated_first_tick_pending = true;
         }
@@ -1859,7 +2014,7 @@ impl GpuLiveBrainRuntime {
             .as_ref()
             .is_some_and(|plan| matches!(plan.state, CuratedFounderGpuResidencyState::Pending))
         {
-            let receipt = self.commit_retained_curated_founder_gpu_residency()?;
+            let receipt = self.commit_retained_curated_founder_gpu_residency(Some(&result))?;
             self.retained_curated_founder_gpu_residency_receipt = Some(receipt);
             self.curated_first_tick_pending = true;
         }
@@ -1871,6 +2026,7 @@ impl GpuLiveBrainRuntime {
     /// after the backend returns a completed residency receipt.
     pub(crate) fn commit_retained_curated_founder_gpu_residency(
         &mut self,
+        publication: Option<&CuratedFounderResetAttempt>,
     ) -> Result<GpuCuratedResidencyReceipt, CuratedFounderResetRuntimeError> {
         let plan = self
             .retained_curated_founder_gpu_residency_plan
@@ -2004,7 +2160,10 @@ impl GpuLiveBrainRuntime {
                 if let Some(plan) = self.retained_curated_founder_gpu_residency_plan.as_mut() {
                     plan.state = CuratedFounderGpuResidencyState::Unknown;
                 }
-                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown { error });
+                return Err(CuratedFounderResetRuntimeError::GpuResidencyUnknown {
+                    evidence: publication.map(CuratedFounderResetRuntimeEvidence::from_attempt),
+                    error,
+                });
             }
         };
         let candidate_handles = candidate_handle_keys
@@ -2242,7 +2401,7 @@ impl GpuLiveBrainRuntime {
 
         runtime.retained_curated_founder_gpu_residency_plan = Some(plan);
         let receipt = runtime
-            .commit_retained_curated_founder_gpu_residency()
+            .commit_retained_curated_founder_gpu_residency(None)
             .map_err(|error| invalid(&error.to_string()))?;
         runtime.retained_curated_founder_gpu_residency_receipt = Some(receipt.clone());
         runtime.curated_first_tick_pending = true;
@@ -2442,7 +2601,6 @@ impl GpuLiveBrainRuntime {
             sensor_profile,
             homeostatic_parameters: options.homeostatic_parameters,
             schedule_sleep: options.schedule_sleep,
-            birth_template_organism_id: options.birth_template_organism_id,
             sealed_patches: Vec::new(),
             sealed_patch_count: 0,
             last_sealed_patches: Vec::new(),
@@ -2477,6 +2635,8 @@ impl GpuLiveBrainRuntime {
             forced_retirement_post_receipt_failure: false,
             #[cfg(test)]
             retirement_backend_removal_count: 0,
+            #[cfg(test)]
+            forced_late_advance_failure: false,
         };
         runtime.reconcile_population()?;
         Ok(runtime)
@@ -2550,7 +2710,6 @@ impl GpuLiveBrainRuntime {
             sensor_profile,
             homeostatic_parameters: HomeostaticParameters::reference(),
             schedule_sleep: true,
-            birth_template_organism_id: None,
             sealed_patches: Vec::new(),
             sealed_patch_count: 0,
             last_sealed_patches: Vec::new(),
@@ -2585,6 +2744,8 @@ impl GpuLiveBrainRuntime {
             forced_retirement_post_receipt_failure: false,
             #[cfg(test)]
             retirement_backend_removal_count: 0,
+            #[cfg(test)]
+            forced_late_advance_failure: false,
         };
         let mut tracked_object_states = Vec::new();
         for raw in live_ids {
@@ -2600,30 +2761,28 @@ impl GpuLiveBrainRuntime {
                 .world
                 .organism_registry()
                 .get(organism_id)
+                .cloned()
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            let authority = resident_authority_plan_from_record(
-                record,
-                organism_id,
-                world_entity_id,
-                world_tick,
-                brain_class,
-                sensor_profile,
-            )?;
             if let Some(state) = checkpoint_index.get(&raw).copied() {
                 let restored = store.restore_brain(&mut runtime.backend, manifest, state)?;
                 let handle = restored.receipt.handle;
                 let mut pending_eligibility_for_cleanup = restored.receipt.pending_eligibility;
                 let install_result: Result<_, GameAppShellError> = (|| {
-                    compare_resident_checkpoint_metadata(
-                        &authority,
-                        ResidentCheckpointMetadata {
+                    let authority = restore_resident_authority_from_record(
+                        &record,
+                        organism_id,
+                        world_entity_id,
+                        world_tick,
+                        brain_class,
+                        sensor_profile,
+                        Some(ResidentCheckpointMetadata {
                             organism_id: state.organism_id,
                             phenotype_hash: state.phenotype_hash,
                             capacity_class_id: state.capacity_class_id,
                             checkpoint_tick: state.checkpoint_tick,
                             phenotype: &restored.phenotype,
                             compiler_inputs: &restored.compiler_inputs,
-                        },
+                        }),
                     )?;
                     let retained_sequence = restored
                         .retained_learning
@@ -2695,7 +2854,7 @@ impl GpuLiveBrainRuntime {
                         genome: authority.genome.clone(),
                         development: authority.development.clone(),
                         compiler_inputs: authority.compiler_inputs.clone(),
-                        homeostasis: authority.homeostasis,
+                        homeostasis: authority.biochemistry.homeostasis,
                         sleep_scheduler,
                         next_sequence,
                         language_grounding: restored.language_grounding,
@@ -2750,7 +2909,12 @@ impl GpuLiveBrainRuntime {
                     );
                 }
             } else {
-                let resident = authority.into_fresh_resident()?;
+                let (_, resident) = Self::compile_birth(
+                    &runtime.world,
+                    brain_class,
+                    sensor_profile,
+                    organism_id,
+                )?;
                 let memory = Self::new_memory_sidecar(organism_id, sensor_profile)?;
                 let topology = TopologySidecar::new_profiled(
                     organism_id,
@@ -3089,16 +3253,17 @@ impl GpuLiveBrainRuntime {
                 continue;
             }
             let organism_id = OrganismId(raw);
-            let (phenotype, resident) = self.compile_birth(organism_id)?;
+            let (phenotype, resident) = Self::compile_birth(
+                &self.world,
+                self.brain_class,
+                self.sensor_profile,
+                organism_id,
+            )?;
             let birth_manifest_digest =
                 self.archive_birth_before_gpu_insert(organism_id, &resident)?;
             let mut candidate_world = self.world.clone();
             if let Some(digest) = birth_manifest_digest {
-                let record = candidate_world
-                    .organism_registry_mut()
-                    .get_mut(organism_id)
-                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                record.link_birth_manifest(digest)?;
+                candidate_world.link_birth_manifest(organism_id, digest)?;
             }
             validate_candidate_newborn(&candidate_world, organism_id)?;
             let memory = Self::new_memory_sidecar(organism_id, self.sensor_profile)?;
@@ -3582,7 +3747,9 @@ impl GpuLiveBrainRuntime {
         ) -> SleepProgressResult,
     {
         self.backend.ensure_neural_actions_available()?;
-        let result = self.tick_with_sleep_progress_inner(&mut progress);
+        let result = tick_with_sleep_progress_inner(self, |runtime| {
+            runtime.tick_with_sleep_progress_staged(&mut progress)
+        });
         if let Err(error) = &result {
             let contract_error = match error {
                 GameAppShellError::Core(error)
@@ -3598,7 +3765,7 @@ impl GpuLiveBrainRuntime {
         result
     }
 
-    fn tick_with_sleep_progress_inner<F>(
+    fn tick_with_sleep_progress_staged<F>(
         &mut self,
         progress: &mut F,
     ) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError>
@@ -3665,8 +3832,8 @@ impl GpuLiveBrainRuntime {
                         .find_map(|(bound_organism_id, world_entity_id)| {
                             (bound_organism_id == organism_id).then_some(world_entity_id)
                         })
-                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch);
-                    (raw, handle, world_entity_id)
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                    Ok::<_, ScaffoldContractError>((raw, handle, world_entity_id))
                 })
                 .collect::<Result<Vec<_>, _>>()?
         };
@@ -3674,11 +3841,17 @@ impl GpuLiveBrainRuntime {
         for (raw, handle, world_entity_id) in scheduled_handles {
             let retained_learning_pending =
                 self.retry_retained_learning(OrganismId(raw), tick_before)?;
+            let record = self
+                .world
+                .organism_registry()
+                .get(OrganismId(raw))
+                .cloned()
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             let resident = self
                 .residents
                 .get_mut(&raw)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            Self::synchronize_resident_tick(resident, tick_before, homeostatic_parameters)?;
+            synchronize_resident_from_record(resident, &record, tick_before)?;
             let sleep_before = resident.sleep_scheduler.state();
             let phase_before = sleep_before.phase;
             // Fixed continuous-wake lab protocols suppress sleep phases but
@@ -3735,11 +3908,6 @@ impl GpuLiveBrainRuntime {
                 && sleep_event.phase == SleepPhase::Awake
                 && sleep_event.transition.is_none();
             if !remains_dispatchable || retained_learning_pending {
-                if sleep_event.phase == SleepPhase::Awake {
-                    Self::advance_failed_resident(resident, tick_after, homeostatic_parameters)?;
-                } else {
-                    Self::advance_sleeping_resident(resident, tick_after, homeostatic_parameters)?;
-                }
                 summaries_by_organism.insert(
                     raw,
                     if retained_learning_pending && sleep_event.phase == SleepPhase::Awake {
@@ -3798,7 +3966,6 @@ impl GpuLiveBrainRuntime {
                 Err(error) => {
                     self.last_memory_preparation_errors
                         .push((OrganismId(raw), error));
-                    Self::advance_failed_resident(resident, tick_after, homeostatic_parameters)?;
                     summaries_by_organism.insert(
                         raw,
                         Self::preparation_failure_summary(
@@ -3855,8 +4022,16 @@ impl GpuLiveBrainRuntime {
         if summaries_by_organism.len() != expected_summary_count {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
+        #[cfg(test)]
+        if std::mem::take(&mut self.forced_late_advance_failure) {
+            return Err(ScaffoldContractError::NonMonotonicTick.into());
+        }
+        advance_and_synchronize_authority(
+            &mut self.world,
+            &mut self.residents,
+            tick_after,
+        )?;
         self.observe_passive_tick(tick_before, tick_after)?;
-        self.world.advance_tick();
         self.reconcile_population()?;
         if persist_sleep_boundary {
             self.persist_sleep_checkpoint_boundary()?;
@@ -4155,82 +4330,27 @@ impl GpuLiveBrainRuntime {
     }
 
     fn compile_birth(
-        &self,
+        world: &HeadlessWorld,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
         organism_id: OrganismId,
     ) -> Result<(alife_core::BrainPhenotype, ResidentCognition), GameAppShellError> {
-        let (phenotype, genome, development) = compile_gpu_birth_components(
-            self.deterministic_seed,
-            self.brain_class,
-            self.birth_template_organism_id.unwrap_or(organism_id),
-            self.world.tick(),
-            self.sensor_profile,
+        let record = world
+            .organism_registry()
+            .get(organism_id)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let authority = restore_resident_authority_from_record(
+            record,
+            organism_id,
+            record.world_entity_id(),
+            world.tick(),
+            brain_class,
+            sensor_profile,
+            None,
         )?;
-        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
-        let compiler_inputs = PhenotypeCompilerInputs::try_new_with_foundation_abi(
-            genome.clone(),
-            &capacity,
-            development.clone(),
-            self.sensor_profile,
-            phenotype.foundation_abi().clone(),
-        )?;
-        let verified_phenotype = PhenotypeCompiler::compile_validated(&compiler_inputs, &capacity)?;
-        if verified_phenotype != phenotype {
-            return Err(ScaffoldContractError::PhenotypeCompile.into());
-        }
-        let resident = ResidentCognition {
-            phenotype: phenotype.clone(),
-            compiler_inputs,
-            genome,
-            development,
-            homeostasis: HomeostaticSnapshot::baseline(self.world.tick()),
-            sleep_scheduler: GpuSleepScheduler::new(SleepConsolidationConfig::reference())?,
-            next_sequence: 1,
-            language_grounding: LanguageGroundingLedger::default(),
-            life_statistics: PassiveLifeStatistics::new(organism_id, self.world.tick())?,
-        };
+        let phenotype = authority.phenotype.clone();
+        let resident = authority.into_fresh_resident()?;
         Ok((phenotype, resident))
-    }
-
-    fn synchronize_resident_tick(
-        resident: &mut ResidentCognition,
-        tick: Tick,
-        parameters: HomeostaticParameters,
-    ) -> Result<(), ScaffoldContractError> {
-        if resident.homeostasis.tick != tick {
-            resident.homeostasis =
-                resident
-                    .homeostasis
-                    .advance(tick, HomeostaticDelta::zero(), parameters)?;
-            resident.development.age_ticks = tick;
-        }
-        Ok(())
-    }
-
-    fn advance_sleeping_resident(
-        resident: &mut ResidentCognition,
-        tick_after: Tick,
-        parameters: HomeostaticParameters,
-    ) -> Result<(), ScaffoldContractError> {
-        resident.homeostasis = resident.homeostasis.advance(
-            tick_after,
-            HomeostaticDelta::sleep_recovery_per_tick(),
-            parameters,
-        )?;
-        resident.development.age_ticks = tick_after;
-        Ok(())
-    }
-
-    fn advance_failed_resident(
-        resident: &mut ResidentCognition,
-        tick_after: Tick,
-        parameters: HomeostaticParameters,
-    ) -> Result<(), ScaffoldContractError> {
-        resident.homeostasis =
-            resident
-                .homeostasis
-                .advance(tick_after, HomeostaticDelta::zero(), parameters)?;
-        resident.development.age_ticks = tick_after;
-        Ok(())
     }
 
     fn preparation_failure_summary(
@@ -5031,6 +5151,11 @@ impl GpuLiveBrainRuntime {
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         self.backend.tick_batch(&[(handle, frame)])
     }
+
+    #[cfg(test)]
+    fn force_late_advance_failure_for_test(&mut self) {
+        self.forced_late_advance_failure = true;
+    }
 }
 
 fn validate_candidate_newborn(
@@ -5184,8 +5309,269 @@ mod tests {
     use alife_runtime::GpuDurableSaveManifest;
     use alife_world::{
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
-        HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
+        HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
     };
+
+    #[test]
+    fn v11_authoritative_admission_real_runtime() {
+        let organism_id = OrganismId(1);
+        let seed = 7_701;
+        let world = HeadlessScenarioBuilder::new(seed)
+            .agent("learner", organism_id, Vec3f::ZERO)
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.9)
+            .hazard("hazard", Vec3f::new(-2.0, 0.0, 0.0), 0.7)
+            .build()
+            .unwrap();
+        let mut runtime = GpuLiveBrainRuntime::new(
+            GpuClosedLoopBackend::new_required(
+                alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+            )
+            .expect("required Vulkan adapter"),
+            world,
+            seed,
+            BrainScaleTier::Nano512,
+        )
+        .unwrap();
+
+        let birth_record = runtime
+            .world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap()
+            .clone();
+        let birth_resident = runtime.residents.get(&organism_id.raw()).unwrap();
+        assert_eq!(
+            birth_resident.genome,
+            birth_record.phenotype().brain_genome.clone()
+        );
+        assert_eq!(
+            birth_resident.compiler_inputs.genome(),
+            &birth_record.phenotype().brain_genome
+        );
+        assert_eq!(
+            birth_resident.homeostasis,
+            birth_record.biochemistry().homeostasis
+        );
+        assert_eq!(
+            birth_resident.development,
+            birth_record
+                .phenotype()
+                .development_state_at(birth_record.age_at(runtime.world.tick()).unwrap())
+                .unwrap()
+        );
+        runtime.reconcile_population().unwrap();
+
+        let hardware = runtime.hardware_receipt().clone();
+        eprintln!(
+            "v11 real runtime adapter={} backend_api={} backend_version={}",
+            hardware.adapter_name, hardware.backend_api, hardware.backend_version
+        );
+        let summaries = runtime.tick().unwrap();
+        assert_eq!(summaries.len(), 1);
+        assert!(summaries[0].patch_sealed);
+        assert_eq!(summaries[0].patch_success, Some(true));
+        assert_eq!(summaries[0].learning_updates, 1);
+        assert!(runtime.sealed_patches()[0].outcome().success);
+        assert_eq!(runtime.last_learning_receipts().len(), 1);
+
+        let asset_root = std::env::temp_dir().join(format!(
+            "alife-v11-authoritative-admission-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = fs::remove_dir_all(&asset_root);
+        fs::create_dir_all(&asset_root).unwrap();
+        let store = GpuCheckpointAssetStore::new(asset_root.clone()).unwrap();
+        let write = runtime.checkpoint_brain(organism_id, &store).unwrap();
+        let mut manifest = AssetManifest::empty();
+        merge_gpu_checkpoint_manifest_entries(&mut manifest, write.manifest_entries).unwrap();
+        let world_at_checkpoint = runtime.world_snapshot();
+        let mut restored = GpuLiveBrainRuntime::restore_with_checkpoints(
+            GpuClosedLoopBackend::new_required(
+                alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+            )
+            .expect("required Vulkan adapter"),
+            world_at_checkpoint,
+            seed,
+            BrainScaleTier::Nano512,
+            &store,
+            &manifest,
+            std::slice::from_ref(&write.save_state),
+        )
+        .unwrap();
+        let restored_record = restored
+            .world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap();
+        let restored_resident = restored.residents.get(&organism_id.raw()).unwrap();
+        let source_phenotype = runtime
+            .residents
+            .get(&organism_id.raw())
+            .unwrap()
+            .phenotype
+            .clone();
+        assert_eq!(
+            restored.handle_for(organism_id).unwrap().organism_id(),
+            organism_id
+        );
+        assert_eq!(
+            restored_resident.genome,
+            restored_record.phenotype().brain_genome.clone()
+        );
+        assert_eq!(
+            restored_resident.phenotype,
+            source_phenotype
+        );
+        assert_eq!(
+            restored_resident.homeostasis,
+            restored_record.biochemistry().homeostasis
+        );
+        assert_eq!(
+            restored_resident.development,
+            restored_record
+                .phenotype()
+                .development_state_at(restored_record.age_at(restored.world.tick()).unwrap())
+                .unwrap()
+        );
+
+        let source_record = restored_record.clone();
+        let mut sleepy_biochemistry = source_record.biochemistry().clone();
+        let mut drives = sleepy_biochemistry.homeostasis.drives;
+        drives.fatigue = 0.99;
+        let mut hormones = sleepy_biochemistry.homeostasis.hormones;
+        hormones.sleep_pressure = 0.99;
+        sleepy_biochemistry.homeostasis = HomeostaticSnapshot::new(
+            sleepy_biochemistry.homeostasis.tick,
+            drives,
+            hormones,
+        )
+        .unwrap();
+        let sleepy_record = WorldOrganismRecord::new(
+            source_record.organism_id(),
+            source_record.world_entity_id(),
+            source_record.genome().clone(),
+            source_record.phenotype().clone(),
+            sleepy_biochemistry,
+            source_record.birth_tick(),
+        )
+        .unwrap();
+        restored
+            .world_mut()
+            .replace_organism_registry_exact([sleepy_record])
+            .unwrap();
+        let sleep_tick_before = restored.world.tick();
+        let mut sleep_driver = NoProgressSleepDriver;
+        let sleep_summaries = restored
+            .tick_with_sleep_driver(&mut sleep_driver)
+            .unwrap();
+        assert_eq!(sleep_summaries.len(), 1);
+        assert_eq!(sleep_summaries[0].status, BrainTickStatus::SafeIdle);
+        assert_eq!(sleep_summaries[0].selected_action_id, None);
+        assert!(!sleep_summaries[0].patch_sealed);
+        assert_eq!(
+            restored.world.tick(),
+            Tick::new(sleep_tick_before.raw().saturating_add(1))
+        );
+        let refreshed_record = restored
+            .world
+            .organism_registry()
+            .get(organism_id)
+            .unwrap();
+        let refreshed_resident = restored.residents.get(&organism_id.raw()).unwrap();
+        assert_eq!(
+            refreshed_record.biochemistry().tick,
+            restored.world.tick()
+        );
+        assert_eq!(
+            refreshed_resident.homeostasis,
+            refreshed_record.biochemistry().homeostasis
+        );
+        assert_eq!(
+            refreshed_resident.development,
+            refreshed_record
+                .phenotype()
+                .development_state_at(
+                    refreshed_record
+                        .age_at(restored.world.tick())
+                        .unwrap(),
+                )
+                .unwrap()
+        );
+
+        let before_tick = runtime.world.tick();
+        let before_objects = runtime.world.object_snapshots();
+        let before_records = runtime
+            .world
+            .organism_registry()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        let before_resident = runtime
+            .residents
+            .get(&organism_id.raw())
+            .unwrap()
+            .clone();
+        let sealed_before_failure = runtime.sealed_patches().len();
+        runtime.force_late_advance_failure_for_test();
+        let result = runtime.tick();
+        assert!(matches!(
+            result,
+            Err(GameAppShellError::Core(ScaffoldContractError::NonMonotonicTick))
+        ));
+        assert_eq!(runtime.last_learning_receipts().len(), 1);
+        assert_eq!(runtime.sealed_patches().len(), sealed_before_failure + 1);
+        assert_eq!(runtime.world.tick(), before_tick);
+        assert_eq!(runtime.world.object_snapshots(), before_objects);
+        assert_eq!(
+            runtime
+                .world
+                .organism_registry()
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            before_records
+        );
+        let resident = runtime.residents.get(&organism_id.raw()).unwrap();
+        assert_eq!(resident.genome, before_resident.genome);
+        assert_eq!(resident.phenotype, before_resident.phenotype);
+        assert_eq!(resident.homeostasis, before_resident.homeostasis);
+        assert_eq!(resident.development, before_resident.development);
+        assert_eq!(resident.next_sequence, before_resident.next_sequence);
+
+        let projected = project_curated_founder_reset_runtime_error(
+            CuratedFounderResetRuntimeError::GpuResidencyUnknown {
+                evidence: Some(CuratedFounderResetRuntimeEvidence {
+                    status: CuratedFounderPublicationStatus::Published,
+                    save_state: CuratedFounderSaveState::Verified,
+                    gpu_residency: CuratedFounderGpuResidencyState::Pending,
+                    expected_save_digest: Some("old-save".to_string()),
+                    actual_save_digest: Some("old-save".to_string()),
+                    proposed_save_digest: "published-save".to_string(),
+                    cause: None,
+                    archive_count: 2,
+                }),
+                error: ScaffoldContractError::NeuralBackendUnavailable,
+            },
+        );
+
+        assert!(matches!(
+            projected,
+            CuratedFounderResetDispatchResult::Unknown {
+                proposed_save_digest,
+                archive_count: 2,
+                save_state: CuratedFounderSaveState::Verified,
+                gpu_residency: CuratedFounderGpuResidencyState::Unknown,
+                retryable: false,
+                ..
+            } if proposed_save_digest == "published-save"
+        ));
+
+        fs::remove_dir_all(asset_root).unwrap();
+    }
 
     #[test]
     fn failed_staged_runtime_commit_leaves_live_state_unchanged() {
@@ -6616,7 +7002,7 @@ mod tests {
             expected_inputs.development()
         );
         assert_eq!(
-            plan.homeostasis,
+            plan.biochemistry.homeostasis,
             record.biochemistry().homeostasis
         );
 

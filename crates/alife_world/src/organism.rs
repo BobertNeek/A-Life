@@ -110,6 +110,16 @@ pub struct WorldOrganismRecord {
     archive: OrganismArchiveIdentity,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldOrganismAdmissionSnapshot {
+    pub organism_id: OrganismId,
+    pub world_entity_id: WorldEntityId,
+    pub genome: CreatureGenome,
+    pub phenotype: CreaturePhenotype,
+    pub biochemistry: BiochemistryState,
+    pub age: Tick,
+}
+
 impl WorldOrganismRecord {
     pub const fn organism_id(&self) -> OrganismId {
         self.organism_id
@@ -141,6 +151,24 @@ impl WorldOrganismRecord {
 
     pub fn archive(&self) -> &OrganismArchiveIdentity {
         &self.archive
+    }
+
+    pub fn authoritative_admission_at(
+        &self,
+        world_tick: Tick,
+    ) -> Result<WorldOrganismAdmissionSnapshot, ScaffoldContractError> {
+        self.validate_contract()?;
+        if !self.lifecycle.is_alive() || self.biochemistry.tick != world_tick {
+            return Err(ScaffoldContractError::NonMonotonicTick);
+        }
+        Ok(WorldOrganismAdmissionSnapshot {
+            organism_id: self.organism_id,
+            world_entity_id: self.world_entity_id,
+            genome: self.genome.clone(),
+            phenotype: self.phenotype.clone(),
+            biochemistry: self.biochemistry,
+            age: self.age_at(world_tick)?,
+        })
     }
 
     pub fn new(
