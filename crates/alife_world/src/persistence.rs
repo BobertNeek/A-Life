@@ -1292,8 +1292,7 @@ impl<'de> Deserialize<'de> for WorldSaveState {
         let next_utterance_id = wire
             .next_utterance_id
             .unwrap_or_else(|| max_utterance_id.saturating_add(1));
-        let max_present_organism_id = wire
-            .objects
+        let max_present_organism_id = objects
             .iter()
             .filter(|object| object.kind == WorldObjectKind::Agent)
             .filter_map(|object| object.organism_id.map(OrganismId::raw))

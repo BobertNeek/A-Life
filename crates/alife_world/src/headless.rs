@@ -498,10 +498,7 @@ impl HeadlessWorld {
                     .organism_registry
                     .get(organism_id)
                     .ok_or(ScaffoldContractError::InvalidId)?;
-                let age_ticks = record
-                    .age_at(next_tick)
-                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?
-                    .raw();
+                let age_ticks = record.age_at(next_tick)?.raw();
                 PassiveBodyUpkeepPolicy::is_terminal(
                     &record.biochemistry().body,
                     age_ticks,
