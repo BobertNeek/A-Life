@@ -6,15 +6,17 @@ use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, Linea
 use alife_core::{
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt,
     BiochemistryState, Blake3Digest, BrainCapacityClass, BrainGenome, BrainScaleTier, BrainTickStatus,
-    BrainWorkReceipt, CanonicalDigestBuilder, Confidence, ConsolidationDriverEvent,
-    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
-    EnvironmentalRegime, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    FinalizedMemoryRecall, FoundationGeneticIdentity, FoundationWeightAsset, HomeostaticParameters,
-    HomeostaticSnapshot, LanguageGroundingLedger, MemoryBankConfig,
+    BrainWorkReceipt, CanonicalDigestBuilder, CognitiveContextFrame, CognitiveMemoryExpectancy,
+    Confidence, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
+    DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch,
+    ExperiencePatchBuilder, ExperienceSequenceId, FinalizedMemoryRecall, FoundationGeneticIdentity,
+    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, LanguageGroundingLedger,
+    MAX_CONTEXT_MEMORY_EXPECTANCIES, MemoryBankConfig,
     MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
     MemoryUpdateReceipt, NeuralActionSelection, NormalizedScalar, OrganismId, PassiveLifeEvent,
     PassiveLifeStatistics, PerceptionFrame, PhenotypeCompiler, PhenotypeCompilerInputs,
-    PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile,
+    PostActionOutcome, PreActionSnapshot, PreparedMemoryRecall, ScaffoldContractError,
+    SensorProfile, SignedValence,
     SensorProfileIdentity, SensoryAbiVersion, SleepConsolidationConfig, SleepPhase, SleepState,
     Tick, TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
     Validate, Vec3f, WorldEntityId, LineageId, N512FounderFoundationProjection,
@@ -576,6 +578,7 @@ struct PreparedLiveSelection {
     pending_eligibility: PendingEligibilityReceipt,
     frame: PerceptionFrame,
     memory_recall: FinalizedMemoryRecall,
+    cognitive_context_digest: [u64; 4],
     sequence_id: ExperienceSequenceId,
     outcome_tick: Tick,
     pre_action: PreActionSnapshot,
@@ -604,6 +607,7 @@ struct SealedWorldSelection {
 struct SealedLiveSelection {
     handle: GpuBrainHandle,
     pending_eligibility: PendingEligibilityReceipt,
+    cognitive_context_digest: [u64; 4],
     summary: LiveBrainTickSummary,
     patch: ExperiencePatch,
 }
@@ -1202,6 +1206,7 @@ pub struct GpuLiveBrainRuntime {
     last_activity_work_receipts: Vec<BrainWorkReceipt>,
     last_memory_recall_receipts: Vec<MemoryRecallReceipt>,
     last_memory_update_receipts: Vec<MemoryUpdateReceipt>,
+    last_cognitive_context_digests: Vec<[u64; 4]>,
     last_memory_compaction_receipts: Vec<MemoryCompactionReceipt>,
     last_memory_preparation_errors: Vec<(OrganismId, ScaffoldContractError)>,
     last_memory_observation_errors: Vec<(OrganismId, ScaffoldContractError)>,
@@ -1664,6 +1669,62 @@ fn archive_foundation_asset_bytes(
         return Err(ScaffoldContractError::PhenotypeCompile.into());
     }
     Ok(Some(foundation.encode_canonical()?))
+}
+
+fn cognitive_context_for_recall(
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    recall: &PreparedMemoryRecall,
+) -> Result<CognitiveContextFrame, ScaffoldContractError> {
+    let mut context =
+        CognitiveContextFrame::empty(organism_id, sequence_id, recall.context().tick)?;
+    context.prediction.successor_feature_abi = 1;
+    context.prediction.source_digest = recall.receipt().bank_digest;
+    if let Some(candidate) = recall.context().candidates.first() {
+        context.prediction.prediction_error.push(NormalizedScalar::new(
+            candidate.family_value.first().copied().unwrap_or(0.0).abs(),
+        )?);
+        context.prediction.action_sensitivity =
+            NormalizedScalar::new(candidate.family_confidence.raw())?;
+    }
+    for candidate in recall
+        .context()
+        .candidates
+        .iter()
+        .take(MAX_CONTEXT_MEMORY_EXPECTANCIES)
+    {
+        let expectancy = candidate
+            .best_target_source
+            .zip(candidate.target_latent.first().copied())
+            .map(|(memory_id, value)| {
+                (
+                    memory_id,
+                    value,
+                    candidate.target_confidence.raw(),
+                )
+            })
+            .or_else(|| {
+                candidate
+                    .best_family_source
+                    .zip(candidate.family_value.first().copied())
+                    .map(|(memory_id, value)| {
+                        (
+                            memory_id,
+                            value,
+                            candidate.family_confidence.raw(),
+                        )
+                    })
+            });
+        if let Some((memory_id, value, confidence)) = expectancy {
+            context.memory.expectancies.push(CognitiveMemoryExpectancy {
+                memory_id,
+                expected_valence: SignedValence::new(value.clamp(-1.0, 1.0))?,
+                confidence: NormalizedScalar::new(confidence.clamp(0.0, 1.0))?,
+            });
+        }
+    }
+    context.validate_contract()?;
+    Ok(context)
 }
 
 fn seal_prepared_selection_core(
@@ -2610,6 +2671,7 @@ impl GpuLiveBrainRuntime {
             last_activity_work_receipts: Vec::new(),
             last_memory_recall_receipts: Vec::new(),
             last_memory_update_receipts: Vec::new(),
+            last_cognitive_context_digests: Vec::new(),
             last_memory_compaction_receipts: Vec::new(),
             last_memory_preparation_errors: Vec::new(),
             last_memory_observation_errors: Vec::new(),
@@ -2719,6 +2781,7 @@ impl GpuLiveBrainRuntime {
             last_activity_work_receipts: Vec::new(),
             last_memory_recall_receipts: Vec::new(),
             last_memory_update_receipts: Vec::new(),
+            last_cognitive_context_digests: Vec::new(),
             last_memory_compaction_receipts: Vec::new(),
             last_memory_preparation_errors: Vec::new(),
             last_memory_observation_errors: Vec::new(),
@@ -3794,6 +3857,7 @@ impl GpuLiveBrainRuntime {
         self.last_activity_work_receipts.clear();
         self.last_memory_recall_receipts.clear();
         self.last_memory_update_receipts.clear();
+        self.last_cognitive_context_digests.clear();
         self.last_memory_compaction_receipts.clear();
         self.last_memory_preparation_errors.clear();
         self.last_memory_observation_errors.clear();
@@ -3948,6 +4012,17 @@ impl GpuLiveBrainRuntime {
                     .get(&raw)
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
                     .recall_frame(&draft)?;
+                let sequence_id = ExperienceSequenceId(resident.next_sequence);
+                let prepared_recall = if sequence_id.validate().is_ok() {
+                    let cognitive_context = cognitive_context_for_recall(
+                        OrganismId(raw),
+                        sequence_id,
+                        &prepared_recall,
+                    )?;
+                    prepared_recall.with_cognitive_context(cognitive_context)?
+                } else {
+                    prepared_recall
+                };
                 let (frame, memory_recall) = prepared_recall.finalize(draft)?;
                 memory_recall.validate_for_frame(&frame)?;
                 let memory_upload =
@@ -4166,6 +4241,12 @@ impl GpuLiveBrainRuntime {
     /// Successful post-learning observations from the most recent world tick.
     pub fn last_memory_update_receipts(&self) -> &[MemoryUpdateReceipt] {
         &self.last_memory_update_receipts
+    }
+
+    /// v1.1 context digests whose corresponding sealed GPU outcome reached
+    /// fast plasticity in the most recent world tick.
+    pub fn last_cognitive_context_digests(&self) -> &[[u64; 4]] {
+        &self.last_cognitive_context_digests
     }
 
     pub fn last_memory_compaction_receipts(&self) -> &[MemoryCompactionReceipt] {
@@ -4629,6 +4710,7 @@ impl GpuLiveBrainRuntime {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         memory_recall.validate_for_frame(&frame)?;
+        let cognitive_context_digest = memory_recall.cognitive_context_digest()?;
         let organism_id = handle.organism_id();
         let resident = self
             .residents
@@ -4698,6 +4780,7 @@ impl GpuLiveBrainRuntime {
             pending_eligibility: gpu_tick.pending_eligibility,
             frame,
             memory_recall,
+            cognitive_context_digest,
             sequence_id,
             outcome_tick,
             pre_action,
@@ -4717,6 +4800,7 @@ impl GpuLiveBrainRuntime {
             pending_eligibility,
             frame,
             memory_recall: _,
+            cognitive_context_digest,
             sequence_id,
             outcome_tick,
             pre_action,
@@ -4744,6 +4828,7 @@ impl GpuLiveBrainRuntime {
         Ok(SealedLiveSelection {
             handle,
             pending_eligibility,
+            cognitive_context_digest,
             summary: sealed.summary,
             patch: sealed.patch,
         })
@@ -4881,6 +4966,11 @@ impl GpuLiveBrainRuntime {
             summaries.push(selection.summary.clone());
         }
         if let Some(learning) = learning {
+            self.last_cognitive_context_digests.extend(
+                sealed
+                    .iter()
+                    .map(|selection| selection.cognitive_context_digest),
+            );
             self.last_learning_receipts.extend(learning);
         }
         let committed_patches = sealed

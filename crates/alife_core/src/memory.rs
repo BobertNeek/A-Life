@@ -5,9 +5,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{
     validate_finite_slice, ActionId, ActionKind, CandidateActionFamily, CandidateMemoryContextV1,
-    CandidateMemoryQueryV2, CanonicalDigestBuilder, Confidence, DriveDelta, EpisodicDecisionKeyV2,
-    EpisodicRetrievalContextV1, ExperiencePatch, ExperienceSequenceId, MemoryId,
-    MemoryQueryEncoderV2, NormalizedScalar, OrganismId, PerceptionBaseDigest,
+    CandidateMemoryQueryV2, CanonicalDigestBuilder, CognitiveContextFrame, Confidence, DriveDelta,
+    EpisodicDecisionKeyV2, EpisodicRetrievalContextV1, ExperiencePatch, ExperienceSequenceId,
+    MemoryId, MemoryQueryEncoderV2, NormalizedScalar, OrganismId, PerceptionBaseDigest,
     PerceptionContextDigest, PerceptionFrame, PerceptionFrameDigest, PerceptionFrameDraft,
     PhysicalContactKind, PreActionSnapshot, ScaffoldContractError, SignedValence, Tick, Validate,
     CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES, MEMORY_LATENT_V1_COUNT, MEMORY_TARGET_RANGE,
@@ -135,6 +135,7 @@ pub struct PreparedMemoryRecall {
     candidate_queries: Vec<CandidateMemoryQueryV2>,
     base_frame_digest: PerceptionBaseDigest,
     receipt: MemoryRecallReceipt,
+    cognitive_context: Option<CognitiveContextFrame>,
 }
 
 impl PreparedMemoryRecall {
@@ -162,6 +163,7 @@ impl PreparedMemoryRecall {
             final_frame_digest,
             candidate_keys,
             receipt: self.receipt,
+            cognitive_context: self.cognitive_context,
         };
         finalized.validate_for_frame(&frame)?;
         Ok((frame, finalized))
@@ -176,6 +178,14 @@ impl PreparedMemoryRecall {
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
         self.context.validate_contract()?;
         self.receipt.validate_contract()?;
+        if let Some(cognitive_context) = &self.cognitive_context {
+            cognitive_context.validate_contract()?;
+            if cognitive_context.organism_id != draft.organism_id()
+                || cognitive_context.world_tick != draft.tick()
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+        }
         let profile = draft.profile_provenance().identity();
         if self.base_frame_digest != draft.base_digest()
             || self.receipt.base_frame_digest != draft.base_digest()
@@ -224,6 +234,38 @@ impl PreparedMemoryRecall {
         Ok(())
     }
 
+    /// Bind the v1.1 context to the existing episodic lanes before the
+    /// perception frame is finalized. The projection only changes channels
+    /// backed by an actual memory source, so an empty bank remains neutral.
+    pub fn with_cognitive_context(
+        mut self,
+        cognitive_context: CognitiveContextFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        cognitive_context.validate_contract()?;
+        let digest = cognitive_context.canonical_digest()?;
+        for candidate in &mut self.context.candidates {
+            let lane = usize::from(candidate.candidate_index) % digest.len();
+            let offset = (((digest[lane] & 0xff) as f32 + 1.0) / 256.0) * 0.03125;
+            if candidate.target_source_count > 0 {
+                if let Some(value) = candidate.target_latent.first_mut() {
+                    *value = (*value + offset).clamp(-1.0, 1.0);
+                }
+            }
+            if candidate.family_source_count > 0 {
+                if let Some(value) = candidate.family_value.first_mut() {
+                    *value = (*value + offset).clamp(-1.0, 1.0);
+                }
+            }
+        }
+        self.cognitive_context = Some(cognitive_context);
+        self.receipt.context_digest = self
+            .context
+            .to_perception_context_block()?
+            .canonical_digest();
+        self.receipt.validate_contract()?;
+        Ok(self)
+    }
+
     pub const fn base_frame_digest(&self) -> PerceptionBaseDigest {
         self.base_frame_digest
     }
@@ -245,6 +287,7 @@ pub struct FinalizedMemoryRecall {
     final_frame_digest: PerceptionFrameDigest,
     candidate_keys: Vec<EpisodicDecisionKeyV2>,
     receipt: MemoryRecallReceipt,
+    cognitive_context: Option<CognitiveContextFrame>,
 }
 
 impl FinalizedMemoryRecall {
@@ -254,6 +297,14 @@ impl FinalizedMemoryRecall {
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
         self.context.validate_contract()?;
         self.receipt.validate_contract()?;
+        if let Some(cognitive_context) = &self.cognitive_context {
+            cognitive_context.validate_contract()?;
+            if cognitive_context.organism_id != frame.organism_id()
+                || cognitive_context.world_tick != frame.tick()
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+        }
         if self.base_frame_digest != frame.base_digest()
             || self.context_digest != frame.context().canonical_digest()
             || self.final_frame_digest != frame.frame_digest()
@@ -305,6 +356,17 @@ impl FinalizedMemoryRecall {
 
     pub const fn context(&self) -> &EpisodicRetrievalContextV1 {
         &self.context
+    }
+
+    pub fn cognitive_context_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+        self.cognitive_context
+            .as_ref()
+            .ok_or(ScaffoldContractError::MissingPhaseData)?
+            .canonical_digest()
+    }
+
+    pub const fn cognitive_context(&self) -> Option<&CognitiveContextFrame> {
+        self.cognitive_context.as_ref()
     }
 
     pub fn candidate_keys(&self) -> &[EpisodicDecisionKeyV2] {
@@ -824,6 +886,7 @@ impl MemoryBank {
             candidate_queries,
             base_frame_digest: draft.base_digest(),
             receipt,
+            cognitive_context: None,
         };
         prepared.validate_for_draft(draft)?;
         Ok(prepared)
