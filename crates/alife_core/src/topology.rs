@@ -1196,7 +1196,7 @@ impl TopologicalMap {
         salience: NormalizedScalar,
     ) -> Result<ConceptCellId, ScaffoldContractError> {
         source_id.validate()?;
-        salience.validate_contract()?;
+        NormalizedScalar::new(salience.raw())?;
         let source = self
             .concept(source_id)
             .cloned()
